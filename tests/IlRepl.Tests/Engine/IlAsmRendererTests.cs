@@ -140,18 +140,66 @@ public sealed class IlAsmRendererTests
     public void Render_KeywordNames_AreQuoted()
     {
         var session = new Session();
-        foreach (var line in new[] { ".method int32 add(int32 value) {", "ldarg value", "ret", "}", ".locals init (int32 class)", "ldc.i4 3", "stloc class", "ldloc class", "call int32 add(int32)" })
+        foreach (var line in new[] { ".method int32 add(int32 value) {", "ldarg value", "ret", "}", ".method int32 windowsruntime(int32 noplatform, int32 bestfit) {", "ldarg noplatform", "ldarg bestfit", "add", "ret", "}", ".locals init (int32 class)", "ldc.i4 3", "stloc class", "ldloc class", "call int32 add(int32)" })
         {
             session.AddLine(line);
         }
 
         var text = session.ToIlAsm();
         Assert.Contains(".method public static int32 'add'(int32 'value') cil managed", text);
+        Assert.Contains(".method public static int32 'windowsruntime'(int32 'noplatform', int32 'bestfit') cil managed", text);
+        Assert.Contains("ldarg 'noplatform'", text);
         Assert.Contains("ldarg 'value'", text);
         Assert.Contains(".locals init ([0] int32 'class')", text);
         Assert.Contains("stloc 'class'", text);
         Assert.Contains("ldloc 'class'", text);
         Assert.Contains("call int32 IlRepl.Cell::'add'(int32)", text);
         Assert.Contains("ldarg n", new Session().ToIlAsm() + "ldarg n", "plain names stay unquoted");
+    }
+
+    /// <summary>
+    /// The rendered text assembles with ilasm when one is installed; otherwise the test is inconclusive.
+    /// </summary>
+    [TestMethod]
+    public void Render_KeywordNames_AssembleWithIlasm()
+    {
+        var ilasm = FindIlasm();
+        TestSkip.Unless(ilasm is not null, "ilasm is not installed");
+
+        var session = new Session();
+        foreach (var line in new[] { ".method int32 add(int32 value) {", "ldarg value", "ret", "}", ".method int32 windowsruntime(int32 noplatform, int32 bestfit) {", "ldarg noplatform", "ldarg bestfit", "add", "ret", "}", ".locals init (int32 class)", "ldc.i4 3", "stloc class", "ldloc class", "call int32 add(int32)" })
+        {
+            session.AddLine(line);
+        }
+
+        var directory = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var source = Path.Combine(directory, "cell.il");
+            File.WriteAllText(source, session.ToIlAsm());
+            // Options take a dash: a slash is a path on Unix.
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ilasm!, ["-DLL", "-QUIET", "-OUTPUT=" + Path.Combine(directory, "cell.dll"), source])
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            })!;
+            var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            Assert.AreEqual(0, process.ExitCode, output);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static string? FindIlasm()
+    {
+        var name = OperatingSystem.IsWindows() ? "ilasm.exe" : "ilasm";
+        var directories = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
+            .Append(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin"));
+        return directories.Select(d => Path.Combine(d, name)).FirstOrDefault(File.Exists);
     }
 }

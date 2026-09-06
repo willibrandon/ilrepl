@@ -65,7 +65,7 @@ public sealed class StackCompatibilityTests
     {
         Assert.IsTrue(StackCompatibility.CanReturn(typeof(string), typeof(object)));
         Assert.IsTrue(StackCompatibility.CanReturn(typeof(ArgumentException), typeof(Exception)));
-        Assert.IsFalse(StackCompatibility.CanReturn(typeof(Exception), typeof(string)));
+        Assert.IsFalse(StackCompatibility.CanReturn(typeof(object), typeof(string)));
         Assert.IsTrue(StackCompatibility.CanReturn(typeof(int[]), typeof(Array)));
         Assert.IsTrue(StackCompatibility.CanReturn(typeof(NullReferenceMarker), typeof(string)));
     }
@@ -113,13 +113,17 @@ public sealed class StackCompatibilityTests
     }
 
     /// <summary>
-    /// object on the stack is the model's imprecise reference, so any reference return takes it.
+    /// A reference the model could not type is accepted for any reference return; a value that is
+    /// exactly object is not narrowed.
     /// </summary>
     [TestMethod]
-    public void CanReturn_ObjectOnStack_IsAcceptedForReferenceTypes()
+    public void CanReturn_UnknownReference_IsAcceptedButExactObjectIsNot()
     {
-        Assert.IsTrue(StackCompatibility.CanReturn(typeof(object), typeof(IComparable)));
-        Assert.IsTrue(StackCompatibility.CanReturn(typeof(object), typeof(string)));
-        Assert.IsFalse(StackCompatibility.CanReturn(typeof(object), typeof(int)));
+        Assert.IsTrue(StackCompatibility.CanReturn(typeof(UnknownReferenceMarker), typeof(IComparable)));
+        Assert.IsTrue(StackCompatibility.CanReturn(typeof(UnknownReferenceMarker), typeof(string)));
+        Assert.IsFalse(StackCompatibility.CanReturn(typeof(UnknownReferenceMarker), typeof(int)));
+        Assert.IsTrue(StackCompatibility.CanReturn(typeof(object), typeof(object)));
+        Assert.IsFalse(StackCompatibility.CanReturn(typeof(object), typeof(string)));
+        Assert.IsFalse(StackCompatibility.CanReturn(typeof(object), typeof(IComparable)));
     }
 }

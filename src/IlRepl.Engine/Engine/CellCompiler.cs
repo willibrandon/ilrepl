@@ -100,6 +100,10 @@ public static class CellCompiler
             {
                 MethodPreparation.Prepare(method);
             }
+            catch (InvalidProgramException ex) when (ex.Message.Contains("Vararg", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ReplException($"the runtime only supports the vararg calling convention on Windows; method {methodName} cannot be prepared here (the block is still open)", ex);
+            }
             catch (InvalidProgramException ex)
             {
                 throw new ReplException($"the JIT rejected method {methodName}: {ex.Message} (check .show for a stack mismatch between branches; the block is still open)", ex);
@@ -166,7 +170,7 @@ public static class CellCompiler
         }
 
         EmitSessionMethods(builders, session.Methods);
-        EmitBody(run.GetILGenerator(), state, builders);
+        EmitGuarded("the cell", () => EmitBody(run.GetILGenerator(), state, builders));
 
         MethodBuilder entry = run;
         if (state.IsVarArg)
@@ -207,7 +211,21 @@ public static class CellCompiler
     {
         foreach (var method in methods)
         {
-            EmitBody(((MethodBuilder)builders[method.Signature.Name]).GetILGenerator(), method.State, builders);
+            EmitGuarded("method " + method.Signature.Name, () => EmitBody(((MethodBuilder)builders[method.Signature.Name]).GetILGenerator(), method.State, builders));
+        }
+    }
+
+    private static void EmitGuarded(string what, Action emit)
+    {
+        // ILGenerator refuses some operands only while emitting. That is a verdict on the body
+        // and must reach the user as an error, never as an exception out of the session.
+        try
+        {
+            emit();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException)
+        {
+            throw new ReplException($"the runtime rejected {what}: {ex.Message}", ex);
         }
     }
 

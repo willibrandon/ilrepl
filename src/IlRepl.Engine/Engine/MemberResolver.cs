@@ -612,7 +612,8 @@ public static class MemberResolver
 
         if (a.IsArray && b.IsArray)
         {
-            return a.GetArrayRank() == b.GetArrayRank() && TypesEqual(a.GetElementType()!, b.GetElementType()!);
+            // int32[] is a vector and int32[0...] is a rank-1 array; they are different types.
+            return a.IsSZArray == b.IsSZArray && a.GetArrayRank() == b.GetArrayRank() && TypesEqual(a.GetElementType()!, b.GetElementType()!);
         }
 
         if (a.IsGenericType && b.IsGenericType && !a.IsGenericTypeDefinition && !b.IsGenericTypeDefinition)

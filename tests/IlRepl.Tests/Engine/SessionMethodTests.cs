@@ -559,4 +559,32 @@ public sealed class SessionMethodTests
         Assert.AreEqual(8, RunCell(session, "call int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsLong) Long()"));
         Assert.AreEqual(5, RunCell(session, "ldstr \"abc\"", "ldc.i4 2", "call int32 Len(string, int32)"));
     }
+
+    /// <summary>
+    /// A vector and a rank-1 array are different signatures, so an indirect caller keeps the one it bound to.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_RedefinitionChangingArrayKind_FailsAtHeader()
+    {
+        var session = Load(
+            ".method int32 First(int32[] a) {", "ldarg a", "ldc.i4 0", "ldelem.i4", "ret", "}",
+            ".method int32 Read() {", "ldc.i4 1", "newarr int32", "dup", "ldc.i4 0", "ldc.i4 9", "stelem.i4", "ldftn First", "calli int32(int32[])", "ret", "}");
+        Assert.AreEqual(9, RunCell(session, "call int32 Read()"));
+        var ex = Assert.ThrowsExactly<ReplException>(() => session.AddLine(".method int32 First(int32[0...] a) {"));
+        Assert.Contains("cannot redefine First as int32 First(int32[0...]): method Read references int32 First(int32[])", ex.Message);
+        Assert.IsNull(session.OpenMethod);
+        Assert.AreEqual(9, RunCell(session, "call int32 Read()"));
+    }
+
+    /// <summary>
+    /// Returning an exact object where a narrower reference is declared is refused, at ret and at the brace.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_ExactObjectForStringReturn_IsRefused()
+    {
+        var session = Load(".method string F() {", "newobj instance void Object::.ctor()");
+        Assert.Contains("ret needs string on the stack but found object", Assert.ThrowsExactly<ReplException>(() => session.AddLine("ret")).Message);
+        Assert.Contains("but F returns string", Assert.ThrowsExactly<ReplException>(() => session.AddLine("}")).Message);
+        Assert.AreEqual("F", session.OpenMethod!.Name);
+    }
 }

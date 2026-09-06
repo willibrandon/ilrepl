@@ -225,4 +225,15 @@ public sealed class CellStateTests
         Assert.AreEqual("[string]", deref.Stack.Render());
         Assert.AreEqual(LineOutcome.MethodEnd, deref.Apply("}").Outcome);
     }
+
+    /// <summary>
+    /// An exact object cannot be returned as string, even though a boxed value can be returned as an interface.
+    /// </summary>
+    [TestMethod]
+    public void Apply_RetWithExactObjectForString_Throws()
+    {
+        var state = Body(Signature("F", typeof(string)), "newobj instance void Object::.ctor()");
+        Assert.Contains("ret needs string on the stack but found object", Assert.ThrowsExactly<ReplException>(() => state.Apply("ret")).Message);
+        Assert.Contains("the stack holds [object] but F returns string", Assert.ThrowsExactly<ReplException>(() => state.Apply("}")).Message);
+    }
 }

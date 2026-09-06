@@ -141,4 +141,20 @@ public sealed class TypeParserTests
         Assert.AreEqual("Dictionary<string, int32>", parts[0]);
         Assert.AreEqual("Func<int32, string>", parts[2]);
     }
+
+    /// <summary>
+    /// A rank-1 array with bounds renders apart from a vector, in both display and ILAsm form.
+    /// </summary>
+    [TestMethod]
+    public void Arrays_VectorAndRankOne_RenderDifferently()
+    {
+        var vector = TypeParser.Parse("int32[]", Context);
+        var rankOne = TypeParser.Parse("int32[0...]", Context);
+        Assert.IsTrue(vector.IsSZArray);
+        Assert.IsFalse(rankOne.IsSZArray);
+        Assert.AreEqual("int32[]", TypeNameFormatter.Pretty(vector));
+        Assert.AreEqual("int32[0...]", TypeNameFormatter.Pretty(rankOne));
+        Assert.AreEqual("int32[0...]", TypeNameFormatter.IlAsm(rankOne));
+        Assert.AreEqual("int32[,]", TypeNameFormatter.Pretty(TypeParser.Parse("int32[,]", Context)));
+    }
 }

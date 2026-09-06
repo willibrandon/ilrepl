@@ -59,7 +59,8 @@ public sealed class StackSimulator
     /// </summary>
     /// <param name="type">The entry type.</param>
     /// <returns><c>null</c> for the null marker, <c>?</c> for unknown, otherwise the pretty type name.</returns>
-    public static string Name(Type? type) => type == typeof(NullReferenceMarker) ? "null" : TypeNameFormatter.Pretty(type);
+    public static string Name(Type? type) =>
+        type == typeof(NullReferenceMarker) ? "null" : type == typeof(UnknownReferenceMarker) ? "object" : TypeNameFormatter.Pretty(type);
 
     /// <summary>
     /// Renders the stack as <c>[a, b, c]</c> with the top on the right.
@@ -199,7 +200,7 @@ public sealed class StackSimulator
             case "refanytype":
                 return [typeof(RuntimeTypeHandle)];
             case "box":
-                return [typeof(object)];
+                return [typeof(UnknownReferenceMarker)];
             case "newarr":
                 return [((Type)instruction.Operand!).MakeArrayType()];
             case "castclass":
@@ -278,7 +279,7 @@ public sealed class StackSimulator
                 return [popped[0]];
             case "ldelem.ref":
             case "ldind.ref":
-                return [popped.Count > 0 && popped[0] is { IsByRef: true } or { IsPointer: true } ? popped[0]!.GetElementType() : typeof(object)];
+                return [popped.Count > 0 && popped[0] is { IsByRef: true } or { IsPointer: true } ? popped[0]!.GetElementType() : typeof(UnknownReferenceMarker)];
             default:
                 break;
         }
@@ -306,7 +307,7 @@ public sealed class StackSimulator
             StackBehaviour.Pushi8 => [typeof(long)],
             StackBehaviour.Pushr4 => [typeof(float)],
             StackBehaviour.Pushr8 => [typeof(double)],
-            StackBehaviour.Pushref => [typeof(object)],
+            StackBehaviour.Pushref => [typeof(UnknownReferenceMarker)],
             StackBehaviour.Push1 => [null],
             StackBehaviour.Push1_push1 => [null, null],
             _ => [],

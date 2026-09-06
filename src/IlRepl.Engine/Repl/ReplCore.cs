@@ -178,6 +178,12 @@ public sealed class ReplCore
             Error(ex.Message);
             return new HandleResult(false, false);
         }
+        catch (Exception ex) when (ex is not (CellException or OperationCanceledException))
+        {
+            // A line must never take the session down with it; the host keeps serving.
+            Error("unexpected " + ex.GetType().Name + ": " + ex.Message);
+            return new HandleResult(false, false);
+        }
         catch (CellException ex)
         {
             var inner = ex.InnerException ?? ex;

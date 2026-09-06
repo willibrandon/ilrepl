@@ -58,9 +58,9 @@ public static class StackCompatibility
 
     /// <summary>
     /// True when a value of the given stack type can be returned where <paramref name="declared"/> is expected.
-    /// A plain <c>object</c> on the stack is accepted for any reference type, because the model
-    /// says <c>object</c> whenever it lost precision (after <c>box</c>, or a load it cannot type);
-    /// the JIT settles those when the method is prepared.
+    /// A reference the model could not type (<see cref="UnknownReferenceMarker"/>, after <c>box</c>
+    /// or a load it cannot type) is accepted for any reference type; a value that is exactly
+    /// <c>object</c> is not, because returning it as a narrower type would be type confusion.
     /// </summary>
     /// <param name="actual">The type on the stack; null when the model could not infer it, which is accepted.</param>
     /// <param name="declared">The declared return type.</param>
@@ -74,7 +74,7 @@ public static class StackCompatibility
         }
 
         var expected = Category(declared);
-        if (actual == typeof(NullReferenceMarker))
+        if (actual == typeof(NullReferenceMarker) || actual == typeof(UnknownReferenceMarker))
         {
             return expected == StackCategory.ObjectReference;
         }
@@ -86,7 +86,7 @@ public static class StackCompatibility
             StackCategory.NativeInt => found is StackCategory.NativeInt or StackCategory.Int32,
             StackCategory.ByRef => found == StackCategory.ByRef && MemberResolver.TypesEqual(actual.GetElementType()!, declared.GetElementType()!),
             StackCategory.ValueType => found == StackCategory.ValueType && MemberResolver.TypesEqual(actual, declared),
-            _ => found == StackCategory.ObjectReference && (actual == typeof(object) || Assignable(declared, actual)),
+            _ => found == StackCategory.ObjectReference && Assignable(declared, actual),
         };
     }
 

@@ -204,4 +204,16 @@ public sealed class MemberResolverTests
         Assert.IsTrue(MemberResolver.ResolveMethod("int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsLong) Fib(int32)", context, false).IsSessionMethod);
         Assert.Contains("unexpected 'extra'", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("int32 Fib extra", context, false)).Message);
     }
+
+    /// <summary>
+    /// int32[] and int32[0...] are different parameter types.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_SessionMethodArrayKind_MustMatch()
+    {
+        var first = new MethodSignature("First", typeof(int), [new ArgumentDeclaration(typeof(int[]), "a", null, "")]);
+        var context = ContextWith(first);
+        Assert.IsTrue(MemberResolver.ResolveMethod("First(int32[])", context, false).IsSessionMethod);
+        Assert.Contains("no method First(int32[0...]) in the session; defined: int32 First(int32[])", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("First(int32[0...])", context, false)).Message);
+    }
 }

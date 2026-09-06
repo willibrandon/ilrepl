@@ -8,27 +8,45 @@ namespace IlRepl.Engine;
 /// </summary>
 public static class TypeNameFormatter
 {
+    /// <summary>
+    /// Every identifier-shaped terminal of the ILAsm grammar (dotnet/runtime, src/coreclr/ilasm/prebuilt/asmparse.grammar).
+    /// A name in this set, or an opcode name, must be quoted to be read as a name.
+    /// </summary>
     private static readonly HashSet<string> IlAsmKeywords = new(StringComparer.Ordinal)
     {
-        "abstract", "aggressiveinlining", "algorithm", "alignment", "ansi", "any", "array", "as", "assembly", "assert", "at", "auto", "autochar",
-        "beforefieldinit", "blob", "bool", "boxed", "bstr", "bytearray", "byvalstr", "carray", "catch", "cdecl", "cf", "char", "cil", "class",
-        "clsid", "const", "constrained", "culture", "currency", "custom", "data", "date", "decimal", "default", "demand", "deny", "disabled",
-        "enum", "error", "event", "explicit", "extends", "extern", "false", "family", "famandassem", "famorassem", "fastcall", "fault", "field",
-        "filetime", "filter", "final", "finally", "fixed", "flags", "float", "float32", "float64", "forwardref", "fromunmanaged", "handler",
-        "hash", "hidebysig", "hresult", "idispatch", "il", "illegal", "implements", "implicitcom", "implicitres", "import", "in", "inheritcheck",
-        "init", "initonly", "instance", "int", "int8", "int16", "int32", "int64", "interface", "internalcall", "iunknown", "lasterr", "lcid",
-        "linkcheck", "literal", "locale", "localloc", "lpstr", "lpstruct", "lptstr", "lpvoid", "lpwstr", "managed", "marshal", "method",
-        "modopt", "modreq", "module", "native", "nested", "newslot", "noappdomain", "noinlining", "nomachine", "nomangle", "nometadata",
-        "noncasdemand", "noncasinheritance", "noncaslinkdemand", "noprocess", "not_in_gc_heap", "notremotable", "notserialized", "null",
-        "nullref", "object", "objectref", "opt", "optil", "out", "overrides", "pack", "permitonly", "pinned", "pinvokeimpl", "platformapi",
-        "prefix1", "prefix2", "prefix3", "prefix4", "prefix5", "prefix6", "prefix7", "prefixref", "prejitdeny", "prejitgrant", "preservesig",
-        "private", "privatescope", "property", "protected", "public", "readonly", "record", "refany", "reqmin", "reqopt", "reqrefuse",
-        "request", "retargetable", "retval", "rtspecialname", "runtime", "safearray", "sealed", "sequential", "serializable", "size",
-        "specialname", "static", "stdcall", "storage", "stored", "stream", "streamed", "string", "struct", "synchronized", "syschar",
-        "sysstring", "tbstr", "thiscall", "tls", "to", "true", "typedref", "uint", "uint8", "uint16", "uint32", "uint64", "unicode", "union",
-        "unmanaged", "unmanagedexp", "unsigned", "unused", "userdefined", "value", "valuetype", "vararg", "variant", "vector", "virtual",
-        "void", "wchar", "winapi", "with",
+        "abstract", "aggressiveinlining", "aggressiveoptimization", "algorithm", "alignment", "amd64", "ansi", "any",
+        "arm", "arm64", "array", "as", "assembly", "assert", "async", "at",
+        "auto", "autochar", "beforefieldinit", "bestfit", "blob", "blob_object", "bool", "bstr",
+        "byreflike", "bytearray", "byvalstr", "callconv", "callmostderived", "carray", "catch", "cdecl",
+        "cf", "char", "charmaperror", "cil", "class", "clsid", "constraint", "currency",
+        "custom", "date", "decimal", "default", "demand", "deny", "enum", "error",
+        "explicit", "extended", "extends", "extern", "false", "famandassem", "family", "famorassem",
+        "fastcall", "fault", "field", "filetime", "filter", "final", "finally", "fixed",
+        "flags", "float32", "float64", "forwarder", "forwardref", "fromunmanaged", "handler", "hi",
+        "hidebysig", "hresult", "idispatch", "iidparam", "implements", "import", "in", "inheritcheck",
+        "init", "initonly", "instance", "int", "int16", "int32", "int64", "int8",
+        "interface", "internalcall", "iunknown", "lasterr", "legacy", "library", "linkcheck", "literal",
+        "lpstr", "lpstruct", "lptstr", "lpwstr", "managed", "marshal", "mdtoken", "method",
+        "modopt", "modreq", "native", "nested", "newslot", "noinlining", "nomangle", "nometadata",
+        "noncasdemand", "noncasinheritance", "noncaslinkdemand", "nooptimization", "noplatform", "notserialized", "null", "nullref",
+        "object", "objectref", "off", "on", "opt", "optil", "out", "permitonly",
+        "pinned", "pinvokeimpl", "prejitdeny", "prejitgrant", "preservesig", "private", "privatescope", "property",
+        "public", "record", "reqmin", "reqopt", "reqrefuse", "reqsecobj", "request", "retainappdomain",
+        "retargetable", "rtspecialname", "runtime", "safearray", "sealed", "sequential", "serializable", "specialname",
+        "static", "stdcall", "storage", "stored_object", "stream", "streamed_object", "strict", "string",
+        "struct", "synchronized", "syschar", "sysstring", "tbstr", "thiscall", "tls", "to",
+        "true", "type", "typedref", "uint", "uint16", "uint32", "uint64", "uint8",
+        "unicode", "unmanaged", "unmanagedexp", "unsigned", "userdefined", "value", "valuetype", "vararg",
+        "variant", "vector", "virtual", "void", "winapi", "windowsruntime", "with", "x86",
     };
+
+    private static string ArraySuffix(Type array)
+    {
+        // A vector is int32[]; a rank-1 array with bounds is int32[0...], which ILAsm and the
+        // runtime keep distinct from the vector.
+        var rank = array.GetArrayRank();
+        return rank == 1 && !array.IsSZArray ? "[0...]" : "[" + new string(',', rank - 1) + "]";
+    }
 
     /// <summary>
     /// Renders a name the way ILAsm needs it: quoted when it is an opcode or a keyword, or not a
@@ -77,8 +95,7 @@ public static class TypeNameFormatter
 
         if (type.IsArray)
         {
-            var rank = type.GetArrayRank();
-            return Pretty(type.GetElementType()) + "[" + new string(',', rank - 1) + "]";
+            return Pretty(type.GetElementType()) + ArraySuffix(type);
         }
 
         if (type.IsGenericType)
@@ -132,7 +149,7 @@ public static class TypeNameFormatter
 
         if (type.IsArray)
         {
-            return IlAsm(type.GetElementType()!) + "[" + new string(',', type.GetArrayRank() - 1) + "]";
+            return IlAsm(type.GetElementType()!) + ArraySuffix(type);
         }
 
         var kind = type.IsValueType ? "valuetype " : "class ";

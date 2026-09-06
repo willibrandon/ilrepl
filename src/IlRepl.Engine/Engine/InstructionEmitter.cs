@@ -142,7 +142,8 @@ public static class InstructionEmitter
             case ConstructorInfo constructor:
                 il.Emit(op, constructor);
                 break;
-            case MethodInfo method when resolved.OptionalParameterTypes is not null:
+            case MethodInfo method when resolved.OptionalParameterTypes is not null && (op == OpCodes.Call || op == OpCodes.Callvirt):
+                // Only a call site carries the vararg extra parameters; ldftn and jmp name the method itself.
                 il.EmitCall(op, method, resolved.OptionalParameterTypes);
                 break;
             case MethodInfo method:

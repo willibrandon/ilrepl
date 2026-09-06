@@ -384,4 +384,31 @@ public sealed class ReplCoreMethodTests
         Assert.AreEqual("Bad", core.Status.OpenMethod);
         Assert.AreEqual(1, core.CellNumber);
     }
+
+    /// <summary>
+    /// A close the runtime cannot prepare on this platform is an error line, never an exception
+    /// out of Handle, and the block stays open.
+    /// </summary>
+    [TestMethod]
+    public void Handle_PlatformLimitedClose_IsAnErrorLine()
+    {
+        var core = new ReplCore();
+        core.Session.Resolver.Load(SampleHost.Samples.GreeterDll);
+        foreach (var line in new[] { ".method native int Pointer() {", "ldftn vararg int32 Greeter.Hello::CountArgs()", "ret" })
+        {
+            core.Handle(line);
+        }
+
+        var close = core.Handle("}");
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.IsTrue(close.Succeeded);
+            Assert.AreEqual(1, core.Status.Methods);
+            return;
+        }
+
+        Assert.IsFalse(close.Succeeded);
+        Assert.Contains("error: the runtime only supports the vararg calling convention on Windows; method Pointer cannot be prepared here", Plain(core));
+        Assert.AreEqual("Pointer", core.Status.OpenMethod);
+    }
 }
