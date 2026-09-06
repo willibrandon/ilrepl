@@ -70,6 +70,7 @@ public sealed class FrontEndProcessTests
     {
         TestSkip.Unless(!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("ILREPL_PTY_TESTS") == "1", "PTY test runs on Unix by default");
         var ct = TestContext.CancellationToken;
+        var recorder = new WorkloadRecorder();
         await using var terminal = Hex1bTerminal.CreateBuilder()
             .WithPtyProcess(options =>
             {
@@ -78,6 +79,7 @@ public sealed class FrontEndProcessTests
                 options.WorkingDirectory = RepoPaths.Root;
                 options.Environment = new Dictionary<string, string> { ["TERM"] = "xterm-256color", ["NO_COLOR"] = "" };
             })
+            .AddWorkloadFilter(recorder)
             .WithHeadless()
             .WithDimensions(100, 30)
             .Build();
@@ -85,6 +87,11 @@ public sealed class FrontEndProcessTests
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("il[1]>");
+
+        // What the process writes is what a terminal would see: the caret at the prompt is
+        // requested as a blinking block, never as the bar.
+        await auto.WaitUntilAsync(_ => recorder.Output.Contains("\x1b[1 q", StringComparison.Ordinal));
+        Assert.DoesNotContain("\x1b[6 q", recorder.Output, "the bar caret should not reach the terminal");
         await auto.TypeAsync("ldc.i4 41", ct: ct);
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("[int32]");

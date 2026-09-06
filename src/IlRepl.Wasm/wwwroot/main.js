@@ -16,6 +16,7 @@
   window.ilreplReady = false;
   window.ilreplSessionCount = 0;
   window.ilreplLastRestart = null;
+  window.ilreplLastCopy = null;
 
   try {
     if (!document.querySelector('link[href*="xterm"]')) {
@@ -187,9 +188,24 @@
       resizeTimer = setTimeout(fitColumns, 100);
     });
 
-    // The app does not ask for mouse tracking, so dragging selects text in xterm as usual and
-    // the right-click menu can copy it. Ctrl+C or Cmd+C with a selection copies instead of
-    // sending the key.
+    // Selection and copy happen inside the app: a drag or F12 starts a selection and Enter, y,
+    // or a right click copies it, which reaches the page as an OSC 52 sequence.
+    term.parser.registerOscHandler(52, (data) => {
+      const parts = data.split(';');
+      if (parts.length < 2) return false;
+      let text;
+      try {
+        text = new TextDecoder().decode(Uint8Array.from(atob(parts[1]), (c) => c.charCodeAt(0)));
+      } catch {
+        return false;
+      }
+      window.ilreplLastCopy = text;
+      if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+      return true;
+    });
+
+    // xterm's own selection still works with the platform's modifier held (Shift, or Option on
+    // macOS); Ctrl+C or Cmd+C copies that selection instead of sending the key.
     term.attachCustomKeyEventHandler((e) => {
       if (e.type === 'keydown' && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'c' && term.hasSelection()) {
         if (navigator.clipboard) navigator.clipboard.writeText(term.getSelection()).catch(() => {});
@@ -198,25 +214,6 @@
       }
       return true;
     });
-
-    // The wheel becomes the SGR wheel report the app understands, aimed at the cell under the
-    // pointer, so the transcript scrolls by three lines per report as it does in a terminal.
-    let wheelRemainder = 0;
-    container.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!worker) return;
-      const screen = container.querySelector('.xterm-screen') || container;
-      const box = screen.getBoundingClientRect();
-      const col = Math.min(term.cols, Math.max(1, Math.floor((e.clientX - box.left) / (box.width / term.cols)) + 1));
-      const row = Math.min(term.rows, Math.max(1, Math.floor((e.clientY - box.top) / (box.height / term.rows)) + 1));
-      const step = e.deltaMode === 1 ? 3 : (e.deltaMode === 2 ? 1 : 50);
-      wheelRemainder += e.deltaY;
-      let reports = '';
-      while (wheelRemainder >= step) { reports += `\x1b[<65;${col};${row}M`; wheelRemainder -= step; }
-      while (wheelRemainder <= -step) { reports += `\x1b[<64;${col};${row}M`; wheelRemainder += step; }
-      if (reports) send(reports);
-    }, { capture: true, passive: false });
 
     // A click anywhere in the box focuses the terminal. In the padding around the rows the
     // default action of the mousedown would move focus to the body right after, so it is

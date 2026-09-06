@@ -12,6 +12,7 @@ description: Keys in the terminal UI.
 | Escape | Dismiss the palette. |
 | Home, End, Left, Right | Move within the line. |
 | Ctrl+L | Clear the transcript. |
+| Shift+Up | Select the last transcript line. Shift+Up and Shift+Down extend the selection, y copies it, Escape cancels. Dragging with the mouse selects as well. |
 | Ctrl+Q | Quit. |
 | Ctrl+C | Quit. |
 

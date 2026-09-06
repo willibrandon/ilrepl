@@ -276,13 +276,152 @@ public sealed class IlReplAppTests
         Assert.IsGreaterThan(0, separator, "the separator above the prompt should be on screen");
         Assert.DoesNotContain(r => r.TrimEnd().Length > 59, rows.Take(separator), "no transcript row should run into the scrollbar column");
 
+        // At this width only the last hint fits beside the facts; it is never clipped.
+        Assert.EndsWith("Ctrl+Q quit", rows[^1].TrimEnd(), "the quit hint should be whole");
+        Assert.DoesNotContain("Tab complete", rows[^1], "a hint that does not fit should be dropped");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// Dragging across the transcript selects text, the status bar switches to copy mode's keys,
+    /// y copies to the clipboard through the terminal, the selection is gone, the status bar says
+    /// what was yanked, and the prompt is back in charge. The caret the terminal is asked for is
+    /// a blinking block.
+    /// </summary>
+    [TestMethod]
+    public async Task DragOnTranscript_CopiesSelection()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = await HostPaths.StartEngineAsync(ct);
+        var transcript = new Transcript();
+        var recorder = new PresentationRecorder();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
+            .AddPresentationFilter(recorder)
+            .WithHeadless()
+            .WithDimensions(100, 30)
+            .WithMouse()
+            .Build();
+
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.WaitUntilTextAsync("Tab complete │ Shift+↑ select │ Ctrl+Q quit");
+        await auto.TypeAsync("ldc.i4 6", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("[int32]");
+
+        // The echoed line sits on the second row. Select it with the mouse, then yank with y.
+        await auto.DragAsync(0, 1, 14, 1, ct: ct);
+        await auto.WaitUntilTextAsync("Shift+↑↓ extend │ y yank │ Esc cancel");
+        await auto.TypeAsync("y", ct: ct);
+        await auto.WaitUntilAsync(_ => recorder.Output.Contains("\x1b]52;c;", StringComparison.Ordinal));
+        var payload = recorder.Output[(recorder.Output.LastIndexOf("\x1b]52;c;", StringComparison.Ordinal) + 7)..];
+        payload = payload[..payload.IndexOfAny(['\x07', '\x1b'])];
+        var copied = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+        Assert.Contains("ldc.i4 6", copied, "the selected row should be what was copied");
+
+        // The yank is confirmed on the status bar, the selection is gone, and the message clears.
+        await auto.WaitUntilTextAsync("Yanked: il[1]> ldc.i4 6");
+        await auto.WaitUntilNoTextAsync("y yank");
+        await auto.WaitUntilNoTextAsync("Yanked:", timeout: TimeSpan.FromSeconds(5));
+
+        Assert.Contains("\x1b[1 q", recorder.Output, "the prompt caret should be a blinking block");
+        Assert.DoesNotContain("\x1b[6 q", recorder.Output, "no bar caret should reach the terminal");
+
+        // Copy mode has ended; typing goes to the prompt again.
+        await auto.TypeAsync("ret", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("= 6 : int32");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// Shift+Up at the prompt selects the last transcript line, another Shift+Up extends the
+    /// selection upward, y yanks both lines, and F12 is not bound to anything.
+    /// </summary>
+    [TestMethod]
+    public async Task ShiftUp_SelectsLinesFromTheKeyboard()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = await HostPaths.StartEngineAsync(ct);
+        var transcript = new Transcript();
+        var recorder = new PresentationRecorder();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
+            .AddPresentationFilter(recorder)
+            .WithHeadless()
+            .WithDimensions(100, 30)
+            .Build();
+
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync("ldc.i4 6", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("[int32]");
+
+        await auto.Shift().KeyAsync(Hex1bKey.UpArrow, ct: ct);
+        await auto.WaitUntilTextAsync("y yank");
+        await auto.Shift().KeyAsync(Hex1bKey.UpArrow, ct: ct);
+        await auto.TypeAsync("y", ct: ct);
+        await auto.WaitUntilAsync(_ => recorder.Output.Contains("\x1b]52;c;", StringComparison.Ordinal));
+        var payload = recorder.Output[(recorder.Output.LastIndexOf("\x1b]52;c;", StringComparison.Ordinal) + 7)..];
+        payload = payload[..payload.IndexOfAny(['\x07', '\x1b'])];
+        var copied = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+        Assert.Contains("ldc.i4 6", copied, "the echoed line should be in the yank");
+        Assert.Contains("[int32]", copied, "the stack line should be in the yank");
+        await auto.WaitUntilTextAsync("Yanked 2 lines");
+
+        // F12 does nothing, so the line after it goes to the prompt.
+        await auto.KeyAsync(Hex1bKey.F12, ct: ct);
+        await auto.TypeAsync("ret", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("= 6 : int32");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// The transcript's scrollbar can be dragged with the mouse.
+    /// </summary>
+    [TestMethod]
+    public async Task Scrollbar_DragScrollsTranscript()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = await HostPaths.StartEngineAsync(ct);
+        var transcript = new Transcript();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
+            .WithHeadless()
+            .WithDimensions(100, 30)
+            .WithMouse()
+            .Build();
+
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync(".help", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("Ctrl+Q leaves.");
+
+        // The transcript follows its end, so the thumb sits at the bottom of the last column.
+        await auto.DragAsync(99, 24, 99, 1, ct: ct);
+        await auto.WaitUntilNoTextAsync("Ctrl+Q leaves.");
+        await auto.WaitUntilTextAsync("Type one IL instruction");
+
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
 
     /// <summary>
     /// Wheel reports scroll the transcript even when the app has not asked the terminal for mouse
-    /// tracking, which is how the browser build works so text can still be selected there.
+    /// tracking.
     /// </summary>
     [TestMethod]
     public async Task Wheel_ScrollsTranscriptWithoutMouseTracking()

@@ -55,7 +55,7 @@ run for a few seconds is left failed, since it would most likely fail the same w
 | `src/IlRepl.Protocol` | library, AOT-safe | Transcript model, completion catalog, request and response records, JSON source generation. |
 | `src/IlRepl.Engine` | library | IL parsing, member resolution, stack simulation, compilation, the session, and `ReplCore`. |
 | `src/IlRepl.Host` | console app | Serves `ReplCore` over stdin/stdout. Published into `host/` next to the tool. |
-| `src/IlRepl.Tui` | library, AOT-safe | The Hex1b widgets: transcript, prompt with completion palette, status bar. |
+| `src/IlRepl.Tui` | library, AOT-safe | The Hex1b widgets: transcript with copy mode, prompt with completion palette, status bar, and the presentation filters that fold lines to the width and shape the caret. |
 | `src/IlRepl` | tool, Native AOT | CLI, batch mode, host process client. |
 | `src/IlRepl.Wasm` | browser app | The engine and the UI on the .NET WebAssembly runtime, for the docs site. |
 | `samples/Greeter` | library | A real assembly the tests load and call into. |
