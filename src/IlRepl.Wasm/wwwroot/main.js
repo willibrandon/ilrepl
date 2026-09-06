@@ -49,6 +49,8 @@
 
   const worker = new Worker(baseUrl + 'worker.js', { type: 'module' });
   const sendResize = () => worker.postMessage({ type: 'resize', cols: term.cols, rows: term.rows });
+  // The worker queues this until the runtime is up, so the app's first layout matches the terminal.
+  sendResize();
 
   worker.onmessage = (e) => {
     const msg = e.data;

@@ -68,6 +68,12 @@ public sealed class LiveSessionTests
         await Assertions.Expect(page.Locator("#session-status")).ToHaveTextAsync("Ready");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("il[1]>", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
 
+        // The layout must match the terminal's size: the prompt sits on the second to last row and the
+        // status bar on the last, otherwise they are below the visible rows.
+        var rows = await BufferRowsAsync(page);
+        Assert.StartsWith("il[1]>", rows[^2].TrimStart(), "the prompt should be on the second to last row");
+        Assert.Contains("Ctrl+Q", rows[^1], "the status bar should be on the last row");
+
         await page.EvaluateAsync("() => window.ilreplTerminal.focus()");
         foreach (var line in new[] { "ldc.i4 6", "ldc.i4 7", "mul", "ret" })
         {
@@ -104,10 +110,8 @@ public sealed class LiveSessionTests
         _ => await s_playwright!.Chromium.LaunchAsync(),
     };
 
-    private static async Task<string> BufferTextAsync(IPage page)
-    {
-        var lines = await page.EvaluateAsync<string[]>(
-            "() => Array.from({length: window.ilreplTerminal.rows}, (_, i) => (window.ilreplTerminal.buffer.active.getLine(i)?.translateToString(true) ?? ''))");
-        return string.Join('\n', lines);
-    }
+    private static async Task<string> BufferTextAsync(IPage page) => string.Join('\n', await BufferRowsAsync(page));
+
+    private static Task<string[]> BufferRowsAsync(IPage page) => page.EvaluateAsync<string[]>(
+        "() => Array.from({length: window.ilreplTerminal.rows}, (_, i) => (window.ilreplTerminal.buffer.active.getLine(i)?.translateToString(true) ?? ''))");
 }

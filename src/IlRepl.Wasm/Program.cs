@@ -9,9 +9,17 @@ using IlRepl.Wasm;
 // Bind the [JSImport] functions to the interop module that the worker loads.
 await JSHost.ImportAsync("main.js", "../interop.js");
 
+// The page posts the terminal size as soon as the worker starts, but the message is delivered
+// asynchronously. Wait for it briefly so the first layout matches the terminal rather than a default.
 var columns = 100;
-var rows = 30;
+var rows = 28;
 var initialSize = WasmPresentationAdapter.PollResize();
+for (var attempt = 0; attempt < 300 && string.IsNullOrEmpty(initialSize); attempt++)
+{
+    await Task.Delay(10);
+    initialSize = WasmPresentationAdapter.PollResize();
+}
+
 if (!string.IsNullOrEmpty(initialSize))
 {
     var parts = initialSize.Split(',');
