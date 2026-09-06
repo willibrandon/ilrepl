@@ -137,7 +137,7 @@ bindings: Ctrl+Q quits, Ctrl+L clears.
 - [x] Docs site on Astro Starlight with the live session
 - [x] CI, docs deploy, release workflows
 - [x] README
-- [ ] First release tag and nuget.org trusted publishing (needs the nuget.org side configured)
+- [x] First release tag and nuget.org trusted publishing (v0.1.0)
 
 ## Decisions
 
