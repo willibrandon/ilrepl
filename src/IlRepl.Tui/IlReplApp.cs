@@ -26,8 +26,9 @@ public static class IlReplApp
     /// <param name="engine">The engine that handles lines.</param>
     /// <param name="transcript">The transcript to render and append to.</param>
     /// <param name="usePlatformClipboard">True to copy selections through the platform's clipboard command as well as the terminal.</param>
+    /// <param name="onApp">Called once the app exists, before its first frame.</param>
     /// <returns>The same builder, for chaining.</returns>
-    public static Hex1bTerminalBuilder Configure(Hex1bTerminalBuilder builder, IReplEngine engine, Transcript transcript, bool usePlatformClipboard = false)
+    public static Hex1bTerminalBuilder Configure(Hex1bTerminalBuilder builder, IReplEngine engine, Transcript transcript, bool usePlatformClipboard = false, Action<Hex1bApp>? onApp = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(engine);
@@ -44,11 +45,10 @@ public static class IlReplApp
             .AddPresentationFilter(size)
             .AddPresentationFilter(new PromptCursorFilter())
             .WithHex1bApp(
-                // Each input event is handled and rendered on its own, so focus pulled back to the
-                // prompt by one render is in place before the next key is read.
-                options => options.EnableInputCoalescing = false,
+                options => { },
                 app =>
                 {
+                    onApp?.Invoke(app);
                     app.RequestFocus(node => node is TextBoxNode);
                     size.Changed += app.Invalidate;
                     return ctx => BuildRoot(ctx, app, engine, transcript, size, feedback, usePlatformClipboard);
@@ -101,12 +101,14 @@ public static class IlReplApp
     }
 
     /// <summary>
-    /// Finds the transcript's selection panel node by walking up from the focused node and back
+    /// Finds the first node of a type by walking up from the focused node to the root and back
     /// down the tree, or null before the first frame.
     /// </summary>
+    /// <typeparam name="TNode">The node type to find.</typeparam>
     /// <param name="app">The running app.</param>
-    /// <returns>The panel node, or null.</returns>
-    public static SelectionPanelNode? FindSelectionPanel(Hex1bApp app)
+    /// <returns>The node, or null.</returns>
+    public static TNode? FindNode<TNode>(Hex1bApp app)
+        where TNode : Hex1bNode
     {
         ArgumentNullException.ThrowIfNull(app);
         var root = app.FocusedNode;
@@ -117,11 +119,11 @@ public static class IlReplApp
 
         return root is null ? null : Descend(root);
 
-        static SelectionPanelNode? Descend(Hex1bNode node)
+        static TNode? Descend(Hex1bNode node)
         {
-            if (node is SelectionPanelNode panel)
+            if (node is TNode match)
             {
-                return panel;
+                return match;
             }
 
             foreach (var child in node.GetChildren())
@@ -134,6 +136,45 @@ public static class IlReplApp
 
             return null;
         }
+    }
+
+    private static void Scroll(Hex1bApp app, int amount, InputBindingActionContext context)
+    {
+        FindNode<ScrollPanelNode>(app)?.ScrollBy(amount);
+        context.FocusWhere(node => node is TextBoxNode);
+        context.Invalidate();
+    }
+
+    private static DragHandler SelectionDrag(Hex1bApp app, SelectionMode mode)
+    {
+        app.FocusWhere(node => node is TextBoxNode);
+        var panel = FindNode<SelectionPanelNode>(app);
+        if (panel is null)
+        {
+            return new DragHandler(onMove: (_, _, _) => { }, onEnd: _ => { });
+        }
+
+        // Copy mode starts on the first movement, with the anchor where the press was, so a plain
+        // click selects nothing. Releasing keeps the selection so y can yank it.
+        var started = false;
+        return new DragHandler(
+            onMove: (context, dx, dy) =>
+            {
+                var row = context.MouseY - panel.Bounds.Y;
+                var column = context.MouseX - panel.Bounds.X;
+                if (!started)
+                {
+                    started = true;
+                    panel.EnterCopyMode();
+                    panel.SetCursor(row - dy, column - dx);
+                    panel.StartOrToggleSelection(mode);
+                    context.CaptureInput(panel);
+                }
+
+                panel.SetCursor(row, column);
+                context.Invalidate();
+            },
+            onEnd: context => context.Invalidate());
     }
 
     private static Hex1bWidget[] TranscriptLines(Transcript transcript, int lineWidth, YankFeedback feedback)
@@ -160,15 +201,16 @@ public static class IlReplApp
 
     private static VStackWidget BuildRoot(RootContext ctx, Hex1bApp app, IReplEngine engine, Transcript transcript, TerminalSizeFilter size, YankFeedback feedback, bool usePlatformClipboard)
     {
-        // Any mouse event, a wheel notch included, focuses the node under the pointer. The prompt
-        // is the only place input goes, so focus is pulled back on the next render.
+        // The prompt is the only place input goes. A click on the scrollbar still focuses the
+        // transcript panel, so focus is pulled back on the next render as a last resort; clicks
+        // and wheel notches over the transcript itself are handed back at once, below.
         if (app.FocusedNode is not null and not TextBoxNode)
         {
             app.RequestFocus(node => node is TextBoxNode);
         }
 
         var status = engine.Status;
-        var panel = FindSelectionPanel(app);
+        var panel = FindNode<SelectionPanelNode>(app);
         var copyMode = panel?.IsInCopyMode == true;
         // The scrollbar takes the last column of the transcript panel.
         var lineWidth = size.Width > 1 ? size.Width - 1 : 0;
@@ -193,6 +235,18 @@ public static class IlReplApp
                             b.Shift().Key(Hex1bKey.DownArrow).OverridesCapture().Triggers(SelectionPanelWidget.CopyModeDown);
                         }),
                 ], showScrollbar: true)
+                .InputBindings(b =>
+                {
+                    // A press on the transcript focuses the panel before any binding runs. These
+                    // bindings hand focus back to the prompt inside the same event, so keys that
+                    // arrive right behind the mouse still reach it. A press that moves becomes a
+                    // selection in the panel; the scrollbar's own drag has already had first pick.
+                    b.Drag(MouseButton.Left).Action((x, y) => SelectionDrag(app, SelectionMode.Character), "Select");
+                    b.Drag(MouseButton.Left).Ctrl().Action((x, y) => SelectionDrag(app, SelectionMode.Line), "Select lines");
+                    b.Drag(MouseButton.Left).Alt().Action((x, y) => SelectionDrag(app, SelectionMode.Block), "Select a block");
+                    b.Mouse(MouseButton.ScrollUp).Action(c => Scroll(app, -3, c), "Scroll up");
+                    b.Mouse(MouseButton.ScrollDown).Action(c => Scroll(app, 3, c), "Scroll down");
+                })
                 .Follow()
                 .Fill(),
             v.Separator(),
@@ -247,7 +301,7 @@ public static class IlReplApp
             // Shift+Up from the prompt selects the last transcript line; more Shift+Up extends it.
             b.Shift().Key(Hex1bKey.UpArrow).Action(c =>
             {
-                if (FindSelectionPanel(app) is { IsInCopyMode: false } target)
+                if (FindNode<SelectionPanelNode>(app) is { IsInCopyMode: false } target)
                 {
                     target.EnterCopyMode();
                     target.StartOrToggleSelection(SelectionMode.Line);
