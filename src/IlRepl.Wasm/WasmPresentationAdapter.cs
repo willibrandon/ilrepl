@@ -135,6 +135,12 @@ public sealed partial class WasmPresentationAdapter : IHex1bTerminalPresentation
     internal static partial void NotifyReady(int cols, int rows);
 
     /// <summary>
+    /// Tells the page that the session ended and the next one is about to start.
+    /// </summary>
+    [JSImport("notifyExited", "main.js")]
+    internal static partial void NotifyExited();
+
+    /// <summary>
     /// Wakes <see cref="ReadInputAsync"/>. JavaScript calls this when input or a resize arrives.
     /// </summary>
     [JSExport]

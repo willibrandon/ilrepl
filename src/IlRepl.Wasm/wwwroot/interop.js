@@ -14,6 +14,10 @@ export function notifyReady(cols, rows) {
   self.postMessage({ type: 'ready', cols, rows });
 }
 
+export function notifyExited() {
+  self.postMessage({ type: 'exited' });
+}
+
 export function pollAllInput() {
   if (inputChunks.length === 0) return null;
   let total = 0;

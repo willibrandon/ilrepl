@@ -11,11 +11,14 @@ This is ilrepl itself, compiled to WebAssembly. Cells compile with Reflection.Em
     <div class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
     <span class="title">ilrepl</span>
     <span class="status" id="session-status">Loading</span>
+    <button class="restart" id="session-restart" type="button" title="Restart the session" aria-label="Restart the session">&#x21bb;</button>
   </div>
   <div id="terminal"></div>
 </div>
 
 Click into the terminal and type. Tab completes opcodes, Up and Down walk history, `.help` lists the commands.
+
+Ctrl+Q ends the session and a fresh one starts in its place. The button in the corner restarts the runtime, and the page does that on its own if the session stops responding, say after a cell that never returns.
 
 ```
 ldc.i4 6

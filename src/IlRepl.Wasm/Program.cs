@@ -20,35 +20,57 @@ for (var attempt = 0; attempt < 300 && string.IsNullOrEmpty(initialSize); attemp
     initialSize = WasmPresentationAdapter.PollResize();
 }
 
-if (!string.IsNullOrEmpty(initialSize))
+if (TryParseSize(initialSize, out var initialColumns, out var initialRows))
 {
-    var parts = initialSize.Split(',');
-    if (parts.Length == 2
-        && int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var c)
-        && int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var r))
+    columns = initialColumns;
+    rows = initialRows;
+}
+
+// A session ends when the user quits with Ctrl+Q or .quit. The page is told, and the next session
+// starts in the same runtime with a fresh engine, so quitting never leaves the box empty.
+while (true)
+{
+    (columns, rows) = await RunSessionAsync(columns, rows);
+    WasmPresentationAdapter.NotifyExited();
+}
+
+static async Task<(int Columns, int Rows)> RunSessionAsync(int columns, int rows)
+{
+    var adapter = new WasmPresentationAdapter(columns, rows);
+    WasmPresentationAdapter.Instance = adapter;
+
+    await using var engine = new InProcessEngine();
+    var transcript = new Transcript { MaxLines = 500 };
+    await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder().WithPresentation(adapter), engine, transcript)
+        .WithMouse()
+        .Build();
+
+    WasmPresentationAdapter.NotifyReady(adapter.Width, adapter.Height);
+    try
     {
-        columns = c;
-        rows = r;
+        await terminal.RunAsync();
     }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+        // The browser console is the only place a failure can be read from.
+        Console.Error.WriteLine(ex.ToString());
+        throw;
+    }
+
+    return (adapter.Width, adapter.Height);
 }
 
-var adapter = new WasmPresentationAdapter(columns, rows);
-WasmPresentationAdapter.Instance = adapter;
-
-await using var engine = new InProcessEngine();
-var transcript = new Transcript { MaxLines = 500 };
-await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder().WithPresentation(adapter), engine, transcript)
-    .WithMouse()
-    .Build();
-
-WasmPresentationAdapter.NotifyReady(adapter.Width, adapter.Height);
-try
+static bool TryParseSize(string? size, out int columns, out int rows)
 {
-    await terminal.RunAsync();
-}
-catch (Exception ex) when (ex is not OperationCanceledException)
-{
-    // The browser console is the only place a failure can be read from.
-    Console.Error.WriteLine(ex.ToString());
-    throw;
+    columns = 0;
+    rows = 0;
+    if (string.IsNullOrEmpty(size))
+    {
+        return false;
+    }
+
+    var parts = size.Split(',');
+    return parts.Length == 2
+        && int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out columns)
+        && int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out rows);
 }

@@ -98,6 +98,94 @@ public sealed class LiveSessionTests
     }
 
     /// <summary>
+    /// Ctrl+Q ends the session and a fresh one starts in the same runtime with an empty transcript.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(300_000, CooperativeCancellation = true)]
+    public async Task LiveSession_RestartsAfterQuit(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await launched.NewContextAsync();
+        var page = await OpenSessionAsync(context);
+        await TypeLineAsync(page, "ldc.i4 6");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("┊ [int32]", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+
+        await page.Keyboard.PressAsync("Control+q");
+        await WaitForSessionAsync(page, 2, 60_000);
+
+        Assert.AreEqual("quit", await page.EvaluateAsync<string>("() => window.ilreplLastRestart"));
+        var text = await BufferTextAsync(page);
+        Assert.Contains("il[1]>", text, "the new session should start at cell 1");
+        Assert.DoesNotContain("ldc.i4 6", text, "the new session should have an empty transcript");
+        await TypeLineAsync(page, "ldc.i4 3");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 3 : int32", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+    }
+
+    /// <summary>
+    /// The restart button replaces the worker; the runtime boots again into a fresh session.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(300_000, CooperativeCancellation = true)]
+    public async Task RestartButton_StartsFreshSession(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await launched.NewContextAsync();
+        var page = await OpenSessionAsync(context);
+        await TypeLineAsync(page, "ldc.i4 6");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("┊ [int32]", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+
+        await page.Locator("#session-restart").ClickAsync();
+        await WaitForSessionAsync(page, 2, 180_000);
+
+        Assert.AreEqual("button", await page.EvaluateAsync<string>("() => window.ilreplLastRestart"));
+        var text = await BufferTextAsync(page);
+        Assert.Contains("il[1]>", text, "the new session should start at cell 1");
+        Assert.DoesNotContain("ldc.i4 6", text, "the new session should have an empty transcript");
+        await ClickIntoTerminalAsync(page);
+        await TypeLineAsync(page, "ldc.i4 4");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 4 : int32", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+    }
+
+    /// <summary>
+    /// A cell that never returns blocks the runtime. The page notices the missing heartbeats and
+    /// restarts the worker on its own.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(300_000, CooperativeCancellation = true)]
+    public async Task Watchdog_RestartsHungSession(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await launched.NewContextAsync();
+        var page = await OpenSessionAsync(context);
+        await TypeLineAsync(page, "L: br L");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("┊ []", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await TypeLineAsync(page, "ret");
+
+        await WaitForSessionAsync(page, 2, 180_000);
+
+        Assert.AreEqual("hung", await page.EvaluateAsync<string>("() => window.ilreplLastRestart"));
+        Assert.Contains("il[1]>", await BufferTextAsync(page), "the new session should start at cell 1");
+        await ClickIntoTerminalAsync(page);
+        await TypeLineAsync(page, "ldc.i4 5");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 5 : int32", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+    }
+
+    /// <summary>
     /// The home page links to the live session and shows the install command.
     /// </summary>
     /// <returns>A task that completes when the assertions have run.</returns>
@@ -113,6 +201,35 @@ public sealed class LiveSessionTests
         await Assertions.Expect(page.Locator(".hero-prompt")).ToContainTextAsync("ldc.i4 6");
         await Assertions.Expect(page.Locator(".hero-prompt")).ToContainTextAsync("= 42 : int32");
         await Assertions.Expect(page.Locator(".install-hint code")).ToHaveTextAsync("dotnet tool install -g ilrepl");
+    }
+
+    private static async Task<IPage> OpenSessionAsync(IBrowserContext context)
+    {
+        var page = await context.NewPageAsync();
+        await page.GotoAsync(s_site!.BaseUrl + "/try/");
+        await WaitForSessionAsync(page, 1, 180_000);
+        await ClickIntoTerminalAsync(page);
+        return page;
+    }
+
+    private static async Task WaitForSessionAsync(IPage page, int count, float timeout)
+    {
+        await page.WaitForFunctionAsync($"() => window.ilreplReady === true && window.ilreplSessionCount >= {count}", null, new PageWaitForFunctionOptions { Timeout = timeout });
+        await Assertions.Expect(page.Locator("#session-status")).ToHaveTextAsync("Ready");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("il[1]>", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+    }
+
+    private static async Task ClickIntoTerminalAsync(IPage page)
+    {
+        var box = await page.Locator("#terminal").BoundingBoxAsync();
+        Assert.IsNotNull(box);
+        await page.Mouse.ClickAsync(box.X + (box.Width / 2), box.Y + (box.Height / 2));
+    }
+
+    private static async Task TypeLineAsync(IPage page, string line)
+    {
+        await page.Keyboard.TypeAsync(line);
+        await page.Keyboard.PressAsync("Enter");
     }
 
     private static async Task<IBrowser> LaunchAsync(string browser) => browser switch

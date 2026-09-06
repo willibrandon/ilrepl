@@ -7,6 +7,10 @@ self.onmessage = (e) => {
   if (self.__ilreplQueuedMessages) self.__ilreplQueuedMessages.push(e.data);
 };
 
+// The page watches for these. They stop when the event loop is blocked, which is how a cell that
+// never returns is noticed from outside.
+setInterval(() => self.postMessage({ type: 'heartbeat' }), 1000);
+
 try {
   let loaded = 0;
   let total = 0;

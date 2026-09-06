@@ -42,6 +42,11 @@ app: a Web Worker boots the .NET runtime, an in-process engine wraps `ReplCore`,
 presentation adapter bridges the Hex1b terminal to xterm.js on the page, following Hex1b's
 WasmDemo sample. Reflection.Emit runs on the Mono interpreter, so cells compile there too.
 Nothing talks to a server, which is what a GitHub Pages site can host.
+Sessions loop inside the worker: a quit ends one and the next starts in the same runtime with a
+fresh engine. The page supervises the worker through a heartbeat. A session that stops responding,
+say after a cell that never returns, or a worker that fails after it has been running, is replaced.
+A button in the session header does the same by hand. A worker that fails before its session has
+run for a few seconds is left failed, since it would most likely fail the same way again.
 
 ### Projects
 
@@ -111,8 +116,8 @@ bindings: Ctrl+Q quits, Ctrl+L clears.
   the automator, including a real host process behind the UI.
 - End-to-end tests run the built front-end as a process, in batch mode over pipes and in a PTY
   through the Hex1b emulator.
-- Docs tests serve the built site from Kestrel and drive the live session in Chromium with
-  Playwright.
+- Docs tests serve the built site from Kestrel and drive the live session in Chromium and WebKit
+  with Playwright, including a quit, the restart button, and a cell that hangs the runtime.
 
 ## Progress
 
@@ -127,7 +132,7 @@ bindings: Ctrl+Q quits, Ctrl+L clears.
 - [x] Native AOT tool with the host bundled beside it; smoke-tested and packed per runtime
 - [x] Samples: Greeter library and ten transcripts
 - [x] Tests: engine, samples, transcripts, UI on the emulator, end-to-end over pipes and a PTY
-- [x] Browser build and a Playwright test of the live session
+- [x] Browser build and Playwright tests of the live session, its restarts, and the watchdog
 - [x] Scripts: opcode reference generator, browser publish, Native AOT publish and pack
 - [x] Docs site on Astro Starlight with the live session
 - [x] CI, docs deploy, release workflows

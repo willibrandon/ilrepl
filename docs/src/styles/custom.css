@@ -286,6 +286,22 @@ starlight-toc {
   color: #8c8ca0;
 }
 
+#session-header .restart {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: #8c8ca0;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+#session-header .restart:hover {
+  color: #4fd1c5;
+  border-color: #4fd1c5;
+}
+
 #terminal {
   padding: 0.5rem;
   background: #121218;
