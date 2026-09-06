@@ -181,6 +181,142 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
+    /// The palette's columns stay put while the selection scrolls through the whole list, so the
+    /// descriptions do not jump left and right.
+    /// </summary>
+    [TestMethod]
+    public async Task Palette_ColumnsStayPutWhileScrolling()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = await HostPaths.StartEngineAsync(ct);
+        var transcript = new Transcript();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
+            .WithHeadless()
+            .WithDimensions(100, 30)
+            .Build();
+
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        var commands = engine.Catalog.Where(c => c.Name.StartsWith('.')).ToList();
+        await auto.TypeAsync(".", ct: ct);
+        await auto.WaitUntilTextAsync($"commands 1/{commands.Count}");
+
+        var descriptionColumns = new HashSet<int>();
+        for (var step = 0; step < commands.Count; step++)
+        {
+            await auto.WaitUntilTextAsync($"commands {step + 1}/{commands.Count}");
+            string[] lines;
+            using (var snapshot = auto.CreateSnapshot())
+            {
+                lines = snapshot.GetScreenText().Split('\n');
+            }
+
+            foreach (var item in commands)
+            {
+                var row = Array.Find(lines, line => line.Contains(' ' + item.Name + ' ', StringComparison.Ordinal) && line.Contains(item.Description, StringComparison.Ordinal));
+                if (row is not null)
+                {
+                    descriptionColumns.Add(row.IndexOf(item.Description, StringComparison.Ordinal));
+                }
+            }
+
+            await auto.DownAsync(ct: ct);
+        }
+
+        Assert.HasCount(1, descriptionColumns, "descriptions should start in the same column on every row at every scroll position");
+
+        await auto.EscapeAsync(ct: ct);
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// Long transcript lines wrap instead of being cut off, so the help is readable in a narrow
+    /// terminal. A description after a label folds under itself, at the label's width.
+    /// </summary>
+    [TestMethod]
+    public async Task Help_WrapsInNarrowTerminal()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = await HostPaths.StartEngineAsync(ct);
+        var transcript = new Transcript();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
+            .WithHeadless()
+            .WithDimensions(60, 120)
+            .Build();
+
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync(".help", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("Ctrl+Q leaves.");
+
+        string[] rows;
+        using (var snapshot = auto.CreateSnapshot())
+        {
+            rows = snapshot.GetScreenText().Split('\n');
+        }
+
+        // Folded rows read back as one paragraph once the line breaks are folded away.
+        var text = string.Join(' ', rows.Select(r => r.Trim()).Where(r => r.Length > 0));
+        Assert.Contains("ret or an empty line compiles the cell, runs it, and prints the value left on the stack.", text, "the paragraph should be readable in full");
+        Assert.Contains("cell arguments and the values passed each run", text, "a description should be readable in full");
+
+        // Rows fill the width beside the scrollbar; they are not folded early.
+        Assert.Contains("Type one IL instruction per line. The simulated stack is", rows.Select(r => r.TrimEnd()), "the first row of the paragraph should use the full width");
+        Assert.Contains("shown after each one.", rows.Select(r => r.TrimEnd()));
+        Assert.Contains(r => r.StartsWith("  ldc.i4 6 ", StringComparison.Ordinal), rows, "an indented example should keep its indentation");
+        Assert.Contains(r => r.StartsWith("  .args (T name = literal, ...)", StringComparison.Ordinal), rows, "an entry should keep its indentation and label");
+        Assert.Contains(r => r.StartsWith(new string(' ', 32), StringComparison.Ordinal) && r.Trim().Length > 0, rows, "a folded description should continue at the label's width");
+        var separator = Array.FindIndex(rows, r => r.StartsWith("──", StringComparison.Ordinal));
+        Assert.IsGreaterThan(0, separator, "the separator above the prompt should be on screen");
+        Assert.DoesNotContain(r => r.TrimEnd().Length > 59, rows.Take(separator), "no transcript row should run into the scrollbar column");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// Wheel reports scroll the transcript even when the app has not asked the terminal for mouse
+    /// tracking, which is how the browser build works so text can still be selected there.
+    /// </summary>
+    [TestMethod]
+    public async Task Wheel_ScrollsTranscriptWithoutMouseTracking()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = await HostPaths.StartEngineAsync(ct);
+        var transcript = new Transcript();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
+            .WithHeadless()
+            .WithDimensions(100, 30)
+            .Build();
+
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync(".help", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("Ctrl+Q leaves.");
+        await auto.WaitUntilNoTextAsync("Type one IL instruction");
+
+        await auto.MouseMoveToAsync(20, 5, ct: ct);
+        await auto.ScrollUpAsync(20, ct: ct);
+        await auto.WaitUntilTextAsync("Type one IL instruction");
+        await auto.WaitUntilNoTextAsync("Ctrl+Q leaves.");
+
+        await auto.ScrollDownAsync(20, ct: ct);
+        await auto.WaitUntilTextAsync("Ctrl+Q leaves.");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
     /// Ctrl+L clears the transcript back to the banner.
     /// </summary>
     [TestMethod]

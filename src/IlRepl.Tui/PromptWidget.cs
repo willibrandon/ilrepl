@@ -190,8 +190,10 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
     {
         var first = Math.Clamp(state.SelectedIndex - (PaletteRows / 2), 0, Math.Max(0, candidates.Count - PaletteRows));
         var visible = candidates.Skip(first).Take(PaletteRows).ToList();
-        var nameWidth = Math.Max(12, visible.Max(c => c.Name.Length) + 2);
-        var detailWidth = Math.Max(4, visible.Max(c => c.Detail.Length) + 2);
+        // Column widths come from every candidate, not just the visible ones, so the columns stay
+        // put while the selection scrolls through the list.
+        var nameWidth = Math.Max(12, candidates.Max(c => c.Name.Length) + 2);
+        var detailWidth = Math.Max(4, candidates.Max(c => c.Detail.Length) + 2);
 
         var rows = visible.Select((item, offset) =>
         {

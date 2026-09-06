@@ -41,8 +41,9 @@ static async Task<(int Columns, int Rows)> RunSessionAsync(int columns, int rows
 
     await using var engine = new InProcessEngine();
     var transcript = new Transcript { MaxLines = 500 };
+    // Mouse tracking stays off so xterm.js keeps its own text selection. The page turns wheel
+    // events into the reports the app understands, so the transcript still scrolls.
     await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder().WithPresentation(adapter), engine, transcript)
-        .WithMouse()
         .Build();
 
     WasmPresentationAdapter.NotifyReady(adapter.Width, adapter.Height);

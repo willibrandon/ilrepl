@@ -6,21 +6,30 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Renders one transcript line: plain text for a single default span, otherwise a row of
-/// colored text runs.
+/// Renders one transcript line as one or more rows of styled runs, folded to the width the
+/// terminal reported, so long output is read in full instead of being cut off at the edge.
 /// </summary>
 /// <param name="Line">The line to render.</param>
-public sealed record TranscriptLineWidget(TranscriptLine Line) : Hex1bWidget
+/// <param name="Width">The width in columns to fold at, or zero or less to leave the line whole.</param>
+public sealed record TranscriptLineWidget(TranscriptLine Line, int Width) : Hex1bWidget
 {
     /// <summary>
-    /// Builds the row.
+    /// Builds the rows.
     /// </summary>
     /// <param name="ctx">The composition context.</param>
     /// <returns>The widget tree for the line.</returns>
     protected override Hex1bWidget Build(CompositionContext ctx)
     {
         ArgumentNullException.ThrowIfNull(ctx);
-        var spans = Line.Spans;
+        var rows = TranscriptLineFolder.Fold(Line.Spans, Width);
+        return rows.Count == 1
+            ? Row(ctx, rows[0])
+            : ctx.VStack(v => rows.Select(row => Row(v, row)).ToArray());
+    }
+
+    private static Hex1bWidget Row<TParent>(WidgetContext<TParent> ctx, IReadOnlyList<TranscriptSpan> spans)
+        where TParent : Hex1bWidget
+    {
         if (spans.Count == 0)
         {
             return ctx.Text("");
@@ -32,7 +41,6 @@ public sealed record TranscriptLineWidget(TranscriptLine Line) : Hex1bWidget
         }
 
         return ctx.HStack(h => spans
-            .Where(s => s.Text.Length > 0)
             .Select(s => s.Style == SpanStyle.Default
                 ? (Hex1bWidget)h.Text(s.Text).ContentWidth()
                 : h.ThemePanel(SpanPalette.Mutator(s.Style), h.Text(s.Text).ContentWidth()).ContentWidth())

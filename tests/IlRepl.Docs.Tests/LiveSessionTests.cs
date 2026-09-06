@@ -61,7 +61,7 @@ public sealed class LiveSessionTests
     public async Task LiveSession_RunsCellInBrowser(string browser)
     {
         await using var launched = await LaunchAsync(browser);
-        await using var context = await launched.NewContextAsync();
+        await using var context = await NewContextAsync(launched);
         var page = await context.NewPageAsync();
         await page.GotoAsync(s_site!.BaseUrl + "/try/");
         await page.WaitForFunctionAsync("() => window.ilreplReady === true", null, new PageWaitForFunctionOptions { Timeout = 180_000 });
@@ -98,6 +98,83 @@ public sealed class LiveSessionTests
     }
 
     /// <summary>
+    /// After focus has left the page's terminal, a click anywhere in the box brings it back, the
+    /// padding around the rows included, and typing reaches the prompt again.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task ClickInBox_RestoresFocusToPrompt(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+
+        await page.Locator("h1").ClickAsync();
+        Assert.AreEqual("BODY", await page.EvaluateAsync<string>("() => document.activeElement.tagName"), "clicking the heading should take focus off the terminal");
+
+        var box = await page.Locator("#terminal").BoundingBoxAsync();
+        Assert.IsNotNull(box);
+        await page.Mouse.ClickAsync(box.X + 3, box.Y + 3);
+        Assert.AreEqual("TEXTAREA", await page.EvaluateAsync<string>("() => document.activeElement.tagName"), "a click in the padding should focus the terminal");
+        await TypeLineAsync(page, "ldc.i4 6");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("┊ [int32]", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+
+        await page.Locator("h1").ClickAsync();
+        await page.Mouse.ClickAsync(box.X + box.Width - 4, box.Y + box.Height - 4);
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 6 : int32", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+    }
+
+    /// <summary>
+    /// Dragging selects text the way it does in any terminal on the web, a click afterwards still
+    /// puts typing at the prompt, and the wheel scrolls the transcript.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task Selection_ClickAndWheel_KeepWorking(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+
+        // Drag across the banner on the first row.
+        var screen = await page.Locator(".xterm-screen").BoundingBoxAsync();
+        Assert.IsNotNull(screen);
+        var size = await page.EvaluateAsync<int[]>("() => [window.ilreplTerminal.cols, window.ilreplTerminal.rows]");
+        var cellWidth = screen.Width / size[0];
+        var cellHeight = screen.Height / size[1];
+        var y = screen.Y + (cellHeight / 2);
+        await page.Mouse.MoveAsync(screen.X + (cellWidth * 8.5f), y);
+        await page.Mouse.DownAsync();
+        await page.Mouse.MoveAsync(screen.X + (cellWidth * 44.5f), y, new MouseMoveOptions { Steps = 8 });
+        await page.Mouse.UpAsync();
+        var selection = await page.EvaluateAsync<string>("() => window.ilreplTerminal.getSelection()");
+        Assert.Contains("type IL, watch the stack", selection, "the drag should select the banner text");
+
+        // A click afterwards leaves the selection behind and typing reaches the prompt.
+        await ClickIntoTerminalAsync(page);
+        await TypeLineAsync(page, "ldc.i4 6");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("┊ [int32]", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+
+        // The help is taller than the box; the wheel scrolls the transcript up and back down.
+        await TypeLineAsync(page, ".help");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("Ctrl+Q leaves.", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await page.Mouse.MoveAsync(screen.X + (screen.Width / 2), screen.Y + (screen.Height / 3));
+        await page.Mouse.WheelAsync(0, -1000);
+        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("Ctrl+Q leaves.", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
+        await page.Mouse.WheelAsync(0, 1000);
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("Ctrl+Q leaves.", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
+    }
+
+    /// <summary>
     /// Ctrl+Q ends the session and a fresh one starts in the same runtime with an empty transcript.
     /// </summary>
     /// <param name="browser">The browser engine to drive.</param>
@@ -109,7 +186,7 @@ public sealed class LiveSessionTests
     public async Task LiveSession_RestartsAfterQuit(string browser)
     {
         await using var launched = await LaunchAsync(browser);
-        await using var context = await launched.NewContextAsync();
+        await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await TypeLineAsync(page, "ldc.i4 6");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("┊ [int32]", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
@@ -138,7 +215,7 @@ public sealed class LiveSessionTests
     public async Task RestartButton_StartsFreshSession(string browser)
     {
         await using var launched = await LaunchAsync(browser);
-        await using var context = await launched.NewContextAsync();
+        await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await TypeLineAsync(page, "ldc.i4 6");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("┊ [int32]", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
@@ -169,7 +246,7 @@ public sealed class LiveSessionTests
     public async Task Watchdog_RestartsHungSession(string browser)
     {
         await using var launched = await LaunchAsync(browser);
-        await using var context = await launched.NewContextAsync();
+        await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await TypeLineAsync(page, "L: br L");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("┊ []", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
@@ -194,7 +271,7 @@ public sealed class LiveSessionTests
     public async Task Home_LinksToLiveSessionAndInstall()
     {
         await using var launched = await LaunchAsync("chromium");
-        await using var context = await launched.NewContextAsync();
+        await using var context = await NewContextAsync(launched);
         var page = await context.NewPageAsync();
         await page.GotoAsync(s_site!.BaseUrl + "/");
         await Assertions.Expect(page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Try it live" })).ToBeVisibleAsync();
@@ -202,6 +279,12 @@ public sealed class LiveSessionTests
         await Assertions.Expect(page.Locator(".hero-prompt")).ToContainTextAsync("= 42 : int32");
         await Assertions.Expect(page.Locator(".install-hint code")).ToHaveTextAsync("dotnet tool install -g ilrepl");
     }
+
+    // The session box is taller than Playwright's default viewport; clicks outside the viewport never land.
+    private static Task<IBrowserContext> NewContextAsync(IBrowser browser) => browser.NewContextAsync(new BrowserNewContextOptions
+    {
+        ViewportSize = new ViewportSize { Width = 1280, Height = 1000 },
+    });
 
     private static async Task<IPage> OpenSessionAsync(IBrowserContext context)
     {

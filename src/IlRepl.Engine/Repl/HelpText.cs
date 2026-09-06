@@ -20,8 +20,8 @@ public static class HelpText
 
         Heading("ilrepl");
         Plain("Type one IL instruction per line. The simulated stack is shown after each one.");
-        Plain("ret or an empty line compiles the cell, runs it on the JIT, and prints the value left");
-        Plain("on the stack. Nothing on the stack means void. Two or more values is an error.");
+        Plain("ret or an empty line compiles the cell, runs it, and prints the value left on");
+        Plain("the stack. Nothing on the stack means void. Two or more values is an error.");
         Plain("");
         Heading("examples");
         Plain("  ldc.i4 6                       .locals init (int32 i)");
@@ -46,21 +46,23 @@ public static class HelpText
         Plain("  ret");
         Plain("");
         Heading("member references");
-        Plain("The return type and [assembly] prefix are optional; short names resolve through System.*.");
+        Plain("Return type and [assembly] prefix are optional; short names resolve in System.*.");
         Plain("  call int32 [System.Runtime]System.Math::Max(int32, int32)");
         Plain("  call Math::Max(int32, int32)");
         Plain("  callvirt instance int32 List<int32>::get_Count()");
         Plain("  call !!0 Enumerable::First<int32>(class IEnumerable`1<!!0>)");
-        Plain("  ldsfld string String::Empty        ldtoken int32        ldtoken method void Console::WriteLine()");
+        Plain("  ldsfld string String::Empty        ldtoken int32");
+        Plain("  ldtoken method void Console::WriteLine()");
         Plain("  calli int32(int32, int32)          call vararg int32 Hello::Count(..., int32)");
         Plain("");
         Heading("declarations");
-        Entry(".locals init (T name, ...)", "declare locals; they persist across cells, their values do not");
-        Entry(".args (T name = literal, ...)", "declare cell arguments and the values passed on each run");
+        Entry(".locals init (T name, ...)", "declare locals; kept across cells, values reset");
+        Entry(".args (T name = literal, ...)", "cell arguments and the values passed each run");
         Entry(".typeparams (T, U)", "make the cell generic; use !!T or !!0 in types");
         Entry(".typeargs (int32, string)", "bind the generic parameters before running");
-        Entry(".vararg", "give the cell the vararg calling convention so arglist works");
-        Entry(".try {  } catch T {  }", "exception blocks; also filter, handler, finally, fault; exit with leave");
+        Entry(".vararg", "vararg calling convention, so arglist works");
+        Entry(".try {  } catch T {  }", "exception blocks, exit them with leave");
+        Entry("} finally {  } fault {", "more handlers; also } filter {  } handler {");
         Plain("");
         Heading("commands");
         foreach (var c in Completer.Commands)
@@ -74,7 +76,8 @@ public static class HelpText
         }
 
         Plain("");
-        Plain("Tab completes opcodes and commands, Up and Down walk history, Ctrl+L clears the screen, Ctrl+Q leaves.");
+        Plain("Tab completes opcodes and commands, Up and Down walk history.");
+        Plain("Ctrl+L clears the screen, Ctrl+Q leaves.");
         return lines;
     }
 }

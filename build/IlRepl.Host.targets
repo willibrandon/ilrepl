@@ -6,7 +6,8 @@
   <PropertyGroup>
     <_IlReplHostRoot>$(MSBuildThisFileDirectory)..\</_IlReplHostRoot>
     <_IlReplHostProject>$([System.IO.Path]::GetFullPath('$(_IlReplHostRoot)src\IlRepl.Host\IlRepl.Host.csproj'))</_IlReplHostProject>
-    <_IlReplHostBuildDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(BaseIntermediateOutputPath)host\$(MSBuildProjectName)\$(Configuration)\'))</_IlReplHostBuildDirectory>
+    <!-- BaseIntermediateOutputPath may be absolute, as with artifacts output or a build that redirects it; NormalizeDirectory honors that. -->
+    <_IlReplHostBuildDirectory>$([System.IO.Path]::GetFullPath('$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(BaseIntermediateOutputPath)', 'host', '$(MSBuildProjectName)', '$(Configuration)'))'))</_IlReplHostBuildDirectory>
     <_IlReplHostOutputDirectory>$(_IlReplHostBuildDirectory)bin\</_IlReplHostOutputDirectory>
     <_IlReplHostIntermediateDirectory>$(_IlReplHostBuildDirectory)obj\</_IlReplHostIntermediateDirectory>
     <_IlReplHostPublishDirectory>$(_IlReplHostBuildDirectory)publish\</_IlReplHostPublishDirectory>

@@ -14,7 +14,7 @@ public static class Completer
     [
         new(".help", "", "show help", false),
         new(".ops", "[filter]", "list opcodes with their stack transitions", true),
-        new(".show", "", "list the cell with the stack after each instruction", false),
+        new(".show", "", "the cell, with the stack after each instruction", false),
         new(".undo", "", "remove the last line of the cell", false),
         new(".clear", "", "drop the cell, keep declarations", false),
         new(".reset", "", "drop the cell and every declaration", false),

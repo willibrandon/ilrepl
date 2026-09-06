@@ -34,13 +34,18 @@ public static class IlReplApp
             transcript.Add(LineKind.Info, Banner, SpanStyle.Dim);
         }
 
-        return builder.WithHex1bApp(
-            options => { },
-            app =>
-            {
-                app.RequestFocus(node => node is TextBoxNode);
-                return ctx => BuildRoot(ctx, app, engine, transcript);
-            });
+        // The terminal reports its size to this filter, and long lines are folded at that width.
+        var size = new TerminalSizeFilter();
+        return builder
+            .AddPresentationFilter(size)
+            .WithHex1bApp(
+                options => { },
+                app =>
+                {
+                    app.RequestFocus(node => node is TextBoxNode);
+                    size.Changed += app.Invalidate;
+                    return ctx => BuildRoot(ctx, app, engine, transcript, size);
+                });
     }
 
     /// <summary>
@@ -59,12 +64,14 @@ public static class IlReplApp
         return await terminal.RunAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private static VStackWidget BuildRoot(RootContext ctx, Hex1bApp app, IReplEngine engine, Transcript transcript)
+    private static VStackWidget BuildRoot(RootContext ctx, Hex1bApp app, IReplEngine engine, Transcript transcript, TerminalSizeFilter size)
     {
         var status = engine.Status;
+        // The scrollbar takes the last column of the transcript panel.
+        var lineWidth = size.Width > 1 ? size.Width - 1 : 0;
         return ctx.VStack(v =>
         [
-            v.VScrollPanel(sv => transcript.Lines.Select(line => (Hex1bWidget)new TranscriptLineWidget(line)).ToArray(), showScrollbar: true)
+            v.VScrollPanel(sv => transcript.Lines.Select(line => (Hex1bWidget)new TranscriptLineWidget(line, lineWidth)).ToArray(), showScrollbar: true)
                 .InputBindings(b =>
                 {
                     // The click has already focused the transcript panel. Hand focus straight back to
