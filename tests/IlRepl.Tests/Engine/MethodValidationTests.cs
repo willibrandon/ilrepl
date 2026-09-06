@@ -212,4 +212,22 @@ public sealed class MethodValidationTests
 
     private static int CheckAssemblies() =>
         AppDomain.CurrentDomain.GetAssemblies().Count(a => a.GetName().Name?.StartsWith("ilrepl.check", StringComparison.Ordinal) == true);
+
+    /// <summary>
+    /// A body the runtime refuses for a reason other than invalid IL is still a recoverable
+    /// close: the error names the method and the block stays open.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_CloseWithRuntimeRejection_IsReportedNotThrown()
+    {
+        var session = Load(".method void Bad() {", "callvirt void Console::WriteLine()");
+        var ex = Assert.ThrowsExactly<ReplException>(() => session.AddLine("}"));
+        Assert.Contains("rejected method Bad", ex.Message);
+        Assert.Contains("the block is still open", ex.Message);
+        Assert.AreEqual("Bad", session.OpenMethod!.Name);
+        Assert.AreEqual(0, session.Submissions);
+        Assert.IsTrue(session.Undo());
+        session.AddLine("call void Console::WriteLine()");
+        Assert.AreEqual("end of method Bad", session.AddLine("}").Message);
+    }
 }

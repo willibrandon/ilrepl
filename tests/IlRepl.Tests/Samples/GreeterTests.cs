@@ -213,4 +213,18 @@ public sealed class GreeterTests
             "callvirt instance string [System.Runtime]System.Reflection.MemberInfo::get_Name()");
         Assert.AreEqual("Say", name);
     }
+
+    /// <summary>
+    /// ldtoken of a vararg method takes the plain token path, not the vararg call-site one.
+    /// </summary>
+    [TestMethod]
+    public void Tokens_VarargMethod()
+    {
+        var session = new Session();
+        session.Resolver.Load(SampleHost.Samples.GreeterDll);
+        Assert.AreEqual("CountArgs", Run(session,
+            "ldtoken method vararg int32 Greeter.Hello::CountArgs()",
+            "call class [System.Runtime]System.Reflection.MethodBase [System.Runtime]System.Reflection.MethodBase::GetMethodFromHandle(valuetype [System.Runtime]System.RuntimeMethodHandle)",
+            "callvirt instance string [System.Runtime]System.Reflection.MemberInfo::get_Name()"));
+    }
 }

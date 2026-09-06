@@ -225,12 +225,34 @@ public static class MemberResolver
     private static ResolvedMethod ResolveSessionMethod(string s, ParseContext context, bool wantConstructor, bool explicitInstance, bool isVarArg)
     {
         // "[ret] Name(params)" with no "::" names a method defined with .method. The return type
-        // is optional, as it is for a framework method; the parameter list, when given, must match.
-        var paren = s.IndexOf('(', StringComparison.Ordinal);
-        var head = (paren < 0 ? s : s[..paren]).Trim();
-        var space = head.LastIndexOfAny([' ', '\t']);
-        var name = space < 0 ? head : head[(space + 1)..];
-        var returnText = space < 0 ? null : head[..space].Trim();
+        // is optional, as it is for a framework method, and may contain parentheses of its own
+        // (modopt, a function pointer), so it is parsed as a type when the text before the first
+        // '(' has room for one. The parameter list, when given, must match.
+        var firstParen = s.IndexOf('(', StringComparison.Ordinal);
+        var head = (firstParen < 0 ? s : s[..firstParen]).Trim();
+        Type? returnType = null;
+        var pos = 0;
+        if (head.Any(char.IsWhiteSpace))
+        {
+            returnType = TypeParser.ParseAt(s, ref pos, context, out _);
+            TypeParser.SkipWhitespace(s, ref pos);
+        }
+
+        var nameEnd = pos;
+        while (nameEnd < s.Length && s[nameEnd] != '(' && !char.IsWhiteSpace(s[nameEnd]))
+        {
+            nameEnd++;
+        }
+
+        var name = InstructionParser.Unquote(s[pos..nameEnd]);
+        var afterName = nameEnd;
+        TypeParser.SkipWhitespace(s, ref afterName);
+        var paren = afterName < s.Length && s[afterName] == '(' ? afterName : -1;
+        if (paren < 0 && afterName < s.Length)
+        {
+            throw new ReplException($"unexpected '{s[afterName..]}' in method reference");
+        }
+
         if (name.Contains('<', StringComparison.Ordinal))
         {
             throw new ReplException("session methods are not generic");
@@ -264,13 +286,9 @@ public static class MemberResolver
                 : $"no method '{name}' in the session; defined: {string.Join(", ", context.Methods.Select(m => m.Describe()))}  (define one with .method)");
         }
 
-        if (returnText is not null)
+        if (returnType is not null && !TypesEqual(returnType, signature.ReturnType))
         {
-            var returnType = TypeParser.Parse(returnText, context);
-            if (!TypesEqual(returnType, signature.ReturnType))
-            {
-                throw new ReplException($"method {name} returns {TypeNameFormatter.Pretty(signature.ReturnType)}, not {TypeNameFormatter.Pretty(returnType)}");
-            }
+            throw new ReplException($"method {name} returns {TypeNameFormatter.Pretty(signature.ReturnType)}, not {TypeNameFormatter.Pretty(returnType)}");
         }
 
         if (paren >= 0)

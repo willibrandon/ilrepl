@@ -285,7 +285,9 @@ public sealed class Session
         if (replacing is not null)
         {
             // Dependents bind to the signature, which is known now. Checking here, rather than at
-            // the closing brace, means a refused redefinition costs nothing to recover from.
+            // the closing brace, means a refused redefinition costs nothing to recover from. A
+            // reference already bound to the old signature is checked directly, because a replay
+            // would happily rebind an abbreviated reference such as "ldftn F" to the new one.
             foreach (var other in _methods)
             {
                 if (ReferenceEquals(other, replacing))
@@ -293,6 +295,7 @@ public sealed class Session
                     continue;
                 }
 
+                RequireCompatibleReferences(other.State, "method " + other.Signature.Name, signature, "(the previous definition stays)");
                 try
                 {
                     ReplayMethod(other, table);
@@ -303,6 +306,7 @@ public sealed class Session
                 }
             }
 
+            RequireCompatibleReferences(_cell, "the cell body", signature, "(.clear the cell first, or keep the signature)");
             try
             {
                 BuildCell(table);
@@ -366,6 +370,7 @@ public sealed class Session
                 continue;
             }
 
+            RequireCompatibleReferences(existing.State, "method " + existing.Signature.Name, open.Signature, "(the previous definition stays)");
             try
             {
                 committed.Add(existing with { State = ReplayMethod(existing, open.Signatures) });
@@ -380,6 +385,11 @@ public sealed class Session
         if (open.Replacing is null)
         {
             committed.Add(candidate);
+        }
+
+        if (open.Replacing is not null)
+        {
+            RequireCompatibleReferences(_cell, "the cell body", open.Signature, "(.clear the cell first, or keep the signature)");
         }
 
         CellState cell;
@@ -461,6 +471,22 @@ public sealed class Session
 
         TypeArguments = types;
     }
+
+    private static void RequireCompatibleReferences(CellState state, string what, MethodSignature replacement, string hint)
+    {
+        foreach (var entry in state.Entries)
+        {
+            if (entry.Instruction?.Operand is ResolvedMethod { Definition: { } bound } && bound.Name == replacement.Name && !SameSignature(bound, replacement))
+            {
+                throw new ReplException($"cannot redefine {replacement.Name} as {replacement.Describe()}: {what} references {bound.Describe()}  {hint}");
+            }
+        }
+    }
+
+    private static bool SameSignature(MethodSignature a, MethodSignature b) =>
+        MemberResolver.TypesEqual(a.ReturnType, b.ReturnType)
+        && a.Parameters.Count == b.Parameters.Count
+        && a.ParameterTypes.Zip(b.ParameterTypes).All(pair => MemberResolver.TypesEqual(pair.First, pair.Second));
 
     private List<MethodSignature> Signatures() => _methods.Select(m => m.Signature).ToList();
 

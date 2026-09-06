@@ -155,4 +155,17 @@ public sealed class StackSimulatorTests
     {
         Assert.AreEqual(typeof(RuntimeMethodHandle), RunWithMethods("ldtoken method int32 Fib(int32)").Top);
     }
+
+    /// <summary>
+    /// ldind.ref through a byref or pointer yields the element type rather than object.
+    /// </summary>
+    [TestMethod]
+    public void Apply_LdindRefOnByRef_PushesElementType()
+    {
+        var locals = new ParseContext([new LocalDeclaration(typeof(string), "s", false)], [], GenericContext.Empty, new TypeResolver(), []);
+        var simulator = new StackSimulator();
+        simulator.Apply(InstructionParser.Parse("ldloca s", locals), locals);
+        simulator.Apply(InstructionParser.Parse("ldind.ref", locals), locals);
+        Assert.AreEqual("[string]", simulator.Render());
+    }
 }

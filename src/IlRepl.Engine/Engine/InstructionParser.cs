@@ -125,6 +125,17 @@ public static class InstructionParser
     }
 
     /// <summary>
+    /// Strips the single quotes ILAsm allows around a name, so <c>'value'</c> and <c>value</c> name the same thing.
+    /// </summary>
+    /// <param name="name">The name as written.</param>
+    /// <returns>The name without quotes.</returns>
+    public static string Unquote(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return name.Length > 2 && name.StartsWith('\'') && name.EndsWith('\'') ? name[1..^1] : name;
+    }
+
+    /// <summary>
     /// Parses an instruction (opcode plus operand) with no labels or comments.
     /// </summary>
     /// <param name="text">The instruction text.</param>
@@ -429,9 +440,6 @@ public static class InstructionParser
             ? $"no argument '{name}'; declare one with: .args (int32 {name} = 0)"
             : $"no argument '{name}'; declared: {string.Join(", ", arguments.Select((a, i) => $"{i}:{a.Name ?? "?"}"))}");
     }
-
-    private static string Unquote(string s) =>
-        s.Length > 2 && s[0] == '\'' && s[^1] == '\'' ? s[1..^1] : s;
 
     private static void RequireNoOperand(OpCode op, string operandText)
     {

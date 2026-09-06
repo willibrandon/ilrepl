@@ -174,7 +174,7 @@ public sealed class SessionMethodTests
     {
         var session = Load([.. Two, ".method int32 Twice() {", "call int32 Two()", "ldc.i4 2", "mul", "ret", "}"]);
         var ex = Assert.ThrowsExactly<ReplException>(() => session.AddLine(".method int64 Two() {"));
-        Assert.Contains("cannot redefine Two as int64 Two(): method Twice would no longer compile", ex.Message);
+        Assert.Contains("cannot redefine Two as int64 Two(): method Twice references int32 Two()", ex.Message);
         Assert.Contains("(the previous definition stays)", ex.Message);
         Assert.IsNull(session.OpenMethod);
         Assert.AreEqual(typeof(int), session.Methods[0].Signature.ReturnType);
@@ -190,7 +190,7 @@ public sealed class SessionMethodTests
     {
         var session = Load([.. Two, "call int32 Two()"]);
         var ex = Assert.ThrowsExactly<ReplException>(() => session.AddLine(".method int64 Two() {"));
-        Assert.Contains("the cell body would no longer compile", ex.Message);
+        Assert.Contains("the cell body references int32 Two()", ex.Message);
         Assert.Contains("(.clear the cell first, or keep the signature)", ex.Message);
         Assert.AreEqual("[int32]", session.State.Stack.Render(), "the cell is untouched");
 
@@ -506,5 +506,57 @@ public sealed class SessionMethodTests
         Assert.AreEqual(2, RunCell(session, "call int32 Two()"));
         Add(session, ".method int32 Two() {", "ldc.i4 3", "ret", "}");
         Assert.AreEqual(3, RunCell(session, "call int32 Two()"));
+    }
+
+    /// <summary>
+    /// A reference that named the method without its signature still pins the old one: the
+    /// caller's calli signature would otherwise quietly read the new return as the old type.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_RedefinitionChangingReferencedSignature_FailsAtHeader()
+    {
+        var session = Load(".method int32 F() {", "ldc.i4 1", "ret", "}", ".method int32 Read() {", "ldftn F", "calli int32()", "ret", "}");
+        var ex = Assert.ThrowsExactly<ReplException>(() => session.AddLine(".method string F() {"));
+        Assert.Contains("cannot redefine F as string F(): method Read references int32 F()", ex.Message);
+        Assert.IsNull(session.OpenMethod);
+        Assert.AreEqual(1, RunCell(session, "call int32 Read()"));
+
+        Assert.AreEqual(LineOutcome.MethodStart, session.AddLine(".method int32 F() {").Outcome, "the same signature is always allowed");
+
+        var cell = Load(".method int32 F() {", "ldc.i4 1", "ret", "}", "ldftn F", "pop");
+        Assert.Contains("the cell body references int32 F()", Assert.ThrowsExactly<ReplException>(() => cell.AddLine(".method int64 F() {")).Message);
+        Assert.IsNull(cell.OpenMethod);
+    }
+
+    /// <summary>
+    /// A boxed value returns as an interface, and a load through a byref returns as its element type.
+    /// </summary>
+    [TestMethod]
+    public void Run_BoxedReturnAndByRefDeref_Work()
+    {
+        var session = Load(
+            ".method class IComparable Boxed() {", "ldc.i4 1", "box int32", "ret", "}",
+            ".method string Deref(string& s) {", "ldarg s", "ldind.ref", "ret", "}",
+            ".method object Widen() {", "ldstr \"x\"", "castclass object", "}");
+        Assert.AreEqual(1, RunCell(session, "call class IComparable Boxed()"));
+        Assert.AreEqual("x", RunCell(session, ".locals init (string s)", "ldstr \"x\"", "stloc s", "ldloca s", "call string Deref(string&)"));
+        Assert.AreEqual("x", RunCell(session, "call object Widen()"));
+    }
+
+    /// <summary>
+    /// Quoted names, assembly-qualified parameter types, and return types with parentheses all
+    /// define and resolve.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_IlAsmSpellings_DefineAndResolve()
+    {
+        var session = Load(
+            ".method int32 'F'() {", "ldc.i4 7", "ret", "}",
+            ".method int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsLong) Long() {", "ldc.i4 8", "ret", "}",
+            ".method int32 Len([System.Runtime]System.String s, [in] int32 extra) {", "ldarg s", "callvirt instance int32 String::get_Length()", "ldarg extra", "add", "ret", "}");
+        Assert.AreEqual(7, RunCell(session, "call int32 'F'()"));
+        Assert.AreEqual(7, RunCell(session, "ldftn int32 'F'()", "calli int32()"));
+        Assert.AreEqual(8, RunCell(session, "call int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsLong) Long()"));
+        Assert.AreEqual(5, RunCell(session, "ldstr \"abc\"", "ldc.i4 2", "call int32 Len(string, int32)"));
     }
 }

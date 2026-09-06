@@ -278,7 +278,7 @@ public sealed class StackSimulator
                 return [popped[0]];
             case "ldelem.ref":
             case "ldind.ref":
-                return [popped.Count > 0 && popped[0] is { IsArray: true } array ? array.GetElementType() : typeof(object)];
+                return [popped.Count > 0 && popped[0] is { IsByRef: true } or { IsPointer: true } ? popped[0]!.GetElementType() : typeof(object)];
             default:
                 break;
         }

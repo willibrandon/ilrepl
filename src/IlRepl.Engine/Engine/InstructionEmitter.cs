@@ -112,7 +112,7 @@ public static class InstructionEmitter
                         il.Emit(op, f);
                         break;
                     case ResolvedMethod r:
-                        EmitMethod(il, op, r, methods);
+                        EmitToken(il, op, r, methods);
                         break;
                     default:
                         throw new ReplException("unsupported token operand");
@@ -150,6 +150,28 @@ public static class InstructionEmitter
                 break;
             default:
                 throw new ReplException("unsupported method operand");
+        }
+    }
+
+    private static void EmitToken(ILGenerator il, OpCode op, ResolvedMethod resolved, IReadOnlyDictionary<string, MethodInfo> methods)
+    {
+        // A token names the method itself, so the vararg call-site overload does not apply.
+        if (resolved.Definition is { } definition)
+        {
+            il.Emit(op, methods[definition.Name]);
+            return;
+        }
+
+        switch (resolved.Method)
+        {
+            case ConstructorInfo constructor:
+                il.Emit(op, constructor);
+                break;
+            case MethodInfo method:
+                il.Emit(op, method);
+                break;
+            default:
+                throw new ReplException("unsupported token operand");
         }
     }
 

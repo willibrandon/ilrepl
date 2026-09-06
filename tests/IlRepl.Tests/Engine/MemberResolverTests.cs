@@ -191,4 +191,17 @@ public sealed class MemberResolverTests
         Assert.Contains("expected 'Type::Method(...)' in method reference", ex.Message);
         Assert.Contains("(or a session method name defined with .method)", ex.Message);
     }
+
+    /// <summary>
+    /// A quoted name and a return type with parentheses resolve a session method.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_SessionMethodQuotedOrModifiedReturn_Resolves()
+    {
+        var context = ContextWith(Fib());
+        Assert.IsTrue(MemberResolver.ResolveMethod("int32 'Fib'(int32)", context, false).IsSessionMethod);
+        Assert.IsTrue(MemberResolver.ResolveMethod("'Fib'", context, false).IsSessionMethod);
+        Assert.IsTrue(MemberResolver.ResolveMethod("int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsLong) Fib(int32)", context, false).IsSessionMethod);
+        Assert.Contains("unexpected 'extra'", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("int32 Fib extra", context, false)).Message);
+    }
 }

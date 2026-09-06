@@ -132,4 +132,26 @@ public sealed class IlAsmRendererTests
         Assert.DoesNotContain("Fib", text);
         Assert.Contains("ldc.i4 1", text);
     }
+
+    /// <summary>
+    /// Names that ILAsm reads as keywords or opcodes are quoted wherever they appear.
+    /// </summary>
+    [TestMethod]
+    public void Render_KeywordNames_AreQuoted()
+    {
+        var session = new Session();
+        foreach (var line in new[] { ".method int32 add(int32 value) {", "ldarg value", "ret", "}", ".locals init (int32 class)", "ldc.i4 3", "stloc class", "ldloc class", "call int32 add(int32)" })
+        {
+            session.AddLine(line);
+        }
+
+        var text = session.ToIlAsm();
+        Assert.Contains(".method public static int32 'add'(int32 'value') cil managed", text);
+        Assert.Contains("ldarg 'value'", text);
+        Assert.Contains(".locals init ([0] int32 'class')", text);
+        Assert.Contains("stloc 'class'", text);
+        Assert.Contains("ldloc 'class'", text);
+        Assert.Contains("call int32 IlRepl.Cell::'add'(int32)", text);
+        Assert.Contains("ldarg n", new Session().ToIlAsm() + "ldarg n", "plain names stay unquoted");
+    }
 }

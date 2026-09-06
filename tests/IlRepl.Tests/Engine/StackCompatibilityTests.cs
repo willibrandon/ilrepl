@@ -65,7 +65,7 @@ public sealed class StackCompatibilityTests
     {
         Assert.IsTrue(StackCompatibility.CanReturn(typeof(string), typeof(object)));
         Assert.IsTrue(StackCompatibility.CanReturn(typeof(ArgumentException), typeof(Exception)));
-        Assert.IsFalse(StackCompatibility.CanReturn(typeof(object), typeof(string)));
+        Assert.IsFalse(StackCompatibility.CanReturn(typeof(Exception), typeof(string)));
         Assert.IsTrue(StackCompatibility.CanReturn(typeof(int[]), typeof(Array)));
         Assert.IsTrue(StackCompatibility.CanReturn(typeof(NullReferenceMarker), typeof(string)));
     }
@@ -110,5 +110,16 @@ public sealed class StackCompatibilityTests
     {
         Assert.IsFalse(StackCompatibility.CanReturn(typeof(int), typeof(object)));
         Assert.IsFalse(StackCompatibility.CanReturn(typeof(Guid), typeof(IFormattable)));
+    }
+
+    /// <summary>
+    /// object on the stack is the model's imprecise reference, so any reference return takes it.
+    /// </summary>
+    [TestMethod]
+    public void CanReturn_ObjectOnStack_IsAcceptedForReferenceTypes()
+    {
+        Assert.IsTrue(StackCompatibility.CanReturn(typeof(object), typeof(IComparable)));
+        Assert.IsTrue(StackCompatibility.CanReturn(typeof(object), typeof(string)));
+        Assert.IsFalse(StackCompatibility.CanReturn(typeof(object), typeof(int)));
     }
 }

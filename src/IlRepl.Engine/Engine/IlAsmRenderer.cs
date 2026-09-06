@@ -99,8 +99,8 @@ public static class IlAsmRenderer
         foreach (var method in session.Methods)
         {
             var signature = method.Signature;
-            var methodParameters = string.Join(", ", signature.Parameters.Select((p, i) => TypeNameFormatter.IlAsm(p.Type) + " " + (p.Name ?? "arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))));
-            sb.Append("    .method public static ").Append(TypeNameFormatter.IlAsm(signature.ReturnType)).Append(' ').Append(signature.Name).Append('(').Append(methodParameters).AppendLine(") cil managed");
+            var methodParameters = string.Join(", ", signature.Parameters.Select((p, i) => TypeNameFormatter.IlAsm(p.Type) + " " + TypeNameFormatter.IlAsmIdentifier(p.Name ?? "arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+            sb.Append("    .method public static ").Append(TypeNameFormatter.IlAsm(signature.ReturnType)).Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(signature.Name)).Append('(').Append(methodParameters).AppendLine(") cil managed");
             sb.AppendLine("    {");
             RenderBody(sb, method.State);
             sb.AppendLine("    }");
@@ -109,7 +109,7 @@ public static class IlAsmRenderer
 
         var generic = session.TypeParameterNames.Count > 0 ? "<" + string.Join(", ", session.TypeParameterNames) + ">" : "";
         var convention = cell.IsVarArg ? "vararg " : "";
-        var parameters = string.Join(", ", cell.Arguments.Select((a, i) => TypeNameFormatter.IlAsm(a.Type) + " " + (a.Name ?? "arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        var parameters = string.Join(", ", cell.Arguments.Select((a, i) => TypeNameFormatter.IlAsm(a.Type) + " " + TypeNameFormatter.IlAsmIdentifier(a.Name ?? "arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))));
         sb.Append("    .method public static ").Append(convention).Append("object Run").Append(generic).Append('(').Append(parameters).AppendLine(") cil managed");
         sb.AppendLine("    {");
         RenderBody(sb, cell);
@@ -124,7 +124,7 @@ public static class IlAsmRenderer
         if (state.Locals.Count > 0)
         {
             var locals = state.Locals.Select((l, i) =>
-                $"[{i}] {TypeNameFormatter.IlAsm(l.Type)}{(l.IsPinned ? " pinned" : "")} {l.Name ?? "V_" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+                $"[{i}] {TypeNameFormatter.IlAsm(l.Type)}{(l.IsPinned ? " pinned" : "")} {TypeNameFormatter.IlAsmIdentifier(l.Name ?? "V_" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))}");
             sb.Append("        .locals init (").Append(string.Join(", ", locals)).AppendLine(")");
         }
 
@@ -251,8 +251,23 @@ public static class IlAsmRenderer
             },
             OperandKind.Signature => name + " " + SignatureIlAsm((CalliSignature)instruction.Operand!),
             OperandKind.Labels => name + " (" + string.Join(", ", (string[])instruction.Operand!) + ")",
+            OperandKind.Local or OperandKind.Argument => NamedSlot(instruction),
             _ => instruction.Text,
         };
+    }
+
+    private static string NamedSlot(Instruction instruction)
+    {
+        // The user's operand is kept, quoted when it is a name ILAsm would read as a keyword.
+        var text = instruction.Text.Trim();
+        var space = text.IndexOfAny([' ', '\t']);
+        if (space < 0)
+        {
+            return text;
+        }
+
+        var operand = InstructionParser.Unquote(text[(space + 1)..].Trim());
+        return text[..space] + " " + (operand.All(char.IsDigit) ? operand : TypeNameFormatter.IlAsmIdentifier(operand));
     }
 
     private static string Pad(int level) => new(' ', level * 4);
@@ -261,7 +276,7 @@ public static class IlAsmRenderer
     {
         if (resolved.Definition is { } definition)
         {
-            return $"{TypeNameFormatter.IlAsm(definition.ReturnType)} IlRepl.Cell::{definition.Name}({string.Join(", ", definition.ParameterTypes.Select(TypeNameFormatter.IlAsm))})";
+            return $"{TypeNameFormatter.IlAsm(definition.ReturnType)} IlRepl.Cell::{TypeNameFormatter.IlAsmIdentifier(definition.Name)}({string.Join(", ", definition.ParameterTypes.Select(TypeNameFormatter.IlAsm))})";
         }
 
         var method = resolved.Method!;

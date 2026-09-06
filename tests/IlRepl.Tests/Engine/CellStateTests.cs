@@ -211,4 +211,18 @@ public sealed class CellStateTests
         var call = state.Entries[^1].Instruction!;
         Assert.IsTrue(((ResolvedMethod)call.Operand!).IsSessionMethod);
     }
+
+    /// <summary>
+    /// A boxed value is object to the model, which a reference return type accepts.
+    /// </summary>
+    [TestMethod]
+    public void Apply_RetWithBoxedValueForInterface_IsAccepted()
+    {
+        var state = Body(Signature("Boxed", typeof(IComparable)), "ldc.i4 1", "box int32");
+        Assert.AreEqual(LineOutcome.Instruction, state.Apply("ret").Outcome);
+
+        var deref = Body(Signature("Deref", typeof(string), (typeof(string).MakeByRefType(), "s")), "ldarg s", "ldind.ref");
+        Assert.AreEqual("[string]", deref.Stack.Render());
+        Assert.AreEqual(LineOutcome.MethodEnd, deref.Apply("}").Outcome);
+    }
 }

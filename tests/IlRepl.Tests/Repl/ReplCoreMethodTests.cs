@@ -371,4 +371,17 @@ public sealed class ReplCoreMethodTests
         Assert.AreEqual(0, status.Methods);
         Assert.AreEqual("il[1]> ", status.Prompt);
     }
+
+    /// <summary>
+    /// A close the runtime refuses is an error line, never an exception out of Handle.
+    /// </summary>
+    [TestMethod]
+    public void Handle_RuntimeRejectedClose_ReportsError()
+    {
+        var core = Load(".method void Bad() {", "callvirt void Console::WriteLine()");
+        Assert.IsFalse(core.Handle("}").Succeeded);
+        Assert.Contains("error: the runtime rejected method Bad", Plain(core));
+        Assert.AreEqual("Bad", core.Status.OpenMethod);
+        Assert.AreEqual(1, core.CellNumber);
+    }
 }

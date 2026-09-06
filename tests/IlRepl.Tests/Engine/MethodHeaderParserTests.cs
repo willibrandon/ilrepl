@@ -162,4 +162,44 @@ public sealed class MethodHeaderParserTests
     {
         Assert.Contains("generic parameter", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" !!T Id(!!T x) {", Context, out _)).Message);
     }
+
+    /// <summary>
+    /// Only [in], [out], and [opt] are parameter attributes; an assembly qualifier belongs to the type.
+    /// </summary>
+    [TestMethod]
+    public void Parse_AssemblyQualifiedParameter_KeepsQualifier()
+    {
+        var signature = MethodHeaderParser.Parse(" void F([System.Runtime]System.Object o, [in] int32 x, [out] [System.Runtime]System.String s) {", Context, out _);
+        Assert.AreSequenceEqual([typeof(object), typeof(int), typeof(string)], signature.ParameterTypes);
+        Assert.AreEqual("o", signature.Parameters[0].Name);
+        Assert.AreEqual("s", signature.Parameters[2].Name);
+    }
+
+    /// <summary>
+    /// The return type is parsed as a type, so its own parentheses do not end the header.
+    /// </summary>
+    [TestMethod]
+    public void Parse_ReturnTypeWithParentheses_IsParsed()
+    {
+        var modopt = MethodHeaderParser.Parse(" int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsLong) F() {", Context, out var opensBlock);
+        Assert.AreEqual(typeof(int), modopt.ReturnType);
+        Assert.AreEqual("F", modopt.Name);
+        Assert.IsTrue(opensBlock);
+
+        var pointer = MethodHeaderParser.Parse(" method int32 *(int32) G(int32 x)", Context, out _);
+        Assert.AreEqual(typeof(nint), pointer.ReturnType);
+        Assert.AreEqual("G", pointer.Name);
+        Assert.HasCount(1, pointer.Parameters);
+    }
+
+    /// <summary>
+    /// A quoted name is stored without its quotes.
+    /// </summary>
+    [TestMethod]
+    public void Parse_QuotedName_IsUnquoted()
+    {
+        var signature = MethodHeaderParser.Parse(" int32 'F'(int32 'value') {", Context, out _);
+        Assert.AreEqual("F", signature.Name);
+        Assert.AreEqual("value", signature.Parameters[0].Name);
+    }
 }

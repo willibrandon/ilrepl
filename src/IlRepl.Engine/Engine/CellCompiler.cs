@@ -104,6 +104,13 @@ public static class CellCompiler
             {
                 throw new ReplException($"the JIT rejected method {methodName}: {ex.Message} (check .show for a stack mismatch between branches; the block is still open)", ex);
             }
+            catch (Exception ex)
+            {
+                // Preparation never runs user code, so anything else it throws (a missing member
+                // behind callvirt on a static, a type that fails to load) is also a verdict on the
+                // body, and the session must be able to keep the block open.
+                throw new ReplException($"the runtime rejected method {methodName}: {ex.Message} (the block is still open)", ex);
+            }
         }
     }
 

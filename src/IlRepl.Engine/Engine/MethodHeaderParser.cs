@@ -7,6 +7,8 @@ namespace IlRepl.Engine;
 /// </summary>
 public static class MethodHeaderParser
 {
+    private const string Usage = "usage: .method <return type> Name(<T name>, ...) {  (use void for no return value)";
+
     private static readonly string[] Modifiers =
         ["public", "private", "assembly", "family", "famandassem", "famorassem", "static", "hidebysig", "specialname", "rtspecialname"];
 
@@ -32,32 +34,16 @@ public static class MethodHeaderParser
             s = s[..^1].TrimEnd();
         }
 
-        var paren = s.IndexOf('(', StringComparison.Ordinal);
-        if (paren < 0)
-        {
-            throw new ReplException("usage: .method <return type> Name(<T name>, ...) {  (use void for no return value)");
-        }
-
-        var close = TypeParser.FindMatchingParen(s, paren);
-        foreach (var word in s[(close + 1)..].Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (!Trailers.Contains(word))
-            {
-                throw new ReplException($"unexpected '{word}' after the parameter list");
-            }
-        }
-
-        var head = s[..paren].Trim();
         var pos = 0;
         while (true)
         {
-            TypeParser.SkipWhitespace(head, ref pos);
-            if (TypeParser.TryKeyword(head, ref pos, "instance"))
+            TypeParser.SkipWhitespace(s, ref pos);
+            if (TypeParser.TryKeyword(s, ref pos, "instance"))
             {
                 throw new ReplException("session methods are static; remove 'instance'");
             }
 
-            if (TypeParser.TryKeyword(head, ref pos, "vararg"))
+            if (TypeParser.TryKeyword(s, ref pos, "vararg"))
             {
                 throw new ReplException("session methods cannot be vararg (only the cell can, with .vararg)");
             }
@@ -65,7 +51,7 @@ public static class MethodHeaderParser
             var matched = false;
             foreach (var modifier in Modifiers)
             {
-                if (TypeParser.TryKeyword(head, ref pos, modifier))
+                if (TypeParser.TryKeyword(s, ref pos, modifier))
                 {
                     matched = true;
                     break;
@@ -78,15 +64,25 @@ public static class MethodHeaderParser
             }
         }
 
-        head = head[pos..].Trim();
-        var space = head.LastIndexOfAny([' ', '\t']);
-        if (space < 0)
+        // The return type comes first and may itself contain parentheses (modopt, a function
+        // pointer), so it is parsed as a type rather than split at the first '('. A header with
+        // nothing before the name has no return type.
+        var firstParen = s.IndexOf('(', pos);
+        var beforeParen = (firstParen < 0 ? s[pos..] : s[pos..firstParen]).Trim();
+        if (firstParen < 0 || beforeParen.Length == 0 || !beforeParen.Any(char.IsWhiteSpace))
         {
-            throw new ReplException("usage: .method <return type> Name(<T name>, ...) {  (use void for no return value)");
+            throw new ReplException(Usage);
         }
 
-        var name = Unquote(head[(space + 1)..].Trim());
-        var returnText = head[..space].Trim();
+        var returnType = TypeParser.ParseAt(s, ref pos, context, out _);
+        TypeParser.SkipWhitespace(s, ref pos);
+        var name = ReadName(s, ref pos);
+        TypeParser.SkipWhitespace(s, ref pos);
+        if (name.Length == 0 || pos >= s.Length || s[pos] != '(')
+        {
+            throw new ReplException(Usage);
+        }
+
         if (!InstructionParser.IsIdentifier(name))
         {
             throw new ReplException($"bad method name '{name}'");
@@ -97,34 +93,30 @@ public static class MethodHeaderParser
             throw new ReplException($"'{name}' is reserved for the cell method; pick another name");
         }
 
-        var returnType = TypeParser.Parse(returnText, context);
+        var close = TypeParser.FindMatchingParen(s, pos);
+        foreach (var word in s[(close + 1)..].Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!Trailers.Contains(word))
+            {
+                throw new ReplException($"unexpected '{word}' after the parameter list");
+            }
+        }
+
         var parameters = new List<ArgumentDeclaration>();
-        var inner = s.Substring(paren + 1, close - paren - 1).Trim();
+        var inner = s.Substring(pos + 1, close - pos - 1).Trim();
         if (inner.Length > 0)
         {
             foreach (var raw in TypeParser.SplitTopLevel(inner))
             {
-                var part = raw;
+                var part = StripParameterAttributes(raw);
                 if (part == "...")
                 {
                     throw new ReplException("session methods cannot be vararg (only the cell can, with .vararg)");
                 }
 
-                // [in], [out], and [opt] carry no meaning here; strip them the way .locals strips [N].
-                while (part.StartsWith('['))
-                {
-                    var bracket = part.IndexOf(']', StringComparison.Ordinal);
-                    if (bracket < 0)
-                    {
-                        throw new ReplException($"bad parameter declaration '{raw}'");
-                    }
-
-                    part = part[(bracket + 1)..].Trim();
-                }
-
                 var at = 0;
                 var type = TypeParser.ParseAt(part, ref at, context, out _);
-                var parameterName = Unquote(part[at..].Trim());
+                var parameterName = InstructionParser.Unquote(part[at..].Trim());
                 if (parameterName.Length > 0 && !InstructionParser.IsIdentifier(parameterName))
                 {
                     throw new ReplException($"bad parameter name '{parameterName}'");
@@ -147,6 +139,51 @@ public static class MethodHeaderParser
         return new MethodSignature(name, returnType, parameters);
     }
 
-    private static string Unquote(string name) =>
-        name.StartsWith('\'') && name.EndsWith('\'') && name.Length > 2 ? name[1..^1] : name;
+    private static string ReadName(string s, ref int pos)
+    {
+        if (pos < s.Length && s[pos] == '\'')
+        {
+            var end = s.IndexOf('\'', pos + 1);
+            if (end < 0)
+            {
+                throw new ReplException("unterminated quoted name");
+            }
+
+            var quoted = s[(pos + 1)..end];
+            pos = end + 1;
+            return quoted;
+        }
+
+        var start = pos;
+        while (pos < s.Length && s[pos] != '(' && !char.IsWhiteSpace(s[pos]))
+        {
+            pos++;
+        }
+
+        return s[start..pos];
+    }
+
+    private static string StripParameterAttributes(string part)
+    {
+        // [in], [out], and [opt] carry no meaning here. Anything else in brackets is an assembly
+        // qualifier on the type and stays for the type parser.
+        while (part.StartsWith('['))
+        {
+            var bracket = part.IndexOf(']', StringComparison.Ordinal);
+            if (bracket < 0)
+            {
+                throw new ReplException($"bad parameter declaration '{part}'");
+            }
+
+            var attribute = part[1..bracket].Trim();
+            if (attribute is not ("in" or "out" or "opt"))
+            {
+                break;
+            }
+
+            part = part[(bracket + 1)..].Trim();
+        }
+
+        return part;
+    }
 }
