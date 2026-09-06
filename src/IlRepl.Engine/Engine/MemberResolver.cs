@@ -55,7 +55,7 @@ public static class MemberResolver
         var separator = FindMemberSeparator(s);
         if (separator < 0)
         {
-            throw new ReplException("expected 'Type::Method(...)' in method reference");
+            return ResolveSessionMethod(s, context, wantConstructor, explicitInstance, isVarArg);
         }
 
         var left = s[..separator];
@@ -220,6 +220,83 @@ public static class MemberResolver
         }
 
         return $"{instance}{returnType} {TypeNameFormatter.Pretty(method.DeclaringType)}::{name}({parameters})";
+    }
+
+    private static ResolvedMethod ResolveSessionMethod(string s, ParseContext context, bool wantConstructor, bool explicitInstance, bool isVarArg)
+    {
+        // "[ret] Name(params)" with no "::" names a method defined with .method. The return type
+        // is optional, as it is for a framework method; the parameter list, when given, must match.
+        var paren = s.IndexOf('(', StringComparison.Ordinal);
+        var head = (paren < 0 ? s : s[..paren]).Trim();
+        var space = head.LastIndexOfAny([' ', '\t']);
+        var name = space < 0 ? head : head[(space + 1)..];
+        var returnText = space < 0 ? null : head[..space].Trim();
+        if (name.Contains('<', StringComparison.Ordinal))
+        {
+            throw new ReplException("session methods are not generic");
+        }
+
+        if (!InstructionParser.IsIdentifier(name))
+        {
+            throw new ReplException("expected 'Type::Method(...)' in method reference (or a session method name defined with .method)");
+        }
+
+        if (wantConstructor)
+        {
+            throw new ReplException("newobj needs a constructor (Type::.ctor(...)); session methods are static and are called with call");
+        }
+
+        if (explicitInstance)
+        {
+            throw new ReplException("session methods are static; drop 'instance'");
+        }
+
+        if (isVarArg)
+        {
+            throw new ReplException("session methods are not vararg");
+        }
+
+        var signature = context.Methods.FirstOrDefault(m => m.Name == name);
+        if (signature is null)
+        {
+            throw new ReplException(context.Methods.Count == 0
+                ? $"no method '{name}' in the session (define one with .method, or write Type::{name}(...) for a framework method)"
+                : $"no method '{name}' in the session; defined: {string.Join(", ", context.Methods.Select(m => m.Describe()))}  (define one with .method)");
+        }
+
+        if (returnText is not null)
+        {
+            var returnType = TypeParser.Parse(returnText, context);
+            if (!TypesEqual(returnType, signature.ReturnType))
+            {
+                throw new ReplException($"method {name} returns {TypeNameFormatter.Pretty(signature.ReturnType)}, not {TypeNameFormatter.Pretty(returnType)}");
+            }
+        }
+
+        if (paren >= 0)
+        {
+            var close = TypeParser.FindMatchingParen(s, paren);
+            var trailing = s[(close + 1)..].Trim();
+            if (trailing.Length > 0)
+            {
+                throw new ReplException($"unexpected '{trailing}' after parameter list");
+            }
+
+            var parts = TypeParser.SplitTopLevel(s.Substring(paren + 1, close - paren - 1));
+            if (parts.Contains("..."))
+            {
+                throw new ReplException("session methods are not vararg");
+            }
+
+            var types = parts.Select(p => TypeParser.Parse(p, context)).ToArray();
+            var expected = signature.ParameterTypes;
+            if (types.Length != expected.Length || !types.Zip(expected).All(pair => TypesEqual(pair.First, pair.Second)))
+            {
+                throw new ReplException($"no method {name}({string.Join(", ", types.Select(TypeNameFormatter.Pretty))}) in the session; defined: {signature.Describe()}");
+            }
+        }
+
+        return new ResolvedMethod(signature);
     }
 
     private static int FindMemberSeparator(string s)
@@ -491,7 +568,7 @@ public static class MemberResolver
         return type;
     }
 
-    private static bool TypesEqual(Type a, Type b)
+    internal static bool TypesEqual(Type a, Type b)
     {
         if (a == b)
         {

@@ -9,7 +9,7 @@ namespace IlRepl.Tests.Engine;
 [TestClass]
 public sealed class InstructionParserTests
 {
-    private static readonly ParseContext Empty = new([], [], GenericContext.Empty, new TypeResolver());
+    private static readonly ParseContext Empty = new([], [], GenericContext.Empty, new TypeResolver(), []);
 
     /// <summary>
     /// Comments are stripped without touching string literals.

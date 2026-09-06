@@ -10,6 +10,7 @@ namespace IlRepl.Tests.Tui;
 public sealed class StatusHintsTests
 {
     private static readonly string[] s_facts = ["stack [int32, int32]", "no locals", "2 instructions"];
+    private static readonly string[] s_methodFacts = ["method Fib", "stack [int32, int32]", "no locals", "2 instructions"];
     private static readonly string[] s_all = ["Tab complete", "Shift+↑ select", "Ctrl+Q quit"];
     private static readonly string[] s_two = ["Shift+↑ select", "Ctrl+Q quit"];
     private static readonly string[] s_one = ["Ctrl+Q quit"];
@@ -47,5 +48,16 @@ public sealed class StatusHintsTests
     public void UnknownWidth_KeepsEveryHint()
     {
         Assert.HasCount(3, IlReplApp.StatusHints(s_facts, 0, copyMode: false));
+    }
+
+    /// <summary>
+    /// The method fact takes its width from the hints, which drop from the left as before.
+    /// </summary>
+    [TestMethod]
+    public void MethodFact_TakesRoomFromTheHints()
+    {
+        Assert.AreSequenceEqual(s_all, IlReplApp.StatusHints(s_methodFacts, 110, copyMode: false));
+        Assert.AreSequenceEqual(s_two, IlReplApp.StatusHints(s_methodFacts, 100, copyMode: false));
+        Assert.AreSequenceEqual(s_one, IlReplApp.StatusHints(s_methodFacts, 83, copyMode: false));
     }
 }

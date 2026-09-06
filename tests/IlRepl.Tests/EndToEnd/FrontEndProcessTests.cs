@@ -136,4 +136,41 @@ public sealed class FrontEndProcessTests
         await process.WaitForExitAsync(TestContext.CancellationToken);
         return (process.ExitCode, await stdout, await stderr);
     }
+
+    /// <summary>
+    /// -e can define a method and call it, with the block's lines separated by semicolons.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    public async Task Eval_DefinesAndCallsMethod()
+    {
+        var (code, stdout, stderr) = await RunAsync(["--no-color", "-e", ".method int32 Two() {; ldc.i4 2; ret; }; call int32 Two(); ret"]);
+        Assert.AreEqual(0, code, stderr);
+        Assert.Contains("method int32 Two()", stdout);
+        Assert.Contains("end of method Two", stdout);
+        Assert.Contains("= 2 : int32", stdout);
+    }
+
+    /// <summary>
+    /// A script that ends inside a method block is an error rather than a silent ret.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    public async Task Script_EndingInsideMethod_Fails()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllLinesAsync(path, [".method int32 Two() {", "ldc.i4 2"], TestContext.CancellationToken);
+        try
+        {
+            var (code, stdout, _) = await RunAsync(["--no-color", path]);
+            Assert.AreEqual(1, code);
+            Assert.Contains("error: method Two is still open; close it with }", stdout);
+            Assert.DoesNotContain("= 2", stdout);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

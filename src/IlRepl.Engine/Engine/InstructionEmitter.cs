@@ -16,12 +16,14 @@ public static class InstructionEmitter
     /// <param name="instruction">The instruction.</param>
     /// <param name="locals">The declared locals, by index.</param>
     /// <param name="labels">The defined labels, by name.</param>
-    public static void Emit(ILGenerator il, Instruction instruction, IReadOnlyList<LocalBuilder> locals, IReadOnlyDictionary<string, Label> labels)
+    /// <param name="methods">The session methods defined on the type being emitted, by name.</param>
+    public static void Emit(ILGenerator il, Instruction instruction, IReadOnlyList<LocalBuilder> locals, IReadOnlyDictionary<string, Label> labels, IReadOnlyDictionary<string, MethodInfo> methods)
     {
         ArgumentNullException.ThrowIfNull(il);
         ArgumentNullException.ThrowIfNull(instruction);
         ArgumentNullException.ThrowIfNull(locals);
         ArgumentNullException.ThrowIfNull(labels);
+        ArgumentNullException.ThrowIfNull(methods);
         var op = instruction.Op;
 
         if (op == OpCodes.Endfilter)
@@ -32,7 +34,7 @@ public static class InstructionEmitter
 
         if (op == OpCodes.Ret)
         {
-            if (instruction.RetPops == 0)
+            if (instruction.RetNull)
             {
                 il.Emit(OpCodes.Ldnull);
             }
@@ -98,7 +100,7 @@ public static class InstructionEmitter
                 il.Emit(op, (FieldInfo)instruction.Operand!);
                 break;
             case OperandKind.Method:
-                EmitMethod(il, op, (ResolvedMethod)instruction.Operand!);
+                EmitMethod(il, op, (ResolvedMethod)instruction.Operand!, methods);
                 break;
             case OperandKind.Token:
                 switch (instruction.Operand)
@@ -109,11 +111,8 @@ public static class InstructionEmitter
                     case FieldInfo f:
                         il.Emit(op, f);
                         break;
-                    case ConstructorInfo c:
-                        il.Emit(op, c);
-                        break;
-                    case MethodInfo m:
-                        il.Emit(op, m);
+                    case ResolvedMethod r:
+                        EmitMethod(il, op, r, methods);
                         break;
                     default:
                         throw new ReplException("unsupported token operand");
@@ -128,8 +127,16 @@ public static class InstructionEmitter
         }
     }
 
-    private static void EmitMethod(ILGenerator il, OpCode op, ResolvedMethod resolved)
+    private static void EmitMethod(ILGenerator il, OpCode op, ResolvedMethod resolved, IReadOnlyDictionary<string, MethodInfo> methods)
     {
+        if (resolved.Definition is { } definition)
+        {
+            // A session method is bound to the builder of the compile in progress; the same
+            // overload serves call, callvirt, ldftn, jmp, and ldtoken.
+            il.Emit(op, methods[definition.Name]);
+            return;
+        }
+
         switch (resolved.Method)
         {
             case ConstructorInfo constructor:

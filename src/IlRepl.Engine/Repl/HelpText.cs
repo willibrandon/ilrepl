@@ -54,6 +54,7 @@ public static class HelpText
         Plain("  ldsfld string String::Empty        ldtoken int32");
         Plain("  ldtoken method void Console::WriteLine()");
         Plain("  calli int32(int32, int32)          call vararg int32 Hello::Count(..., int32)");
+        Plain("  call int32 Fib(int32)              ldftn int32 Fib(int32)");
         Plain("");
         Heading("declarations");
         Entry(".locals init (T name, ...)", "declare locals; kept across cells, values reset");
@@ -63,11 +64,12 @@ public static class HelpText
         Entry(".vararg", "vararg calling convention, so arglist works");
         Entry(".try {  } catch T {  }", "exception blocks, exit them with leave");
         Entry("} finally {  } fault {", "more handlers; also } filter {  } handler {");
+        Entry(".method T Name(T a, ...) {", "define a method kept across cells; } ends it");
         Plain("");
         Heading("commands");
         foreach (var c in Completer.Commands)
         {
-            if (c.Name is ".locals" or ".args" or ".typeparams" or ".typeargs" or ".vararg" or ".try")
+            if (c.Name is ".locals" or ".args" or ".typeparams" or ".typeargs" or ".vararg" or ".try" or ".method")
             {
                 continue;
             }

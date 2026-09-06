@@ -96,4 +96,45 @@ public sealed class CellCompilerTests
         var ex = Assert.ThrowsExactly<ReplException>(() => session.Run());
         Assert.Contains("0 or 1 value", ex.Message);
     }
+
+    /// <summary>
+    /// A saved assembly carries the session methods as public static methods beside Run.
+    /// </summary>
+    [TestMethod]
+    public void Save_WithMethods_WritesCallableMethods()
+    {
+        var session = new Session();
+        foreach (var line in new[] { ".method int32 Fib(int32 n) {", "ldarg n", "ldc.i4 2", "blt BASE", "ldarg n", "ldc.i4 1", "sub", "call int32 Fib(int32)", "ldarg n", "ldc.i4 2", "sub", "call int32 Fib(int32)", "add", "ret", "BASE: ldarg n", "ret", "}", "ldc.i4 1" })
+        {
+            session.AddLine(line);
+        }
+
+        var directory = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, "fib.dll");
+        try
+        {
+            session.Save(path);
+            var context = new System.Runtime.Loader.AssemblyLoadContext("saved-methods", isCollectible: true);
+            try
+            {
+                using var stream = new MemoryStream(File.ReadAllBytes(path));
+                var type = context.LoadFromStream(stream).GetType("IlRepl.Cell")!;
+                var fib = type.GetMethod("Fib", BindingFlags.Public | BindingFlags.Static)!;
+                Assert.AreEqual("n", fib.GetParameters()[0].Name);
+                Assert.AreEqual(55, fib.Invoke(null, [10]));
+                Assert.AreEqual(1, type.GetMethod("Run", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, []));
+            }
+            finally
+            {
+                context.Unload();
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
 }

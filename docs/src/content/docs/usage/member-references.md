@@ -68,6 +68,19 @@ call vararg int32 Greeter.Hello::CountArgs(..., int32, string)
 The types after `...` are the call site's extra arguments. The runtime only supports the vararg
 calling convention on Windows; elsewhere the cell is refused with a message that says so.
 
+## Session methods
+
+A method defined with `.method` is called by name, with no type in front of it. The return type
+is optional here too, and `ldftn` takes the same reference.
+
+```
+call int32 Fib(int32)
+call Fib(int32)
+ldftn int32 Fib(int32)
+```
+
+See [Methods](/usage/methods/).
+
 ## Your own assemblies
 
 `.load` takes a path or an assembly name. After that its types resolve like any other, with or

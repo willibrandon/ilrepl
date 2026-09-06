@@ -8,7 +8,7 @@ namespace IlRepl.Tests.Engine;
 [TestClass]
 public sealed class TypeParserTests
 {
-    private static readonly ParseContext Context = new([], [], GenericContext.Empty, new TypeResolver());
+    private static readonly ParseContext Context = new([], [], GenericContext.Empty, new TypeResolver(), []);
 
     /// <summary>
     /// Primitive keywords resolve to the runtime types.

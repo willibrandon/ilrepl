@@ -9,7 +9,7 @@ namespace IlRepl.Tests.Engine;
 [TestClass]
 public sealed class MemberResolverTests
 {
-    private static readonly ParseContext Context = new([], [], GenericContext.Empty, new TypeResolver());
+    private static readonly ParseContext Context = new([], [], GenericContext.Empty, new TypeResolver(), []);
 
     /// <summary>
     /// Full ILAsm references, short references, and constructors resolve.
@@ -112,6 +112,83 @@ public sealed class MemberResolverTests
     {
         var resolver = new TypeResolver();
         resolver.Load(SampleHost.Samples.GreeterDll);
-        return new ParseContext([], [], GenericContext.Empty, resolver);
+        return new ParseContext([], [], GenericContext.Empty, resolver, []);
+    }
+
+    private static ParseContext ContextWith(params MethodSignature[] methods) =>
+        new([], [], GenericContext.Empty, new TypeResolver(), methods);
+
+    private static MethodSignature Fib() => new("Fib", typeof(int), [new ArgumentDeclaration(typeof(int), "n", null, "")]);
+
+    /// <summary>
+    /// A bare name resolves a session method, with the return type and the parameter list both optional.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_SessionMethod_ResolvesDefinition()
+    {
+        var context = ContextWith(Fib());
+        foreach (var spec in new[] { "int32 Fib(int32)", "Fib(int32)", "Fib", "int32 Fib" })
+        {
+            var resolved = MemberResolver.ResolveMethod(spec, context, false);
+            Assert.IsTrue(resolved.IsSessionMethod, spec);
+            Assert.IsNull(resolved.Method, spec);
+            Assert.AreEqual("Fib", resolved.Name, spec);
+            Assert.AreEqual(typeof(int), resolved.ReturnType, spec);
+            Assert.AreSequenceEqual([typeof(int)], resolved.ParameterTypes);
+            Assert.IsTrue(resolved.IsStatic, spec);
+            Assert.AreEqual("IlRepl.Cell", resolved.DeclaringTypeName, spec);
+            Assert.AreEqual(1, resolved.ArgumentPopCount(false), spec);
+        }
+    }
+
+    /// <summary>
+    /// A stated return type must match the definition.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_SessionMethodReturnTypeMismatch_Explains()
+    {
+        Assert.Contains("method Fib returns int32, not int64", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("int64 Fib(int32)", ContextWith(Fib()), false)).Message);
+    }
+
+    /// <summary>
+    /// A stated parameter list must match the definition.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_SessionMethodParameterMismatch_ListsDefined()
+    {
+        Assert.Contains("no method Fib(string) in the session; defined: int32 Fib(int32)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fib(string)", ContextWith(Fib()), false)).Message);
+        Assert.Contains("no method Fib() in the session; defined: int32 Fib(int32)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fib()", ContextWith(Fib()), false)).Message);
+    }
+
+    /// <summary>
+    /// An unknown name points at .method, and lists the methods that do exist.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_UnknownSessionMethod_SuggestsDotMethod()
+    {
+        Assert.Contains("no method 'Fib' in the session (define one with .method, or write Type::Fib(...) for a framework method)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fib(int32)", Context, false)).Message);
+        Assert.Contains("no method 'Fibb' in the session; defined: int32 Fib(int32)  (define one with .method)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fibb(int32)", ContextWith(Fib()), false)).Message);
+    }
+
+    /// <summary>
+    /// newobj and instance do not apply to session methods.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_SessionMethodNewobj_Throws()
+    {
+        Assert.Contains("newobj needs a constructor", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("void Fib(int32)", ContextWith(Fib()), true)).Message);
+        Assert.Contains("drop 'instance'", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance int32 Fib(int32)", ContextWith(Fib()), false)).Message);
+        Assert.Contains("not vararg", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("vararg int32 Fib(int32)", ContextWith(Fib()), false)).Message);
+    }
+
+    /// <summary>
+    /// A dotted name without :: is a mistyped framework reference, not a session method.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_DottedNameWithoutSeparator_KeepsOriginalError()
+    {
+        var ex = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("void Console.WriteLine(string)", Context, false));
+        Assert.Contains("expected 'Type::Method(...)' in method reference", ex.Message);
+        Assert.Contains("(or a session method name defined with .method)", ex.Message);
     }
 }

@@ -326,7 +326,7 @@ public static class InstructionParser
                 object token;
                 if (operandText.StartsWith("method ", StringComparison.Ordinal))
                 {
-                    token = MemberResolver.ResolveMethod(operandText[7..], context, wantConstructor: false).Method;
+                    token = MemberResolver.ResolveMethod(operandText[7..], context, wantConstructor: false);
                 }
                 else if (operandText.StartsWith("field ", StringComparison.Ordinal))
                 {

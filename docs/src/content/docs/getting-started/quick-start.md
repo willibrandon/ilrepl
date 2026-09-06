@@ -61,6 +61,9 @@ il[3]> ret
 A label is a name followed by a colon, on its own line or before an instruction. A branch to a
 label that has not been defined yet is fine; the cell will not run until it is.
 
+Methods persist the same way: `.method int32 Twice(int32 n) {` opens one, `}` closes it, and later
+cells call it with `call int32 Twice(int32)`. See [Methods](/usage/methods/).
+
 ## Mistakes
 
 The stack model catches the common ones before the runtime sees them.

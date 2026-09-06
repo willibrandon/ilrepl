@@ -30,8 +30,8 @@ follows the runtime's widening rules. A `?` means the type could not be inferred
 point. One value is boxed and printed with its runtime type; zero values prints `(void)`.
 
 `ret` is emitted inside the cell instead when it cannot be the end: while a forward branch is
-waiting for its label, or inside a protected region. That is how early returns and `switch`
-tables work.
+waiting for its label, or inside a protected region. Inside a `.method` block it returns from the
+method. That is how early returns and `switch` tables work.
 
 ```
 il[2]> ldloc x
@@ -46,9 +46,11 @@ il[2]> ret
   = "b" : string
 ```
 
-After a run the cell body is cleared. Declarations (`.locals`, `.args`, `.typeparams`, `.vararg`)
-stay, so the next cell can use the same locals. `.clear` drops the body without running it and
-`.reset` drops the declarations as well.
+After a run the cell body is cleared and the next cell starts. Declarations (`.locals`, `.args`,
+`.typeparams`, `.vararg`) stay, and so do methods defined with `.method`, so the next cell can use
+the same locals and call the same methods. Closing a `.method` block also starts a new cell,
+without running anything. `.clear` drops the body without running it and `.reset` drops the
+declarations and methods as well.
 
 ## Output
 

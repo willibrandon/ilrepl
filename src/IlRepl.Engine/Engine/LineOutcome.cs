@@ -49,4 +49,14 @@ public enum LineOutcome
     /// A <c>.typeargs</c> binding for the next run.
     /// </summary>
     TypeArguments,
+
+    /// <summary>
+    /// A <c>.method</c> header opened a method block.
+    /// </summary>
+    MethodStart,
+
+    /// <summary>
+    /// A <c>}</c> closed the open method block and committed the method.
+    /// </summary>
+    MethodEnd,
 }

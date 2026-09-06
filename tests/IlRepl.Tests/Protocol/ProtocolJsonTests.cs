@@ -45,4 +45,24 @@ public sealed class ProtocolJsonTests
         Assert.AreEqual("2", transcript.Lines[0].PlainText);
         Assert.AreEqual(5, transcript.TotalAdded);
     }
+
+    /// <summary>
+    /// The open method and the method count survive the wire, and a fresh status omits the null.
+    /// </summary>
+    [TestMethod]
+    public void SessionStatus_RoundTripsMethodFields()
+    {
+        var status = SessionStatus.Initial with { OpenMethod = "Fib", Methods = 2 };
+        var json = JsonSerializer.Serialize(status, ProtocolJsonContext.Default.SessionStatus);
+        Assert.Contains("\"openMethod\":\"Fib\"", json);
+        Assert.Contains("\"methods\":2", json);
+        Assert.AreEqual(status, JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.SessionStatus));
+
+        var initial = JsonSerializer.Serialize(SessionStatus.Initial, ProtocolJsonContext.Default.SessionStatus);
+        Assert.DoesNotContain("openMethod", initial);
+        var back = JsonSerializer.Deserialize(initial, ProtocolJsonContext.Default.SessionStatus);
+        Assert.IsNotNull(back);
+        Assert.IsNull(back.OpenMethod);
+        Assert.AreEqual(0, back.Methods);
+    }
 }

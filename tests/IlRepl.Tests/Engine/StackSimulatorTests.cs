@@ -8,7 +8,7 @@ namespace IlRepl.Tests.Engine;
 [TestClass]
 public sealed class StackSimulatorTests
 {
-    private static readonly ParseContext Context = new([], [], GenericContext.Empty, new TypeResolver());
+    private static readonly ParseContext Context = new([], [], GenericContext.Empty, new TypeResolver(), []);
 
     private static StackSimulator Run(params string[] lines)
     {
@@ -100,5 +100,59 @@ public sealed class StackSimulatorTests
     {
         Assert.AreEqual("[]", Run("ldc.i4 1", "ldnull", "throw").Render());
         Assert.AreEqual("[]", Run("ldc.i4 1", "leave X").Render());
+    }
+
+    private static readonly ParseContext WithMethods = new([], [], GenericContext.Empty, new TypeResolver(),
+    [
+        new MethodSignature("Fib", typeof(int), [new ArgumentDeclaration(typeof(int), "n", null, "")]),
+        new MethodSignature("Hi", typeof(void), []),
+    ]);
+
+    private static StackSimulator RunWithMethods(params string[] lines)
+    {
+        var simulator = new StackSimulator();
+        foreach (var line in lines)
+        {
+            simulator.Apply(InstructionParser.Parse(line, WithMethods), WithMethods);
+        }
+
+        return simulator;
+    }
+
+    /// <summary>
+    /// A call to a session method pops its parameters and pushes its return type.
+    /// </summary>
+    [TestMethod]
+    public void Apply_CallSessionMethod_PopsArgumentsPushesReturn()
+    {
+        Assert.AreEqual("[int32]", RunWithMethods("ldc.i4 1", "call int32 Fib(int32)").Render());
+        Assert.Contains("underflow", Assert.ThrowsExactly<ReplException>(() => RunWithMethods("call int32 Fib(int32)")).Message);
+    }
+
+    /// <summary>
+    /// A void session method pushes nothing.
+    /// </summary>
+    [TestMethod]
+    public void Apply_CallVoidSessionMethod_PushesNothing()
+    {
+        Assert.AreEqual("[]", RunWithMethods("call void Hi()").Render());
+    }
+
+    /// <summary>
+    /// ldftn of a session method is a native int.
+    /// </summary>
+    [TestMethod]
+    public void Apply_LdftnSessionMethod_PushesNativeInt()
+    {
+        Assert.AreEqual(typeof(nint), RunWithMethods("ldftn int32 Fib(int32)").Top);
+    }
+
+    /// <summary>
+    /// ldtoken of a session method is a method handle.
+    /// </summary>
+    [TestMethod]
+    public void Apply_LdtokenSessionMethod_PushesMethodHandle()
+    {
+        Assert.AreEqual(typeof(RuntimeMethodHandle), RunWithMethods("ldtoken method int32 Fib(int32)").Top);
     }
 }

@@ -14,18 +14,41 @@ public sealed class CellState
     private readonly List<CellEntry> _entries = [];
     private readonly HashSet<string> _definedLabels = new(StringComparer.Ordinal);
     private readonly List<BlockKind> _frames = [];
+    private bool _braceSeen;
 
     /// <summary>
     /// Initializes an empty cell.
     /// </summary>
     /// <param name="resolver">The type resolver.</param>
     /// <param name="generics">The generic parameters in scope for <c>!!N</c>.</param>
-    public CellState(TypeResolver resolver, GenericContext generics)
+    public CellState(TypeResolver resolver, GenericContext generics) : this(resolver, generics, [], null, false)
+    {
+    }
+
+    /// <summary>
+    /// Initializes an empty cell, or the body of a <c>.method</c> when a signature is given. A
+    /// method body names its parameters with <c>ldarg</c>, owns its locals and labels, and checks
+    /// <c>ret</c> against the declared return type.
+    /// </summary>
+    /// <param name="resolver">The type resolver.</param>
+    /// <param name="generics">The generic parameters in scope for <c>!!N</c>.</param>
+    /// <param name="methods">The session methods a call can name without a type.</param>
+    /// <param name="signature">The method's signature, or null for the cell.</param>
+    /// <param name="braceOpen">For a method body: true when the header line already carried the opening brace.</param>
+    public CellState(TypeResolver resolver, GenericContext generics, IReadOnlyList<MethodSignature> methods, MethodSignature? signature, bool braceOpen)
     {
         ArgumentNullException.ThrowIfNull(resolver);
         ArgumentNullException.ThrowIfNull(generics);
+        ArgumentNullException.ThrowIfNull(methods);
         Resolver = resolver;
         Generics = generics;
+        Methods = methods;
+        Signature = signature;
+        _braceSeen = braceOpen;
+        if (signature is not null)
+        {
+            _arguments.AddRange(signature.Parameters);
+        }
     }
 
     /// <summary>
@@ -37,6 +60,21 @@ public sealed class CellState
     /// The generic parameters in scope.
     /// </summary>
     public GenericContext Generics { get; }
+
+    /// <summary>
+    /// The session methods a call can name without a type.
+    /// </summary>
+    public IReadOnlyList<MethodSignature> Methods { get; }
+
+    /// <summary>
+    /// The signature when this is a <c>.method</c> body; null for the cell.
+    /// </summary>
+    public MethodSignature? Signature { get; }
+
+    /// <summary>
+    /// True when this is a <c>.method</c> body rather than the cell.
+    /// </summary>
+    public bool IsMethod => Signature is not null;
 
     /// <summary>
     /// The declared locals.
@@ -94,9 +132,86 @@ public sealed class CellState
     public bool ReturnsValue => _entries.Any(e => e.Instruction is { Op.Name: "ret", RetPops: 1 });
 
     /// <summary>
+    /// True when the last instruction ends its path (a return, throw, unconditional branch, or
+    /// jump) so nothing falls off the end of the body. A trailing label or block boundary means
+    /// the end is reachable.
+    /// </summary>
+    public bool LastInstructionEndsFlow
+    {
+        get
+        {
+            for (var i = _entries.Count - 1; i >= 0; i--)
+            {
+                var entry = _entries[i];
+                switch (entry.Kind)
+                {
+                    case EntryKind.Instruction:
+                        return entry.Instruction!.EndsFlow;
+                    case EntryKind.Block:
+                    case EntryKind.Labels:
+                        return false;
+                    default:
+                        continue;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
     /// The parse context for the next line.
     /// </summary>
-    public ParseContext Context => new(_locals, _arguments, Generics, Resolver);
+    public ParseContext Context => new(_locals, _arguments, Generics, Resolver, Methods);
+
+    /// <summary>
+    /// Checks that a <c>.method</c> body can close: every label is defined, and either the last
+    /// instruction ends its path or the stack holds what the return type needs for an implied
+    /// <c>ret</c> (nothing for <c>void</c>, exactly one compatible value otherwise).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">This is the cell, not a method body.</exception>
+    /// <exception cref="ReplException">The body cannot close as it stands.</exception>
+    public void ValidateMethodEnd()
+    {
+        if (Signature is null)
+        {
+            throw new InvalidOperationException("only a method body can close");
+        }
+
+        var pending = ReferencedLabels().Where(l => !_definedLabels.Contains(l)).Distinct().ToList();
+        if (pending.Count > 0)
+        {
+            throw new ReplException($"label{(pending.Count > 1 ? "s" : "")} referenced but never defined: {string.Join(", ", pending)} (define with 'NAME:')");
+        }
+
+        if (LastInstructionEndsFlow)
+        {
+            return;
+        }
+
+        var name = Signature.Name;
+        var returnType = Signature.ReturnType;
+        if (returnType == typeof(void))
+        {
+            if (Stack.Count > 0)
+            {
+                throw new ReplException($"method {name} needs a ret before }}: the stack holds {Stack.Render()} but {name} returns void (pop it)");
+            }
+
+            return;
+        }
+
+        var pretty = TypeNameFormatter.Pretty(returnType);
+        if (Stack.Count == 0)
+        {
+            throw new ReplException($"method {name} needs a ret before }}: the stack is empty but {name} returns {pretty}");
+        }
+
+        if (Stack.Count > 1 || !StackCompatibility.CanReturn(Stack.Top, returnType))
+        {
+            throw new ReplException($"method {name} needs a ret before }}: the stack holds {Stack.Render()} but {name} returns {pretty}");
+        }
+    }
 
     /// <summary>
     /// The labels referenced by branches and switch tables.
@@ -147,7 +262,13 @@ public sealed class CellState
                 return new LineResult(LineOutcome.Empty, null, null);
             }
 
-            throw new ReplException("unexpected '{'; open a protected region with .try {");
+            if (IsMethod && !_braceSeen && _entries.Count == 0)
+            {
+                _braceSeen = true;
+                return new LineResult(LineOutcome.Empty, null, null);
+            }
+
+            throw new ReplException("unexpected '{'; open a protected region with .try {, or a method with .method");
         }
 
         if (text.StartsWith('}') || StartsWithHandlerKeyword(text))
@@ -207,6 +328,25 @@ public sealed class CellState
         var space = text.IndexOfAny([' ', '\t', '(']);
         var directive = space < 0 ? text : text[..space];
         var rest = space < 0 ? "" : text[space..].Trim();
+        if (IsMethod)
+        {
+            switch (directive)
+            {
+                case ".args":
+                    throw new ReplException(".args is not allowed inside a method; parameters come from the header");
+                case ".vararg":
+                    throw new ReplException("a session method cannot be vararg; close it with } and use .vararg on the cell");
+                case ".typeparams":
+                    throw new ReplException(".typeparams is not allowed inside a method; session methods are not generic");
+                case ".typeargs":
+                    throw new ReplException(".typeargs binds the cell's type parameters; close the method with } first");
+                case ".method":
+                    throw new ReplException($"a method is already open ({Signature!.Name}); close it with }} before defining another");
+                default:
+                    break;
+            }
+        }
+
         switch (directive)
         {
             case ".locals":
@@ -247,7 +387,7 @@ public sealed class CellState
                 return new LineResult(LineOutcome.Empty, null, null);
 
             default:
-                throw new ReplException($"unknown directive '{directive}'; expected .locals, .args, .typeparams, .typeargs, .vararg, .try, or .maxstack");
+                throw new ReplException($"unknown directive '{directive}'; expected .locals, .args, .typeparams, .typeargs, .vararg, .method, .try, or .maxstack");
         }
     }
 
@@ -258,6 +398,14 @@ public sealed class CellState
         {
             if (_frames.Count == 0)
             {
+                if (IsMethod)
+                {
+                    // The innermost open construct is the method itself. Nothing is recorded:
+                    // the session commits the body once the close is validated.
+                    ValidateMethodEnd();
+                    return new LineResult(LineOutcome.MethodEnd, null, null);
+                }
+
                 throw new ReplException("unexpected '}': no protected region is open");
             }
 
@@ -367,6 +515,16 @@ public sealed class CellState
 
     private Instruction InlineRet(string text)
     {
+        if (_frames.Count > 0)
+        {
+            throw new ReplException("ret is not allowed inside a protected region; use leave to exit it first");
+        }
+
+        if (IsMethod)
+        {
+            return MethodRet(text);
+        }
+
         if (Stack.Count > 1)
         {
             throw new ReplException($"the stack must hold 0 or 1 value at ret, but has {Stack.Count}: {Stack.Render()}  (pop, or stloc into a local)");
@@ -378,18 +536,50 @@ public sealed class CellState
             throw new ReplException($"cannot return a {StackSimulator.Name(top)} from the cell; load through it first (ldind/ldobj)");
         }
 
-        if (_frames.Count > 0)
-        {
-            throw new ReplException("ret is not allowed inside a protected region; use leave to exit it first");
-        }
-
         return new Instruction
         {
             Op = OpCodes.Ret,
             Text = text,
             RetPops = Stack.Count,
             RetBox = top is { IsValueType: true } && top != typeof(NullReferenceMarker) ? top : null,
+            RetNull = Stack.Count == 0,
         };
+    }
+
+    private Instruction MethodRet(string text)
+    {
+        var name = Signature!.Name;
+        var returnType = Signature.ReturnType;
+        if (returnType == typeof(void))
+        {
+            if (Stack.Count > 0)
+            {
+                throw new ReplException($"ret in void method {name} needs an empty stack but found {Stack.Render()} (pop first)");
+            }
+
+            return new Instruction { Op = OpCodes.Ret, Text = text, RetPops = 0 };
+        }
+
+        var pretty = TypeNameFormatter.Pretty(returnType);
+        if (Stack.Count == 0)
+        {
+            throw new ReplException($"ret needs {pretty} on the stack but the stack is empty");
+        }
+
+        if (Stack.Count > 1)
+        {
+            throw new ReplException($"ret needs exactly one {pretty} on the stack but found {Stack.Render()} (pop, or stloc into a local)");
+        }
+
+        var top = Stack.Top;
+        if (!StackCompatibility.CanReturn(top, returnType))
+        {
+            var boxable = top is { IsValueType: true } && top != typeof(NullReferenceMarker)
+                && !returnType.IsValueType && !returnType.IsByRef && !returnType.IsPointer;
+            throw new ReplException($"ret needs {pretty} on the stack but found {StackSimulator.Name(top)}" + (boxable ? " (box it first)" : ""));
+        }
+
+        return new Instruction { Op = OpCodes.Ret, Text = text, RetPops = 1 };
     }
 
     private List<LocalDeclaration> ParseLocals(string spec)

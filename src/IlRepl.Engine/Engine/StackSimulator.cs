@@ -182,6 +182,7 @@ public sealed class StackSimulator
                 {
                     Type => typeof(RuntimeTypeHandle),
                     FieldInfo => typeof(RuntimeFieldHandle),
+                    ResolvedMethod => typeof(RuntimeMethodHandle),
                     _ => typeof(RuntimeMethodHandle),
                 }];
             case "ldftn":
@@ -212,7 +213,7 @@ public sealed class StackSimulator
             case "refanyval":
                 return [((Type)instruction.Operand!).MakeByRefType()];
             case "newobj":
-                return [((ResolvedMethod)instruction.Operand!).Method.DeclaringType];
+                return [((ResolvedMethod)instruction.Operand!).DeclaringType];
             case "ldfld":
             case "ldsfld":
                 return [((FieldInfo)instruction.Operand!).FieldType];
@@ -242,8 +243,7 @@ public sealed class StackSimulator
             case "call":
             case "callvirt":
             {
-                var method = ((ResolvedMethod)instruction.Operand!).Method;
-                var returnType = method is MethodInfo mi ? mi.ReturnType : typeof(void);
+                var returnType = ((ResolvedMethod)instruction.Operand!).ReturnType;
                 return returnType == typeof(void) ? [] : [returnType];
             }
 

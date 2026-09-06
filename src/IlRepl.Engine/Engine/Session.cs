@@ -3,15 +3,19 @@ using System.Diagnostics;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// One REPL session: the resolver, the declarations that persist across cells, and the cell
-/// currently being written. Lines are validated as they arrive; <see cref="Run"/> compiles and
-/// executes the cell and clears it.
+/// One REPL session: the resolver, the declarations and methods that persist across cells, and
+/// the cell currently being written. Lines are validated as they arrive; <see cref="Run"/>
+/// compiles and executes the cell and clears it. While a <c>.method</c> block is open, lines go
+/// to the method instead, and closing it commits the method and completes the submission.
 /// </summary>
 public sealed class Session
 {
     private readonly List<string> _declarationLines = [];
     private readonly List<string> _bodyLines = [];
     private readonly List<string> _typeParameterNames = [];
+    private readonly List<SessionMethod> _methods = [];
+    private CellState _cell;
+    private OpenMethodBlock? _open;
 
     /// <summary>
     /// Initializes a session with a fresh resolver.
@@ -28,7 +32,7 @@ public sealed class Session
     {
         ArgumentNullException.ThrowIfNull(resolver);
         Resolver = resolver;
-        State = new CellState(resolver, GenericContext.Empty);
+        _cell = new CellState(resolver, GenericContext.Empty);
     }
 
     /// <summary>
@@ -37,9 +41,25 @@ public sealed class Session
     public TypeResolver Resolver { get; }
 
     /// <summary>
-    /// The validated state of the current cell, used for the stack echo and listings.
+    /// The validated state of the body being written: the open method while a <c>.method</c>
+    /// block is open, otherwise the cell. The stack echo, listings, and the status bar read this.
     /// </summary>
-    public CellState State { get; private set; }
+    public CellState State => _open?.State ?? _cell;
+
+    /// <summary>
+    /// The validated state of the cell itself, whether or not a method block is open.
+    /// </summary>
+    public CellState Cell => _cell;
+
+    /// <summary>
+    /// The signature of the method block being typed, or null when lines go to the cell.
+    /// </summary>
+    public MethodSignature? OpenMethod => _open?.Signature;
+
+    /// <summary>
+    /// The methods defined with <c>.method</c>, in definition order. A redefinition keeps its place.
+    /// </summary>
+    public IReadOnlyList<SessionMethod> Methods => _methods;
 
     /// <summary>
     /// The declaration lines (<c>.locals</c>, <c>.args</c>, <c>.typeparams</c>, <c>.vararg</c>) that persist across cells.
@@ -67,7 +87,14 @@ public sealed class Session
     public int CellsRun { get; private set; }
 
     /// <summary>
-    /// Adds a line to the cell. Declarations are kept across runs; everything else belongs to the current cell.
+    /// How many submissions have completed: a run, or a <c>.method</c> block that closed and
+    /// committed. The prompt numbers the next one. A rejected close or an abandoned block does not count.
+    /// </summary>
+    public int Submissions { get; private set; }
+
+    /// <summary>
+    /// Adds a line. Declarations are kept across runs; a <c>.method</c> header opens a block that
+    /// takes the following lines until <c>}</c>; everything else belongs to the current cell.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <returns>What the line was.</returns>
@@ -79,6 +106,16 @@ public sealed class Session
         if (text.Length == 0)
         {
             return new LineResult(LineOutcome.Empty, null, null);
+        }
+
+        if (_open is not null)
+        {
+            return AddMethodLine(line);
+        }
+
+        if (text.StartsWith(".method", StringComparison.Ordinal) && (text.Length == ".method".Length || !char.IsLetter(text[".method".Length])))
+        {
+            return OpenBlock(text[".method".Length..], line);
         }
 
         if (text.StartsWith(".typeparams", StringComparison.Ordinal))
@@ -94,7 +131,7 @@ public sealed class Session
             return new LineResult(LineOutcome.TypeArguments, null, "type arguments: " + string.Join(", ", TypeArguments!.Select(TypeNameFormatter.Pretty)));
         }
 
-        var result = State.Apply(line);
+        var result = _cell.Apply(line);
         switch (result.Outcome)
         {
             case LineOutcome.Empty:
@@ -113,11 +150,25 @@ public sealed class Session
     }
 
     /// <summary>
-    /// Removes the last body line.
+    /// Removes the last line: of the open method block, or of the cell body. Removing a method
+    /// header abandons the block. Committed methods and declarations are not undone.
     /// </summary>
     /// <returns>True when a line was removed.</returns>
     public bool Undo()
     {
+        if (_open is not null)
+        {
+            if (_open.BodyLines.Count == 0)
+            {
+                _open = null;
+                return true;
+            }
+
+            _open.BodyLines.RemoveAt(_open.BodyLines.Count - 1);
+            _open.State = ReplayOpenBody(_open);
+            return true;
+        }
+
         if (_bodyLines.Count == 0)
         {
             return false;
@@ -129,7 +180,22 @@ public sealed class Session
     }
 
     /// <summary>
-    /// Drops the cell body and keeps the declarations.
+    /// Drops the open method block without committing it. The cell and the methods are untouched.
+    /// </summary>
+    /// <returns>True when a block was open.</returns>
+    public bool AbandonMethod()
+    {
+        if (_open is null)
+        {
+            return false;
+        }
+
+        _open = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Drops the cell body and keeps the declarations and the methods.
     /// </summary>
     public void ClearCell()
     {
@@ -138,30 +204,33 @@ public sealed class Session
     }
 
     /// <summary>
-    /// Drops the cell body, the declarations, and any bound type arguments.
+    /// Drops the cell body, the declarations, the methods, any open method block, and any bound type arguments.
     /// </summary>
     public void Reset()
     {
         _bodyLines.Clear();
         _declarationLines.Clear();
         _typeParameterNames.Clear();
+        _methods.Clear();
+        _open = null;
         TypeArguments = null;
         Rebuild();
     }
 
     /// <summary>
-    /// Compiles and runs the cell, then clears the body. Declarations stay.
+    /// Compiles and runs the cell, then clears the body. Declarations and methods stay.
     /// </summary>
     /// <returns>The result.</returns>
-    /// <exception cref="ReplException">The cell is incomplete or the runtime rejected it.</exception>
+    /// <exception cref="ReplException">The cell is incomplete, a method block is open, or the runtime rejected it.</exception>
     /// <exception cref="CellException">The cell threw.</exception>
     public CellResult Run()
     {
-        var isVoid = State.Stack.Count == 0 && !State.ReturnsValue;
+        var isVoid = _cell.Stack.Count == 0 && !_cell.ReturnsValue;
         var compiled = CellCompiler.Compile(this);
         var typeArguments = TypeArguments;
         ClearCell();
         CellsRun++;
+        Submissions++;
 
         using var capture = new ConsoleCapture();
         var stopwatch = Stopwatch.StartNew();
@@ -183,21 +252,159 @@ public sealed class Session
     }
 
     /// <summary>
-    /// Writes the current cell to disk as an assembly with a static <c>IlRepl.Cell.Run</c> method. The cell is kept.
+    /// Writes the current cell and the session methods to disk as an assembly with a static
+    /// <c>IlRepl.Cell.Run</c> method. The cell is kept.
     /// </summary>
     /// <param name="path">The output path.</param>
-    /// <exception cref="ReplException">The cell is incomplete or the runtime rejected it.</exception>
+    /// <exception cref="ReplException">The cell is incomplete, a method block is open, or the runtime rejected it.</exception>
     public void Save(string path) => CellCompiler.Save(this, path);
 
     /// <summary>
-    /// Renders the current cell as ILAsm source.
+    /// Renders the session methods and the current cell as ILAsm source.
     /// </summary>
     /// <returns>The ILAsm text.</returns>
     public string ToIlAsm() => IlAsmRenderer.Render(this);
 
+    private LineResult OpenBlock(string spec, string line)
+    {
+        var signatures = Signatures();
+        var headerContext = new ParseContext([], [], GenericContext.Empty, Resolver, signatures);
+        var signature = MethodHeaderParser.Parse(spec, headerContext, out var braceOpen);
+        var replacing = _methods.FirstOrDefault(m => m.Signature.Name == signature.Name);
+        var table = new List<MethodSignature>(signatures);
+        var index = table.FindIndex(s => s.Name == signature.Name);
+        if (index < 0)
+        {
+            table.Add(signature);
+        }
+        else
+        {
+            table[index] = signature;
+        }
+
+        if (replacing is not null)
+        {
+            // Dependents bind to the signature, which is known now. Checking here, rather than at
+            // the closing brace, means a refused redefinition costs nothing to recover from.
+            foreach (var other in _methods)
+            {
+                if (ReferenceEquals(other, replacing))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    ReplayMethod(other, table);
+                }
+                catch (ReplException ex)
+                {
+                    throw new ReplException($"cannot redefine {signature.Name} as {signature.Describe()}: method {other.Signature.Name} would no longer compile: {ex.Message}  (the previous definition stays)", ex);
+                }
+            }
+
+            try
+            {
+                BuildCell(table);
+            }
+            catch (ReplException ex)
+            {
+                throw new ReplException($"cannot redefine {signature.Name} as {signature.Describe()}: the cell body would no longer compile: {ex.Message}  (.clear the cell first, or keep the signature)", ex);
+            }
+        }
+
+        _open = new OpenMethodBlock
+        {
+            HeaderLine = line,
+            Signature = signature,
+            Replacing = replacing,
+            Signatures = table,
+            State = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen),
+        };
+        return new LineResult(LineOutcome.MethodStart, null, "method " + signature.DescribeWithNames());
+    }
+
+    private LineResult AddMethodLine(string line)
+    {
+        var open = _open!;
+        var result = open.State.Apply(line);
+        if (result.Outcome == LineOutcome.MethodEnd)
+        {
+            return CloseBlock();
+        }
+
+        if (result.Outcome != LineOutcome.Empty)
+        {
+            open.BodyLines.Add(line);
+        }
+
+        return result;
+    }
+
+    private LineResult CloseBlock()
+    {
+        var open = _open!;
+        var name = open.Signature.Name;
+        var candidate = new SessionMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State);
+
+        // Rebuild every dependent against the committed table. The header already checked them;
+        // this pass produces the states that are kept, and catches a .load that changed
+        // resolution in between.
+        var committed = new List<SessionMethod>();
+        var changed = new List<string> { name };
+        foreach (var existing in _methods)
+        {
+            if (ReferenceEquals(existing, open.Replacing))
+            {
+                committed.Add(candidate);
+                continue;
+            }
+
+            if (open.Replacing is null)
+            {
+                committed.Add(existing);
+                continue;
+            }
+
+            try
+            {
+                committed.Add(existing with { State = ReplayMethod(existing, open.Signatures) });
+                changed.Add(existing.Signature.Name);
+            }
+            catch (ReplException ex)
+            {
+                throw new ReplException($"cannot replace {name}: method {existing.Signature.Name} would no longer compile: {ex.Message}  (the previous definition stays)", ex);
+            }
+        }
+
+        if (open.Replacing is null)
+        {
+            committed.Add(candidate);
+        }
+
+        CellState cell;
+        try
+        {
+            cell = BuildCell(open.Signatures);
+        }
+        catch (ReplException ex)
+        {
+            throw new ReplException($"cannot {(open.Replacing is null ? "define" : "replace")} {name}: the cell body would no longer compile: {ex.Message}  (.clear the cell first)", ex);
+        }
+
+        CellCompiler.ValidateMethods(committed, changed);
+
+        _methods.Clear();
+        _methods.AddRange(committed);
+        _cell = cell;
+        _open = null;
+        Submissions++;
+        return new LineResult(LineOutcome.MethodEnd, null, open.Replacing is null ? $"end of method {name}" : $"replaced method {name}");
+    }
+
     private void DeclareTypeParameters(string spec)
     {
-        if (!State.IsEmpty)
+        if (!_cell.IsEmpty)
         {
             throw new ReplException("declare .typeparams before the first instruction of the cell (or .clear first)");
         }
@@ -245,7 +452,7 @@ public sealed class Session
             s = s[1..^1];
         }
 
-        var context = new ParseContext([], [], GenericContext.Empty, Resolver);
+        var context = new ParseContext([], [], GenericContext.Empty, Resolver, Signatures());
         var types = TypeParser.SplitTopLevel(s).Select(t => TypeParser.Parse(t, context)).ToArray();
         if (types.Length != _typeParameterNames.Count)
         {
@@ -255,10 +462,14 @@ public sealed class Session
         TypeArguments = types;
     }
 
-    private void Rebuild()
+    private List<MethodSignature> Signatures() => _methods.Select(m => m.Signature).ToList();
+
+    private void Rebuild() => _cell = BuildCell(Signatures());
+
+    private CellState BuildCell(IReadOnlyList<MethodSignature> table)
     {
         var generics = new GenericContext([], PrototypeGenerics.Create(_typeParameterNames));
-        var state = new CellState(Resolver, generics);
+        var state = new CellState(Resolver, generics, table, null, false);
         foreach (var line in _declarationLines)
         {
             state.Apply(line);
@@ -269,6 +480,27 @@ public sealed class Session
             state.Apply(line);
         }
 
-        State = state;
+        return state;
+    }
+
+    private CellState ReplayMethod(SessionMethod method, IReadOnlyList<MethodSignature> table)
+    {
+        var state = ReplayBody(method.Signature, method.BodyLines, table);
+        state.ValidateMethodEnd();
+        return state;
+    }
+
+    private CellState ReplayOpenBody(OpenMethodBlock open) => ReplayBody(open.Signature, open.BodyLines, open.Signatures);
+
+    private CellState ReplayBody(MethodSignature signature, IReadOnlyList<string> lines, IReadOnlyList<MethodSignature> table)
+    {
+        // The opening brace is never stored, so a replay starts as if it had been seen.
+        var state = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen: true);
+        foreach (var line in lines)
+        {
+            state.Apply(line);
+        }
+
+        return state;
     }
 }

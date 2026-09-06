@@ -36,9 +36,11 @@ stack with its runtime type.
 
 It takes all of IL: every opcode, exception blocks (`.try {`, `} catch T {`, `} filter {`,
 `} finally {`, `} fault {`), `calli`, varargs and `arglist`, pinned locals, cell arguments,
-generic parameters with `!!T`, and `ldtoken` for types, methods, and fields. Member references use
-ILAsm syntax, and the return type and `[assembly]` prefix are optional. Cells can be saved to disk
-as real assemblies with `.save`, or shown as ILAsm with `.il`.
+generic parameters with `!!T`, and `ldtoken` for types, methods, and fields. Methods defined with
+`.method` persist across cells and are called by name, so recursion, `ldftn` over your own code,
+and delegates over it all work. Member references use ILAsm syntax, and the return type and
+`[assembly]` prefix are optional. Cells and their methods can be saved to disk as real assemblies
+with `.save`, or shown as ILAsm with `.il`.
 
 ```
 il[2]> .locals init (string m)
@@ -55,6 +57,34 @@ il[2]> }
 il[2]> DONE: ldloc m
 il[2]> ret
   = "boom" : string
+```
+
+A method stays for the rest of the session:
+
+```
+il[3]> .method int32 Fib(int32 n) {
+  method int32 Fib(int32 n)
+il[3]> ldarg n
+il[3]> ldc.i4 2
+il[3]> blt BASE
+il[3]> ldarg n
+il[3]> ldc.i4 1
+il[3]> sub
+il[3]> call int32 Fib(int32)
+il[3]> ldarg n
+il[3]> ldc.i4 2
+il[3]> sub
+il[3]> call int32 Fib(int32)
+il[3]> add
+il[3]> ret
+il[3]> BASE: ldarg n
+il[3]> ret
+il[3]> }
+  end of method Fib
+il[4]> ldc.i4 10
+il[4]> call int32 Fib(int32)
+il[4]> ret
+  = 55 : int32
 ```
 
 Tab completes opcodes and commands, with a palette that shows each candidate's stack transition.

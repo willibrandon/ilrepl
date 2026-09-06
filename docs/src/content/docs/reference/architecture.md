@@ -23,7 +23,8 @@ is never mixed with what the cell prints.
 
 The same engine runs in the browser on the [live session](/try/) page, where the .NET
 runtime is compiled to WebAssembly and the Hex1b UI renders into xterm.js. Nothing there talks
-to a server.
+to a server. Mono's `PrepareMethod` does nothing on that runtime, so the JIT check that closes a
+`.method` block on the desktop is skipped there and a rejection waits for the first call.
 
 ## The cell
 
@@ -31,11 +32,14 @@ Every line is validated against a replayable model of the cell: declared locals 
 the instructions, the labels, the open exception blocks, and the simulated stack. When the cell
 runs, the accepted lines are replayed against a fresh `MethodBuilder`, so generic parameters bind
 to the method that is emitted and the same cell can compile more than once, for `ret` and for
-`.save`.
+`.save`. Methods defined with `.method` are kept the same way, one replayable model each. Every
+compile defines them on the type ahead of `Run`, signatures first and then bodies, so a method can
+call itself or any other. Closing a block emits the candidate table into a collectible assembly
+and prepares the changed methods on the JIT before anything is committed.
 
-Compiled cells are `AssemblyBuilder` types with one static `Run` method returning `object`. The
-epilogue boxes a value type left on the stack. Vararg cells get a standard-convention wrapper,
-because reflection cannot invoke a vararg method directly.
+Compiled cells are `AssemblyBuilder` types with one static `Run` method returning `object` and
+one static method per `.method`. The epilogue boxes a value type left on the stack. Vararg cells
+get a standard-convention wrapper, because reflection cannot invoke a vararg method directly.
 
 ## Projects
 

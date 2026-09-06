@@ -364,4 +364,70 @@ public sealed class LiveSessionTests
 
     private static Task<string[]> BufferRowsAsync(IPage page) => page.EvaluateAsync<string[]>(
         "() => Array.from({length: window.ilreplTerminal.rows}, (_, i) => (window.ilreplTerminal.buffer.active.getLine(i)?.translateToString(true) ?? ''))");
+
+    /// <summary>
+    /// A method defined in one cell is called from the next, in the browser.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_DefinesAndCallsMethod(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+
+        await TypeLineAsync(page, ".method int32 Twice(int32 n) {");
+        await Assertions.Expect(terminal).ToContainTextAsync("method int32 Twice(int32 n)", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await Assertions.Expect(terminal).ToContainTextAsync("method Twice", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        foreach (var line in new[] { "ldarg n", "ldc.i4 2", "mul", "ret", "}" })
+        {
+            await TypeLineAsync(page, line);
+        }
+
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Twice", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await Assertions.Expect(terminal).ToContainTextAsync("il[2]>", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+
+        await TypeLineAsync(page, "ldc.i4 21");
+        await TypeLineAsync(page, "call int32 Twice(int32)");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(terminal).ToContainTextAsync("= 42 : int32", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+        await Assertions.Expect(terminal).ToContainTextAsync("il[3]>", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+    }
+
+    /// <summary>
+    /// The browser runtime cannot prepare a method ahead of a call, so a body the JIT would refuse
+    /// closes without complaint there and is rejected at the first call instead.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_BadBranchInMethod_IsRejectedAtFirstCall(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+
+        foreach (var line in new[] { ".method void Bad() {", "ldc.i4 0", "brfalse SKIP", "ldc.i4 1", "ldc.i4 2", "pop", "SKIP: pop", "}" })
+        {
+            await TypeLineAsync(page, line);
+        }
+
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Bad", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await Assertions.Expect(terminal).ToContainTextAsync("il[2]>", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        var text = await BufferTextAsync(page);
+        Assert.DoesNotContain("rejected method Bad", text, "the browser skips preparation at the close");
+
+        await TypeLineAsync(page, "call void Bad()");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(terminal).ToContainTextAsync("error: the JIT rejected the cell", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+    }
 }

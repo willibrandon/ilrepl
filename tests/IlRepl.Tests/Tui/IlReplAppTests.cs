@@ -483,4 +483,96 @@ public sealed class IlReplAppTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A method block shows its fact in the status bar, closes into a new cell, and is callable.
+    /// </summary>
+    [TestMethod]
+    public async Task TypeMethod_ShowsMethodFactAndCallsIt()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = await HostPaths.StartEngineAsync(ct);
+        var transcript = new Transcript();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
+            .WithHeadless()
+            .WithDimensions(100, 30)
+            .Build();
+
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync(".method int32 Twice(int32 n) {", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("method int32 Twice(int32 n)");
+        await auto.WaitUntilTextAsync("method Twice │ stack []");
+        using (var snapshot = auto.CreateSnapshot())
+        {
+            Assert.IsTrue(snapshot.HasForegroundColor(SpanPalette.Color(SpanStyle.Label)), "the method fact should use the label color");
+        }
+
+        foreach (var line in new[] { "ldarg n", "ldc.i4 2", "mul", "ret" })
+        {
+            await auto.TypeAsync(line, ct: ct);
+            await auto.EnterAsync(ct: ct);
+        }
+
+        await auto.WaitUntilTextAsync("method Twice │ stack [] │ no locals │ 4 instructions");
+        await auto.TypeAsync("}", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("end of method Twice");
+        await auto.WaitUntilTextAsync("il[2]>");
+        await auto.WaitUntilNoTextAsync("method Twice │");
+
+        await auto.TypeAsync("ldc.i4 21", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.TypeAsync("call int32 Twice(int32)", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilAsync(s => s.ContainsText("stack [int32]"), description: "status bar shows the call's result type");
+        await auto.TypeAsync("ret", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("= 42 : int32");
+        await auto.WaitUntilTextAsync("il[3]>");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// The palette offers .method ahead of .methods.
+    /// </summary>
+    [TestMethod]
+    public async Task Palette_MethodPrefix_ShowsDirectiveAndCommand()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = await HostPaths.StartEngineAsync(ct);
+        var transcript = new Transcript();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
+            .WithHeadless()
+            .WithDimensions(100, 30)
+            .Build();
+
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync(".me", ct: ct);
+        await auto.WaitUntilTextAsync("❯ .method");
+        await auto.WaitUntilTextAsync("T Name(T arg, ...) {");
+        await auto.WaitUntilTextAsync("  .methods");
+        using (var snapshot = auto.CreateSnapshot())
+        {
+            var rows = snapshot.GetScreenText().Split('\n');
+            Assert.Contains(r => r.Contains("commands", StringComparison.Ordinal), rows, "the palette should be titled commands");
+            var method = Array.FindIndex(rows, r => r.Contains("❯ .method", StringComparison.Ordinal));
+            var methods = Array.FindIndex(rows, r => r.Contains("  .methods", StringComparison.Ordinal));
+            Assert.IsGreaterThan(method, methods, ".method should be listed before .methods");
+        }
+
+        await auto.EscapeAsync(ct: ct);
+        await auto.WaitUntilNoTextAsync("❯ .method");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

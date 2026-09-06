@@ -18,7 +18,8 @@ ilrepl [options] [script]
 | `--help` | Print the options. |
 
 The exit code is 0 when every line succeeded, 1 when any line failed, 2 for a bad script path,
-and 3 when the host could not be started.
+and 3 when the host could not be started. Input that ends inside a `.method` block is an error;
+close it with `}` first.
 
 ## Examples
 
