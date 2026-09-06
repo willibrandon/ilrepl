@@ -11,7 +11,6 @@ public sealed class LiveSessionTests
 {
     private static StaticSite? s_site;
     private static IPlaywright? s_playwright;
-    private static IBrowser? s_browser;
 
     /// <summary>
     /// The test context, for cancellation.
@@ -34,7 +33,6 @@ public sealed class LiveSessionTests
 
         s_site = await StaticSite.StartAsync(SitePaths.Dist).ConfigureAwait(false);
         s_playwright = await Playwright.CreateAsync().ConfigureAwait(false);
-        s_browser = await s_playwright.Chromium.LaunchAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -44,11 +42,6 @@ public sealed class LiveSessionTests
     [ClassCleanup]
     public static async Task ClassCleanup()
     {
-        if (s_browser is not null)
-        {
-            await s_browser.DisposeAsync().ConfigureAwait(false);
-        }
-
         s_playwright?.Dispose();
         if (s_site is not null)
         {
@@ -57,17 +50,22 @@ public sealed class LiveSessionTests
     }
 
     /// <summary>
-    /// The runtime boots, the UI renders, and a cell compiles and runs in the browser.
+    /// The runtime boots, the UI renders, and a cell compiles and runs, in Chromium and in WebKit.
     /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
     /// <returns>A task that completes when the assertions have run.</returns>
     [TestMethod]
-    [Timeout(180_000, CooperativeCancellation = true)]
-    public async Task LiveSession_RunsCellInBrowser()
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_RunsCellInBrowser(string browser)
     {
-        await using var context = await s_browser!.NewContextAsync();
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await launched.NewContextAsync();
         var page = await context.NewPageAsync();
         await page.GotoAsync(s_site!.BaseUrl + "/try/");
-        await page.WaitForFunctionAsync("() => window.ilreplReady === true", null, new PageWaitForFunctionOptions { Timeout = 120_000 });
+        await page.WaitForFunctionAsync("() => window.ilreplReady === true", null, new PageWaitForFunctionOptions { Timeout = 180_000 });
+        await Assertions.Expect(page.Locator("#session-status")).ToHaveTextAsync("Ready");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("il[1]>", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
 
         await page.EvaluateAsync("() => window.ilreplTerminal.focus()");
@@ -84,22 +82,27 @@ public sealed class LiveSessionTests
     }
 
     /// <summary>
-    /// The home page links to the live session and shows the recorded demo.
+    /// The home page links to the live session and shows the install command.
     /// </summary>
     /// <returns>A task that completes when the assertions have run.</returns>
     [TestMethod]
     [Timeout(60_000, CooperativeCancellation = true)]
-    public async Task Home_LinksToLiveSessionAndShowsDemo()
+    public async Task Home_LinksToLiveSessionAndInstall()
     {
-        await using var context = await s_browser!.NewContextAsync();
+        await using var launched = await LaunchAsync("chromium");
+        await using var context = await launched.NewContextAsync();
         var page = await context.NewPageAsync();
         await page.GotoAsync(s_site!.BaseUrl + "/");
-        await Assertions.Expect(page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Try it in the browser" })).ToBeVisibleAsync();
-        var demo = page.Locator("img.ilrepl-demo");
-        await Assertions.Expect(demo).ToBeVisibleAsync();
-        var naturalWidth = await demo.EvaluateAsync<int>("img => img.naturalWidth");
-        Assert.IsGreaterThan(0, naturalWidth, "the demo image should load");
+        await Assertions.Expect(page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Try it live" })).ToBeVisibleAsync();
+        await Assertions.Expect(page.Locator(".hero-prompt")).ToContainTextAsync("ldc.i4 6");
+        await Assertions.Expect(page.Locator(".install-hint code")).ToHaveTextAsync("dotnet tool install -g ilrepl");
     }
+
+    private static async Task<IBrowser> LaunchAsync(string browser) => browser switch
+    {
+        "webkit" => await s_playwright!.Webkit.LaunchAsync(),
+        _ => await s_playwright!.Chromium.LaunchAsync(),
+    };
 
     private static async Task<string> BufferTextAsync(IPage page)
     {

@@ -4,18 +4,18 @@ description: ilrepl running in your browser on the .NET WebAssembly runtime.
 tableOfContents: false
 ---
 
-This is the real thing: the engine and the Hex1b terminal UI compiled to WebAssembly, rendering
-into xterm.js. Cells compile with Reflection.Emit on the Mono interpreter. Nothing is sent to a
-server. The first load fetches the runtime, so give it a moment.
+This is ilrepl itself, compiled to WebAssembly. Cells compile with Reflection.Emit on the Mono interpreter. Nothing leaves your browser. The runtime is about 15 MB, so the first load takes a moment.
 
-<div id="terminal" class="ilrepl-terminal"></div>
+<div id="session">
+  <div id="session-header">
+    <div class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+    <span class="title">ilrepl</span>
+    <span class="status" id="session-status">Loading</span>
+  </div>
+  <div id="terminal"></div>
+</div>
 
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" crossorigin="anonymous" />
-<script is:inline src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js" crossorigin="anonymous"></script>
-<script is:inline src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js" crossorigin="anonymous"></script>
-<script is:inline src="/ilrepl/try/main.js"></script>
-
-Try a few lines:
+Click into the terminal and type. Tab completes opcodes, Up and Down walk history, `.help` lists the commands.
 
 ```
 ldc.i4 6
@@ -24,4 +24,4 @@ mul
 ret
 ```
 
-Or `.help`, or a `.try {` block from [Exception blocks](/ilrepl/usage/exception-blocks/).
+<script is:inline src="/ilrepl/try/main.js"></script>

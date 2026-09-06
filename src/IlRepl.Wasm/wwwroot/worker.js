@@ -8,7 +8,22 @@ self.onmessage = (e) => {
 };
 
 try {
-  const { getAssemblyExports, getConfig, runMain } = await dotnet.create();
+  let loaded = 0;
+  let total = 0;
+  const runtime = await dotnet
+    .withResourceLoader((type, name, defaultUri, integrity, behavior) => {
+      // The runtime imports its own JavaScript modules; only the assets it downloads are counted.
+      if (type === 'dotnetjs') return undefined;
+      total++;
+      const response = fetch(defaultUri, { cache: 'default', integrity: integrity ?? undefined });
+      response.then(() => {
+        loaded++;
+        self.postMessage({ type: 'progress', loaded, total });
+      }).catch(() => {});
+      return response;
+    })
+    .create();
+  const { getAssemblyExports, getConfig, runMain } = runtime;
   self.postMessage({ type: 'workerReady' });
   const config = getConfig();
   const exports = await getAssemblyExports(config.mainAssemblyName);

@@ -28,10 +28,12 @@ public sealed class CellCompilerTests
             session.Save(path);
             Assert.IsTrue(File.Exists(path));
 
+            // Loading from a stream keeps the file unmapped, so the directory can be deleted on Windows too.
             var context = new System.Runtime.Loader.AssemblyLoadContext("saved-cell", isCollectible: true);
             try
             {
-                var assembly = context.LoadFromAssemblyPath(path);
+                using var stream = new MemoryStream(File.ReadAllBytes(path));
+                var assembly = context.LoadFromStream(stream);
                 var run = assembly.GetType("IlRepl.Cell")!.GetMethod("Run", BindingFlags.Public | BindingFlags.Static)!;
                 Assert.AreEqual(42, run.Invoke(null, [21]));
             }

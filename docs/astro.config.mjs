@@ -10,8 +10,8 @@ export default defineConfig({
     starlight({
       title: 'ilrepl',
       description: 'An interactive CIL REPL with a live evaluation stack.',
-      logo: { src: './src/assets/icon.png', alt: 'ilrepl' },
-      favicon: '/favicon.png',
+      logo: { src: './src/assets/icon.svg', alt: 'ilrepl' },
+      favicon: '/favicon.svg',
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/willibrandon/ilrepl' }],
       customCss: ['./src/styles/custom.css'],
       sidebar: [

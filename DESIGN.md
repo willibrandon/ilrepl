@@ -57,7 +57,7 @@ Nothing talks to a server, which is what a GitHub Pages site can host.
 | `samples/Transcripts` | IL scripts | Real sessions run by tests and shown in the docs. |
 | `tests/IlRepl.Tests` | MSTest | Engine tests in-process, UI tests on the Hex1b emulator, end-to-end tests over a PTY. |
 | `tests/IlRepl.Docs.Tests` | MSTest, Playwright | Serves the built site and drives the live session in Chromium. |
-| `scripts/` | file-based apps | Demo recorder and opcode reference generator. |
+| `scripts/` | file-based apps | Opcode reference generator, browser publish, Native AOT publish and pack. |
 | `docs/` | Astro Starlight | Public site on GitHub Pages. |
 
 ### Protocol
@@ -128,7 +128,7 @@ bindings: Ctrl+Q quits, Ctrl+L clears.
 - [x] Samples: Greeter library and ten transcripts
 - [x] Tests: engine, samples, transcripts, UI on the emulator, end-to-end over pipes and a PTY
 - [x] Browser build and a Playwright test of the live session
-- [x] Scripts: demo recorder, opcode reference generator, browser publish, Native AOT publish
+- [x] Scripts: opcode reference generator, browser publish, Native AOT publish and pack
 - [x] Docs site on Astro Starlight with the live session
 - [x] CI, docs deploy, release workflows
 - [x] README
