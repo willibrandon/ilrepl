@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+
+  <PropertyGroup>
+    <RootNamespace>IlRepl.Wasm</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>ilrepl-wasm</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <WasmMainJSPath>wwwroot/worker.js</WasmMainJSPath>
+    <!-- The worker imports _framework/dotnet.js by name; module workers cannot use the page's import map. -->
+    <WasmFingerprintDotnetJs>false</WasmFingerprintDotnetJs>
+    <WasmInitialHeapSize>134217728</WasmInitialHeapSize>
+    <EmccMaximumHeapSize>536870912</EmccMaximumHeapSize>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!--
+      Cells resolve members by name at runtime, which trim analysis cannot follow. The engine and the
+      framework assemblies cells reach for are rooted below, so trimming only drops assemblies nothing
+      references. The analysis warnings carry no information here and are turned off for this project.
+    -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+    <ILLinkTreatWarningsAsErrors>false</ILLinkTreatWarningsAsErrors>
+    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+    <Description>ilrepl in the browser: the engine and the Hex1b UI on the .NET WebAssembly runtime, rendering into xterm.js.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <TrimmerRootAssembly Include="System.Private.CoreLib" />
+    <TrimmerRootAssembly Include="System.Runtime" />
+    <TrimmerRootAssembly Include="System.Console" />
+    <TrimmerRootAssembly Include="System.Collections" />
+    <TrimmerRootAssembly Include="System.Linq" />
+    <TrimmerRootAssembly Include="System.Text.RegularExpressions" />
+    <TrimmerRootAssembly Include="System.Runtime.Numerics" />
+    <TrimmerRootAssembly Include="System.ObjectModel" />
+    <TrimmerRootAssembly Include="System.Memory" />
+    <TrimmerRootAssembly Include="System.Collections.Concurrent" />
+    <TrimmerRootAssembly Include="System.Reflection.Emit" />
+    <TrimmerRootAssembly Include="IlRepl.Engine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../IlRepl.Engine/IlRepl.Engine.csproj" />
+    <ProjectReference Include="../IlRepl.Protocol/IlRepl.Protocol.csproj" />
+    <ProjectReference Include="../IlRepl.Tui/IlRepl.Tui.csproj" />
+  </ItemGroup>
+
+</Project>

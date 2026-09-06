@@ -1,0 +1,83 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'tests/IlRepl.Docs.Tests/**'
+      - 'scripts/Publish-Wasm.cs'
+      - 'scripts/Generate-OpcodeReference.cs'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.302'
+
+      - name: Install the wasm-tools workload
+        run: dotnet workload install wasm-tools --skip-manifest-update
+
+      - name: Generate the opcode reference
+        run: dotnet run --file scripts/Generate-OpcodeReference.cs
+
+      - name: Publish the browser build into the site
+        run: dotnet run --file scripts/Publish-Wasm.cs
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: docs/package.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: docs/pnpm-lock.yaml
+
+      - name: Build the site
+        run: pnpm install --frozen-lockfile && pnpm build
+        working-directory: docs
+
+      - name: Build the docs tests
+        run: dotnet build tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj
+
+      - name: Install the test browser
+        run: pwsh tests/IlRepl.Docs.Tests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Drive the live session in a browser
+        run: dotnet test tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj --no-build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

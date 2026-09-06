@@ -1,0 +1,36 @@
+---
+title: ilrepl
+description: An interactive CIL REPL with a live evaluation stack.
+template: splash
+hero:
+  tagline: Type IL one instruction at a time, watch the evaluation stack, and run the cell on the real JIT.
+  image:
+    file: ../../assets/icon.png
+  actions:
+    - text: Quick start
+      link: /ilrepl/getting-started/quick-start/
+      icon: right-arrow
+    - text: Try it in the browser
+      link: /ilrepl/try/
+      icon: rocket
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<img class="ilrepl-demo" src="/ilrepl/demo.svg" alt="An ilrepl session: a multiplication, a counting loop, and the completion palette" />
+
+<CardGrid stagger>
+  <Card title="The stack, after every line" icon="list-format">
+    Each instruction is checked against a typed model of the evaluation stack before it is accepted. Underflows and arity mistakes are reported at the prompt.
+  </Card>
+  <Card title="Real IL, real JIT" icon="rocket">
+    Cells compile with Reflection.Emit and run on the runtime you already have. What you see is what the CLR did.
+  </Card>
+  <Card title="All of it" icon="puzzle">
+    Every opcode, exception blocks, `calli`, varargs, pinned locals, cell arguments, generic parameters, and metadata tokens.
+  </Card>
+  <Card title="A dotnet tool" icon="setting">
+    Install with `dotnet tool install -g ilrepl`. The front-end is Native AOT; the compiler runs in a bundled host on your .NET runtime.
+  </Card>
+</CardGrid>

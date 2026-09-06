@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/IlRepl.Protocol/IlRepl.Protocol.csproj" />
+    <Project Path="src/IlRepl.Engine/IlRepl.Engine.csproj" />
+    <Project Path="src/IlRepl.Host/IlRepl.Host.csproj" />
+    <Project Path="src/IlRepl.Tui/IlRepl.Tui.csproj" />
+    <Project Path="src/IlRepl.Wasm/IlRepl.Wasm.csproj" />
+    <Project Path="src/IlRepl/IlRepl.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Greeter/Greeter.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/IlRepl.Tests/IlRepl.Tests.csproj" />
+    <Project Path="tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj" />
+  </Folder>
+</Solution>

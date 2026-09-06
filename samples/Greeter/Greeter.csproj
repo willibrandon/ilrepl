@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Greeter</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <Description>A small library the ilrepl tests load and call into. Every member shape a REPL cell might reference lives here.</Description>
+  </PropertyGroup>
+
+</Project>

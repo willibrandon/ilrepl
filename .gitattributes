@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.cs text eol=lf
+*.il text eol=lf
+*.png binary
+*.gif binary
+*.cast text eol=lf

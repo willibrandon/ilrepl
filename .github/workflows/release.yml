@@ -1,0 +1,166 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  native-packages:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+          - rid: win-arm64
+            os: windows-11-arm
+          - rid: linux-x64
+            os: ubuntu-latest
+          - rid: linux-arm64
+            os: ubuntu-24.04-arm
+          - rid: linux-musl-x64
+            os: ubuntu-latest
+          - rid: linux-musl-arm64
+            os: ubuntu-24.04-arm
+          - rid: osx-x64
+            os: macos-26-intel
+          - rid: osx-arm64
+            os: macos-26
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.302'
+
+      - name: Publish, smoke test, and pack
+        run: dotnet run --file scripts/Publish-NativeAot.cs -- --rid ${{ matrix.rid }} --package-version ${{ github.ref_name }}
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: ilrepl-${{ matrix.rid }}
+          path: artifacts/native-aot/${{ matrix.rid }}/publish/**
+          if-no-files-found: error
+
+      - name: Upload tool package
+        uses: actions/upload-artifact@v7
+        with:
+          name: tool-packages-${{ matrix.rid }}
+          path: artifacts/native-aot/${{ matrix.rid }}/packages/*.nupkg
+          if-no-files-found: error
+
+  portable-packages:
+    needs: native-packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.302'
+
+      - name: Download native tool packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: tool-packages-*
+          path: ./nupkg
+          merge-multiple: true
+
+      - name: Pack the pointer and portable packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          dotnet pack src/IlRepl/IlRepl.csproj -c Release -p:Version="$version" -p:PackageVersion="$version" -o ./nupkg
+          dotnet pack src/IlRepl/IlRepl.csproj -c Release -r any -p:PublishAot=false -p:Version="$version" -p:PackageVersion="$version" -o ./nupkg
+
+      - name: Verify installation through the pointer package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          dotnet tool install ilrepl --tool-path ./tool-smoke --version "$version" --add-source "$(pwd)/nupkg" --no-cache --ignore-failed-sources
+          ./tool-smoke/ilrepl --version
+          ./tool-smoke/ilrepl --no-color -e 'ldc.i4 6; ldc.i4 7; mul; ret' | grep -q '= 42 : int32'
+
+      - name: Upload portable packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: tool-packages-portable
+          path: ./nupkg/*.nupkg
+          if-no-files-found: error
+
+  publish:
+    needs: [native-packages, portable-packages]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.302'
+
+      - name: Download tool packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: tool-packages-*
+          path: ./nupkg
+          merge-multiple: true
+
+      # Trusted publishing: nuget.org issues a short-lived key from the workflow's identity.
+      - name: Sign in to nuget.org
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push runtime packages, then the pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          for rid in any win-x64 win-arm64 linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-x64 osx-arm64; do
+            package="./nupkg/ilrepl.$rid.$version.nupkg"
+            test -f "$package"
+            dotnet nuget push "$package" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+          dotnet nuget push "./nupkg/ilrepl.$version.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Download binaries
+        uses: actions/download-artifact@v8
+        with:
+          pattern: ilrepl-*
+          path: ./binaries
+
+      - name: Archive binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ./release
+          for dir in ./binaries/ilrepl-*; do
+            name="$(basename "$dir")"
+            case "$name" in
+              *win-*) (cd "$dir" && zip -qr "../../release/$name.zip" .) ;;
+              *) tar -C "$dir" -czf "./release/$name.tar.gz" . ;;
+            esac
+          done
+
+      - name: Create the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

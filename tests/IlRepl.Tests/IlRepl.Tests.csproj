@@ -1,0 +1,27 @@
+<Project Sdk="MSTest.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>IlRepl.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <MSTestAnalysisMode>Recommended</MSTestAnalysisMode>
+    <IncludeIlReplHostInOutput>true</IncludeIlReplHostInOutput>
+    <NoWarn>$(NoWarn);MSTESTEXP</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/IlRepl/IlRepl.csproj" />
+    <ProjectReference Include="../../src/IlRepl.Engine/IlRepl.Engine.csproj" />
+    <ProjectReference Include="../../src/IlRepl.Host/IlRepl.Host.csproj" />
+    <ProjectReference Include="../../src/IlRepl.Protocol/IlRepl.Protocol.csproj" />
+    <ProjectReference Include="../../src/IlRepl.Tui/IlRepl.Tui.csproj" />
+    <ProjectReference Include="../../samples/Greeter/Greeter.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Import Project="../../build/IlRepl.Host.targets" />
+
+</Project>

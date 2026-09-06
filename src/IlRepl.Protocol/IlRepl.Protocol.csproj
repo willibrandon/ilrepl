@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>IlRepl.Protocol</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsPackable>false</IsPackable>
+    <Description>The transcript model and the JSON-RPC contract shared by the ilrepl front-end and its host.</Description>
+    <EnableStreamJsonRpcInterceptors>true</EnableStreamJsonRpcInterceptors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StreamJsonRpc" />
+  </ItemGroup>
+
+</Project>

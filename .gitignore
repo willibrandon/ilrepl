@@ -1,0 +1,12 @@
+bin/
+obj/
+artifacts/
+TestResults/
+*.user
+*.binlog
+.DS_Store
+docs/node_modules/
+docs/dist/
+docs/.astro/
+docs/public/try/
+.playwright-cli/

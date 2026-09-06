@@ -1,0 +1,27 @@
+---
+title: Live session
+description: ilrepl running in your browser on the .NET WebAssembly runtime.
+tableOfContents: false
+---
+
+This is the real thing: the engine and the Hex1b terminal UI compiled to WebAssembly, rendering
+into xterm.js. Cells compile with Reflection.Emit on the Mono interpreter. Nothing is sent to a
+server. The first load fetches the runtime, so give it a moment.
+
+<div id="terminal" class="ilrepl-terminal"></div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" crossorigin="anonymous" />
+<script is:inline src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js" crossorigin="anonymous"></script>
+<script is:inline src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js" crossorigin="anonymous"></script>
+<script is:inline src="/ilrepl/try/main.js"></script>
+
+Try a few lines:
+
+```
+ldc.i4 6
+ldc.i4 7
+mul
+ret
+```
+
+Or `.help`, or a `.try {` block from [Exception blocks](/ilrepl/usage/exception-blocks/).

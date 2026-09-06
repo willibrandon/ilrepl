@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>ilrepl</AssemblyName>
+    <RootNamespace>IlRepl</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PublishAot>true</PublishAot>
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;linux-musl-arm64;osx-x64;osx-arm64</RuntimeIdentifiers>
+    <ToolPackageRuntimeIdentifiers>$(RuntimeIdentifiers);any</ToolPackageRuntimeIdentifiers>
+    <IncludeSymbols>false</IncludeSymbols>
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <StripSymbols>true</StripSymbols>
+    <StackTraceSupport>true</StackTraceSupport>
+    <IncludeIlReplHostInOutput>true</IncludeIlReplHostInOutput>
+    <IncludeIlReplHostInPublish>true</IncludeIlReplHostInPublish>
+    <EnableStreamJsonRpcInterceptors>true</EnableStreamJsonRpcInterceptors>
+    <DsymUtilOptions Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-', System.StringComparison.Ordinal))">$(DsymUtilOptions) &gt;/dev/null 2&gt;&amp;1</DsymUtilOptions>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>ilrepl</ToolCommandName>
+    <PackageId>ilrepl</PackageId>
+    <Version>0.1.0</Version>
+    <Description>Interactive CIL REPL with a live evaluation stack. Type IL, watch the stack, run it on the real JIT.</Description>
+    <PackageTags>il;cil;msil;repl;reflection-emit;dotnet-tool;hex1b</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Hex1b" />
+    <PackageReference Include="StreamJsonRpc" />
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../IlRepl.Protocol/IlRepl.Protocol.csproj" />
+    <ProjectReference Include="../IlRepl.Tui/IlRepl.Tui.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../assets/icon.png" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="IlRepl.Tests" />
+  </ItemGroup>
+
+  <Import Project="../../build/IlRepl.Host.targets" />
+
+</Project>

@@ -1,0 +1,3 @@
+using StreamJsonRpc;
+
+[assembly: ExportRpcContractProxies]

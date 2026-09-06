@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>IlRepl</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <Description>The ilrepl engine: IL parsing, member resolution, stack simulation, and Reflection.Emit compilation.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../IlRepl.Protocol/IlRepl.Protocol.csproj" />
+  </ItemGroup>
+
+</Project>

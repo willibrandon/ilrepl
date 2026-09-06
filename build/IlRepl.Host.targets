@@ -1,0 +1,58 @@
+<Project>
+  <!--
+    Publishes the framework-dependent host and copies it into a "host" directory beside the
+    importing project's output and publish directories. The tool starts it with the dotnet muxer.
+  -->
+  <PropertyGroup>
+    <_IlReplHostRoot>$(MSBuildThisFileDirectory)..\</_IlReplHostRoot>
+    <_IlReplHostProject>$([System.IO.Path]::GetFullPath('$(_IlReplHostRoot)src\IlRepl.Host\IlRepl.Host.csproj'))</_IlReplHostProject>
+    <_IlReplHostBuildDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(BaseIntermediateOutputPath)host\$(MSBuildProjectName)\$(Configuration)\'))</_IlReplHostBuildDirectory>
+    <_IlReplHostOutputDirectory>$(_IlReplHostBuildDirectory)bin\</_IlReplHostOutputDirectory>
+    <_IlReplHostIntermediateDirectory>$(_IlReplHostBuildDirectory)obj\</_IlReplHostIntermediateDirectory>
+    <_IlReplHostPublishDirectory>$(_IlReplHostBuildDirectory)publish\</_IlReplHostPublishDirectory>
+
+    <_IlReplHostPropertiesToRemove>RuntimeIdentifier;RuntimeIdentifiers;SelfContained;PublishAot;PublishSingleFile;PublishTrimmed;PublishReadyToRun;UseAppHost;_CommandLineDefinedRuntimeIdentifier;_CommandLineDefinedSelfContained;_CommandLineDefinedOutputPath</_IlReplHostPropertiesToRemove>
+
+    <_IlReplHostPublishProperties>Configuration=$(Configuration);TargetFramework=net10.0;RuntimeIdentifier=;RuntimeIdentifiers=;PublishAot=false;SelfContained=false;PublishSingleFile=false;PublishTrimmed=false;PublishReadyToRun=false;UseAppHost=false;OutputPath=$(_IlReplHostOutputDirectory);IntermediateOutputPath=$(_IlReplHostIntermediateDirectory);PublishDir=$(_IlReplHostPublishDirectory)</_IlReplHostPublishProperties>
+
+    <_IlReplHostExcludedFiles>$(_IlReplHostPublishDirectory)**\*.pdb;$(_IlReplHostPublishDirectory)**\*.xml</_IlReplHostExcludedFiles>
+  </PropertyGroup>
+
+  <Target Name="_PublishIlReplHost" Condition="'$(DesignTimeBuild)' != 'true'">
+    <MSBuild Projects="$(_IlReplHostProject)"
+             Targets="Restore;Publish"
+             BuildInParallel="false"
+             RemoveProperties="$(_IlReplHostPropertiesToRemove)"
+             Properties="$(_IlReplHostPublishProperties)" />
+  </Target>
+
+  <Target Name="CleanIlReplHostBuild" BeforeTargets="Clean">
+    <RemoveDir Directories="$(_IlReplHostBuildDirectory)" />
+  </Target>
+
+  <Target Name="CopyIlReplHostToOutput"
+          AfterTargets="Build"
+          DependsOnTargets="_PublishIlReplHost"
+          Condition="'$(IncludeIlReplHostInOutput)' == 'true' and '$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_IlReplHostOutputFile Include="$(_IlReplHostPublishDirectory)**\*" Exclude="$(_IlReplHostExcludedFiles)" />
+    </ItemGroup>
+    <RemoveDir Directories="$(OutDir)host" />
+    <Copy SourceFiles="@(_IlReplHostOutputFile)"
+          DestinationFolder="$(OutDir)host\%(_IlReplHostOutputFile.RecursiveDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyIlReplHostToPublish"
+          AfterTargets="Publish"
+          DependsOnTargets="_PublishIlReplHost"
+          Condition="'$(IncludeIlReplHostInPublish)' == 'true' and '$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_IlReplHostPublishFile Include="$(_IlReplHostPublishDirectory)**\*" Exclude="$(_IlReplHostExcludedFiles)" />
+    </ItemGroup>
+    <RemoveDir Directories="$(PublishDir)host" />
+    <Copy SourceFiles="@(_IlReplHostPublishFile)"
+          DestinationFolder="$(PublishDir)host\%(_IlReplHostPublishFile.RecursiveDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

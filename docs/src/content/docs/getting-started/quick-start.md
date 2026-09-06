@@ -1,0 +1,83 @@
+---
+title: Quick start
+description: A first session, one instruction at a time.
+---
+
+Start `ilrepl` and type an instruction. The line under it is the simulated evaluation stack,
+bottom to top.
+
+```
+il[1]> ldc.i4 6
+  ┊ [int32]
+il[1]> ldc.i4 7
+  ┊ [int32, int32] ◂ top
+il[1]> mul
+  ┊ [int32]
+il[1]> ret
+  = 42 : int32
+```
+
+`ret`, or an empty line, compiles everything you typed since the last run into a method, runs it,
+and prints whatever single value was left on the stack. An empty stack means the cell was void.
+
+## Calls
+
+Member references use ILAsm syntax, with two conveniences: the return type and the `[assembly]`
+prefix are optional, and short type names resolve through the common `System` namespaces.
+
+```
+il[2]> ldstr "hello"
+  ┊ [string]
+il[2]> callvirt instance int32 String::get_Length()
+  ┊ [int32]
+il[2]> ret
+  = 5 : int32
+```
+
+When a name is ambiguous the error lists the overloads so you can pick one.
+
+## Locals and loops
+
+Locals are declared with `.locals` and persist across cells. Their values do not; each run starts
+fresh.
+
+```
+il[3]> .locals init (int32 i)
+  locals: 0:int32 i
+il[3]> ldc.i4.0
+il[3]> stloc i
+il[3]> LOOP: ldloc i
+il[3]> ldc.i4.1
+il[3]> add
+il[3]> dup
+il[3]> stloc i
+il[3]> ldc.i4 10
+il[3]> blt LOOP
+il[3]> ldloc i
+il[3]> ret
+  = 10 : int32
+```
+
+A label is a name followed by a colon, on its own line or before an instruction. A branch to a
+label that has not been defined yet is fine; the cell will not run until it is.
+
+## Mistakes
+
+The stack model catches the common ones before the runtime sees them.
+
+```
+il[4]> add
+  error: stack underflow: 'add' pops 2 values but the stack has 0: []
+il[4]> lcd.i4 1
+  error: unknown opcode 'lcd.i4' (did you mean 'ldc.i4'?)
+```
+
+Anything the model cannot catch, such as a stack that differs between two branches into the same
+label, is reported when the JIT rejects the cell. `.show` lists the cell with the stack after each
+instruction, which is usually enough to find it.
+
+## Getting around
+
+Tab completes opcodes and commands, with a palette that shows each candidate's stack transition.
+Up and Down walk history. `.help` prints the full command list, `.ops` lists opcodes, and Ctrl+Q
+leaves.

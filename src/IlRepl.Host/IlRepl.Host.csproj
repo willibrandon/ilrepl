@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>IlRepl.Host</RootNamespace>
+    <AssemblyName>ilrepl-host</AssemblyName>
+    <IsAotCompatible>false</IsAotCompatible>
+    <PublishAot>false</PublishAot>
+    <SelfContained>false</SelfContained>
+    <UseAppHost>false</UseAppHost>
+    <RollForward>Major</RollForward>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StreamJsonRpc" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../IlRepl.Engine/IlRepl.Engine.csproj"
+                      GlobalPropertiesToRemove="IntermediateOutputPath;OutputPath;PublishAot;PublishDir;PublishReadyToRun;PublishSingleFile;PublishTrimmed;RuntimeIdentifier;RuntimeIdentifiers;SelfContained;UseAppHost" />
+    <ProjectReference Include="../IlRepl.Protocol/IlRepl.Protocol.csproj"
+                      GlobalPropertiesToRemove="IntermediateOutputPath;OutputPath;PublishAot;PublishDir;PublishReadyToRun;PublishSingleFile;PublishTrimmed;RuntimeIdentifier;RuntimeIdentifiers;SelfContained;UseAppHost" />
+  </ItemGroup>
+
+</Project>
