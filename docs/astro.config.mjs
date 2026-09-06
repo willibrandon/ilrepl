@@ -4,8 +4,7 @@ import starlight from '@astrojs/starlight';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://willibrandon.github.io',
-  base: '/ilrepl',
+  site: 'https://ilrepl.dev',
   integrations: [
     starlight({
       title: 'ilrepl',

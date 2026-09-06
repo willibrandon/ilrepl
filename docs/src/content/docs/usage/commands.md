@@ -14,7 +14,7 @@ Directives are part of the cell. Commands act on the session.
 | `.typeparams (T, U)` | Make the cell generic. |
 | `.typeargs (int32, string)` | Bind the type parameters for the next run. |
 | `.vararg` | Use the vararg calling convention so `arglist` works. |
-| `.try {` and friends | Exception blocks. See [Exception blocks](/ilrepl/usage/exception-blocks/). |
+| `.try {` and friends | Exception blocks. See [Exception blocks](/usage/exception-blocks/). |
 | `.maxstack N` | Accepted and ignored. |
 
 ## Commands

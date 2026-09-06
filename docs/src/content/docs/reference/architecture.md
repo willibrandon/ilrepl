@@ -21,7 +21,7 @@ returns the transcript lines each input produced. They talk JSON-RPC with Stream
 host's standard streams. Console output from a cell is captured inside the host, so the channel
 is never mixed with what the cell prints.
 
-The same engine runs in the browser on the [live session](/ilrepl/try/) page, where the .NET
+The same engine runs in the browser on the [live session](/try/) page, where the .NET
 runtime is compiled to WebAssembly and the Hex1b UI renders into xterm.js. Nothing there talks
 to a server.
 

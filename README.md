@@ -14,7 +14,7 @@ il[1]> ret
   = 42 : int32
 ```
 
-Documentation and a live session in your browser: https://willibrandon.github.io/ilrepl/
+Documentation and a live session in your browser: https://ilrepl.dev/
 
 ## Install
 

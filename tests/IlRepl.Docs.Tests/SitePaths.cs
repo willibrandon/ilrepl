@@ -15,11 +15,6 @@ internal static class SitePaths
     /// </summary>
     public static string Dist => Path.Combine(Root, "docs", "dist");
 
-    /// <summary>
-    /// The base path the site is built for, matching <c>base</c> in <c>astro.config.mjs</c>.
-    /// </summary>
-    public const string BasePath = "/ilrepl";
-
     private static string FindRoot()
     {
         var directory = AppContext.BaseDirectory;

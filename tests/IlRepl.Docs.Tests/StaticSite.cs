@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
@@ -44,19 +43,16 @@ internal sealed class StaticSite : IAsyncDisposable
 
         var app = builder.Build();
         var provider = new PhysicalFileProvider(dist);
-        app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = provider, RequestPath = SitePaths.BasePath });
+        app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = provider });
         app.UseStaticFiles(new StaticFileOptions
         {
             FileProvider = provider,
-            RequestPath = SitePaths.BasePath,
             ContentTypeProvider = contentTypes,
             ServeUnknownFileTypes = true,
         });
-        app.MapGet("/", () => Results.Redirect(SitePaths.BasePath + "/"));
 
         await app.StartAsync().ConfigureAwait(false);
-        var address = app.Urls.First();
-        return new StaticSite(app, address + SitePaths.BasePath);
+        return new StaticSite(app, app.Urls.First());
     }
 
     /// <summary>
