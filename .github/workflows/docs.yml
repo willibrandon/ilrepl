@@ -60,7 +60,7 @@ jobs:
         run: dotnet build tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj
 
       - name: Install the test browser
-        run: pwsh tests/IlRepl.Docs.Tests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
+        run: pwsh tests/IlRepl.Docs.Tests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium webkit
 
       - name: Drive the live session in a browser
         run: dotnet test tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj --no-build
