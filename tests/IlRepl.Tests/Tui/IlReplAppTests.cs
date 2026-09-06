@@ -149,6 +149,38 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
+    /// A mouse click on the transcript does not take keyboard focus away from the prompt.
+    /// </summary>
+    [TestMethod]
+    public async Task ClickOnTranscript_KeepsTypingAtThePrompt()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = await HostPaths.StartEngineAsync(ct);
+        var transcript = new Transcript();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
+            .WithHeadless()
+            .WithDimensions(100, 30)
+            .WithMouse()
+            .Build();
+
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.ClickAtAsync(40, 10, ct: ct);
+        await auto.TypeAsync("ldc.i4 5", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("[int32]");
+        await auto.ClickAtAsync(20, 5, ct: ct);
+        await auto.TypeAsync("ret", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("= 5 : int32");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
     /// Ctrl+L clears the transcript back to the banner.
     /// </summary>
     [TestMethod]

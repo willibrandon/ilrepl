@@ -16,26 +16,31 @@ hero:
       variant: minimal
 ---
 
-<div class="hero-prompt">
-  <span class="prompt-char">il[1]&gt;</span> ldc.i4 6 <span class="prompt-stack">┊ [int32]</span>
-</div>
+<pre class="hero-prompt"><span class="prompt-char">il[1]&gt;</span> ldc.i4 6
+<span class="prompt-stack">  ┊ [int32]</span>
+<span class="prompt-char">il[1]&gt;</span> ldc.i4 7
+<span class="prompt-stack">  ┊ [int32, int32] ◂ top</span>
+<span class="prompt-char">il[1]&gt;</span> mul
+<span class="prompt-stack">  ┊ [int32]</span>
+<span class="prompt-char">il[1]&gt;</span> ret
+<span class="prompt-result">  = 42 : int32</span></pre>
 
 <div class="feature-strip">
   <div class="feature-item">
     <span class="feature-key">stack</span>
-    <span class="feature-label">Every instruction is checked against a typed model of the evaluation stack before it is accepted. Underflows show up at the prompt.</span>
+    <span class="feature-label">Typed, and shown after every instruction. Underflows and type mismatches are caught at the prompt.</span>
   </div>
   <div class="feature-item">
     <span class="feature-key">ret</span>
-    <span class="feature-label">The cell compiles with Reflection.Emit and runs on the JIT. What you see is what the runtime did.</span>
+    <span class="feature-label">Ends the cell. It compiles to a real method, runs, and prints the result with its type.</span>
   </div>
   <div class="feature-item">
-    <span class="feature-key">all of IL</span>
-    <span class="feature-label">Every opcode, exception blocks, calli, varargs, pinned locals, cell arguments, generic parameters, tokens.</span>
+    <span class="feature-key">opcodes</span>
+    <span class="feature-label">All of them. Exception blocks, calli, varargs, generics, pinned locals, and tokens too.</span>
   </div>
   <div class="feature-item">
     <span class="feature-key">.save</span>
-    <span class="feature-label">Write a cell to disk as a real assembly, or read it back as ILAsm with .il.</span>
+    <span class="feature-label">Writes the cell to disk as an assembly. .il prints it back as ILAsm.</span>
   </div>
 </div>
 

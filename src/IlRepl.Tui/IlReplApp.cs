@@ -65,6 +65,12 @@ public static class IlReplApp
         return ctx.VStack(v =>
         [
             v.VScrollPanel(sv => transcript.Lines.Select(line => (Hex1bWidget)new TranscriptLineWidget(line)).ToArray(), showScrollbar: true)
+                .InputBindings(b =>
+                {
+                    // The click has already focused the transcript panel. Hand focus straight back to
+                    // the prompt so the next keystroke lands there, not on the next render.
+                    b.Mouse(MouseButton.Left).Action(c => c.FocusWhere(node => node is TextBoxNode), "Focus the prompt");
+                })
                 .Follow()
                 .Fill(),
             v.Separator(),
@@ -94,14 +100,12 @@ public static class IlReplApp
                 }),
             v.InfoBar(s =>
             [
-                s.Section("ilrepl"),
                 s.Section("stack " + status.Stack),
                 s.Section(status.Locals == 0 ? "no locals" : $"{status.Locals} local{(status.Locals == 1 ? "" : "s")}"),
                 s.Section(status.OpenBlocks > 0 ? $"{status.OpenBlocks} open block{(status.OpenBlocks == 1 ? "" : "s")}" : $"{status.Instructions} instruction{(status.Instructions == 1 ? "" : "s")}"),
                 s.Spacer(),
                 s.Section("Tab complete"),
                 s.Section("↑↓ history"),
-                s.Section("Ctrl+L clear"),
                 s.Section("Ctrl+Q quit"),
             ]).Divider(" │ "),
         ])

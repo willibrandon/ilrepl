@@ -74,7 +74,17 @@ public sealed class LiveSessionTests
         Assert.StartsWith("il[1]>", rows[^2].TrimStart(), "the prompt should be on the second to last row");
         Assert.Contains("Ctrl+Q", rows[^1], "the status bar should be on the last row");
 
-        await page.EvaluateAsync("() => window.ilreplTerminal.focus()");
+        // The rows must also be painted where the buffer says they are: the page's own styles must
+        // not push xterm's row elements apart, or the bottom rows end up outside the box.
+        var layout = await page.EvaluateAsync<int[]>(
+            "() => { const rows = Array.from(document.querySelectorAll('.xterm-rows > div')); const box = document.getElementById('terminal'); return [rows.length, rows[rows.length - 1].offsetTop + rows[rows.length - 1].offsetHeight, box.clientHeight]; }");
+        Assert.AreEqual(rows.Length, layout[0], "xterm should have one element per row");
+        Assert.IsLessThanOrEqualTo(layout[2], layout[1], "the last row must be painted inside the terminal box");
+
+        // Click into the transcript the way a person does, then type.
+        var box = await page.Locator("#terminal").BoundingBoxAsync();
+        Assert.IsNotNull(box);
+        await page.Mouse.ClickAsync(box.X + (box.Width / 2), box.Y + (box.Height / 2));
         foreach (var line in new[] { "ldc.i4 6", "ldc.i4 7", "mul", "ret" })
         {
             await page.Keyboard.TypeAsync(line);
@@ -101,6 +111,7 @@ public sealed class LiveSessionTests
         await page.GotoAsync(s_site!.BaseUrl + "/");
         await Assertions.Expect(page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Try it live" })).ToBeVisibleAsync();
         await Assertions.Expect(page.Locator(".hero-prompt")).ToContainTextAsync("ldc.i4 6");
+        await Assertions.Expect(page.Locator(".hero-prompt")).ToContainTextAsync("= 42 : int32");
         await Assertions.Expect(page.Locator(".install-hint code")).ToHaveTextAsync("dotnet tool install -g ilrepl");
     }
 
