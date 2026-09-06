@@ -9,35 +9,49 @@ namespace IlRepl.Engine;
 public static class TypeNameFormatter
 {
     /// <summary>
-    /// Every identifier-shaped terminal of the ILAsm grammar (dotnet/runtime, src/coreclr/ilasm/prebuilt/asmparse.grammar).
-    /// A name in this set, or an opcode name, must be quoted to be read as a name.
+    /// Every identifier-shaped word the ILAsm lexer reserves: its keyword table
+    /// (dotnet/runtime, src/coreclr/inc/il_kywd.h) and every opcode name and alias
+    /// (src/coreclr/inc/opcode.def). A name in this set must be quoted to be read as a name.
     /// </summary>
     private static readonly HashSet<string> IlAsmKeywords = new(StringComparer.Ordinal)
     {
-        "abstract", "aggressiveinlining", "aggressiveoptimization", "algorithm", "alignment", "amd64", "ansi", "any",
-        "arm", "arm64", "array", "as", "assembly", "assert", "async", "at",
-        "auto", "autochar", "beforefieldinit", "bestfit", "blob", "blob_object", "bool", "bstr",
-        "byreflike", "bytearray", "byvalstr", "callconv", "callmostderived", "carray", "catch", "cdecl",
-        "cf", "char", "charmaperror", "cil", "class", "clsid", "constraint", "currency",
-        "custom", "date", "decimal", "default", "demand", "deny", "enum", "error",
-        "explicit", "extended", "extends", "extern", "false", "famandassem", "family", "famorassem",
-        "fastcall", "fault", "field", "filetime", "filter", "final", "finally", "fixed",
-        "flags", "float32", "float64", "forwarder", "forwardref", "fromunmanaged", "handler", "hi",
-        "hidebysig", "hresult", "idispatch", "iidparam", "implements", "import", "in", "inheritcheck",
-        "init", "initonly", "instance", "int", "int16", "int32", "int64", "int8",
-        "interface", "internalcall", "iunknown", "lasterr", "legacy", "library", "linkcheck", "literal",
-        "lpstr", "lpstruct", "lptstr", "lpwstr", "managed", "marshal", "mdtoken", "method",
-        "modopt", "modreq", "native", "nested", "newslot", "noinlining", "nomangle", "nometadata",
-        "noncasdemand", "noncasinheritance", "noncaslinkdemand", "nooptimization", "noplatform", "notserialized", "null", "nullref",
-        "object", "objectref", "off", "on", "opt", "optil", "out", "permitonly",
-        "pinned", "pinvokeimpl", "prejitdeny", "prejitgrant", "preservesig", "private", "privatescope", "property",
-        "public", "record", "reqmin", "reqopt", "reqrefuse", "reqsecobj", "request", "retainappdomain",
-        "retargetable", "rtspecialname", "runtime", "safearray", "sealed", "sequential", "serializable", "specialname",
-        "static", "stdcall", "storage", "stored_object", "stream", "streamed_object", "strict", "string",
-        "struct", "synchronized", "syschar", "sysstring", "tbstr", "thiscall", "tls", "to",
-        "true", "type", "typedref", "uint", "uint16", "uint32", "uint64", "uint8",
-        "unicode", "unmanaged", "unmanagedexp", "unsigned", "userdefined", "value", "valuetype", "vararg",
-        "variant", "vector", "virtual", "void", "winapi", "windowsruntime", "with", "x86",
+        "abstract", "add", "aggressiveinlining", "aggressiveoptimization", "algorithm", "alignment", "amd64", "and",
+        "ansi", "any", "arglist", "arm", "arm64", "array", "as", "assembly",
+        "assert", "async", "at", "auto", "autochar", "beforefieldinit", "beq", "bestfit",
+        "bge", "bgt", "ble", "blob", "blob_object", "blt", "bool", "box",
+        "br", "break", "brfalse", "brinst", "brnull", "brtrue", "brzero", "bstr",
+        "byreflike", "bytearray", "byvalstr", "call", "callconv", "calli", "callmostderived", "callvirt",
+        "carray", "castclass", "catch", "cdecl", "ceq", "cf", "cgt", "char",
+        "charmaperror", "cil", "ckfinite", "class", "clsid", "clt", "codelabel", "constraint",
+        "cpblk", "cpobj", "currency", "custom", "date", "decimal", "default", "demand",
+        "deny", "div", "dup", "endfault", "endfilter", "endfinally", "endmac", "enum",
+        "error", "explicit", "extended", "extends", "extern", "false", "famandassem", "family",
+        "famorassem", "fastcall", "fault", "field", "filetime", "filter", "final", "finally",
+        "fixed", "flags", "float", "float32", "float64", "forwarder", "forwardref", "fromunmanaged",
+        "handler", "hidebysig", "hresult", "idispatch", "iidparam", "il", "illegal", "implements",
+        "import", "in", "inheritcheck", "init", "initblk", "initobj", "initonly", "instance",
+        "int", "int16", "int32", "int64", "int8", "interface", "internalcall", "isinst",
+        "iunknown", "jmp", "lasterr", "ldarg", "ldarga", "ldelem", "ldelema", "ldfld",
+        "ldflda", "ldftn", "ldlen", "ldloc", "ldloca", "ldnull", "ldobj", "ldsfld",
+        "ldsflda", "ldstr", "ldtoken", "ldvirtftn", "leave", "legacy", "library", "linkcheck",
+        "literal", "localloc", "lpstr", "lpstruct", "lptstr", "lpvoid", "lpwstr", "managed",
+        "marshal", "mdtoken", "method", "mkrefany", "modopt", "modreq", "mul", "native",
+        "neg", "nested", "newarr", "newobj", "newslot", "noinlining", "nomangle", "nometadata",
+        "noncasdemand", "noncasinheritance", "noncaslinkdemand", "nooptimization", "nop", "noplatform", "not", "notserialized",
+        "null", "nullref", "object", "objectref", "off", "on", "opt", "optil",
+        "or", "out", "permitonly", "pinned", "pinvokeimpl", "pop", "prefix1", "prefix2",
+        "prefix3", "prefix4", "prefix5", "prefix6", "prefix7", "prefixref", "prejitdeny", "prejitgrant",
+        "preservesig", "private", "privatescope", "property", "public", "record", "refany", "refanytype",
+        "refanyval", "rem", "reqmin", "reqopt", "reqrefuse", "reqsecobj", "request", "ret",
+        "retainappdomain", "retargetable", "rethrow", "rtspecialname", "runtime", "safearray", "sealed", "sequential",
+        "serializable", "shl", "shr", "sizeof", "specialname", "starg", "static", "stdcall",
+        "stelem", "stfld", "stloc", "stobj", "storage", "stored_object", "stream", "streamed_object",
+        "strict", "string", "struct", "stsfld", "sub", "switch", "synchronized", "syschar",
+        "sysstring", "tbstr", "thiscall", "throw", "tls", "to", "true", "type",
+        "typedref", "uint", "uint16", "uint32", "uint64", "uint8", "unbox", "unicode",
+        "unmanaged", "unmanagedexp", "unsigned", "unused", "userdefined", "value", "valuetype", "vararg",
+        "variant", "vector", "virtual", "void", "wchar", "winapi", "windowsruntime", "with",
+        "x86", "xor",
     };
 
     private static string ArraySuffix(Type array)
@@ -49,7 +63,7 @@ public static class TypeNameFormatter
     }
 
     /// <summary>
-    /// Renders a name the way ILAsm needs it: quoted when it is an opcode or a keyword, or not a
+    /// Renders a name the way ILAsm needs it: quoted when the lexer reserves it or it is not a
     /// plain identifier, so a method called <c>add</c> or a parameter called <c>value</c> assembles.
     /// </summary>
     /// <param name="name">The name.</param>

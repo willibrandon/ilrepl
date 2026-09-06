@@ -60,7 +60,17 @@ public sealed class StackSimulator
     /// <param name="type">The entry type.</param>
     /// <returns><c>null</c> for the null marker, <c>?</c> for unknown, otherwise the pretty type name.</returns>
     public static string Name(Type? type) =>
-        type == typeof(NullReferenceMarker) ? "null" : type == typeof(UnknownReferenceMarker) ? "object" : TypeNameFormatter.Pretty(type);
+        type == typeof(NullReferenceMarker) ? "null"
+        : type == typeof(UnknownReferenceMarker) || BoxedType(type) is not null ? "object"
+        : TypeNameFormatter.Pretty(type);
+
+    /// <summary>
+    /// The value type behind a <c>box</c> result, or null when the entry is not a boxed value.
+    /// </summary>
+    /// <param name="type">The stack entry type.</param>
+    /// <returns>The boxed value type, or null.</returns>
+    public static Type? BoxedType(Type? type) =>
+        type is { IsGenericType: true } && type.GetGenericTypeDefinition() == typeof(Boxed<>) ? type.GetGenericArguments()[0] : null;
 
     /// <summary>
     /// Renders the stack as <c>[a, b, c]</c> with the top on the right.
@@ -200,7 +210,7 @@ public sealed class StackSimulator
             case "refanytype":
                 return [typeof(RuntimeTypeHandle)];
             case "box":
-                return [typeof(UnknownReferenceMarker)];
+                return [Box((Type)instruction.Operand!)];
             case "newarr":
                 return [((Type)instruction.Operand!).MakeArrayType()];
             case "castclass":
@@ -277,9 +287,10 @@ public sealed class StackSimulator
             case "neg":
             case "not":
                 return [popped[0]];
-            case "ldelem.ref":
             case "ldind.ref":
                 return [popped.Count > 0 && popped[0] is { IsByRef: true } or { IsPointer: true } ? popped[0]!.GetElementType() : typeof(UnknownReferenceMarker)];
+            case "ldelem.ref":
+                return [popped.Count > 1 && popped[0] is { IsArray: true } ? popped[0]!.GetElementType() : typeof(UnknownReferenceMarker)];
             default:
                 break;
         }
@@ -312,6 +323,23 @@ public sealed class StackSimulator
             StackBehaviour.Push1_push1 => [null, null],
             _ => [],
         };
+    }
+
+    private static Type Box(Type operand)
+    {
+        // Boxing a reference type is the identity, and a generic parameter could be either, so
+        // only a known value type becomes a boxed entry that remembers what it holds.
+        if (operand.IsGenericParameter)
+        {
+            return typeof(UnknownReferenceMarker);
+        }
+
+        if (!operand.IsValueType)
+        {
+            return operand;
+        }
+
+        return typeof(Boxed<>).MakeGenericType(Nullable.GetUnderlyingType(operand) ?? operand);
     }
 
     private static Type? NumericSuffix(string suffix) => suffix switch

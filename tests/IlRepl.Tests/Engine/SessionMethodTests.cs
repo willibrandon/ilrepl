@@ -587,4 +587,25 @@ public sealed class SessionMethodTests
         Assert.Contains("but F returns string", Assert.ThrowsExactly<ReplException>(() => session.AddLine("}")).Message);
         Assert.AreEqual("F", session.OpenMethod!.Name);
     }
+
+    /// <summary>
+    /// The reviewer's case: a boxed int32 cannot leave a string method by ret or by the brace, and
+    /// typed loads keep their element type.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_BoxedValueForStringReturn_IsRefused()
+    {
+        var session = Load(".method string Bad() {", "ldc.i4.1", "box int32");
+        Assert.Contains("ret needs string on the stack but found object", Assert.ThrowsExactly<ReplException>(() => session.AddLine("ret")).Message);
+        Assert.Contains("but Bad returns string", Assert.ThrowsExactly<ReplException>(() => session.AddLine("}")).Message);
+        session.AddLine("box object");
+        Assert.Contains("but Bad returns string", Assert.ThrowsExactly<ReplException>(() => session.AddLine("}")).Message);
+        Assert.AreEqual("Bad", session.OpenMethod!.Name);
+        session.AbandonMethod();
+
+        Add(session, ".method string First(string[] a) {", "ldarg a", "ldc.i4 0", "ldelem.ref", "ret", "}");
+        Assert.AreEqual("x", RunCell(session, "ldc.i4 1", "newarr string", "dup", "ldc.i4 0", "ldstr \"x\"", "stelem.ref", "call string First(string[])"));
+        Add(session, ".method string Second(object[] a) {", "ldarg a", "ldc.i4 0", "ldelem.ref");
+        Assert.Contains("found object", Assert.ThrowsExactly<ReplException>(() => session.AddLine("ret")).Message);
+    }
 }

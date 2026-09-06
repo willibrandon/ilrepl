@@ -140,7 +140,7 @@ public sealed class IlAsmRendererTests
     public void Render_KeywordNames_AreQuoted()
     {
         var session = new Session();
-        foreach (var line in new[] { ".method int32 add(int32 value) {", "ldarg value", "ret", "}", ".method int32 windowsruntime(int32 noplatform, int32 bestfit) {", "ldarg noplatform", "ldarg bestfit", "add", "ret", "}", ".locals init (int32 class)", "ldc.i4 3", "stloc class", "ldloc class", "call int32 add(int32)" })
+        foreach (var line in KeywordNamedSession)
         {
             session.AddLine(line);
         }
@@ -148,7 +148,11 @@ public sealed class IlAsmRendererTests
         var text = session.ToIlAsm();
         Assert.Contains(".method public static int32 'add'(int32 'value') cil managed", text);
         Assert.Contains(".method public static int32 'windowsruntime'(int32 'noplatform', int32 'bestfit') cil managed", text);
+        Assert.Contains(".method public static int32 'float'(int32 'lpvoid', int32 'wchar') cil managed", text);
+        Assert.Contains(".method public static int32 'brnull'(int32 'refany') cil managed", text);
         Assert.Contains("ldarg 'noplatform'", text);
+        Assert.Contains("ldarg 'lpvoid'", text);
+        Assert.Contains("call int32 IlRepl.Cell::'brnull'(int32)", text);
         Assert.Contains("ldarg 'value'", text);
         Assert.Contains(".locals init ([0] int32 'class')", text);
         Assert.Contains("stloc 'class'", text);
@@ -167,7 +171,7 @@ public sealed class IlAsmRendererTests
         TestSkip.Unless(ilasm is not null, "ilasm is not installed");
 
         var session = new Session();
-        foreach (var line in new[] { ".method int32 add(int32 value) {", "ldarg value", "ret", "}", ".method int32 windowsruntime(int32 noplatform, int32 bestfit) {", "ldarg noplatform", "ldarg bestfit", "add", "ret", "}", ".locals init (int32 class)", "ldc.i4 3", "stloc class", "ldloc class", "call int32 add(int32)" })
+        foreach (var line in KeywordNamedSession)
         {
             session.AddLine(line);
         }
@@ -194,6 +198,18 @@ public sealed class IlAsmRendererTests
             Directory.Delete(directory, recursive: true);
         }
     }
+
+    /// <summary>
+    /// Methods, parameters, and locals named after lexer keywords, opcode aliases, and opcodes.
+    /// </summary>
+    private static readonly string[] KeywordNamedSession =
+    [
+        ".method int32 add(int32 value) {", "ldarg value", "ret", "}",
+        ".method int32 windowsruntime(int32 noplatform, int32 bestfit) {", "ldarg noplatform", "ldarg bestfit", "add", "ret", "}",
+        ".method int32 float(int32 lpvoid, int32 wchar) {", "ldarg lpvoid", "ldarg wchar", "add", "ret", "}",
+        ".method int32 brnull(int32 refany) {", "ldarg refany", "ret", "}",
+        ".locals init (int32 class)", "ldc.i4 3", "stloc class", "ldloc class", "call int32 add(int32)", "call int32 brnull(int32)",
+    ];
 
     private static string? FindIlasm()
     {

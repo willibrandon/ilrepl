@@ -168,4 +168,18 @@ public sealed class StackSimulatorTests
         simulator.Apply(InstructionParser.Parse("ldind.ref", locals), locals);
         Assert.AreEqual("[string]", simulator.Render());
     }
+
+    /// <summary>
+    /// box remembers what it boxed, boxing a reference is the identity, and ldelem.ref yields the element type.
+    /// </summary>
+    [TestMethod]
+    public void Apply_BoxAndLdelemRef_KeepTypes()
+    {
+        Assert.AreEqual(typeof(Boxed<int>), Run("ldc.i4 3", "box int32").Top);
+        Assert.AreEqual(typeof(string), Run("ldstr \"s\"", "box string").Top);
+        Assert.AreEqual(typeof(object), Run("newobj instance void Object::.ctor()", "box object").Top);
+        Assert.AreEqual(typeof(Boxed<int>), Run("ldc.i4 3", "box valuetype Nullable`1<int32>").Top);
+        Assert.AreEqual(typeof(string), Run("ldc.i4 1", "newarr string", "ldc.i4 0", "ldelem.ref").Top);
+        Assert.AreEqual("[object]", Run("ldc.i4 3", "box int32").Render());
+    }
 }

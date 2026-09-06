@@ -236,4 +236,23 @@ public sealed class CellStateTests
         Assert.Contains("ret needs string on the stack but found object", Assert.ThrowsExactly<ReplException>(() => state.Apply("ret")).Message);
         Assert.Contains("the stack holds [object] but F returns string", Assert.ThrowsExactly<ReplException>(() => state.Apply("}")).Message);
     }
+
+    /// <summary>
+    /// A boxed int32 is not a string, at ret and at the brace; boxing an object changes nothing.
+    /// </summary>
+    [TestMethod]
+    public void Apply_RetWithBoxedValueForString_Throws()
+    {
+        var explicitRet = Body(Signature("Bad", typeof(string)), "ldc.i4.1", "box int32");
+        Assert.Contains("ret needs string on the stack but found object", Assert.ThrowsExactly<ReplException>(() => explicitRet.Apply("ret")).Message);
+
+        var implied = Body(Signature("Bad", typeof(string)), "ldc.i4.1", "box int32");
+        Assert.Contains("the stack holds [object] but Bad returns string", Assert.ThrowsExactly<ReplException>(() => implied.Apply("}")).Message);
+
+        var boxedObject = Body(Signature("Bad", typeof(string)), "newobj instance void Object::.ctor()", "box object");
+        Assert.Contains("found object", Assert.ThrowsExactly<ReplException>(() => boxedObject.Apply("ret")).Message);
+
+        var element = Body(Signature("Bad", typeof(string), (typeof(object[]), "a")), "ldarg a", "ldc.i4 0", "ldelem.ref");
+        Assert.Contains("found object", Assert.ThrowsExactly<ReplException>(() => element.Apply("ret")).Message);
+    }
 }

@@ -58,9 +58,10 @@ public static class StackCompatibility
 
     /// <summary>
     /// True when a value of the given stack type can be returned where <paramref name="declared"/> is expected.
-    /// A reference the model could not type (<see cref="UnknownReferenceMarker"/>, after <c>box</c>
-    /// or a load it cannot type) is accepted for any reference type; a value that is exactly
-    /// <c>object</c> is not, because returning it as a narrower type would be type confusion.
+    /// A boxed value (<see cref="Boxed{T}"/>) can be returned wherever its value type is assignable,
+    /// a reference the model could not type (<see cref="UnknownReferenceMarker"/>) is accepted for
+    /// any reference type, and a value that is exactly <c>object</c> is not narrowed, because
+    /// returning it as a narrower type would be type confusion.
     /// </summary>
     /// <param name="actual">The type on the stack; null when the model could not infer it, which is accepted.</param>
     /// <param name="declared">The declared return type.</param>
@@ -77,6 +78,11 @@ public static class StackCompatibility
         if (actual == typeof(NullReferenceMarker) || actual == typeof(UnknownReferenceMarker))
         {
             return expected == StackCategory.ObjectReference;
+        }
+
+        if (StackSimulator.BoxedType(actual) is { } boxed)
+        {
+            return expected == StackCategory.ObjectReference && Assignable(declared, boxed);
         }
 
         var found = Category(actual);

@@ -126,4 +126,19 @@ public sealed class StackCompatibilityTests
         Assert.IsFalse(StackCompatibility.CanReturn(typeof(object), typeof(string)));
         Assert.IsFalse(StackCompatibility.CanReturn(typeof(object), typeof(IComparable)));
     }
+
+    /// <summary>
+    /// A boxed value returns wherever its value type is assignable, and nowhere else.
+    /// </summary>
+    [TestMethod]
+    public void CanReturn_BoxedValue_FollowsItsValueType()
+    {
+        Assert.IsTrue(StackCompatibility.CanReturn(typeof(Boxed<int>), typeof(object)));
+        Assert.IsTrue(StackCompatibility.CanReturn(typeof(Boxed<int>), typeof(IComparable)));
+        Assert.IsTrue(StackCompatibility.CanReturn(typeof(Boxed<int>), typeof(ValueType)));
+        Assert.IsTrue(StackCompatibility.CanReturn(typeof(Boxed<DayOfWeek>), typeof(Enum)));
+        Assert.IsFalse(StackCompatibility.CanReturn(typeof(Boxed<int>), typeof(string)));
+        Assert.IsFalse(StackCompatibility.CanReturn(typeof(Boxed<int>), typeof(IDisposable)));
+        Assert.IsFalse(StackCompatibility.CanReturn(typeof(Boxed<int>), typeof(int)));
+    }
 }
