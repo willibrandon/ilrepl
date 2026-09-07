@@ -50,6 +50,44 @@ public sealed class OwnMembers
         _fields.Add((declaration, builder));
     }
 
+    private readonly HashSet<FieldInfo> _forwardFields = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// Adds a field declared ahead of its line, as a rebuild does, for the line to claim.
+    /// </summary>
+    /// <param name="declaration">The declaration.</param>
+    /// <param name="builder">The prototype builder.</param>
+    public void AddForward(FieldDeclaration declaration, FieldInfo builder)
+    {
+        Add(declaration, builder);
+        _forwardFields.Add(builder);
+    }
+
+    /// <summary>
+    /// Claims a field declared ahead of its line: the builder is kept and the declaration replaced.
+    /// </summary>
+    /// <param name="declaration">The declaration as the line has it.</param>
+    /// <returns>The builder, or null when the field was not declared ahead.</returns>
+    public FieldInfo? Claim(FieldDeclaration declaration)
+    {
+        ArgumentNullException.ThrowIfNull(declaration);
+        var index = _fields.FindIndex(f => f.Declaration.Name == declaration.Name && _forwardFields.Contains(f.Builder));
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var builder = _fields[index].Builder;
+        _fields[index] = (declaration, builder);
+        _forwardFields.Remove(builder);
+        return builder;
+    }
+
+    /// <summary>
+    /// True when a member was declared ahead of its line and the line has not arrived.
+    /// </summary>
+    public bool HasForwardFields => _forwardFields.Count > 0;
+
     /// <summary>
     /// Adds a method, or marks a forward reference as declared.
     /// </summary>

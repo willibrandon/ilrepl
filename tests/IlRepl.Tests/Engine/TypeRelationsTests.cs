@@ -138,4 +138,25 @@ public sealed class TypeRelationsTests
         Assert.IsTrue(TypeRelations.IsWithin(typeof(Dictionary<,>), typeof(Dictionary<,>)));
         Assert.IsFalse(TypeRelations.IsWithin(typeof(Dictionary<,>), typeof(Dictionary<,>.Enumerator)));
     }
+
+    /// <summary>
+    /// A vector of a session type implements the generic collection interfaces over it.
+    /// </summary>
+    [TestMethod]
+    public void IsAssignable_VectorToGenericInterfaces()
+    {
+        var session = Load(".class public A { }");
+        var table = session.TypeTable;
+        var a = Find(session, "A");
+        Assert.IsTrue(TypeRelations.IsAssignable(a.MakeArrayType(), typeof(IEnumerable<>).MakeGenericType(a), table));
+        Assert.IsTrue(TypeRelations.IsAssignable(a.MakeArrayType(), typeof(IList<>).MakeGenericType(a), table));
+        Assert.IsTrue(TypeRelations.IsAssignable(a.MakeArrayType(), typeof(IEnumerable<object>), table), "covariant over a reference element");
+        Assert.IsFalse(TypeRelations.IsAssignable(a.MakeArrayType(1), typeof(IEnumerable<>).MakeGenericType(a), table), "only vectors implement them");
+        foreach (var line in IlLines.Expand(".method class [System.Runtime]System.Collections.Generic.IEnumerable`1<class A> Many() { ldc.i4 2; newarr A; ret }"))
+        {
+            session.AddLine(line);
+        }
+
+        Assert.HasCount(1, session.Methods);
+    }
 }

@@ -13,12 +13,12 @@ public static class TypeDeclarationValidator
     /// <summary>
     /// One method as the validator sees it, whatever type it came from.
     /// </summary>
-    private sealed record Shape(string Name, bool IsStatic, Type ReturnType, IReadOnlyList<Type> Parameters, bool IsAbstract, bool IsVirtual, bool IsNewSlot, Type Owner)
+    private sealed record Shape(string Name, bool IsStatic, Type ReturnType, IReadOnlyList<Type> Parameters, bool IsAbstract, bool IsVirtual, bool IsNewSlot, Type Owner, int Arity = 0)
     {
         public bool Matches(Shape other) =>
-            Name == other.Name && IsStatic == other.IsStatic && Parameters.Count == other.Parameters.Count
-            && TypeIdentity.Equal(ReturnType, other.ReturnType)
-            && Parameters.Zip(other.Parameters).All(p => TypeIdentity.Equal(p.First, p.Second));
+            Name == other.Name && IsStatic == other.IsStatic && Parameters.Count == other.Parameters.Count && Arity == other.Arity
+            && SignatureIdentity.Equal(ReturnType, other.ReturnType)
+            && Parameters.Zip(other.Parameters).All(p => SignatureIdentity.Equal(p.First, p.Second));
 
         public string Describe() =>
             $"{(IsStatic ? "static " : "instance ")}{TypeNameFormatter.Pretty(ReturnType)} {TypeNameFormatter.Pretty(Owner)}::{Name}({string.Join(", ", Parameters.Select(TypeNameFormatter.Pretty))})";
@@ -334,7 +334,8 @@ public static class TypeDeclarationValidator
                         method.IsAbstract,
                         method.IsVirtual,
                         signature.Attributes.HasFlag(MethodAttributes.NewSlot),
-                        type);
+                        type,
+                        signature.TypeParameters.Count);
                 }
             }
             else if (types.TryGetMembers(definition, out var own))
@@ -354,7 +355,8 @@ public static class TypeDeclarationValidator
                         signature.Attributes.HasFlag(MethodAttributes.Abstract),
                         signature.Attributes.HasFlag(MethodAttributes.Virtual),
                         signature.Attributes.HasFlag(MethodAttributes.NewSlot),
-                        type);
+                        type,
+                        signature.TypeParameters.Count);
                 }
             }
 
@@ -374,7 +376,8 @@ public static class TypeDeclarationValidator
                 method.IsAbstract,
                 method.IsVirtual,
                 method.Attributes.HasFlag(MethodAttributes.NewSlot),
-                type);
+                type,
+                method.IsGenericMethodDefinition ? method.GetGenericArguments().Length : 0);
         }
     }
 }

@@ -266,7 +266,14 @@ public static class TypeRelations
 
         if (from.IsArray)
         {
-            return to.IsAssignableFrom(typeof(Array)) || (to.IsInterface && to.IsGenericType && typeof(Array).GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == to.GetGenericTypeDefinition()) && from.IsSZArray && IsVariantMatch(to.GetGenericTypeDefinition().MakeGenericType(from.GetElementType()!), to, types));
+            if (to.IsAssignableFrom(typeof(Array)))
+            {
+                return true;
+            }
+
+            // A vector implements the generic collection interfaces over its element type.
+            return to.IsInterface && to.IsGenericType && from.IsSZArray && VectorInterfaces.Contains(to.GetGenericTypeDefinition())
+                && IsVariantMatch(to.GetGenericTypeDefinition().MakeGenericType(from.GetElementType()!), to, types);
         }
 
         if (from.HasElementType || to.HasElementType)
@@ -289,6 +296,11 @@ public static class TypeRelations
 
         return false;
     }
+
+    private static readonly HashSet<Type> VectorInterfaces =
+    [
+        typeof(IEnumerable<>), typeof(ICollection<>), typeof(IList<>), typeof(IReadOnlyCollection<>), typeof(IReadOnlyList<>),
+    ];
 
     /// <summary>
     /// Substitutes a definition's generic parameters with the arguments of a constructed type.

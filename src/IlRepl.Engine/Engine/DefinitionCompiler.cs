@@ -24,7 +24,22 @@ public static class DefinitionCompiler
     /// <param name="prepare">True to ask the JIT to compile the body.</param>
     /// <returns>The version, not yet bound.</returns>
     /// <exception cref="ReplException">The emitter, the loader, or the JIT rejected the body.</exception>
-    public static CompiledMethodVersion CompileMethod(MethodSignature signature, CellState state, MethodTrampoline trampoline, IReadOnlyDictionary<string, MethodTrampoline> trampolines, bool prepare)
+    public static CompiledMethodVersion CompileMethod(MethodSignature signature, CellState state, MethodTrampoline trampoline, IReadOnlyDictionary<string, MethodTrampoline> trampolines, bool prepare) =>
+        CompileMethod(signature, state, trampoline, trampolines, prepare, null);
+
+    /// <summary>
+    /// Compiles one version of a session method whose body may reference prototypes of families
+    /// written in the same group.
+    /// </summary>
+    /// <param name="signature">The method's signature.</param>
+    /// <param name="state">The validated body.</param>
+    /// <param name="trampoline">The trampoline the version will be bound into.</param>
+    /// <param name="trampolines">The trampolines of every session method the body may call, by name, including this one.</param>
+    /// <param name="prepare">True to ask the JIT to compile the body.</param>
+    /// <param name="externals">Prototypes of families in the group, referenced by their assembly names, or null.</param>
+    /// <returns>The version, not yet bound.</returns>
+    /// <exception cref="ReplException">The emitter, the loader, or the JIT rejected the body.</exception>
+    public static CompiledMethodVersion CompileMethod(MethodSignature signature, CellState state, MethodTrampoline trampoline, IReadOnlyDictionary<string, MethodTrampoline> trampolines, bool prepare, IReadOnlyDictionary<Type, CecilWriter.ExternalPrototype>? externals)
     {
         ArgumentNullException.ThrowIfNull(signature);
         ArgumentNullException.ThrowIfNull(state);
@@ -32,6 +47,11 @@ public static class DefinitionCompiler
         ArgumentNullException.ThrowIfNull(trampolines);
         var name = signature.Name;
         var writer = new CecilWriter(SessionAssemblyKind.Methods);
+        foreach (var (prototype, external) in externals ?? new Dictionary<Type, CecilWriter.ExternalPrototype>())
+        {
+            writer.DefineExternal(prototype, external);
+        }
+
         var cell = writer.DefineType("IlRepl", "Cell", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit, writer.Object);
         var method = new MethodDefinition(name, MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, writer.Import(signature.ReturnType));
         for (var i = 0; i < signature.Parameters.Count; i++)

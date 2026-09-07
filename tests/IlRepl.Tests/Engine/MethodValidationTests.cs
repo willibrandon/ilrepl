@@ -236,4 +236,27 @@ public sealed class MethodValidationTests
         session.AddLine("call void Console::WriteLine()");
         Assert.AreEqual("end of method Bad", session.AddLine("}").Message);
     }
+
+    /// <summary>
+    /// A try with both a catch and a finally is written as nested regions, the way ILGenerator
+    /// emits it, so the method prepares and runs.
+    /// </summary>
+    [TestMethod]
+    public void CompileMethod_CatchAndFinally_NestsTheRegions()
+    {
+        var session = new Session();
+        foreach (var line in new[]
+        {
+            ".method int32 Both() {", ".locals init (int32 v)", ".try {", "ldstr \"x\"", "newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)", "throw",
+            "} catch [System.Runtime]System.InvalidOperationException {", "pop", "ldc.i4 1", "stloc v", "leave DONE",
+            "} finally {", "ldloc v", "ldc.i4 10", "add", "stloc v", "endfinally", "}",
+            "DONE: ldloc v", "ret", "}",
+            "call int32 Both()",
+        })
+        {
+            session.AddLine(line);
+        }
+
+        Assert.AreEqual(11, session.Run().Value);
+    }
 }

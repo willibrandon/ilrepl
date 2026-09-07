@@ -46,6 +46,11 @@ public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList
     public IReadOnlyList<CustomAttributeDeclaration> CustomAttributes { get; init; } = [];
 
     /// <summary>
+    /// The custom attributes on the return value, written after <c>.param [0]</c>.
+    /// </summary>
+    public IReadOnlyList<CustomAttributeDeclaration> ReturnCustomAttributes { get; init; } = [];
+
+    /// <summary>
     /// True for a static method.
     /// </summary>
     public bool IsStatic => Attributes.HasFlag(System.Reflection.MethodAttributes.Static);
@@ -66,7 +71,9 @@ public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList
     /// </summary>
     /// <returns>The call form.</returns>
     public string Describe() =>
-        $"{TypeNameFormatter.Pretty(ReturnType)} {Name}({string.Join(", ", Parameters.Select(p => TypeNameFormatter.Pretty(p.Type)))})";
+        $"{TypeNameFormatter.Pretty(ReturnType)} {Name}{GenericSuffix}({string.Join(", ", Parameters.Select(p => TypeNameFormatter.Pretty(p.Type)))})";
+
+    private string GenericSuffix => TypeParameters.Count == 0 ? "" : "<" + string.Join(", ", TypeParameters.Select(p => p.Name)) + ">";
 
     /// <summary>
     /// Renders the signature with its parameter names, for example <c>int32 Fib(int32 n)</c>.

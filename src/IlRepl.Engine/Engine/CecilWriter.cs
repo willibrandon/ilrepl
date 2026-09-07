@@ -19,16 +19,60 @@ public sealed class CecilWriter
     private readonly Dictionary<Type, TypeReference> _definedTypes = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<FieldInfo, FieldReference> _definedFields = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<MethodBase, MethodReference> _definedMethods = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Type, ExternalPrototype> _externals = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<string, AssemblyNameReference> _externalAssemblies = new(StringComparer.Ordinal);
     private MethodDefinition? _ignoresAccessChecksConstructor;
+
+    /// <summary>
+    /// A prototype written by another writer of the same group, referenced here by the name its
+    /// assembly will carry.
+    /// </summary>
+    /// <param name="AssemblyName">The simple name of the assembly the prototype is written into.</param>
+    /// <param name="Namespace">The type's namespace, or empty.</param>
+    /// <param name="Name">The metadata name, with its arity suffix.</param>
+    /// <param name="Enclosing">The enclosing prototype for a nested type, or null.</param>
+    /// <param name="Members">The declared members, which give references their signatures.</param>
+    public sealed record ExternalPrototype(string AssemblyName, string Namespace, string Name, Type? Enclosing, OwnMembers Members);
+
+    /// <summary>
+    /// Records that a prototype lives in another assembly of the group being written.
+    /// </summary>
+    /// <param name="prototype">The prototype builder.</param>
+    /// <param name="external">Where and what it is.</param>
+    public void DefineExternal(Type prototype, ExternalPrototype external)
+    {
+        ArgumentNullException.ThrowIfNull(prototype);
+        ArgumentNullException.ThrowIfNull(external);
+        _externals[prototype] = external;
+        if (!_externalAssemblies.ContainsKey(external.AssemblyName))
+        {
+            var reference = new AssemblyNameReference(external.AssemblyName, SessionAssemblies.Version);
+            Module.AssemblyReferences.Add(reference);
+            _externalAssemblies[external.AssemblyName] = reference;
+            GrantAccessTo(external.AssemblyName);
+        }
+    }
 
     /// <summary>
     /// Starts an assembly.
     /// </summary>
     /// <param name="kind">What the assembly will hold.</param>
     public CecilWriter(SessionAssemblyKind kind)
+        : this(kind, SessionAssemblies.NextName(kind))
     {
+    }
+
+    /// <summary>
+    /// Starts a session assembly under a name taken in advance, so other assemblies written in
+    /// the same group can reference it before it is loaded.
+    /// </summary>
+    /// <param name="kind">What the assembly will hold.</param>
+    /// <param name="name">A name from <see cref="SessionAssemblies.NextName"/>.</param>
+    public CecilWriter(SessionAssemblyKind kind, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         Kind = kind;
-        Name = SessionAssemblies.NextName(kind);
+        Name = name;
         Assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(Name, SessionAssemblies.Version), Name, ModuleKind.Dll);
         ReferenceCoreLibrary();
     }
@@ -140,6 +184,23 @@ public sealed class CecilWriter
             return defined;
         }
 
+        if (_externals.TryGetValue(type, out var external))
+        {
+            return ExternalReference(type, external);
+        }
+
+        if (type is System.Reflection.Emit.GenericTypeParameterBuilder { DeclaringMethod: null } parameter && parameter.DeclaringType is { } owner && _externals.TryGetValue(owner, out var ownerExternal))
+        {
+            var reference = ExternalReference(owner, ownerExternal);
+            return reference.GenericParameters[parameter.GenericParameterPosition];
+        }
+
+        if (type is System.Reflection.Emit.GenericTypeParameterBuilder { DeclaringMethod: not null } methodParameter && _externalMethod is { } building)
+        {
+            // A method's own parameter inside its signature: !!N on the reference being built.
+            return building.GenericParameters[methodParameter.GenericParameterPosition];
+        }
+
         if (type.IsByRef)
         {
             return new ByReferenceType(Import(type.GetElementType()!));
@@ -182,6 +243,89 @@ public sealed class CecilWriter
         return Module.ImportReference(type);
     }
 
+    private MethodReference ExternalMethod(MethodBase method, Type declaring, ExternalPrototype external)
+    {
+        // The builder cannot describe itself; the declaration behind it can.
+        var entry = external.Members.Methods.FirstOrDefault(m => ReferenceEquals(m.Builder, method));
+        var signature = entry.Signature ?? throw new ReplException($"{external.Name} declares no method {method.Name}");
+        var reference = new MethodReference(signature.Name, Import(typeof(void)), Import(declaring))
+        {
+            HasThis = !signature.IsStatic,
+            ExplicitThis = signature.CallingConvention.HasFlag(CallingConventions.ExplicitThis),
+            CallingConvention = signature.CallingConvention.HasFlag(CallingConventions.VarArgs) ? MethodCallingConvention.VarArg : MethodCallingConvention.Default,
+        };
+        foreach (var parameter in signature.TypeParameters)
+        {
+            reference.GenericParameters.Add(new GenericParameter(parameter.Name, reference));
+        }
+
+        var outer = _externalMethod;
+        _externalMethod = reference;
+        try
+        {
+            reference.ReturnType = WithModifiers(Import(signature.ReturnType), signature.ReturnRequiredModifiers, signature.ReturnOptionalModifiers);
+            foreach (var parameter in signature.Parameters)
+            {
+                reference.Parameters.Add(new ParameterDefinition(WithModifiers(Import(parameter.Type), parameter.RequiredModifiers, parameter.OptionalModifiers)));
+            }
+        }
+        finally
+        {
+            _externalMethod = outer;
+        }
+
+        return reference;
+    }
+
+    private MethodReference? _externalMethod;
+
+    private TypeReference WithModifiers(TypeReference type, IReadOnlyList<Type> required, IReadOnlyList<Type> optional)
+    {
+        var result = type;
+        foreach (var modifier in optional)
+        {
+            result = new OptionalModifierType(Import(modifier), result);
+        }
+
+        foreach (var modifier in required)
+        {
+            result = new RequiredModifierType(Import(modifier), result);
+        }
+
+        return result;
+    }
+
+    private TypeReference ExternalReference(Type prototype, ExternalPrototype external)
+    {
+        var scope = _externalAssemblies[external.AssemblyName];
+        var reference = external.Enclosing is null
+            ? new TypeReference(external.Namespace, external.Name, Module, scope)
+            : new TypeReference("", external.Name, Module, scope) { DeclaringType = Import(external.Enclosing) };
+        reference.IsValueType = prototype.IsValueType;
+        if (prototype.IsGenericTypeDefinition)
+        {
+            foreach (var parameter in prototype.GetGenericArguments())
+            {
+                reference.GenericParameters.Add(new GenericParameter(parameter.Name, reference));
+            }
+        }
+
+        return reference;
+    }
+
+    private bool IsExternal(Type? declaring, out ExternalPrototype? external, out Type? definition)
+    {
+        external = null;
+        definition = null;
+        if (declaring is null)
+        {
+            return false;
+        }
+
+        definition = declaring.IsGenericType && !declaring.IsGenericTypeDefinition ? declaring.GetGenericTypeDefinition() : declaring;
+        return _externals.TryGetValue(definition, out external);
+    }
+
     /// <summary>
     /// Imports a field, noting a session assembly it comes from. A prototype field maps to its
     /// definition; a field of an instantiated prototype becomes a reference on the instantiation.
@@ -196,6 +340,17 @@ public sealed class CecilWriter
             return defined;
         }
 
+        if (IsExternal(field.DeclaringType, out var external, out var externalDefinition))
+        {
+            var declaration = external!.Members.FindField(field.Name)?.Declaration
+                ?? throw new ReplException($"{external.Name} declares no field {field.Name}");
+            var externalDefinitionReference = Import(externalDefinition!);
+            var fieldType = Import(declaration.Type);
+            fieldType = WithModifiers(fieldType, declaration.RequiredModifiers, declaration.OptionalModifiers);
+            _ = externalDefinitionReference;
+            return new FieldReference(field.Name, fieldType, Import(field.DeclaringType!));
+        }
+
         var declaring = field.DeclaringType;
         if (declaring is { IsGenericType: true, IsGenericTypeDefinition: false } && _definedTypes.TryGetValue(declaring.GetGenericTypeDefinition(), out var definitionType))
         {
@@ -203,9 +358,9 @@ public sealed class CecilWriter
             return new FieldReference(field.Name, definitionField.FieldType, Import(declaring));
         }
 
-        if (declaring is { IsGenericType: true, IsGenericTypeDefinition: false } && MentionsBuilder(declaring))
+        if (declaring is { IsGenericType: true, IsGenericTypeDefinition: false } && NeedsRebuild(declaring))
         {
-            // A field of a loaded generic type instantiated with a prototype's parameters.
+            // A field of a loaded generic type instantiated with a prototype's parameters or a type written here.
             const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
             var definitionField = declaring.GetGenericTypeDefinition().GetField(field.Name, all)
                 ?? throw new ReplException($"{TypeNameFormatter.Pretty(declaring)} has no field {field.Name}");
@@ -228,6 +383,11 @@ public sealed class CecilWriter
     public MethodReference Import(MethodBase method, Type? declaring)
     {
         ArgumentNullException.ThrowIfNull(method);
+        if (IsExternal(declaring ?? method.DeclaringType, out var external, out _))
+        {
+            return ExternalMethod(method, declaring ?? method.DeclaringType!, external!);
+        }
+
         if (_definedMethods.TryGetValue(method, out var defined))
         {
             if (declaring is { IsGenericType: true, IsGenericTypeDefinition: false })
@@ -272,7 +432,12 @@ public sealed class CecilWriter
             return defined;
         }
 
-        if (method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } instantiated && (instantiated.GetGenericArguments().Any(MentionsBuilder) || _definedMethods.ContainsKey(instantiated.GetGenericMethodDefinition()) || IsDefinedInstantiationMember(instantiated.GetGenericMethodDefinition())))
+        if (IsExternal(method.DeclaringType, out var external, out _))
+        {
+            return ExternalMethod(method, method.DeclaringType!, external!);
+        }
+
+        if (method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } instantiated && (instantiated.GetGenericArguments().Any(NeedsRebuild) || _definedMethods.ContainsKey(instantiated.GetGenericMethodDefinition()) || IsDefinedInstantiationMember(instantiated.GetGenericMethodDefinition())))
         {
             var generic = new GenericInstanceMethod(Import(instantiated.GetGenericMethodDefinition()));
             foreach (var argument in instantiated.GetGenericArguments())
@@ -310,15 +475,10 @@ public sealed class CecilWriter
             }
         }
 
-        if (method.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } declaring && MentionsBuilder(declaring) && !(_definedTypes.ContainsKey(declaring.GetGenericTypeDefinition())))
+        if (method.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } declaring && NeedsRebuild(declaring) && !(_definedTypes.ContainsKey(declaring.GetGenericTypeDefinition())))
         {
             var definitionType = declaring.GetGenericTypeDefinition();
-            const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
-            var wanted = method.GetParameters().Select(p => p.ParameterType).ToArray();
-            var definitionMethod = definitionType.GetMembers(all).OfType<MethodBase>()
-                .FirstOrDefault(m => m.Name == method.Name && m.IsStatic == method.IsStatic && m is ConstructorInfo == method is ConstructorInfo
-                    && m.GetParameters().Length == wanted.Length && m.GetParameters().Zip(wanted).All(p => TypeIdentity.Equal(p.First.ParameterType, p.Second)))
-                ?? throw new ReplException($"{TypeNameFormatter.Pretty(declaring)}::{method.Name} has no definition on {TypeNameFormatter.Pretty(definitionType)}");
+            var definitionMethod = DefinitionOf(method, definitionType);
             var onDefinition = Import(definitionMethod);
             var onInstance = new MethodReference(onDefinition.Name, onDefinition.ReturnType, Import(declaring))
             {
@@ -415,10 +575,73 @@ public sealed class CecilWriter
         }
 
         _dependencies[dependency.Name] = dependency;
+        GrantAccessTo(dependency.Name);
+    }
+
+    private readonly HashSet<string> _granted = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Grants this assembly access to every member of a session assembly by name, for one that
+    /// is not loaded yet.
+    /// </summary>
+    /// <param name="name">The assembly's simple name.</param>
+    public void GrantAccessTo(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (!_granted.Add(name))
+        {
+            return;
+        }
+
         _ignoresAccessChecksConstructor ??= DefineIgnoresAccessChecksAttribute();
         var attribute = new CustomAttribute(_ignoresAccessChecksConstructor);
-        attribute.ConstructorArguments.Add(new CustomAttributeArgument(Module.TypeSystem.String, dependency.Name));
+        attribute.ConstructorArguments.Add(new CustomAttributeArgument(Import(typeof(string)), name));
         Assembly.CustomAttributes.Add(attribute);
+    }
+
+    /// <summary>
+    /// True when the type mentions a builder or a type written by this writer, so the reflection
+    /// importer must not see it.
+    /// </summary>
+    private bool NeedsRebuild(Type type)
+    {
+        while (type.HasElementType)
+        {
+            type = type.GetElementType()!;
+        }
+
+        if (MentionsBuilder(type) || _definedTypes.ContainsKey(type))
+        {
+            return true;
+        }
+
+        return type.IsGenericType && !type.IsGenericTypeDefinition && (_definedTypes.ContainsKey(type.GetGenericTypeDefinition()) || type.GetGenericArguments().Any(NeedsRebuild));
+    }
+
+    /// <summary>
+    /// The method on the generic type definition behind a member of an instantiation: by token
+    /// for a loaded member, by shape for a wrapper over a builder.
+    /// </summary>
+    private static MethodBase DefinitionOf(MethodBase method, Type definitionType)
+    {
+        if (method is not System.Reflection.Emit.MethodBuilder and not System.Reflection.Emit.ConstructorBuilder && definitionType is not System.Reflection.Emit.TypeBuilder)
+        {
+            try
+            {
+                return method.Module.ResolveMethod(method.MetadataToken)!;
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or InvalidOperationException)
+            {
+                // A wrapper without a token of its own; matched by shape below.
+            }
+        }
+
+        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+        var wanted = method.GetParameters().Select(p => p.ParameterType).ToArray();
+        return definitionType.GetMembers(all).OfType<MethodBase>()
+            .FirstOrDefault(m => m.Name == method.Name && m.IsStatic == method.IsStatic && m is ConstructorInfo == method is ConstructorInfo
+                && m.GetParameters().Length == wanted.Length && m.GetParameters().Zip(wanted).All(p => TypeIdentity.Equal(p.First.ParameterType, p.Second) || p.First.ParameterType.IsGenericParameter))
+            ?? throw new ReplException($"{TypeNameFormatter.Pretty(method.DeclaringType)}::{method.Name} has no definition on {TypeNameFormatter.Pretty(definitionType)}");
     }
 
     private bool IsDefinedInstantiationMember(MethodBase definition) =>

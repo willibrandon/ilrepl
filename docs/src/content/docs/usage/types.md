@@ -227,15 +227,18 @@ il[9]> .types
 ## Closing, undoing, and redefining
 
 `.undo` takes back the last line of the class, and taking back the header abandons it. `.clear`
-inside a class abandons the class and leaves the cell alone. `.reset` drops every type along
-with the methods; instances you still hold keep working with the old type.
+inside a member abandons that member and keeps the class open; `.clear` between members
+abandons the class. Both leave the cell alone. `.reset` drops every type along with the
+methods; instances you still hold keep working with the old type.
 
 Declaring a class again with the same name replaces it when the block closes. The new class is a
 new type: existing instances keep the previous definition, and a static starts over. Anything
 that mentions the class, another class, a session method, or the cell, is rebuilt against the
-new definition, in the order it was accepted, and the note lists what was rebuilt. If one of
-them no longer compiles, the redefinition is refused with that name and nothing changes:
-redefine the dependent first, or `.reset`.
+new definition, and the note lists what was rebuilt. The whole group is written together, so a
+class may refer back to one that refers to it: define `A`, define `B` using `A`, then redefine
+`A` using `B`, and both run against each other's new definitions. If one member of the group no
+longer compiles, the redefinition is refused with that name and nothing changes: redefine the
+dependent first, or `.reset`.
 
 ```
 il[10]> }

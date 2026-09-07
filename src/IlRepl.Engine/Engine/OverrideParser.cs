@@ -147,7 +147,8 @@ public static class OverrideParser
         }
 
         var expected = target.ParameterTypes;
-        if (expected.Count != method.Parameters.Count || !expected.Zip(method.ParameterTypes).All(p => TypeIdentity.Equal(p.First, p.Second)) || !TypeIdentity.Equal(target.ReturnType, method.ReturnType))
+        var targetArity = target.Declared?.TypeParameters.Count ?? (target.Method is MethodInfo { IsGenericMethodDefinition: true } generic ? generic.GetGenericArguments().Length : 0);
+        if (targetArity != method.TypeParameters.Count || expected.Count != method.Parameters.Count || !expected.Zip(method.ParameterTypes).All(p => SignatureIdentity.Equal(p.First, p.Second)) || !SignatureIdentity.Equal(target.ReturnType, method.ReturnType))
         {
             throw new ReplException($".override target {Describe(target)} does not match {method.DescribeMember()}");
         }

@@ -68,7 +68,7 @@ internal sealed class OpenTypeBlock
     /// <summary>
     /// The members declared so far, for resolution.
     /// </summary>
-    public OwnMembers Members { get; } = new();
+    public OwnMembers Members { get; init; } = new();
 
     /// <summary>
     /// The <c>.pack</c> value.

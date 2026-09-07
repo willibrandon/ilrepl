@@ -54,6 +54,13 @@ public static class SessionMentions
             if (entry.Custom is { } custom)
             {
                 yield return custom.AttributeType;
+                foreach (var value in custom.FixedArguments.Concat(custom.NamedFields.Select(f => f.Value)).Concat(custom.NamedProperties.Select(p => p.Value)))
+                {
+                    if (value is Type mentioned)
+                    {
+                        yield return mentioned;
+                    }
+                }
             }
 
             switch (entry.Instruction?.Operand)

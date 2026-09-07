@@ -34,23 +34,76 @@ public static class TypeEmitter
     public static CompiledFamily Compile(TypeDeclaration family, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> prototypes, IReadOnlyDictionary<string, MethodTrampoline> trampolines, bool prepare)
     {
         ArgumentNullException.ThrowIfNull(family);
+        var name = SessionAssemblies.NextName(SessionAssemblyKind.Types);
+        var (image, dependencies) = Write(family, prototypes, trampolines, name, null);
+        var compiled = Load(image, name, dependencies, family);
+        if (prepare)
+        {
+            try
+            {
+                Prepare(compiled, family);
+            }
+            catch
+            {
+                SessionAssemblies.Release(compiled.Definition);
+                throw;
+            }
+        }
+
+        return compiled;
+    }
+
+    /// <summary>
+    /// Writes a family into an image under a name taken in advance. Prototypes of other families
+    /// written in the same group are referenced by their assembly names.
+    /// </summary>
+    /// <param name="family">The outermost declaration.</param>
+    /// <param name="prototypes">The prototype and members of every declaration, by path.</param>
+    /// <param name="trampolines">The trampolines of the session methods, by name.</param>
+    /// <param name="name">The assembly's simple name.</param>
+    /// <param name="externals">Prototypes of the other families of the group, or null.</param>
+    /// <returns>The image and the loaded session assemblies it references.</returns>
+    /// <exception cref="ReplException">The writer rejected the family.</exception>
+    public static (byte[] Image, IReadOnlyList<DefinitionAssembly> Dependencies) Write(TypeDeclaration family, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> prototypes, IReadOnlyDictionary<string, MethodTrampoline> trampolines, string name, IReadOnlyDictionary<Type, CecilWriter.ExternalPrototype>? externals)
+    {
+        ArgumentNullException.ThrowIfNull(family);
         ArgumentNullException.ThrowIfNull(prototypes);
         ArgumentNullException.ThrowIfNull(trampolines);
-        var writer = new CecilWriter(SessionAssemblyKind.Types);
-        var emitter = new Emitter(writer, prototypes, trampolines);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        var writer = new CecilWriter(SessionAssemblyKind.Types, name);
+        foreach (var (prototype, external) in externals ?? new Dictionary<Type, CecilWriter.ExternalPrototype>())
+        {
+            writer.DefineExternal(prototype, external);
+        }
+
         try
         {
-            emitter.Write(family);
+            WriteAll(writer, [(family, prototypes, null)], trampolines);
+            return (writer.Write(), writer.Dependencies);
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException or NullReferenceException)
         {
             throw new ReplException($"the writer rejected {family.KindWord} {family.FullName}: {ex.Message}", ex);
         }
+    }
 
+    /// <summary>
+    /// Loads a written family and resolves its types.
+    /// </summary>
+    /// <param name="image">The image.</param>
+    /// <param name="name">The assembly's simple name.</param>
+    /// <param name="dependencies">The loaded session assemblies it references.</param>
+    /// <param name="family">The outermost declaration.</param>
+    /// <returns>The loaded family.</returns>
+    /// <exception cref="ReplException">The runtime rejected the family.</exception>
+    public static CompiledFamily Load(byte[] image, string name, IReadOnlyList<DefinitionAssembly> dependencies, TypeDeclaration family)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        ArgumentNullException.ThrowIfNull(family);
         DefinitionAssembly definition;
         try
         {
-            definition = writer.Load();
+            definition = SessionAssemblies.Load(image, name, SessionAssemblyKind.Types, dependencies);
         }
         catch (Exception ex) when (ex is BadImageFormatException or FileLoadException or ArgumentException or InvalidOperationException)
         {
@@ -65,20 +118,28 @@ public static class TypeEmitter
                 types[declaration.FullName] = LoadType(definition.Assembly, declaration);
             }
 
-            if (prepare)
-            {
-                foreach (var declaration in family.Family)
-                {
-                    Prepare(declaration, types[declaration.FullName]);
-                }
-            }
-
             return new CompiledFamily(definition, types);
         }
         catch
         {
             SessionAssemblies.Release(definition);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Asks the JIT to compile every body of a loaded family.
+    /// </summary>
+    /// <param name="compiled">The loaded family.</param>
+    /// <param name="family">Its outermost declaration.</param>
+    /// <exception cref="ReplException">The JIT or the runtime rejected a body.</exception>
+    public static void Prepare(CompiledFamily compiled, TypeDeclaration family)
+    {
+        ArgumentNullException.ThrowIfNull(compiled);
+        ArgumentNullException.ThrowIfNull(family);
+        foreach (var declaration in family.Family)
+        {
+            Prepare(declaration, compiled.Types[declaration.FullName]);
         }
     }
 
@@ -95,12 +156,44 @@ public static class TypeEmitter
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(family);
-        ArgumentNullException.ThrowIfNull(prototypes);
-        ArgumentNullException.ThrowIfNull(trampolines);
-        new Emitter(writer, prototypes, trampolines) { RuntimeTypes = runtimeTypes }.Write(family);
+        WriteAll(writer, [(family, prototypes, runtimeTypes)], trampolines);
     }
 
-    private static Type LoadType(Assembly assembly, TypeDeclaration declaration)
+    /// <summary>
+    /// Writes several families into one writer: every type of every family is declared before
+    /// any shape or body is imported, so the families may mention each other in any order.
+    /// </summary>
+    /// <param name="writer">The writer.</param>
+    /// <param name="families">The families with their prototypes and, for an export, their loaded types.</param>
+    /// <param name="trampolines">The trampolines of the session methods, by name.</param>
+    public static void WriteAll(CecilWriter writer, IReadOnlyList<(TypeDeclaration Family, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> Prototypes, IReadOnlyDictionary<string, Type>? RuntimeTypes)> families, IReadOnlyDictionary<string, MethodTrampoline> trampolines)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(families);
+        ArgumentNullException.ThrowIfNull(trampolines);
+        var emitters = families.Select(f => (Emitter: new Emitter(writer, f.Prototypes, trampolines) { RuntimeTypes = f.RuntimeTypes }, f.Family)).ToList();
+        foreach (var (emitter, family) in emitters)
+        {
+            emitter.Declare(family);
+        }
+
+        foreach (var (emitter, family) in emitters)
+        {
+            emitter.Shape(family);
+        }
+
+        foreach (var (emitter, family) in emitters)
+        {
+            emitter.Members(family);
+        }
+
+        foreach (var (emitter, family) in emitters)
+        {
+            emitter.Bodies(family);
+        }
+    }
+
+    internal static Type LoadType(Assembly assembly, TypeDeclaration declaration)
     {
         var name = ReflectionName(declaration);
         try
@@ -208,21 +301,26 @@ public static class TypeEmitter
 
         private Type? RuntimeTypeOf(string path) => RuntimeTypes is not null && RuntimeTypes.TryGetValue(path, out var type) ? type : null;
 
-        public void Write(TypeDeclaration family)
+        public void Declare(TypeDeclaration family) => DefineTypes(family, null);
+
+        public void Shape(TypeDeclaration family)
         {
-            // Every type and generic parameter exists before any reference is imported, so a
-            // family can mention itself in any order.
-            DefineTypes(family, null);
             foreach (var declaration in family.Family)
             {
                 DefineShape(declaration);
             }
+        }
 
+        public void Members(TypeDeclaration family)
+        {
             foreach (var declaration in family.Family)
             {
                 DefineMembers(declaration);
             }
+        }
 
+        public void Bodies(TypeDeclaration family)
+        {
             foreach (var declaration in family.Family)
             {
                 EmitBodies(declaration);
@@ -435,6 +533,11 @@ public static class TypeEmitter
                 foreach (var attribute in signature.CustomAttributes)
                 {
                     cecilMethod.CustomAttributes.Add(Attribute(attribute));
+                }
+
+                foreach (var attribute in signature.ReturnCustomAttributes)
+                {
+                    cecilMethod.MethodReturnType.CustomAttributes.Add(Attribute(attribute));
                 }
             }
 

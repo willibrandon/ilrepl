@@ -14,9 +14,11 @@ public sealed class DefinitionAssembly
     {
         Assembly = assembly;
         Kind = kind;
-        Dependencies = dependencies;
+        _dependencies = [.. dependencies];
         Context = context;
     }
+
+    private readonly List<DefinitionAssembly> _dependencies;
 
     /// <summary>
     /// The loaded assembly.
@@ -31,7 +33,21 @@ public sealed class DefinitionAssembly
     /// <summary>
     /// The session assemblies this one references, held strongly.
     /// </summary>
-    public IReadOnlyList<DefinitionAssembly> Dependencies { get; }
+    public IReadOnlyList<DefinitionAssembly> Dependencies => _dependencies;
+
+    /// <summary>
+    /// Adds a dependency loaded after this assembly, as happens when definitions that refer to
+    /// each other are written together and loaded one after another.
+    /// </summary>
+    /// <param name="dependency">The session assembly this one references.</param>
+    public void AddDependency(DefinitionAssembly dependency)
+    {
+        ArgumentNullException.ThrowIfNull(dependency);
+        if (!ReferenceEquals(dependency, this) && !_dependencies.Contains(dependency))
+        {
+            _dependencies.Add(dependency);
+        }
+    }
 
     /// <summary>
     /// The load context that holds the assembly, or null for a cell built with Reflection.Emit.

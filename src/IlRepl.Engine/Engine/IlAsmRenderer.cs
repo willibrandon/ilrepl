@@ -300,6 +300,20 @@ public static class IlAsmRenderer
             return $"{TypeNameFormatter.IlAsm(definition.ReturnType)} IlRepl.Cell::{TypeNameFormatter.IlAsmIdentifier(definition.Name)}({string.Join(", ", definition.ParameterTypes.Select(TypeNameFormatter.IlAsm))})";
         }
 
+        if (resolved.Declared is { } declared)
+        {
+            // A member of a type being written is described by its declaration; its builder cannot describe itself.
+            var declaredParameters = declared.ParameterTypes.Select(TypeNameFormatter.IlAsm).ToList();
+            if (resolved.OptionalParameterTypes is not null)
+            {
+                declaredParameters.Add("...");
+                declaredParameters.AddRange(resolved.OptionalParameterTypes.Select(TypeNameFormatter.IlAsm));
+            }
+
+            var declaredVarArg = declared.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "";
+            return $"{(declared.IsStatic ? "" : "instance ")}{declaredVarArg}{TypeNameFormatter.IlAsm(declared.ReturnType)} {TypeNameFormatter.IlAsmDeclaring(resolved.DeclaringType!)}::{MemberName(declared.Name)}({string.Join(", ", declaredParameters)})";
+        }
+
         var method = resolved.Method!;
         var instance = method.IsStatic ? "" : "instance ";
         var vararg = method.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "";
@@ -467,7 +481,7 @@ public static class IlAsmRenderer
         var inner = Pad(level + 1);
         var header = new StringBuilder();
         header.Append(pad).Append(".class ").Append(IlAsmWords.Type(declaration.Attributes, declaration.Kind, declaration.IsNested));
-        header.Append(TypeName(declaration.Name));
+        header.Append(level == 0 && declaration.Namespace.Length > 0 ? string.Join(".", declaration.Namespace.Split('.').Select(TypeNameFormatter.IlAsmIdentifier)) + "." + TypeName(declaration.Name) : TypeName(declaration.Name));
         if (declaration.TypeParameters.Count > 0)
         {
             header.Append('<').Append(string.Join(", ", declaration.TypeParameters.Select(GenericParameterIlAsm))).Append('>');
@@ -570,7 +584,7 @@ public static class IlAsmRenderer
             sb.Append(inner).AppendLine("}");
         }
 
-        foreach (var over in declaration.Overrides.Where(o => o.Source.Length > 0))
+        foreach (var over in declaration.Overrides)
         {
             sb.Append(inner).Append(".override ").AppendLine(OverrideTargetIlAsm(over.Target) + " with method " + (over.BodyIsStatic ? "" : "instance ") + TypeNameFormatter.IlAsm(over.BodyReturnType) + " " + TypePath(declaration.FullName) + "::" + MemberName(over.BodyName) + "(" + string.Join(", ", over.BodyParameterTypes.Select(TypeNameFormatter.IlAsm)) + ")");
         }
@@ -663,6 +677,15 @@ public static class IlAsmRenderer
         foreach (var attribute in signature.CustomAttributes)
         {
             sb.Append(inner).AppendLine(CustomAttributeIlAsm(attribute));
+        }
+
+        if (signature.ReturnCustomAttributes.Count > 0)
+        {
+            sb.Append(inner).AppendLine(".param [0]");
+            foreach (var attribute in signature.ReturnCustomAttributes)
+            {
+                sb.Append(inner).AppendLine(CustomAttributeIlAsm(attribute));
+            }
         }
 
         for (var i = 0; i < signature.Parameters.Count; i++)

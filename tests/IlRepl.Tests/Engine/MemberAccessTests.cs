@@ -222,4 +222,14 @@ public sealed class MemberAccessTests
         Assert.AreEqual(1, session.TypeCount, "a private member is fine from its own type");
         Assert.AreEqual("end of class Late", session.AddLine("}").Message);
     }
+
+    /// <summary>
+    /// A type argument of a framework method is judged like any other mention of the type.
+    /// </summary>
+    [TestMethod]
+    public void GenericArguments_OfFrameworkMethods_AreJudged()
+    {
+        var session = Load(".class public Outer {", ".class nested private Inner { }", "}");
+        Assert.Contains("Outer/Inner is nested private", Refused(session, "call !!0[] [System.Runtime]System.Array::Empty<class Outer/Inner>()"));
+    }
 }

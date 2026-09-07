@@ -292,7 +292,13 @@ public static class ValueFormatter
         }
 
         il.Emit(OpCodes.Ldfld, field);
-        if (field.FieldType.IsValueType || field.FieldType.IsGenericParameter)
+        if (field.FieldType.IsPointer || field.FieldType.IsFunctionPointer)
+        {
+            // An address is shown as a native integer; returning it as an object would be a fault.
+            il.Emit(OpCodes.Conv_I);
+            il.Emit(OpCodes.Box, typeof(nint));
+        }
+        else if (field.FieldType.IsValueType || field.FieldType.IsGenericParameter)
         {
             il.Emit(OpCodes.Box, field.FieldType);
         }

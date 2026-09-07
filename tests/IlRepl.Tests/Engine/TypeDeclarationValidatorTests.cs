@@ -186,4 +186,19 @@ public sealed class TypeDeclarationValidatorTests
         var wrong = Load([.. IBox, ".class public IntBox implements class IBox`1<int32> {", ".method public virtual instance string Get() { ldnull; ret }"]);
         Assert.Contains("must implement instance int32 IBox<int32>::Get()", CloseRefused(wrong));
     }
+
+    /// <summary>
+    /// A generic interface method is implemented by a generic method with the same shape; the
+    /// two methods' own parameters match by position.
+    /// </summary>
+    [TestMethod]
+    public void GenericInterfaceMethod_MatchedByPosition()
+    {
+        var session = Load(".class interface public abstract IFoo {", ".method public abstract virtual instance !!0 Id<T>(!!0 v) { }", "}",
+            ".class public Foo implements IFoo {", ".method public virtual instance !!0 Id<T>(!!0 v) { ldarg v; ret }");
+        Assert.AreEqual("end of class Foo", session.AddLine("}").Message);
+        var wrong = Load(".class interface public abstract IFoo {", ".method public abstract virtual instance !!0 Id<T>(!!0 v) { }", "}",
+            ".class public Foo implements IFoo {", ".method public virtual instance !!0 Id<T, U>(!!0 v) { ldarg v; ret }");
+        Assert.Contains("must implement", CloseRefused(wrong));
+    }
 }

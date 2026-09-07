@@ -38,6 +38,21 @@ public sealed class TypeTable
     }
 
     /// <summary>
+    /// Removes a type by its path, with the members registered for it.
+    /// </summary>
+    /// <param name="fullName">The path.</param>
+    public void Remove(string fullName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fullName);
+        foreach (var entry in _entries.Where(e => e.FullName == fullName).ToList())
+        {
+            _members.Remove(entry.Type);
+        }
+
+        _entries.RemoveAll(e => e.FullName == fullName);
+    }
+
+    /// <summary>
     /// A callback that resolves a name inside the family being written to a placeholder, for a
     /// nested type referenced before its declaration, or returns null.
     /// </summary>

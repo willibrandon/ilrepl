@@ -1,3 +1,4 @@
+using System.Reflection;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
@@ -375,5 +376,126 @@ public sealed class SessionTypeTests
         Assert.IsEmpty(session.Types);
         Assert.IsNull(session.OpenType);
         Assert.AreEqual(0, session.TypeCount);
+    }
+
+    /// <summary>
+    /// Methods that differ only in generic arity are distinct overloads.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_GenericArity_DistinguishesOverloads()
+    {
+        var session = Load(".class public Over {", ".method public static int32 F() {", "ldc.i4 1", "ret", "}");
+        Assert.AreEqual("method static int32 F<T>()", session.AddLine(".method public static int32 F<T>() {").Message);
+        session.AddLine("ldc.i4 2");
+        session.AddLine("ret");
+        session.AddLine("}");
+        Assert.AreEqual("end of class Over", session.AddLine("}").Message);
+        Assert.HasCount(2, session.Types[0].RuntimeType!.GetMethods().Where(m => m.Name == "F").ToList());
+    }
+
+    /// <summary>
+    /// A member inherited from a base is found on the open type, whether the base is loaded or
+    /// still being written.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_InheritedMembers_ResolveOnOpenTypes()
+    {
+        var session = Load(".class public Base {", ".field public int32 N", ".method public instance int32 F() {", "ldc.i4 7", "ret", "}", "}",
+            ".class public Derived extends Base {", ".method public instance int32 G() {", "ldarg.0");
+        Assert.AreEqual(LineOutcome.Instruction, session.AddLine("call instance int32 Derived::F()").Outcome);
+        session.AddLine("ldarg.0");
+        Assert.AreEqual(LineOutcome.Instruction, session.AddLine("ldfld int32 Derived::N").Outcome);
+        session.AddLine("add");
+        session.AddLine("ret");
+        session.AddLine("}");
+        Assert.AreEqual("end of class Derived", session.AddLine("}").Message);
+        var open = Load(".class public Outer {", ".class nested public Base {", ".method public instance int32 F() {", "ldc.i4 3", "ret", "}", "}", ".class nested public Derived extends Outer/Base {", ".method public instance int32 G() {", "ldarg.0");
+        Assert.AreEqual(LineOutcome.Instruction, open.AddLine("call instance int32 Outer/Derived::F()").Outcome);
+    }
+
+    /// <summary>
+    /// Abandoning a member with .clear removes it from the family, so it can be declared again
+    /// and a later replay does not bring it back.
+    /// </summary>
+    [TestMethod]
+    public void AbandonMethod_InsideClass_RemovesTheMember()
+    {
+        var session = Load(".class public Box {", ".field public int32 V", ".method public instance int32 Get() {", "ldc.i4 1");
+        Assert.IsTrue(session.AbandonMethod());
+        Assert.AreEqual("Box", session.OpenType);
+        Assert.IsNull(session.OpenMethod);
+        Assert.AreEqual("method instance int32 Get()", session.AddLine(".method public instance int32 Get() {").Message);
+        session.AddLine("ldc.i4 2");
+        session.AddLine("ret");
+        session.AddLine("}");
+        session.AddLine("}");
+        Assert.HasCount(1, session.Types[0].Declaration.Methods);
+        Assert.AreEqual("ldc.i4 2", session.Types[0].Declaration.Methods[0].BodyLines[0]);
+    }
+
+    /// <summary>
+    /// An interface with inline abstract members replays cleanly, since each header is recorded once.
+    /// </summary>
+    [TestMethod]
+    public void Undo_AfterInlineAbstractMembers_Replays()
+    {
+        var session = Load(".class interface public abstract IPair {", ".method public abstract virtual instance int32 F() { }", ".method public abstract virtual instance int32 G() { }");
+        Assert.IsTrue(session.Undo());
+        Assert.AreEqual("IPair", session.OpenType);
+        Assert.AreEqual("method instance int32 G(); end of method G", session.AddLine(".method public abstract virtual instance int32 G() { }").Message);
+        Assert.AreEqual("end of interface IPair", session.AddLine("}").Message);
+    }
+
+    /// <summary>
+    /// A nested header the checks refuse leaves nothing behind, so the corrected header is accepted.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_RejectedNestedHeader_LeavesNoTrace()
+    {
+        var session = Load(".class public A {");
+        Assert.Contains("sealed", Assert.ThrowsExactly<ReplException>(() => session.AddLine(".class nested public B extends string {")).Message);
+        Assert.AreEqual("A", session.OpenType);
+        Assert.AreEqual("class A/B; end of class A/B", session.AddLine(".class nested public B { }").Message);
+        Assert.AreEqual("end of class A", session.AddLine("}").Message);
+        Assert.AreEqual(2, session.TypeCount);
+    }
+
+    /// <summary>
+    /// Attributes after .param [0] belong to the return value, and every attribute after
+    /// .param [N] belongs to that parameter.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_ParamAttributes_TargetReturnAndParameters()
+    {
+        var session = Load(".class public Attr {",
+            ".method public static int32 M(int32 a) {",
+            ".param [0]", ".custom instance void [System.Runtime]System.ObsoleteAttribute::.ctor(string) = { string('ret') }",
+            ".param [1]", ".custom instance void [System.Runtime]System.ObsoleteAttribute::.ctor(string) = { string('one') }",
+            ".custom instance void [System.Runtime]System.Diagnostics.ConditionalAttribute::.ctor(string) = { string('two') }",
+            "ldarg a", "ret", "}", "}");
+        var method = session.Types[0].RuntimeType!.GetMethod("M")!;
+        Assert.AreEqual("ret", method.ReturnParameter.GetCustomAttribute<ObsoleteAttribute>()!.Message);
+        Assert.IsEmpty(method.GetCustomAttributes(false));
+        var parameter = method.GetParameters()[0];
+        Assert.AreEqual("one", parameter.GetCustomAttribute<ObsoleteAttribute>()!.Message);
+        Assert.AreEqual("two", parameter.GetCustomAttribute<System.Diagnostics.ConditionalAttribute>()!.ConditionString);
+        Assert.HasCount(1, session.Types[0].Declaration.Methods[0].Signature.ReturnCustomAttributes);
+    }
+
+    /// <summary>
+    /// Indexers overload by their parameters.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_Indexers_OverloadByParameters()
+    {
+        var session = Load(".class public Table {",
+            ".method public specialname instance int32 get_Item(int32 i) {", "ldarg i", "ret", "}",
+            ".method public specialname instance int32 get_Item(string s) {", "ldc.i4 0", "ret", "}",
+            ".property instance int32 Item(int32) {", ".get instance int32 Table::get_Item(int32)", "}");
+        Assert.AreEqual("property Item", session.AddLine(".property instance int32 Item(string) {").Message);
+        session.AddLine(".get instance int32 Table::get_Item(string)");
+        session.AddLine("}");
+        Assert.AreEqual("end of class Table", session.AddLine("}").Message);
+        Assert.HasCount(2, session.Types[0].RuntimeType!.GetProperties());
     }
 }

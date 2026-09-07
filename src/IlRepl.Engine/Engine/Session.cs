@@ -203,9 +203,17 @@ public sealed partial class Session
     /// <returns>True when a block was open.</returns>
     public bool AbandonMethod()
     {
-        if (_openMember is not null)
+        if (_openMember is { } member)
         {
+            // The member's header and body are the last lines of the family; the family is
+            // replayed without them, which also forgets the member's builder and signature.
+            var outermost = _openType!.Outermost;
+            var header = outermost.HeaderLine;
+            var kept = outermost.Lines.Take(Math.Max(0, outermost.Lines.Count - member.BodyLines.Count - 1)).ToList();
             _openMember = null;
+            _openAccessor = null;
+            _openType = null;
+            ReplayFamily(header, kept);
             return true;
         }
 
@@ -415,6 +423,14 @@ public sealed partial class Session
             RequireCompatibleReferences(_cell, "the cell body", open.Signature, "(.clear the cell first, or keep the signature)");
         }
 
+        if (_rebuilding)
+        {
+            // The version is compiled with the rest of the group once every member has replayed.
+            _pendingMethods.Add(new PendingMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State, replacing));
+            _open = null;
+            return new LineResult(LineOutcome.MethodEnd, null, $"end of method {name}");
+        }
+
         CellState cell;
         try
         {
@@ -458,7 +474,7 @@ public sealed partial class Session
             trampoline.Bind(version.Implementation);
         }
 
-        var committed = new SessionMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State, trampoline, version) { Order = Submissions };
+        var committed = new SessionMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State, trampoline, version) { Order = sameSignature ? replacing!.Order : Submissions };
         var index = replacing is null ? -1 : _methods.IndexOf(replacing);
         if (index < 0)
         {
@@ -573,10 +589,7 @@ public sealed partial class Session
         }
     }
 
-    private static bool SameSignature(MethodSignature a, MethodSignature b) =>
-        TypeIdentity.Equal(a.ReturnType, b.ReturnType)
-        && a.Parameters.Count == b.Parameters.Count
-        && a.ParameterTypes.Zip(b.ParameterTypes).All(pair => TypeIdentity.Equal(pair.First, pair.Second));
+    private static bool SameSignature(MethodSignature a, MethodSignature b) => SignatureIdentity.Same(a, b);
 
     private List<MethodSignature> Signatures() => _methods.Select(m => m.Signature).ToList();
 

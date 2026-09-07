@@ -148,4 +148,90 @@ public sealed class TypeReplacementTests
         Assert.AreEqual("replaced class A; rebuilt class B (existing instances and delegates keep the previous definitions)", message);
         Assert.AreEqual(4, Run(session, "call int32 A::Four()"));
     }
+
+    /// <summary>
+    /// A redefinition that refers back to a dependent binds to that dependent's new identity,
+    /// so no member of the group runs against a previous generation.
+    /// </summary>
+    [TestMethod]
+    public void Redefine_CyclicReference_BindsToNewIdentities()
+    {
+        var session = Load(
+            ".class public A {", ".method public static int32 Value() { ldc.i4 1; ret }", "}",
+            ".class public B {", ".method public static int32 Twice() { call int32 A::Value(); ldc.i4 2; mul; ret }", "}");
+        var message = Add(session, ".class public A {", ".method public static int32 Value() { ldc.i4 10; ret }", ".method public static int32 Four() { call int32 B::Twice(); ldc.i4 2; mul; ret }", "}");
+        Assert.AreEqual("replaced class A; rebuilt class B (existing instances and delegates keep the previous definitions)", message);
+        Assert.AreEqual(20, Run(session, "call int32 B::Twice()"));
+        Assert.AreEqual(40, Run(session, "call int32 A::Four()"), "A.Four calls the rebuilt B, which calls the new A");
+    }
+
+    /// <summary>
+    /// A same-signature method redefinition does not change the order in which a later
+    /// replacement rebuilds callers, and every caller ends up on the new entry points.
+    /// </summary>
+    [TestMethod]
+    public void Redefine_AfterMethodRedefinition_CallersFollowTheNewEntryPoints()
+    {
+        var session = Load(
+            ".class public A {", ".method public static int32 Value() { ldc.i4 1; ret }", "}",
+            ".method int32 F() { call int32 A::Value(); ret }",
+            ".method int32 G() { call int32 F(); ret }",
+            ".method int32 F() { call int32 A::Value(); ret }");
+        var message = Add(session, ".class public A {", ".method public static int32 Value() { ldc.i4 10; ret }", "}");
+        Assert.Contains("rebuilt method F and method G", message);
+        Assert.AreEqual(10, Run(session, "call int32 F()"));
+        Assert.AreEqual(10, Run(session, "call int32 G()"), "G calls the rebuilt F");
+    }
+
+    /// <summary>
+    /// A pending cell that calls a session method whose signature names the type is rebuilt
+    /// once the method has been, not against a mix of new types and old signatures.
+    /// </summary>
+    [TestMethod]
+    public void Redefine_WithCellCallingAMethodOverTheType_RebuildsTheCellLast()
+    {
+        var session = Load(
+            ".class public A {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", "}",
+            ".method class A Id(class A a) { ldarg a; ret }");
+        session.AddLine("newobj instance void A::.ctor()");
+        session.AddLine("call class A Id(class A)");
+        var message = Add(session, ".class public A {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", "}");
+        Assert.Contains("rebuilt method Id", message);
+        Assert.AreEqual("[A]", session.State.Stack.Render());
+        Assert.IsNotNull(session.Run().Value);
+    }
+
+    /// <summary>
+    /// A nested type the replacement drops stops resolving, so nothing can bind to it and a save
+    /// has nothing stale to refuse.
+    /// </summary>
+    [TestMethod]
+    public void Redefine_DroppingANestedType_RemovesItFromLookup()
+    {
+        var session = Load(".class public Outer {", ".class nested public Inner {", ".method public static int32 One() { ldc.i4 1; ret }", "}", "}");
+        Assert.AreEqual(1, Run(session, "call int32 Outer/Inner::One()"));
+        Add(session, ".class public Outer {", "}");
+        Assert.Contains("not found", Assert.ThrowsExactly<ReplException>(() => session.AddLine("call int32 Outer/Inner::One()")).Message);
+        Assert.IsFalse(session.TypeTable.TryResolve("Outer/Inner", false, false, out _));
+        _ = AssemblyExporter.Write(session, "outer");
+    }
+
+    /// <summary>
+    /// A type named in an attribute argument is a dependency: the annotated type is rebuilt
+    /// against the new one, and the saved assembly names the new one.
+    /// </summary>
+    [TestMethod]
+    public void Redefine_TypeNamedInAnAttributeArgument_RebuildsTheAnnotatedType()
+    {
+        var session = Load(
+            ".class public Point { }",
+            ".class public Line {",
+            ".custom instance void [System.Runtime]System.Diagnostics.DebuggerTypeProxyAttribute::.ctor(class [System.Runtime]System.Type) = { type(Point) }",
+            "}");
+        var message = Add(session, ".class public Point {", ".field public int32 X", "}");
+        Assert.Contains("rebuilt class Line", message);
+        var line = session.Types[1].RuntimeType!;
+        Assert.AreSame(session.Types[0].RuntimeType, line.GetCustomAttributesData()[0].ConstructorArguments[0].Value);
+        _ = AssemblyExporter.Write(session, "annotated");
+    }
 }

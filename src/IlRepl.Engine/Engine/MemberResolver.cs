@@ -145,7 +145,7 @@ public static class MemberResolver
 
         if (context.Types.TryGetMembers(declaring, out var own))
         {
-            return ResolveOwnMethod(own, declaring, name, parameterTypes, returnType, explicitInstance, wantConstructor || name is ".ctor" or ".cctor", genericText is not null, optionalTypes);
+            return ResolveOwnMethod(own, declaring, context, name, parameterTypes, returnType, explicitInstance, wantConstructor || name is ".ctor" or ".cctor", genericText is not null, optionalTypes);
         }
 
         if (wantConstructor || name is ".ctor" or ".cctor")
@@ -185,6 +185,11 @@ public static class MemberResolver
         if (context.Types.TryGetMembers(declaring, out var own))
         {
             var found = own.FindField(name);
+            if (found is null && own.BaseType is { } baseType && ResolveInheritedField(baseType, context, name) is { } inheritedField)
+            {
+                return inheritedField;
+            }
+
             if (found is null)
             {
                 var declared = string.Join(", ", own.Fields.Select(f => f.Declaration.Name));
@@ -215,6 +220,37 @@ public static class MemberResolver
         throw new ReplException(names.Length == 0
             ? $"no field '{name}' on {TypeNameFormatter.Pretty(declaring)}"
             : $"no field '{name}' on {TypeNameFormatter.Pretty(declaring)}; fields: {names}");
+    }
+
+    private static FieldInfo? ResolveInheritedField(Type baseType, ParseContext context, string name)
+    {
+        for (Type? current = baseType; current is not null; current = TypeRelations.BaseTypeOf(current, context.Types))
+        {
+            if (context.Types.TryGetMembers(current, out var baseOwn))
+            {
+                var found = baseOwn.FindField(name);
+                if (found is not null)
+                {
+                    return current.IsGenericType && !current.IsGenericTypeDefinition && found.Value.Builder is FieldBuilder fieldBuilder
+                        ? TypeBuilder.GetField(current, fieldBuilder)
+                        : found.Value.Builder;
+                }
+
+                continue;
+            }
+
+            if (current is TypeBuilder)
+            {
+                continue;
+            }
+
+            if (current.GetField(name, AllMembers) is { } field)
+            {
+                return field;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -348,7 +384,7 @@ public static class MemberResolver
         return new ResolvedMethod(signature);
     }
 
-    private static ResolvedMethod ResolveOwnMethod(OwnMembers own, Type declaring, string name, Type[]? parameterTypes, Type? returnType, bool explicitInstance, bool wantConstructor, bool hasGenericArguments, Type[]? optionalTypes)
+    private static ResolvedMethod ResolveOwnMethod(OwnMembers own, Type declaring, ParseContext context, string name, Type[]? parameterTypes, Type? returnType, bool explicitInstance, bool wantConstructor, bool hasGenericArguments, Type[]? optionalTypes)
     {
         if (hasGenericArguments)
         {
@@ -392,6 +428,11 @@ public static class MemberResolver
             return new ResolvedMethod(builder, effective, declaring) { OptionalParameterTypesOverride = optionalTypes };
         }
 
+        if (candidates.Count == 0 && !wantConstructor && own.BaseType is { } baseType && ResolveInherited(baseType, context, name, parameterTypes, returnType, explicitInstance, optionalTypes) is { } inherited)
+        {
+            return inherited;
+        }
+
         if (candidates.Count == 0 && returnType is not null && parameterTypes is not null && own.DefineForward is not null && !instantiated)
         {
             // A member referenced before its declaration: the signature is taken at its word and
@@ -406,6 +447,11 @@ public static class MemberResolver
         }
 
         var known = own.FindMethods(name).ToList();
+        if (known.Count == 0 && wantConstructor && own.DefineForward is null)
+        {
+            throw new ReplException($"{(declaring.IsValueType ? "struct" : "class")} {TypeNameFormatter.Pretty(declaring)} declares no constructor (add a .method public instance void .ctor(...) to it{(declaring.IsValueType ? ", or use initobj" : "")})");
+        }
+
         if (known.Count == 0)
         {
             var names = string.Join(", ", own.Methods.Where(m => m.Declared).Select(m => m.Signature.Describe()).Take(12));
@@ -420,6 +466,52 @@ public static class MemberResolver
         }
 
         throw new ReplException($"ambiguous: {TypeNameFormatter.Pretty(declaring)}::{name}; give parameter types. candidates:\n{string.Join("\n", candidates.Select(c => "    " + c.Signature.DescribeMember()))}");
+    }
+
+    /// <summary>
+    /// Finds a member a type being written inherits: from a base still being written through
+    /// its declarations, from a loaded base through reflection.
+    /// </summary>
+    private static ResolvedMethod? ResolveInherited(Type baseType, ParseContext context, string name, Type[]? parameterTypes, Type? returnType, bool explicitInstance, Type[]? optionalTypes)
+    {
+        for (Type? current = baseType; current is not null; current = TypeRelations.BaseTypeOf(current, context.Types))
+        {
+            if (context.Types.TryGetMembers(current, out var baseOwn))
+            {
+                var instantiated = current.IsGenericType && !current.IsGenericTypeDefinition;
+                var definitionArguments = instantiated ? current.GetGenericTypeDefinition().GetGenericArguments() : null;
+                var actualArguments = instantiated ? current.GetGenericArguments() : null;
+                var found = baseOwn.FindMethods(name)
+                    .Where(m => m.Declared && m.Signature.Name != ".ctor" && m.Signature.Name != ".cctor")
+                    .Select(m => (m.Builder, Effective: instantiated ? SubstituteSignature(m.Signature, definitionArguments!, actualArguments!) : m.Signature))
+                    .Where(m => parameterTypes is null || (m.Effective.Parameters.Count == parameterTypes.Length && m.Effective.ParameterTypes.Zip(parameterTypes).All(p => TypeIdentity.Equal(p.First, p.Second))))
+                    .Where(m => returnType is null || TypeIdentity.Equal(m.Effective.ReturnType, returnType))
+                    .ToList();
+                if (found.Count == 1)
+                {
+                    return new ResolvedMethod(found[0].Builder, found[0].Effective, current) { OptionalParameterTypesOverride = optionalTypes };
+                }
+
+                continue;
+            }
+
+            if (current is System.Reflection.Emit.TypeBuilder)
+            {
+                continue;
+            }
+
+            try
+            {
+                var method = ResolveMethodCore(current, name, parameterTypes, null, returnType, explicitInstance, optionalTypes is not null);
+                return new ResolvedMethod(method, optionalTypes);
+            }
+            catch (ReplException)
+            {
+                // Not declared there; the next base may have it.
+            }
+        }
+
+        return null;
     }
 
     private static MethodSignature SubstituteSignature(MethodSignature signature, Type[] definitionArguments, Type[] actualArguments)

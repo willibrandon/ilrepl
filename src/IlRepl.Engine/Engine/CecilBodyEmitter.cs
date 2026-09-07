@@ -391,6 +391,7 @@ public static class CecilBodyEmitter
                     var handler = frame.Handlers[i];
                     var next = i + 1 < frame.Handlers.Count ? frame.Handlers[i + 1] : null;
                     var handlerEnd = next is null ? frame.End.Target! : next.FilterStart?.Target ?? next.Start!.Target!;
+                    var terminal = handler.Kind is BlockKind.Finally or BlockKind.Fault;
                     var cecil = new ExceptionHandler(handler.Kind switch
                     {
                         BlockKind.Catch => ExceptionHandlerType.Catch,
@@ -400,7 +401,10 @@ public static class CecilBodyEmitter
                     })
                     {
                         TryStart = frame.TryStart.Target!,
-                        TryEnd = tryEnd,
+                        // A finally or fault written after catch handlers protects the try block
+                        // and those handlers together, the way ILGenerator nests them: its
+                        // region ends where the handler itself begins.
+                        TryEnd = terminal && i > 0 ? handler.Start!.Target! : tryEnd,
                         HandlerStart = handler.Start!.Target!,
                         HandlerEnd = handlerEnd,
                         CatchType = handler.CatchType,

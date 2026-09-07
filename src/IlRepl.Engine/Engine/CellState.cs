@@ -566,9 +566,24 @@ public sealed class CellState
     private LineResult ApplyCustom(string rest, string source)
     {
         var attribute = CustomAttributeParser.Parse(rest, Context, source);
-        // A .custom right after .param [N] applies to that parameter; otherwise to the method.
-        var last = _entries.LastOrDefault();
-        var target = last?.Kind == EntryKind.Param ? last.ParamIndex : null;
+        // A .custom after .param [N] applies to that parameter, as do the ones that follow it;
+        // any other line ends the run and a .custom applies to the method again.
+        int? target = null;
+        for (var i = _entries.Count - 1; i >= 0; i--)
+        {
+            var entry = _entries[i];
+            if (entry.Kind == EntryKind.Param)
+            {
+                target = entry.ParamIndex;
+                break;
+            }
+
+            if (entry.Kind != EntryKind.Custom)
+            {
+                break;
+            }
+        }
+
         _entries.Add(new CellEntry { Kind = EntryKind.Custom, Source = source, Custom = attribute, ParamIndex = target });
         return new LineResult(LineOutcome.Custom, null, "custom " + attribute.Describe() + (target is { } t ? $" on parameter {t}" : ""));
     }
@@ -596,6 +611,21 @@ public sealed class CellState
                 MemberAccess.CheckField(field, scope, Types);
                 break;
             case ResolvedMethod { Method: not null } method:
+                // The declaring type and the type arguments are mentioned whatever assembly the
+                // method belongs to; the member's own access is judged for session members.
+                if (method.DeclaringType is { } declaring)
+                {
+                    MemberAccess.CheckType(declaring, scope, Types);
+                }
+
+                if (method.Method is System.Reflection.MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } generic)
+                {
+                    foreach (var argument in generic.GetGenericArguments())
+                    {
+                        MemberAccess.CheckType(argument, scope, Types);
+                    }
+                }
+
                 MemberAccess.CheckMethod(method, scope, Types);
                 break;
             case Type type:

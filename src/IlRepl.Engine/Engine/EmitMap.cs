@@ -12,9 +12,10 @@ namespace IlRepl.Engine;
 /// </summary>
 public sealed class EmitMap
 {
-    private readonly Dictionary<Type, Type> _types = [];
-    private readonly Dictionary<FieldInfo, FieldInfo> _fields = [];
-    private readonly Dictionary<MethodBase, MethodBase> _methods = [];
+    // Keyed by identity: a builder's Equals may ask for an underlying type it does not have yet.
+    private readonly Dictionary<Type, Type> _types = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<FieldInfo, FieldInfo> _fields = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<MethodBase, MethodBase> _methods = new(ReferenceEqualityComparer.Instance);
     private readonly Func<MethodSignature, MethodInfo> _sessionMethods;
 
     /// <summary>

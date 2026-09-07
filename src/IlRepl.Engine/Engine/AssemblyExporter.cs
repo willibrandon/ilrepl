@@ -71,10 +71,7 @@ public static class AssemblyExporter
                 methods.Add((method, definition));
             }
 
-            foreach (var family in session.Types)
-            {
-                TypeEmitter.Write(writer, family.Declaration, family.Prototypes, trampolines, family.Types);
-            }
+            TypeEmitter.WriteAll(writer, [.. session.Types.Select(f => (f.Declaration, f.Prototypes, (IReadOnlyDictionary<string, Type>?)f.Types))], trampolines);
 
             // Signatures are imported once every session type is a definition of this module.
             foreach (var (method, definition) in methods)

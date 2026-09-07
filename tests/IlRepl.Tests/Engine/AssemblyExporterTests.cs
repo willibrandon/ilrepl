@@ -193,4 +193,44 @@ public sealed class AssemblyExporterTests
         var pending = Load("br NOWHERE");
         Assert.Contains("never defined", Assert.ThrowsExactly<ReplException>(() => AssemblyExporter.Write(pending, "x")).Message);
     }
+
+    /// <summary>
+    /// A family listed first may mention one listed later, since every family is declared
+    /// before any shape is imported.
+    /// </summary>
+    [TestMethod]
+    public void Write_FamiliesInAnyOrder()
+    {
+        var session = Load(".class public A { }", ".class public B { }", ".class public A {", ".field public class B Other", "}");
+        var (assembly, context) = LoadExport(session, "ordered");
+        try
+        {
+            Assert.AreEqual(assembly.GetType("B"), assembly.GetType("A")!.GetField("Other")!.FieldType);
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
+    /// <summary>
+    /// A framework generic instantiated with a session type is written over the exported type.
+    /// </summary>
+    [TestMethod]
+    public void Write_FrameworkGenericOverASessionType()
+    {
+        var session = Load(".class public Point {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", "}",
+            "newobj instance void class [System.Collections]System.Collections.Generic.List`1<class Point>::.ctor()",
+            "dup", "newobj instance void Point::.ctor()", "callvirt instance void class [System.Collections]System.Collections.Generic.List`1<class Point>::Add(!0)",
+            "callvirt instance int32 class [System.Collections]System.Collections.Generic.List`1<class Point>::get_Count()");
+        var (assembly, context) = LoadExport(session, "listed");
+        try
+        {
+            Assert.AreEqual(1, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
 }

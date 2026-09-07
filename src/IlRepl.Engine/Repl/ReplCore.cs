@@ -408,8 +408,9 @@ public sealed class ReplCore
             case ".clear":
                 if (Session.OpenMethod is { } abandoned)
                 {
+                    var owner = Session.OpenType;
                     Session.AbandonMethod();
-                    Note($"method {abandoned.Name} abandoned");
+                    Note(owner is null ? $"method {abandoned.Name} abandoned" : $"method {abandoned.Name} abandoned; class {owner} is still open");
                     return new HandleResult(true, false);
                 }
 

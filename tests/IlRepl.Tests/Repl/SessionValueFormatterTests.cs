@@ -173,4 +173,15 @@ public sealed class SessionValueFormatterTests
         Assert.AreEqual("Pixel { C = Red } : Pixel", Text(Run(session, ".locals init (valuetype Pixel p)", "ldloc p", "box Pixel")));
         Assert.AreEqual("[Pixel { C = Red }, Pixel { C = Red }] : Pixel[]", Text(Run(session, "ldc.i4 2", "newarr Pixel")));
     }
+
+    /// <summary>
+    /// A pointer field is shown as its address rather than treated as an object.
+    /// </summary>
+    [TestMethod]
+    public void PointerField_ShowsTheAddress()
+    {
+        var session = IlLines.Load(".class public sequential sealed Raw extends [System.Runtime]System.ValueType {", ".field public int32* P", "}");
+        var value = Run(session, ".locals init (valuetype Raw r)", "ldloca r", "ldc.i4 1", "conv.i", "stfld int32* Raw::P", "ldloc r", "box Raw");
+        Assert.AreEqual("Raw { P = 1 } : Raw", Text(value));
+    }
 }

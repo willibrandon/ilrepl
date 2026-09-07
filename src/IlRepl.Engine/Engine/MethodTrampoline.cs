@@ -55,10 +55,25 @@ public sealed class MethodTrampoline
     /// <param name="signature">The signature.</param>
     /// <returns>The trampoline.</returns>
     /// <exception cref="ReplException">The runtime refused the signature.</exception>
-    public static MethodTrampoline Create(MethodSignature signature)
+    public static MethodTrampoline Create(MethodSignature signature) => Create(signature, null);
+
+    /// <summary>
+    /// Creates the trampoline for a signature that may mention prototypes of families written in
+    /// the same group.
+    /// </summary>
+    /// <param name="signature">The signature.</param>
+    /// <param name="externals">Prototypes of the group, referenced by their assembly names, or null.</param>
+    /// <returns>The trampoline.</returns>
+    /// <exception cref="ReplException">The runtime refused the signature.</exception>
+    public static MethodTrampoline Create(MethodSignature signature, IReadOnlyDictionary<Type, CecilWriter.ExternalPrototype>? externals)
     {
         ArgumentNullException.ThrowIfNull(signature);
         var writer = new CecilWriter(SessionAssemblyKind.Trampoline);
+        foreach (var (prototype, external) in externals ?? new Dictionary<Type, CecilWriter.ExternalPrototype>())
+        {
+            writer.DefineExternal(prototype, external);
+        }
+
         var cell = writer.DefineType("IlRepl", "Cell", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit, writer.Object);
         var returnType = writer.Import(signature.ReturnType);
         var parameterTypes = signature.ParameterTypes.Select(writer.Import).ToArray();

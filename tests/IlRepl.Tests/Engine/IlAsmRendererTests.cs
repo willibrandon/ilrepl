@@ -286,4 +286,32 @@ public sealed class IlAsmRendererTests
             context.Unload();
         }
     }
+
+    /// <summary>
+    /// A member calling another member of its own type renders from the declaration, a
+    /// namespaced type keeps its namespace, and a synthesized static-interface override is written.
+    /// </summary>
+    [TestMethod]
+    public void Render_OwnCalls_NamespacesAndStaticOverrides()
+    {
+        var session = IlLines.Load(
+            ".class public N.A {", ".method public static int32 F() { ldc.i4 1; ret }", ".method public static int32 G() { call int32 N.A::F(); ret }", "}",
+            ".class interface public abstract IZero {", ".method public static abstract virtual int32 Zero() { }", "}",
+            ".class public Num implements IZero {", ".method public static int32 Zero() { ldc.i4 0; ret }", "}",
+            "call int32 N.A::G()", "constrained. Num", "call int32 IZero::Zero()", "add");
+        var text = session.ToIlAsm();
+        Assert.Contains(".class public auto ansi N.A extends [System.Runtime]System.Object", text);
+        Assert.Contains("call int32 N.A::F()", text);
+        Assert.Contains(".override method int32 IZero::Zero() with method int32 Num::Zero()", text);
+        var image = IlasmLocator.Assemble(text);
+        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-review", isCollectible: true);
+        try
+        {
+            Assert.AreEqual(1, context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
 }
