@@ -19,6 +19,43 @@ public static class OpcodeTable
     public static IReadOnlyList<string> Names { get; } = ByName.Keys.OrderBy(n => n, StringComparer.Ordinal).ToArray();
 
     /// <summary>
+    /// The encoded value of the <c>no.</c> prefix, which Reflection.Emit does not describe.
+    /// </summary>
+    public const ushort NoPrefixValue = 0xFE19;
+
+    /// <summary>
+    /// Every opcode that can appear in a method body, keyed by its encoded value. The reserved
+    /// <c>prefixN</c> values are left out on purpose: a reader that meets one has found a fault.
+    /// </summary>
+    public static IReadOnlyDictionary<ushort, IlOpcode> ByValue { get; } = BuildByValue();
+
+    /// <summary>
+    /// Looks up an opcode by its encoded value.
+    /// </summary>
+    /// <param name="value">The byte for a one-byte opcode, <c>0xFExx</c> for a two-byte one.</param>
+    /// <param name="opcode">The opcode when found.</param>
+    /// <returns>True when the value encodes an instruction or prefix.</returns>
+    public static bool TryGetByValue(ushort value, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IlOpcode? opcode) => ByValue.TryGetValue(value, out opcode);
+
+    /// <summary>
+    /// The number of operand bytes an operand layout takes, or -1 for <see cref="OperandType.InlineSwitch"/>.
+    /// </summary>
+    /// <param name="type">The operand layout.</param>
+    /// <returns>The byte count.</returns>
+    public static int OperandSize(OperandType type) => type switch
+    {
+        OperandType.InlineNone => 0,
+        OperandType.ShortInlineBrTarget or OperandType.ShortInlineI or OperandType.ShortInlineVar => 1,
+        OperandType.InlineVar => 2,
+        OperandType.InlineBrTarget or OperandType.InlineField or OperandType.InlineI or OperandType.InlineMethod
+            or OperandType.InlineSig or OperandType.InlineString or OperandType.InlineTok or OperandType.InlineType
+            or OperandType.ShortInlineR => 4,
+        OperandType.InlineI8 or OperandType.InlineR => 8,
+        OperandType.InlineSwitch => -1,
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "unknown operand type"),
+    };
+
+    /// <summary>
     /// Looks up an opcode by name.
     /// </summary>
     /// <param name="name">The ILAsm name, for example <c>ldc.i4.s</c>.</param>
@@ -69,6 +106,23 @@ public static class OpcodeTable
             d[op.Name!] = op;
         }
 
+        return d;
+    }
+
+    private static Dictionary<ushort, IlOpcode> BuildByValue()
+    {
+        var d = new Dictionary<ushort, IlOpcode>();
+        foreach (var op in ByName.Values)
+        {
+            if (op.Name is null || IsReserved(op.Name))
+            {
+                continue;
+            }
+
+            d[unchecked((ushort)op.Value)] = new IlOpcode(unchecked((ushort)op.Value), op.Name, op.OperandType, op);
+        }
+
+        d[NoPrefixValue] = new IlOpcode(NoPrefixValue, "no.", OperandType.ShortInlineI, null);
         return d;
     }
 
