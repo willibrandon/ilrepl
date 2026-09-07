@@ -94,7 +94,7 @@ public sealed class MethodDisassemblerTests
         var lines = DisassemblyText.Lines(box);
         var text = string.Join("\n", lines);
         Assert.Contains(".try {", text);
-        Assert.Contains("} catch [System.Runtime]System.Exception {", text);
+        Assert.Contains("} catch Exception {", text);
         Assert.Contains("leave", text);
         Assert.Contains("box int32", text);
         Assert.AreSequenceEqual(["int32"], box.Locals.Select(IlSignatureRenderer.Pretty).ToList());
@@ -157,7 +157,7 @@ public sealed class MethodDisassemblerTests
         Assert.HasCount(2, method.Clauses);
         Assert.IsEmpty(method.Notes, string.Join("; ", method.Notes));
         var lines = DisassemblyText.LinesWithStack(method);
-        Assert.Contains("} catch [System.Runtime]System.Exception {", lines);
+        Assert.Contains("} catch Exception {", lines);
         Assert.Contains("} finally {", lines);
         Assert.Contains(l => l.EndsWith("endfinally\t[]", StringComparison.Ordinal), lines);
         Assert.Contains(l => l.EndsWith("pop\t[]", StringComparison.Ordinal), lines);

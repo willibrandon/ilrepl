@@ -200,12 +200,13 @@ public static class MethodDisassembler
 
         private static string CatchText(IlExceptionClause clause)
         {
-            if (clause.CatchSignature is { } signature)
+            // The block line reads as .show prints it: the short name when the type resolved.
+            if (clause.CatchType is { } type)
             {
-                return IlSignatureRenderer.Declaring(signature);
+                return TypeNameFormatter.Pretty(type);
             }
 
-            return clause.CatchType is { } type ? TypeNameFormatter.IlAsmDeclaring(type) : $"0x{clause.CatchToken:x8}";
+            return clause.CatchSignature is { } signature ? IlSignatureRenderer.Declaring(signature) : $"0x{clause.CatchToken:x8}";
         }
 
         private string Header()

@@ -29,6 +29,20 @@ public sealed class FrontEndProcessTests
     }
 
     /// <summary>
+    /// -e can define a method and disassemble it in one run.
+    /// </summary>
+    [TestMethod]
+    public async Task Eval_DisassemblesMethod()
+    {
+        var (code, stdout, stderr) = await RunAsync(["--no-color", "-e", ".method int32 Two() {; ldc.i4 2; ret; }; .dis Two"]);
+        Assert.AreEqual(0, code, stderr);
+        Assert.Contains(".method public hidebysig static int32 Two() cil managed {", stdout);
+        Assert.Contains("ldc.i4 2", stdout);
+        Assert.Contains("ret", stdout);
+        Assert.Contains(".maxstack", stdout);
+    }
+
+    /// <summary>
     /// A script file runs with prompts echoed and a failing line sets the exit code.
     /// </summary>
     [TestMethod]

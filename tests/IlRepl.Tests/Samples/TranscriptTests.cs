@@ -109,4 +109,29 @@ public sealed class TranscriptTests
         Assert.Contains("\"boxed\"", results[4]);
         Assert.AreEqual(4, core.Status.Types);
     }
+
+    /// <summary>
+    /// The disassembly transcript: a session method, a filter, a class member, a calli, and the framework list; the cell runs.
+    /// </summary>
+    [TestMethod]
+    public void Transcripts_DisassemblyListsBodies()
+    {
+        var core = new ReplCore();
+        foreach (var line in File.ReadAllLines(Path.Combine(RepoPaths.Transcripts, "disassembly.il")))
+        {
+            core.Handle(line);
+        }
+
+        var listing = core.Transcript.Lines.Where(l => l.Kind == LineKind.Listing).Select(l => l.PlainText).ToList();
+        Assert.Contains(l => l.Contains("call int32 Fib(int32)", StringComparison.Ordinal), listing);
+        Assert.Contains(l => l.Trim() == "} filter {", listing, string.Join("\n", listing));
+        Assert.Contains(l => l.Trim() == "} handler {", listing);
+        Assert.Contains(l => l.Contains("ldfld int32 Point::X", StringComparison.Ordinal), listing);
+        Assert.Contains(l => l.Contains("calli int32(int32, int32)", StringComparison.Ordinal), listing);
+        Assert.Contains(l => l.Contains(".method public hidebysig instance string Trim() cil managed {", StringComparison.Ordinal), listing);
+        Assert.Contains(l => l.Contains("!0", StringComparison.Ordinal), listing);
+        var results = core.Transcript.Lines.Where(l => l.Kind == LineKind.Result).Select(l => l.PlainText).ToList();
+        Assert.HasCount(1, results);
+        Assert.Contains("97", results[0]);
+    }
 }
