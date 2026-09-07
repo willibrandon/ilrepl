@@ -246,6 +246,7 @@ public sealed class Session
         finally
         {
             stopwatch.Stop();
+            compiled.Release();
         }
 
         return new CellResult(value, isVoid, stopwatch.Elapsed, capture.StandardOutput, capture.StandardError);

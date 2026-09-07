@@ -23,12 +23,24 @@ public static class CellCompiler
     public static CompiledCell Compile(Session session)
     {
         ArgumentNullException.ThrowIfNull(session);
-        var id = Interlocked.Increment(ref s_counter);
-        var name = new AssemblyName("ilrepl.cell" + id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        var name = SessionAssemblies.NextName(SessionAssemblyKind.Cell);
         // Collectible assemblies let CoreCLR unload old cells; the browser runtime has no unloading.
         var access = OperatingSystem.IsBrowser() ? AssemblyBuilderAccess.Run : AssemblyBuilderAccess.RunAndCollect;
-        var assembly = AssemblyBuilder.DefineDynamicAssembly(name, access);
-        return Build(session, assembly, name.Name!);
+        var context = SessionAssemblies.CreateCellContext(name);
+        AssemblyBuilder assembly;
+        if (context is null)
+        {
+            assembly = AssemblyBuilder.DefineDynamicAssembly(SessionAssemblies.MakeAssemblyName(name), access);
+        }
+        else
+        {
+            // The dynamic assembly lands in the cell's own context, so a session name typed into
+            // the cell resolves through that context.
+            using var scope = context.EnterContextualReflection();
+            assembly = AssemblyBuilder.DefineDynamicAssembly(SessionAssemblies.MakeAssemblyName(name), access);
+        }
+
+        return Build(session, assembly, name, context);
     }
 
     /// <summary>
@@ -48,7 +60,7 @@ public static class CellCompiler
         }
 
         var assembly = new PersistedAssemblyBuilder(new AssemblyName(assemblyName), typeof(object).Assembly);
-        Build(session, assembly, assemblyName);
+        Build(session, assembly, assemblyName, null);
         var fullPath = Path.GetFullPath(path);
         var directory = Path.GetDirectoryName(fullPath);
         if (!string.IsNullOrEmpty(directory))
@@ -118,7 +130,7 @@ public static class CellCompiler
         }
     }
 
-    private static CompiledCell Build(Session session, AssemblyBuilder assembly, string moduleName)
+    private static CompiledCell Build(Session session, AssemblyBuilder assembly, string moduleName, DefinitionLoadContext? context)
     {
         if (session.OpenMethod is { } open)
         {
@@ -181,7 +193,8 @@ public static class CellCompiler
         var created = CreateCellType(type, "the cell");
         var method = created.GetMethod(entry.Name, BindingFlags.Public | BindingFlags.Static)
             ?? throw new ReplException("the compiled cell has no entry point");
-        return new CompiledCell(assembly, created, method, state.Arguments.Select(a => a.Value).ToArray());
+        var definition = SessionAssemblies.RegisterCell(assembly, created, [], context);
+        return new CompiledCell(assembly, created, method, state.Arguments.Select(a => a.Value).ToArray(), definition);
     }
 
     private static TypeBuilder DefineCellType(ModuleBuilder module) =>

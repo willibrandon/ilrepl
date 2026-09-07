@@ -77,7 +77,8 @@ public sealed class TypeResolver
     }
 
     /// <summary>
-    /// Enumerates the assemblies searched by <see cref="Resolve"/>, most specific first.
+    /// Enumerates the assemblies searched by <see cref="Resolve"/>, most specific first. Assemblies a
+    /// session owns are excluded by identity.
     /// </summary>
     public IEnumerable<Assembly> Assemblies
     {
@@ -90,7 +91,10 @@ public sealed class TypeResolver
 
             foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
             {
-                if (!a.IsDynamic && !_extra.Contains(a))
+                // Session assemblies are reached only through the owning session's type table, so a
+                // type from another session, a superseded version, or a definition dropped by .reset
+                // never comes back through a name search.
+                if (!a.IsDynamic && !_extra.Contains(a) && !SessionAssemblies.IsSessionAssembly(a))
                 {
                     yield return a;
                 }

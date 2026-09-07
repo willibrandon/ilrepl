@@ -10,8 +10,14 @@ namespace IlRepl.Engine;
 /// <param name="CellType">The generated type.</param>
 /// <param name="EntryPoint">The method to invoke. For vararg cells this is a standard-convention wrapper.</param>
 /// <param name="ArgumentValues">The values passed for the cell's declared arguments.</param>
-public sealed record CompiledCell(AssemblyBuilder Assembly, Type CellType, MethodInfo EntryPoint, object?[] ArgumentValues)
+/// <param name="Definition">The session's record of the cell assembly.</param>
+public sealed record CompiledCell(AssemblyBuilder Assembly, Type CellType, MethodInfo EntryPoint, object?[] ArgumentValues, DefinitionAssembly Definition)
 {
+    /// <summary>
+    /// Lets the runtime unload the cell once nothing references it any more.
+    /// </summary>
+    public void Release() => SessionAssemblies.Release(Definition);
+
     /// <summary>
     /// Invokes the cell, binding generic parameters first when the cell declares any.
     /// </summary>
