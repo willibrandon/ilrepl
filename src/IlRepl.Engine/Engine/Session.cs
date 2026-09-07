@@ -555,9 +555,9 @@ public sealed partial class Session
     }
 
     private static bool SameSignature(MethodSignature a, MethodSignature b) =>
-        MemberResolver.TypesEqual(a.ReturnType, b.ReturnType)
+        TypeIdentity.Equal(a.ReturnType, b.ReturnType)
         && a.Parameters.Count == b.Parameters.Count
-        && a.ParameterTypes.Zip(b.ParameterTypes).All(pair => MemberResolver.TypesEqual(pair.First, pair.Second));
+        && a.ParameterTypes.Zip(b.ParameterTypes).All(pair => TypeIdentity.Equal(pair.First, pair.Second));
 
     private List<MethodSignature> Signatures() => _methods.Select(m => m.Signature).ToList();
 

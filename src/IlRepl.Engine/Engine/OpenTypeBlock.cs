@@ -152,6 +152,17 @@ internal sealed class OpenTypeBlock
     /// The type of <c>this</c> for an instance member: a reference for a struct.
     /// </summary>
     public Type ThisType => Kind is TypeKind.Struct or TypeKind.Enum ? Prototype.MakeByRefType() : Prototype;
+
+    /// <summary>
+    /// On the outermost block, every type of the family that has closed, by path, with its
+    /// prototype and members, so the family can be validated and published as one.
+    /// </summary>
+    public Dictionary<string, (System.Reflection.Emit.TypeBuilder Prototype, OwnMembers Members)> FamilyTypes { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The access scope of declarations in this type.
+    /// </summary>
+    public AccessScope Scope => new(Prototype, KindWord + " " + Path);
 }
 
 /// <summary>

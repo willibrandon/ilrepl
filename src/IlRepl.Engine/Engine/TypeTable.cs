@@ -8,7 +8,8 @@ namespace IlRepl.Engine;
 public sealed class TypeTable
 {
     private readonly List<(string FullName, string ShortName, Type Type)> _entries = [];
-    private readonly Dictionary<Type, OwnMembers> _members = [];
+    // Keyed by identity: a builder's Equals may ask for an underlying type it does not have yet.
+    private readonly Dictionary<Type, OwnMembers> _members = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
     /// A table with no types.

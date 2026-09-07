@@ -19,6 +19,16 @@ public sealed class OwnMembers
     public Func<MethodSignature, MethodBase>? DefineForward { get; set; }
 
     /// <summary>
+    /// The base type as declared, or null for an interface.
+    /// </summary>
+    public Type? BaseType { get; set; }
+
+    /// <summary>
+    /// The interfaces the type declares.
+    /// </summary>
+    public IReadOnlyList<Type> Interfaces { get; set; } = [];
+
+    /// <summary>
     /// The fields declared so far.
     /// </summary>
     public IReadOnlyList<(FieldDeclaration Declaration, FieldInfo Builder)> Fields => _fields;

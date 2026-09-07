@@ -251,7 +251,7 @@ public sealed class CellState
             throw new ReplException($"method {name} needs a ret before }}: the stack is empty but {name} returns {pretty}");
         }
 
-        if (Stack.Count > 1 || !StackCompatibility.CanReturn(Stack.Top, returnType))
+        if (Stack.Count > 1 || !StackCompatibility.CanReturn(Stack.Top, returnType, Types))
         {
             throw new ReplException($"method {name} needs a ret before }}: the stack holds {Stack.Render()} but {name} returns {pretty}");
         }
@@ -359,6 +359,7 @@ public sealed class CellState
         }
 
         CheckInitOnlyStore(instruction);
+        CheckAccess(instruction);
 
         if (instruction.Op == OpCodes.Arglist && !IsVarArg)
         {
@@ -515,7 +516,7 @@ public sealed class CellState
     {
         var declaration = OverrideParser.ParseInBody(rest, Context, Signature!, source);
         _entries.Add(new CellEntry { Kind = EntryKind.Override, Source = source, Override = declaration });
-        return new LineResult(LineOutcome.Override, null, "overrides " + MemberResolver.Describe(declaration.Target));
+        return new LineResult(LineOutcome.Override, null, "overrides " + declaration.TargetDescription);
     }
 
     private LineResult ApplyParam(string rest, string source)
@@ -572,6 +573,59 @@ public sealed class CellState
         return new LineResult(LineOutcome.Custom, null, "custom " + attribute.Describe() + (target is { } t ? $" on parameter {t}" : ""));
     }
 
+    /// <summary>
+    /// The scope accesses in this body are judged from.
+    /// </summary>
+    public AccessScope Scope => Member?.Scope ?? (Signature is null ? AccessScope.Cell : new AccessScope(null, "method " + Signature.Name));
+
+    /// <summary>
+    /// Judges every member and type an instruction mentions from this body's scope.
+    /// </summary>
+    private void CheckAccess(Instruction instruction)
+    {
+        var scope = Scope;
+        switch (instruction.Operand)
+        {
+            case System.Reflection.FieldInfo field:
+                MemberAccess.CheckType(field.FieldType, scope, Types);
+                MemberAccess.CheckField(field, scope, Types);
+                break;
+            case ResolvedMethod { Method: not null } method:
+                MemberAccess.CheckMethod(method, scope, Types);
+                break;
+            case Type type:
+                MemberAccess.CheckType(type, scope, Types);
+                break;
+            default:
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Judges every member access in the body again, once the declarations it referenced ahead
+    /// of their headers are complete.
+    /// </summary>
+    /// <param name="types">The table with the final declarations.</param>
+    /// <exception cref="ReplException">An access is not allowed.</exception>
+    public void RecheckAccess(TypeTable types)
+    {
+        ArgumentNullException.ThrowIfNull(types);
+        foreach (var entry in _entries)
+        {
+            switch (entry.Instruction?.Operand)
+            {
+                case System.Reflection.FieldInfo field:
+                    MemberAccess.CheckField(field, Scope, types);
+                    break;
+                case ResolvedMethod { Method: not null } method:
+                    MemberAccess.CheckMethod(method, Scope, types);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
     private void CheckInitOnlyStore(Instruction instruction)
     {
         if (instruction.Operand is not System.Reflection.FieldInfo field || !field.Attributes.HasFlag(System.Reflection.FieldAttributes.InitOnly))
@@ -612,7 +666,7 @@ public sealed class CellState
         }
 
         var definition = declaring.IsGenericType && !declaring.IsGenericTypeDefinition ? declaring.GetGenericTypeDefinition() : declaring;
-        return definition == Member.Owner;
+        return ReferenceEquals(definition, Member.Owner);
     }
 
     private LineResult ApplyBlock(string text, string source)
@@ -796,7 +850,7 @@ public sealed class CellState
         }
 
         var top = Stack.Top;
-        if (!StackCompatibility.CanReturn(top, returnType))
+        if (!StackCompatibility.CanReturn(top, returnType, Types))
         {
             var boxable = top is { IsValueType: true } && top != typeof(NullReferenceMarker)
                 && !returnType.IsValueType && !returnType.IsByRef && !returnType.IsPointer;
@@ -842,6 +896,7 @@ public sealed class CellState
 
             var pos = 0;
             var type = TypeParser.ParseAt(part, ref pos, context, out var pinned);
+            MemberAccess.CheckType(type, Scope, Types);
             var name = part[pos..].Trim();
             if (name.StartsWith('\'') && name.EndsWith('\'') && name.Length > 2)
             {
@@ -925,7 +980,8 @@ public sealed class CellState
             }
             else if (type.IsValueType)
             {
-                value = Activator.CreateInstance(type);
+                // A zeroed element, so no constructor or type initializer of the type runs.
+                value = Array.CreateInstance(type, 1).GetValue(0);
             }
             else
             {

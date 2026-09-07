@@ -33,7 +33,7 @@ public static class OverrideParser
 
         var target = ResolveTarget(s, context, method);
         Check(target, method);
-        return new OverrideDeclaration(target, source);
+        return new OverrideDeclaration(target.Method!, Describe(target), source);
     }
 
     /// <summary>
@@ -87,17 +87,19 @@ public static class OverrideParser
         var close = TypeParser.FindMatchingParen(body, paren);
         var parameterTypes = TypeParser.SplitTopLevel(body[(paren + 1)..close]).Select(t => TypeParser.Parse(t, context)).ToList();
         var target = ResolveTarget(s[..with].Trim(), context, new MethodSignature(name, returnType, [.. parameterTypes.Select(t => new ArgumentDeclaration(t, null, null, ""))]) { Attributes = bodyStatic ? MethodAttributes.Static : MethodAttributes.PrivateScope });
-        return new ClassOverrideDeclaration(target, name, returnType, parameterTypes, bodyStatic, source);
+        return new ClassOverrideDeclaration(target.Method!, Describe(target), name, returnType, parameterTypes, bodyStatic, source);
     }
 
-    private static MethodBase ResolveTarget(string text, ParseContext context, MethodSignature implementing)
+    private static ResolvedMethod ResolveTarget(string text, ParseContext context, MethodSignature implementing)
     {
         var s = text.Trim();
         if (s.StartsWith("method ", StringComparison.Ordinal))
         {
             // The explicit form spells the target out; the resolver reads it as a call site would.
-            return MemberResolver.ResolveMethod(s[7..], context, wantConstructor: false).Method
-                ?? throw new ReplException("an .override target must be a method of a base type or an interface, not a session method");
+            var explicitTarget = MemberResolver.ResolveMethod(s[7..], context, wantConstructor: false);
+            return explicitTarget.Method is null
+                ? throw new ReplException("an .override target must be a method of a base type or an interface, not a session method")
+                : explicitTarget;
         }
 
         if (!s.Contains("::", StringComparison.Ordinal))
@@ -109,32 +111,45 @@ public static class OverrideParser
         var parameters = string.Join(", ", implementing.ParameterTypes.Select(TypeNameFormatter.Pretty));
         var instance = implementing.IsStatic ? "" : "instance ";
         var spelled = $"{instance}{TypeNameFormatter.Pretty(implementing.ReturnType)} {s}({parameters})";
-        return MemberResolver.ResolveMethod(spelled, context, wantConstructor: false).Method
-            ?? throw new ReplException("an .override target must be a method of a base type or an interface, not a session method");
+        var target = MemberResolver.ResolveMethod(spelled, context, wantConstructor: false);
+        return target.Method is null
+            ? throw new ReplException("an .override target must be a method of a base type or an interface, not a session method")
+            : target;
     }
 
-    private static void Check(MethodBase target, MethodSignature method)
+    /// <summary>
+    /// Describes a resolved override target without asking a builder for its parameters.
+    /// </summary>
+    /// <param name="target">The target.</param>
+    /// <returns>The description.</returns>
+    public static string Describe(ResolvedMethod target)
     {
-        if (!target.IsVirtual)
+        ArgumentNullException.ThrowIfNull(target);
+        return target.Declared is { } declared ? $"{declared.DescribeMember()} on {TypeNameFormatter.Pretty(target.DeclaringType)}" : MemberResolver.Describe(target.Method!);
+    }
+
+    private static void Check(ResolvedMethod target, MethodSignature method)
+    {
+        var targetIsVirtual = target.Declared is { } declared ? declared.Attributes.HasFlag(MethodAttributes.Virtual) : target.Method!.IsVirtual;
+        if (!targetIsVirtual)
         {
-            throw new ReplException($"{MemberResolver.Describe(target)} is not virtual, so nothing can override it");
+            throw new ReplException($"{Describe(target)} is not virtual, so nothing can override it");
         }
 
         if (!method.Attributes.HasFlag(MethodAttributes.Virtual))
         {
-            throw new ReplException($"{method.Name} must be virtual to .override {MemberResolver.Describe(target)}");
+            throw new ReplException($"{method.Name} must be virtual to .override {Describe(target)}");
         }
 
         if (target.IsStatic != method.IsStatic)
         {
-            throw new ReplException($"{method.Name} is {(method.IsStatic ? "static" : "an instance method")} but {MemberResolver.Describe(target)} is not");
+            throw new ReplException($"{method.Name} is {(method.IsStatic ? "static" : "an instance method")} but {Describe(target)} is not");
         }
 
-        var expected = target.GetParameters().Select(p => p.ParameterType).ToArray();
-        var targetReturn = target is MethodInfo info ? info.ReturnType : typeof(void);
-        if (expected.Length != method.Parameters.Count || !expected.Zip(method.ParameterTypes).All(p => TypeIdentity.Equal(p.First, p.Second)) || !TypeIdentity.Equal(targetReturn, method.ReturnType))
+        var expected = target.ParameterTypes;
+        if (expected.Count != method.Parameters.Count || !expected.Zip(method.ParameterTypes).All(p => TypeIdentity.Equal(p.First, p.Second)) || !TypeIdentity.Equal(target.ReturnType, method.ReturnType))
         {
-            throw new ReplException($".override target {MemberResolver.Describe(target)} does not match {method.DescribeMember()}");
+            throw new ReplException($".override target {Describe(target)} does not match {method.DescribeMember()}");
         }
     }
 }

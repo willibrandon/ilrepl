@@ -250,13 +250,16 @@ public sealed partial class Session
             throw new ReplException("an enum cannot implement interfaces");
         }
 
+        var scope = new AccessScope(builder, (kind == TypeKind.Struct ? "struct " : kind == TypeKind.Interface ? "interface " : kind == TypeKind.Enum ? "enum " : "class ") + path);
         if (baseType is not null)
         {
+            MemberAccess.CheckType(baseType, scope, table);
             builder.SetParent(baseType);
         }
 
         foreach (var i in interfaces)
         {
+            MemberAccess.CheckType(i, scope, table);
             builder.AddInterfaceImplementation(i);
         }
 
@@ -298,6 +301,8 @@ public sealed partial class Session
             BraceSeen = header.OpensBlock,
         };
         block.Members.DefineForward = signature => DefineForwardMethod(block, signature);
+        block.Members.BaseType = baseType;
+        block.Members.Interfaces = interfaces;
         _openType = block;
         if (enclosing is not null)
         {
@@ -366,6 +371,13 @@ public sealed partial class Session
     private ParseContext TypeContext(OpenTypeBlock block)
     {
         var table = _typeTable.Clone();
+        foreach (var (path, entry) in block.Outermost.FamilyTypes)
+        {
+            // A nested type that already closed is named by its path from anywhere in the family.
+            table.Add(path, entry.Prototype);
+            table.SetMembers(entry.Prototype, entry.Members);
+        }
+
         for (var outer = block; outer is not null; outer = outer.Enclosing)
         {
             table.Add(outer.Path, outer.Prototype);
@@ -380,6 +392,11 @@ public sealed partial class Session
     {
         // Outer/Inner, or a bare Inner inside Outer, names a nested type that may be declared
         // later in the family; a placeholder of the referenced kind stands in until then.
+        if (block.Outermost.FamilyTypes.TryGetValue(name, out var closed))
+        {
+            return closed.Prototype;
+        }
+
         var slash = name.LastIndexOf('/');
         var enclosingPath = slash < 0 ? null : name[..slash];
         var nested = slash < 0 ? name : name[(slash + 1)..];
@@ -522,6 +539,7 @@ public sealed partial class Session
     private LineResult AddField(OpenTypeBlock block, string rest, string line)
     {
         var field = FieldDeclarationParser.Parse(rest, TypeContext(block), line);
+        MemberAccess.CheckType(field.Type, block.Scope, _typeTable);
         if (block.Fields.Any(f => f.Name == field.Name))
         {
             throw new ReplException($"field {field.Name} is already declared on {block.Path}");
@@ -608,7 +626,7 @@ public sealed partial class Session
 
         var declaration = OverrideParser.ParseAtClassLevel(rest, TypeContext(block), line);
         block.Overrides.Add(declaration);
-        return new LineResult(LineOutcome.Override, null, $"overrides {MemberResolver.Describe(declaration.Target)} with {declaration.BodyName}");
+        return new LineResult(LineOutcome.Override, null, $"overrides {declaration.TargetDescription} with {declaration.BodyName}");
     }
 
     private LineResult OpenMember(OpenTypeBlock block, string rest, string line)
@@ -616,6 +634,11 @@ public sealed partial class Session
         var context = TypeContext(block);
         var owner = block.Header with { Kind = block.Kind, Attributes = block.Header.Attributes };
         var signature = MethodHeaderParser.ParseMember(rest, context, owner, out var braceOpen, out var closes, out var throwaway);
+        foreach (var mentioned in signature.ParameterTypes.Append(signature.ReturnType))
+        {
+            MemberAccess.CheckType(mentioned, block.Scope, context.Types);
+        }
+
         var duplicate = block.Members.FindMethods(signature.Name).FirstOrDefault(m => m.Declared && SameSignature(m.Signature, signature));
         if (duplicate.Builder is not null)
         {
@@ -671,7 +694,7 @@ public sealed partial class Session
 
         block.Members.Add(signature, builder, declared: true);
         var isAbstract = signature.Attributes.HasFlag(MethodAttributes.Abstract);
-        var member = new MemberContext(block.Prototype, block.Header, signature.IsStatic ? null : block.ThisType, isAbstract);
+        var member = new MemberContext(block.Prototype, block.Header, signature.IsStatic ? null : block.ThisType, isAbstract, block.Path, block.KindWord);
         var state = new CellState(Resolver, new GenericContext(block.GenericParameters, methodGenerics), Signatures(), signature, braceOpen, context.Types, member);
         _openMember = new OpenMemberBlock { Signature = signature, Builder = builder, HeaderLine = line, State = state };
         var result = new LineResult(LineOutcome.MethodStart, null, "method " + signature.DescribeMember());
@@ -865,6 +888,7 @@ public sealed partial class Session
         }
 
         var declaration = BuildDeclaration(block);
+        block.Outermost.FamilyTypes[block.Path] = (block.Prototype, block.Members);
         if (block.Enclosing is { } enclosing)
         {
             enclosing.NestedTypes.Add(declaration);
@@ -872,6 +896,7 @@ public sealed partial class Session
             return new LineResult(LineOutcome.TypeEnd, null, $"end of {block.KindWord} {block.Path}");
         }
 
+        declaration = ValidateFamily(block, declaration);
         return CommitFamily(block, declaration);
     }
 
@@ -916,7 +941,7 @@ public sealed partial class Session
                 && m.Signature.ParameterTypes.Zip(over.BodyParameterTypes).All(p => TypeIdentity.Equal(p.First, p.Second)));
             if (!found)
             {
-                throw new ReplException($".override {MemberResolver.Describe(over.Target)} names {(over.BodyIsStatic ? "static" : "instance")} {TypeNameFormatter.Pretty(over.BodyReturnType)} {over.BodyName}({string.Join(", ", over.BodyParameterTypes.Select(TypeNameFormatter.Pretty))}), which {block.Path} does not declare");
+                throw new ReplException($".override {over.TargetDescription} names {(over.BodyIsStatic ? "static" : "instance")} {TypeNameFormatter.Pretty(over.BodyReturnType)} {over.BodyName}({string.Join(", ", over.BodyParameterTypes.Select(TypeNameFormatter.Pretty))}), which {block.Path} does not declare");
             }
         }
 
@@ -944,12 +969,66 @@ public sealed partial class Session
         return declaration;
     }
 
+    /// <summary>
+    /// Finds the declaration of a session type: one of the family being closed, or an accepted one.
+    /// </summary>
+    private TypeDeclaration? DeclarationOf(Type type, TypeDeclaration? family, OpenTypeBlock? block)
+    {
+        var definition = TypeRelations.Definition(type);
+        if (family is not null && block is not null)
+        {
+            foreach (var (path, entry) in block.FamilyTypes)
+            {
+                if (ReferenceEquals(entry.Prototype, definition))
+                {
+                    return family.Family.FirstOrDefault(d => d.FullName == path);
+                }
+            }
+        }
+
+        foreach (var accepted in _types)
+        {
+            if (accepted.DeclarationOf(definition) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
+    private TypeDeclaration ValidateFamily(OpenTypeBlock block, TypeDeclaration declaration)
+    {
+        var table = _typeTable.Clone();
+        foreach (var (path, entry) in block.FamilyTypes)
+        {
+            table.Add(path, entry.Prototype);
+            table.SetMembers(entry.Prototype, entry.Members);
+        }
+
+        TypeDeclaration? Lookup(Type type) => DeclarationOf(type, declaration, block);
+        TypeDeclaration Validated(TypeDeclaration member)
+        {
+            var prototype = block.FamilyTypes[member.FullName].Prototype;
+            var implied = TypeDeclarationValidator.Validate(member, prototype, table, Lookup);
+            foreach (var method in member.Methods)
+            {
+                method.Body?.RecheckAccess(table);
+            }
+
+            var nested = member.NestedTypes.Select(Validated).ToList();
+            return member with { Overrides = [.. member.Overrides, .. implied], NestedTypes = nested };
+        }
+
+        return Validated(declaration);
+    }
+
     private LineResult CommitFamily(OpenTypeBlock block, TypeDeclaration declaration)
     {
         // Compilation and publication arrive with the type emitter; for now the family is kept
-        // as its declaration and its prototype answers name lookups.
+        // as its declaration and its prototypes answer name lookups.
         var replacing = _types.FindIndex(t => t.FullName == declaration.FullName);
-        var accepted = new SessionType(declaration, null);
+        var accepted = new SessionType(declaration, block.FamilyTypes.ToDictionary(p => p.Key, p => (Type)p.Value.Prototype, StringComparer.Ordinal), null);
         if (replacing < 0)
         {
             _types.Add(accepted);
@@ -960,7 +1039,12 @@ public sealed partial class Session
         }
 
         var table = _typeTable.Clone();
-        table.Add(declaration.FullName, block.Prototype);
+        foreach (var (path, entry) in block.FamilyTypes)
+        {
+            table.Add(path, entry.Prototype);
+            table.SetMembers(entry.Prototype, entry.Members);
+        }
+
         _typeTable = table;
         _openType = null;
         Rebuild();

@@ -226,7 +226,17 @@ public static class MemberResolver
     public static string Describe(MethodBase method)
     {
         ArgumentNullException.ThrowIfNull(method);
-        var parameters = string.Join(", ", method.GetParameters().Select(p => TypeNameFormatter.Pretty(p.ParameterType)));
+        string parameters;
+        try
+        {
+            parameters = string.Join(", ", method.GetParameters().Select(p => TypeNameFormatter.Pretty(p.ParameterType)));
+        }
+        catch (NotSupportedException)
+        {
+            // A builder cannot list its parameters before its type is created.
+            return $"{TypeNameFormatter.Pretty(method.DeclaringType)}::{method.Name}";
+        }
+
         if (method.CallingConvention.HasFlag(CallingConventions.VarArgs))
         {
             parameters = parameters.Length == 0 ? "..." : parameters + ", ...";
@@ -658,96 +668,9 @@ public static class MemberResolver
         return true;
     }
 
-    private static Type Substitute(Type type, Type[] definitionArguments, Type[] actualArguments)
-    {
-        if (type.IsGenericParameter && type.DeclaringMethod is null)
-        {
-            for (var i = 0; i < definitionArguments.Length; i++)
-            {
-                if (definitionArguments[i] == type)
-                {
-                    return actualArguments[i];
-                }
-            }
-        }
+    private static Type Substitute(Type type, Type[] definitionArguments, Type[] actualArguments) => TypeRelations.Substitute(type, definitionArguments, actualArguments);
 
-        if (type.IsByRef)
-        {
-            return Substitute(type.GetElementType()!, definitionArguments, actualArguments).MakeByRefType();
-        }
-
-        if (type.IsArray)
-        {
-            var element = Substitute(type.GetElementType()!, definitionArguments, actualArguments);
-            return type.GetArrayRank() == 1 && type == type.GetElementType()!.MakeArrayType() ? element.MakeArrayType() : element.MakeArrayType(type.GetArrayRank());
-        }
-
-        if (type.IsGenericType && !type.IsGenericTypeDefinition)
-        {
-            var args = type.GetGenericArguments().Select(a => Substitute(a, definitionArguments, actualArguments)).ToArray();
-            return type.GetGenericTypeDefinition().MakeGenericType(args);
-        }
-
-        return type;
-    }
-
-    internal static bool TypesEqual(Type a, Type b)
-    {
-        if (a == b)
-        {
-            return true;
-        }
-
-        // Generic parameter builders compare by position when both sides are builders from
-        // different prototype methods; names are unique within a cell.
-        if (a.IsGenericParameter && b.IsGenericParameter)
-        {
-            return a.Name == b.Name && a.GenericParameterPosition == b.GenericParameterPosition;
-        }
-
-        if (a.IsByRef && b.IsByRef)
-        {
-            return TypesEqual(a.GetElementType()!, b.GetElementType()!);
-        }
-
-        if (a.IsPointer && b.IsPointer)
-        {
-            return TypesEqual(a.GetElementType()!, b.GetElementType()!);
-        }
-
-        if (a.IsArray && b.IsArray)
-        {
-            // int32[] is a vector and int32[0...] is a rank-1 array; they are different types.
-            return a.IsSZArray == b.IsSZArray && a.GetArrayRank() == b.GetArrayRank() && TypesEqual(a.GetElementType()!, b.GetElementType()!);
-        }
-
-        if (a.IsGenericType && b.IsGenericType && !a.IsGenericTypeDefinition && !b.IsGenericTypeDefinition)
-        {
-            if (a.GetGenericTypeDefinition() != b.GetGenericTypeDefinition())
-            {
-                return false;
-            }
-
-            var aa = a.GetGenericArguments();
-            var ba = b.GetGenericArguments();
-            if (aa.Length != ba.Length)
-            {
-                return false;
-            }
-
-            for (var i = 0; i < aa.Length; i++)
-            {
-                if (!TypesEqual(aa[i], ba[i]))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        return false;
-    }
+    internal static bool TypesEqual(Type a, Type b) => TypeIdentity.Equal(a, b);
 
     private static string Signature(Type[]? parameterTypes) =>
         parameterTypes is null ? "" : string.Join(", ", parameterTypes.Select(TypeNameFormatter.Pretty));

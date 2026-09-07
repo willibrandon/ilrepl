@@ -20,7 +20,7 @@ public static class TypeIdentity
     {
         ArgumentNullException.ThrowIfNull(a);
         ArgumentNullException.ThrowIfNull(b);
-        if (a == b)
+        if (ReferenceEquals(a, b) || (a is System.Reflection.Emit.TypeBuilder == false && b is System.Reflection.Emit.TypeBuilder == false && a == b))
         {
             return true;
         }
@@ -58,7 +58,7 @@ public static class TypeIdentity
             return aa.Length == ba.Length && aa.Zip(ba).All(p => Equal(p.First, p.Second, map));
         }
 
-        return map is not null && (map.Map(a) == b || map.Map(b) == a);
+        return map is not null && (ReferenceEquals(map.Map(a), b) || ReferenceEquals(map.Map(b), a));
     }
 
     private static bool SameParameter(Type a, Type b, EmitMap? map)
@@ -90,7 +90,7 @@ public static class TypeIdentity
             return true;
         }
 
-        return map is not null && (map.Map(a) == b || map.Map(b) == a);
+        return map is not null && (ReferenceEquals(map.Map(a), b) || ReferenceEquals(map.Map(b), a));
     }
 
     private static bool SameOwner(Type? a, Type? b, EmitMap? map)
@@ -100,11 +100,11 @@ public static class TypeIdentity
             return false;
         }
 
-        if (a == b)
+        if (ReferenceEquals(a, b) || (a is not System.Reflection.Emit.TypeBuilder && b is not System.Reflection.Emit.TypeBuilder && a == b))
         {
             return true;
         }
 
-        return map is not null && (map.Map(a) == b || map.Map(b) == a);
+        return map is not null && (ReferenceEquals(map.Map(a), b) || ReferenceEquals(map.Map(b), a));
     }
 }
