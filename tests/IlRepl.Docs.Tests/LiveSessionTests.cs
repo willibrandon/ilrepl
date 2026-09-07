@@ -458,11 +458,16 @@ public sealed class LiveSessionTests
         await TypeLineAsync(page, ".dis Indirect");
         await Assertions.Expect(terminal).ToContainTextAsync("calli int32(int32, int32)", options);
 
+        // A framework body is long enough to scroll its header off the visible rows, so the tail is
+        // what can be checked: in the browser it is read through reflection, and the note says so.
         await TypeLineAsync(page, ".dis instance string String::Trim()");
-        await Assertions.Expect(terminal).ToContainTextAsync(".method public hidebysig instance string Trim() cil managed {", options);
+        await Assertions.Expect(terminal).ToContainTextAsync("the body was read through reflection", options);
+        var trim = await BufferTextAsync(page);
+        Assert.Contains("ret", trim);
+        Assert.Contains("code size", trim);
         await TypeLineAsync(page, ".dis instance void class List`1<int32>::Add(!0)");
         await Assertions.Expect(terminal).ToContainTextAsync("showing the definition", options);
-        await Assertions.Expect(terminal).ToContainTextAsync("!0", options);
+        await Assertions.Expect(terminal).ToContainTextAsync("AddWithResize(!0)", options);
 
         // An assembly from the virtual file system lists through its image; the vararg call site
         // prints the optional types from its own reference, with no fallback note.

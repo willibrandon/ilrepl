@@ -28,6 +28,18 @@ try {
     })
     .create();
   const { getAssemblyExports, getConfig, runMain } = runtime;
+
+  // The Greeter sample goes into the runtime's in-memory file system, where .load finds it by path.
+  try {
+    const sample = await fetch('samples/Greeter.dll', { cache: 'default' });
+    if (sample.ok) {
+      runtime.Module.FS.mkdirTree('/samples');
+      runtime.Module.FS.writeFile('/samples/Greeter.dll', new Uint8Array(await sample.arrayBuffer()));
+    }
+  } catch (err) {
+    console.warn('the Greeter sample is not available in this session', err);
+  }
+
   self.postMessage({ type: 'workerReady' });
   const config = getConfig();
   const exports = await getAssemblyExports(config.mainAssemblyName);

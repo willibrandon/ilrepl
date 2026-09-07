@@ -135,9 +135,10 @@ IL_002c:
 ```
 
 The bytes come from the assembly file on disk, checked against the loaded module's version id,
-so a listing never mixes a newer file with an older loaded assembly. Framework bodies differ
-between runtime versions, and between the desktop and the browser, so expect the shape to match
-and the details to move.
+so a listing never mixes a newer file with an older loaded assembly. In the browser the framework
+has no files to read, so a framework body comes through reflection and a note after the listing
+says so. Framework bodies differ between runtime versions, and between the desktop and the
+browser, so expect the shape to match and the details to move.
 
 ## Generic definitions
 
