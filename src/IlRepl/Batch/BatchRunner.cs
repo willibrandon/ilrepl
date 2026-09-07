@@ -55,9 +55,17 @@ public sealed class BatchRunner
         var status = _engine.Status;
         if (status.OpenMethod is { } open)
         {
-            // Input that ends inside a .method block cannot be completed on the user's behalf.
+            // Input that ends inside a .method or .class block cannot be completed on the user's behalf.
             AnsiWriter.Write(_output, new TranscriptLine(LineKind.Error,
                 [new TranscriptSpan("  error: ", SpanStyle.Error), new TranscriptSpan($"method {open} is still open; close it with }}")]), _color);
+            _output.Flush();
+            return 1;
+        }
+
+        if (status.OpenType is { } openType)
+        {
+            AnsiWriter.Write(_output, new TranscriptLine(LineKind.Error,
+                [new TranscriptSpan("  error: ", SpanStyle.Error), new TranscriptSpan($"class {openType} is still open; close it with }}")]), _color);
             _output.Flush();
             return 1;
         }

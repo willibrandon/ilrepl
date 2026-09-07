@@ -1,5 +1,3 @@
-using System.Reflection.Emit;
-
 namespace IlRepl.Engine;
 
 /// <summary>
@@ -20,6 +18,12 @@ public static class StackCompatibility
         if (type.IsByRef)
         {
             return StackCategory.ByRef;
+        }
+
+        if (type.IsGenericParameter)
+        {
+            // A parameter's constraints decide at run time; a builder cannot even be asked whether it is an enum.
+            return StackCategory.ObjectReference;
         }
 
         if (type.IsPointer || type == typeof(nint) || type == typeof(nuint))
@@ -48,11 +52,6 @@ public static class StackCompatibility
             return StackCategory.Float;
         }
 
-        if (type.IsGenericParameter)
-        {
-            return StackCategory.ObjectReference;
-        }
-
         return type.IsValueType ? StackCategory.ValueType : StackCategory.ObjectReference;
     }
 
@@ -66,9 +65,20 @@ public static class StackCompatibility
     /// <param name="actual">The type on the stack; null when the model could not infer it, which is accepted.</param>
     /// <param name="declared">The declared return type.</param>
     /// <returns>Whether <c>ret</c> is valid.</returns>
-    public static bool CanReturn(Type? actual, Type declared)
+    public static bool CanReturn(Type? actual, Type declared) => CanReturn(actual, declared, TypeTable.Empty);
+
+    /// <summary>
+    /// True when a value of the given stack type can be returned where <paramref name="declared"/> is expected,
+    /// with session types judged through the declarations in <paramref name="types"/>.
+    /// </summary>
+    /// <param name="actual">The type on the stack; null when the model could not infer it, which is accepted.</param>
+    /// <param name="declared">The declared return type.</param>
+    /// <param name="types">The table that knows the types being written.</param>
+    /// <returns>Whether <c>ret</c> is valid.</returns>
+    public static bool CanReturn(Type? actual, Type declared, TypeTable types)
     {
         ArgumentNullException.ThrowIfNull(declared);
+        ArgumentNullException.ThrowIfNull(types);
         if (actual is null)
         {
             return true;
@@ -82,7 +92,7 @@ public static class StackCompatibility
 
         if (StackSimulator.BoxedType(actual) is { } boxed)
         {
-            return expected == StackCategory.ObjectReference && Assignable(declared, boxed);
+            return expected == StackCategory.ObjectReference && Assignable(declared, boxed, types);
         }
 
         var found = Category(actual);
@@ -90,21 +100,21 @@ public static class StackCompatibility
         {
             StackCategory.Int32 or StackCategory.Int64 or StackCategory.Float => found == expected,
             StackCategory.NativeInt => found is StackCategory.NativeInt or StackCategory.Int32,
-            StackCategory.ByRef => found == StackCategory.ByRef && MemberResolver.TypesEqual(actual.GetElementType()!, declared.GetElementType()!),
-            StackCategory.ValueType => found == StackCategory.ValueType && MemberResolver.TypesEqual(actual, declared),
-            _ => found == StackCategory.ObjectReference && Assignable(declared, actual),
+            StackCategory.ByRef => found == StackCategory.ByRef && TypeIdentity.Equal(actual.GetElementType()!, declared.GetElementType()!),
+            StackCategory.ValueType => found == StackCategory.ValueType && TypeIdentity.Equal(actual, declared),
+            _ => found == StackCategory.ObjectReference && Assignable(declared, actual, types),
         };
     }
 
-    private static bool Assignable(Type declared, Type actual)
+    private static bool Assignable(Type declared, Type actual, TypeTable types)
     {
-        // Assignability is not defined for types that are still being built or for open
-        // generic parameters; the JIT settles those when the cell runs.
-        if (declared.IsGenericParameter || actual.IsGenericParameter || declared is TypeBuilder || actual is TypeBuilder)
+        // Open generic parameters are settled by their constraints when the cell runs; a
+        // session type answers through its declaration, since a builder cannot be asked.
+        if (declared.IsGenericParameter || actual.IsGenericParameter)
         {
             return true;
         }
 
-        return declared.IsAssignableFrom(actual);
+        return TypeRelations.IsAssignable(actual, declared, types);
     }
 }

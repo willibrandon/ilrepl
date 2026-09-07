@@ -36,20 +36,64 @@ public sealed class CellState
     /// <param name="signature">The method's signature, or null for the cell.</param>
     /// <param name="braceOpen">For a method body: true when the header line already carried the opening brace.</param>
     public CellState(TypeResolver resolver, GenericContext generics, IReadOnlyList<MethodSignature> methods, MethodSignature? signature, bool braceOpen)
+        : this(resolver, generics, methods, signature, braceOpen, TypeTable.Empty, null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes an empty cell, the body of a session method, or the body of a member of a
+    /// type being written. An instance member has <c>this</c> at argument 0.
+    /// </summary>
+    /// <param name="resolver">The type resolver.</param>
+    /// <param name="generics">The generic parameters in scope for <c>!N</c> and <c>!!N</c>.</param>
+    /// <param name="methods">The session methods a call can name without a type.</param>
+    /// <param name="signature">The method's signature, or null for the cell.</param>
+    /// <param name="braceOpen">For a method body: true when the header line already carried the opening brace.</param>
+    /// <param name="types">The session types a name can resolve to.</param>
+    /// <param name="member">The type this body belongs to, or null for the cell and session methods.</param>
+    public CellState(TypeResolver resolver, GenericContext generics, IReadOnlyList<MethodSignature> methods, MethodSignature? signature, bool braceOpen, TypeTable types, MemberContext? member)
     {
         ArgumentNullException.ThrowIfNull(resolver);
         ArgumentNullException.ThrowIfNull(generics);
         ArgumentNullException.ThrowIfNull(methods);
+        ArgumentNullException.ThrowIfNull(types);
         Resolver = resolver;
         Generics = generics;
         Methods = methods;
         Signature = signature;
+        Types = types;
+        Member = member;
         _braceSeen = braceOpen;
+        if (member?.ThisType is { } thisType)
+        {
+            _arguments.Add(new ArgumentDeclaration(thisType, null, null, ""));
+        }
+
         if (signature is not null)
         {
             _arguments.AddRange(signature.Parameters);
         }
     }
+
+    /// <summary>
+    /// The session types a name can resolve to.
+    /// </summary>
+    public TypeTable Types { get; }
+
+    /// <summary>
+    /// The type this body belongs to, or null for the cell and session methods.
+    /// </summary>
+    public MemberContext? Member { get; }
+
+    /// <summary>
+    /// True when this is the body of a member of a type being written.
+    /// </summary>
+    public bool IsMember => Member is not null;
+
+    /// <summary>
+    /// The <c>.override</c> lines written in this body.
+    /// </summary>
+    public IEnumerable<OverrideDeclaration> Overrides => _entries.Where(e => e.Override is not null).Select(e => e.Override!);
 
     /// <summary>
     /// The type resolver.
@@ -162,7 +206,7 @@ public sealed class CellState
     /// <summary>
     /// The parse context for the next line.
     /// </summary>
-    public ParseContext Context => new(_locals, _arguments, Generics, Resolver, Methods);
+    public ParseContext Context => new(_locals, _arguments, Generics, Resolver, Methods, Types) { ThisIndex = Member?.ThisType is null ? -1 : 0 };
 
     /// <summary>
     /// Checks that a <c>.method</c> body can close: every label is defined, and either the last
@@ -184,7 +228,7 @@ public sealed class CellState
             throw new ReplException($"label{(pending.Count > 1 ? "s" : "")} referenced but never defined: {string.Join(", ", pending)} (define with 'NAME:')");
         }
 
-        if (LastInstructionEndsFlow)
+        if (LastInstructionEndsFlow || Member is { IsAbstract: true })
         {
             return;
         }
@@ -207,7 +251,7 @@ public sealed class CellState
             throw new ReplException($"method {name} needs a ret before }}: the stack is empty but {name} returns {pretty}");
         }
 
-        if (Stack.Count > 1 || !StackCompatibility.CanReturn(Stack.Top, returnType))
+        if (Stack.Count > 1 || !StackCompatibility.CanReturn(Stack.Top, returnType, Types))
         {
             throw new ReplException($"method {name} needs a ret before }}: the stack holds {Stack.Render()} but {name} returns {pretty}");
         }
@@ -287,9 +331,19 @@ public sealed class CellState
 
         if (rest.Length == 0)
         {
+            if (Member is { IsAbstract: true })
+            {
+                throw new ReplException($"abstract method {Signature!.Name} has no body; close it with }}");
+            }
+
             _entries.Add(new CellEntry { Kind = EntryKind.Labels, Source = line, Labels = labels });
             _definedLabels.UnionWith(labels);
             return new LineResult(LineOutcome.Labels, null, null);
+        }
+
+        if (Member is { IsAbstract: true })
+        {
+            throw new ReplException($"abstract method {Signature!.Name} has no body; close it with }}");
         }
 
         var context = Context;
@@ -298,6 +352,14 @@ public sealed class CellState
         {
             instruction = InlineRet(instruction.Text);
         }
+
+        if (Member?.ThisType is { IsByRef: true } && instruction.ArgumentIndex == 0 && instruction.Op.Name is "ldarga" or "ldarga.s")
+        {
+            throw new ReplException($"this is already a {TypeNameFormatter.Pretty(Member.ThisType)} in a struct method; use ldarg.0");
+        }
+
+        CheckInitOnlyStore(instruction);
+        CheckAccess(instruction);
 
         if (instruction.Op == OpCodes.Arglist && !IsVarArg)
         {
@@ -328,6 +390,38 @@ public sealed class CellState
         var space = text.IndexOfAny([' ', '\t', '(']);
         var directive = space < 0 ? text : text[..space];
         var rest = space < 0 ? "" : text[space..].Trim();
+        if (IsMember)
+        {
+            switch (directive)
+            {
+                case ".override":
+                    return ApplyOverride(rest, source);
+                case ".param":
+                    return ApplyParam(rest, source);
+                case ".custom":
+                    return ApplyCustom(rest, source);
+                case ".field":
+                case ".pack":
+                case ".size":
+                case ".property":
+                case ".event":
+                    throw new ReplException($"{directive} is not allowed inside a method; close method {Signature!.Name} with }} first");
+                case ".class":
+                    throw new ReplException($"a class cannot be declared inside a method; close method {Signature!.Name} with }} first");
+                case ".vararg":
+                    throw new ReplException("a member is made vararg on its header: .method public vararg ...");
+                case ".typeparams":
+                    throw new ReplException(".typeparams is not allowed inside a method; declare generic parameters on the header: Name<T>(...)");
+                default:
+                    break;
+            }
+
+            if (Member is { IsAbstract: true } && directive is ".locals" or ".try")
+            {
+                throw new ReplException($"abstract method {Signature!.Name} has no body; close it with }}");
+            }
+        }
+
         if (IsMethod)
         {
             switch (directive)
@@ -342,6 +436,33 @@ public sealed class CellState
                     throw new ReplException(".typeargs binds the cell's type parameters; close the method with } first");
                 case ".method":
                     throw new ReplException($"a method is already open ({Signature!.Name}); close it with }} before defining another");
+                case ".override":
+                    throw new ReplException(".override is only valid in a method of a .class; session methods are static");
+                default:
+                    break;
+            }
+        }
+        else
+        {
+            switch (directive)
+            {
+                case ".field":
+                case ".pack":
+                case ".size":
+                case ".property":
+                case ".event":
+                case ".override":
+                case ".custom":
+                    throw new ReplException($"{directive} belongs inside a .class block (open one with .class Name {{)");
+                case ".param":
+                    throw new ReplException(".param belongs inside a method");
+                case ".data":
+                case ".namespace":
+                case ".export":
+                case ".vtfixup":
+                    throw new ReplException(directive == ".namespace"
+                        ? ".namespace is not supported; write the dotted name on .class instead (.class public Geometry.Point)"
+                        : $"{directive} is not supported");
                 default:
                     break;
             }
@@ -387,8 +508,207 @@ public sealed class CellState
                 return new LineResult(LineOutcome.Empty, null, null);
 
             default:
-                throw new ReplException($"unknown directive '{directive}'; expected .locals, .args, .typeparams, .typeargs, .vararg, .method, .try, or .maxstack");
+                throw new ReplException($"unknown directive '{directive}'; expected .locals, .args, .typeparams, .typeargs, .vararg, .method, .class, .field, .try, or .maxstack");
         }
+    }
+
+    private LineResult ApplyOverride(string rest, string source)
+    {
+        var declaration = OverrideParser.ParseInBody(rest, Context, Signature!, source);
+        _entries.Add(new CellEntry { Kind = EntryKind.Override, Source = source, Override = declaration });
+        return new LineResult(LineOutcome.Override, null, "overrides " + declaration.TargetDescription);
+    }
+
+    private LineResult ApplyParam(string rest, string source)
+    {
+        // .param [N] [= constant]: N is 1 for the first parameter and 0 for the return value.
+        var s = rest.Trim();
+        if (!s.StartsWith('['))
+        {
+            throw new ReplException("usage: .param [1] = int32(5)  (1 is the first parameter, 0 the return value)");
+        }
+
+        var close = s.IndexOf(']', StringComparison.Ordinal);
+        if (close < 0 || !int.TryParse(s[1..close].Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var index))
+        {
+            throw new ReplException("usage: .param [1] = int32(5)  (1 is the first parameter, 0 the return value)");
+        }
+
+        var parameters = Signature!.Parameters;
+        if (index < 0 || index > parameters.Count)
+        {
+            throw new ReplException($"{Signature.Name} has {parameters.Count} parameter(s); .param takes 0 (the return value) to {parameters.Count}");
+        }
+
+        var after = s[(close + 1)..].Trim();
+        object? value = null;
+        var hasDefault = false;
+        if (after.Length > 0)
+        {
+            if (!after.StartsWith('='))
+            {
+                throw new ReplException($"unexpected '{after}' after .param [{index}]");
+            }
+
+            if (index == 0)
+            {
+                throw new ReplException("the return value cannot have a default");
+            }
+
+            value = ConstantParser.Parse(after[1..], parameters[index - 1].Type, $"parameter {index}");
+            hasDefault = true;
+        }
+
+        _entries.Add(new CellEntry { Kind = EntryKind.Param, Source = source, ParamIndex = index, ParamDefault = value, ParamHasDefault = hasDefault });
+        return new LineResult(LineOutcome.Param, null, hasDefault ? $"param {index} = {ConstantText.Describe(value)}" : $"param {index}");
+    }
+
+    private LineResult ApplyCustom(string rest, string source)
+    {
+        var attribute = CustomAttributeParser.Parse(rest, Context, source);
+        // A .custom after .param [N] applies to that parameter, as do the ones that follow it;
+        // any other line ends the run and a .custom applies to the method again.
+        int? target = null;
+        for (var i = _entries.Count - 1; i >= 0; i--)
+        {
+            var entry = _entries[i];
+            if (entry.Kind == EntryKind.Param)
+            {
+                target = entry.ParamIndex;
+                break;
+            }
+
+            if (entry.Kind != EntryKind.Custom)
+            {
+                break;
+            }
+        }
+
+        _entries.Add(new CellEntry { Kind = EntryKind.Custom, Source = source, Custom = attribute, ParamIndex = target });
+        return new LineResult(LineOutcome.Custom, null, "custom " + attribute.Describe() + (target is { } t ? $" on parameter {t}" : ""));
+    }
+
+    /// <summary>
+    /// The scope accesses in this body are judged from.
+    /// </summary>
+    public AccessScope Scope => Member?.Scope ?? (Signature is null ? AccessScope.Cell : new AccessScope(null, "method " + Signature.Name));
+
+    /// <summary>
+    /// Judges every member and type an instruction mentions from this body's scope.
+    /// </summary>
+    private void CheckAccess(Instruction instruction)
+    {
+        var scope = Scope;
+        switch (instruction.Operand)
+        {
+            case System.Reflection.FieldInfo field:
+                if (field.IsLiteral && instruction.Op.Name is "ldsfld" or "ldsflda" or "stsfld")
+                {
+                    throw new ReplException($"{field.Name} is a literal; it has no storage, so {instruction.Op.Name} would fail with MissingFieldException at run time. Load its value instead{LiteralHint(field)}");
+                }
+
+                MemberAccess.CheckType(field.FieldType, scope, Types);
+                MemberAccess.CheckField(field, scope, Types);
+                break;
+            case ResolvedMethod { Method: not null } method:
+                MemberAccess.CheckMethod(method, scope, Types);
+                break;
+            case Type type:
+                MemberAccess.CheckType(type, scope, Types);
+                break;
+            default:
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Judges every member access in the body again, once the declarations it referenced ahead
+    /// of their headers are complete.
+    /// </summary>
+    /// <param name="types">The table with the final declarations.</param>
+    /// <exception cref="ReplException">An access is not allowed.</exception>
+    public void RecheckAccess(TypeTable types)
+    {
+        ArgumentNullException.ThrowIfNull(types);
+        foreach (var entry in _entries)
+        {
+            switch (entry.Instruction?.Operand)
+            {
+                case System.Reflection.FieldInfo field:
+                    MemberAccess.CheckField(field, Scope, types);
+                    break;
+                case ResolvedMethod { Method: not null } method:
+                    MemberAccess.CheckMethod(method, Scope, types);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    private string LiteralHint(System.Reflection.FieldInfo field)
+    {
+        object? value = null;
+        if (Types.TryGetMembers(field.DeclaringType!, out var own))
+        {
+            value = own.FindField(field.Name)?.Declaration.DefaultValue;
+        }
+        else if (field.DeclaringType is not System.Reflection.Emit.TypeBuilder)
+        {
+            value = field.GetRawConstantValue();
+        }
+
+        return value switch
+        {
+            int i => $": ldc.i4 {i.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+            long l => $": ldc.i8 {l.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+            string text => $": ldstr \"{text}\"",
+            Enum e => $": ldc.i4 {System.Convert.ToInt64(e, System.Globalization.CultureInfo.InvariantCulture).ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+            _ => "",
+        };
+    }
+
+    private void CheckInitOnlyStore(Instruction instruction)
+    {
+        if (instruction.Operand is not System.Reflection.FieldInfo field || !field.Attributes.HasFlag(System.Reflection.FieldAttributes.InitOnly))
+        {
+            return;
+        }
+
+        var name = instruction.Op.Name;
+        if (name == "stsfld")
+        {
+            if (Signature?.Name == ".cctor" && SameDeclaringType(field.DeclaringType))
+            {
+                return;
+            }
+
+            throw new ReplException($"{field.Name} is a static initonly field; it can only be stored in {TypeNameFormatter.Pretty(field.DeclaringType)}'s .cctor (ECMA II.16.1.2)");
+        }
+
+        if (name != "stfld")
+        {
+            return;
+        }
+
+        var allowed = Signature is not null && SameDeclaringType(field.DeclaringType)
+            && (Signature.Name == ".ctor" || Signature.ReturnRequiredModifiers.Any(m => m.FullName == "System.Runtime.CompilerServices.IsExternalInit"))
+            && Stack.IsThisAt(Stack.Count - 2);
+        if (!allowed)
+        {
+            throw new ReplException($"{field.Name} is initonly; it can only be stored through this in {TypeNameFormatter.Pretty(field.DeclaringType)}'s constructors or init accessors (ECMA II.16.1.2)");
+        }
+    }
+
+    private bool SameDeclaringType(Type? declaring)
+    {
+        if (declaring is null || Member is null)
+        {
+            return false;
+        }
+
+        var definition = declaring.IsGenericType && !declaring.IsGenericTypeDefinition ? declaring.GetGenericTypeDefinition() : declaring;
+        return ReferenceEquals(definition, Member.Owner);
     }
 
     private LineResult ApplyBlock(string text, string source)
@@ -572,7 +892,7 @@ public sealed class CellState
         }
 
         var top = Stack.Top;
-        if (!StackCompatibility.CanReturn(top, returnType))
+        if (!StackCompatibility.CanReturn(top, returnType, Types))
         {
             var boxable = top is { IsValueType: true } && top != typeof(NullReferenceMarker)
                 && !returnType.IsValueType && !returnType.IsByRef && !returnType.IsPointer;
@@ -618,6 +938,7 @@ public sealed class CellState
 
             var pos = 0;
             var type = TypeParser.ParseAt(part, ref pos, context, out var pinned);
+            MemberAccess.CheckType(type, Scope, Types);
             var name = part[pos..].Trim();
             if (name.StartsWith('\'') && name.EndsWith('\'') && name.Length > 2)
             {
@@ -701,7 +1022,8 @@ public sealed class CellState
             }
             else if (type.IsValueType)
             {
-                value = Activator.CreateInstance(type);
+                // A zeroed element, so no constructor or type initializer of the type runs.
+                value = Array.CreateInstance(type, 1).GetValue(0);
             }
             else
             {

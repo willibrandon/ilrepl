@@ -52,6 +52,42 @@ public sealed class FrontEndProcessTests
     }
 
     /// <summary>
+    /// A script that declares a class runs it through the host and shows the instance by its fields.
+    /// </summary>
+    [TestMethod]
+    public async Task Script_DefinesAndUsesClass()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllLinesAsync(path,
+        [
+            ".class public sequential sealed Pair extends [System.Runtime]System.ValueType {",
+            ".field public int32 A",
+            ".field public int32 B",
+            "}",
+            ".locals init (valuetype Pair p)",
+            "ldloca p",
+            "ldc.i4 9",
+            "stfld int32 Pair::A",
+            "ldloc p",
+            "box Pair",
+            "ret",
+        ], TestContext.CancellationToken);
+        try
+        {
+            var (code, stdout, _) = await RunAsync(["--no-color", path]);
+            Assert.AreEqual(0, code, stdout);
+            Assert.Contains("struct Pair", stdout);
+            Assert.Contains("end of struct Pair", stdout);
+            Assert.Contains("= Pair { A = 9, B = 0 } : Pair", stdout);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
     /// Piped standard input runs in batch mode.
     /// </summary>
     [TestMethod]

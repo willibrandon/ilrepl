@@ -45,4 +45,31 @@ public sealed class CellEntry
     /// The arguments declared by this line, for <see cref="EntryKind.Arguments"/> entries.
     /// </summary>
     public IReadOnlyList<ArgumentDeclaration> Arguments { get; init; } = [];
+
+    /// <summary>
+    /// The override, for <see cref="EntryKind.Override"/> entries.
+    /// </summary>
+    public OverrideDeclaration? Override { get; init; }
+
+    /// <summary>
+    /// The attribute, for <see cref="EntryKind.Custom"/> entries; on the parameter named by the
+    /// preceding <c>.param</c> when <see cref="ParamIndex"/> is set.
+    /// </summary>
+    public CustomAttributeDeclaration? Custom { get; init; }
+
+    /// <summary>
+    /// The parameter index of a <see cref="EntryKind.Param"/> entry, or of the parameter a
+    /// <see cref="EntryKind.Custom"/> entry applies to: 0 for the return value, 1 for the first parameter.
+    /// </summary>
+    public int? ParamIndex { get; init; }
+
+    /// <summary>
+    /// The default value of a <see cref="EntryKind.Param"/> entry, when one was written.
+    /// </summary>
+    public object? ParamDefault { get; init; }
+
+    /// <summary>
+    /// True when the <see cref="EntryKind.Param"/> entry gave the parameter a default.
+    /// </summary>
+    public bool ParamHasDefault { get; init; }
 }

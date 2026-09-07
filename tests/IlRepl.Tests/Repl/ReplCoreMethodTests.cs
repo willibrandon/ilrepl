@@ -262,7 +262,7 @@ public sealed class ReplCoreMethodTests
     {
         var core = Load(Fib);
         core.Handle(".reset");
-        Assert.Contains("  cell, declarations, and methods cleared", Plain(core));
+        Assert.Contains("  cell, declarations, methods, and types cleared", Plain(core));
         Assert.AreEqual(0, core.Status.Methods);
         Assert.IsFalse(core.Handle("call int32 Fib(int32)").Succeeded);
         Assert.Contains("no method 'Fib' in the session", Plain(core));

@@ -167,8 +167,7 @@ public sealed class IlAsmRendererTests
     [TestMethod]
     public void Render_KeywordNames_AssembleWithIlasm()
     {
-        var ilasm = FindIlasm();
-        TestSkip.Unless(ilasm is not null, "ilasm is not installed");
+        var ilasm = IlasmLocator.Require();
 
         var session = new Session();
         foreach (var line in KeywordNamedSession)
@@ -183,7 +182,7 @@ public sealed class IlAsmRendererTests
             var source = Path.Combine(directory, "cell.il");
             File.WriteAllText(source, session.ToIlAsm());
             // Options take a dash: a slash is a path on Unix.
-            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ilasm!, ["-DLL", "-QUIET", "-OUTPUT=" + Path.Combine(directory, "cell.dll"), source])
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ilasm, ["-DLL", "-QUIET", "-OUTPUT=" + Path.Combine(directory, "cell.dll"), source])
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -211,11 +210,198 @@ public sealed class IlAsmRendererTests
         ".locals init (int32 class)", "ldc.i4 3", "stloc class", "ldloc class", "call int32 add(int32)", "call int32 brnull(int32)",
     ];
 
-    private static string? FindIlasm()
+    /// <summary>
+    /// Type families render before the cell type, in declaration order, with their members.
+    /// </summary>
+    [TestMethod]
+    public void Render_Types_AppearBeforeTheCellType()
     {
-        var name = OperatingSystem.IsWindows() ? "ilasm.exe" : "ilasm";
-        var directories = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
-            .Append(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin"));
-        return directories.Select(d => Path.Combine(d, name)).FirstOrDefault(File.Exists);
+        var session = IlLines.Load(
+            ".class interface public abstract IArea {", ".method public abstract virtual instance float64 Area() { }", "}",
+            ".class public sequential ansi sealed Point extends [System.Runtime]System.ValueType implements IArea {",
+            ".pack 4",
+            ".field public int32 X",
+            ".field public static literal int32 Max = int32(9)",
+            ".method public instance void .ctor(int32 x) { ldarg.0; ldarg x; stfld int32 Point::X; ret }",
+            ".method public virtual instance float64 Area() { ldarg.0; ldfld int32 Point::X; conv.r8; ret }",
+            ".method public specialname instance int32 get_Len() { ldarg.0; ldfld int32 Point::X; ret }",
+            ".property instance int32 Len() {", ".get instance int32 Point::get_Len()", "}",
+            ".class nested private Tag { }",
+            "}",
+            ".class public Box`1<class T> {", ".field public !0 V", "}",
+            "ldc.i4 3", "newobj instance void Point::.ctor(int32)", "box Point");
+        var text = session.ToIlAsm();
+        Assert.Contains(".class interface public abstract auto ansi IArea", text);
+        Assert.Contains(".method public newslot abstract virtual instance float64 Area() cil managed", text);
+        Assert.Contains(".class public sequential ansi sealed Point extends [System.Runtime]System.ValueType implements IArea", text);
+        Assert.Contains("    .pack 4", text);
+        Assert.Contains("    .field public static literal int32 Max = int32(9)", text);
+        Assert.Contains(".method public specialname rtspecialname instance void .ctor(int32 x) cil managed", text);
+        Assert.Contains("        stfld int32 Point::X", text);
+        Assert.Contains("    .property instance int32 Len()", text);
+        Assert.Contains("        .get instance int32 Point::get_Len()", text);
+        Assert.Contains("    .class nested private auto ansi Tag extends [System.Runtime]System.Object", text);
+        Assert.Contains(".class public auto ansi Box`1<class T> extends [System.Runtime]System.Object", text);
+        Assert.Contains("    .field public !T V", text);
+        Assert.Contains("        box valuetype Point", text);
+        Assert.IsLessThan(text.IndexOf("IlRepl.Cell extends", StringComparison.Ordinal), text.IndexOf(".class public sequential", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The rendered types assemble with ilasm, and the assembled cell runs with the same result.
+    /// </summary>
+    [TestMethod]
+    public void Render_Types_AssembleWithIlasmAndRun()
+    {
+        var session = IlLines.Load(
+            ".method int32 Twice(int32 n) { ldarg n; ldc.i4 2; mul; ret }",
+            ".class interface public abstract IArea {", ".method public abstract virtual instance int32 Area() { }", "}",
+            ".class public sequential ansi sealed Point extends [System.Runtime]System.ValueType implements IArea {",
+            ".field public int32 X",
+            ".field public static initonly int32 Count",
+            ".method static void .cctor() { ldc.i4 1; stsfld int32 Point::Count; ret }",
+            ".method public instance void .ctor(int32 x) { ldarg.0; ldarg x; stfld int32 Point::X; ret }",
+            ".method public virtual instance int32 Area() { ldarg.0; ldfld int32 Point::X; call int32 Twice(int32); ret }",
+            "}",
+            ".class public Box`1<T> {",
+            ".field public !0 V",
+            ".method public instance void .ctor(!0 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg v; stfld !0 class Box`1<!0>::V; ret }",
+            ".class nested public Inner {",
+            ".method public static int32 Three() { ldc.i4 3; ret }",
+            "}",
+            "}",
+            "ldc.i4 5", "newobj instance void Point::.ctor(int32)", "box Point", "callvirt instance int32 IArea::Area()",
+            "call int32 Box`1/Inner::Three()", "add", "ldsfld int32 Point::Count", "add");
+        var text = session.ToIlAsm();
+        Assert.AreEqual(14, session.Run().Value);
+        var image = IlasmLocator.Assemble(text);
+        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-types", isCollectible: true);
+        try
+        {
+            var assembly = context.LoadFromStream(new MemoryStream(image));
+            Assert.AreEqual(14, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
+    /// <summary>
+    /// A member calling another member of its own type renders from the declaration, a
+    /// namespaced type keeps its namespace, and a synthesized static-interface override is written.
+    /// </summary>
+    [TestMethod]
+    public void Render_OwnCalls_NamespacesAndStaticOverrides()
+    {
+        var session = IlLines.Load(
+            ".class public N.A {", ".method public static int32 F() { ldc.i4 1; ret }", ".method public static int32 G() { call int32 N.A::F(); ret }", "}",
+            ".class interface public abstract IZero {", ".method public static abstract virtual int32 Zero() { }", "}",
+            ".class public Num implements IZero {", ".method public static int32 Zero() { ldc.i4 0; ret }", "}",
+            "call int32 N.A::G()", "constrained. Num", "call int32 IZero::Zero()", "add");
+        var text = session.ToIlAsm();
+        Assert.Contains(".class public auto ansi N.A extends [System.Runtime]System.Object", text);
+        Assert.Contains("call int32 N.A::F()", text);
+        Assert.Contains(".override method int32 IZero::Zero() with method int32 Num::Zero()", text);
+        var image = IlasmLocator.Assemble(text);
+        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-review", isCollectible: true);
+        try
+        {
+            Assert.AreEqual(1, context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
+    /// <summary>
+    /// A catch followed by a finally renders as nested regions, so the assembled method runs.
+    /// </summary>
+    [TestMethod]
+    public void Render_CatchAndFinally_NestsTheRegions()
+    {
+        var session = IlLines.Load(
+            ".method int32 Both() {", ".locals init (int32 v)", ".try {", "ldstr \"x\"", "newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)", "throw",
+            "} catch [System.Runtime]System.InvalidOperationException {", "pop", "ldc.i4 1", "stloc v", "leave DONE",
+            "} finally {", "ldloc v", "ldc.i4 10", "add", "stloc v", "endfinally", "}",
+            "DONE: ldloc v", "ret", "}",
+            "call int32 Both()");
+        var text = session.ToIlAsm();
+        Assert.Contains("        .try\n        {\n            .try\n", text.Replace("\r", "", StringComparison.Ordinal));
+        var image = IlasmLocator.Assemble(text);
+        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-regions", isCollectible: true);
+        try
+        {
+            Assert.AreEqual(11, context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
+    /// <summary>
+    /// A member of a generic instantiation and a generic interface method render with the
+    /// definition's signature, so the assembled references bind.
+    /// </summary>
+    [TestMethod]
+    public void Render_GenericReferences_UseDefinitionSignatures()
+    {
+        var session = IlLines.Load(
+            ".class public Outer {",
+            ".class nested public Box`1<T> {", ".field public !0 V",
+            ".method public instance void .ctor(!0 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg v; stfld !0 class Outer/Box`1<!0>::V; ret }",
+            ".method public instance !0 Id() { ldarg.0; ldfld !0 class Outer/Box`1<!0>::V; ret }", "}",
+            ".method public static int32 Use() { ldc.i4 7; newobj instance void class Outer/Box`1<int32>::.ctor(!0); call instance !0 class Outer/Box`1<int32>::Id(); ret }",
+            "}",
+            ".class interface public abstract IFoo {", ".method public abstract virtual instance !!0 Id<T>(!!0 v) { }", "}",
+            ".class public Foo implements IFoo {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", ".method public virtual instance !!0 Id<T>(!!0 v) { ldarg v; ret }", "}",
+            "call int32 Outer::Use()", "newobj instance void Foo::.ctor()", "ldc.i4 2", "callvirt instance !!0 IFoo::Id<int32>(!!0)", "add");
+        var text = session.ToIlAsm();
+        Assert.AreEqual(9, session.Run().Value);
+        Assert.Contains("call instance !0 class Outer/Box`1<int32>::Id()", text);
+        Assert.Contains("newobj instance void class Outer/Box`1<int32>::.ctor(!0)", text);
+        Assert.Contains("callvirt instance !!0 IFoo::Id<int32>(!!0)", text);
+        var image = IlasmLocator.Assemble(text);
+        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-generic-refs", isCollectible: true);
+        try
+        {
+            Assert.AreEqual(9, context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
+    /// <summary>
+    /// The transitions the REPL supplies, leaving a try or a catch and ending a finally, are
+    /// rendered, so blocks written without them assemble and run.
+    /// </summary>
+    [TestMethod]
+    public void Render_ImplicitBlockTransitions_AreWritten()
+    {
+        var session = IlLines.Load(
+            ".method int32 BothImplicit() {", ".locals init (int32 v)", ".try {", "ldc.i4 1", "stloc v", "ldstr \"x\"", "newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)", "throw",
+            "} catch [System.Runtime]System.InvalidOperationException {", "pop", "ldc.i4 2", "stloc v",
+            "} finally {", "ldloc v", "ldc.i4 10", "add", "stloc v", "}",
+            "ldloc v", "ret", "}",
+            "call int32 BothImplicit()");
+        var text = session.ToIlAsm();
+        Assert.AreEqual(12, session.Run().Value);
+        Assert.Contains("leave IlReplEnd0", text);
+        Assert.Contains("endfinally", text);
+        Assert.Contains("IlReplEnd0:", text);
+        var image = IlasmLocator.Assemble(text);
+        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-implicit", isCollectible: true);
+        try
+        {
+            Assert.AreEqual(12, context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+        }
+        finally
+        {
+            context.Unload();
+        }
     }
 }

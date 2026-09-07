@@ -7,7 +7,7 @@ const stages = [
   ['parse', 'parse', 'The opcode is looked up and its operand parsed by kind: an immediate, a label, a local or argument, a type, or a member reference, which resolves right away.'],
   ['simulate', 'simulate', 'The instruction runs against a copy of the simulated stack. An underflow or a wrong arity is reported here, and a rejected line changes nothing.'],
   ['accept', 'accept', 'The line joins the replayable state and the stack echo shows the result. Declarations persist across cells; instructions belong to the current one.'],
-  ['replay', 'replay', 'ret replays the accepted lines onto a fresh MethodBuilder, session methods first, so generic parameters bind to the method being emitted. .save does the same into a persisted assembly.'],
+  ['replay', 'replay', 'ret replays the accepted lines onto a fresh MethodBuilder, so generic parameters bind to the method being emitted. Methods and classes are not replayed: each is written once with Mono.Cecil and loaded as its own assembly, and .save writes them all into one.'],
   ['run', 'run', 'The JIT compiles the cell and it runs. One value left on the stack is boxed and printed with its runtime type; the body clears and the next cell starts.'],
 ];
 

@@ -400,6 +400,56 @@ public sealed class LiveSessionTests
     }
 
     /// <summary>
+    /// A class declared in the browser is a type across cells: a struct instance is shown by its
+    /// fields, a static keeps its value, and a member is called from a later cell.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(300_000, CooperativeCancellation = true)]
+    public async Task LiveSession_DefinesClassAndShowsFields(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+
+        await TypeLineAsync(page, ".class public sequential ansi sealed Point extends [System.Runtime]System.ValueType {");
+        await Assertions.Expect(terminal).ToContainTextAsync("struct Point", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        foreach (var line in new[]
+        {
+            ".field public int32 X", ".field public int32 Y", ".field public static int32 Made",
+            ".method public instance void .ctor(int32 x, int32 y) {", "ldarg.0", "ldarg x", "stfld int32 Point::X", "ldarg.0", "ldarg y", "stfld int32 Point::Y",
+            "ldsfld int32 Point::Made", "ldc.i4 1", "add", "stsfld int32 Point::Made", "ret", "}",
+            ".method public instance int32 Sum() {", "ldarg.0", "ldfld int32 Point::X", "ldarg.0", "ldfld int32 Point::Y", "add", "ret", "}",
+            "}",
+        })
+        {
+            await TypeLineAsync(page, line);
+        }
+
+        await Assertions.Expect(terminal).ToContainTextAsync("end of struct Point", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+        await Assertions.Expect(terminal).ToContainTextAsync("il[2]>", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+
+        foreach (var line in new[] { "ldc.i4 3", "ldc.i4 4", "newobj instance void Point::.ctor(int32, int32)", "box Point", "ret" })
+        {
+            await TypeLineAsync(page, line);
+        }
+
+        await Assertions.Expect(terminal).ToContainTextAsync("= Point { X = 3, Y = 4 } : Point", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+
+        foreach (var line in new[] { ".locals init (valuetype Point p)", "ldloca p", "ldc.i4 5", "ldc.i4 6", "call instance void Point::.ctor(int32, int32)", "ldloca p", "call instance int32 Point::Sum()", "ldsfld int32 Point::Made", "add", "ret" })
+        {
+            await TypeLineAsync(page, line);
+        }
+
+        await Assertions.Expect(terminal).ToContainTextAsync("= 13 : int32", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+        await Assertions.Expect(terminal).ToContainTextAsync("il[4]>", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+    }
+
+    /// <summary>
     /// The browser runtime cannot prepare a method ahead of a call, so a body the JIT would refuse
     /// closes without complaint there and is rejected at the first call instead.
     /// </summary>

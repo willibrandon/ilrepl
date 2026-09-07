@@ -12,7 +12,11 @@ namespace IlRepl.Repl;
 /// </summary>
 public sealed class ReplCore
 {
-    private static readonly string[] Directives = [".locals", ".args", ".typeparams", ".typeargs", ".vararg", ".method", ".try", ".maxstack"];
+    private static readonly string[] Directives =
+    [
+        ".locals", ".args", ".typeparams", ".typeargs", ".vararg", ".method", ".try", ".maxstack",
+        ".class", ".field", ".property", ".event", ".get", ".set", ".other", ".addon", ".removeon", ".fire", ".override", ".pack", ".size", ".param", ".custom",
+    ];
 
     /// <summary>
     /// Initializes a REPL over a new session.
@@ -69,7 +73,7 @@ public sealed class ReplCore
         get
         {
             var state = Session.State;
-            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count);
+            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count, Session.OpenType, Session.TypeCount);
         }
     }
 
@@ -96,7 +100,7 @@ public sealed class ReplCore
         {
             if (text.Length == 0)
             {
-                RequireNoOpenMethod();
+                RequireNoOpenBlock();
                 if (!Session.State.IsEmpty)
                 {
                     Run();
@@ -165,6 +169,14 @@ public sealed class ReplCore
                 case LineOutcome.VarArg:
                 case LineOutcome.MethodStart:
                 case LineOutcome.MethodEnd:
+                case LineOutcome.TypeStart:
+                case LineOutcome.TypeEnd:
+                case LineOutcome.Field:
+                case LineOutcome.Accessor:
+                case LineOutcome.Override:
+                case LineOutcome.Layout:
+                case LineOutcome.Custom:
+                case LineOutcome.Param:
                     Note(result.Message ?? "");
                     break;
                 default:
@@ -215,17 +227,22 @@ public sealed class ReplCore
         return false;
     }
 
-    private void RequireNoOpenMethod()
+    private void RequireNoOpenBlock()
     {
         if (Session.OpenMethod is { } open)
         {
             throw new ReplException($"method {open.Name} is still open; close it with }}");
         }
+
+        if (Session.OpenType is { } type)
+        {
+            throw new ReplException($"class {type} is still open; close it with }}");
+        }
     }
 
     private void Run()
     {
-        RequireNoOpenMethod();
+        RequireNoOpenBlock();
         if (Session.State.IsEmpty && Session.State.Stack.Count == 0)
         {
             Note("(empty cell)");
@@ -349,7 +366,11 @@ public sealed class ReplCore
             case ".show":
             case ".list":
             case ".ls":
-                if (Session.OpenMethod is { } shown)
+                if (Session.OpenType is not null)
+                {
+                    ShowType();
+                }
+                else if (Session.OpenMethod is { } shown)
                 {
                     ShowMethod(shown);
                 }
@@ -364,13 +385,18 @@ public sealed class ReplCore
             case ".u":
             {
                 var wasOpen = Session.OpenMethod;
+                var wasType = Session.OpenType;
                 if (!Session.Undo())
                 {
                     Note("nothing to undo");
                     return new HandleResult(true, false);
                 }
 
-                if (wasOpen is not null && Session.OpenMethod is null)
+                if (wasType is not null && Session.OpenType is null)
+                {
+                    Note($"class {wasType} abandoned");
+                }
+                else if (wasOpen is not null && Session.OpenMethod is null)
                 {
                     Note($"method {wasOpen.Name} abandoned");
                 }
@@ -382,8 +408,16 @@ public sealed class ReplCore
             case ".clear":
                 if (Session.OpenMethod is { } abandoned)
                 {
+                    var owner = Session.OpenType;
                     Session.AbandonMethod();
-                    Note($"method {abandoned.Name} abandoned");
+                    Note(owner is null ? $"method {abandoned.Name} abandoned" : $"method {abandoned.Name} abandoned; class {owner} is still open");
+                    return new HandleResult(true, false);
+                }
+
+                if (Session.OpenType is { } abandonedType)
+                {
+                    Session.AbandonType();
+                    Note($"class {abandonedType} abandoned");
                     return new HandleResult(true, false);
                 }
 
@@ -393,7 +427,20 @@ public sealed class ReplCore
 
             case ".reset":
                 Session.Reset();
-                Note("cell, declarations, and methods cleared");
+                Note("cell, declarations, methods, and types cleared");
+                return new HandleResult(true, false);
+
+            case ".types":
+                foreach (var type in Session.Types)
+                {
+                    ListType(type.Declaration, 1);
+                }
+
+                if (Session.Types.Count == 0)
+                {
+                    Note("no types");
+                }
+
                 return new HandleResult(true, false);
 
             case ".methods":
@@ -465,12 +512,27 @@ public sealed class ReplCore
                     throw new ReplException("usage: .save <path.dll>");
                 }
 
-                RequireNoOpenMethod();
+                RequireNoOpenBlock();
                 Session.Save(argument);
                 {
-                    var count = Session.Methods.Count;
-                    var methods = count == 0 ? "" : $" and {count} method{(count == 1 ? "" : "s")}";
-                    Note($"wrote {Path.GetFullPath(argument)} with IlRepl.Cell.Run{methods}");
+                    var parts = new List<string> { "IlRepl.Cell.Run" };
+                    if (Session.Methods.Count > 0)
+                    {
+                        parts.Add($"{Session.Methods.Count} method{(Session.Methods.Count == 1 ? "" : "s")}");
+                    }
+
+                    if (Session.TypeCount > 0)
+                    {
+                        parts.Add($"{Session.TypeCount} type{(Session.TypeCount == 1 ? "" : "s")}");
+                    }
+
+                    var with = parts.Count switch
+                    {
+                        1 => parts[0],
+                        2 => parts[0] + " and " + parts[1],
+                        _ => string.Join(", ", parts.Take(parts.Count - 1)) + ", and " + parts[^1],
+                    };
+                    Note($"wrote {Path.GetFullPath(argument)} with {with}");
                 }
 
                 return new HandleResult(true, false);
@@ -520,6 +582,66 @@ public sealed class ReplCore
     }
 
     private void Show() => ListBody(Session.State, showArguments: true, "(empty cell)");
+
+    private void ShowType()
+    {
+        var lines = Session.DescribeOpenType();
+        for (var i = 0; i < lines.Count; i++)
+        {
+            Transcript.Add(LineKind.Listing, "  " + lines[i], i == 0 || lines[i].TrimStart().StartsWith(".class", StringComparison.Ordinal) ? SpanStyle.Label : SpanStyle.Default);
+        }
+
+        if (Session.OpenMethod is { } open)
+        {
+            Transcript.Add(LineKind.Listing, "    .method " + open.DescribeMember() + " {", SpanStyle.Label);
+            ListBody(Session.State, showArguments: false, "(empty method)");
+        }
+        else if (lines.Count == 1)
+        {
+            Note("(empty class)");
+        }
+    }
+
+    private void ListType(TypeDeclaration type, int level)
+    {
+        var indent = new string(' ', level * 2);
+        var header = type.KindWord + " " + type.DisplayName;
+        if (type.BaseType is not null && type.BaseType != typeof(object) && type.BaseType != typeof(ValueType) && type.BaseType != typeof(Enum))
+        {
+            header += " extends " + TypeNameFormatter.Pretty(type.BaseType);
+        }
+
+        if (type.Interfaces.Count > 0)
+        {
+            header += " implements " + string.Join(", ", type.Interfaces.Select(TypeNameFormatter.Pretty));
+        }
+
+        Transcript.Add(LineKind.Listing, indent + header, SpanStyle.Label);
+        foreach (var field in type.Fields)
+        {
+            Transcript.Add(LineKind.Listing, indent + "    " + field.Describe(), SpanStyle.Default);
+        }
+
+        foreach (var method in type.Methods)
+        {
+            Transcript.Add(LineKind.Listing, indent + "    " + method.Describe(), SpanStyle.Default);
+        }
+
+        foreach (var property in type.Properties)
+        {
+            Transcript.Add(LineKind.Listing, indent + "    " + property.Describe(), SpanStyle.Default);
+        }
+
+        foreach (var evt in type.Events)
+        {
+            Transcript.Add(LineKind.Listing, indent + "    " + evt.Describe(), SpanStyle.Default);
+        }
+
+        foreach (var nested in type.NestedTypes)
+        {
+            ListType(nested, level + 2);
+        }
+    }
 
     private void ShowMethod(MethodSignature open)
     {

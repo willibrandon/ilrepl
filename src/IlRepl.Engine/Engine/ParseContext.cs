@@ -9,13 +9,33 @@ namespace IlRepl.Engine;
 /// <param name="Generics">The generic parameters in scope for <c>!N</c> and <c>!!N</c>.</param>
 /// <param name="Resolver">The type resolver.</param>
 /// <param name="Methods">The methods defined with <c>.method</c>, resolvable by bare name.</param>
+/// <param name="Types">The types defined with <c>.class</c>, resolvable by name before any assembly is searched.</param>
 public sealed record ParseContext(
     IReadOnlyList<LocalDeclaration> Locals,
     IReadOnlyList<ArgumentDeclaration> Arguments,
     GenericContext Generics,
     TypeResolver Resolver,
-    IReadOnlyList<MethodSignature> Methods)
+    IReadOnlyList<MethodSignature> Methods,
+    TypeTable Types)
 {
+    /// <summary>
+    /// Initializes a context with no session types.
+    /// </summary>
+    /// <param name="locals">The declared locals.</param>
+    /// <param name="arguments">The declared arguments.</param>
+    /// <param name="generics">The generic parameters in scope.</param>
+    /// <param name="resolver">The type resolver.</param>
+    /// <param name="methods">The session methods.</param>
+    public ParseContext(IReadOnlyList<LocalDeclaration> locals, IReadOnlyList<ArgumentDeclaration> arguments, GenericContext generics, TypeResolver resolver, IReadOnlyList<MethodSignature> methods)
+        : this(locals, arguments, generics, resolver, methods, TypeTable.Empty)
+    {
+    }
+
+    /// <summary>
+    /// The argument index that holds <c>this</c> inside an instance member, or -1.
+    /// </summary>
+    public int ThisIndex { get; init; } = -1;
+
     /// <summary>
     /// Returns a copy with different generic parameters in scope.
     /// </summary>

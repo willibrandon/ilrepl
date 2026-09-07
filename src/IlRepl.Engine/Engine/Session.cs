@@ -6,9 +6,12 @@ namespace IlRepl.Engine;
 /// One REPL session: the resolver, the declarations and methods that persist across cells, and
 /// the cell currently being written. Lines are validated as they arrive; <see cref="Run"/>
 /// compiles and executes the cell and clears it. While a <c>.method</c> block is open, lines go
-/// to the method instead, and closing it commits the method and completes the submission.
+/// to the method instead, and closing it compiles the method into an assembly of its own, binds
+/// it into its trampoline, and completes the submission. The session's records are read and
+/// written only by the thread that drives it; code a cell started on other threads reaches
+/// trampolines and types, never these records.
 /// </summary>
-public sealed class Session
+public sealed partial class Session
 {
     private readonly List<string> _declarationLines = [];
     private readonly List<string> _bodyLines = [];
@@ -44,7 +47,7 @@ public sealed class Session
     /// The validated state of the body being written: the open method while a <c>.method</c>
     /// block is open, otherwise the cell. The stack echo, listings, and the status bar read this.
     /// </summary>
-    public CellState State => _open?.State ?? _cell;
+    public CellState State => _openMember?.State ?? _open?.State ?? _cell;
 
     /// <summary>
     /// The validated state of the cell itself, whether or not a method block is open.
@@ -54,7 +57,7 @@ public sealed class Session
     /// <summary>
     /// The signature of the method block being typed, or null when lines go to the cell.
     /// </summary>
-    public MethodSignature? OpenMethod => _open?.Signature;
+    public MethodSignature? OpenMethod => _openMember?.Signature ?? _open?.Signature;
 
     /// <summary>
     /// The methods defined with <c>.method</c>, in definition order. A redefinition keeps its place.
@@ -108,9 +111,19 @@ public sealed class Session
             return new LineResult(LineOutcome.Empty, null, null);
         }
 
+        if (_openType is not null)
+        {
+            return AddTypeLine(line, text);
+        }
+
         if (_open is not null)
         {
             return AddMethodLine(line);
+        }
+
+        if (IsClassDirective(text))
+        {
+            return OpenTypeBlock(text[".class".Length..], line);
         }
 
         if (text.StartsWith(".method", StringComparison.Ordinal) && (text.Length == ".method".Length || !char.IsLetter(text[".method".Length])))
@@ -156,6 +169,11 @@ public sealed class Session
     /// <returns>True when a line was removed.</returns>
     public bool Undo()
     {
+        if (_openType is not null)
+        {
+            return UndoTypeLine();
+        }
+
         if (_open is not null)
         {
             if (_open.BodyLines.Count == 0)
@@ -185,12 +203,42 @@ public sealed class Session
     /// <returns>True when a block was open.</returns>
     public bool AbandonMethod()
     {
+        if (_openMember is { } member)
+        {
+            // The member's header and body are the last lines of the family; the family is
+            // replayed without them, which also forgets the member's builder and signature.
+            var outermost = _openType!.Outermost;
+            var header = outermost.HeaderLine;
+            var kept = outermost.Lines.Take(Math.Max(0, outermost.Lines.Count - member.BodyLines.Count - 1)).ToList();
+            _openMember = null;
+            _openAccessor = null;
+            _openType = null;
+            ReplayFamily(header, kept);
+            return true;
+        }
+
         if (_open is null)
         {
             return false;
         }
 
         _open = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Drops the whole open type family without committing it. The cell, the methods, and the
+    /// accepted types are untouched.
+    /// </summary>
+    /// <returns>True when a family was open.</returns>
+    public bool AbandonType()
+    {
+        if (_openType is null)
+        {
+            return false;
+        }
+
+        AbandonTypeFamily();
         return true;
     }
 
@@ -211,8 +259,26 @@ public sealed class Session
         _bodyLines.Clear();
         _declarationLines.Clear();
         _typeParameterNames.Clear();
+        foreach (var method in _methods)
+        {
+            // The session drops its references; anything a user retained keeps its version alive.
+            SessionAssemblies.Release(method.Version.Definition);
+            SessionAssemblies.Release(method.Trampoline.Definition);
+        }
+
         _methods.Clear();
         _open = null;
+        foreach (var type in _types)
+        {
+            if (type.Definition is { } definition)
+            {
+                SessionAssemblies.Release(definition);
+            }
+        }
+
+        _types.Clear();
+        _typeTable = new TypeTable();
+        AbandonTypeFamily();
         TypeArguments = null;
         Rebuild();
     }
@@ -246,6 +312,7 @@ public sealed class Session
         finally
         {
             stopwatch.Stop();
+            compiled.Release();
         }
 
         return new CellResult(value, isVoid, stopwatch.Elapsed, capture.StandardOutput, capture.StandardError);
@@ -257,7 +324,7 @@ public sealed class Session
     /// </summary>
     /// <param name="path">The output path.</param>
     /// <exception cref="ReplException">The cell is incomplete, a method block is open, or the runtime rejected it.</exception>
-    public void Save(string path) => CellCompiler.Save(this, path);
+    public void Save(string path) => AssemblyExporter.Save(this, path);
 
     /// <summary>
     /// Renders the session methods and the current cell as ILAsm source.
@@ -268,7 +335,7 @@ public sealed class Session
     private LineResult OpenBlock(string spec, string line)
     {
         var signatures = Signatures();
-        var headerContext = new ParseContext([], [], GenericContext.Empty, Resolver, signatures);
+        var headerContext = new ParseContext([], [], GenericContext.Empty, Resolver, signatures, _typeTable);
         var signature = MethodHeaderParser.Parse(spec, headerContext, out var braceOpen);
         var replacing = _methods.FirstOrDefault(m => m.Signature.Name == signature.Name);
         var table = new List<MethodSignature>(signatures);
@@ -282,30 +349,21 @@ public sealed class Session
             table[index] = signature;
         }
 
-        if (replacing is not null)
+        if (replacing is not null && !_rebuilding)
         {
             // Dependents bind to the signature, which is known now. Checking here, rather than at
             // the closing brace, means a refused redefinition costs nothing to recover from. A
-            // reference already bound to the old signature is checked directly, because a replay
-            // would happily rebind an abbreviated reference such as "ldftn F" to the new one.
+            // dependent keeps the state it was accepted with; it is never parsed again, and a
+            // same-signature replacement reaches it through the trampoline it already calls.
             foreach (var other in _methods)
             {
-                if (ReferenceEquals(other, replacing))
+                if (!ReferenceEquals(other, replacing))
                 {
-                    continue;
-                }
-
-                RequireCompatibleReferences(other.State, "method " + other.Signature.Name, signature, "(the previous definition stays)");
-                try
-                {
-                    ReplayMethod(other, table);
-                }
-                catch (ReplException ex)
-                {
-                    throw new ReplException($"cannot redefine {signature.Name} as {signature.Describe()}: method {other.Signature.Name} would no longer compile: {ex.Message}  (the previous definition stays)", ex);
+                    RequireCompatibleReferences(other.State, "method " + other.Signature.Name, signature, "(the previous definition stays)");
                 }
             }
 
+            RequireCompatibleTypeReferences(signature);
             RequireCompatibleReferences(_cell, "the cell body", signature, "(.clear the cell first, or keep the signature)");
             try
             {
@@ -323,7 +381,7 @@ public sealed class Session
             Signature = signature,
             Replacing = replacing,
             Signatures = table,
-            State = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen),
+            State = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen, _typeTable, null),
         };
         return new LineResult(LineOutcome.MethodStart, null, "method " + signature.DescribeWithNames());
     }
@@ -349,47 +407,28 @@ public sealed class Session
     {
         var open = _open!;
         var name = open.Signature.Name;
-        var candidate = new SessionMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State);
+        var replacing = open.Replacing;
 
-        // Rebuild every dependent against the committed table. The header already checked them;
-        // this pass produces the states that are kept, and catches a .load that changed
-        // resolution in between.
-        var committed = new List<SessionMethod>();
-        var changed = new List<string> { name };
-        foreach (var existing in _methods)
+        if (replacing is not null && !_rebuilding)
         {
-            if (ReferenceEquals(existing, open.Replacing))
+            foreach (var existing in _methods)
             {
-                committed.Add(candidate);
-                continue;
+                if (!ReferenceEquals(existing, replacing))
+                {
+                    RequireCompatibleReferences(existing.State, "method " + existing.Signature.Name, open.Signature, "(the previous definition stays)");
+                }
             }
 
-            if (open.Replacing is null)
-            {
-                committed.Add(existing);
-                continue;
-            }
-
-            RequireCompatibleReferences(existing.State, "method " + existing.Signature.Name, open.Signature, "(the previous definition stays)");
-            try
-            {
-                committed.Add(existing with { State = ReplayMethod(existing, open.Signatures) });
-                changed.Add(existing.Signature.Name);
-            }
-            catch (ReplException ex)
-            {
-                throw new ReplException($"cannot replace {name}: method {existing.Signature.Name} would no longer compile: {ex.Message}  (the previous definition stays)", ex);
-            }
-        }
-
-        if (open.Replacing is null)
-        {
-            committed.Add(candidate);
-        }
-
-        if (open.Replacing is not null)
-        {
+            RequireCompatibleTypeReferences(open.Signature);
             RequireCompatibleReferences(_cell, "the cell body", open.Signature, "(.clear the cell first, or keep the signature)");
+        }
+
+        if (_rebuilding)
+        {
+            // The version is compiled with the rest of the group once every member has replayed.
+            _pendingMethods.Add(new PendingMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State, replacing));
+            _open = null;
+            return new LineResult(LineOutcome.MethodEnd, null, $"end of method {name}");
         }
 
         CellState cell;
@@ -399,17 +438,67 @@ public sealed class Session
         }
         catch (ReplException ex)
         {
-            throw new ReplException($"cannot {(open.Replacing is null ? "define" : "replace")} {name}: the cell body would no longer compile: {ex.Message}  (.clear the cell first)", ex);
+            throw new ReplException($"cannot {(replacing is null ? "define" : "replace")} {name}: the cell body would no longer compile: {ex.Message}  (.clear the cell first)", ex);
         }
 
-        CellCompiler.ValidateMethods(committed, changed);
+        // Phase A: everything that can fail. A same-signature replacement keeps its trampoline,
+        // so every caller already bound to it sees the new body; a new signature is a new
+        // identity, and nothing references it yet.
+        var sameSignature = replacing is not null && !_rebuilding && SameSignature(replacing.Signature, open.Signature);
+        var trampoline = sameSignature ? replacing!.Trampoline : MethodTrampoline.Create(open.Signature);
+        var trampolines = _methods.Where(m => !ReferenceEquals(m, replacing)).ToDictionary(m => m.Signature.Name, m => m.Trampoline, StringComparer.Ordinal);
+        trampolines[name] = trampoline;
+        CompiledMethodVersion version;
+        try
+        {
+            version = DefinitionCompiler.CompileMethod(open.Signature, open.State, trampoline, trampolines, MethodPreparation.IsSupported);
+        }
+        catch
+        {
+            if (!sameSignature)
+            {
+                SessionAssemblies.Release(trampoline.Definition);
+            }
 
-        _methods.Clear();
-        _methods.AddRange(committed);
+            throw;
+        }
+
+        if (!sameSignature)
+        {
+            trampoline.Bind(version.Implementation);
+        }
+
+        // Phase B: one reference store and the record swap. Neither can fail.
+        if (sameSignature)
+        {
+            trampoline.Bind(version.Implementation);
+        }
+
+        var committed = new SessionMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State, trampoline, version) { Order = sameSignature ? replacing!.Order : Submissions };
+        var index = replacing is null ? -1 : _methods.IndexOf(replacing);
+        if (index < 0)
+        {
+            _methods.Add(committed);
+        }
+        else
+        {
+            _methods[index] = committed;
+        }
+
         _cell = cell;
         _open = null;
         Submissions++;
-        return new LineResult(LineOutcome.MethodEnd, null, open.Replacing is null ? $"end of method {name}" : $"replaced method {name}");
+
+        if (replacing is not null && !_rebuilding)
+        {
+            SessionAssemblies.Release(replacing.Version.Definition);
+            if (!sameSignature)
+            {
+                SessionAssemblies.Release(replacing.Trampoline.Definition);
+            }
+        }
+
+        return new LineResult(LineOutcome.MethodEnd, null, replacing is null ? $"end of method {name}" : $"replaced method {name}");
     }
 
     private void DeclareTypeParameters(string spec)
@@ -462,7 +551,7 @@ public sealed class Session
             s = s[1..^1];
         }
 
-        var context = new ParseContext([], [], GenericContext.Empty, Resolver, Signatures());
+        var context = new ParseContext([], [], GenericContext.Empty, Resolver, Signatures(), _typeTable);
         var types = TypeParser.SplitTopLevel(s).Select(t => TypeParser.Parse(t, context)).ToArray();
         if (types.Length != _typeParameterNames.Count)
         {
@@ -470,6 +559,23 @@ public sealed class Session
         }
 
         TypeArguments = types;
+    }
+
+    private void RequireCompatibleTypeReferences(MethodSignature replacement)
+    {
+        foreach (var family in _types)
+        {
+            foreach (var declaration in family.Declaration.Family)
+            {
+                foreach (var method in declaration.Methods)
+                {
+                    if (method.Body is { } body)
+                    {
+                        RequireCompatibleReferences(body, $"{declaration.KindWord} {declaration.FullName}", replacement, "(the previous definition stays)");
+                    }
+                }
+            }
+        }
     }
 
     private static void RequireCompatibleReferences(CellState state, string what, MethodSignature replacement, string hint)
@@ -483,19 +589,18 @@ public sealed class Session
         }
     }
 
-    private static bool SameSignature(MethodSignature a, MethodSignature b) =>
-        MemberResolver.TypesEqual(a.ReturnType, b.ReturnType)
-        && a.Parameters.Count == b.Parameters.Count
-        && a.ParameterTypes.Zip(b.ParameterTypes).All(pair => MemberResolver.TypesEqual(pair.First, pair.Second));
+    private static bool SameSignature(MethodSignature a, MethodSignature b) => SignatureIdentity.Same(a, b);
 
     private List<MethodSignature> Signatures() => _methods.Select(m => m.Signature).ToList();
 
     private void Rebuild() => _cell = BuildCell(Signatures());
 
-    private CellState BuildCell(IReadOnlyList<MethodSignature> table)
+    private CellState BuildCell(IReadOnlyList<MethodSignature> table) => BuildCell(table, _typeTable);
+
+    private CellState BuildCell(IReadOnlyList<MethodSignature> table, TypeTable types)
     {
         var generics = new GenericContext([], PrototypeGenerics.Create(_typeParameterNames));
-        var state = new CellState(Resolver, generics, table, null, false);
+        var state = new CellState(Resolver, generics, table, null, false, types, null);
         foreach (var line in _declarationLines)
         {
             state.Apply(line);
@@ -509,19 +614,12 @@ public sealed class Session
         return state;
     }
 
-    private CellState ReplayMethod(SessionMethod method, IReadOnlyList<MethodSignature> table)
-    {
-        var state = ReplayBody(method.Signature, method.BodyLines, table);
-        state.ValidateMethodEnd();
-        return state;
-    }
-
     private CellState ReplayOpenBody(OpenMethodBlock open) => ReplayBody(open.Signature, open.BodyLines, open.Signatures);
 
     private CellState ReplayBody(MethodSignature signature, IReadOnlyList<string> lines, IReadOnlyList<MethodSignature> table)
     {
         // The opening brace is never stored, so a replay starts as if it had been seen.
-        var state = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen: true);
+        var state = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen: true, _typeTable, null);
         foreach (var line in lines)
         {
             state.Apply(line);

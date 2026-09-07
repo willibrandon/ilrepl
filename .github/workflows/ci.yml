@@ -37,6 +37,9 @@ jobs:
 
       - name: Test
         run: dotnet test tests/IlRepl.Tests/IlRepl.Tests.csproj --no-build --report-trx --results-directory TestResults
+        env:
+          # The ILAsm round trips must run on CI, not be skipped when ilasm is missing.
+          ILREPL_REQUIRE_ILASM: 1
 
       - name: Upload test results
         if: always()

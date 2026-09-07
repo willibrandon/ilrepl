@@ -3,9 +3,9 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for the validation that runs when a <c>.method</c> block closes: the candidate table
-/// is emitted, the type is created, and the changed methods are prepared on the JIT without
-/// ever being invoked.
+/// Tests for the validation that runs when a <c>.method</c> block closes: the candidate is
+/// compiled into a version assembly of its own and prepared on the JIT without ever being
+/// invoked, and only then bound into its trampoline.
 /// </summary>
 [TestClass]
 public sealed class MethodValidationTests
@@ -128,7 +128,7 @@ public sealed class MethodValidationTests
     /// browser's behavior, where Mono's PrepareMethod does nothing and the JIT speaks at the first call.
     /// </summary>
     [TestMethod]
-    public void ValidateMethods_WithoutPreparation_AcceptsBranchMismatch()
+    public void CompileMethod_WithoutPreparation_AcceptsBranchMismatch()
     {
         var signature = new MethodSignature("Bad", typeof(void), []);
         var state = new CellState(new TypeResolver(), GenericContext.Empty, [signature], signature, braceOpen: true);
@@ -138,43 +138,49 @@ public sealed class MethodValidationTests
         }
 
         state.ValidateMethodEnd();
-        var method = new SessionMethod(signature, ".method void Bad() {", BadBranch, state);
+        var trampoline = MethodTrampoline.Create(signature);
+        var trampolines = new Dictionary<string, MethodTrampoline>(StringComparer.Ordinal) { ["Bad"] = trampoline };
 
-        CellCompiler.ValidateMethods([method], []);
-        Assert.Contains("the JIT rejected method Bad", Assert.ThrowsExactly<ReplException>(() => CellCompiler.ValidateMethods([method], ["Bad"])).Message);
+        var version = DefinitionCompiler.CompileMethod(signature, state, trampoline, trampolines, prepare: false);
+        Assert.IsNotNull(version.Implementation);
+        Assert.Contains("the JIT rejected method Bad", Assert.ThrowsExactly<ReplException>(() => DefinitionCompiler.CompileMethod(signature, state, trampoline, trampolines, prepare: true)).Message);
     }
 
     /// <summary>
-    /// The assemblies built to validate a close are collectible and are released afterwards.
+    /// A version superseded by a compatible redefinition is released and collected; the
+    /// trampoline and the current version stay.
     /// </summary>
     [TestMethod]
-    public void ValidateMethods_ReleasesTemporaryAssemblies()
+    [DoNotParallelize]
+    public void Redefinitions_ReleaseSupersededVersions()
     {
-        const int Closes = 20;
-        var before = CheckAssemblies();
+        TestSkip.Unless(!OperatingSystem.IsBrowser(), "unloading needs CoreCLR");
+        const int Redefinitions = 20;
+        var before = VersionAssemblies();
         var session = new Session();
-        for (var i = 0; i < Closes; i++)
+        for (var i = 0; i <= Redefinitions; i++)
         {
-            session.AddLine($".method int32 M{i}() {{");
+            session.AddLine(".method int32 M() {");
             session.AddLine($"ldc.i4 {i}");
             session.AddLine("ret");
             session.AddLine("}");
         }
 
-        Assert.HasCount(Closes, session.Methods);
+        Assert.HasCount(1, session.Methods);
+        session.AddLine("call int32 M()");
+        Assert.AreEqual(Redefinitions, session.Run().Value);
 
-        // Collection is not immediate, so give it a few rounds. Other tests may be creating
-        // their own check assemblies in parallel, which is why the assertion is relative.
         var after = int.MaxValue;
-        for (var round = 0; round < 20 && after - before >= Closes; round++)
+        for (var round = 0; round < 20 && after - before >= Redefinitions; round++)
         {
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
-            after = CheckAssemblies();
+            after = VersionAssemblies();
         }
 
-        Assert.IsLessThan(before + Closes, after, "the check assemblies should be collected once validation returns");
+        Assert.IsLessThan(before + Redefinitions, after, "superseded versions should be collected once the trampoline is rebound");
+        Assert.AreEqual(Redefinitions, session.Methods[0].Trampoline.Method.Invoke(null, null), "the current version stays bound");
     }
 
     /// <summary>
@@ -210,8 +216,8 @@ public sealed class MethodValidationTests
         Assert.AreEqual(6, session.Submissions);
     }
 
-    private static int CheckAssemblies() =>
-        AppDomain.CurrentDomain.GetAssemblies().Count(a => a.GetName().Name?.StartsWith("ilrepl.check", StringComparison.Ordinal) == true);
+    private static int VersionAssemblies() =>
+        AppDomain.CurrentDomain.GetAssemblies().Count(a => a.GetName().Name?.StartsWith("ilrepl.methods.", StringComparison.Ordinal) == true);
 
     /// <summary>
     /// A body the runtime refuses for a reason other than invalid IL is still a recoverable
@@ -229,5 +235,28 @@ public sealed class MethodValidationTests
         Assert.IsTrue(session.Undo());
         session.AddLine("call void Console::WriteLine()");
         Assert.AreEqual("end of method Bad", session.AddLine("}").Message);
+    }
+
+    /// <summary>
+    /// A try with both a catch and a finally is written as nested regions, the way ILGenerator
+    /// emits it, so the method prepares and runs.
+    /// </summary>
+    [TestMethod]
+    public void CompileMethod_CatchAndFinally_NestsTheRegions()
+    {
+        var session = new Session();
+        foreach (var line in new[]
+        {
+            ".method int32 Both() {", ".locals init (int32 v)", ".try {", "ldstr \"x\"", "newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)", "throw",
+            "} catch [System.Runtime]System.InvalidOperationException {", "pop", "ldc.i4 1", "stloc v", "leave DONE",
+            "} finally {", "ldloc v", "ldc.i4 10", "add", "stloc v", "endfinally", "}",
+            "DONE: ldloc v", "ret", "}",
+            "call int32 Both()",
+        })
+        {
+            session.AddLine(line);
+        }
+
+        Assert.AreEqual(11, session.Run().Value);
     }
 }

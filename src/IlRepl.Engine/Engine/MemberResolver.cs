@@ -143,6 +143,11 @@ public static class MemberResolver
             optionalTypes = optional?.ToArray();
         }
 
+        if (context.Types.TryGetMembers(declaring, out var own))
+        {
+            return ResolveOwnMethod(own, declaring, context, name, parameterTypes, returnType, explicitInstance, wantConstructor || name is ".ctor" or ".cctor", genericText is null ? null : methodArguments, optionalTypes);
+        }
+
         if (wantConstructor || name is ".ctor" or ".cctor")
         {
             return new ResolvedMethod(ResolveConstructor(declaring, name, parameterTypes), optionalTypes);
@@ -177,7 +182,28 @@ public static class MemberResolver
             throw new ReplException("missing field name");
         }
 
-        if (declaring is TypeBuilder || (declaring.IsGenericType && declaring.GetGenericArguments().Any(a => a is GenericTypeParameterBuilder)))
+        if (context.Types.TryGetMembers(declaring, out var own))
+        {
+            var found = own.FindField(name);
+            if (found is null && own.BaseType is { } baseType && ResolveInheritedField(baseType, context, name) is { } inheritedField)
+            {
+                return inheritedField;
+            }
+
+            if (found is null)
+            {
+                var declared = string.Join(", ", own.Fields.Select(f => f.Declaration.Name));
+                throw new ReplException(declared.Length == 0
+                    ? $"no field '{name}' on {TypeNameFormatter.Pretty(declaring)} (declare it with .field first)"
+                    : $"no field '{name}' on {TypeNameFormatter.Pretty(declaring)}; fields: {declared}");
+            }
+
+            return declaring.IsGenericType && !declaring.IsGenericTypeDefinition && found.Value.Builder is FieldBuilder fieldBuilder
+                ? TypeBuilder.GetField(declaring, fieldBuilder)
+                : found.Value.Builder;
+        }
+
+        if (declaring.IsGenericType && !declaring.IsGenericTypeDefinition && declaring.GetGenericArguments().Any(a => a is GenericTypeParameterBuilder))
         {
             var definitionField = declaring.GetGenericTypeDefinition().GetField(name, AllMembers)
                 ?? throw new ReplException($"no field '{name}' on {TypeNameFormatter.Pretty(declaring)}");
@@ -196,6 +222,37 @@ public static class MemberResolver
             : $"no field '{name}' on {TypeNameFormatter.Pretty(declaring)}; fields: {names}");
     }
 
+    private static FieldInfo? ResolveInheritedField(Type baseType, ParseContext context, string name)
+    {
+        for (Type? current = baseType; current is not null; current = TypeRelations.BaseTypeOf(current, context.Types))
+        {
+            if (context.Types.TryGetMembers(current, out var baseOwn))
+            {
+                var found = baseOwn.FindField(name);
+                if (found is not null)
+                {
+                    return current.IsGenericType && !current.IsGenericTypeDefinition && found.Value.Builder is FieldBuilder fieldBuilder
+                        ? TypeBuilder.GetField(current, fieldBuilder)
+                        : found.Value.Builder;
+                }
+
+                continue;
+            }
+
+            if (current is TypeBuilder)
+            {
+                continue;
+            }
+
+            if (current.GetField(name, AllMembers) is { } field)
+            {
+                return field;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Renders a method in the same shape the resolver accepts, for candidate lists and
     /// diagnostics.
@@ -205,7 +262,17 @@ public static class MemberResolver
     public static string Describe(MethodBase method)
     {
         ArgumentNullException.ThrowIfNull(method);
-        var parameters = string.Join(", ", method.GetParameters().Select(p => TypeNameFormatter.Pretty(p.ParameterType)));
+        string parameters;
+        try
+        {
+            parameters = string.Join(", ", method.GetParameters().Select(p => TypeNameFormatter.Pretty(p.ParameterType)));
+        }
+        catch (NotSupportedException)
+        {
+            // A builder cannot list its parameters before its type is created.
+            return $"{TypeNameFormatter.Pretty(method.DeclaringType)}::{method.Name}";
+        }
+
         if (method.CallingConvention.HasFlag(CallingConventions.VarArgs))
         {
             parameters = parameters.Length == 0 ? "..." : parameters + ", ...";
@@ -317,6 +384,175 @@ public static class MemberResolver
         return new ResolvedMethod(signature);
     }
 
+    private static ResolvedMethod ResolveOwnMethod(OwnMembers own, Type declaring, ParseContext context, string name, Type[]? parameterTypes, Type? returnType, bool explicitInstance, bool wantConstructor, IReadOnlyList<Type>? methodArguments, Type[]? optionalTypes)
+    {
+        var instantiated = declaring.IsGenericType && !declaring.IsGenericTypeDefinition;
+        var definitionArguments = instantiated ? declaring.GetGenericTypeDefinition().GetGenericArguments() : null;
+        var actualArguments = instantiated ? declaring.GetGenericArguments() : null;
+        var arity = methodArguments?.Count ?? 0;
+        MethodSignature Substituted(MethodSignature signature)
+        {
+            var effective = instantiated ? SubstituteSignature(signature, definitionArguments!, actualArguments!) : signature;
+            if (methodArguments is { Count: > 0 })
+            {
+                // The call names the method's own arguments; its parameters are found in the signature.
+                var parameters = SignatureIdentity.MethodParametersOf(signature);
+                effective = effective with
+                {
+                    ReturnType = TypeRelations.SubstituteParameters(effective.ReturnType, parameters, methodArguments),
+                    Parameters = [.. effective.Parameters.Select(p => p with { Type = TypeRelations.SubstituteParameters(p.Type, parameters, methodArguments) })],
+                };
+            }
+
+            return effective;
+        }
+
+        var candidates = own.FindMethods(name)
+            .Where(m => m.Signature.TypeParameters.Count == arity)
+            .Select(m => (m.Signature, m.Builder, Declared: m.Declared, Effective: Substituted(m.Signature)))
+            .Where(m => parameterTypes is null || (m.Effective.Parameters.Count == parameterTypes.Length && m.Effective.ParameterTypes.Zip(parameterTypes).All(p => TypeIdentity.Equal(p.First, p.Second))))
+            .ToList();
+        if (candidates.Count > 1 && returnType is not null)
+        {
+            candidates = candidates.Where(c => TypeIdentity.Equal(c.Effective.ReturnType, returnType)).ToList();
+        }
+
+        if (candidates.Count > 1 && explicitInstance)
+        {
+            candidates = candidates.Where(c => !c.Effective.IsStatic).ToList();
+        }
+
+        if (candidates.Count == 1)
+        {
+            var (signature, builder, _, effective) = candidates[0];
+            if (returnType is not null && !TypeIdentity.Equal(effective.ReturnType, returnType))
+            {
+                throw new ReplException($"{TypeNameFormatter.Pretty(declaring)}::{name} returns {TypeNameFormatter.Pretty(effective.ReturnType)}, not {TypeNameFormatter.Pretty(returnType)}");
+            }
+
+            if (wantConstructor && signature.Name != ".ctor")
+            {
+                throw new ReplException($"newobj needs a constructor; {name} is a method");
+            }
+
+            // The builder itself is kept; the declaring type carries the instantiation, and the
+            // writer builds the member reference on it.
+            return new ResolvedMethod(builder, effective, declaring) { OptionalParameterTypesOverride = optionalTypes, DeclaredDefinition = signature, GenericArguments = methodArguments is { Count: > 0 } ? [.. methodArguments] : null };
+        }
+
+        if (candidates.Count == 0 && !wantConstructor && own.BaseType is { } baseType && ResolveInherited(baseType, context, name, parameterTypes, returnType, explicitInstance, methodArguments, optionalTypes) is { } inherited)
+        {
+            return inherited;
+        }
+
+        if (candidates.Count == 0 && arity == 0 && returnType is not null && parameterTypes is not null && own.DefineForward is not null && !instantiated)
+        {
+            // A member referenced before its declaration: the signature is taken at its word and
+            // checked when the type closes, which is what lets members call each other in any order.
+            var signature = new MethodSignature(name, returnType, [.. parameterTypes.Select(t => new ArgumentDeclaration(t, null, null, ""))])
+            {
+                Attributes = wantConstructor ? MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName : explicitInstance ? MethodAttributes.Public : MethodAttributes.Public | MethodAttributes.Static,
+                CallingConvention = wantConstructor || explicitInstance ? CallingConventions.HasThis : CallingConventions.Standard,
+            };
+            var forward = own.DefineForward(signature);
+            return new ResolvedMethod(forward, signature, declaring) { OptionalParameterTypesOverride = optionalTypes };
+        }
+
+        var known = own.FindMethods(name).ToList();
+        if (known.Count == 0 && wantConstructor && own.DefineForward is null)
+        {
+            throw new ReplException($"{(declaring.IsValueType ? "struct" : "class")} {TypeNameFormatter.Pretty(declaring)} declares no constructor (add a .method public instance void .ctor(...) to it{(declaring.IsValueType ? ", or use initobj" : "")})");
+        }
+
+        if (known.Count == 0)
+        {
+            var names = string.Join(", ", own.Methods.Where(m => m.Declared).Select(m => m.Signature.Describe()).Take(12));
+            throw new ReplException(names.Length == 0
+                ? $"no method '{name}' on {TypeNameFormatter.Pretty(declaring)} yet (declare it, or reference it with its full signature to declare it later)"
+                : $"no method '{name}' on {TypeNameFormatter.Pretty(declaring)}; methods: {names}");
+        }
+
+        if (candidates.Count == 0)
+        {
+            throw new ReplException($"no overload {TypeNameFormatter.Pretty(declaring)}::{name}({Signature(parameterTypes)}); candidates:\n{string.Join("\n", known.Select(k => "    " + k.Signature.DescribeMember()))}");
+        }
+
+        throw new ReplException($"ambiguous: {TypeNameFormatter.Pretty(declaring)}::{name}; give parameter types. candidates:\n{string.Join("\n", candidates.Select(c => "    " + c.Signature.DescribeMember()))}");
+    }
+
+    /// <summary>
+    /// Finds a member a type being written inherits: from a base still being written through
+    /// its declarations, from a loaded base through reflection.
+    /// </summary>
+    private static ResolvedMethod? ResolveInherited(Type baseType, ParseContext context, string name, Type[]? parameterTypes, Type? returnType, bool explicitInstance, IReadOnlyList<Type>? methodArguments, Type[]? optionalTypes)
+    {
+        var arity = methodArguments?.Count ?? 0;
+        for (Type? current = baseType; current is not null; current = TypeRelations.BaseTypeOf(current, context.Types))
+        {
+            if (context.Types.TryGetMembers(current, out var baseOwn))
+            {
+                // A member declared ahead of its line, as a rebuild does, counts: the base's close
+                // refuses a forward reference that no line claims.
+                var instantiated = current.IsGenericType && !current.IsGenericTypeDefinition;
+                var definitionArguments = instantiated ? current.GetGenericTypeDefinition().GetGenericArguments() : null;
+                var actualArguments = instantiated ? current.GetGenericArguments() : null;
+                var found = baseOwn.FindMethods(name)
+                    .Where(m => m.Signature.Name != ".ctor" && m.Signature.Name != ".cctor" && m.Signature.TypeParameters.Count == arity)
+                    .Select(m => (m.Builder, Definition: m.Signature, Effective: Instantiate(instantiated ? SubstituteSignature(m.Signature, definitionArguments!, actualArguments!) : m.Signature, m.Signature, methodArguments)))
+                    .Where(m => parameterTypes is null || (m.Effective.Parameters.Count == parameterTypes.Length && m.Effective.ParameterTypes.Zip(parameterTypes).All(p => TypeIdentity.Equal(p.First, p.Second))))
+                    .Where(m => returnType is null || TypeIdentity.Equal(m.Effective.ReturnType, returnType))
+                    .ToList();
+                if (found.Count == 1)
+                {
+                    return new ResolvedMethod(found[0].Builder, found[0].Effective, current) { OptionalParameterTypesOverride = optionalTypes, DeclaredDefinition = found[0].Definition, GenericArguments = methodArguments is { Count: > 0 } ? [.. methodArguments] : null };
+                }
+
+                continue;
+            }
+
+            if (current is System.Reflection.Emit.TypeBuilder)
+            {
+                continue;
+            }
+
+            try
+            {
+                var method = ResolveMethodCore(current, name, parameterTypes, methodArguments, returnType, explicitInstance, optionalTypes is not null);
+                return new ResolvedMethod(method, optionalTypes);
+            }
+            catch (ReplException)
+            {
+                // Not declared there; the next base may have it.
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Substitutes a method's own parameters, found in its definition, with the call's arguments.
+    /// </summary>
+    private static MethodSignature Instantiate(MethodSignature effective, MethodSignature definition, IReadOnlyList<Type>? methodArguments)
+    {
+        if (methodArguments is not { Count: > 0 })
+        {
+            return effective;
+        }
+
+        var parameters = SignatureIdentity.MethodParametersOf(definition);
+        return effective with
+        {
+            ReturnType = TypeRelations.SubstituteParameters(effective.ReturnType, parameters, methodArguments),
+            Parameters = [.. effective.Parameters.Select(p => p with { Type = TypeRelations.SubstituteParameters(p.Type, parameters, methodArguments) })],
+        };
+    }
+
+    private static MethodSignature SubstituteSignature(MethodSignature signature, Type[] definitionArguments, Type[] actualArguments)
+    {
+        var parameters = signature.Parameters.Select(p => p with { Type = Substitute(p.Type, definitionArguments, actualArguments) }).ToList();
+        return signature with { ReturnType = Substitute(signature.ReturnType, definitionArguments, actualArguments), Parameters = parameters };
+    }
+
     private static int FindMemberSeparator(string s)
     {
         var depth = 0;
@@ -368,10 +604,14 @@ public static class MemberResolver
 
     private static GenericContext LenientGenerics(GenericContext generics)
     {
-        // While the declaring type is still unknown, !N cannot be resolved for real; any
-        // placeholder works because only the declaring type is kept from this pass.
-        var placeholders = Enumerable.Repeat(typeof(object), 32).ToArray();
-        return new GenericContext(placeholders, generics.MethodArguments.Count > 0 ? generics.MethodArguments : placeholders);
+        // While the declaring type is still unknown, a !N that names the member's own type
+        // parameters cannot be resolved for real; any placeholder works because only the
+        // declaring type is kept from this pass. Parameters that are in scope, a generic type's
+        // own !N inside its body or a method's !!N, are real and stay so: they can appear in the
+        // declaring type itself, as in Box`1<!0>::Count.
+        // A !N beyond what is in scope belongs to the referenced type and gets a placeholder.
+        var placeholders = Enumerable.Repeat(typeof(object), 32);
+        return new GenericContext([.. generics.TypeArguments, .. placeholders], [.. generics.MethodArguments, .. placeholders]);
     }
 
     private static ConstructorInfo ResolveConstructor(Type declaring, string name, Type[]? parameterTypes)
@@ -395,6 +635,11 @@ public static class MemberResolver
         }
 
         var constructors = declaring.GetConstructors(flags);
+        if (constructors.Length == 0 && name == ".ctor" && TypeRelations.IsSessionType(declaring))
+        {
+            throw new ReplException($"{(declaring.IsValueType ? "struct" : "class")} {TypeNameFormatter.Pretty(declaring)} declares no constructor (add a .method public instance void .ctor(...) to it{(declaring.IsValueType ? ", or use initobj" : "")})");
+        }
+
         var matched = parameterTypes is null ? constructors : constructors.Where(c => ParametersMatch(c.GetParameters(), parameterTypes, null, null)).ToArray();
         if (matched.Length == 1)
         {
@@ -553,96 +798,9 @@ public static class MemberResolver
         return true;
     }
 
-    private static Type Substitute(Type type, Type[] definitionArguments, Type[] actualArguments)
-    {
-        if (type.IsGenericParameter && type.DeclaringMethod is null)
-        {
-            for (var i = 0; i < definitionArguments.Length; i++)
-            {
-                if (definitionArguments[i] == type)
-                {
-                    return actualArguments[i];
-                }
-            }
-        }
+    private static Type Substitute(Type type, Type[] definitionArguments, Type[] actualArguments) => TypeRelations.Substitute(type, definitionArguments, actualArguments);
 
-        if (type.IsByRef)
-        {
-            return Substitute(type.GetElementType()!, definitionArguments, actualArguments).MakeByRefType();
-        }
-
-        if (type.IsArray)
-        {
-            var element = Substitute(type.GetElementType()!, definitionArguments, actualArguments);
-            return type.GetArrayRank() == 1 && type == type.GetElementType()!.MakeArrayType() ? element.MakeArrayType() : element.MakeArrayType(type.GetArrayRank());
-        }
-
-        if (type.IsGenericType && !type.IsGenericTypeDefinition)
-        {
-            var args = type.GetGenericArguments().Select(a => Substitute(a, definitionArguments, actualArguments)).ToArray();
-            return type.GetGenericTypeDefinition().MakeGenericType(args);
-        }
-
-        return type;
-    }
-
-    internal static bool TypesEqual(Type a, Type b)
-    {
-        if (a == b)
-        {
-            return true;
-        }
-
-        // Generic parameter builders compare by position when both sides are builders from
-        // different prototype methods; names are unique within a cell.
-        if (a.IsGenericParameter && b.IsGenericParameter)
-        {
-            return a.Name == b.Name && a.GenericParameterPosition == b.GenericParameterPosition;
-        }
-
-        if (a.IsByRef && b.IsByRef)
-        {
-            return TypesEqual(a.GetElementType()!, b.GetElementType()!);
-        }
-
-        if (a.IsPointer && b.IsPointer)
-        {
-            return TypesEqual(a.GetElementType()!, b.GetElementType()!);
-        }
-
-        if (a.IsArray && b.IsArray)
-        {
-            // int32[] is a vector and int32[0...] is a rank-1 array; they are different types.
-            return a.IsSZArray == b.IsSZArray && a.GetArrayRank() == b.GetArrayRank() && TypesEqual(a.GetElementType()!, b.GetElementType()!);
-        }
-
-        if (a.IsGenericType && b.IsGenericType && !a.IsGenericTypeDefinition && !b.IsGenericTypeDefinition)
-        {
-            if (a.GetGenericTypeDefinition() != b.GetGenericTypeDefinition())
-            {
-                return false;
-            }
-
-            var aa = a.GetGenericArguments();
-            var ba = b.GetGenericArguments();
-            if (aa.Length != ba.Length)
-            {
-                return false;
-            }
-
-            for (var i = 0; i < aa.Length; i++)
-            {
-                if (!TypesEqual(aa[i], ba[i]))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        return false;
-    }
+    internal static bool TypesEqual(Type a, Type b) => TypeIdentity.Equal(a, b);
 
     private static string Signature(Type[]? parameterTypes) =>
         parameterTypes is null ? "" : string.Join(", ", parameterTypes.Select(TypeNameFormatter.Pretty));

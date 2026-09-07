@@ -11,6 +11,7 @@ namespace IlRepl.Engine;
 public sealed class StackSimulator
 {
     private readonly List<Type?> _items = [];
+    private readonly List<bool> _isThis = [];
 
     /// <summary>
     /// The entries from bottom to top. A null entry has an unknown type.
@@ -35,13 +36,18 @@ public sealed class StackSimulator
     {
         var copy = new StackSimulator();
         copy._items.AddRange(_items);
+        copy._isThis.AddRange(_isThis);
         return copy;
     }
 
     /// <summary>
     /// Empties the stack.
     /// </summary>
-    public void Clear() => _items.Clear();
+    public void Clear()
+    {
+        _items.Clear();
+        _isThis.Clear();
+    }
 
     /// <summary>
     /// Replaces the contents of this stack with those of another.
@@ -52,7 +58,17 @@ public sealed class StackSimulator
         ArgumentNullException.ThrowIfNull(other);
         _items.Clear();
         _items.AddRange(other._items);
+        _isThis.Clear();
+        _isThis.AddRange(other._isThis);
     }
+
+    /// <summary>
+    /// True when the entry at <paramref name="index"/> (from the bottom) is the <c>this</c> of an
+    /// instance member, loaded with <c>ldarg.0</c> and not copied through a local since.
+    /// </summary>
+    /// <param name="index">The entry index.</param>
+    /// <returns>True for <c>this</c>.</returns>
+    public bool IsThisAt(int index) => index >= 0 && index < _isThis.Count && _isThis[index];
 
     /// <summary>
     /// The display name of a stack entry.
@@ -90,18 +106,18 @@ public sealed class StackSimulator
             case BlockKind.Try:
                 break;
             case BlockKind.Catch:
-                _items.Clear();
-                _items.Add(catchType ?? typeof(object));
+                Clear();
+                Push(catchType ?? typeof(object), false);
                 break;
             case BlockKind.Filter:
             case BlockKind.FilterHandler:
-                _items.Clear();
-                _items.Add(typeof(object));
+                Clear();
+                Push(typeof(object), false);
                 break;
             case BlockKind.Finally:
             case BlockKind.Fault:
             case BlockKind.End:
-                _items.Clear();
+                Clear();
                 break;
             default:
                 break;
@@ -126,20 +142,30 @@ public sealed class StackSimulator
         }
 
         var popped = _items.GetRange(_items.Count - pops, pops);
+        var poppedThis = _isThis.GetRange(_isThis.Count - pops, pops);
         _items.RemoveRange(_items.Count - pops, pops);
+        _isThis.RemoveRange(_isThis.Count - pops, pops);
 
         if (op.FlowControl is FlowControl.Throw || op == OpCodes.Leave || op == OpCodes.Leave_S || op == OpCodes.Endfinally
             || op == OpCodes.Endfilter || op == OpCodes.Jmp)
         {
             // Nothing after these is reachable on this path.
-            _items.Clear();
+            Clear();
             return;
         }
 
+        var loadsThis = instruction.ArgumentIndex == 0 && context.ThisIndex == 0 && op.Name is "ldarg.0" or "ldarg" or "ldarg.s";
+        var addressOfThis = instruction.ArgumentIndex == 0 && context.ThisIndex == 0 && op.Name is "ldarga" or "ldarga.s";
         foreach (var t in PushTypes(instruction, popped, context))
         {
-            _items.Add(t);
+            Push(t, loadsThis || addressOfThis || (op == OpCodes.Dup && poppedThis[0]));
         }
+    }
+
+    private void Push(Type? type, bool isThis)
+    {
+        _items.Add(type);
+        _isThis.Add(isThis);
     }
 
     private static int PopCount(Instruction instruction)

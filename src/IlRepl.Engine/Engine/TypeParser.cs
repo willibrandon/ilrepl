@@ -77,14 +77,41 @@ public static class TypeParser
     /// <param name="pinned">Set to true when the type carried the <c>pinned</c> modifier.</param>
     /// <returns>The parsed type.</returns>
     /// <exception cref="ReplException">The text is not a valid type or the type cannot be found.</exception>
-    public static Type ParseAt(string s, ref int pos, ParseContext context, out bool pinned)
+    public static Type ParseAt(string s, ref int pos, ParseContext context, out bool pinned) =>
+        ParseAt(s, ref pos, context, out pinned, out _, out _);
+
+    /// <summary>
+    /// Parses a type starting at <paramref name="pos"/>, advances past it, and reports the custom
+    /// modifiers written after it.
+    /// </summary>
+    /// <param name="s">The normalized text.</param>
+    /// <param name="pos">The position to start at; updated to the first character after the type.</param>
+    /// <param name="context">The parse context.</param>
+    /// <param name="pinned">Set to true when the type carried the <c>pinned</c> modifier.</param>
+    /// <param name="requiredModifiers">The <c>modreq</c> types, in order.</param>
+    /// <param name="optionalModifiers">The <c>modopt</c> types, in order.</param>
+    /// <returns>The parsed type.</returns>
+    /// <exception cref="ReplException">The text is not a valid type or the type cannot be found.</exception>
+    public static Type ParseAt(string s, ref int pos, ParseContext context, out bool pinned, out List<Type> requiredModifiers, out List<Type> optionalModifiers)
     {
         ArgumentNullException.ThrowIfNull(s);
         ArgumentNullException.ThrowIfNull(context);
         pinned = false;
+        requiredModifiers = [];
+        optionalModifiers = [];
         SkipWhitespace(s, ref pos);
-        while (TryKeyword(s, ref pos, "class") || TryKeyword(s, ref pos, "valuetype"))
+        var sawValueType = false;
+        while (true)
         {
+            if (TryKeyword(s, ref pos, "valuetype"))
+            {
+                sawValueType = true;
+            }
+            else if (!TryKeyword(s, ref pos, "class"))
+            {
+                break;
+            }
+
             SkipWhitespace(s, ref pos);
         }
 
@@ -142,7 +169,50 @@ public static class TypeParser
             }
 
             var name = s[start..pos];
-            if (pos < s.Length && s[pos] == '<')
+            if (asm is null && Primitives.TryGetValue(name, out var primitiveType) && !(pos < s.Length && s[pos] == '<'))
+            {
+                t = primitiveType;
+            }
+            else if (asm is null or "ilrepl" && context.Types.TryResolve(name, pos < s.Length && s[pos] == '<', sawValueType, out var sessionType))
+            {
+                t = sessionType;
+                if (pos < s.Length && s[pos] == '<')
+                {
+                    pos++;
+                    var sessionArgs = new List<Type>();
+                    while (true)
+                    {
+                        sessionArgs.Add(ParseAt(s, ref pos, context, out _));
+                        SkipWhitespace(s, ref pos);
+                        if (pos < s.Length && s[pos] == ',')
+                        {
+                            pos++;
+                            continue;
+                        }
+
+                        if (pos < s.Length && s[pos] == '>')
+                        {
+                            pos++;
+                            break;
+                        }
+
+                        throw new ReplException("expected ',' or '>' in generic type arguments");
+                    }
+
+                    var arity = t.GetGenericArguments().Length;
+                    if (arity != sessionArgs.Count)
+                    {
+                        throw new ReplException($"'{TypeNameFormatter.Pretty(t)}' takes {arity} type argument(s), not {sessionArgs.Count}");
+                    }
+
+                    t = t.MakeGenericType([.. sessionArgs]);
+                }
+            }
+            else if (asm == "ilrepl")
+            {
+                throw new ReplException($"no type '{name}' in the session (define one with .class)");
+            }
+            else if (pos < s.Length && s[pos] == '<')
             {
                 pos++;
                 var args = new List<Type>();
@@ -223,6 +293,7 @@ public static class TypeParser
             }
             else if (TryKeyword(s, ref pos, "modreq") || TryKeyword(s, ref pos, "modopt"))
             {
+                var required = s[(pos - 6)..pos] == "modreq";
                 SkipWhitespace(s, ref pos);
                 if (pos >= s.Length || s[pos] != '(')
                 {
@@ -230,7 +301,7 @@ public static class TypeParser
                 }
 
                 pos++;
-                ParseAt(s, ref pos, context, out _);
+                var modifier = ParseAt(s, ref pos, context, out _);
                 SkipWhitespace(s, ref pos);
                 if (pos >= s.Length || s[pos] != ')')
                 {
@@ -238,6 +309,7 @@ public static class TypeParser
                 }
 
                 pos++;
+                (required ? requiredModifiers : optionalModifiers).Add(modifier);
             }
             else
             {
@@ -435,6 +507,17 @@ public static class TypeParser
     /// <param name="c">The character.</param>
     /// <returns>True for letters, digits, and the punctuation IL names allow.</returns>
     public static bool IsNameChar(char c) => char.IsLetterOrDigit(c) || c is '.' or '_' or '`' or '/' or '$' or '@' or '+';
+
+    /// <summary>
+    /// Returns the primitive type an IL keyword names, or null when the word is not a primitive keyword.
+    /// </summary>
+    /// <param name="keyword">The keyword, for example <c>int32</c>.</param>
+    /// <returns>The type, or null.</returns>
+    public static Type? PrimitiveKeywordType(string keyword)
+    {
+        ArgumentNullException.ThrowIfNull(keyword);
+        return Primitives.TryGetValue(keyword.Trim(), out var type) ? type : null;
+    }
 
     /// <summary>
     /// Returns the IL keyword for a primitive type, or null when the type has none.
