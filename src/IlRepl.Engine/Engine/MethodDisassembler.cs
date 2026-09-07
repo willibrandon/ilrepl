@@ -405,11 +405,7 @@ public static class MethodDisassembler
         private DisassembledEntry TokenInstruction(RawInstruction raw, OpCode emit)
         {
             var token = raw.Operand.Token;
-            var kind = _metadata is null ? null : (HandleKind?)MetadataTokens.EntityHandle(token).Kind;
-            if (kind is HandleKind.MemberReference && _metadata is not null)
-            {
-                kind = _metadata.GetMemberReference((MemberReferenceHandle)MetadataTokens.EntityHandle(token)).GetKind() == MemberReferenceKind.Method ? HandleKind.MethodDefinition : HandleKind.FieldDefinition;
-            }
+            var kind = TokenKind(token, raw.Label);
 
             var member = Try(() => _module.ResolveMember(token, _typeArguments, _methodArguments), $"the token at {raw.Label}");
             switch (member)
@@ -463,6 +459,35 @@ public static class MethodDisassembler
             return calli is null
                 ? new DisassembledEntry(DisassembledEntryKind.Instruction, raw.Offset) { Instruction = new Instruction { Op = emit, Text = text, Kind = OperandKind.Signature }, Raw = raw, EffectUnknown = true }
                 : Instruction(raw, new Instruction { Op = emit, Text = text, Kind = OperandKind.Signature, Operand = calli });
+        }
+
+        /// <summary>
+        /// What table a token names, with a member reference classified as a method or a field;
+        /// null when there is no metadata or the token names no row. A damaged token is a note,
+        /// not a failure, like every other operand that does not resolve.
+        /// </summary>
+        private HandleKind? TokenKind(int token, string label)
+        {
+            if (_metadata is null)
+            {
+                return null;
+            }
+
+            try
+            {
+                var handle = MetadataTokens.EntityHandle(token);
+                if (handle.Kind != HandleKind.MemberReference)
+                {
+                    return handle.Kind;
+                }
+
+                return _metadata.GetMemberReference((MemberReferenceHandle)handle).GetKind() == MemberReferenceKind.Method ? HandleKind.MethodDefinition : HandleKind.FieldDefinition;
+            }
+            catch (Exception ex) when (ex is BadImageFormatException or ArgumentException or InvalidOperationException)
+            {
+                _notes.Add($"the token at {label} names no row: {ex.Message}");
+                return null;
+            }
         }
 
         /// <summary>
@@ -546,6 +571,19 @@ public static class MethodDisassembler
         /// </summary>
         private (string Declaring, string Name) MemberRow(int token, MemberInfo? resolved)
         {
+            try
+            {
+                return MemberRowCore(token, resolved);
+            }
+            catch (Exception ex) when (ex is BadImageFormatException or ArgumentException or InvalidOperationException)
+            {
+                // A token whose row cannot be read: the runtime member, when there is one, still names it.
+                return (resolved?.DeclaringType is { } declaring ? TypeNameFormatter.IlAsmDeclaring(declaring) : "?", resolved is null ? "?" : IlAsmRenderer.MemberName(resolved.Name));
+            }
+        }
+
+        private (string Declaring, string Name) MemberRowCore(int token, MemberInfo? resolved)
+        {
             var handle = MetadataTokens.EntityHandle(token);
             string name;
             IlSignature? parent = null;
@@ -581,7 +619,7 @@ public static class MethodDisassembler
                 }
 
                 case HandleKind.MethodSpecification:
-                    return MemberRow(MetadataTokens.GetToken(_metadata!.GetMethodSpecification((MethodSpecificationHandle)handle).Method), resolved);
+                    return MemberRowCore(MetadataTokens.GetToken(_metadata!.GetMethodSpecification((MethodSpecificationHandle)handle).Method), resolved);
                 default:
                     name = resolved?.Name ?? "?";
                     break;
@@ -630,11 +668,13 @@ public static class MethodDisassembler
 
         private static string FloatText(uint bits)
         {
+            // A finite value prints as the shortest decimal that reads back to the same bits; NaN
+            // and the infinities print as their bits, which both the parser and ilasm accept.
             var value = BitConverter.Int32BitsToSingle(unchecked((int)bits));
             var text = value.ToString("R", CultureInfo.InvariantCulture);
-            if (float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var back) && BitConverter.SingleToInt32Bits(back) == unchecked((int)bits))
+            if (float.IsFinite(value) && float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var back) && BitConverter.SingleToInt32Bits(back) == unchecked((int)bits))
             {
-                return text.Contains('.') || text.Contains('E') || float.IsInfinity(value) ? text : text + ".0";
+                return text.Contains('.') || text.Contains('E') ? text : text + ".0";
             }
 
             return $"float32(0x{bits:x8})";
@@ -644,9 +684,9 @@ public static class MethodDisassembler
         {
             var value = BitConverter.Int64BitsToDouble(unchecked((long)bits));
             var text = value.ToString("R", CultureInfo.InvariantCulture);
-            if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var back) && BitConverter.DoubleToInt64Bits(back) == unchecked((long)bits))
+            if (double.IsFinite(value) && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var back) && BitConverter.DoubleToInt64Bits(back) == unchecked((long)bits))
             {
-                return text.Contains('.') || text.Contains('E') || double.IsInfinity(value) ? text : text + ".0";
+                return text.Contains('.') || text.Contains('E') ? text : text + ".0";
             }
 
             return $"float64(0x{bits:x16})";

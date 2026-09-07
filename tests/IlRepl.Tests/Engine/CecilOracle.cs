@@ -210,26 +210,39 @@ internal static class CecilOracle
                 return (parameter.Type == GenericParameterType.Method ? "!!" : "!") + parameter.Position.ToString(CultureInfo.InvariantCulture);
             default:
             {
-                var scope = ScopeName(type, self);
                 var name = type.IsNested ? TypeIdentity(type.DeclaringType, self) + "/" + type.Name : (type.Namespace.Length == 0 ? type.Name : type.Namespace + "." + type.Name);
-                return type.IsNested ? name : "[" + scope + "]" + name;
+                return type.IsNested ? name : "[" + ScopeName(type, self) + "]" + name;
             }
         }
     }
 
+    /// <summary>
+    /// The assembly a type lives in. A compiled reference names a facade such as System.Collections
+    /// that forwards the type on, and the listing names where the runtime finds it, so both sides
+    /// are followed to the runtime type when it can be loaded and its home named the way the
+    /// listing names it.
+    /// </summary>
     private static string ScopeName(TypeReference type, string self)
     {
         var scope = type.Scope;
-        return scope switch
+        var assemblyName = scope switch
         {
-            AssemblyNameReference assembly => Facade(assembly.Name) == self ? self : Facade(assembly.Name),
+            AssemblyNameReference assembly => assembly.Name,
             ModuleDefinition => self,
             ModuleReference module => module.Name,
             _ => scope?.Name ?? "?",
         };
-    }
+        if (scope is AssemblyNameReference && assemblyName != self)
+        {
+            var runtime = Type.GetType(type.FullName.Replace('/', '+') + ", " + assemblyName, throwOnError: false);
+            if (runtime is not null)
+            {
+                return TypeNameFormatter.AssemblyReferenceName(runtime);
+            }
+        }
 
-    private static string Facade(string assembly) => assembly is "System.Private.CoreLib" or "mscorlib" or "netstandard" ? "System.Runtime" : assembly;
+        return assemblyName;
+    }
 
     private static string Dump(MethodDefinition method) => string.Join("\n", method.Body.Instructions.Select(i => i.ToString()));
 }

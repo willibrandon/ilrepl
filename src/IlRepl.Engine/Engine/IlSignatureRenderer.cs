@@ -58,7 +58,12 @@ public static class IlSignatureRenderer
     public static string MemberReference(IlMethodSignature signature, string declaringType, string name, IReadOnlyList<IlSignature>? instantiation)
     {
         ArgumentNullException.ThrowIfNull(signature);
-        var arguments = instantiation is { Count: > 0 } ? "<" + string.Join(", ", instantiation.Select(IlAsm)) + ">" : "";
+
+        // A generic method named without an instantiation keeps its arity, <[N]>, as ILAsm spells a
+        // reference to the definition; without it the reference would name a non-generic overload.
+        var arguments = instantiation is { Count: > 0 }
+            ? "<" + string.Join(", ", instantiation.Select(IlAsm)) + ">"
+            : signature.GenericParameterCount > 0 ? "<[" + signature.GenericParameterCount.ToString(CultureInfo.InvariantCulture) + "]>" : "";
         return Convention(signature) + Render(signature.ReturnType, false, false) + " " + declaringType + "::" + name + arguments + "(" + Parameters(signature, false, false) + ")";
     }
 
@@ -151,7 +156,8 @@ public static class IlSignatureRenderer
             case IlSignatureKind.Named:
                 if (signature.Resolved is { } type)
                 {
-                    return pretty ? TypeNameFormatter.Pretty(type) : TypeNameFormatter.IlAsm(type);
+                    // A named generic type is the open definition, List`1, not an instantiation over its own parameters.
+                    return pretty ? TypeNameFormatter.Pretty(type) : type.IsGenericTypeDefinition ? TypeNameFormatter.IlAsmDefinition(type) : TypeNameFormatter.IlAsm(type);
                 }
 
                 return pretty ? Unqualified(signature.UnresolvedName!) : (signature.IsValueType ? "valuetype " : "class ") + signature.UnresolvedName;

@@ -22,9 +22,12 @@ public static class ClauseLayout
     {
         ArgumentNullException.ThrowIfNull(clauses);
         var fallback = new List<IlExceptionClause>();
+        // Handlers keep their metadata order: it is the dispatch order, and reordering them by
+        // offset would change which handler catches. A region whose handlers do not follow each
+        // other in that order fails the contiguity check below and stays in offset form.
         var regions = clauses
             .GroupBy(c => (c.TryStart, c.TryEnd))
-            .Select(g => new Region(g.Key.TryStart, g.Key.TryEnd, [.. g.OrderBy(c => c.LexicalStart)]))
+            .Select(g => new Region(g.Key.TryStart, g.Key.TryEnd, [.. g]))
             .ToList();
 
         // A finally or fault over another region's try and handlers is that region's last handler.

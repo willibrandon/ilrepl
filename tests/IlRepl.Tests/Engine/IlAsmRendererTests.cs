@@ -436,4 +436,16 @@ public sealed class IlAsmRendererTests
         var ldftn = new Instruction { Op = OpCodes.Ldftn, Text = "ldftn", Kind = OperandKind.Method, Operand = new ResolvedMethod(lambda, null) };
         Assert.AreEqual($"ldftn void [{assembly}]N.Fixture/'<>c'::'<Main>b__0_0'()", IlAsmRenderer.RenderInstruction(ldftn));
     }
+
+    /// <summary>
+    /// A generic type name that needs quotes takes its arity inside them, which is how ILAsm reads it.
+    /// </summary>
+    [TestMethod]
+    public void IlAsmTypeName_QuotedGenericName_KeepsArityInsideTheQuotes()
+    {
+        Assert.AreEqual("'<>c__DisplayClass1_0`1'", TypeNameFormatter.IlAsmTypeName("<>c__DisplayClass1_0`1"));
+        Assert.AreEqual("List`1", TypeNameFormatter.IlAsmTypeName("List`1"));
+        Assert.AreEqual("'<>c'", TypeNameFormatter.IlAsmTypeName("<>c"));
+        Assert.AreEqual("'add'", TypeNameFormatter.IlAsmTypeName("add"));
+    }
 }

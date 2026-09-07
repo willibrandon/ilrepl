@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Reflection.Emit;
 
@@ -61,36 +62,37 @@ public static class MemberResolver
         var left = s[..separator];
         var rest = s[(separator + 2)..].Trim();
 
-        // Name, method generic arguments, and parameters come from the right-hand side.
-        string name;
+        // Name, method generic arguments, and parameters come from the right-hand side. A quoted
+        // name, '<Main>b__0_0', is read as one name however it is spelled inside the quotes.
+        var (name, afterName) = ReadMemberName(rest);
         string? parameterText = null;
         string? genericText = null;
-        var paren = rest.IndexOf('(', StringComparison.Ordinal);
+        var afterGeneric = afterName;
+        if (afterName < rest.Length && rest[afterName] == '<')
+        {
+            var closeAngle = FindMatchingAngle(rest, afterName);
+            genericText = rest[(afterName + 1)..closeAngle];
+            afterGeneric = closeAngle + 1;
+        }
+
+        var paren = afterGeneric < rest.Length && rest[afterGeneric] == '(' ? afterGeneric : rest.IndexOf('(', afterGeneric);
         if (paren >= 0)
         {
+            if (rest[afterGeneric..paren].Trim().Length > 0)
+            {
+                throw new ReplException($"unexpected '{rest[afterGeneric..paren].Trim()}' before parameter list");
+            }
+
             var close = TypeParser.FindMatchingParen(rest, paren);
-            name = rest[..paren].Trim();
             parameterText = rest.Substring(paren + 1, close - paren - 1);
             if (rest[(close + 1)..].Trim().Length > 0)
             {
                 throw new ReplException($"unexpected '{rest[(close + 1)..].Trim()}' after parameter list");
             }
         }
-        else
+        else if (rest[afterGeneric..].Trim().Length > 0)
         {
-            name = rest;
-        }
-
-        var lt = name.IndexOf('<', StringComparison.Ordinal);
-        if (lt >= 0)
-        {
-            if (!name.EndsWith('>'))
-            {
-                throw new ReplException("unbalanced '<' in method name");
-            }
-
-            genericText = name[(lt + 1)..^1];
-            name = name[..lt].Trim();
+            throw new ReplException($"unexpected '{rest[afterGeneric..].Trim()}' in method reference");
         }
 
         if (name.Length == 0)
@@ -98,10 +100,30 @@ public static class MemberResolver
             throw new ReplException("missing method name");
         }
 
+        // <[N]> names a generic method definition of arity N without instantiating it, as ILAsm
+        // spells a token for one.
+        int? genericArity = null;
+        if (genericText is not null && genericText.Trim().StartsWith('[') && genericText.Trim().EndsWith(']'))
+        {
+            var inner = genericText.Trim()[1..^1].Trim();
+            if (!int.TryParse(inner, NumberStyles.None, CultureInfo.InvariantCulture, out var arityValue) || arityValue < 1)
+            {
+                throw new ReplException($"expected a generic arity such as <[1]>, got '<{genericText}>'");
+            }
+
+            genericArity = arityValue;
+            genericText = null;
+        }
+
         // The declaring type must be known before !N can be resolved, so the left side is parsed
         // twice: once to find the declaring type, then again with that type's arguments in scope.
         var (_, declaring) = SplitLeft(left, context, lenient: true);
         var typeArguments = declaring.IsGenericType ? declaring.GetGenericArguments() : [];
+        if (genericArity is int arity)
+        {
+            return ResolveGenericDefinition(declaring, name, arity, parameterText, left, context, typeArguments, explicitInstance);
+        }
+
         var methodArguments = genericText is null
             ? context.Generics.MethodArguments
             : TypeParser.SplitTopLevel(genericText).Select(t => TypeParser.Parse(t, context)).ToArray();
@@ -176,7 +198,7 @@ public static class MemberResolver
         }
 
         var (_, declaring) = SplitLeft(s[..separator], context, lenient: true);
-        var name = s[(separator + 2)..].Trim();
+        var name = InstructionParser.Unquote(s[(separator + 2)..].Trim());
         if (name.Length == 0)
         {
             throw new ReplException("missing field name");
@@ -556,8 +578,20 @@ public static class MemberResolver
     private static int FindMemberSeparator(string s)
     {
         var depth = 0;
+        var quoted = false;
         for (var i = 0; i + 1 < s.Length; i++)
         {
+            if (s[i] == '\'')
+            {
+                quoted = !quoted;
+                continue;
+            }
+
+            if (quoted)
+            {
+                continue;
+            }
+
             switch (s[i])
             {
                 case '<':
@@ -578,6 +612,97 @@ public static class MemberResolver
         }
 
         return -1;
+    }
+
+    /// <summary>
+    /// Reads the member name at the start of the text after <c>::</c>: a quoted name up to its
+    /// closing quote, otherwise everything before a generic argument list or a parameter list.
+    /// </summary>
+    private static (string Name, int End) ReadMemberName(string rest)
+    {
+        if (rest.Length > 0 && rest[0] == '\'')
+        {
+            var close = rest.IndexOf('\'', 1);
+            if (close < 0)
+            {
+                throw new ReplException("unterminated quote in member name");
+            }
+
+            return (rest[1..close], close + 1);
+        }
+
+        var end = 0;
+        while (end < rest.Length && rest[end] != '<' && rest[end] != '(' && !char.IsWhiteSpace(rest[end]))
+        {
+            end++;
+        }
+
+        return (rest[..end], end);
+    }
+
+    private static int FindMatchingAngle(string s, int open)
+    {
+        var depth = 0;
+        for (var i = open; i < s.Length; i++)
+        {
+            if (s[i] == '<')
+            {
+                depth++;
+            }
+            else if (s[i] == '>' && --depth == 0)
+            {
+                return i;
+            }
+        }
+
+        throw new ReplException("unbalanced '<' in method name");
+    }
+
+    /// <summary>
+    /// Resolves a generic method definition by arity, <c>Name&lt;[N]&gt;(...)</c>, keeping it open. The
+    /// parameter list is read against each candidate's own parameters, so <c>!!0</c> means that
+    /// candidate's first parameter.
+    /// </summary>
+    private static ResolvedMethod ResolveGenericDefinition(Type declaring, string name, int arity, string? parameterText, string left, ParseContext context, Type[] typeArguments, bool explicitInstance)
+    {
+        if (context.Types.TryGetMembers(declaring, out _) || declaring is TypeBuilder)
+        {
+            throw new ReplException($"{TypeNameFormatter.Pretty(declaring)}::{name}<[{arity}]> names a member of a class being written; give its type arguments instead");
+        }
+
+        var matches = new List<MethodInfo>();
+        foreach (var candidate in declaring.GetMethods(AllMembers).Where(m => m.Name == name && m.IsGenericMethodDefinition && m.GetGenericArguments().Length == arity))
+        {
+            var candidateContext = context.WithGenerics(new GenericContext(typeArguments, candidate.GetGenericArguments()));
+            var (returnType, _) = SplitLeft(left, candidateContext, lenient: false);
+            if (returnType is not null && candidate.ReturnType != returnType)
+            {
+                continue;
+            }
+
+            if (parameterText is not null)
+            {
+                var parameterTypes = TypeParser.SplitTopLevel(parameterText).Where(p => p != "...").Select(p => TypeParser.Parse(p, candidateContext)).ToArray();
+                if (!ParametersMatch(candidate.GetParameters(), parameterTypes, null, null))
+                {
+                    continue;
+                }
+            }
+
+            if (explicitInstance && candidate.IsStatic)
+            {
+                continue;
+            }
+
+            matches.Add(candidate);
+        }
+
+        return matches.Count switch
+        {
+            1 => new ResolvedMethod(matches[0], null),
+            0 => throw new ReplException($"no generic method '{name}' with {arity} type parameter(s) and those parameters on {TypeNameFormatter.Pretty(declaring)}"),
+            _ => throw new ReplException($"ambiguous: {TypeNameFormatter.Pretty(declaring)}::{name}<[{arity}]>; give parameter types"),
+        };
     }
 
     private static (Type? ReturnType, Type Declaring) SplitLeft(string left, ParseContext context, bool lenient)

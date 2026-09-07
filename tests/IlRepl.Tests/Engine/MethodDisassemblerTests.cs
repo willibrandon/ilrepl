@@ -283,6 +283,7 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Ldc_R4, BitConverter.Int32BitsToSingle(0x7F800001));
             il.Emit(OpCodes.Ldc_R8, BitConverter.Int64BitsToDouble(unchecked((long)0xFFF8000000000123)));
             il.Emit(OpCodes.Ldc_R4, float.PositiveInfinity);
+            il.Emit(OpCodes.Ldc_R8, double.NaN);
             il.Emit(OpCodes.Ldc_R4, float.Epsilon);
             il.Emit(OpCodes.Ldstr, "a\"b\n");
             il.Emit(OpCodes.Unaligned, (byte)2);
@@ -292,7 +293,7 @@ public sealed class MethodDisassemblerTests
         });
         var texts = DisassemblyText.Instructions(method);
         Assert.AreSequenceEqual(
-            ["ldc.i4.s -1", "ldc.i4 -2147483648", "ldc.i8 9223372036854775807", "ldc.r4 1.5", "ldc.r8 -0.25", "ldc.r4 -0.0", "ldc.r4 float32(0x7f800001)", "ldc.r8 float64(0xfff8000000000123)", "ldc.r4 Infinity", "ldc.r4 1E-45", "ldstr \"a\\\"b\\n\"", "unaligned. 2", "ldnull", "ldind.i4", "ret"],
+            ["ldc.i4.s -1", "ldc.i4 -2147483648", "ldc.i8 9223372036854775807", "ldc.r4 1.5", "ldc.r8 -0.25", "ldc.r4 -0.0", "ldc.r4 float32(0x7f800001)", "ldc.r8 float64(0xfff8000000000123)", "ldc.r4 float32(0x7f800000)", "ldc.r8 float64(0xfff8000000000000)", "ldc.r4 1E-45", "ldstr \"a\\\"b\\n\"", "unaligned. 2", "ldnull", "ldind.i4", "ret"],
             texts);
         foreach (var entry in method.Entries.Where(e => e.Instruction?.Kind is OperandKind.Single or OperandKind.Double))
         {
@@ -575,6 +576,7 @@ public sealed class MethodDisassemblerTests
     /// A loaded assembly lists from the bytes read at load time, even after the file changes.
     /// </summary>
     [TestMethod]
+    [OSCondition(ConditionMode.Exclude, OperatingSystems.Windows, IgnoreMessage = "Windows keeps a loaded assembly's file locked, so it cannot be replaced while loaded; the image path is exercised on Unix")]
     public void Disassemble_LoadedAssembly_UsesImageReadAtLoad()
     {
         var directory = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
@@ -611,6 +613,155 @@ public sealed class MethodDisassemblerTests
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// Handlers that share a try keep their metadata order, which is the dispatch order; when
+    /// that order is not their lexical order, braces cannot draw them and the offset form does.
+    /// </summary>
+    [TestMethod]
+    public void Disassemble_HandlersOutOfLexicalOrder_KeepMetadataOrder()
+    {
+        var method = Cecil((module, type) => AddOutOfOrderHandlers(module, type));
+        Assert.DoesNotContain(e => e.Kind == DisassembledEntryKind.Block, method.Entries);
+        Assert.AreEqual(IlClauseKind.Catch, method.Clauses[0].Kind);
+        Assert.AreEqual(typeof(Exception), method.Clauses[0].CatchType, "the first clause in metadata is the Exception handler");
+        Assert.AreEqual(typeof(ArgumentException), method.Clauses[1].CatchType);
+        var notes = method.Notes.Where(n => n.StartsWith("clause not drawn", StringComparison.Ordinal)).ToList();
+        Assert.HasCount(2, notes);
+        Assert.Contains("catch [System.Runtime]System.Exception", notes[0]);
+        Assert.Contains("catch [System.Runtime]System.ArgumentException", notes[1]);
+        var native = IlAsmClauseWriter.Write(method);
+        Assert.Contains(".try IL_0000 to IL_", native);
+        Assert.IsLessThan(native.IndexOf("System.ArgumentException handler", StringComparison.Ordinal), native.IndexOf("System.Exception handler", StringComparison.Ordinal), native);
+    }
+
+    /// <summary>
+    /// Writes a body whose two catch handlers sit in the opposite order from their clauses:
+    /// the Exception handler comes first in metadata but last in the bytes, so it must win.
+    /// </summary>
+    internal static void AddOutOfOrderHandlers(ModuleDefinition module, TypeDefinition type)
+    {
+        var m = Static(type, "M", module.TypeSystem.Int32);
+        m.Body.Variables.Add(new VariableDefinition(module.TypeSystem.Int32));
+        var il = m.Body.GetILProcessor();
+        var tryStart = il.Create(OpCodes.Ldstr, "boom");
+        var argumentHandler = il.Create(OpCodes.Pop);
+        var exceptionHandler = il.Create(OpCodes.Pop);
+        var end = il.Create(OpCodes.Ldloc_0);
+        il.Append(tryStart);
+        il.Emit(OpCodes.Newobj, module.ImportReference(typeof(ArgumentException).GetConstructor([typeof(string)])!));
+        il.Emit(OpCodes.Throw);
+        il.Append(argumentHandler);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc_0);
+        il.Emit(OpCodes.Leave, end);
+        il.Append(exceptionHandler);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Stloc_0);
+        il.Emit(OpCodes.Leave, end);
+        il.Append(end);
+        il.Emit(OpCodes.Ret);
+        m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = argumentHandler, HandlerStart = exceptionHandler, HandlerEnd = end, CatchType = module.ImportReference(typeof(Exception)) });
+        m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = argumentHandler, HandlerStart = argumentHandler, HandlerEnd = exceptionHandler, CatchType = module.ImportReference(typeof(ArgumentException)) });
+    }
+
+    /// <summary>
+    /// A token for an open generic type prints the definition, not an instantiation over its own parameters.
+    /// </summary>
+    [TestMethod]
+    public void Disassemble_OpenGenericTypeToken_PrintsDefinition()
+    {
+        var method = Cecil((module, type) =>
+        {
+            var m = Static(type, "M", module.TypeSystem.Void);
+            var il = m.Body.GetILProcessor();
+            il.Emit(OpCodes.Ldtoken, module.ImportReference(typeof(List<>)));
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+        });
+        var text = method.Entries[0].Instruction!.Text;
+        Assert.AreEqual("ldtoken class [System.Runtime]System.Collections.Generic.List`1", text);
+        var parsed = InstructionParser.Parse(text, method.Context);
+        Assert.AreEqual(typeof(List<>), parsed.Operand);
+    }
+
+    /// <summary>
+    /// A token for a generic method definition keeps its arity, so it does not read back as a non-generic overload.
+    /// </summary>
+    [TestMethod]
+    public void Disassemble_GenericMethodDefinitionToken_KeepsArity()
+    {
+        var session = new Session();
+        var method = Cecil((module, type) =>
+        {
+            var generic = new MethodDefinition("Generic", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            var t = new Mono.Cecil.GenericParameter("T", generic);
+            generic.GenericParameters.Add(t);
+            generic.ReturnType = t;
+            generic.Body.GetILProcessor().Emit(OpCodes.Ldnull);
+            generic.Body.GetILProcessor().Emit(OpCodes.Ret);
+            type.Methods.Add(generic);
+            var plain = Static(type, "Generic", module.TypeSystem.Int32);
+            plain.Body.GetILProcessor().Emit(OpCodes.Ldc_I4_0);
+            plain.Body.GetILProcessor().Emit(OpCodes.Ret);
+            var m = Static(type, "M", module.TypeSystem.Void);
+            var il = m.Body.GetILProcessor();
+            il.Emit(OpCodes.Ldtoken, generic);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldtoken, plain);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+        }, session: session);
+        var assembly = method.Method.Module.Assembly.GetName().Name;
+        var texts = DisassemblyText.Instructions(method);
+        Assert.AreEqual($"ldtoken method !!0 [{assembly}]N.Fixture::Generic<[1]>()", texts[0]);
+        Assert.AreEqual($"ldtoken method int32 [{assembly}]N.Fixture::Generic()", texts[2]);
+        var definition = (ResolvedMethod)InstructionParser.Parse(texts[0], method.Context).Operand!;
+        Assert.IsTrue(definition.Method!.IsGenericMethodDefinition);
+        var plainMethod = (ResolvedMethod)InstructionParser.Parse(texts[2], method.Context).Operand!;
+        Assert.IsFalse(plainMethod.Method!.IsGenericMethod);
+    }
+
+    /// <summary>
+    /// A damaged token names no row: the line prints the token, a note says so, and the rest of the body lists.
+    /// </summary>
+    [TestMethod]
+    public void Disassemble_DamagedToken_IsRawLineWithNote()
+    {
+        var session = new Session();
+        var (_, image, _) = CecilFixture.Build((module, type) =>
+        {
+            var m = Static(type, "M", module.TypeSystem.Void);
+            var il = m.Body.GetILProcessor();
+            il.Emit(OpCodes.Ldtoken, module.ImportReference(typeof(string).GetMethod("Trim", Type.EmptyTypes)!));
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+        });
+
+        // The ldtoken operand is a MemberRef; point it at a row the table does not have.
+        var patched = (byte[])image.Clone();
+        var at = -1;
+        for (var i = 0; i + 5 < patched.Length; i++)
+        {
+            if (patched[i] == 0xD0 && patched[i + 4] == 0x0A && patched[i + 5] == 0x26)
+            {
+                at = i;
+                break;
+            }
+        }
+
+        Assert.IsGreaterThan(0, at, "the ldtoken bytes should be in the image");
+        patched[at + 1] = 0xFF;
+        patched[at + 2] = 0xFF;
+        patched[at + 3] = 0xFF;
+        var assembly = session.Resolver.LoadImage(patched);
+        var listing = MethodDisassembler.Disassemble(assembly.GetType("N.Fixture")!.GetMethod("M")!, session);
+        var lines = DisassemblyText.LinesWithStack(listing);
+        Assert.AreEqual("0000 ldtoken 0x0affffff\t?", lines[0]);
+        Assert.AreEqual(DisassembledEntryKind.Raw, listing.Entries[0].Kind);
+        Assert.Contains(n => n.Contains("IL_0000", StringComparison.Ordinal), listing.Notes);
+        Assert.AreSequenceEqual(["ldtoken 0x0affffff", "pop", "ret"], DisassemblyText.Instructions(listing));
     }
 
     /// <summary>

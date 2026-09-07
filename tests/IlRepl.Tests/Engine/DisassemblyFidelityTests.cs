@@ -195,8 +195,31 @@ public sealed partial class DisassemblyFidelityTests
         context.Unload();
     }
 
+    /// <summary>
+    /// A body whose handlers sit in a different order from their clauses reassembles with the same
+    /// dispatch: the offset form keeps the metadata order, and the Exception handler still wins.
+    /// </summary>
+    [TestMethod]
+    public void Scaffold_KeepsHandlerOrder_WhenLexicalOrderDiffers()
+    {
+        _ = IlasmLocator.Require();
+        var session = new Session();
+        var (_, image, fixture) = CecilFixture.Build(MethodDisassemblerTests.AddOutOfOrderHandlers, session.Resolver);
+        Assert.AreEqual(2, fixture.GetMethod("M")!.Invoke(null, null), "the original dispatches to the Exception handler first");
+        var listing = MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
+        var reassembled = IlasmLocator.Assemble(Scaffold(listing));
+        var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture").Methods.First(m => m.Name == "M");
+        var method = ModuleDefinition.ReadModule(new MemoryStream(reassembled)).Types.First(t => t.Name == "T").Methods.Single(m => m.HasBody);
+        CecilOracle.AssertSameMeaning(original, method, fixture.Assembly.GetName().Name!, fixture.Assembly.GetName().Name!);
+        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-order", isCollectible: true);
+        var loaded = context.LoadFromStream(new MemoryStream(reassembled));
+        Assert.AreEqual(2, loaded.GetType("N.T")!.GetMethod("M")!.Invoke(null, null), "the reassembled body dispatches the same way");
+        context.Unload();
+    }
+
     private static string Scaffold(DisassembledMethod method)
     {
+        var self = method.Method.Module.Assembly.GetName().Name!;
         var body = IlAsmClauseWriter.Write(method);
         var locals = method.Locals.Count == 0
             ? ""
@@ -208,8 +231,15 @@ public sealed partial class DisassemblyFidelityTests
             sb.Append(".assembly extern ").Append(name).AppendLine(" {}");
         }
 
-        sb.AppendLine(".assembly Fixtures {}");
-        sb.AppendLine(".class public auto ansi beforefieldinit N.T extends [System.Runtime]System.Object");
+        // The scaffold takes the fixture's own name, so the oracle maps both modules' own scope onto it.
+        sb.Append(".assembly ").Append(self).AppendLine(" {}");
+        // A member of a generic type names the type's parameters, so the scaffold declares them too;
+        // their constraints play no part in the body's bytes.
+        var owner = method.Method.DeclaringType;
+        var typeParameters = owner is { IsGenericTypeDefinition: true }
+            ? "<" + string.Join(", ", owner.GetGenericArguments().Select(p => TypeNameFormatter.IlAsmIdentifier(p.Name))) + ">"
+            : "";
+        sb.Append(".class public auto ansi beforefieldinit N.T").Append(typeParameters).AppendLine(" extends [System.Runtime]System.Object");
         sb.AppendLine("{");
         sb.Append("  ").Append(method.Header).AppendLine();
         sb.AppendLine("  {");
@@ -244,9 +274,26 @@ public sealed partial class DisassemblyFidelityTests
             var line = raw.TrimEnd('\r').Trim();
             if (line.StartsWith(".class ", StringComparison.Ordinal))
             {
-                var words = line.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
-                var stop = words.FindIndex(w => w is "extends" or "implements" or "{");
-                pendingClass = Unquote(stop < 0 ? words[^1] : words[stop - 1]);
+                // The name is the last word before extends or implements, without its generic
+                // parameter list, which may hold spaces, and without quotes.
+                var head = line;
+                foreach (var stop in new[] { " extends ", " implements ", " {" })
+                {
+                    var at = head.IndexOf(stop, StringComparison.Ordinal);
+                    if (at >= 0)
+                    {
+                        head = head[..at];
+                    }
+                }
+
+                // A generic parameter list follows the name, after any quotes the name itself carries.
+                var angle = head.IndexOf('<', head.LastIndexOf('\'') + 1);
+                if (angle >= 0)
+                {
+                    head = head[..angle];
+                }
+
+                pendingClass = Unquote(head[(head.LastIndexOf(' ') + 1)..]);
                 continue;
             }
 

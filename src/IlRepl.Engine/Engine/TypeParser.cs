@@ -157,10 +157,32 @@ public static class TypeParser
                 pos = close + 1;
             }
 
+            // A name is a run of name characters, in which a quoted segment stands for a name ILAsm
+            // could not read bare: Outer/'<>c' is the nested type <>c of Outer.
             var start = pos;
-            while (pos < s.Length && IsNameChar(s[pos]))
+            var nameBuilder = new System.Text.StringBuilder();
+            while (pos < s.Length)
             {
-                pos++;
+                if (s[pos] == '\'')
+                {
+                    var closeQuote = s.IndexOf('\'', pos + 1);
+                    if (closeQuote < 0)
+                    {
+                        throw new ReplException("unterminated quote in type name");
+                    }
+
+                    nameBuilder.Append(s, pos + 1, closeQuote - pos - 1);
+                    pos = closeQuote + 1;
+                }
+                else if (IsNameChar(s[pos]))
+                {
+                    nameBuilder.Append(s[pos]);
+                    pos++;
+                }
+                else
+                {
+                    break;
+                }
             }
 
             if (start == pos)
@@ -168,7 +190,7 @@ public static class TypeParser
                 throw new ReplException(pos < s.Length ? $"expected a type at '{s[pos..]}'" : "expected a type");
             }
 
-            var name = s[start..pos];
+            var name = nameBuilder.ToString();
             if (asm is null && Primitives.TryGetValue(name, out var primitiveType) && !(pos < s.Length && s[pos] == '<'))
             {
                 t = primitiveType;

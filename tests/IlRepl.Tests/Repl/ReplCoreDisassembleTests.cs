@@ -266,4 +266,101 @@ public sealed class ReplCoreDisassembleTests
             Assert.Contains(expected, results[0]);
         }
     }
+
+    /// <summary>
+    /// A listing of compiled C# pastes back into a method: the quoted names of a lambda's closure
+    /// parse, and a body over public members runs to the same result. The closure's own fields are
+    /// private to the loaded assembly, which the runtime still enforces, so that body compiles but
+    /// is not run.
+    /// </summary>
+    [TestMethod]
+    public void Handle_Dis_LoadedListing_PastesBackIntoAMethod()
+    {
+        var core = new ReplCore();
+        Assert.IsTrue(core.Handle(".load " + SampleHost.Samples.FixturesDll).Succeeded);
+
+        var doubled = Pasteable(core, ".dis Fixtures.Shapes::Doubled");
+        Assert.Contains(l => l.Contains("'<Doubled>b__0_0'", StringComparison.Ordinal), doubled, "the lambda's name needs quotes");
+        Assert.IsTrue(core.Handle(".method class [System.Runtime]System.Collections.Generic.IEnumerable`1<int32> Doubled2(class [System.Runtime]System.Collections.Generic.IEnumerable`1<int32> values) {").Succeeded);
+        foreach (var line in doubled)
+        {
+            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
+        }
+
+        Assert.IsTrue(core.Handle("}").Succeeded, string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
+
+        var read = Pasteable(core, ".dis instance int32 Fixtures.Holder::Read()");
+        Assert.Contains(l => l.Contains("modreq(", StringComparison.Ordinal), read, "the volatile field keeps its modifier");
+        Assert.IsTrue(core.Handle(".method int32 Read2(class [Fixtures]Fixtures.Holder h) {").Succeeded);
+        foreach (var line in read)
+        {
+            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
+        }
+
+        Assert.IsTrue(core.Handle("}").Succeeded, string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
+        var run = core.Transcript.Lines.Count;
+        foreach (var line in new[] { "ldstr \"abc\"", "newobj instance void [Fixtures]Fixtures.Holder::.ctor(string)", "call int32 Read2(class [Fixtures]Fixtures.Holder)", "ret" })
+        {
+            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + string.Join("\n", core.Transcript.Lines.Skip(run).Select(l => l.Kind + ": " + l.PlainText)));
+        }
+
+        var results = core.Transcript.Lines.Skip(run).Where(l => l.Kind == LineKind.Result).Select(l => l.PlainText).ToList();
+        Assert.HasCount(1, results, string.Join("\n", core.Transcript.Lines.Skip(run).Select(l => l.Kind + ": " + l.PlainText)));
+        Assert.Contains("3", results[0]);
+    }
+
+    /// <summary>
+    /// The lines of a listing that paste into a method block: everything between the header and
+    /// the closing brace except .maxstack, with the offset and stack columns removed.
+    /// </summary>
+    private static List<string> Pasteable(ReplCore core, string command)
+    {
+        var listing = Listing(core, command);
+        var before = core.Transcript.Lines.Count - listing.Count;
+        var lines = core.Transcript.Lines.Skip(before).Where(l => l.Kind == LineKind.Listing).ToList();
+        var pasted = new List<string>();
+        foreach (var line in lines.Skip(1).Take(lines.Count - 2))
+        {
+            var text = line.PlainText.Trim();
+            if (text.StartsWith(".maxstack", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var offsetColumn = line.Spans.Count == 3 && System.Text.RegularExpressions.Regex.IsMatch(line.Spans[0].Text, "^  [0-9a-f]{4} $");
+            pasted.Add(offsetColumn ? line.Spans[1].Text.Trim() : text);
+        }
+
+        return pasted;
+    }
+
+    /// <summary>
+    /// Locals print with their qualified types, so two types with one short name stay apart and the line pastes back.
+    /// </summary>
+    [TestMethod]
+    public void Handle_Dis_Locals_PrintQualifiedTypes()
+    {
+        var core = new ReplCore();
+        var (_, _, fixture) = Engine.CecilFixture.Build((module, type) =>
+        {
+            var a = new Mono.Cecil.TypeDefinition("A", "Item", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            var b = new Mono.Cecil.TypeDefinition("B", "Item", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            module.Types.Add(a);
+            module.Types.Add(b);
+            var m = new Mono.Cecil.MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            m.Body.InitLocals = true;
+            m.Body.Variables.Add(new Mono.Cecil.Cil.VariableDefinition(a));
+            m.Body.Variables.Add(new Mono.Cecil.Cil.VariableDefinition(b));
+            m.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ret);
+            type.Methods.Add(m);
+        }, core.Session.Resolver);
+        var assembly = fixture.Assembly.GetName().Name;
+        var lines = Listing(core, ".dis void N.Fixture::M()");
+        var locals = lines.Single(l => l.TrimStart().StartsWith(".locals", StringComparison.Ordinal)).Trim();
+        Assert.AreEqual($".locals init (class [{assembly}]A.Item V_0, class [{assembly}]B.Item V_1)", locals);
+        Assert.IsTrue(core.Handle(".method void Pasted() {").Succeeded);
+        Assert.IsTrue(core.Handle(locals).Succeeded, string.Join("\n", core.Transcript.Lines.TakeLast(2).Select(l => l.PlainText)));
+        Assert.IsTrue(core.Handle("ret").Succeeded);
+        Assert.IsTrue(core.Handle("}").Succeeded);
+    }
 }

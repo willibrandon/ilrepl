@@ -230,7 +230,14 @@ public static class TypeNameFormatter
     {
         ArgumentNullException.ThrowIfNull(name);
         var tick = name.IndexOf('`', StringComparison.Ordinal);
-        return tick > 0 && name[(tick + 1)..].All(char.IsDigit) ? IlAsmIdentifier(name[..tick]) + name[tick..] : IlAsmIdentifier(name);
+        if (tick > 0 && name[(tick + 1)..].All(char.IsDigit))
+        {
+            // A name that needs quotes takes its arity inside them: ILAsm reads '<>c`1', not '<>c'`1.
+            var quoted = IlAsmIdentifier(name[..tick]);
+            return quoted.StartsWith('\'') ? "'" + name + "'" : name;
+        }
+
+        return IlAsmIdentifier(name);
     }
 
     /// <summary>

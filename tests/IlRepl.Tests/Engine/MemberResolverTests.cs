@@ -216,4 +216,46 @@ public sealed class MemberResolverTests
         Assert.IsTrue(MemberResolver.ResolveMethod("First(int32[])", context, false).IsSessionMethod);
         Assert.Contains("no method First(int32[0...]) in the session; defined: int32 First(int32[])", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("First(int32[0...])", context, false)).Message);
     }
+
+    /// <summary>
+    /// Quoted names, as listings print them, resolve: a method named like an opcode, a compiler-made
+    /// nested type and member, and a field whose name starts with angle brackets.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_QuotedNames_Resolve()
+    {
+        var resolver = new TypeResolver();
+        resolver.Load(SampleHost.Samples.FixturesDll);
+        var context = new ParseContext([], [], GenericContext.Empty, resolver, []);
+
+        var add = MemberResolver.ResolveMethod("int32 [Fixtures]Fixtures.Shapes::'add'(int32, int32)", context, false);
+        Assert.AreEqual("add", add.Method!.Name);
+        var lambda = MemberResolver.ResolveMethod("instance int32 [Fixtures]Fixtures.Shapes/'<>c'::'<Doubled>b__0_0'(int32)", context, false);
+        Assert.AreEqual("<Doubled>b__0_0", lambda.Method!.Name);
+        Assert.AreEqual("<>c", lambda.Method.DeclaringType!.Name);
+        var field = MemberResolver.ResolveField("class [System.Runtime]System.Func`2<int32, int32> [Fixtures]Fixtures.Shapes/'<>c'::'<>9__0_0'", context);
+        Assert.AreEqual("<>9__0_0", field.Name);
+        Assert.AreEqual("<>c", field.DeclaringType!.Name);
+        var closure = TypeParser.Parse("class [Fixtures]Fixtures.Shapes/'<>c__DisplayClass13_0`1'<int32>", context);
+        Assert.IsTrue(closure.IsGenericType);
+        Assert.AreEqual("<>c__DisplayClass13_0`1", closure.GetGenericTypeDefinition().Name);
+    }
+
+    /// <summary>
+    /// The arity form names a generic method definition without instantiating it, and never a non-generic overload.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_ArityMarker_ResolvesTheDefinition()
+    {
+        var resolver = new TypeResolver();
+        resolver.Load(SampleHost.Samples.FixturesDll);
+        var context = new ParseContext([], [], GenericContext.Empty, resolver, []);
+        var larger = MemberResolver.ResolveMethod("!!0 [Fixtures]Fixtures.Shapes::Larger<[1]>(!!0, !!0)", context, false);
+        Assert.IsTrue(larger.Method!.IsGenericMethodDefinition);
+        Assert.AreEqual("Larger", larger.Method.Name);
+        var bare = MemberResolver.ResolveMethod("[Fixtures]Fixtures.Shapes::Larger<[1]>", context, false);
+        Assert.IsTrue(bare.Method!.IsGenericMethodDefinition);
+        Assert.Throws<ReplException>(() => MemberResolver.ResolveMethod("!!0 [Fixtures]Fixtures.Shapes::Larger<[2]>(!!0, !!0)", context, false));
+        Assert.Throws<ReplException>(() => MemberResolver.ResolveMethod("[Fixtures]Fixtures.Shapes::Larger<[x]>", context, false));
+    }
 }

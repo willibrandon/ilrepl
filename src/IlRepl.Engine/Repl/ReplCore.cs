@@ -622,7 +622,7 @@ public sealed class ReplCore
             Transcript.Add(new TranscriptLine(LineKind.Listing,
             [
                 new TranscriptSpan(listing.InitLocals ? "  .locals init (" : "  .locals (", SpanStyle.Dim),
-                new TranscriptSpan(string.Join(", ", listing.Locals.Select((l, i) => $"{IlSignatureRenderer.Pretty(l)} V_{i.ToString(CultureInfo.InvariantCulture)}")), SpanStyle.Type),
+                new TranscriptSpan(string.Join(", ", listing.Locals.Select((l, i) => $"{IlSignatureRenderer.IlAsmNamed(l)} V_{i.ToString(CultureInfo.InvariantCulture)}")), SpanStyle.Type),
                 new TranscriptSpan(")", SpanStyle.Dim),
             ]));
         }

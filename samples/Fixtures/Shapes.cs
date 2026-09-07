@@ -140,4 +140,24 @@ public static class Shapes
     /// <returns>The larger.</returns>
     public static T Larger<T>(T a, T b)
         where T : IComparable<T> => a.CompareTo(b) >= 0 ? a : b;
+
+    /// <summary>
+    /// A token for an open generic type, which is the definition and not an instantiation.
+    /// </summary>
+    /// <returns>The open list type.</returns>
+    public static Type Open() => typeof(List<>);
+
+    /// <summary>
+    /// Constants that are not finite, which have no decimal spelling.
+    /// </summary>
+    /// <returns>A tuple of a NaN and an infinity.</returns>
+    public static (float, double) NonFinite() => (float.NaN, double.PositiveInfinity);
+
+    /// <summary>
+    /// A lambda over a generic method's type parameter, which the compiler moves into a generic closure class.
+    /// </summary>
+    /// <typeparam name="T">The captured type.</typeparam>
+    /// <param name="value">The value to capture.</param>
+    /// <returns>A function returning the value.</returns>
+    public static Func<T> Capture<T>(T value) => () => value;
 }
