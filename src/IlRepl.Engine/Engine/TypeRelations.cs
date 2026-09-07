@@ -271,9 +271,17 @@ public static class TypeRelations
                 return true;
             }
 
-            // A vector implements the generic collection interfaces over its element type.
-            return to.IsInterface && to.IsGenericType && from.IsSZArray && VectorInterfaces.Contains(to.GetGenericTypeDefinition())
-                && IsVariantMatch(to.GetGenericTypeDefinition().MakeGenericType(from.GetElementType()!), to, types);
+            // A vector implements the generic collection interfaces over its element type, and
+            // over any reference type the element converts to, whatever the interface's own
+            // variance: the runtime treats arrays specially here.
+            if (!to.IsInterface || !to.IsGenericType || !from.IsSZArray || !VectorInterfaces.Contains(to.GetGenericTypeDefinition()))
+            {
+                return false;
+            }
+
+            var element = from.GetElementType()!;
+            var wanted = to.GetGenericArguments()[0];
+            return TypeIdentity.Equal(element, wanted) || (!element.IsValueType && !wanted.IsValueType && IsAssignable(element, wanted, types));
         }
 
         if (from.HasElementType || to.HasElementType)
@@ -346,6 +354,56 @@ public static class TypeRelations
         if (type.IsGenericType && !type.IsGenericTypeDefinition)
         {
             var args = type.GetGenericArguments().Select(a => Substitute(a, definitionArguments, actualArguments)).ToArray();
+            return type.GetGenericTypeDefinition().MakeGenericType(args);
+        }
+
+        return type;
+    }
+
+    /// <summary>
+    /// Substitutes generic parameters of any owner, matched by identity, with the given types.
+    /// </summary>
+    /// <param name="type">The type to rewrite.</param>
+    /// <param name="from">The parameters.</param>
+    /// <param name="to">The types to put in their place.</param>
+    /// <returns>The rewritten type.</returns>
+    public static Type SubstituteParameters(Type type, IReadOnlyList<Type> from, IReadOnlyList<Type> to)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(to);
+        if (type.IsGenericParameter)
+        {
+            for (var i = 0; i < from.Count && i < to.Count; i++)
+            {
+                if (ReferenceEquals(from[i], type))
+                {
+                    return to[i];
+                }
+            }
+
+            return type;
+        }
+
+        if (type.IsByRef)
+        {
+            return SubstituteParameters(type.GetElementType()!, from, to).MakeByRefType();
+        }
+
+        if (type.IsPointer)
+        {
+            return SubstituteParameters(type.GetElementType()!, from, to).MakePointerType();
+        }
+
+        if (type.IsArray)
+        {
+            var element = SubstituteParameters(type.GetElementType()!, from, to);
+            return type.IsSZArray ? element.MakeArrayType() : element.MakeArrayType(type.GetArrayRank());
+        }
+
+        if (type.IsGenericType && !type.IsGenericTypeDefinition)
+        {
+            var args = type.GetGenericArguments().Select(a => SubstituteParameters(a, from, to)).ToArray();
             return type.GetGenericTypeDefinition().MakeGenericType(args);
         }
 

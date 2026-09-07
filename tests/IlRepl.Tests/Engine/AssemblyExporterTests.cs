@@ -233,4 +233,28 @@ public sealed class AssemblyExporterTests
             context.Unload();
         }
     }
+
+    /// <summary>
+    /// An attribute type declared in the session is applied and exported; its constructor is a
+    /// definition of the export before any attribute is imported.
+    /// </summary>
+    [TestMethod]
+    public void Write_SessionDefinedAttribute()
+    {
+        var session = Load(
+            ".class public Marker extends [System.Runtime]System.Attribute {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Attribute::.ctor(); ret }", "}",
+            ".class public Tagged {", ".custom instance void Marker::.ctor() = ( 01 00 00 00 )", ".field public int32 X", ".custom instance void Marker::.ctor() = ( 01 00 00 00 )", "}");
+        Assert.AreEqual("Marker", session.Types[1].RuntimeType!.GetCustomAttributesData()[0].AttributeType.Name);
+        var (assembly, context) = LoadExport(session, "marked");
+        try
+        {
+            var tagged = assembly.GetType("Tagged")!;
+            Assert.AreEqual(assembly.GetType("Marker"), tagged.GetCustomAttributesData()[0].AttributeType);
+            Assert.AreEqual(assembly.GetType("Marker"), tagged.GetField("X")!.GetCustomAttributesData()[0].AttributeType);
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
 }

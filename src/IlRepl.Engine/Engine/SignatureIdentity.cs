@@ -52,6 +52,57 @@ public static class SignatureIdentity
     }
 
     /// <summary>
+    /// The method's own generic parameters as they appear in a signature's types, by position.
+    /// </summary>
+    /// <param name="signature">The signature.</param>
+    /// <returns>The parameters found, ordered by position.</returns>
+    public static IReadOnlyList<Type> MethodParametersOf(MethodSignature signature)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        var found = new Dictionary<int, Type>();
+        void Visit(Type type)
+        {
+            if (type.IsGenericParameter)
+            {
+                if (type.DeclaringMethod is not null)
+                {
+                    found.TryAdd(type.GenericParameterPosition, type);
+                }
+
+                return;
+            }
+
+            if (type.HasElementType)
+            {
+                Visit(type.GetElementType()!);
+            }
+            else if (type.IsGenericType && !type.IsGenericTypeDefinition)
+            {
+                foreach (var argument in type.GetGenericArguments())
+                {
+                    Visit(argument);
+                }
+            }
+        }
+
+        Visit(signature.ReturnType);
+        foreach (var parameter in signature.ParameterTypes)
+        {
+            Visit(parameter);
+        }
+
+        foreach (var parameter in signature.TypeParameters)
+        {
+            foreach (var constraint in parameter.Constraints)
+            {
+                Visit(constraint);
+            }
+        }
+
+        return [.. found.OrderBy(p => p.Key).Select(p => p.Value)];
+    }
+
+    /// <summary>
     /// True when two signatures have the same shape: arity, return type, and parameter types.
     /// </summary>
     /// <param name="a">The first signature.</param>

@@ -189,6 +189,11 @@ public static class TypeEmitter
 
         foreach (var (emitter, family) in emitters)
         {
+            emitter.Details(family);
+        }
+
+        foreach (var (emitter, family) in emitters)
+        {
             emitter.Bodies(family);
         }
     }
@@ -319,6 +324,14 @@ public static class TypeEmitter
             }
         }
 
+        public void Details(TypeDeclaration family)
+        {
+            foreach (var declaration in family.Family)
+            {
+                DefineDetails(declaration);
+            }
+        }
+
         public void Bodies(TypeDeclaration family)
         {
             foreach (var declaration in family.Family)
@@ -404,10 +417,6 @@ public static class TypeEmitter
                 definition.ClassSize = declaration.ClassSize ?? 0;
             }
 
-            foreach (var attribute in declaration.CustomAttributes)
-            {
-                definition.CustomAttributes.Add(Attribute(attribute));
-            }
         }
 
         private void DefineMembers(TypeDeclaration declaration)
@@ -426,11 +435,6 @@ public static class TypeEmitter
                 if (field.HasDefault)
                 {
                     cecilField.Constant = ConstantFor(field.DefaultValue);
-                }
-
-                foreach (var attribute in field.CustomAttributes)
-                {
-                    cecilField.CustomAttributes.Add(Attribute(attribute));
                 }
 
                 definition.Fields.Add(cecilField);
@@ -495,7 +499,31 @@ public static class TypeEmitter
                 }
             }
 
-            // Signatures are imported once every generic parameter of the family is known.
+            _ = prototype;
+        }
+
+        /// <summary>
+        /// Signatures, attributes, properties, and events: imported once every type and member
+        /// of every family in the group exists, since an attribute may name a constructor of
+        /// another family.
+        /// </summary>
+        private void DefineDetails(TypeDeclaration declaration)
+        {
+            var definition = _definitions[declaration.FullName];
+            foreach (var attribute in declaration.CustomAttributes)
+            {
+                definition.CustomAttributes.Add(Attribute(attribute));
+            }
+
+            foreach (var field in declaration.Fields)
+            {
+                var cecilField = definition.Fields.First(f => f.Name == field.Name);
+                foreach (var attribute in field.CustomAttributes)
+                {
+                    cecilField.CustomAttributes.Add(Attribute(attribute));
+                }
+            }
+
             foreach (var method in declaration.Methods)
             {
                 var signature = method.Signature;
@@ -587,8 +615,6 @@ public static class TypeEmitter
 
                 definition.Events.Add(cecilEvent);
             }
-
-            _ = prototype;
         }
 
         private void EmitBodies(TypeDeclaration declaration)

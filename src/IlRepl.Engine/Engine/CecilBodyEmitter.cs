@@ -209,6 +209,17 @@ public static class CecilBodyEmitter
         {
             var target = resolved.Definition is { } definition ? map.SessionMethod(definition) : map.Map(resolved.Method!);
             var reference = resolved.Definition is null && resolved.Declared is not null ? writer.Import(target, resolved.DeclaringType) : writer.Import(target);
+            if (resolved.GenericArguments is { Count: > 0 } arguments)
+            {
+                var instance = new GenericInstanceMethod(reference);
+                foreach (var argument in arguments)
+                {
+                    instance.GenericArguments.Add(writer.Import(map.Map(argument)));
+                }
+
+                reference = instance;
+            }
+
             if (!callSite || resolved.OptionalParameterTypes is not { Length: > 0 } optional)
             {
                 return reference;

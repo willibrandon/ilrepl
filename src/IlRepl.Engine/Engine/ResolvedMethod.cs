@@ -55,6 +55,16 @@ public sealed record ResolvedMethod
     /// </summary>
     public MethodSignature? Declared { get; }
 
+    /// <summary>
+    /// The declaration as written, before the declaring type's and the method's own arguments were substituted; null outside a type being written.
+    /// </summary>
+    public MethodSignature? DeclaredDefinition { get; init; }
+
+    /// <summary>
+    /// The method's generic arguments when the call instantiates a member of a type being written; null otherwise.
+    /// </summary>
+    public IReadOnlyList<Type>? GenericArguments { get; init; }
+
     private Type? DeclaredType { get; }
 
     /// <summary>

@@ -149,9 +149,49 @@ public static class IlAsmRenderer
             sb.Append(Pad(level)).Append(".locals init (").Append(string.Join(", ", locals)).AppendLine(")");
         }
 
-        var indent = level;
-        foreach (var e in state.Entries)
+        // A finally or fault written after catch handlers protects the try and those handlers
+        // together, as the emitters nest them; the text nests them the same way.
+        var nestedTries = new HashSet<int>();
+        var nestedTerminals = new HashSet<int>();
+        var frames = new Stack<(int TryIndex, bool HasHandler)>();
+        for (var i = 0; i < state.Entries.Count; i++)
         {
+            var entry = state.Entries[i];
+            if (entry.Kind != EntryKind.Block)
+            {
+                continue;
+            }
+
+            switch (entry.Block)
+            {
+                case BlockKind.Try:
+                    frames.Push((i, false));
+                    break;
+                case BlockKind.Catch:
+                case BlockKind.Filter:
+                    frames.Push((frames.Pop().TryIndex, true));
+                    break;
+                case BlockKind.Finally:
+                case BlockKind.Fault:
+                    if (frames.Peek().HasHandler)
+                    {
+                        nestedTries.Add(frames.Peek().TryIndex);
+                        nestedTerminals.Add(i);
+                    }
+
+                    break;
+                case BlockKind.End:
+                    frames.Pop();
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        var indent = level;
+        for (var index = 0; index < state.Entries.Count; index++)
+        {
+            var e = state.Entries[index];
             foreach (var l in e.Labels)
             {
                 sb.Append(Pad(indent - 1)).Append(l).AppendLine(":");
@@ -176,6 +216,13 @@ public static class IlAsmRenderer
                     switch (e.Block)
                     {
                         case BlockKind.Try:
+                            if (nestedTries.Contains(index))
+                            {
+                                sb.Append(Pad(indent)).AppendLine(".try");
+                                sb.Append(Pad(indent)).AppendLine("{");
+                                indent++;
+                            }
+
                             sb.Append(Pad(indent)).AppendLine(".try");
                             sb.Append(Pad(indent)).AppendLine("{");
                             indent++;
@@ -203,6 +250,12 @@ public static class IlAsmRenderer
                         case BlockKind.Finally:
                             indent--;
                             sb.Append(Pad(indent)).AppendLine("}");
+                            if (nestedTerminals.Contains(index))
+                            {
+                                indent--;
+                                sb.Append(Pad(indent)).AppendLine("}");
+                            }
+
                             sb.Append(Pad(indent)).AppendLine("finally");
                             sb.Append(Pad(indent)).AppendLine("{");
                             indent++;
@@ -210,6 +263,12 @@ public static class IlAsmRenderer
                         case BlockKind.Fault:
                             indent--;
                             sb.Append(Pad(indent)).AppendLine("}");
+                            if (nestedTerminals.Contains(index))
+                            {
+                                indent--;
+                                sb.Append(Pad(indent)).AppendLine("}");
+                            }
+
                             sb.Append(Pad(indent)).AppendLine("fault");
                             sb.Append(Pad(indent)).AppendLine("{");
                             indent++;
@@ -302,29 +361,36 @@ public static class IlAsmRenderer
 
         if (resolved.Declared is { } declared)
         {
-            // A member of a type being written is described by its declaration; its builder cannot describe itself.
-            var declaredParameters = declared.ParameterTypes.Select(TypeNameFormatter.IlAsm).ToList();
+            // A member of a type being written is described by its declaration as written, with
+            // the declaring type's and the method's own parameters as !N and !!N; the owner and
+            // the method's arguments carry the instantiation.
+            var written = resolved.DeclaredDefinition ?? declared;
+            var declaredParameters = written.ParameterTypes.Select(SignatureType).ToList();
             if (resolved.OptionalParameterTypes is not null)
             {
                 declaredParameters.Add("...");
                 declaredParameters.AddRange(resolved.OptionalParameterTypes.Select(TypeNameFormatter.IlAsm));
             }
 
-            var declaredVarArg = declared.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "";
-            return $"{(declared.IsStatic ? "" : "instance ")}{declaredVarArg}{TypeNameFormatter.IlAsm(declared.ReturnType)} {TypeNameFormatter.IlAsmDeclaring(resolved.DeclaringType!)}::{MemberName(declared.Name)}({string.Join(", ", declaredParameters)})";
+            var declaredVarArg = written.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "";
+            var declaredName = MemberName(written.Name) + (resolved.GenericArguments is { Count: > 0 } arguments ? "<" + string.Join(", ", arguments.Select(TypeNameFormatter.IlAsm)) + ">" : "");
+            return $"{(written.IsStatic ? "" : "instance ")}{declaredVarArg}{SignatureType(written.ReturnType)} {TypeNameFormatter.IlAsmDeclaring(resolved.DeclaringType!)}::{declaredName}({string.Join(", ", declaredParameters)})";
         }
 
         var method = resolved.Method!;
         var instance = method.IsStatic ? "" : "instance ";
         var vararg = method.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "";
-        var returnType = method is MethodInfo mi ? TypeNameFormatter.IlAsm(mi.ReturnType) : "void";
+        // The signature is the definition's: a member of an instantiation names the type's
+        // parameters as !N, a generic method instance its own as !!N.
+        var definitionMethod = DefinitionOf(method);
+        var returnType = definitionMethod is MethodInfo mi ? SignatureType(mi.ReturnType) : "void";
         var name = method is ConstructorInfo ? (method.IsStatic ? ".cctor" : ".ctor") : method.Name;
         if (method is MethodInfo g && g.IsGenericMethod)
         {
             name += "<" + string.Join(", ", g.GetGenericArguments().Select(TypeNameFormatter.IlAsm)) + ">";
         }
 
-        var parameters = method.GetParameters().Select(p => TypeNameFormatter.IlAsm(p.ParameterType)).ToList();
+        var parameters = definitionMethod.GetParameters().Select(p => SignatureType(p.ParameterType)).ToList();
         if (resolved.OptionalParameterTypes is not null)
         {
             parameters.Add("...");
@@ -338,7 +404,87 @@ public static class IlAsmRenderer
     private static string FieldIlAsm(FieldInfo field)
     {
         var declaring = field.DeclaringType is null ? "?" : TypeNameFormatter.IlAsmDeclaring(field.DeclaringType);
-        return $"{TypeNameFormatter.IlAsm(field.FieldType)} {declaring}::{field.Name}";
+        return $"{SignatureType(DefinitionOf(field).FieldType)} {declaring}::{field.Name}";
+    }
+
+    /// <summary>
+    /// The method on the generic type definition, or the generic method definition, behind a
+    /// member reached through an instantiation; the member itself otherwise.
+    /// </summary>
+    private static MethodBase DefinitionOf(MethodBase method)
+    {
+        var definition = method;
+        if (method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } generic)
+        {
+            definition = generic.GetGenericMethodDefinition();
+        }
+
+        if (definition.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } owner && owner.GetGenericTypeDefinition() is not System.Reflection.Emit.TypeBuilder)
+        {
+            try
+            {
+                definition = definition.Module.ResolveMethod(definition.MetadataToken) ?? definition;
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or InvalidOperationException)
+            {
+                // A wrapper over a builder describes the definition already.
+            }
+        }
+
+        return definition;
+    }
+
+    private static FieldInfo DefinitionOf(FieldInfo field)
+    {
+        if (field.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } owner && owner.GetGenericTypeDefinition() is not System.Reflection.Emit.TypeBuilder)
+        {
+            // A wrapper over a builder describes the definition already.
+            try
+            {
+                return field.Module.ResolveField(field.MetadataToken) ?? field;
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or InvalidOperationException)
+            {
+                // A wrapper over a builder describes the definition already.
+            }
+        }
+
+        return field;
+    }
+
+    /// <summary>
+    /// A type inside a member reference's signature: generic parameters by position.
+    /// </summary>
+    private static string SignatureType(Type type)
+    {
+        if (type.IsGenericParameter)
+        {
+            return (type.DeclaringMethod is null ? "!" : "!!") + type.GenericParameterPosition.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        if (type.IsByRef)
+        {
+            return SignatureType(type.GetElementType()!) + "&";
+        }
+
+        if (type.IsPointer)
+        {
+            return SignatureType(type.GetElementType()!) + "*";
+        }
+
+        if (type.IsArray)
+        {
+            var element = SignatureType(type.GetElementType()!);
+            return type.IsSZArray ? element + "[]" : element + "[" + string.Join(",", Enumerable.Repeat("0...", type.GetArrayRank())) + "]";
+        }
+
+        if (type.IsGenericType && !type.IsGenericTypeDefinition)
+        {
+            var prefix = type.IsValueType ? "valuetype " : "class ";
+            return prefix + TypeNameFormatter.IlAsmDeclaring(type.GetGenericTypeDefinition()) + "<" + string.Join(", ", type.GetGenericArguments().Select(SignatureType)) + ">";
+        }
+
+        return TypeNameFormatter.IlAsm(type);
     }
 
     private static string SignatureIlAsm(CalliSignature signature)

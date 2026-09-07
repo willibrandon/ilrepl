@@ -744,6 +744,12 @@ public sealed partial class Session
         if (forward.Builder is not null)
         {
             builder = forward.Builder;
+            if (builder is MethodBuilder { IsGenericMethodDefinition: true } claimedGeneric)
+            {
+                // The header was read with stand-in parameters; the builder's own take their place.
+                methodGenerics = claimedGeneric.GetGenericArguments();
+                signature = MethodHeaderParser.ParseMember(rest, context, owner, out _, out _, out _, _ => methodGenerics);
+            }
         }
         else if (throwaway.Length > 0)
         {
@@ -878,7 +884,7 @@ public sealed partial class Session
         if (directive == ".property")
         {
             var header = PropertyEventParser.ParseProperty(rest, context);
-            if (block.Accessors.Any(a => a.Property is { } existing && existing.Name == header.Name && existing.IsStatic == header.IsStatic
+            if (block.Accessors.Any(a => a.Property is { } existing && existing.Name == header.Name && existing.IsStatic == header.IsStatic && TypeIdentity.Equal(existing.Type, header.Type)
                 && existing.ParameterTypes.Count == header.ParameterTypes.Count && existing.ParameterTypes.Zip(header.ParameterTypes).All(p => TypeIdentity.Equal(p.First, p.Second))))
             {
                 throw new ReplException($"property {header.Name} is already declared on {block.Path}");
@@ -1276,6 +1282,7 @@ public sealed partial class Session
             declared.AddRange(declaration.Interfaces);
             declared.AddRange(declaration.TypeParameters.SelectMany(p => p.Constraints));
             declared.AddRange(declaration.Fields.Select(f => f.Type));
+            declared.AddRange(declaration.Fields.SelectMany(f => f.RequiredModifiers.Concat(f.OptionalModifiers)));
             declared.AddRange(declaration.Properties.Select(p => p.Type));
             declared.AddRange(declaration.Events.Select(e => e.HandlerType));
             declared.AddRange(AttributeMentions(declaration.CustomAttributes));
@@ -1286,7 +1293,9 @@ public sealed partial class Session
             foreach (var method in declaration.Methods)
             {
                 declared.Add(method.Signature.ReturnType);
+                declared.AddRange(method.Signature.ReturnRequiredModifiers.Concat(method.Signature.ReturnOptionalModifiers));
                 declared.AddRange(method.Signature.ParameterTypes);
+                declared.AddRange(method.Signature.Parameters.SelectMany(p => p.RequiredModifiers.Concat(p.OptionalModifiers)));
                 declared.AddRange(method.Signature.TypeParameters.SelectMany(p => p.Constraints));
                 declared.AddRange(method.Overrides.Select(o => o.Target.DeclaringType!));
                 declared.AddRange(AttributeMentions(method.Signature.CustomAttributes));

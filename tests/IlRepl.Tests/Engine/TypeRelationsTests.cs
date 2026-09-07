@@ -159,4 +159,27 @@ public sealed class TypeRelationsTests
 
         Assert.HasCount(1, session.Methods);
     }
+
+    /// <summary>
+    /// The runtime converts a vector to the collection interfaces over any reference type its
+    /// element converts to, whatever the interface's own variance; value elements and other
+    /// ranks stay put.
+    /// </summary>
+    [TestMethod]
+    public void IsAssignable_VectorToInterfaceOverABaseElement()
+    {
+        var session = Load(".class public A { }");
+        var table = session.TypeTable;
+        var a = Find(session, "A");
+        Assert.IsTrue(TypeRelations.IsAssignable(a.MakeArrayType(), typeof(IList<object>), table));
+        Assert.IsTrue(TypeRelations.IsAssignable(a.MakeArrayType(), typeof(ICollection<object>), table));
+        Assert.IsFalse(TypeRelations.IsAssignable(typeof(int[]), typeof(IList<object>), table));
+        Assert.IsFalse(TypeRelations.IsAssignable(a.MakeArrayType(2), typeof(IList<object>), table));
+        foreach (var line in IlLines.Expand(".method class [System.Runtime]System.Collections.Generic.IList`1<object> Many() { ldc.i4 2; newarr A; ret }"))
+        {
+            session.AddLine(line);
+        }
+
+        Assert.HasCount(1, session.Methods);
+    }
 }

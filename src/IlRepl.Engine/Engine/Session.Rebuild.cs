@@ -53,7 +53,18 @@ public sealed partial class Session
             {
                 var module = NewPrototypeModule();
                 var family = new Dictionary<string, (TypeBuilder Prototype, OwnMembers Members)>(StringComparer.Ordinal);
-                DeclareAhead(member.Declaration, null, module, family, map, member.Old?.Types, ReferenceEquals(member.Declaration, declaration) ? block.FamilyTypes : null);
+                var generations = new List<IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)>>();
+                if (member.Old is not null)
+                {
+                    generations.Add(member.Old.Prototypes);
+                }
+
+                if (ReferenceEquals(member.Declaration, declaration))
+                {
+                    generations.Add(block.FamilyTypes);
+                }
+
+                DeclareAhead(member.Declaration, null, module, family, map, member.Old?.Types, generations);
                 predeclared[member.Declaration.FullName] = family;
                 foreach (var (path, entry) in family)
                 {
@@ -349,7 +360,7 @@ public sealed partial class Session
     /// Defines the prototype of a declaration and its nested types ahead of their lines, and
     /// maps the identities the session holds for them onto the new builders.
     /// </summary>
-    private static void DeclareAhead(TypeDeclaration declaration, TypeBuilder? enclosing, ModuleBuilder module, Dictionary<string, (TypeBuilder Prototype, OwnMembers Members)> family, EmitMap map, IReadOnlyDictionary<string, Type>? oldTypes, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)>? oldPrototypes)
+    private static void DeclareAhead(TypeDeclaration declaration, TypeBuilder? enclosing, ModuleBuilder module, Dictionary<string, (TypeBuilder Prototype, OwnMembers Members)> family, EmitMap map, IReadOnlyDictionary<string, Type>? oldTypes, IReadOnlyList<IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)>> oldPrototypes)
     {
         var builder = enclosing is null
             ? module.DefineType(declaration.Namespace.Length == 0 ? declaration.Name : declaration.Namespace + "." + declaration.Name, declaration.Attributes)
@@ -371,9 +382,14 @@ public sealed partial class Session
             MapOld(oldType);
         }
 
-        if (oldPrototypes is not null && oldPrototypes.TryGetValue(declaration.FullName, out var oldPrototype))
+        foreach (var generation in oldPrototypes)
         {
-            MapOld(oldPrototype.Prototype);
+            // The accepted family's prototypes, and the ones the edited block just built, both
+            // appear in bodies and declarations that are replayed or shaped.
+            if (generation.TryGetValue(declaration.FullName, out var oldPrototype))
+            {
+                MapOld(oldPrototype.Prototype);
+            }
         }
 
         foreach (var nested in declaration.NestedTypes)
@@ -443,7 +459,7 @@ public sealed partial class Session
             {
                 // The signature's own parameters are the old method's; the builder's replace them by position.
                 var methodMap = new EmitMap(_ => throw new InvalidOperationException("no session methods are mapped here"));
-                foreach (var old in MethodParameters(signature))
+                foreach (var old in SignatureIdentity.MethodParametersOf(signature))
                 {
                     if (old.GenericParameterPosition < methodGenerics.Length)
                     {
@@ -465,54 +481,6 @@ public sealed partial class Session
         {
             ShapeAhead(nested, family, map);
         }
-    }
-
-    /// <summary>
-    /// The generic parameters of the method a signature belongs to, found in its types.
-    /// </summary>
-    private static IEnumerable<Type> MethodParameters(MethodSignature signature)
-    {
-        var found = new Dictionary<int, Type>();
-        void Visit(Type type)
-        {
-            if (type.IsGenericParameter)
-            {
-                if (type.DeclaringMethod is not null)
-                {
-                    found.TryAdd(type.GenericParameterPosition, type);
-                }
-
-                return;
-            }
-
-            if (type.HasElementType)
-            {
-                Visit(type.GetElementType()!);
-            }
-            else if (type.IsGenericType && !type.IsGenericTypeDefinition)
-            {
-                foreach (var argument in type.GetGenericArguments())
-                {
-                    Visit(argument);
-                }
-            }
-        }
-
-        Visit(signature.ReturnType);
-        foreach (var parameter in signature.ParameterTypes)
-        {
-            Visit(parameter);
-        }
-
-        foreach (var parameter in signature.TypeParameters)
-        {
-            foreach (var constraint in parameter.Constraints)
-            {
-                Visit(constraint);
-            }
-        }
-
-        return found.OrderBy(p => p.Key).Select(p => p.Value);
     }
 
     /// <summary>

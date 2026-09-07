@@ -234,4 +234,58 @@ public sealed class TypeReplacementTests
         Assert.AreSame(session.Types[0].RuntimeType, line.GetCustomAttributesData()[0].ConstructorArguments[0].Value);
         _ = AssemblyExporter.Write(session, "annotated");
     }
+
+    /// <summary>
+    /// A family replaced twice maps every generation of its prototypes, so a dependent whose
+    /// signature names it replays cleanly each time.
+    /// </summary>
+    [TestMethod]
+    public void Redefine_Twice_WithATypedDependent()
+    {
+        var session = Load(".class public A { }", ".class public B {", ".method public static class A Id(class A a) { ldarg a; ret }", "}");
+        Assert.Contains("rebuilt class B", Add(session, ".class public A {", ".field public int32 X", "}"));
+        Assert.Contains("rebuilt class B", Add(session, ".class public A {", ".field public int32 Y", "}"));
+        Assert.IsNotNull(session.Types[0].RuntimeType!.GetField("Y"));
+        Assert.AreEqual(session.Types[0].RuntimeType, session.Types[1].RuntimeType!.GetMethod("Id")!.ReturnType);
+    }
+
+    /// <summary>
+    /// A caller of a generic method keeps working through a replacement of the method's type.
+    /// </summary>
+    [TestMethod]
+    public void Redefine_WithAGenericCaller()
+    {
+        var session = Load(
+            ".class public A {", ".method public static !!0 Id<T>(!!0 v) { ldarg v; ret }", "}",
+            ".class public B {", ".method public static int32 Use() { ldc.i4 7; call !!0 A::Id<int32>(!!0); ret }", "}");
+        Assert.AreEqual(7, Run(session, "call int32 B::Use()"));
+        Assert.Contains("rebuilt class B", Add(session, ".class public A {", ".method public static !!0 Id<T>(!!0 v) { ldarg v; ret }", "}"));
+        Assert.AreEqual(7, Run(session, "call int32 B::Use()"));
+        Assert.AreEqual(7, session.Types[1].RuntimeType!.GetMethod("Use")!.Invoke(null, null));
+    }
+
+    /// <summary>
+    /// A derived type calling an inherited member keeps working through a replacement of the base.
+    /// </summary>
+    [TestMethod]
+    public void Redefine_Base_WithADerivedCallerOfAnInheritedMember()
+    {
+        var session = Load(
+            ".class public Base {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", ".method public instance int32 F() { ldc.i4 1; ret }", "}",
+            ".class public Derived extends Base {", ".method public instance void .ctor() { ldarg.0; call instance void Base::.ctor(); ret }", ".method public instance int32 G() { ldarg.0; call instance int32 Derived::F(); ret }", "}");
+        Assert.Contains("rebuilt class Derived", Add(session, ".class public Base {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", ".method public instance int32 F() { ldc.i4 2; ret }", "}"));
+        Assert.AreEqual(2, Run(session, "newobj instance void Derived::.ctor()", "call instance int32 Derived::G()"));
+    }
+
+    /// <summary>
+    /// A custom modifier naming a type is a dependency of the declaration that carries it.
+    /// </summary>
+    [TestMethod]
+    public void Redefine_TypeNamedInAModifier_RebuildsTheDeclaration()
+    {
+        var session = Load(".class public A { }", ".class public B {", ".field public int32 modopt(A) V", "}");
+        Assert.Contains("rebuilt class B", Add(session, ".class public A {", ".field public int32 X", "}"));
+        Assert.AreEqual(session.Types[0].RuntimeType, session.Types[1].RuntimeType!.GetField("V")!.GetOptionalCustomModifiers()[0]);
+        _ = AssemblyExporter.Write(session, "modified");
+    }
 }

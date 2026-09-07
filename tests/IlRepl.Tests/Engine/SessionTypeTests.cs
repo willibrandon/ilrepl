@@ -498,4 +498,33 @@ public sealed class SessionTypeTests
         Assert.AreEqual("end of class Table", session.AddLine("}").Message);
         Assert.HasCount(2, session.Types[0].RuntimeType!.GetProperties());
     }
+
+    /// <summary>
+    /// A call picks the overload by generic arity, so F() is not ambiguous with F&lt;T&gt;().
+    /// </summary>
+    [TestMethod]
+    public void AddLine_CallsPickOverloadsByArity()
+    {
+        var session = IlLines.Load(".class public Over {", ".method public static int32 F() { ldc.i4 1; ret }", ".method public static int32 F<T>() { ldc.i4 2; ret }",
+            ".method public static int32 Both() { call int32 Over::F(); call int32 Over::F<string>(); add; ret }", "}");
+        Assert.AreEqual(3, session.Types[0].RuntimeType!.GetMethod("Both")!.Invoke(null, null));
+    }
+
+    /// <summary>
+    /// Properties with the same name and parameters but different types are distinct, as the
+    /// CLI's property signature includes the type.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_Properties_DifferByType()
+    {
+        var session = IlLines.Load(".class public Table {",
+            ".method public specialname instance int32 get_Item(int32 i) { ldarg i; ret }",
+            ".method public specialname instance string get_Text(int32 i) { ldnull; ret }",
+            ".property instance int32 Item(int32) {", ".get instance int32 Table::get_Item(int32)", "}",
+            ".property instance string Item(int32) {", ".get instance string Table::get_Text(int32)", "}",
+            "}");
+        var properties = session.Types[0].RuntimeType!.GetProperties();
+        Assert.HasCount(2, properties);
+        Assert.IsTrue(properties.Any(p => p.PropertyType == typeof(int)) && properties.Any(p => p.PropertyType == typeof(string)));
+    }
 }

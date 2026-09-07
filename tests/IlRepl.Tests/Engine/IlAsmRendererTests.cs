@@ -314,4 +314,64 @@ public sealed class IlAsmRendererTests
             context.Unload();
         }
     }
+
+    /// <summary>
+    /// A catch followed by a finally renders as nested regions, so the assembled method runs.
+    /// </summary>
+    [TestMethod]
+    public void Render_CatchAndFinally_NestsTheRegions()
+    {
+        var session = IlLines.Load(
+            ".method int32 Both() {", ".locals init (int32 v)", ".try {", "ldstr \"x\"", "newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)", "throw",
+            "} catch [System.Runtime]System.InvalidOperationException {", "pop", "ldc.i4 1", "stloc v", "leave DONE",
+            "} finally {", "ldloc v", "ldc.i4 10", "add", "stloc v", "endfinally", "}",
+            "DONE: ldloc v", "ret", "}",
+            "call int32 Both()");
+        var text = session.ToIlAsm();
+        Assert.Contains("        .try\n        {\n            .try\n", text.Replace("\r", "", StringComparison.Ordinal));
+        var image = IlasmLocator.Assemble(text);
+        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-regions", isCollectible: true);
+        try
+        {
+            Assert.AreEqual(11, context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
+    /// <summary>
+    /// A member of a generic instantiation and a generic interface method render with the
+    /// definition's signature, so the assembled references bind.
+    /// </summary>
+    [TestMethod]
+    public void Render_GenericReferences_UseDefinitionSignatures()
+    {
+        var session = IlLines.Load(
+            ".class public Outer {",
+            ".class nested public Box`1<T> {", ".field public !0 V",
+            ".method public instance void .ctor(!0 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg v; stfld !0 class Outer/Box`1<!0>::V; ret }",
+            ".method public instance !0 Id() { ldarg.0; ldfld !0 class Outer/Box`1<!0>::V; ret }", "}",
+            ".method public static int32 Use() { ldc.i4 7; newobj instance void class Outer/Box`1<int32>::.ctor(!0); call instance !0 class Outer/Box`1<int32>::Id(); ret }",
+            "}",
+            ".class interface public abstract IFoo {", ".method public abstract virtual instance !!0 Id<T>(!!0 v) { }", "}",
+            ".class public Foo implements IFoo {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", ".method public virtual instance !!0 Id<T>(!!0 v) { ldarg v; ret }", "}",
+            "call int32 Outer::Use()", "newobj instance void Foo::.ctor()", "ldc.i4 2", "callvirt instance !!0 IFoo::Id<int32>(!!0)", "add");
+        var text = session.ToIlAsm();
+        Assert.AreEqual(9, session.Run().Value);
+        Assert.Contains("call instance !0 class Outer/Box`1<int32>::Id()", text);
+        Assert.Contains("newobj instance void class Outer/Box`1<int32>::.ctor(!0)", text);
+        Assert.Contains("callvirt instance !!0 IFoo::Id<int32>(!!0)", text);
+        var image = IlasmLocator.Assemble(text);
+        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-generic-refs", isCollectible: true);
+        try
+        {
+            Assert.AreEqual(9, context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
 }
