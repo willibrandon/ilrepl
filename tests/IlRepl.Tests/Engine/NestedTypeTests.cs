@@ -104,4 +104,32 @@ public sealed class NestedTypeTests
         Assert.AreEqual(3, Run(session, "call int32 A/B/C::Deep()"));
         Assert.AreEqual(BindingFlags.Public, session.Types[0].Types["A/B/C"].IsNestedPublic ? BindingFlags.Public : BindingFlags.NonPublic);
     }
+
+    /// <summary>
+    /// A nested generic type redeclares the enclosing parameters first and its arity suffix
+    /// counts only the ones it introduces (ECMA I.10.7.1); references carry the total list.
+    /// </summary>
+    [TestMethod]
+    public void NestedGeneric_ArityAndReferences()
+    {
+        var session = Load(
+            ".class public Outer`1<T> {",
+            ".class nested public Inner`1<T, U> {",
+            ".field public !0 A",
+            ".field public !1 B",
+            ".method public instance void .ctor(!0 a, !1 b) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg a; stfld !0 class Outer`1/Inner`1<!0, !1>::A; ldarg.0; ldarg b; stfld !1 class Outer`1/Inner`1<!0, !1>::B; ret }",
+            "}",
+            ".class nested public Same<T> { }",
+            "}");
+        var outer = session.Types[0].RuntimeType!;
+        var inner = session.Types[0].Types["Outer`1/Inner`1"];
+        Assert.AreEqual("Inner`1", inner.Name);
+        Assert.HasCount(2, inner.GetGenericArguments(), "the nested type carries both parameters");
+        Assert.AreEqual("Same", session.Types[0].Types["Outer`1/Same"].Name, "no arity suffix when nothing is introduced");
+        Assert.AreEqual("x", Run(session, "ldc.i4 1", "ldstr \"x\"", "newobj instance void class Outer`1/Inner`1<int32, string>::.ctor(!0, !1)", "ldfld !1 class Outer`1/Inner`1<int32, string>::B"));
+        Assert.AreEqual(1, Run(session, "ldc.i4 1", "ldstr \"x\"", "newobj instance void class Outer`1/Inner`1<int32, string>::.ctor(!0, !1)", "ldfld !0 class Outer`1/Inner`1<int32, string>::A"));
+        Assert.AreSame(outer, inner.DeclaringType);
+        var wrong = Load(".class public Outer`1<T> {");
+        Assert.Contains("Inner`1 needs 2 parameters, or write Inner for the 0 it introduces", Assert.ThrowsExactly<ReplException>(() => wrong.AddLine(".class nested public Inner`1<U> {")).Message);
+    }
 }

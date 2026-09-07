@@ -104,4 +104,117 @@ public sealed class GenericTypeTests
         Assert.AreEqual(4, Run(session, "ldc.i4 4", "call class Box`1<int32> Wrap(int32)", "dup", "stsfld class Box`1<int32> Holder::B", "call instance !0 class Box`1<int32>::Get()"));
         Assert.AreEqual(4, Run(session, "ldsfld class Box`1<int32> Holder::B", "ldfld !0 class Box`1<int32>::Value"));
     }
+
+    /// <summary>
+    /// A generic method of a generic type mixes !0 and !!0, and a call site names the callee's
+    /// parameters with !N even inside another generic body.
+    /// </summary>
+    [TestMethod]
+    public void GenericMethod_InAGenericType_MixesTypeAndMethodParameters()
+    {
+        var session = Load(
+            ".class public Pair`1<T> {",
+            ".field public !0 V",
+            ".method public instance void .ctor(!0 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg v; stfld !0 class Pair`1<!0>::V; ret }",
+            ".method public instance !!0 Map<U>(class [System.Runtime]System.Func`2<!0, !!0> f) { ldarg f; ldarg.0; ldfld !0 class Pair`1<!0>::V; callvirt instance !1 class [System.Runtime]System.Func`2<!0, !!0>::Invoke(!0); ret }",
+            "}");
+        var pair = session.Types[0].RuntimeType!;
+        var map = pair.GetMethod("Map")!;
+        Assert.IsTrue(map.IsGenericMethodDefinition);
+        var closed = pair.MakeGenericType(typeof(int));
+        var instance = Activator.CreateInstance(closed, 21)!;
+        var mapped = closed.GetMethod("Map")!.MakeGenericMethod(typeof(string)).Invoke(instance, [new Func<int, string>(i => (i * 2).ToString(System.Globalization.CultureInfo.InvariantCulture))]);
+        Assert.AreEqual("42", mapped);
+    }
+
+    /// <summary>
+    /// A generic virtual method is overridden and dispatched.
+    /// </summary>
+    [TestMethod]
+    public void GenericVirtualMethod_Dispatches()
+    {
+        var session = Load(
+            ".class public Base {",
+            ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }",
+            ".method public virtual instance string Describe<T>(!!0 v) { ldstr \"base\"; ret }",
+            "}",
+            ".class public Derived extends Base {",
+            ".method public instance void .ctor() { ldarg.0; call instance void Base::.ctor(); ret }",
+            ".method public virtual instance string Describe<T>(!!0 v) { ldstr \"derived\"; ret }",
+            "}");
+        Assert.AreEqual("derived", Run(session, "newobj instance void Derived::.ctor()", "ldc.i4 1", "callvirt instance string Base::Describe<int32>(!!0)"));
+    }
+
+    /// <summary>
+    /// A generic type derives from a generic session base instantiated with its own parameter.
+    /// </summary>
+    [TestMethod]
+    public void Generic_DerivesFromGenericSessionBase()
+    {
+        var session = Load(
+            ".class public Base`1<T> {",
+            ".field public !0 V",
+            ".method public instance void .ctor(!0 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg v; stfld !0 class Base`1<!0>::V; ret }",
+            "}",
+            ".class public Derived`1<T> extends class Base`1<!0> {",
+            ".method public instance void .ctor(!0 v) { ldarg.0; ldarg v; call instance void class Base`1<!0>::.ctor(!0); ret }",
+            "}");
+        Assert.AreEqual(8, Run(session, "ldc.i4 8", "newobj instance void class Derived`1<int32>::.ctor(!0)", "ldfld !0 class Base`1<int32>::V"));
+        var derived = session.Types[1].RuntimeType!;
+        Assert.AreEqual(session.Types[0].RuntimeType, derived.BaseType!.GetGenericTypeDefinition());
+    }
+
+    /// <summary>
+    /// A generic struct holds its parameter by value.
+    /// </summary>
+    [TestMethod]
+    public void GenericStruct_HoldsItsParameter()
+    {
+        var session = Load(".class public sequential sealed Opt`1<T> extends [System.Runtime]System.ValueType {", ".field public !0 Value", ".field public bool Has", "}");
+        Assert.AreEqual(5, Run(session, ".locals init (valuetype Opt`1<int32> o)", "ldloca o", "ldc.i4 5", "stfld !0 valuetype Opt`1<int32>::Value", "ldloc o", "ldfld !0 valuetype Opt`1<int32>::Value"));
+        Assert.IsTrue(session.Types[0].RuntimeType!.IsValueType);
+    }
+
+    /// <summary>
+    /// A recursive constraint lets a constrained call reach the argument's implementation.
+    /// </summary>
+    [TestMethod]
+    public void RecursiveConstraint_AndConstrainedCall()
+    {
+        var session = Load(
+            ".class public Max`1<([System.Runtime]System.IComparable`1<!0>) T> {",
+            ".method public static !0 Of(!0 a, !0 b) { ldarga a; ldarg b; constrained. !0; callvirt instance int32 class [System.Runtime]System.IComparable`1<!0>::CompareTo(!0); ldc.i4 0; bge L; ldarg b; ret; L: ldarg a; ret }",
+            "}");
+        Assert.AreEqual(7, Run(session, "ldc.i4 3", "ldc.i4 7", "call !0 class Max`1<int32>::Of(!0, !0)"));
+        Assert.AreEqual("b", Run(session, "ldstr \"b\"", "ldstr \"a\"", "call !0 class Max`1<string>::Of(!0, !0)"));
+    }
+
+    /// <summary>
+    /// A type initializer runs once per closed type, and ldtoken names the instantiation.
+    /// </summary>
+    [TestMethod]
+    public void Generic_InitializerPerClosedType_AndLdtoken()
+    {
+        var session = Load(
+            ".class public Counted`1<T> {",
+            ".field public static int32 N",
+            ".method static void .cctor() { ldsfld int32 class Counted`1<!0>::N; ldc.i4 5; add; stsfld int32 class Counted`1<!0>::N; ret }",
+            "}");
+        Assert.AreEqual(5, Run(session, "ldsfld int32 class Counted`1<string>::N"));
+        Assert.AreEqual(5, Run(session, "ldsfld int32 class Counted`1<string>::N"));
+        Assert.AreEqual(5, Run(session, "ldsfld int32 class Counted`1<int32>::N"));
+        var token = Run(session, "ldtoken class Counted`1<int32>", "call class [System.Runtime]System.Type [System.Runtime]System.Type::GetTypeFromHandle(valuetype [System.Runtime]System.RuntimeTypeHandle)") as Type;
+        Assert.IsNotNull(token);
+        Assert.AreEqual(session.Types[0].RuntimeType, token.GetGenericTypeDefinition());
+    }
+
+    /// <summary>
+    /// A cell with its own type parameter instantiates a session generic with it.
+    /// </summary>
+    [TestMethod]
+    public void Generic_FromACellTypeParameter()
+    {
+        var session = Load(Box);
+        Assert.AreEqual(0, Run(session, ".typeparams (T)", ".typeargs (int32)", ".locals init (!!0 v)", "ldloc v", "newobj instance void class Box`1<!!0>::.ctor(!0)", "ldfld !0 class Box`1<!!0>::Value", "box !!0"));
+    }
 }

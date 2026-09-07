@@ -31,7 +31,13 @@ public sealed record TypeHeader(
     string? BaseTypeText,
     IReadOnlyList<string> InterfaceTexts,
     bool OpensBlock,
-    bool ClosesBlock);
+    bool ClosesBlock)
+{
+    /// <summary>
+    /// True when the arity suffix was written on the header rather than added from the parameter count.
+    /// </summary>
+    public bool ArityWritten { get; init; }
+}
 
 /// <summary>
 /// One generic parameter as written: its name, variance, special constraints, and the text of
@@ -275,7 +281,8 @@ public static class TypeHeaderParser
 
         var (ns, name) = SplitNamespace(fullName);
         var introduced = generics.Count;
-        if (introduced > 0 && !name.Contains('`'))
+        var arityWritten = name.Contains('`');
+        if (introduced > 0 && !arityWritten)
         {
             // The arity suffix counts the parameters this type introduces; a nested type's
             // redeclared parameters are accounted for by the session, which knows the enclosing type.
@@ -287,7 +294,7 @@ public static class TypeHeaderParser
             throw new ReplException("the IlRepl namespace is reserved for the cell type");
         }
 
-        return new TypeHeader(attributes, kind, kindFromWord, layout ?? TypeLayoutKind.Auto, ns, name, generics, baseText, interfaces, opens, closes);
+        return new TypeHeader(attributes, kind, kindFromWord, layout ?? TypeLayoutKind.Auto, ns, name, generics, baseText, interfaces, opens, closes) { ArityWritten = arityWritten };
     }
 
     private static (string Namespace, string Name) SplitNamespace(string fullName)

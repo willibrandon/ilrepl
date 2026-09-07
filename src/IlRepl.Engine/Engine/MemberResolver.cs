@@ -484,8 +484,9 @@ public static class MemberResolver
         // declaring type is kept from this pass. Parameters that are in scope, a generic type's
         // own !N inside its body or a method's !!N, are real and stay so: they can appear in the
         // declaring type itself, as in Box`1<!0>::Count.
-        var placeholders = Enumerable.Repeat(typeof(object), 32).ToArray();
-        return new GenericContext(generics.TypeArguments.Count > 0 ? generics.TypeArguments : placeholders, generics.MethodArguments.Count > 0 ? generics.MethodArguments : placeholders);
+        // A !N beyond what is in scope belongs to the referenced type and gets a placeholder.
+        var placeholders = Enumerable.Repeat(typeof(object), 32);
+        return new GenericContext([.. generics.TypeArguments, .. placeholders], [.. generics.MethodArguments, .. placeholders]);
     }
 
     private static ConstructorInfo ResolveConstructor(Type declaring, string name, Type[]? parameterTypes)

@@ -149,6 +149,12 @@ public sealed partial class Session
         else if (names.Length > 0 && enclosing is not null)
         {
             var tick = header.Name.LastIndexOf('`');
+            if (header.ArityWritten && int.TryParse(header.Name[(tick + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var written) && written != introduced)
+            {
+                // The suffix counts introduced parameters; a nested type lists the enclosing ones first.
+                throw new ReplException($"{header.Name} declares {names.Length} generic parameter(s) but {enclosing.Path} already has {enclosingTotal}; a nested type redeclares the enclosing parameters first (ECMA I.10.7.1), so {header.Name} needs {enclosingTotal + written} parameters, or write {header.Name[..tick]}{(introduced == 0 ? "" : "`" + introduced.ToString(CultureInfo.InvariantCulture))} for the {introduced} it introduces");
+            }
+
             name = introduced == 0 ? header.Name[..tick] : header.Name[..tick] + "`" + introduced.ToString(CultureInfo.InvariantCulture);
         }
 
