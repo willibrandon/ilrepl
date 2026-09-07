@@ -37,6 +37,12 @@ public sealed record ParseContext(
     public int ThisIndex { get; init; } = -1;
 
     /// <summary>
+    /// True when a lookup only inspects: nothing it names may be declared ahead of its declaration,
+    /// so a reference to a member or nested type that does not exist yet is an error, not a promise.
+    /// </summary>
+    public bool Inspecting { get; init; }
+
+    /// <summary>
     /// Returns a copy with different generic parameters in scope.
     /// </summary>
     /// <param name="generics">The generic context.</param>

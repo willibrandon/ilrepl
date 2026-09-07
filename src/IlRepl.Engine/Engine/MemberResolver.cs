@@ -445,7 +445,7 @@ public static class MemberResolver
             return inherited;
         }
 
-        if (candidates.Count == 0 && arity == 0 && returnType is not null && parameterTypes is not null && own.DefineForward is not null && !instantiated)
+        if (candidates.Count == 0 && arity == 0 && returnType is not null && parameterTypes is not null && own.DefineForward is not null && !instantiated && !context.Inspecting)
         {
             // A member referenced before its declaration: the signature is taken at its word and
             // checked when the type closes, which is what lets members call each other in any order.
