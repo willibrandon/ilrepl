@@ -328,7 +328,8 @@ public sealed partial class Session
         var result = new LineResult(LineOutcome.TypeStart, null, block.KindWord + " " + DisplayName(block));
         if (header.ClosesBlock)
         {
-            return CloseTypeBlock();
+            var end = CloseTypeBlock();
+            return new LineResult(LineOutcome.TypeEnd, null, result.Message + "; " + end.Message);
         }
 
         return result;

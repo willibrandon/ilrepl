@@ -38,9 +38,11 @@ It takes all of IL: every opcode, exception blocks (`.try {`, `} catch T {`, `} 
 `} finally {`, `} fault {`), `calli`, varargs and `arglist`, pinned locals, cell arguments,
 generic parameters with `!!T`, and `ldtoken` for types, methods, and fields. Methods defined with
 `.method` persist across cells and are called by name, so recursion, `ldftn` over your own code,
-and delegates over it all work. Member references use ILAsm syntax, and the return type and
-`[assembly]` prefix are optional. Cells and their methods can be saved to disk as real assemblies
-with `.save`, or shown as ILAsm with `.il`.
+and delegates over it all work. Types defined with `.class` persist too: structs and classes with
+constructors, virtual and abstract members, interfaces, enums, layout, generics, and nested types,
+each one runtime type across cells, shown by its fields when a cell returns one. Member references
+use ILAsm syntax, and the return type and `[assembly]` prefix are optional. Types, methods, and
+cells can be saved to disk as real assemblies with `.save`, or shown as ILAsm with `.il`.
 
 ```
 il[2]> .locals init (string m)
@@ -85,6 +87,33 @@ il[4]> ldc.i4 10
 il[4]> call int32 Fib(int32)
 il[4]> ret
   = 55 : int32
+```
+
+A type stays too, and a value of it is shown by its fields:
+
+```
+il[5]> .class public sequential ansi sealed Point extends [System.Runtime]System.ValueType {
+  struct Point
+il[5]> .field public int32 X
+il[5]> .field public int32 Y
+il[5]> .method public instance void .ctor(int32 x, int32 y) {
+il[5]> ldarg.0
+il[5]> ldarg x
+il[5]> stfld int32 Point::X
+il[5]> ldarg.0
+il[5]> ldarg y
+il[5]> stfld int32 Point::Y
+il[5]> ret
+il[5]> }
+  end of method .ctor
+il[5]> }
+  end of struct Point
+il[6]> ldc.i4 3
+il[6]> ldc.i4 4
+il[6]> newobj instance void Point::.ctor(int32, int32)
+il[6]> box Point
+il[6]> ret
+  = Point { X = 3, Y = 4 } : Point
 ```
 
 Tab completes opcodes and commands, with a palette that shows each candidate's stack transition.

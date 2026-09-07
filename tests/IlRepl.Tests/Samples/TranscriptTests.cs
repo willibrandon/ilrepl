@@ -35,6 +35,7 @@ public sealed class TranscriptTests
         }
 
         Assert.IsNull(core.Status.OpenMethod, "a transcript must close its methods: " + Path.GetFileName(path));
+        Assert.IsNull(core.Status.OpenType, "a transcript must close its classes: " + Path.GetFileName(path));
         if (!core.Session.State.IsEmpty)
         {
             core.Handle("ret");
@@ -84,5 +85,28 @@ public sealed class TranscriptTests
         Assert.Contains(l => l.Kind == LineKind.Output && l.PlainText == "hello, methods", core.Transcript.Lines);
         Assert.AreEqual(2, core.Status.Methods);
         Assert.AreEqual(7, core.CellNumber, "two closes and four runs");
+    }
+
+    /// <summary>
+    /// The types transcript: a struct shown by its fields, a static that persists, an interface
+    /// dispatched through a class, and a generic class instantiated from a cell.
+    /// </summary>
+    [TestMethod]
+    public void Transcripts_TypesProduceExpectedValues()
+    {
+        var core = new ReplCore();
+        foreach (var line in File.ReadAllLines(Path.Combine(RepoPaths.Transcripts, "types.il")))
+        {
+            core.Handle(line);
+        }
+
+        var results = core.Transcript.Lines.Where(l => l.Kind == LineKind.Result).Select(l => l.PlainText).ToList();
+        Assert.HasCount(5, results);
+        Assert.Contains("Point { X = 3, Y = 4 } : Point", results[0]);
+        Assert.Contains("11", results[1]);
+        Assert.Contains("2", results[2]);
+        Assert.Contains("49", results[3]);
+        Assert.Contains("\"boxed\"", results[4]);
+        Assert.AreEqual(4, core.Status.Types);
     }
 }

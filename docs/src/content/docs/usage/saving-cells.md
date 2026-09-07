@@ -5,8 +5,9 @@ description: Write a cell to disk as an assembly, or look at it as ILAsm.
 
 ## As an assembly
 
-`.save` writes the current cell as a real assembly with a static `IlRepl.Cell.Run` method, and
-every method defined with `.method` beside it. The cell is kept, so you can still run it.
+`.save` writes the current cell as a real assembly with a static `IlRepl.Cell.Run` method,
+every method defined with `.method` beside it, and every type defined with `.class` before it.
+The cell is kept, so you can still run it.
 
 ```
 il[1]> .args (int32 n = 0)
@@ -26,14 +27,19 @@ Console.WriteLine(run.Invoke(null, [21])); // 42
 ```
 
 Session methods are public static methods on the same type, so `GetMethod("Fib")` finds them the
-same way. Saving uses `PersistedAssemblyBuilder`, so the output has real metadata: declared
-parameters, locals, exception blocks, and tokens for every member the cell references.
+same way, and a session type is a type of the assembly under its own name, `Point` or
+`Outer+Inner`. The file is written by the same Mono.Cecil writer that produces the types the
+session runs, so it carries what you declared and nothing else: the layouts and offsets, the
+constants and modifiers, parameter defaults, attributes, and no constructor you did not write.
+A call from one session method to another is a direct call in the file, and nothing in it
+refers back to the session.
 
 ## As ILAsm
 
-`.il` renders the cell and its methods as ILAsm source, and `.save` with an `.il` extension is not needed because
-you can copy it from the transcript. Operands are fully qualified so the text assembles with
-`ilasm` after adding the assembly references it lists.
+`.il` renders the types, the methods, and the cell as ILAsm source, and `.save` with an `.il`
+extension is not needed because you can copy it from the transcript. Operands are fully
+qualified and each class is written out with its fields, members, and nested types, so the text
+assembles with `ilasm` after adding the assembly references it lists.
 
 ```
 il[2]> .il
