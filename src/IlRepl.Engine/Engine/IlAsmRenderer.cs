@@ -424,7 +424,7 @@ public static class IlAsmRenderer
         // parameters as !N, a generic method instance its own as !!N.
         var definitionMethod = DefinitionOf(method);
         var returnType = definitionMethod is MethodInfo mi ? SignatureType(mi.ReturnType) : "void";
-        var name = method is ConstructorInfo ? (method.IsStatic ? ".cctor" : ".ctor") : method.Name;
+        var name = method is ConstructorInfo ? (method.IsStatic ? ".cctor" : ".ctor") : MemberName(method.Name);
         if (method is MethodInfo g && g.IsGenericMethod)
         {
             name += "<" + string.Join(", ", g.GetGenericArguments().Select(TypeNameFormatter.IlAsm)) + ">";
@@ -444,7 +444,19 @@ public static class IlAsmRenderer
     private static string FieldIlAsm(FieldInfo field)
     {
         var declaring = field.DeclaringType is null ? "?" : TypeNameFormatter.IlAsmDeclaring(field.DeclaringType);
-        return $"{SignatureType(DefinitionOf(field).FieldType)} {declaring}::{field.Name}";
+        var definition = DefinitionOf(field);
+        var type = SignatureType(definition.FieldType);
+        try
+        {
+            // A loaded field carries its modifiers; a builder cannot describe them yet.
+            type = Modified(type, definition.GetRequiredCustomModifiers(), definition.GetOptionalCustomModifiers());
+        }
+        catch (Exception ex) when (ex is NotSupportedException or NotImplementedException)
+        {
+            // A field of a type being written: its declaration renders the modifiers elsewhere.
+        }
+
+        return $"{type} {declaring}::{MemberName(field.Name)}";
     }
 
     /// <summary>
@@ -957,11 +969,7 @@ public static class IlAsmRenderer
     /// <summary>
     /// A type name as ILAsm reads it: the arity suffix is part of the name and needs no quotes.
     /// </summary>
-    private static string TypeName(string name)
-    {
-        var tick = name.IndexOf('`', StringComparison.Ordinal);
-        return tick > 0 && name[(tick + 1)..].All(char.IsDigit) ? TypeNameFormatter.IlAsmIdentifier(name[..tick]) + name[tick..] : TypeNameFormatter.IlAsmIdentifier(name);
-    }
+    private static string TypeName(string name) => TypeNameFormatter.IlAsmTypeName(name);
 
     /// <summary>
     /// A nested path as ILAsm reads it, each segment quoted on its own when it must be.

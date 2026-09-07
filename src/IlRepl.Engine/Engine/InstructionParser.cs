@@ -252,7 +252,7 @@ public static class InstructionParser
                 return new Instruction { Op = op, Text = text, Kind = OperandKind.Int64, Operand = LiteralParser.ParseInteger(operandText, opName) };
 
             case OperandType.ShortInlineR:
-                return new Instruction { Op = op, Text = text, Kind = OperandKind.Single, Operand = (float)LiteralParser.ParseFloat(operandText, opName) };
+                return new Instruction { Op = op, Text = text, Kind = OperandKind.Single, Operand = LiteralParser.ParseFloat32(operandText, opName) };
 
             case OperandType.InlineR:
                 return new Instruction { Op = op, Text = text, Kind = OperandKind.Double, Operand = LiteralParser.ParseFloat(operandText, opName) };

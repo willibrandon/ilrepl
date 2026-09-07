@@ -106,6 +106,11 @@ public static class TypeNameFormatter
             return Pretty(type.GetElementType()) + "*";
         }
 
+        if (IsFunctionPointer(type))
+        {
+            return IlSignatureRenderer.Pretty(IlSignature.FromType(type));
+        }
+
         if (type.IsArray)
         {
             return Pretty(type.GetElementType()) + ArraySuffix(type);
@@ -160,21 +165,90 @@ public static class TypeNameFormatter
             return IlAsm(type.GetElementType()!) + "*";
         }
 
+        if (IsFunctionPointer(type))
+        {
+            // Reflection describes a function pointer's signature; the signature renderer spells it.
+            return IlSignatureRenderer.IlAsm(IlSignature.FromType(type));
+        }
+
         if (type.IsArray)
         {
             return IlAsm(type.GetElementType()!) + ArraySuffix(type);
         }
 
-        var kind = type.IsValueType ? "valuetype " : "class ";
-        var definition = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
-        var full = (definition.FullName ?? definition.Name).Replace('+', '/');
+        var full = IlAsmDefinition(type);
         if (type.IsGenericType)
         {
             full += "<" + string.Join(", ", type.GetGenericArguments().Select(IlAsm)) + ">";
         }
 
+        return full;
+    }
+
+    /// <summary>
+    /// True for a function pointer type. A builder or a placeholder type answers the question with
+    /// <see cref="NotImplementedException"/>, and none of those is a function pointer.
+    /// </summary>
+    /// <param name="type">The type.</param>
+    /// <returns>True when the runtime describes the type as a function pointer.</returns>
+    public static bool IsFunctionPointer(Type type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        try
+        {
+            return type.IsFunctionPointer;
+        }
+        catch (Exception ex) when (ex is NotImplementedException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The ILAsm spelling of a type's definition, without generic arguments: <c>class [System.Collections]System.Collections.Generic.List`1</c>.
+    /// </summary>
+    /// <param name="type">The type, or an instantiation of it.</param>
+    /// <returns>The reference text with its <c>class</c>/<c>valuetype</c> word.</returns>
+    public static string IlAsmDefinition(Type type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        var kind = type.IsValueType ? "valuetype " : "class ";
+        var definition = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
+        var full = QualifiedName(definition);
+
         // A session type lives in the module being rendered, so it is named without an assembly.
         return TypeRelations.IsSessionType(definition) ? kind + full : $"{kind}[{AssemblyReferenceName(type)}]{full}";
+    }
+
+    /// <summary>
+    /// A type name as ILAsm reads it: quoted when the lexer would not take it as a name, with an
+    /// arity suffix left outside the quotes because ILAsm reads <c>List`1</c> as one name.
+    /// </summary>
+    /// <param name="name">The simple type name.</param>
+    /// <returns>The name, quoted when needed.</returns>
+    public static string IlAsmTypeName(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        var tick = name.IndexOf('`', StringComparison.Ordinal);
+        return tick > 0 && name[(tick + 1)..].All(char.IsDigit) ? IlAsmIdentifier(name[..tick]) + name[tick..] : IlAsmIdentifier(name);
+    }
+
+    /// <summary>
+    /// The namespace-qualified, nesting-qualified name of a type definition, each segment quoted on
+    /// its own when it must be: <c>System.Collections.Generic.List`1</c>, <c>Program/'&lt;&gt;c'</c>.
+    /// </summary>
+    /// <param name="definition">The type definition.</param>
+    /// <returns>The qualified name without an assembly.</returns>
+    public static string QualifiedName(Type definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        if (definition.IsNested && definition.DeclaringType is { } declaring)
+        {
+            return QualifiedName(declaring) + "/" + IlAsmTypeName(definition.Name);
+        }
+
+        var name = IlAsmTypeName(definition.Name);
+        return string.IsNullOrEmpty(definition.Namespace) ? name : string.Join(".", definition.Namespace.Split('.').Select(IlAsmIdentifier)) + "." + name;
     }
 
     /// <summary>

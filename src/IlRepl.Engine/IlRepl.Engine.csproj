@@ -3,6 +3,7 @@
   <PropertyGroup>
     <RootNamespace>IlRepl</RootNamespace>
     <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Description>The ilrepl engine: IL parsing, member resolution, stack simulation, and Reflection.Emit compilation.</Description>
   </PropertyGroup>
 
