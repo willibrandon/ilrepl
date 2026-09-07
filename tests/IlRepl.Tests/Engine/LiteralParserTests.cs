@@ -70,4 +70,56 @@ public sealed class LiteralParserTests
         var ex = Assert.ThrowsExactly<ReplException>(() => LiteralParser.ParseInteger("abc", "ldc.i4"));
         Assert.Contains("ldc.i4", ex.Message);
     }
+
+    /// <summary>
+    /// float32 bit patterns are kept exactly, signaling NaNs included; every other spelling parses as a float.
+    /// </summary>
+    [TestMethod]
+    public void ParseFloat32_KeepsBits()
+    {
+        Assert.AreEqual(0x7F800001, BitConverter.SingleToInt32Bits(LiteralParser.ParseFloat32("float32(0x7f800001)", "ldc.r4")));
+        Assert.AreEqual(unchecked((int)0xFF800001), BitConverter.SingleToInt32Bits(LiteralParser.ParseFloat32("float32(0xff800001)", "ldc.r4")));
+        Assert.AreEqual(unchecked((int)0x80000000), BitConverter.SingleToInt32Bits(LiteralParser.ParseFloat32("-0", "ldc.r4")));
+        Assert.AreEqual(1.5f, LiteralParser.ParseFloat32("1.5", "ldc.r4"));
+        Assert.AreEqual(1.5f, LiteralParser.ParseFloat32("float32(1.5)", "ldc.r4"));
+        Assert.AreEqual(float.PositiveInfinity, LiteralParser.ParseFloat32("inf", "ldc.r4"));
+        Assert.AreEqual(1e-45f, LiteralParser.ParseFloat32("1E-45", "ldc.r4"));
+        Assert.Throws<ReplException>(() => LiteralParser.ParseFloat32("float32(0x100000000)", "ldc.r4"));
+    }
+
+    /// <summary>
+    /// A float32 bit pattern reaches the emitted operand bytes unchanged through both emitters.
+    /// </summary>
+    [TestMethod]
+    public void ParseFloat32_BitsSurviveEmission()
+    {
+        var value = LiteralParser.ParseFloat32("float32(0x7f800001)", "ldc.r4");
+
+        // Reflection.Emit: the cell's path. The body is persisted and read back, because a JIT
+        // folds float constants through double and would quiet the NaN before any bits were read.
+        var persisted = new System.Reflection.Emit.PersistedAssemblyBuilder(new System.Reflection.AssemblyName("IlReplFloatBits"), typeof(object).Assembly);
+        var builder = persisted.DefineDynamicModule("IlReplFloatBits").DefineType("T", System.Reflection.TypeAttributes.Public);
+        var il = builder.DefineMethod("F", System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static, typeof(float), Type.EmptyTypes).GetILGenerator();
+        il.Emit(System.Reflection.Emit.OpCodes.Ldc_R4, value);
+        il.Emit(System.Reflection.Emit.OpCodes.Ret);
+        builder.CreateType();
+        using var stream = new MemoryStream();
+        persisted.Save(stream);
+        stream.Position = 0;
+        var emitted = new System.Runtime.Loader.AssemblyLoadContext("IlReplFloatBits", isCollectible: true).LoadFromStream(stream);
+        var emittedBytes = emitted.GetType("T")!.GetMethod("F")!.GetMethodBody()!.GetILAsByteArray()!;
+        Assert.AreEqual(0x22, emittedBytes[0]);
+        Assert.AreEqual(0x7F800001u, BitConverter.ToUInt32(emittedBytes, 1));
+
+        // Cecil: a session method's path. The operand bytes are read from the written body.
+        var session = new Session();
+        foreach (var line in new[] { ".method float32 F() {", "ldc.r4 float32(0x7f800001)", "ret", "}" })
+        {
+            session.AddLine(line);
+        }
+
+        var bytes = session.Methods[0].Version.Body.GetMethodBody()!.GetILAsByteArray()!;
+        Assert.AreEqual(0x22, bytes[0]);
+        Assert.AreEqual(0x7F800001u, BitConverter.ToUInt32(bytes, 1));
+    }
 }

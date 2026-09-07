@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reflection;
 using IlRepl.Engine;
 using IlRepl.Protocol;
 
@@ -381,6 +382,16 @@ public sealed class ReplCore
 
                 return new HandleResult(true, false);
 
+            case ".dis":
+            case ".disassemble":
+                if (argument.Length == 0)
+                {
+                    throw new ReplException("usage: .dis <method reference>  e.g. .dis instance string [System.Runtime]System.String::Trim()  or  .dis Fib");
+                }
+
+                Disassemble(argument);
+                return new HandleResult(true, false);
+
             case ".undo":
             case ".u":
             {
@@ -582,6 +593,101 @@ public sealed class ReplCore
     }
 
     private void Show() => ListBody(Session.State, showArguments: true, "(empty cell)");
+
+    private void Disassemble(string spec)
+    {
+        var resolved = MemberResolver.ResolveMethod(spec, Session.InspectionContext, wantConstructor: false);
+        MethodBase method;
+        if (resolved.Definition is { } definition)
+        {
+            var record = Session.Methods.FirstOrDefault(m => m.Signature.Name == definition.Name && SignatureIdentity.Same(m.Signature, definition))
+                ?? throw new ReplException($"no method '{definition.Name}' in the session");
+            method = record.Version.Body;
+        }
+        else if (resolved.Method is { } loaded && loaded.DeclaringType is not System.Reflection.Emit.TypeBuilder && resolved.Declared is null)
+        {
+            method = loaded;
+        }
+        else
+        {
+            throw new ReplException($"{TypeNameFormatter.Pretty(resolved.DeclaringType)}::{resolved.Declared?.Name ?? resolved.Method?.Name} belongs to the class being written and has no compiled body; close it with }} first");
+        }
+
+        var listing = MethodDisassembler.Disassemble(method, Session);
+        var column = StackAnalysis.Run(listing);
+        Transcript.Add(LineKind.Listing, "  " + listing.Header + " {", SpanStyle.Label);
+        Transcript.Add(LineKind.Listing, "  .maxstack " + listing.MaxStack.ToString(CultureInfo.InvariantCulture), SpanStyle.Dim);
+        if (listing.Locals.Count > 0)
+        {
+            Transcript.Add(new TranscriptLine(LineKind.Listing,
+            [
+                new TranscriptSpan(listing.InitLocals ? "  .locals init (" : "  .locals (", SpanStyle.Dim),
+                new TranscriptSpan(string.Join(", ", listing.Locals.Select((l, i) => $"{IlSignatureRenderer.IlAsmNamed(l)} V_{i.ToString(CultureInfo.InvariantCulture)}")), SpanStyle.Type),
+                new TranscriptSpan(")", SpanStyle.Dim),
+            ]));
+        }
+
+        var indent = 0;
+        for (var i = 0; i < listing.Entries.Count; i++)
+        {
+            var entry = listing.Entries[i];
+            switch (entry.Kind)
+            {
+                case DisassembledEntryKind.Label:
+                    Transcript.Add(LineKind.Listing, entry.Label + ":", SpanStyle.Label);
+                    break;
+                case DisassembledEntryKind.Block:
+                {
+                    var text = entry.Block switch
+                    {
+                        BlockKind.Try => ".try {",
+                        BlockKind.Catch => "} catch " + entry.CatchText + " {",
+                        BlockKind.Filter => "} filter {",
+                        BlockKind.FilterHandler => "} handler {",
+                        BlockKind.Finally => "} finally {",
+                        BlockKind.Fault => "} fault {",
+                        _ => "}",
+                    };
+                    if (entry.Block != BlockKind.Try)
+                    {
+                        indent = Math.Max(0, indent - 1);
+                    }
+
+                    Transcript.Add(LineKind.Listing, "       " + new string(' ', indent * 2) + text, SpanStyle.Label);
+                    if (entry.Block != BlockKind.End)
+                    {
+                        indent++;
+                    }
+
+                    break;
+                }
+
+                default:
+                {
+                    var padding = Math.Max(0, 40 - (indent * 2));
+                    Transcript.Add(new TranscriptLine(LineKind.Listing,
+                    [
+                        new TranscriptSpan("  " + entry.Offset.ToString("x4", CultureInfo.InvariantCulture) + " ", SpanStyle.Dim),
+                        new TranscriptSpan(new string(' ', indent * 2) + entry.DisplayText.PadRight(padding)),
+                        new TranscriptSpan(" " + (column[i] ?? ""), SpanStyle.Dim),
+                    ]));
+                    break;
+                }
+            }
+        }
+
+        Transcript.Add(LineKind.Listing, "  }", SpanStyle.Label);
+        Note($"code size {listing.CodeSize} (0x{listing.CodeSize:x})");
+        foreach (var note in listing.Notes)
+        {
+            Note(note);
+        }
+
+        foreach (var problem in listing.Problems)
+        {
+            Note("problem: " + problem);
+        }
+    }
 
     private void ShowType()
     {

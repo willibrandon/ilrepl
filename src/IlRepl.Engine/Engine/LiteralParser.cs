@@ -132,6 +132,62 @@ public static class LiteralParser
     }
 
     /// <summary>
+    /// Parses a <c>float32</c> literal without widening it: <c>float32(0x...)</c> reinterprets the
+    /// bits exactly, so a signaling NaN stays signaling; every other spelling parses as a float.
+    /// </summary>
+    /// <param name="text">The literal text.</param>
+    /// <param name="what">What the literal is for, used in error messages.</param>
+    /// <returns>The value as a float.</returns>
+    /// <exception cref="ReplException">The text is not a floating-point literal.</exception>
+    public static float ParseFloat32(string text, string what)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(what);
+        var t = text.Trim();
+        if (t.StartsWith("float32(", StringComparison.Ordinal) && t.EndsWith(')'))
+        {
+            var inner = t[8..^1].Trim();
+            if (inner.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                var bits = ParseInteger(inner, what);
+                if (bits is < 0 or > uint.MaxValue)
+                {
+                    throw new ReplException($"'{what}' float32 bit pattern must fit 32 bits, got '{inner}'");
+                }
+
+                return BitConverter.Int32BitsToSingle(unchecked((int)(uint)bits));
+            }
+
+            return ParseFloat32(inner, what);
+        }
+
+        if (t.StartsWith("float64(", StringComparison.Ordinal))
+        {
+            return (float)ParseFloat(t, what);
+        }
+
+        switch (t.ToLowerInvariant())
+        {
+            case "nan":
+                return float.NaN;
+            case "inf":
+            case "+inf":
+            case "infinity":
+                return float.PositiveInfinity;
+            case "-inf":
+            case "-infinity":
+                return float.NegativeInfinity;
+            default:
+                if (float.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var f))
+                {
+                    return f;
+                }
+
+                return (float)ParseFloat(t, what);
+        }
+    }
+
+    /// <summary>
     /// Parses a string operand: a double-quoted string with C-style escapes, a single-quoted string,
     /// an ILAsm <c>bytearray (…)</c> of UTF-16 bytes, or, as a convenience, bare text.
     /// </summary>

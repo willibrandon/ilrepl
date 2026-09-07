@@ -95,7 +95,7 @@ public static class SessionAssemblies
         ArgumentNullException.ThrowIfNull(dependencies);
         var context = new DefinitionLoadContext(name);
         var assembly = context.LoadFromStream(new MemoryStream(image, writable: false));
-        var definition = new DefinitionAssembly(assembly, kind, [.. dependencies], context);
+        var definition = new DefinitionAssembly(assembly, kind, [.. dependencies], context) { Image = image };
         Register(assembly, definition);
         return definition;
     }

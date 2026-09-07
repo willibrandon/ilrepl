@@ -244,7 +244,7 @@ public sealed class IlReplAppTests
         var transcript = new Transcript();
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
             .WithHeadless()
-            .WithDimensions(60, 120)
+            .WithDimensions(60, 124)
             .Build();
 
         var run = terminal.RunAsync(ct);

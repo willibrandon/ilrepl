@@ -1,3 +1,4 @@
+using System.Reflection.Emit;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
@@ -403,5 +404,62 @@ public sealed class IlAsmRendererTests
         {
             context.Unload();
         }
+    }
+
+    /// <summary>
+    /// Member references quote names the ILAsm lexer would not read as names, and field references keep their modifiers.
+    /// </summary>
+    [TestMethod]
+    public void RenderInstruction_LoadedMembers_QuoteNamesAndKeepModifiers()
+    {
+        var (_, _, fixture) = CecilFixture.Build((module, type) =>
+        {
+            var add = new Mono.Cecil.MethodDefinition("add", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Int32);
+            add.Parameters.Add(new Mono.Cecil.ParameterDefinition(module.TypeSystem.Int32));
+            add.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ldarg_0);
+            add.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ret);
+            type.Methods.Add(add);
+            type.Fields.Add(new Mono.Cecil.FieldDefinition("Data", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static,
+                new Mono.Cecil.RequiredModifierType(module.ImportReference(typeof(System.Runtime.CompilerServices.IsVolatile)), module.TypeSystem.Int32)));
+            var closure = new Mono.Cecil.TypeDefinition("", "<>c", Mono.Cecil.TypeAttributes.NestedPublic | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            var lambda = new Mono.Cecil.MethodDefinition("<Main>b__0_0", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            lambda.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ret);
+            closure.Methods.Add(lambda);
+            type.NestedTypes.Add(closure);
+        });
+        var assembly = fixture.Assembly.GetName().Name;
+        var add = new Instruction { Op = OpCodes.Call, Text = "call", Kind = OperandKind.Method, Operand = new ResolvedMethod(fixture.GetMethod("add")!, null) };
+        Assert.AreEqual($"call int32 [{assembly}]N.Fixture::'add'(int32)", IlAsmRenderer.RenderInstruction(add));
+        var data = new Instruction { Op = OpCodes.Ldsfld, Text = "ldsfld", Kind = OperandKind.Field, Operand = fixture.GetField("Data")! };
+        Assert.AreEqual($"ldsfld int32 modreq([System.Runtime]System.Runtime.CompilerServices.IsVolatile) [{assembly}]N.Fixture::Data", IlAsmRenderer.RenderInstruction(data));
+        var lambda = fixture.GetNestedType("<>c")!.GetMethod("<Main>b__0_0")!;
+        var ldftn = new Instruction { Op = OpCodes.Ldftn, Text = "ldftn", Kind = OperandKind.Method, Operand = new ResolvedMethod(lambda, null) };
+        Assert.AreEqual($"ldftn void [{assembly}]N.Fixture/'<>c'::'<Main>b__0_0'()", IlAsmRenderer.RenderInstruction(ldftn));
+    }
+
+    /// <summary>
+    /// A generic type name that needs quotes takes its arity inside them, which is how ILAsm reads it.
+    /// </summary>
+    [TestMethod]
+    public void IlAsmTypeName_QuotedGenericName_KeepsArityInsideTheQuotes()
+    {
+        Assert.AreEqual("'<>c__DisplayClass1_0`1'", TypeNameFormatter.IlAsmTypeName("<>c__DisplayClass1_0`1"));
+        Assert.AreEqual("List`1", TypeNameFormatter.IlAsmTypeName("List`1"));
+        Assert.AreEqual("'<>c'", TypeNameFormatter.IlAsmTypeName("<>c"));
+        Assert.AreEqual("'add'", TypeNameFormatter.IlAsmTypeName("add"));
+    }
+
+    /// <summary>
+    /// A core type is spelled with the facade that exports it, which is what a reference binds through.
+    /// </summary>
+    [TestMethod]
+    public void AssemblyReferenceName_CoreTypes_NameTheExportingFacade()
+    {
+        Assert.AreEqual("System.Runtime", TypeNameFormatter.AssemblyReferenceName(typeof(string)));
+        Assert.AreEqual("System.Runtime", TypeNameFormatter.AssemblyReferenceName(typeof(IEnumerable<int>)));
+        Assert.AreEqual("System.Collections", TypeNameFormatter.AssemblyReferenceName(typeof(List<int>)));
+        Assert.AreEqual("System.Collections", TypeNameFormatter.AssemblyReferenceName(typeof(List<>)));
+        Assert.AreEqual("System.Collections", TypeNameFormatter.AssemblyReferenceName(typeof(List<int>[])));
+        Assert.AreEqual("class [System.Collections]System.Collections.Generic.List`1<int32>", TypeNameFormatter.IlAsm(typeof(List<int>)));
     }
 }

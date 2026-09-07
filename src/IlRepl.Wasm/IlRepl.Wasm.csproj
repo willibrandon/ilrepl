@@ -45,6 +45,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      The Greeter sample is built alongside so scripts/Publish-Wasm.cs can put it beside the page as
+      samples/Greeter.dll; worker.js fetches it into the runtime's file system before the session
+      starts, so .load and .dis have an assembly to read in the browser.
+    -->
+    <ProjectReference Include="../../samples/Greeter/Greeter.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../IlRepl.Engine/IlRepl.Engine.csproj" />
     <ProjectReference Include="../IlRepl.Protocol/IlRepl.Protocol.csproj" />
     <ProjectReference Include="../IlRepl.Tui/IlRepl.Tui.csproj" />

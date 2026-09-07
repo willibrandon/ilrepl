@@ -55,6 +55,22 @@ public sealed partial class Session
     public CellState Cell => _cell;
 
     /// <summary>
+    /// A context for looking a member up without changing anything: the committed type table
+    /// alone, with no prototype of a class being written laid over it and no callback that could
+    /// declare a member or a nested type ahead of its declaration. A family being redefined
+    /// resolves to its accepted generation; a class with no accepted generation is not there at all.
+    /// </summary>
+    public ParseContext InspectionContext
+    {
+        get
+        {
+            var types = _typeTable.Clone();
+            types.Forward = null;
+            return new ParseContext([], [], State.Context.Generics, Resolver, Signatures(), types) { Inspecting = true };
+        }
+    }
+
+    /// <summary>
     /// The signature of the method block being typed, or null when lines go to the cell.
     /// </summary>
     public MethodSignature? OpenMethod => _openMember?.Signature ?? _open?.Signature;

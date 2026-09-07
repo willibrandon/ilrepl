@@ -55,6 +55,13 @@ public sealed class DefinitionAssembly
     public DefinitionLoadContext? Context { get; }
 
     /// <summary>
+    /// The PE image the assembly was loaded from, or null for a cell. The record lives exactly as
+    /// long as the assembly, so keeping the bytes here adds no root; they let a listing read the
+    /// body straight from the image that was loaded.
+    /// </summary>
+    public byte[]? Image { get; init; }
+
+    /// <summary>
     /// The simple name.
     /// </summary>
     public string Name => Assembly.GetName().Name ?? "";

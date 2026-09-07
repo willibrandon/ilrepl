@@ -23,8 +23,10 @@ public sealed record CalliSignature(
 {
     /// <summary>
     /// The number of values popped for arguments, including <c>this</c> for instance signatures.
-    /// The function pointer itself is popped in addition to this count.
+    /// Under <c>instance explicit</c> the receiver is already the first parameter (ECMA-335
+    /// II.15.3), so it is not counted twice. The function pointer itself is popped in addition.
     /// </summary>
     public int ArgumentPopCount =>
-        ParameterTypes.Length + (OptionalParameterTypes?.Length ?? 0) + ((ManagedConvention & CallingConventions.HasThis) != 0 ? 1 : 0);
+        ParameterTypes.Length + (OptionalParameterTypes?.Length ?? 0)
+        + ((ManagedConvention & CallingConventions.HasThis) != 0 && (ManagedConvention & CallingConventions.ExplicitThis) == 0 ? 1 : 0);
 }

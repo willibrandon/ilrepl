@@ -59,6 +59,12 @@ root.SetAction(async (parseResult, cancellationToken) =>
         File.Copy(Path.Combine(wwwroot, name), Path.Combine(output, name), overwrite: true);
     }
 
+    // The Greeter sample sits beside the page; the worker fetches it into the runtime's file
+    // system so .load has an assembly to read in the browser.
+    var samples = Path.Combine(output, "samples");
+    Directory.CreateDirectory(samples);
+    File.Copy(Path.Combine(repo, "samples", "Greeter", "bin", configuration, "net10.0", "Greeter.dll"), Path.Combine(samples, "Greeter.dll"), overwrite: true);
+
     Console.WriteLine($"copied {copied} framework files to {output}");
     return 0;
 });

@@ -1,0 +1,268 @@
+using System.Globalization;
+using System.Reflection.Metadata;
+using System.Text;
+
+namespace IlRepl.Engine;
+
+/// <summary>
+/// Spells <see cref="IlSignature"/> trees the way the REPL spells types: leaves through
+/// <see cref="TypeNameFormatter"/>, so a resolved type reads exactly as <c>.il</c> prints it,
+/// and the composite forms reflection cannot carry (modifiers, array shapes, function pointers,
+/// pinning) the way ildasm prints them.
+/// </summary>
+public static class IlSignatureRenderer
+{
+    /// <summary>
+    /// The fully qualified ILAsm spelling.
+    /// </summary>
+    /// <param name="signature">The signature.</param>
+    /// <returns>The text.</returns>
+    public static string IlAsm(IlSignature signature) => Render(signature, pretty: false, namedParameters: false);
+
+    /// <summary>
+    /// The fully qualified spelling with generic parameters by name where the context knew them,
+    /// for method headers and locals, where ildasm writes <c>!T</c> rather than <c>!0</c>.
+    /// </summary>
+    /// <param name="signature">The signature.</param>
+    /// <returns>The text.</returns>
+    public static string IlAsmNamed(IlSignature signature) => Render(signature, pretty: false, namedParameters: true);
+
+    /// <summary>
+    /// The short spelling the stack column and <c>.locals</c> listing use.
+    /// </summary>
+    /// <param name="signature">The signature.</param>
+    /// <returns>The text.</returns>
+    public static string Pretty(IlSignature signature) => Render(signature, pretty: true, namedParameters: true);
+
+    /// <summary>
+    /// A method signature as <c>calli</c> takes it: <c>[instance] [explicit] [vararg] ret(params)</c> or
+    /// <c>unmanaged cdecl ret(params)</c>.
+    /// </summary>
+    /// <param name="signature">The signature.</param>
+    /// <returns>The text.</returns>
+    public static string IlAsm(IlMethodSignature signature)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        return Convention(signature) + Render(signature.ReturnType, false, false) + "(" + Parameters(signature, false, false) + ")";
+    }
+
+    /// <summary>
+    /// A member reference as an instruction operand spells it:
+    /// <c>instance int32 [Asm]N.T::Name&lt;int32&gt;(string, ..., int32)</c>.
+    /// </summary>
+    /// <param name="signature">The member's signature.</param>
+    /// <param name="declaringType">The declaring type, already spelled for a member position.</param>
+    /// <param name="name">The member name, already quoted where needed.</param>
+    /// <param name="instantiation">The generic arguments of a method instance, or null.</param>
+    /// <returns>The text.</returns>
+    public static string MemberReference(IlMethodSignature signature, string declaringType, string name, IReadOnlyList<IlSignature>? instantiation)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+
+        // A generic method named without an instantiation keeps its arity, <[N]>, as ILAsm spells a
+        // reference to the definition; without it the reference would name a non-generic overload.
+        var arguments = instantiation is { Count: > 0 }
+            ? "<" + string.Join(", ", instantiation.Select(IlAsm)) + ">"
+            : signature.GenericParameterCount > 0 ? "<[" + signature.GenericParameterCount.ToString(CultureInfo.InvariantCulture) + "]>" : "";
+        return Convention(signature) + Render(signature.ReturnType, false, false) + " " + declaringType + "::" + name + arguments + "(" + Parameters(signature, false, false) + ")";
+    }
+
+    /// <summary>
+    /// A type as an instruction operand. A plain named type prints bare, which ilasm encodes as
+    /// the TypeRef or TypeDef the compilers write; with <paramref name="viaSignature"/> it keeps
+    /// its <c>class</c>/<c>valuetype</c> word, which ilasm encodes as a TypeSpec, the form the
+    /// original token had. Every other shape is a signature either way.
+    /// </summary>
+    /// <param name="signature">The operand type.</param>
+    /// <param name="viaSignature">True when the original token was a TypeSpec.</param>
+    /// <returns>The text.</returns>
+    public static string TypeOperand(IlSignature signature, bool viaSignature)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        return signature.Kind == IlSignatureKind.Named && !viaSignature ? Declaring(signature) : IlAsm(signature);
+    }
+
+    /// <summary>
+    /// A type in a member position: the <c>class</c>/<c>valuetype</c> word dropped except for a
+    /// generic instantiation, which keeps it as ILAsm requires.
+    /// </summary>
+    /// <param name="signature">The declaring type.</param>
+    /// <returns>The text.</returns>
+    public static string Declaring(IlSignature signature)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        var text = IlAsm(signature);
+        if (signature.Kind == IlSignatureKind.GenericInstance)
+        {
+            return text;
+        }
+
+        return text.StartsWith("class ", StringComparison.Ordinal) ? text[6..] : text.StartsWith("valuetype ", StringComparison.Ordinal) ? text[10..] : text;
+    }
+
+    private static string Convention(IlMethodSignature signature)
+    {
+        var sb = new StringBuilder();
+        if (signature.HasThis)
+        {
+            sb.Append("instance ");
+        }
+
+        if (signature.ExplicitThis)
+        {
+            sb.Append("explicit ");
+        }
+
+        switch (signature.Convention)
+        {
+            case SignatureCallingConvention.VarArgs:
+                sb.Append("vararg ");
+                break;
+            case SignatureCallingConvention.CDecl:
+                sb.Append("unmanaged cdecl ");
+                break;
+            case SignatureCallingConvention.StdCall:
+                sb.Append("unmanaged stdcall ");
+                break;
+            case SignatureCallingConvention.ThisCall:
+                sb.Append("unmanaged thiscall ");
+                break;
+            case SignatureCallingConvention.FastCall:
+                sb.Append("unmanaged fastcall ");
+                break;
+            case SignatureCallingConvention.Unmanaged:
+                sb.Append("unmanaged ");
+                break;
+            default:
+                break;
+        }
+
+        return sb.ToString();
+    }
+
+    private static string Parameters(IlMethodSignature signature, bool pretty, bool named)
+    {
+        var parts = new List<string>();
+        for (var i = 0; i < signature.Parameters.Count; i++)
+        {
+            if (i == signature.RequiredParameterCount && signature.IsVarArg)
+            {
+                parts.Add("...");
+            }
+
+            parts.Add(Render(signature.Parameters[i], pretty, named));
+        }
+
+        if (signature.IsVarArg && signature.RequiredParameterCount == signature.Parameters.Count)
+        {
+            parts.Add("...");
+        }
+
+        return string.Join(", ", parts);
+    }
+
+    private static string Render(IlSignature signature, bool pretty, bool namedParameters)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        switch (signature.Kind)
+        {
+            case IlSignatureKind.Primitive:
+                return signature.Keyword!;
+            case IlSignatureKind.Named:
+                if (signature.Resolved is { } type)
+                {
+                    // A named generic type is the open definition, List`1, spelled bare so that ilasm writes the TypeRef.
+                    return pretty ? TypeNameFormatter.Pretty(type) : TypeNameFormatter.IlAsm(type);
+                }
+
+                return pretty ? Unqualified(signature.UnresolvedName!) : (signature.IsValueType ? "valuetype " : "class ") + signature.UnresolvedName;
+            case IlSignatureKind.GenericInstance:
+            {
+                var definition = signature.Element!;
+                var arguments = string.Join(", ", signature.Arguments.Select(a => Render(a, pretty, namedParameters)));
+                if (pretty)
+                {
+                    // The definition's own name without its parameters, nested under its declaring type as Pretty does.
+                    var name = definition.Resolved is { } d
+                        ? (d.IsNested && d.DeclaringType is not null ? TypeNameFormatter.Pretty(d.DeclaringType) + "/" : "") + d.Name
+                        : Unqualified(definition.UnresolvedName!);
+                    var tick = name.LastIndexOf('`');
+                    return (tick > 0 ? name[..tick] : name) + "<" + arguments + ">";
+                }
+
+                var head = definition.Resolved is { } dt ? TypeNameFormatter.IlAsmDefinition(dt) : (definition.IsValueType ? "valuetype " : "class ") + definition.UnresolvedName;
+                return head + "<" + arguments + ">";
+            }
+
+            case IlSignatureKind.SzArray:
+                return Render(signature.Element!, pretty, namedParameters) + "[]";
+            case IlSignatureKind.Array:
+                return Render(signature.Element!, pretty, namedParameters) + ArrayShape(signature);
+            case IlSignatureKind.ByRef:
+                return Render(signature.Element!, pretty, namedParameters) + "&";
+            case IlSignatureKind.Pointer:
+                return Render(signature.Element!, pretty, namedParameters) + "*";
+            case IlSignatureKind.FunctionPointer:
+            {
+                var method = signature.Method!;
+                return "method " + Convention(method) + Render(method.ReturnType, pretty, namedParameters) + " *(" + Parameters(method, pretty, namedParameters) + ")";
+            }
+
+            case IlSignatureKind.Modified:
+                return Render(signature.Element!, pretty, namedParameters) + (signature.IsRequired ? " modreq(" : " modopt(") + Modifier(signature.Modifier!, pretty) + ")";
+            case IlSignatureKind.Pinned:
+                return Render(signature.Element!, pretty, namedParameters) + " pinned";
+            case IlSignatureKind.TypeParameter:
+                return "!" + ParameterName(signature, namedParameters);
+            case IlSignatureKind.MethodParameter:
+                return "!!" + ParameterName(signature, namedParameters);
+            case IlSignatureKind.Sentinel:
+                return "...";
+            default:
+                return "?";
+        }
+    }
+
+    private static string ParameterName(IlSignature signature, bool named) =>
+        named && signature.Resolved is { IsGenericParameter: true } p ? p.Name : signature.Index.ToString(CultureInfo.InvariantCulture);
+
+    private static string Modifier(IlSignature modifier, bool pretty)
+    {
+        // A modifier is a type reference without its class/valuetype word.
+        var text = Render(modifier, pretty, false);
+        if (text.StartsWith("class ", StringComparison.Ordinal))
+        {
+            return text[6..];
+        }
+
+        return text.StartsWith("valuetype ", StringComparison.Ordinal) ? text[10..] : text;
+    }
+
+    private static string ArrayShape(IlSignature array)
+    {
+        var dimensions = new List<string>();
+        for (var i = 0; i < array.Rank; i++)
+        {
+            int? lower = i < array.LowerBounds.Count ? array.LowerBounds[i] : null;
+            int? size = i < array.Sizes.Count ? array.Sizes[i] : null;
+            var text = (lower, size) switch
+            {
+                (int l, int s) => l.ToString(CultureInfo.InvariantCulture) + "..." + (l + s - 1).ToString(CultureInfo.InvariantCulture),
+                (int l, null) => l.ToString(CultureInfo.InvariantCulture) + "...",
+                (null, int s) => s.ToString(CultureInfo.InvariantCulture),
+                _ => "...",
+            };
+            dimensions.Add(text);
+        }
+
+        return "[" + string.Join(",", dimensions) + "]";
+    }
+
+    private static string Unqualified(string name)
+    {
+        var close = name.IndexOf(']', StringComparison.Ordinal);
+        var bare = name.StartsWith('[') && close > 0 ? name[(close + 1)..] : name;
+        var dot = bare.LastIndexOf('.');
+        return dot < 0 ? bare : bare[(dot + 1)..];
+    }
+}

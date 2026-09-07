@@ -132,7 +132,7 @@ public static class InstructionParser
     public static string Unquote(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        return name.Length > 2 && name.StartsWith('\'') && name.EndsWith('\'') ? name[1..^1] : name;
+        return name.Length > 2 && name.StartsWith('\'') && name.EndsWith('\'') ? TypeParser.DecodeQuoted(name[1..^1]) : name;
     }
 
     /// <summary>
@@ -252,7 +252,7 @@ public static class InstructionParser
                 return new Instruction { Op = op, Text = text, Kind = OperandKind.Int64, Operand = LiteralParser.ParseInteger(operandText, opName) };
 
             case OperandType.ShortInlineR:
-                return new Instruction { Op = op, Text = text, Kind = OperandKind.Single, Operand = (float)LiteralParser.ParseFloat(operandText, opName) };
+                return new Instruction { Op = op, Text = text, Kind = OperandKind.Single, Operand = LiteralParser.ParseFloat32(operandText, opName) };
 
             case OperandType.InlineR:
                 return new Instruction { Op = op, Text = text, Kind = OperandKind.Double, Operand = LiteralParser.ParseFloat(operandText, opName) };

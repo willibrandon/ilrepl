@@ -400,6 +400,90 @@ public sealed class LiveSessionTests
     }
 
     /// <summary>
+    /// .dis reads bodies back in the browser: a session method, a filter, a class member, a calli,
+    /// the framework, a generic definition, and an assembly loaded from the virtual file system whose
+    /// vararg call site prints the optional argument types its reference carries.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(300_000, CooperativeCancellation = true)]
+    public async Task LiveSession_DisassemblesCorpus(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 60_000 };
+
+        foreach (var line in new[] { ".method int32 Fib(int32 n) {", "ldarg n", "ldc.i4 2", "blt BASE", "ldarg n", "ldc.i4 1", "sub", "call int32 Fib(int32)", "ldarg n", "ldc.i4 2", "sub", "call int32 Fib(int32)", "add", "ret", "BASE: ldarg n", "ret", "}" })
+        {
+            await TypeLineAsync(page, line);
+        }
+
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Fib", options);
+        await TypeLineAsync(page, ".dis Fib");
+        await Assertions.Expect(terminal).ToContainTextAsync(".method public hidebysig static int32 Fib(int32 n) cil managed {", options);
+        await Assertions.Expect(terminal).ToContainTextAsync("call int32 Fib(int32)", options);
+        await Assertions.Expect(terminal).ToContainTextAsync("IL_002e:", options);
+
+        foreach (var line in new[] { ".method int32 Safe(int32 d) {", ".locals init (int32 n)", ".try {", "ldc.i4 1", "ldarg d", "div", "stloc n", "leave END", "} filter {", "isinst DivideByZeroException", "ldnull", "cgt.un", "endfilter", "} handler {", "pop", "ldc.i4 42", "stloc n", "leave END", "}", "END: ldloc n", "ret", "}" })
+        {
+            await TypeLineAsync(page, line);
+        }
+
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Safe", options);
+        await TypeLineAsync(page, ".dis Safe");
+        await Assertions.Expect(terminal).ToContainTextAsync("} filter {", options);
+        await Assertions.Expect(terminal).ToContainTextAsync("} handler {", options);
+        await Assertions.Expect(terminal).ToContainTextAsync("endfilter", options);
+
+        foreach (var line in new[] { ".class public Point {", ".field public int32 X", ".method public instance int32 Twice() {", "ldarg.0", "ldfld int32 Point::X", "ldc.i4 2", "mul", "ret", "}", "}" })
+        {
+            await TypeLineAsync(page, line);
+        }
+
+        await Assertions.Expect(terminal).ToContainTextAsync("end of class Point", options);
+        await TypeLineAsync(page, ".dis instance int32 Point::Twice()");
+        await Assertions.Expect(terminal).ToContainTextAsync("ldfld int32 Point::X", options);
+
+        foreach (var line in new[] { ".method int32 Indirect() {", "ldc.i4 3", "ldc.i4 9", "ldftn int32 Math::Max(int32, int32)", "calli int32(int32, int32)", "ret", "}" })
+        {
+            await TypeLineAsync(page, line);
+        }
+
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Indirect", options);
+        await TypeLineAsync(page, ".dis Indirect");
+        await Assertions.Expect(terminal).ToContainTextAsync("calli int32(int32, int32)", options);
+
+        // A framework body is long enough to scroll its header off the visible rows, so the tail is
+        // what can be checked: in the browser it is read through reflection, and the note says so.
+        await TypeLineAsync(page, ".dis instance string String::Trim()");
+        await Assertions.Expect(terminal).ToContainTextAsync("the body was read through reflection", options);
+        var trim = await BufferTextAsync(page);
+        Assert.Contains("ret", trim);
+        Assert.Contains("code size", trim);
+        await TypeLineAsync(page, ".dis instance void class List`1<int32>::Add(!0)");
+        await Assertions.Expect(terminal).ToContainTextAsync("showing the definition", options);
+        await Assertions.Expect(terminal).ToContainTextAsync("AddWithResize(!0)", options);
+
+        // An assembly from the virtual file system lists through its image; the vararg call site
+        // prints the optional types from its own reference, with no fallback note.
+        await TypeLineAsync(page, ".load /samples/Greeter.dll");
+        await Assertions.Expect(terminal).ToContainTextAsync("loaded Greeter", options);
+        await TypeLineAsync(page, ".dis int32 Greeter.Hello::CallCountArgs()");
+        await Assertions.Expect(terminal).ToContainTextAsync("call vararg int32 [Greeter]Greeter.Hello::CountArgs(..., int32)", options);
+        await Assertions.Expect(terminal).ToContainTextAsync("code size 8 (0x8)", options);
+        var text = await BufferTextAsync(page);
+        var greeter = text[text.IndexOf("CallCountArgs() cil managed", StringComparison.Ordinal)..];
+        Assert.DoesNotContain("read through reflection", greeter, "the loaded image must serve the listing");
+        Assert.DoesNotContain("could not be", greeter, "no operand may fall back");
+        Assert.Contains("CountArgs(..., int32)", greeter);
+    }
+
+    /// <summary>
     /// A class declared in the browser is a type across cells: a struct instance is shown by its
     /// fields, a static keeps its value, and a member is called from a later cell.
     /// </summary>

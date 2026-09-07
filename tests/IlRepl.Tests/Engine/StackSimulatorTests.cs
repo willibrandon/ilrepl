@@ -182,4 +182,14 @@ public sealed class StackSimulatorTests
         Assert.AreEqual(typeof(string), Run("ldc.i4 1", "newarr string", "ldc.i4 0", "ldelem.ref").Top);
         Assert.AreEqual("[object]", Run("ldc.i4 3", "box int32").Render());
     }
+
+    /// <summary>
+    /// Under instance explicit the receiver is the first parameter and is popped once.
+    /// </summary>
+    [TestMethod]
+    public void Apply_CalliExplicitThis_PopsReceiverOnce()
+    {
+        Assert.AreEqual("[int32]", Run("ldnull", "ldc.i4.0", "conv.i", "calli instance explicit int32(object)").Render());
+        Assert.AreEqual("[int32]", Run("ldnull", "ldc.i4.0", "conv.i", "calli instance int32()").Render());
+    }
 }
