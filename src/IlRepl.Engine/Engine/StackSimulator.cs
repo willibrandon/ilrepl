@@ -29,6 +29,23 @@ public sealed class StackSimulator
     public Type? Top => _items.Count == 0 ? null : _items[^1];
 
     /// <summary>
+    /// A stack holding the given entries, bottom first; a null entry is a slot of unknown type.
+    /// </summary>
+    /// <param name="entries">The entries.</param>
+    /// <returns>The stack.</returns>
+    public static StackSimulator WithEntries(params Type?[] entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        var simulator = new StackSimulator();
+        foreach (var entry in entries)
+        {
+            simulator.Push(entry, false);
+        }
+
+        return simulator;
+    }
+
+    /// <summary>
     /// Copies the stack.
     /// </summary>
     /// <returns>An independent copy.</returns>
@@ -47,6 +64,126 @@ public sealed class StackSimulator
     {
         _items.Clear();
         _isThis.Clear();
+    }
+
+    /// <summary>
+    /// Merges another stack of the same depth into this one, slot by slot, the way the CLI merges
+    /// stack states at a join (ECMA-335 III.1.8.1.3): by stack category, with an unknown slot
+    /// staying unknown. The depths must already agree.
+    /// </summary>
+    /// <param name="other">The incoming stack.</param>
+    /// <param name="types">The session types, for the base chain of session classes.</param>
+    /// <returns>True when a slot changed.</returns>
+    public bool Merge(StackSimulator other, TypeTable types)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        ArgumentNullException.ThrowIfNull(types);
+        if (other._items.Count != _items.Count)
+        {
+            throw new ArgumentException("stacks of different depths cannot merge", nameof(other));
+        }
+
+        var changed = false;
+        for (var i = 0; i < _items.Count; i++)
+        {
+            var merged = Join(_items[i], other._items[i], types);
+            if (merged != _items[i])
+            {
+                _items[i] = merged;
+                changed = true;
+            }
+
+            if (_isThis[i] && !other._isThis[i])
+            {
+                _isThis[i] = false;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private static Type? Join(Type? a, Type? b, TypeTable types)
+    {
+        if (a is null || b is null)
+        {
+            return null;
+        }
+
+        if (a == b)
+        {
+            return a;
+        }
+
+        if (a == typeof(NullReferenceMarker))
+        {
+            return StackCompatibility.Category(b) == StackCategory.ObjectReference ? b : null;
+        }
+
+        if (b == typeof(NullReferenceMarker))
+        {
+            return StackCompatibility.Category(a) == StackCategory.ObjectReference ? a : null;
+        }
+
+        var category = StackCompatibility.Category(a);
+        if (category != StackCompatibility.Category(b))
+        {
+            return null;
+        }
+
+        switch (category)
+        {
+            case StackCategory.Int32:
+                return typeof(int);
+            case StackCategory.Int64:
+                return typeof(long);
+            case StackCategory.NativeInt:
+                return typeof(nint);
+            case StackCategory.Float:
+                return typeof(double);
+            case StackCategory.ObjectReference:
+                return CommonReference(a, b, types);
+            case StackCategory.ByRef:
+            case StackCategory.ValueType:
+            default:
+                // Two byrefs to different pointees, or two different unboxed value types, have no
+                // common stack type the model can name.
+                return null;
+        }
+    }
+
+    private static Type? CommonReference(Type a, Type b, TypeTable types)
+    {
+        static Type Plain(Type t) => BoxedType(t) is not null ? typeof(object) : t;
+        a = Plain(a);
+        b = Plain(b);
+        if (a == b)
+        {
+            return a;
+        }
+
+        if (a.IsGenericParameter || b.IsGenericParameter)
+        {
+            // Two different parameters share only what their constraints promise; a reference
+            // constraint promises object.
+            static bool IsReference(Type t) => !t.IsGenericParameter || t.GenericParameterAttributes.HasFlag(System.Reflection.GenericParameterAttributes.ReferenceTypeConstraint);
+            return IsReference(a) && IsReference(b) ? typeof(object) : null;
+        }
+
+        for (var candidate = a; candidate is not null; candidate = TypeRelations.BaseTypeOf(candidate, types))
+        {
+            if (candidate.IsInterface)
+            {
+                break;
+            }
+
+            if (TypeRelations.IsAssignable(b, candidate, types))
+            {
+                return candidate;
+            }
+        }
+
+        return typeof(object);
     }
 
     /// <summary>

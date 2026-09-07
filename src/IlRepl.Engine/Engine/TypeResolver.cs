@@ -23,6 +23,7 @@ public sealed class TypeResolver
     ];
 
     private readonly List<Assembly> _extra = [];
+    private readonly Dictionary<Assembly, byte[]> _images = [];
 
     /// <summary>
     /// Initializes a resolver and loads the framework assemblies most cells reach for.
@@ -57,11 +58,21 @@ public sealed class TypeResolver
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(nameOrPath);
         Assembly assembly;
+        byte[]? image = null;
         try
         {
-            assembly = File.Exists(nameOrPath)
-                ? Assembly.LoadFrom(Path.GetFullPath(nameOrPath))
-                : Assembly.Load(nameOrPath);
+            if (File.Exists(nameOrPath))
+            {
+                // The bytes are read at the same moment the file is mapped, so a listing later
+                // reads the image that was loaded and not whatever the path holds by then.
+                var path = Path.GetFullPath(nameOrPath);
+                image = File.ReadAllBytes(path);
+                assembly = Assembly.LoadFrom(path);
+            }
+            else
+            {
+                assembly = Assembly.Load(nameOrPath);
+            }
         }
         catch (Exception ex) when (ex is FileNotFoundException or FileLoadException or BadImageFormatException or ArgumentException)
         {
@@ -73,7 +84,53 @@ public sealed class TypeResolver
             _extra.Insert(0, assembly);
         }
 
+        if (image is not null)
+        {
+            _images.TryAdd(assembly, image);
+        }
+
         return assembly;
+    }
+
+    /// <summary>
+    /// Loads an assembly from its image so its types resolve, and keeps the image for listings. This
+    /// is the path a host without a file system takes, and the one tests take for assemblies they write.
+    /// </summary>
+    /// <param name="image">The PE image.</param>
+    /// <returns>The loaded assembly.</returns>
+    /// <exception cref="ReplException">The image could not be loaded.</exception>
+    public Assembly LoadImage(byte[] image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        Assembly assembly;
+        try
+        {
+            assembly = System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromStream(new MemoryStream(image, writable: false));
+        }
+        catch (Exception ex) when (ex is FileLoadException or BadImageFormatException or ArgumentException)
+        {
+            throw new ReplException($"could not load the image: {ex.Message}", ex);
+        }
+
+        if (!_extra.Contains(assembly))
+        {
+            _extra.Insert(0, assembly);
+        }
+
+        _images.TryAdd(assembly, image);
+        return assembly;
+    }
+
+    /// <summary>
+    /// The PE image an assembly was loaded from with <see cref="Load"/>, when it came from a file.
+    /// </summary>
+    /// <param name="assembly">The assembly.</param>
+    /// <param name="image">The bytes read when it was loaded.</param>
+    /// <returns>True when the image is known.</returns>
+    public bool TryGetImage(Assembly assembly, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out byte[]? image)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+        return _images.TryGetValue(assembly, out image);
     }
 
     /// <summary>

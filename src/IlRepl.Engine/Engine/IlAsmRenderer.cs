@@ -463,7 +463,7 @@ public static class IlAsmRenderer
     /// The method on the generic type definition, or the generic method definition, behind a
     /// member reached through an instantiation; the member itself otherwise.
     /// </summary>
-    private static MethodBase DefinitionOf(MethodBase method)
+    internal static MethodBase DefinitionOf(MethodBase method)
     {
         var definition = method;
         if (method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } generic)
@@ -790,7 +790,7 @@ public static class IlAsmRenderer
         sb.Append(pad).AppendLine("}");
     }
 
-    private static string GenericParameterIlAsm(GenericParameterDeclaration parameter)
+    internal static string GenericParameterIlAsm(GenericParameterDeclaration parameter)
     {
         var words = new List<string>();
         if (parameter.Attributes.HasFlag(GenericParameterAttributes.Covariant))
@@ -964,7 +964,7 @@ public static class IlAsmRenderer
     /// <summary>
     /// A member name as ILAsm reads it: the special names stay bare, anything else is quoted when it must be.
     /// </summary>
-    private static string MemberName(string name) => name is ".ctor" or ".cctor" ? name : TypeNameFormatter.IlAsmIdentifier(name);
+    internal static string MemberName(string name) => name is ".ctor" or ".cctor" ? name : TypeNameFormatter.IlAsmIdentifier(name);
 
     /// <summary>
     /// A type name as ILAsm reads it: the arity suffix is part of the name and needs no quotes.

@@ -77,6 +77,13 @@ public static class Hello
     }
 
     /// <summary>
+    /// Calls the vararg method with one extra argument, so a listing of this body shows a call
+    /// site with a sentinel and the optional argument types it carries.
+    /// </summary>
+    /// <returns>The count the callee reports.</returns>
+    public static int CallCountArgs() => CountArgs(__arglist(123));
+
+    /// <summary>
     /// Reads through a pointer, to exercise <c>ldloca</c>, <c>conv.u</c>, and pointer parameters.
     /// </summary>
     /// <param name="pointer">The address of an int.</param>

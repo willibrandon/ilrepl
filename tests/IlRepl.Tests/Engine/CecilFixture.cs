@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.Loader;
+using IlRepl.Engine;
 using Mono.Cecil;
 using TypeAttributes = Mono.Cecil.TypeAttributes;
 
@@ -17,8 +18,9 @@ internal static class CecilFixture
     /// Builds and loads an assembly holding one public class <c>N.Fixture</c>.
     /// </summary>
     /// <param name="populate">Adds members to the class; the module is the first argument.</param>
+    /// <param name="resolver">When given, the assembly is loaded through the resolver, which keeps its image for listings.</param>
     /// <returns>The loaded assembly, its bytes, and the fixture type.</returns>
-    public static (Assembly Assembly, byte[] Image, Type Fixture) Build(Action<ModuleDefinition, TypeDefinition> populate)
+    public static (Assembly Assembly, byte[] Image, Type Fixture) Build(Action<ModuleDefinition, TypeDefinition> populate, TypeResolver? resolver = null)
     {
         var name = "IlReplCecilFixture" + Interlocked.Increment(ref s_counter);
         using var definition = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0, 0, 0)), name, ModuleKind.Dll);
@@ -30,8 +32,9 @@ internal static class CecilFixture
         using var stream = new MemoryStream();
         definition.Write(stream);
         var image = stream.ToArray();
-        var context = new AssemblyLoadContext(name, isCollectible: false);
-        var assembly = context.LoadFromStream(new MemoryStream(image));
+        var assembly = resolver is null
+            ? new AssemblyLoadContext(name, isCollectible: false).LoadFromStream(new MemoryStream(image))
+            : resolver.LoadImage(image);
         return (assembly, image, assembly.GetType("N.Fixture")!);
     }
 }

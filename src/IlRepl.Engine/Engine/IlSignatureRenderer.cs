@@ -46,6 +46,40 @@ public static class IlSignatureRenderer
         return Convention(signature) + Render(signature.ReturnType, false, false) + "(" + Parameters(signature, false, false) + ")";
     }
 
+    /// <summary>
+    /// A member reference as an instruction operand spells it:
+    /// <c>instance int32 [Asm]N.T::Name&lt;int32&gt;(string, ..., int32)</c>.
+    /// </summary>
+    /// <param name="signature">The member's signature.</param>
+    /// <param name="declaringType">The declaring type, already spelled for a member position.</param>
+    /// <param name="name">The member name, already quoted where needed.</param>
+    /// <param name="instantiation">The generic arguments of a method instance, or null.</param>
+    /// <returns>The text.</returns>
+    public static string MemberReference(IlMethodSignature signature, string declaringType, string name, IReadOnlyList<IlSignature>? instantiation)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        var arguments = instantiation is { Count: > 0 } ? "<" + string.Join(", ", instantiation.Select(IlAsm)) + ">" : "";
+        return Convention(signature) + Render(signature.ReturnType, false, false) + " " + declaringType + "::" + name + arguments + "(" + Parameters(signature, false, false) + ")";
+    }
+
+    /// <summary>
+    /// A type in a member position: the <c>class</c>/<c>valuetype</c> word dropped except for a
+    /// generic instantiation, which keeps it as ILAsm requires.
+    /// </summary>
+    /// <param name="signature">The declaring type.</param>
+    /// <returns>The text.</returns>
+    public static string Declaring(IlSignature signature)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        var text = IlAsm(signature);
+        if (signature.Kind == IlSignatureKind.GenericInstance)
+        {
+            return text;
+        }
+
+        return text.StartsWith("class ", StringComparison.Ordinal) ? text[6..] : text.StartsWith("valuetype ", StringComparison.Ordinal) ? text[10..] : text;
+    }
+
     private static string Convention(IlMethodSignature signature)
     {
         var sb = new StringBuilder();
