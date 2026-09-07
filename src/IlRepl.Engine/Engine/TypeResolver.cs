@@ -64,9 +64,15 @@ public sealed class TypeResolver
             if (File.Exists(nameOrPath))
             {
                 // The bytes are read at the same moment the file is mapped, so a listing later
-                // reads the image that was loaded and not whatever the path holds by then.
+                // reads the image that was loaded and not whatever the path holds by then. The
+                // browser's file system is in memory and its runtime loads from bytes.
                 var path = Path.GetFullPath(nameOrPath);
                 image = File.ReadAllBytes(path);
+                if (OperatingSystem.IsBrowser())
+                {
+                    return LoadImage(image);
+                }
+
                 assembly = Assembly.LoadFrom(path);
             }
             else

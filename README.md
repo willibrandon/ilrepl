@@ -42,7 +42,9 @@ and delegates over it all work. Types defined with `.class` persist too: structs
 constructors, virtual and abstract members, interfaces, enums, layout, generics, and nested types,
 each one runtime type across cells, shown by its fields when a cell returns one. Member references
 use ILAsm syntax, and the return type and `[assembly]` prefix are optional. Types, methods, and
-cells can be saved to disk as real assemblies with `.save`, or shown as ILAsm with `.il`.
+cells can be saved to disk as real assemblies with `.save`, or shown as ILAsm with `.il`. `.dis`
+reads any method back, the framework's or your own, with the same stack column beside each
+instruction.
 
 ```
 il[2]> .locals init (string m)

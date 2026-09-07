@@ -78,7 +78,9 @@ hello, methods
 ## Listing them
 
 `.methods` lists what the session has defined. `.show` inside an open block lists the method with
-the stack after each instruction, and `.il` renders every method beside `Run`.
+the stack after each instruction, and `.il` renders every method beside `Run`. Once the block is
+closed, `.dis Fib` reads the compiled body back, byte offsets and all, so what the emitter produced
+can be compared with what was typed. See [Disassembly](/usage/disassembly/).
 
 ```
 il[5]> .methods

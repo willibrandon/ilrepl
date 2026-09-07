@@ -33,6 +33,7 @@ Directives are part of the cell. Commands act on the session.
 | `.help` | Show help. |
 | `.ops [filter]` | List opcodes with their stack transitions. The filter matches names and descriptions. |
 | `.show` | List the cell, or the open method or class, with the stack after each instruction. |
+| `.dis <method>` | Disassemble a method: a framework or loaded method, a method defined with `.method`, or a member of a closed class. See [Disassembly](/usage/disassembly/). |
 | `.undo` | Remove the last line of the cell, or of the open method or class. |
 | `.clear` | Drop the cell body, keep declarations, methods, and types. Inside a method or class block, abandon the block. |
 | `.reset` | Drop the cell body, every declaration, every method, and every type. |
