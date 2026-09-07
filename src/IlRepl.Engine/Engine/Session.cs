@@ -6,7 +6,10 @@ namespace IlRepl.Engine;
 /// One REPL session: the resolver, the declarations and methods that persist across cells, and
 /// the cell currently being written. Lines are validated as they arrive; <see cref="Run"/>
 /// compiles and executes the cell and clears it. While a <c>.method</c> block is open, lines go
-/// to the method instead, and closing it commits the method and completes the submission.
+/// to the method instead, and closing it compiles the method into an assembly of its own, binds
+/// it into its trampoline, and completes the submission. The session's records are read and
+/// written only by the thread that drives it; code a cell started on other threads reaches
+/// trampolines and types, never these records.
 /// </summary>
 public sealed class Session
 {
@@ -211,6 +214,13 @@ public sealed class Session
         _bodyLines.Clear();
         _declarationLines.Clear();
         _typeParameterNames.Clear();
+        foreach (var method in _methods)
+        {
+            // The session drops its references; anything a user retained keeps its version alive.
+            SessionAssemblies.Release(method.Version.Definition);
+            SessionAssemblies.Release(method.Trampoline.Definition);
+        }
+
         _methods.Clear();
         _open = null;
         TypeArguments = null;
@@ -287,23 +297,13 @@ public sealed class Session
         {
             // Dependents bind to the signature, which is known now. Checking here, rather than at
             // the closing brace, means a refused redefinition costs nothing to recover from. A
-            // reference already bound to the old signature is checked directly, because a replay
-            // would happily rebind an abbreviated reference such as "ldftn F" to the new one.
+            // dependent keeps the state it was accepted with; it is never parsed again, and a
+            // same-signature replacement reaches it through the trampoline it already calls.
             foreach (var other in _methods)
             {
-                if (ReferenceEquals(other, replacing))
+                if (!ReferenceEquals(other, replacing))
                 {
-                    continue;
-                }
-
-                RequireCompatibleReferences(other.State, "method " + other.Signature.Name, signature, "(the previous definition stays)");
-                try
-                {
-                    ReplayMethod(other, table);
-                }
-                catch (ReplException ex)
-                {
-                    throw new ReplException($"cannot redefine {signature.Name} as {signature.Describe()}: method {other.Signature.Name} would no longer compile: {ex.Message}  (the previous definition stays)", ex);
+                    RequireCompatibleReferences(other.State, "method " + other.Signature.Name, signature, "(the previous definition stays)");
                 }
             }
 
@@ -350,46 +350,18 @@ public sealed class Session
     {
         var open = _open!;
         var name = open.Signature.Name;
-        var candidate = new SessionMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State);
+        var replacing = open.Replacing;
 
-        // Rebuild every dependent against the committed table. The header already checked them;
-        // this pass produces the states that are kept, and catches a .load that changed
-        // resolution in between.
-        var committed = new List<SessionMethod>();
-        var changed = new List<string> { name };
-        foreach (var existing in _methods)
+        if (replacing is not null)
         {
-            if (ReferenceEquals(existing, open.Replacing))
+            foreach (var existing in _methods)
             {
-                committed.Add(candidate);
-                continue;
+                if (!ReferenceEquals(existing, replacing))
+                {
+                    RequireCompatibleReferences(existing.State, "method " + existing.Signature.Name, open.Signature, "(the previous definition stays)");
+                }
             }
 
-            if (open.Replacing is null)
-            {
-                committed.Add(existing);
-                continue;
-            }
-
-            RequireCompatibleReferences(existing.State, "method " + existing.Signature.Name, open.Signature, "(the previous definition stays)");
-            try
-            {
-                committed.Add(existing with { State = ReplayMethod(existing, open.Signatures) });
-                changed.Add(existing.Signature.Name);
-            }
-            catch (ReplException ex)
-            {
-                throw new ReplException($"cannot replace {name}: method {existing.Signature.Name} would no longer compile: {ex.Message}  (the previous definition stays)", ex);
-            }
-        }
-
-        if (open.Replacing is null)
-        {
-            committed.Add(candidate);
-        }
-
-        if (open.Replacing is not null)
-        {
             RequireCompatibleReferences(_cell, "the cell body", open.Signature, "(.clear the cell first, or keep the signature)");
         }
 
@@ -400,17 +372,67 @@ public sealed class Session
         }
         catch (ReplException ex)
         {
-            throw new ReplException($"cannot {(open.Replacing is null ? "define" : "replace")} {name}: the cell body would no longer compile: {ex.Message}  (.clear the cell first)", ex);
+            throw new ReplException($"cannot {(replacing is null ? "define" : "replace")} {name}: the cell body would no longer compile: {ex.Message}  (.clear the cell first)", ex);
         }
 
-        CellCompiler.ValidateMethods(committed, changed);
+        // Phase A: everything that can fail. A same-signature replacement keeps its trampoline,
+        // so every caller already bound to it sees the new body; a new signature is a new
+        // identity, and nothing references it yet.
+        var sameSignature = replacing is not null && SameSignature(replacing.Signature, open.Signature);
+        var trampoline = sameSignature ? replacing!.Trampoline : MethodTrampoline.Create(open.Signature);
+        var trampolines = _methods.Where(m => !ReferenceEquals(m, replacing)).ToDictionary(m => m.Signature.Name, m => m.Trampoline, StringComparer.Ordinal);
+        trampolines[name] = trampoline;
+        CompiledMethodVersion version;
+        try
+        {
+            version = DefinitionCompiler.CompileMethod(open.Signature, open.State, trampoline, trampolines, MethodPreparation.IsSupported);
+        }
+        catch
+        {
+            if (!sameSignature)
+            {
+                SessionAssemblies.Release(trampoline.Definition);
+            }
 
-        _methods.Clear();
-        _methods.AddRange(committed);
+            throw;
+        }
+
+        if (!sameSignature)
+        {
+            trampoline.Bind(version.Implementation);
+        }
+
+        // Phase B: one reference store and the record swap. Neither can fail.
+        if (sameSignature)
+        {
+            trampoline.Bind(version.Implementation);
+        }
+
+        var committed = new SessionMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State, trampoline, version);
+        var index = replacing is null ? -1 : _methods.IndexOf(replacing);
+        if (index < 0)
+        {
+            _methods.Add(committed);
+        }
+        else
+        {
+            _methods[index] = committed;
+        }
+
         _cell = cell;
         _open = null;
         Submissions++;
-        return new LineResult(LineOutcome.MethodEnd, null, open.Replacing is null ? $"end of method {name}" : $"replaced method {name}");
+
+        if (replacing is not null)
+        {
+            SessionAssemblies.Release(replacing.Version.Definition);
+            if (!sameSignature)
+            {
+                SessionAssemblies.Release(replacing.Trampoline.Definition);
+            }
+        }
+
+        return new LineResult(LineOutcome.MethodEnd, null, replacing is null ? $"end of method {name}" : $"replaced method {name}");
     }
 
     private void DeclareTypeParameters(string spec)
@@ -507,13 +529,6 @@ public sealed class Session
             state.Apply(line);
         }
 
-        return state;
-    }
-
-    private CellState ReplayMethod(SessionMethod method, IReadOnlyList<MethodSignature> table)
-    {
-        var state = ReplayBody(method.Signature, method.BodyLines, table);
-        state.ValidateMethodEnd();
         return state;
     }
 

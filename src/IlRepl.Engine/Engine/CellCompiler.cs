@@ -5,14 +5,13 @@ namespace IlRepl.Engine;
 
 /// <summary>
 /// Compiles a session's cell into a dynamic assembly, or persists it to disk as a real assembly.
-/// The type carries one static method per <c>.method</c> definition and then <c>Run</c>; every
-/// compile defines the method signatures first and emits the bodies after, so a body can call
-/// any of them, and replays the cell's lines against a fresh <see cref="CellState"/> so generic
-/// parameters bind to the method being emitted.
+/// A running cell's type carries <c>Run</c> alone and calls session methods through their
+/// trampolines; a persisted assembly carries one static method per <c>.method</c> definition
+/// beside <c>Run</c>, with calls bound directly. Every compile replays the cell's lines against a
+/// fresh <see cref="CellState"/> so generic parameters bind to the method being emitted.
 /// </summary>
 public static class CellCompiler
 {
-    private static int s_counter;
 
     /// <summary>
     /// Compiles the cell for execution.
@@ -71,65 +70,6 @@ public static class CellCompiler
         assembly.Save(fullPath);
     }
 
-    /// <summary>
-    /// Emits the methods into a throwaway assembly with the same code the run path uses, creates
-    /// the type, and, where the runtime supports it, asks the JIT to compile the methods named in
-    /// <paramref name="prepare"/>. Nothing is invoked. A failure names the method so the session
-    /// can keep its block open and its previous definition.
-    /// </summary>
-    /// <param name="methods">The method table as it would be committed.</param>
-    /// <param name="prepare">The names to prepare: the candidate and any method whose body was rebuilt.</param>
-    /// <exception cref="ReplException">The runtime or the JIT rejected a method.</exception>
-    public static void ValidateMethods(IReadOnlyList<SessionMethod> methods, IReadOnlyList<string> prepare)
-    {
-        ArgumentNullException.ThrowIfNull(methods);
-        ArgumentNullException.ThrowIfNull(prepare);
-        if (methods.Count == 0)
-        {
-            return;
-        }
-
-        var id = Interlocked.Increment(ref s_counter);
-        var name = new AssemblyName("ilrepl.check" + id.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        var access = OperatingSystem.IsBrowser() ? AssemblyBuilderAccess.Run : AssemblyBuilderAccess.RunAndCollect;
-        var assembly = AssemblyBuilder.DefineDynamicAssembly(name, access);
-        var module = assembly.DefineDynamicModule(name.Name!);
-        var type = DefineCellType(module);
-        var builders = DefineSessionMethods(type, methods);
-        EmitSessionMethods(builders, methods);
-        var what = prepare.Count > 0 ? "method " + prepare[0] : "the methods";
-        var created = CreateCellType(type, what);
-        if (!MethodPreparation.IsSupported)
-        {
-            return;
-        }
-
-        foreach (var methodName in prepare)
-        {
-            var method = created.GetMethod(methodName, BindingFlags.Public | BindingFlags.Static)
-                ?? throw new ReplException($"the compiled type has no method {methodName}");
-            try
-            {
-                MethodPreparation.Prepare(method);
-            }
-            catch (InvalidProgramException ex) when (ex.Message.Contains("Vararg", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new ReplException($"the runtime only supports the vararg calling convention on Windows; method {methodName} cannot be prepared here (the block is still open)", ex);
-            }
-            catch (InvalidProgramException ex)
-            {
-                throw new ReplException($"the JIT rejected method {methodName}: {ex.Message} (check .show for a stack mismatch between branches; the block is still open)", ex);
-            }
-            catch (Exception ex)
-            {
-                // Preparation never runs user code, so anything else it throws (a missing member
-                // behind callvirt on a static, a type that fails to load) is also a verdict on the
-                // body, and the session must be able to keep the block open.
-                throw new ReplException($"the runtime rejected method {methodName}: {ex.Message} (the block is still open)", ex);
-            }
-        }
-    }
-
     private static CompiledCell Build(Session session, AssemblyBuilder assembly, string moduleName, DefinitionLoadContext? context)
     {
         if (session.OpenMethod is { } open)
@@ -156,7 +96,10 @@ public static class CellCompiler
 
         var module = assembly.DefineDynamicModule(moduleName);
         var type = DefineCellType(module);
-        var builders = DefineSessionMethods(type, session.Methods);
+        var persisted = assembly is PersistedAssemblyBuilder;
+        var methods = persisted
+            ? DefineSessionMethods(type, session.Methods)
+            : session.Methods.ToDictionary(m => m.Signature.Name, m => m.Trampoline.Method, StringComparer.Ordinal);
         var convention = cell.IsVarArg ? CallingConventions.VarArgs : CallingConventions.Standard;
         var run = type.DefineMethod("Run", MethodAttributes.Public | MethodAttributes.Static, convention, typeof(object), Type.EmptyTypes);
         var names = session.TypeParameterNames;
@@ -181,8 +124,12 @@ public static class CellCompiler
             run.DefineParameter(i + 1, ParameterAttributes.None, state.Arguments[i].Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
 
-        EmitSessionMethods(builders, session.Methods);
-        EmitGuarded("the cell", () => EmitBody(run.GetILGenerator(), state, builders));
+        if (persisted)
+        {
+            EmitSessionMethods(methods, session.Methods);
+        }
+
+        EmitGuarded("the cell", () => EmitBody(run.GetILGenerator(), state, methods));
 
         MethodBuilder entry = run;
         if (state.IsVarArg)
@@ -193,7 +140,8 @@ public static class CellCompiler
         var created = CreateCellType(type, "the cell");
         var method = created.GetMethod(entry.Name, BindingFlags.Public | BindingFlags.Static)
             ?? throw new ReplException("the compiled cell has no entry point");
-        var definition = SessionAssemblies.RegisterCell(assembly, created, [], context);
+        var dependencies = session.Methods.Select(m => m.Trampoline.Definition).Distinct().ToArray();
+        var definition = SessionAssemblies.RegisterCell(assembly, created, dependencies, context);
         return new CompiledCell(assembly, created, method, state.Arguments.Select(a => a.Value).ToArray(), definition);
     }
 
@@ -202,8 +150,8 @@ public static class CellCompiler
 
     private static Dictionary<string, MethodInfo> DefineSessionMethods(TypeBuilder type, IReadOnlyList<SessionMethod> methods)
     {
-        // Every signature exists before any body is emitted, which is what lets one body call
-        // another, or itself.
+        // A persisted assembly carries the session methods itself. Every signature exists before
+        // any body is emitted, which is what lets one body call another, or itself.
         var builders = new Dictionary<string, MethodInfo>(StringComparer.Ordinal);
         foreach (var method in methods)
         {
