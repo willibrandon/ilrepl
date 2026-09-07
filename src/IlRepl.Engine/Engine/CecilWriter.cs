@@ -240,7 +240,65 @@ public sealed class CecilWriter
         }
 
         NoteSessionMembers(type);
-        return Module.ImportReference(type);
+        return WithMetadataNames(Module.ImportReference(type));
+    }
+
+    /// <summary>
+    /// Restores the metadata spelling of every name in an imported reference. Reflection escapes
+    /// the characters its own name grammar reserves, a backslash as <c>\\\\</c> and a comma as
+    /// <c>\\,</c>, and Cecil's importer copies that spelling, which names a type that does not exist.
+    /// </summary>
+    /// <param name="reference">The imported reference.</param>
+    /// <returns>The same reference, with metadata names.</returns>
+    private static TypeReference WithMetadataNames(TypeReference reference)
+    {
+        switch (reference)
+        {
+            case TypeDefinition:
+            case Mono.Cecil.GenericParameter:
+                return reference;
+            case GenericInstanceType instance:
+                WithMetadataNames(instance.ElementType);
+                foreach (var argument in instance.GenericArguments)
+                {
+                    WithMetadataNames(argument);
+                }
+
+                return reference;
+            case TypeSpecification specification:
+                WithMetadataNames(specification.ElementType);
+                return reference;
+            default:
+                reference.Name = ReflectionUnescape(reference.Name);
+                reference.Namespace = ReflectionUnescape(reference.Namespace);
+                if (reference.DeclaringType is not null)
+                {
+                    WithMetadataNames(reference.DeclaringType);
+                }
+
+                return reference;
+        }
+    }
+
+    private static string ReflectionUnescape(string name)
+    {
+        if (!name.Contains('\\'))
+        {
+            return name;
+        }
+
+        var sb = new System.Text.StringBuilder(name.Length);
+        for (var i = 0; i < name.Length; i++)
+        {
+            if (name[i] == '\\' && i + 1 < name.Length)
+            {
+                i++;
+            }
+
+            sb.Append(name[i]);
+        }
+
+        return sb.ToString();
     }
 
     private MethodReference ExternalMethod(MethodBase method, Type declaring, ExternalPrototype external)
@@ -370,7 +428,10 @@ public sealed class CecilWriter
 
         NoteSessionMembers(declaring);
         NoteSessionMembers(field.FieldType);
-        return Module.ImportReference(field);
+        var imported = Module.ImportReference(field);
+        WithMetadataNames(imported.DeclaringType);
+        WithMetadataNames(imported.FieldType);
+        return imported;
     }
 
     /// <summary>
@@ -518,6 +579,21 @@ public sealed class CecilWriter
         }
 
         var reference = Module.ImportReference(method);
+        WithMetadataNames(reference.DeclaringType);
+        WithMetadataNames(reference.ReturnType);
+        foreach (var parameter in reference.Parameters)
+        {
+            WithMetadataNames(parameter.ParameterType);
+        }
+
+        if (reference is GenericInstanceMethod genericInstance)
+        {
+            foreach (var argument in genericInstance.GenericArguments)
+            {
+                WithMetadataNames(argument);
+            }
+        }
+
         if (method.CallingConvention.HasFlag(CallingConventions.VarArgs) && reference.CallingConvention != MethodCallingConvention.VarArg)
         {
             // The reflection importer drops the vararg convention, and a reference without it

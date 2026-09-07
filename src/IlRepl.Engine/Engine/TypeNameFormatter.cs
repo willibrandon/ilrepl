@@ -70,7 +70,13 @@ public static class TypeNameFormatter
     public static string IlAsmIdentifier(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        return IlAsmKeywords.Contains(name) || OpcodeTable.ByName.ContainsKey(name) || !InstructionParser.IsIdentifier(name) ? "'" + name + "'" : name;
+        if (IlAsmKeywords.Contains(name) || OpcodeTable.ByName.ContainsKey(name) || !InstructionParser.IsIdentifier(name))
+        {
+            // Inside the quotes a backslash and a quote are escaped, as ILAsm reads quoted names.
+            return "'" + name.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("'", "\\'", StringComparison.Ordinal) + "'";
+        }
+
+        return name;
     }
 
     /// <summary>
@@ -271,7 +277,29 @@ public static class TypeNameFormatter
     /// Reflection escapes the characters its own type-name grammar reserves, writing a comma in a
     /// name as <c>\,</c>; the metadata name has no backslash, and neither does ILAsm's quoted form.
     /// </summary>
-    private static string Unescape(string name) => name.Contains('\\') ? name.Replace("\\", "", StringComparison.Ordinal) : name;
+    private static string Unescape(string name)
+    {
+        // Reflection escapes the characters its own grammar reserves, a comma as \, and a
+        // backslash as \\; each pair decodes to the character it escapes, so a literal backslash
+        // in the metadata name comes back as one backslash, not as nothing.
+        if (!name.Contains('\\'))
+        {
+            return name;
+        }
+
+        var sb = new StringBuilder(name.Length);
+        for (var i = 0; i < name.Length; i++)
+        {
+            if (name[i] == '\\' && i + 1 < name.Length)
+            {
+                i++;
+            }
+
+            sb.Append(name[i]);
+        }
+
+        return sb.ToString();
+    }
 
     /// <summary>
     /// The ILAsm spelling of a type reference in a member position, without the <c>class</c>/<c>valuetype</c> prefix.
@@ -360,6 +388,7 @@ public static class TypeNameFormatter
             }
         }
 
-        return "System.Runtime";
+        // Nothing exports it, as with the runtime's internal helpers: only the defining assembly can resolve it.
+        return definition.Assembly.GetName().Name ?? "System.Private.CoreLib";
     }
 }

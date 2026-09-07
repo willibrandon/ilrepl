@@ -363,4 +363,29 @@ public sealed class ReplCoreDisassembleTests
         Assert.IsTrue(core.Handle("ret").Succeeded);
         Assert.IsTrue(core.Handle("}").Succeeded);
     }
+
+    /// <summary>
+    /// A listing that names a type with a literal backslash pastes back and runs against that type, not its neighbour.
+    /// </summary>
+    [TestMethod]
+    public void Handle_Dis_BackslashName_PastesBackToTheSameType()
+    {
+        var core = new ReplCore();
+        _ = Engine.CecilFixture.Build(Engine.MethodDisassemblerTests.AddBackslashTypes, core.Session.Resolver);
+        var pasted = Pasteable(core, ".dis int32 N.Fixture::M()");
+        Assert.Contains(l => l.Contains("'Slash\\\\Name'", StringComparison.Ordinal), pasted);
+        Assert.IsTrue(core.Handle(".method int32 M2() {").Succeeded);
+        foreach (var line in pasted)
+        {
+            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.Kind + ": " + l.PlainText)));
+        }
+
+        Assert.IsTrue(core.Handle("}").Succeeded, string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.Kind + ": " + l.PlainText)));
+        var run = core.Transcript.Lines.Count;
+        core.Handle("call int32 M2()");
+        core.Handle("ret");
+        var results = core.Transcript.Lines.Skip(run).Where(l => l.Kind == LineKind.Result).Select(l => l.PlainText).ToList();
+        Assert.HasCount(1, results, string.Join("\n", core.Transcript.Lines.Skip(run).Select(l => l.Kind + ": " + l.PlainText)));
+        Assert.Contains("= 1 ", results[0]);
+    }
 }

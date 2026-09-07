@@ -165,13 +165,8 @@ public static class TypeParser
             {
                 if (s[pos] == '\'')
                 {
-                    var closeQuote = s.IndexOf('\'', pos + 1);
-                    if (closeQuote < 0)
-                    {
-                        throw new ReplException("unterminated quote in type name");
-                    }
-
-                    nameBuilder.Append(s, pos + 1, closeQuote - pos - 1);
+                    var closeQuote = EndOfQuoted(s, pos);
+                    nameBuilder.Append(DecodeQuoted(s[(pos + 1)..closeQuote]));
                     pos = closeQuote + 1;
                 }
                 else if (IsNameChar(s[pos]))
@@ -363,6 +358,58 @@ public static class TypeParser
     }
 
     /// <summary>
+    /// Finds the quote that closes a quoted name, skipping escaped characters inside it.
+    /// </summary>
+    /// <param name="s">The text.</param>
+    /// <param name="open">The index of the opening quote.</param>
+    /// <returns>The index of the closing quote.</returns>
+    /// <exception cref="ReplException">The quote is never closed.</exception>
+    public static int EndOfQuoted(string s, int open)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        for (var i = open + 1; i < s.Length; i++)
+        {
+            if (s[i] == '\\')
+            {
+                i++;
+            }
+            else if (s[i] == '\'')
+            {
+                return i;
+            }
+        }
+
+        throw new ReplException("unterminated quote in name");
+    }
+
+    /// <summary>
+    /// Decodes the inside of a quoted name: <c>\\\\</c> is a backslash and <c>\\'</c> a quote, as ILAsm reads them.
+    /// </summary>
+    /// <param name="inner">The text between the quotes.</param>
+    /// <returns>The name.</returns>
+    public static string DecodeQuoted(string inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        if (!inner.Contains('\\'))
+        {
+            return inner;
+        }
+
+        var sb = new System.Text.StringBuilder(inner.Length);
+        for (var i = 0; i < inner.Length; i++)
+        {
+            if (inner[i] == '\\' && i + 1 < inner.Length)
+            {
+                i++;
+            }
+
+            sb.Append(inner[i]);
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Splits a comma-separated list while respecting nested brackets.
     /// </summary>
     /// <param name="s">The list text.</param>
@@ -372,17 +419,11 @@ public static class TypeParser
         ArgumentNullException.ThrowIfNull(s);
         var parts = new List<string>();
         int depth = 0, start = 0;
-        var quoted = false;
         for (var i = 0; i < s.Length; i++)
         {
             if (s[i] == '\'')
             {
-                quoted = !quoted;
-                continue;
-            }
-
-            if (quoted)
-            {
+                i = EndOfQuoted(s, i);
                 continue;
             }
 
@@ -516,16 +557,11 @@ public static class TypeParser
     {
         ArgumentNullException.ThrowIfNull(s);
         var depth = 0;
-        var quoted = false;
         for (var i = open; i < s.Length; i++)
         {
             if (s[i] == '\'')
             {
-                quoted = !quoted;
-            }
-            else if (quoted)
-            {
-                continue;
+                i = EndOfQuoted(s, i);
             }
             else if (s[i] == '(')
             {

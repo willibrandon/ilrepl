@@ -580,17 +580,11 @@ public static partial class MemberResolver
     private static int FindMemberSeparator(string s)
     {
         var depth = 0;
-        var quoted = false;
         for (var i = 0; i + 1 < s.Length; i++)
         {
             if (s[i] == '\'')
             {
-                quoted = !quoted;
-                continue;
-            }
-
-            if (quoted)
-            {
+                i = TypeParser.EndOfQuoted(s, i);
                 continue;
             }
 
@@ -624,13 +618,8 @@ public static partial class MemberResolver
     {
         if (rest.Length > 0 && rest[0] == '\'')
         {
-            var close = rest.IndexOf('\'', 1);
-            if (close < 0)
-            {
-                throw new ReplException("unterminated quote in member name");
-            }
-
-            return (rest[1..close], close + 1);
+            var close = TypeParser.EndOfQuoted(rest, 0);
+            return (TypeParser.DecodeQuoted(rest[1..close]), close + 1);
         }
 
         var end = 0;
@@ -645,16 +634,11 @@ public static partial class MemberResolver
     private static int FindMatchingAngle(string s, int open)
     {
         var depth = 0;
-        var quoted = false;
         for (var i = open; i < s.Length; i++)
         {
             if (s[i] == '\'')
             {
-                quoted = !quoted;
-            }
-            else if (quoted)
-            {
-                continue;
+                i = TypeParser.EndOfQuoted(s, i);
             }
             else if (s[i] == '<')
             {

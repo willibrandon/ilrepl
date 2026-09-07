@@ -933,4 +933,61 @@ public sealed class MethodDisassemblerTests
         session.Reset();
         return reference;
     }
+
+    /// <summary>
+    /// Writes two types whose names differ by one literal backslash, each with a Value method
+    /// returning 1 and 2, and a method M that calls the first.
+    /// </summary>
+    internal static void AddBackslashTypes(ModuleDefinition module, TypeDefinition type)
+    {
+        foreach (var (name, value) in new[] { ("Slash\\Name", 1), ("SlashName", 2) })
+        {
+            var owner = new TypeDefinition("N", name, Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            module.Types.Add(owner);
+            var valueMethod = Static(owner, "Value", module.TypeSystem.Int32);
+            valueMethod.Body.GetILProcessor().Emit(OpCodes.Ldc_I4, value);
+            valueMethod.Body.GetILProcessor().Emit(OpCodes.Ret);
+        }
+
+        var m = Static(type, "M", module.TypeSystem.Int32);
+        var il = m.Body.GetILProcessor();
+        il.Emit(OpCodes.Call, module.Types.First(t => t.Name == "Slash\\Name").Methods[0]);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// A literal backslash in a type name survives reflection's escaping, ILAsm quoting, and the parser, so the listing names the same type.
+    /// </summary>
+    [TestMethod]
+    public void Disassemble_BackslashInTypeName_KeepsIdentity()
+    {
+        var method = Cecil(AddBackslashTypes);
+        var assembly = method.Method.Module.Assembly.GetName().Name;
+        var call = DisassemblyText.Instructions(method)[0];
+        Assert.AreEqual($"call int32 [{assembly}]N.'Slash\\\\Name'::Value()", call);
+        var parsed = (ResolvedMethod)InstructionParser.Parse(call, method.Context).Operand!;
+
+        // Reflection spells the name with its own escaping, so the metadata name is checked through Cecil and the value.
+        Assert.AreEqual("Slash\\\\Name", parsed.Method!.DeclaringType!.Name);
+        Assert.AreEqual(1, parsed.Method.Invoke(null, null));
+        Assert.AreEqual(1, method.Method.Invoke(null, null));
+    }
+
+    /// <summary>
+    /// A core type that no facade exports is spelled with its defining assembly, which is the only reference that binds.
+    /// </summary>
+    [TestMethod]
+    public void Disassemble_UnexportedCoreType_NamesTheDefiningAssembly()
+    {
+        var marvin = typeof(string).Assembly.GetType("System.Marvin")!;
+        Assert.AreEqual("System.Private.CoreLib", TypeNameFormatter.AssemblyReferenceName(marvin));
+        var session = new Session();
+        var hash = MethodDisassembler.Disassemble(typeof(string).GetMethod("GetHashCode", Type.EmptyTypes)!, session);
+        var texts = DisassemblyText.Instructions(hash);
+        var marvinCall = texts.First(t => t.Contains("System.Marvin::", StringComparison.Ordinal));
+        Assert.Contains("[System.Private.CoreLib]System.Marvin::", marvinCall);
+        Assert.DoesNotContain(t => t.Contains("[System.Runtime]System.Marvin", StringComparison.Ordinal), texts);
+        var parsed = (ResolvedMethod)InstructionParser.Parse(marvinCall, hash.Context).Operand!;
+        Assert.AreEqual(marvin, parsed.Method!.DeclaringType);
+    }
 }

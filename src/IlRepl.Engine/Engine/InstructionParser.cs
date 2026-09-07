@@ -132,7 +132,7 @@ public static class InstructionParser
     public static string Unquote(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        return name.Length > 2 && name.StartsWith('\'') && name.EndsWith('\'') ? name[1..^1] : name;
+        return name.Length > 2 && name.StartsWith('\'') && name.EndsWith('\'') ? TypeParser.DecodeQuoted(name[1..^1]) : name;
     }
 
     /// <summary>

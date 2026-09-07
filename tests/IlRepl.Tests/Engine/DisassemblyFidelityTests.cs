@@ -586,4 +586,44 @@ public sealed partial class DisassemblyFidelityTests
 
     [GeneratedRegex(@"\[([A-Za-z][A-Za-z0-9_.]*)\]")]
     private static partial Regex AssemblyHint();
+
+    /// <summary>
+    /// A quoted name with an escaped backslash assembles to the type it names: the reassembled call returns the first type's value.
+    /// </summary>
+    [TestMethod]
+    public void Scaffold_BackslashName_BindsTheSameType()
+    {
+        _ = IlasmLocator.Require();
+        var session = new Session();
+        var (assembly, image, fixture) = CecilFixture.Build(MethodDisassemblerTests.AddBackslashTypes, session.Resolver);
+        var listing = MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
+        var reassembled = IlasmLocator.Assemble(Scaffold(listing));
+        var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture").Methods.First(m => m.Name == "M");
+        var method = ModuleDefinition.ReadModule(new MemoryStream(reassembled)).Types.First(t => t.Name == "T").Methods.Single(m => m.HasBody);
+        CecilOracle.AssertSameMeaning(original, method, assembly.GetName().FullName, assembly.GetName().FullName, image, reassembled);
+        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-backslash", isCollectible: true);
+        var loaded = context.LoadFromStream(new MemoryStream(reassembled));
+        Assert.AreEqual(1, loaded.GetType("N.T")!.GetMethod("M")!.Invoke(null, null));
+        context.Unload();
+    }
+
+    /// <summary>
+    /// A reference to a core type nothing exports binds through its defining assembly.
+    /// </summary>
+    [TestMethod]
+    public void Scaffold_UnexportedCoreType_Binds()
+    {
+        _ = IlasmLocator.Require();
+        var marvin = typeof(string).Assembly.GetType("System.Marvin")!;
+        var identity = marvin.Assembly.GetName();
+        var token = string.Join(" ", identity.GetPublicKeyToken()!.Select(b => b.ToString("X2", CultureInfo.InvariantCulture)));
+        var source = $".assembly extern System.Runtime {{}}\n.assembly extern {identity.Name} {{ .ver {identity.Version!.Major}:{identity.Version.Minor}:{identity.Version.Build}:{identity.Version.Revision} .publickeytoken = ({token}) }}\n.assembly Wrapper {{}}\n"
+            + ".class public auto ansi N.T extends [System.Runtime]System.Object\n{\n  .method public static class [System.Runtime]System.Type M() cil managed\n  {\n    .maxstack 8\n"
+            + $"    ldtoken {TypeNameFormatter.IlAsm(marvin)}\n    call class [System.Runtime]System.Type [System.Runtime]System.Type::GetTypeFromHandle(valuetype [System.Runtime]System.RuntimeTypeHandle)\n    ret\n  }}\n}}\n";
+        var image = IlasmLocator.Assemble(source);
+        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-marvin", isCollectible: true);
+        var loaded = context.LoadFromStream(new MemoryStream(image));
+        Assert.AreEqual(marvin, loaded.GetType("N.T")!.GetMethod("M")!.Invoke(null, null));
+        context.Unload();
+    }
 }
