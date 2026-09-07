@@ -324,3 +324,172 @@ starlight-toc {
 #terminal .xterm-viewport {
   overflow-y: hidden !important;
 }
+
+/* Diagrams */
+.il-diagram {
+  margin: 1.5rem 0;
+}
+
+.il-diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  font-family: var(--sl-font-mono);
+  overflow: visible;
+}
+
+.il-diagram .panel {
+  fill: var(--sl-color-gray-6);
+  stroke: var(--sl-color-gray-5);
+  stroke-width: 1;
+}
+
+.il-diagram .panel-title {
+  fill: var(--sl-color-white);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.il-diagram .panel-sub,
+.il-diagram .channel-label {
+  fill: var(--sl-color-gray-3);
+  font-size: 11px;
+}
+
+.il-diagram [data-part] {
+  cursor: pointer;
+  outline: none;
+}
+
+.il-diagram .part-box {
+  fill: var(--sl-color-gray-5);
+  stroke: transparent;
+  stroke-width: 1.5;
+  transition: fill 0.15s, stroke 0.15s;
+}
+
+.il-diagram .part-tick {
+  fill: var(--sl-color-gray-3);
+  transition: fill 0.15s;
+}
+
+.il-diagram [data-part] text {
+  fill: var(--sl-color-gray-1);
+  font-size: 12.5px;
+  transition: fill 0.15s;
+}
+
+.il-diagram [data-part]:hover .part-box,
+.il-diagram [data-part]:focus-visible .part-box,
+.il-diagram [data-part].is-active .part-box {
+  fill: var(--sl-color-accent-low);
+  stroke: var(--sl-color-accent);
+}
+
+.il-diagram [data-part]:hover .part-tick,
+.il-diagram [data-part]:focus-visible .part-tick,
+.il-diagram [data-part].is-active .part-tick {
+  fill: var(--sl-color-accent);
+}
+
+.il-diagram [data-part]:hover text,
+.il-diagram [data-part]:focus-visible text,
+.il-diagram [data-part].is-active text {
+  fill: var(--sl-color-accent-high);
+}
+
+.il-diagram .channel-hit {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 1.5;
+  transition: stroke 0.15s;
+}
+
+.il-diagram [data-part="channel"]:hover .channel-hit,
+.il-diagram [data-part="channel"]:focus-visible .channel-hit,
+.il-diagram [data-part="channel"].is-active .channel-hit {
+  stroke: var(--sl-color-accent);
+}
+
+.il-diagram [data-part="channel"]:hover .channel-label,
+.il-diagram [data-part="channel"]:focus-visible .channel-label,
+.il-diagram [data-part="channel"].is-active .channel-label {
+  fill: var(--sl-color-accent-high);
+}
+
+.il-diagram .wire {
+  fill: none;
+  stroke: var(--sl-color-gray-4);
+  stroke-width: 1.5;
+  transition: stroke 0.15s;
+}
+
+.il-diagram .arrow {
+  fill: var(--sl-color-gray-3);
+}
+
+.il-diagram[data-active="channel"] .wire,
+.il-diagram[data-active="run"] .wire.loop {
+  stroke: var(--sl-color-accent);
+}
+
+/* A short segment travels each wire, the way a line goes out and its echo comes back. */
+.il-diagram .wire-pulse {
+  fill: none;
+  stroke: var(--sl-color-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 16 184;
+  stroke-dashoffset: 200;
+  animation: il-pulse 2.4s linear infinite;
+}
+
+.il-diagram .wire-pulse.reply {
+  animation-delay: 1.2s;
+}
+
+.il-diagram .wire-pulse.loop {
+  stroke-dasharray: 24 776;
+  stroke-dashoffset: 800;
+  animation-duration: 6s;
+}
+
+@keyframes il-pulse {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .il-diagram .wire-pulse {
+    display: none;
+  }
+}
+
+.il-diagram-caption {
+  margin-top: 0.75rem;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+  background: var(--sl-color-gray-6);
+  padding: 0.75rem 1rem;
+  font-family: var(--sl-font);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--sl-color-gray-2);
+  min-height: 4.2em;
+}
+
+.il-diagram-caption-title {
+  font-family: var(--sl-font-mono);
+  font-weight: 600;
+  color: var(--sl-color-accent);
+}
+
+.il-diagram-caption-title:not(:empty)::after {
+  content: '  ';
+  white-space: pre;
+}
+
+.il-diagram-caption.is-active .il-diagram-caption-text {
+  color: var(--sl-color-gray-1);
+}

@@ -1,0 +1,42 @@
+---
+import Diagram from './Diagram.astro';
+
+// What happens to one line, from the prompt to a result, and back to the prompt for the next cell.
+const stages = [
+  ['line', 'a line', 'You type one instruction, directive, or command. Comments are stripped and labels split off before anything else looks at it.'],
+  ['parse', 'parse', 'The opcode is looked up and its operand parsed by kind: an immediate, a label, a local or argument, a type, or a member reference, which resolves right away.'],
+  ['simulate', 'simulate', 'The instruction runs against a copy of the simulated stack. An underflow or a wrong arity is reported here, and a rejected line changes nothing.'],
+  ['accept', 'accept', 'The line joins the replayable state and the stack echo shows the result. Declarations persist across cells; instructions belong to the current one.'],
+  ['replay', 'replay', 'ret replays the accepted lines onto a fresh MethodBuilder, session methods first, so generic parameters bind to the method being emitted. .save does the same into a persisted assembly.'],
+  ['run', 'run', 'The JIT compiles the cell and it runs. One value left on the stack is boxed and printed with its runtime type; the body clears and the next cell starts.'],
+];
+
+const boxX = (i: number) => 20 + i * 124;
+---
+
+<Diagram id="cell-diagram" label="The life of a line, from the prompt to a result">
+  <svg viewBox="0 0 760 150" xmlns="http://www.w3.org/2000/svg" role="list">
+    <defs>
+      <marker id="il-arrow-cell" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M0 0.5 L7.5 4 L0 7.5 Z" class="arrow" />
+      </marker>
+    </defs>
+
+    {stages.map(([part, name, text], i) => (
+      <g data-part={part} data-title={name} data-text={text} tabindex="0" role="listitem" aria-label={`${name}. ${text}`}>
+        <rect class="part-box" x={boxX(i)} y="40" width="100" height="40" rx="6" />
+        <rect class="part-tick" x={boxX(i) + 10} y="53" width="3" height="14" rx="1.5" />
+        <text x={boxX(i) + 24} y="65">{name}</text>
+      </g>
+    ))}
+
+    {stages.slice(0, -1).map((_, i) => (
+      <path class="wire" d={`M${boxX(i) + 102} 60 H${boxX(i + 1) - 6}`} marker-end="url(#il-arrow-cell)" />
+    ))}
+    <text class="channel-label" x={boxX(4) - 12} y="30" text-anchor="middle">ret</text>
+
+    <path class="wire loop" d="M690 82 V118 H70 V88" marker-end="url(#il-arrow-cell)" />
+    <path class="wire-pulse loop" d="M690 82 V118 H70 V86" />
+    <text class="channel-label" x="380" y="134" text-anchor="middle">the next cell</text>
+  </svg>
+</Diagram>

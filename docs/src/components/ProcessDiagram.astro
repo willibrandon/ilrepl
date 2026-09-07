@@ -1,0 +1,71 @@
+---
+import Diagram from './Diagram.astro';
+
+// The two processes and the channel between them. Each part is drawn like a transcript line:
+// a tick in the gutter and a label, the way the stack echo sits under an instruction.
+const left = [
+  ['cli', 'command line', 'System.CommandLine reads the options: a script path, -e lines, and the batch, quiet, and color flags. Batch mode is implied when input is piped.'],
+  ['tui', 'terminal UI', 'The prompt with its completion palette, the transcript with copy mode, and the status bar with the live stack. It is a widget tree behind a terminal driver, so the same UI runs headless in the tests.'],
+  ['batch', 'batch mode', 'Scripts, -e, and piped input run without the UI. The transcript streams to standard output, a cell left open at the end of the input is run, and a method block left open is an error.'],
+  ['transcript', 'transcript and completion', 'The front-end keeps the transcript and completes opcodes and commands from the catalog the host sends once at startup, so the palette never waits on a round trip.'],
+  ['client', 'host client', 'Starts the host on the dotnet found on the path, connects to its standard streams, and sends each line as a request. If the host stops, the front-end says so instead of hanging.'],
+];
+
+const right = [
+  ['resolve', 'type and member resolution', 'ILAsm member references resolve against the loaded assemblies. The return type and the [assembly] prefix are optional, short names resolve through System.*, and a method defined with .method resolves by its bare name.'],
+  ['stack', 'stack simulation', 'Every line is checked against a linear model of the evaluation stack before it is accepted, so underflows and arity mistakes show up at the prompt rather than at the JIT.'],
+  ['emit', 'Reflection.Emit compilation', 'ret replays the accepted lines onto a fresh MethodBuilder in a collectible assembly, defines the session methods ahead of Run, and hands the type to the JIT. .save writes the same thing to disk.'],
+  ['session', 'the session', 'The declarations and methods that persist across cells, the cell being written, and the replayable state behind every listing, echo, and status line.'],
+  ['capture', 'console capture', 'While a cell runs, its console output goes to a buffer for that call and comes back as transcript lines, so the JSON-RPC stream stays clean.'],
+];
+
+const channel = 'Two methods over JSON-RPC: Hello returns the catalog and the initial status, and Handle takes one line and returns the transcript lines it produced with the new status. StreamJsonRpc carries them over the host’s standard streams.';
+
+const rowY = (i: number) => 96 + i * 42;
+---
+
+<Diagram id="process-diagram" label="The two processes of ilrepl and the channel between them">
+  <svg viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg" role="list">
+    <defs>
+      <marker id="il-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M0 0.5 L7.5 4 L0 7.5 Z" class="arrow" />
+      </marker>
+    </defs>
+
+    <g class="process">
+      <rect class="panel" x="20" y="36" width="310" height="284" rx="10" />
+      <text class="panel-title" x="36" y="64">ilrepl</text>
+      <text class="panel-sub" x="36" y="80">Native AOT front-end</text>
+      {left.map(([part, name, text], i) => (
+        <g data-part={part} data-title={name} data-text={text} tabindex="0" role="listitem" aria-label={`${name}. ${text}`}>
+          <rect class="part-box" x="36" y={rowY(i)} width="278" height="32" rx="6" />
+          <rect class="part-tick" x="46" y={rowY(i) + 9} width="3" height="14" rx="1.5" />
+          <text x="60" y={rowY(i) + 21}>{name}</text>
+        </g>
+      ))}
+    </g>
+
+    <g class="process">
+      <rect class="panel" x="430" y="36" width="310" height="284" rx="10" />
+      <text class="panel-title" x="446" y="64">ilrepl-host</text>
+      <text class="panel-sub" x="446" y="80">framework-dependent, runs on your dotnet</text>
+      {right.map(([part, name, text], i) => (
+        <g data-part={part} data-title={name} data-text={text} tabindex="0" role="listitem" aria-label={`${name}. ${text}`}>
+          <rect class="part-box" x="446" y={rowY(i)} width="278" height="32" rx="6" />
+          <rect class="part-tick" x="456" y={rowY(i) + 9} width="3" height="14" rx="1.5" />
+          <text x="470" y={rowY(i) + 21}>{name}</text>
+        </g>
+      ))}
+    </g>
+
+    <g data-part="channel" data-title="JSON-RPC over stdio" data-text={channel} tabindex="0" role="listitem" aria-label={`JSON-RPC over stdio. ${channel}`} class="channel">
+      <rect class="channel-hit" x="332" y="120" width="96" height="112" rx="6" />
+      <text class="channel-label" x="380" y="140" text-anchor="middle">JSON-RPC</text>
+      <path class="wire" d="M336 162 H420" marker-end="url(#il-arrow)" />
+      <path class="wire-pulse" d="M336 162 H424" />
+      <path class="wire" d="M424 192 H340" marker-end="url(#il-arrow)" />
+      <path class="wire-pulse reply" d="M424 192 H336" />
+      <text class="channel-label" x="380" y="222" text-anchor="middle">over stdio</text>
+    </g>
+  </svg>
+</Diagram>

@@ -3,18 +3,13 @@ title: How it works
 description: Two processes, one protocol, and a replayable cell.
 ---
 
+import ProcessDiagram from '../../../components/ProcessDiagram.astro';
+import CellDiagram from '../../../components/CellDiagram.astro';
+
 Reflection.Emit needs a JIT, and the Native AOT front-end has none. ilrepl is therefore two
 processes.
 
-```
-ilrepl (Native AOT)                          ilrepl-host (framework-dependent)
-+------------------------------+   JSON-RPC  +------------------------------+
-| command line                 |  over stdio | type and member resolution   |
-| Hex1b terminal UI            | ----------> | stack simulation             |
-| batch mode                   | <---------- | Reflection.Emit compilation  |
-| transcript and completion    |             | the session                  |
-+------------------------------+             +------------------------------+
-```
+<ProcessDiagram />
 
 The front-end owns the transcript, completion, and rendering. The host owns the session and
 returns the transcript lines each input produced. They talk JSON-RPC with StreamJsonRpc over the
@@ -27,6 +22,8 @@ to a server. Mono's `PrepareMethod` does nothing on that runtime, so the JIT che
 `.method` block on the desktop is skipped there and a rejection waits for the first call.
 
 ## The cell
+
+<CellDiagram />
 
 Every line is validated against a replayable model of the cell: declared locals and arguments,
 the instructions, the labels, the open exception blocks, and the simulated stack. When the cell

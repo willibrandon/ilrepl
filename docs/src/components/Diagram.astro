@@ -1,0 +1,58 @@
+---
+// A diagram with a caption that explains whichever part is pointed at, tabbed to, or tapped.
+// The parts are SVG groups carrying data-part, data-title, and data-text; the script below
+// wires them once per page.
+interface Props {
+  id: string;
+  label: string;
+  hint?: string;
+}
+
+const { id, label, hint = 'Point at a part of the diagram, or tab to it, to read what it does.' } = Astro.props;
+---
+
+<figure class="il-diagram not-content" id={id} aria-label={label} data-active="">
+  <slot />
+  <figcaption class="il-diagram-caption" data-hint={hint} aria-live="polite">
+    <span class="il-diagram-caption-title"></span>
+    <span class="il-diagram-caption-text">{hint}</span>
+  </figcaption>
+</figure>
+
+<script>
+  for (const figure of document.querySelectorAll('.il-diagram')) {
+    const caption = figure.querySelector('.il-diagram-caption');
+    const title = caption.querySelector('.il-diagram-caption-title');
+    const text = caption.querySelector('.il-diagram-caption-text');
+    const hint = caption.dataset.hint;
+    const parts = Array.from(figure.querySelectorAll('[data-part]'));
+    let pinned = null;
+
+    const show = (part) => {
+      title.textContent = part ? part.dataset.title : '';
+      text.textContent = part ? part.dataset.text : hint;
+      caption.classList.toggle('is-active', part !== null);
+      figure.dataset.active = part ? part.dataset.part : '';
+      for (const p of parts) {
+        p.classList.toggle('is-active', p === part);
+      }
+    };
+
+    for (const part of parts) {
+      part.addEventListener('mouseenter', () => show(part));
+      part.addEventListener('mouseleave', () => show(pinned));
+      part.addEventListener('focus', () => show(part));
+      part.addEventListener('blur', () => show(pinned));
+      part.addEventListener('click', () => {
+        pinned = pinned === part ? null : part;
+        show(pinned);
+      });
+      part.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          part.click();
+        }
+      });
+    }
+  }
+</script>
