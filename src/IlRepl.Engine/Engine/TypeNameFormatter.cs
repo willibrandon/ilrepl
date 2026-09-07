@@ -176,6 +176,15 @@ public static class TypeNameFormatter
             return IlAsm(type.GetElementType()!) + ArraySuffix(type);
         }
 
+        if (type.IsGenericTypeDefinition)
+        {
+            // An open definition is a bare reference, List`1, never an instantiation over its own
+            // parameters: ilasm encodes the keyword form as a TypeSpec, which the runtime refuses for
+            // a definition, and the bare form as the TypeRef the C# compiler writes.
+            var definitionText = IlAsmDefinition(type);
+            return definitionText.StartsWith("class ", StringComparison.Ordinal) ? definitionText[6..] : definitionText.StartsWith("valuetype ", StringComparison.Ordinal) ? definitionText[10..] : definitionText;
+        }
+
         var full = IlAsmDefinition(type);
         if (type.IsGenericType)
         {
@@ -251,12 +260,18 @@ public static class TypeNameFormatter
         ArgumentNullException.ThrowIfNull(definition);
         if (definition.IsNested && definition.DeclaringType is { } declaring)
         {
-            return QualifiedName(declaring) + "/" + IlAsmTypeName(definition.Name);
+            return QualifiedName(declaring) + "/" + IlAsmTypeName(Unescape(definition.Name));
         }
 
-        var name = IlAsmTypeName(definition.Name);
-        return string.IsNullOrEmpty(definition.Namespace) ? name : string.Join(".", definition.Namespace.Split('.').Select(IlAsmIdentifier)) + "." + name;
+        var name = IlAsmTypeName(Unescape(definition.Name));
+        return string.IsNullOrEmpty(definition.Namespace) ? name : string.Join(".", Unescape(definition.Namespace).Split('.').Select(IlAsmIdentifier)) + "." + name;
     }
+
+    /// <summary>
+    /// Reflection escapes the characters its own type-name grammar reserves, writing a comma in a
+    /// name as <c>\,</c>; the metadata name has no backslash, and neither does ILAsm's quoted form.
+    /// </summary>
+    private static string Unescape(string name) => name.Contains('\\') ? name.Replace("\\", "", StringComparison.Ordinal) : name;
 
     /// <summary>
     /// The ILAsm spelling of a type reference in a member position, without the <c>class</c>/<c>valuetype</c> prefix.
@@ -280,8 +295,14 @@ public static class TypeNameFormatter
         return text.StartsWith("valuetype ", StringComparison.Ordinal) ? text[10..] : text;
     }
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, string> FacadeNames = new();
+
     /// <summary>
-    /// The assembly name ILAsm should reference for a type. Core types map to the <c>System.Runtime</c> facade.
+    /// The assembly name ILAsm should reference for a type. A type that lives in
+    /// <c>System.Private.CoreLib</c> is named by the facade that exports it, which is what a
+    /// reference must bind through: <c>System.Runtime</c> for <c>string</c>, <c>System.Collections</c>
+    /// for <c>List`1</c>. A reference through a facade that does not export the type would assemble
+    /// and then fail to load.
     /// </summary>
     /// <param name="type">The type.</param>
     /// <returns>The assembly name.</returns>
@@ -289,6 +310,56 @@ public static class TypeNameFormatter
     {
         ArgumentNullException.ThrowIfNull(type);
         var name = type.Assembly.GetName().Name ?? "System.Runtime";
-        return name == "System.Private.CoreLib" ? "System.Runtime" : name;
+        if (name != "System.Private.CoreLib")
+        {
+            return name;
+        }
+
+        var definition = type;
+        while (definition.HasElementType)
+        {
+            definition = definition.GetElementType()!;
+        }
+
+        if (definition.IsGenericType && !definition.IsGenericTypeDefinition)
+        {
+            definition = definition.GetGenericTypeDefinition();
+        }
+
+        while (definition.IsNested && definition.DeclaringType is { } declaring)
+        {
+            definition = declaring;
+        }
+
+        return definition.FullName is null ? "System.Runtime" : FacadeNames.GetOrAdd(definition, FacadeExporting);
+    }
+
+    private static string FacadeExporting(Type definition)
+    {
+        // System.Runtime first, the rest alphabetically, so the spelling is stable: the first loaded
+        // facade whose exported types include the definition names it.
+        var facades = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => !a.IsDynamic && a.GetName().Name is { } n && n.StartsWith("System.", StringComparison.Ordinal) && n != "System.Private.CoreLib")
+            .OrderBy(a => a.GetName().Name == "System.Runtime" ? 0 : 1)
+            .ThenBy(a => a.GetName().Name, StringComparer.Ordinal);
+        foreach (var facade in facades)
+        {
+            Type? exported;
+            try
+            {
+                exported = facade.GetType(definition.FullName!, throwOnError: false);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException)
+            {
+                continue;
+            }
+
+            if (exported == definition)
+            {
+                return facade.GetName().Name!;
+            }
+        }
+
+        return "System.Runtime";
     }
 }

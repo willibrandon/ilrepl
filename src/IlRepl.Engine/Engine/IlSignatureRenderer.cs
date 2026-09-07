@@ -68,6 +68,21 @@ public static class IlSignatureRenderer
     }
 
     /// <summary>
+    /// A type as an instruction operand. A plain named type prints bare, which ilasm encodes as
+    /// the TypeRef or TypeDef the compilers write; with <paramref name="viaSignature"/> it keeps
+    /// its <c>class</c>/<c>valuetype</c> word, which ilasm encodes as a TypeSpec, the form the
+    /// original token had. Every other shape is a signature either way.
+    /// </summary>
+    /// <param name="signature">The operand type.</param>
+    /// <param name="viaSignature">True when the original token was a TypeSpec.</param>
+    /// <returns>The text.</returns>
+    public static string TypeOperand(IlSignature signature, bool viaSignature)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        return signature.Kind == IlSignatureKind.Named && !viaSignature ? Declaring(signature) : IlAsm(signature);
+    }
+
+    /// <summary>
     /// A type in a member position: the <c>class</c>/<c>valuetype</c> word dropped except for a
     /// generic instantiation, which keeps it as ILAsm requires.
     /// </summary>
@@ -156,8 +171,8 @@ public static class IlSignatureRenderer
             case IlSignatureKind.Named:
                 if (signature.Resolved is { } type)
                 {
-                    // A named generic type is the open definition, List`1, not an instantiation over its own parameters.
-                    return pretty ? TypeNameFormatter.Pretty(type) : type.IsGenericTypeDefinition ? TypeNameFormatter.IlAsmDefinition(type) : TypeNameFormatter.IlAsm(type);
+                    // A named generic type is the open definition, List`1, spelled bare so that ilasm writes the TypeRef.
+                    return pretty ? TypeNameFormatter.Pretty(type) : TypeNameFormatter.IlAsm(type);
                 }
 
                 return pretty ? Unqualified(signature.UnresolvedName!) : (signature.IsValueType ? "valuetype " : "class ") + signature.UnresolvedName;

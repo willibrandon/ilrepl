@@ -58,7 +58,7 @@ il[3]> .dis Safe
   000e   leave IL_0036                          []
   0013   leave IL_0036                          unreachable
        } filter {
-  0018   isinst class [System.Runtime]System.DivideByZeroException [DivideByZeroException]
+  0018   isinst [System.Runtime]System.DivideByZeroException [DivideByZeroException]
   001d   ldnull                                 [DivideByZeroException, null]
   001e   cgt.un                                 [int32]
   0020   endfilter                              []
@@ -149,13 +149,16 @@ il[5]> .dis instance void class List`1<int32>::Add(!0)
   .locals (!T[] V_0, int32 V_1)
   0000 ldarg.0                                  [List<!T>]
   0001 ldarg.0                                  [List<!T>, List<!T>]
-  0002 ldfld int32 class [System.Runtime]System.Collections.Generic.List`1<!0>::_version [List<!T>, int32]
+  0002 ldfld int32 class [System.Collections]System.Collections.Generic.List`1<!0>::_version [List<!T>, int32]
 ```
 
 An instantiation has no body of its own, so `.dis` lists the definition and says so in a note
 after the listing. Member references inside it name generic parameters by position, `!0`, as ildasm
 does; the header and the stack column name them, `!T`. This body was compiled with
-`SkipLocalsInit`, and the `.locals` line has no `init` to show for it.
+`SkipLocalsInit`, and the `.locals` line has no `init` to show for it. The list type is spelled with
+`[System.Collections]`, the facade that exports it: a reference through `[System.Runtime]` would
+assemble and then fail to bind, so every core type is named by the assembly a reference must go
+through.
 
 ## Loaded assemblies
 

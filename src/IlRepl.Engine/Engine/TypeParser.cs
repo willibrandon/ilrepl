@@ -372,8 +372,20 @@ public static class TypeParser
         ArgumentNullException.ThrowIfNull(s);
         var parts = new List<string>();
         int depth = 0, start = 0;
+        var quoted = false;
         for (var i = 0; i < s.Length; i++)
         {
+            if (s[i] == '\'')
+            {
+                quoted = !quoted;
+                continue;
+            }
+
+            if (quoted)
+            {
+                continue;
+            }
+
             switch (s[i])
             {
                 case '<':
@@ -504,9 +516,18 @@ public static class TypeParser
     {
         ArgumentNullException.ThrowIfNull(s);
         var depth = 0;
+        var quoted = false;
         for (var i = open; i < s.Length; i++)
         {
-            if (s[i] == '(')
+            if (s[i] == '\'')
+            {
+                quoted = !quoted;
+            }
+            else if (quoted)
+            {
+                continue;
+            }
+            else if (s[i] == '(')
             {
                 depth++;
             }

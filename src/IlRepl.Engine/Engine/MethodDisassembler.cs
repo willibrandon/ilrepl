@@ -365,7 +365,7 @@ public static class MethodDisassembler
             var token = raw.Operand.Token;
             var signature = _metadata is null ? null : Try(() => MetadataSignatures.TypeOperand(_metadata, token, _provider, _generics), $"the type at {raw.Label}");
             var type = signature?.ToClrType() ?? Try(() => _module.ResolveType(token, _typeArguments, _methodArguments), signature is null ? $"the type at {raw.Label}" : null);
-            var text = signature is not null ? IlSignatureRenderer.IlAsm(signature) : type is not null ? TypeNameFormatter.IlAsm(type) : $"0x{token:x8}";
+            var text = signature is not null ? IlSignatureRenderer.TypeOperand(signature, IsTypeSpecification(token)) : type is not null ? TypeOperandText(type) : $"0x{token:x8}";
             if (type is null && signature is null)
             {
                 return Raw(raw, $"{emit.Name} {text}", null);
@@ -413,7 +413,7 @@ public static class MethodDisassembler
                 case Type type:
                 {
                     var signature = _metadata is null ? null : Try(() => MetadataSignatures.TypeOperand(_metadata, token, _provider, _generics), null);
-                    var text = signature is not null ? IlSignatureRenderer.IlAsm(signature) : TypeNameFormatter.IlAsm(type);
+                    var text = signature is not null ? IlSignatureRenderer.TypeOperand(signature, IsTypeSpecification(token)) : TypeOperandText(type);
                     return Instruction(raw, new Instruction { Op = emit, Text = $"{emit.Name} {text}", Kind = OperandKind.Token, Operand = type });
                 }
 
@@ -434,8 +434,8 @@ public static class MethodDisassembler
                         text = kind switch
                         {
                             HandleKind.TypeDefinition or HandleKind.TypeReference or HandleKind.TypeSpecification => Try(() => MetadataSignatures.TypeOperand(_metadata, token, _provider, _generics), null) is { } sig ? IlSignatureRenderer.IlAsm(sig) : null,
-                            HandleKind.FieldDefinition => "field " + FieldText(token, null),
-                            HandleKind.MethodDefinition or HandleKind.MethodSpecification => "method " + MethodOperand(token, null, raw.Label).Text,
+                            HandleKind.FieldDefinition => FieldText(token, null) is { } fieldText ? "field " + fieldText : null,
+                            HandleKind.MethodDefinition or HandleKind.MethodSpecification => MethodOperand(token, null, raw.Label).Text is { } methodText ? "method " + methodText : null,
                             _ => null,
                         };
                     }
@@ -460,6 +460,15 @@ public static class MethodDisassembler
                 ? new DisassembledEntry(DisassembledEntryKind.Instruction, raw.Offset) { Instruction = new Instruction { Op = emit, Text = text, Kind = OperandKind.Signature }, Raw = raw, EffectUnknown = true }
                 : Instruction(raw, new Instruction { Op = emit, Text = text, Kind = OperandKind.Signature, Operand = calli });
         }
+
+        private static bool IsTypeSpecification(int token) => (token >> 24) == 0x1B;
+
+        /// <summary>
+        /// A type operand spelled from a runtime type, for a module without metadata: bare for a
+        /// plain type, as the compilers encode it.
+        /// </summary>
+        private static string TypeOperandText(Type type) =>
+            type.IsGenericType || type.HasElementType || type.IsGenericParameter || TypeNameFormatter.IsFunctionPointer(type) ? TypeNameFormatter.IlAsm(type) : TypeNameFormatter.IlAsmDeclaring(type);
 
         /// <summary>
         /// What table a token names, with a member reference classified as a method or a field;
@@ -626,9 +635,17 @@ public static class MethodDisassembler
             }
 
             var memberName = name is ".ctor" or ".cctor" ? name : IlAsmRenderer.MemberName(name);
-            if (resolved?.DeclaringType is { } declaringType && !(parent?.HasUnresolved == false && parent.Kind == IlSignatureKind.GenericInstance))
+
+            // The row says whether the owner is an open definition or an instantiation; reflection
+            // spells a definition with its own parameters, which are out of scope in the listing.
+            if (parent is { HasUnresolved: false })
             {
-                return (TypeNameFormatter.IlAsmDeclaring(declaringType), memberName);
+                return (IlSignatureRenderer.Declaring(parent), memberName);
+            }
+
+            if (resolved?.DeclaringType is { } declaringType)
+            {
+                return (declaringType.IsGenericTypeDefinition ? IlSignatureRenderer.Declaring(IlSignature.Named(declaringType)) : TypeNameFormatter.IlAsmDeclaring(declaringType), memberName);
             }
 
             return (parent is null ? "?" : IlSignatureRenderer.Declaring(parent), memberName);

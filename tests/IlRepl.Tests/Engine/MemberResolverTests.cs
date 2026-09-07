@@ -257,5 +257,13 @@ public sealed class MemberResolverTests
         Assert.IsTrue(bare.Method!.IsGenericMethodDefinition);
         Assert.Throws<ReplException>(() => MemberResolver.ResolveMethod("!!0 [Fixtures]Fixtures.Shapes::Larger<[2]>(!!0, !!0)", context, false));
         Assert.Throws<ReplException>(() => MemberResolver.ResolveMethod("[Fixtures]Fixtures.Shapes::Larger<[x]>", context, false));
+
+        // An assembly-qualified array is a type argument, not an arity, and whitespace before the arguments is allowed.
+        var empty = MemberResolver.ResolveMethod("!!0[] [System.Runtime]System.Array::Empty<[System.Runtime]System.String[]>()", context, false);
+        Assert.AreEqual(typeof(string[]), empty.Method!.GetGenericArguments()[0]);
+        var spaced = MemberResolver.ResolveMethod("[System.Runtime]System.Array::Empty <string>()", context, false);
+        Assert.AreEqual(typeof(string), spaced.Method!.GetGenericArguments()[0]);
+        var spacedParen = MemberResolver.ResolveMethod("int32 [Fixtures]Fixtures.Shapes::add (int32, int32)", context, false);
+        Assert.AreEqual("add", spacedParen.Method!.Name);
     }
 }

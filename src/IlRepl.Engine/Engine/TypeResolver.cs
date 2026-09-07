@@ -166,6 +166,36 @@ public sealed class TypeResolver
     }
 
     /// <summary>
+    /// The reflection spelling of an IL type name: nesting with <c>+</c>, and a backslash before
+    /// each character reflection's own name grammar reserves, so a type called <c>Comma,Name</c>
+    /// is looked up as one name and not as a name and an assembly.
+    /// </summary>
+    /// <param name="ilName">The IL name.</param>
+    /// <returns>The name for <see cref="Assembly.GetType(string)"/>.</returns>
+    public static string ReflectionName(string ilName)
+    {
+        ArgumentNullException.ThrowIfNull(ilName);
+        var sb = new System.Text.StringBuilder(ilName.Length);
+        foreach (var c in ilName)
+        {
+            if (c == '/')
+            {
+                sb.Append('+');
+                continue;
+            }
+
+            if (c is ',' or '&' or '*' or '[' or ']' or '\\' or '+')
+            {
+                sb.Append('\\');
+            }
+
+            sb.Append(c);
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Finds a type by its IL name, with an optional <c>[assembly]</c> hint.
     /// </summary>
     /// <param name="ilName">The name as written in IL: <c>System.String</c>, <c>Outer/Inner</c>, or a bare short name.</param>
@@ -175,7 +205,7 @@ public sealed class TypeResolver
     public Type Resolve(string ilName, string? assemblyHint)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ilName);
-        var clrName = ilName.Replace('/', '+');
+        var clrName = ReflectionName(ilName);
 
         if (assemblyHint is not null)
         {

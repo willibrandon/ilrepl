@@ -448,4 +448,18 @@ public sealed class IlAsmRendererTests
         Assert.AreEqual("'<>c'", TypeNameFormatter.IlAsmTypeName("<>c"));
         Assert.AreEqual("'add'", TypeNameFormatter.IlAsmTypeName("add"));
     }
+
+    /// <summary>
+    /// A core type is spelled with the facade that exports it, which is what a reference binds through.
+    /// </summary>
+    [TestMethod]
+    public void AssemblyReferenceName_CoreTypes_NameTheExportingFacade()
+    {
+        Assert.AreEqual("System.Runtime", TypeNameFormatter.AssemblyReferenceName(typeof(string)));
+        Assert.AreEqual("System.Runtime", TypeNameFormatter.AssemblyReferenceName(typeof(IEnumerable<int>)));
+        Assert.AreEqual("System.Collections", TypeNameFormatter.AssemblyReferenceName(typeof(List<int>)));
+        Assert.AreEqual("System.Collections", TypeNameFormatter.AssemblyReferenceName(typeof(List<>)));
+        Assert.AreEqual("System.Collections", TypeNameFormatter.AssemblyReferenceName(typeof(List<int>[])));
+        Assert.AreEqual("class [System.Collections]System.Collections.Generic.List`1<int32>", TypeNameFormatter.IlAsm(typeof(List<int>)));
+    }
 }

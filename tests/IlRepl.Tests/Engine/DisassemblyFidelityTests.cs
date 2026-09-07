@@ -167,7 +167,9 @@ public sealed partial class DisassemblyFidelityTests
     {
         _ = IlasmLocator.Require();
         var (session, assembly, module) = Fixtures();
+        var originalImage = File.ReadAllBytes(SampleHost.Samples.FixturesDll);
         var guarded = default(byte[]);
+        var open = default(byte[]);
         var count = 0;
         foreach (var (cecil, runtime) in Bodies(assembly, module))
         {
@@ -176,10 +178,15 @@ public sealed partial class DisassemblyFidelityTests
             var image = IlasmLocator.Assemble(source);
             var reassembled = ModuleDefinition.ReadModule(new MemoryStream(image));
             var method = reassembled.Types.First(t => t.Name == "T").Methods.Single(m => m.HasBody);
-            CecilOracle.AssertSameMeaning(cecil, method, "Fixtures", "Fixtures");
+            CecilOracle.AssertSameMeaning(cecil, method, assembly.GetName().FullName, assembly.GetName().FullName, originalImage, image);
             if (cecil.Name == "Guarded")
             {
                 guarded = image;
+            }
+
+            if (cecil.Name == "Open")
+            {
+                open = image;
             }
 
             count++;
@@ -193,6 +200,13 @@ public sealed partial class DisassemblyFidelityTests
         Assert.AreEqual(11, run.Invoke(null, [true]));
         Assert.AreEqual(2, run.Invoke(null, [false]));
         context.Unload();
+
+        // A reference to a core type binds through the facade that exports it, so the reassembled body loads and runs.
+        Assert.IsNotNull(open);
+        var openContext = new System.Runtime.Loader.AssemblyLoadContext("ilasm-open", isCollectible: true);
+        var openLoaded = openContext.LoadFromStream(new MemoryStream(open));
+        Assert.AreEqual(typeof(List<>), openLoaded.GetType("N.T")!.GetMethod("Open")!.Invoke(null, null));
+        openContext.Unload();
     }
 
     /// <summary>
@@ -210,16 +224,69 @@ public sealed partial class DisassemblyFidelityTests
         var reassembled = IlasmLocator.Assemble(Scaffold(listing));
         var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture").Methods.First(m => m.Name == "M");
         var method = ModuleDefinition.ReadModule(new MemoryStream(reassembled)).Types.First(t => t.Name == "T").Methods.Single(m => m.HasBody);
-        CecilOracle.AssertSameMeaning(original, method, fixture.Assembly.GetName().Name!, fixture.Assembly.GetName().Name!);
+        CecilOracle.AssertSameMeaning(original, method, fixture.Assembly.GetName().FullName, fixture.Assembly.GetName().FullName, image, reassembled);
         var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-order", isCollectible: true);
         var loaded = context.LoadFromStream(new MemoryStream(reassembled));
         Assert.AreEqual(2, loaded.GetType("N.T")!.GetMethod("M")!.Invoke(null, null), "the reassembled body dispatches the same way");
         context.Unload();
     }
 
+    /// <summary>
+    /// The oracle refuses the same clauses in another order, which would change which handler catches.
+    /// </summary>
+    [TestMethod]
+    public void Oracle_RejectsReorderedHandlers()
+    {
+        var session = new Session();
+        var (assembly, image, _) = CecilFixture.Build(MethodDisassemblerTests.AddOutOfOrderHandlers, session.Resolver);
+        var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture").Methods.First(m => m.Name == "M");
+        var changed = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture").Methods.First(m => m.Name == "M");
+        var handlers = changed.Body.ExceptionHandlers.ToList();
+        changed.Body.ExceptionHandlers.Clear();
+        foreach (var handler in Enumerable.Reverse(handlers))
+        {
+            changed.Body.ExceptionHandlers.Add(handler);
+        }
+
+        var self = assembly.GetName().FullName;
+        CecilOracle.AssertSameMeaning(original, original, self, self);
+        Assert.Throws<AssertFailedException>(() => CecilOracle.AssertSameMeaning(original, changed, self, self));
+    }
+
+    /// <summary>
+    /// The oracle keeps two versions of one assembly name apart: a reference to version 2 of a type is not a reference to version 1.
+    /// </summary>
+    [TestMethod]
+    public void Oracle_RejectsAnotherAssemblyVersion()
+    {
+        static MethodDefinition Referencing(Version version)
+        {
+            var definition = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("Referrer", new Version(1, 0, 0, 0)), "Referrer", ModuleKind.Dll);
+            var module = definition.MainModule;
+            var scope = new AssemblyNameReference("ReviewUnloadedLibrary", version);
+            module.AssemblyReferences.Add(scope);
+            var target = new Mono.Cecil.TypeReference("N", "Target", module, scope);
+            var type = new TypeDefinition("N", "Fixture", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            module.Types.Add(type);
+            var m = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            var il = m.Body.GetILProcessor();
+            il.Emit(Mono.Cecil.Cil.OpCodes.Ldtoken, target);
+            il.Emit(Mono.Cecil.Cil.OpCodes.Pop);
+            il.Emit(Mono.Cecil.Cil.OpCodes.Ret);
+            type.Methods.Add(m);
+            return m;
+        }
+
+        var one = Referencing(new Version(1, 0, 0, 0));
+        var two = Referencing(new Version(2, 0, 0, 0));
+        CecilOracle.AssertSameMeaning(one, Referencing(new Version(1, 0, 0, 0)), "Referrer", "Referrer");
+        Assert.Throws<AssertFailedException>(() => CecilOracle.AssertSameMeaning(one, two, "Referrer", "Referrer"));
+    }
+
     private static string Scaffold(DisassembledMethod method)
     {
-        var self = method.Method.Module.Assembly.GetName().Name!;
+        var identity = method.Method.Module.Assembly.GetName();
+        var self = identity.Name!;
         var body = IlAsmClauseWriter.Write(method);
         var locals = method.Locals.Count == 0
             ? ""
@@ -228,7 +295,26 @@ public sealed partial class DisassemblyFidelityTests
         var externs = AssemblyHint().Matches(method.Header + body + locals).Select(m => m.Groups[1].Value).Where(n => char.IsLetter(n[0])).Distinct(StringComparer.Ordinal).ToList();
         foreach (var name in externs)
         {
-            sb.Append(".assembly extern ").Append(name).AppendLine(" {}");
+            // Every extern names the assembly identity the listing means: the fixture's own version
+            // for a self reference, and the loaded assembly's version and key for the rest, so the
+            // reassembled references resolve to the same assemblies as the original's.
+            var known = name == self ? identity : AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetName()).FirstOrDefault(n => n.Name == name);
+            sb.Append(".assembly extern ").Append(name);
+            if (known is null)
+            {
+                sb.AppendLine(" {}");
+                continue;
+            }
+
+            var v = known.Version ?? new Version(0, 0, 0, 0);
+            var token = known.GetPublicKeyToken();
+            sb.Append(" { .ver ").Append(v.Major).Append(':').Append(v.Minor).Append(':').Append(v.Build).Append(':').Append(v.Revision);
+            if (token is { Length: > 0 })
+            {
+                sb.Append(" .publickeytoken = (").Append(string.Join(" ", token.Select(b => b.ToString("X2", CultureInfo.InvariantCulture)))).Append(')');
+            }
+
+            sb.AppendLine(" }");
         }
 
         // The scaffold takes the fixture's own name, so the oracle maps both modules' own scope onto it.

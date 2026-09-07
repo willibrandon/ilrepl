@@ -9,7 +9,7 @@ namespace IlRepl.Engine;
 /// <c>[assembly]</c> prefix are optional, short type names resolve through the common
 /// <c>System.*</c> namespaces, and <c>!N</c>/<c>!!N</c> inside the reference follow ILAsm rules.
 /// </summary>
-public static class MemberResolver
+public static partial class MemberResolver
 {
     private const BindingFlags AllMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.FlattenHierarchy;
 
@@ -65,6 +65,7 @@ public static class MemberResolver
         // Name, method generic arguments, and parameters come from the right-hand side. A quoted
         // name, '<Main>b__0_0', is read as one name however it is spelled inside the quotes.
         var (name, afterName) = ReadMemberName(rest);
+        TypeParser.SkipWhitespace(rest, ref afterName);
         string? parameterText = null;
         string? genericText = null;
         var afterGeneric = afterName;
@@ -73,6 +74,7 @@ public static class MemberResolver
             var closeAngle = FindMatchingAngle(rest, afterName);
             genericText = rest[(afterName + 1)..closeAngle];
             afterGeneric = closeAngle + 1;
+            TypeParser.SkipWhitespace(rest, ref afterGeneric);
         }
 
         var paren = afterGeneric < rest.Length && rest[afterGeneric] == '(' ? afterGeneric : rest.IndexOf('(', afterGeneric);
@@ -103,10 +105,10 @@ public static class MemberResolver
         // <[N]> names a generic method definition of arity N without instantiating it, as ILAsm
         // spells a token for one.
         int? genericArity = null;
-        if (genericText is not null && genericText.Trim().StartsWith('[') && genericText.Trim().EndsWith(']'))
+        if (genericText is not null && ArityMarker().Match(genericText) is { Success: true } arityMatch)
         {
-            var inner = genericText.Trim()[1..^1].Trim();
-            if (!int.TryParse(inner, NumberStyles.None, CultureInfo.InvariantCulture, out var arityValue) || arityValue < 1)
+            var arityValue = int.Parse(arityMatch.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture);
+            if (arityValue < 1)
             {
                 throw new ReplException($"expected a generic arity such as <[1]>, got '<{genericText}>'");
             }
@@ -643,9 +645,18 @@ public static class MemberResolver
     private static int FindMatchingAngle(string s, int open)
     {
         var depth = 0;
+        var quoted = false;
         for (var i = open; i < s.Length; i++)
         {
-            if (s[i] == '<')
+            if (s[i] == '\'')
+            {
+                quoted = !quoted;
+            }
+            else if (quoted)
+            {
+                continue;
+            }
+            else if (s[i] == '<')
             {
                 depth++;
             }
@@ -657,6 +668,13 @@ public static class MemberResolver
 
         throw new ReplException("unbalanced '<' in method name");
     }
+
+    /// <summary>
+    /// The arity form of a generic argument list: a bracketed integer alone, <c>[1]</c>, which is
+    /// not a type, unlike <c>[System.Runtime]System.String[]</c>.
+    /// </summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*\[\s*([0-9]+)\s*\]\s*$")]
+    private static partial System.Text.RegularExpressions.Regex ArityMarker();
 
     /// <summary>
     /// Resolves a generic method definition by arity, <c>Name&lt;[N]&gt;(...)</c>, keeping it open. The

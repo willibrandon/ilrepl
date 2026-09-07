@@ -681,7 +681,8 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Ret);
         });
         var text = method.Entries[0].Instruction!.Text;
-        Assert.AreEqual("ldtoken class [System.Runtime]System.Collections.Generic.List`1", text);
+        // Bare, without the class keyword: that is the spelling ilasm turns into a TypeRef, as the C# compiler writes it.
+        Assert.AreEqual("ldtoken [System.Collections]System.Collections.Generic.List`1", text);
         var parsed = InstructionParser.Parse(text, method.Context);
         Assert.AreEqual(typeof(List<>), parsed.Operand);
     }
@@ -721,6 +722,124 @@ public sealed class MethodDisassemblerTests
         Assert.IsTrue(definition.Method!.IsGenericMethodDefinition);
         var plainMethod = (ResolvedMethod)InstructionParser.Parse(texts[2], method.Context).Operand!;
         Assert.IsFalse(plainMethod.Method!.IsGenericMethod);
+    }
+
+    /// <summary>
+    /// Members of an open generic type print their owner as the definition, with no invented instantiation.
+    /// </summary>
+    [TestMethod]
+    public void Disassemble_MembersOfOpenGenericOwner_PrintTheDefinition()
+    {
+        var method = Cecil((module, type) =>
+        {
+            var owner = new TypeDefinition("N", "GenericOwner`1", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            module.Types.Add(owner);
+            var t = new Mono.Cecil.GenericParameter("T", owner);
+            owner.GenericParameters.Add(t);
+            var field = new FieldDefinition("Value", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static, t);
+            owner.Fields.Add(field);
+            var identity = Static(owner, "Identity", module.TypeSystem.Void);
+            var u = new Mono.Cecil.GenericParameter("U", identity);
+            identity.GenericParameters.Add(u);
+            identity.ReturnType = u;
+            identity.Parameters.Add(new ParameterDefinition(u));
+            identity.Body.GetILProcessor().Emit(OpCodes.Ldarg_0);
+            identity.Body.GetILProcessor().Emit(OpCodes.Ret);
+            var m = Static(type, "M", module.TypeSystem.Void);
+            var il = m.Body.GetILProcessor();
+            il.Emit(OpCodes.Ldtoken, identity);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldtoken, field);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+        });
+        var assembly = method.Method.Module.Assembly.GetName().Name;
+        var texts = DisassemblyText.Instructions(method);
+        Assert.AreEqual($"ldtoken method !!0 [{assembly}]N.GenericOwner`1::Identity<[1]>(!!0)", texts[0]);
+        Assert.AreEqual($"ldtoken field !0 [{assembly}]N.GenericOwner`1::Value", texts[2]);
+        var identityToken = (ResolvedMethod)InstructionParser.Parse(texts[0], method.Context).Operand!;
+        Assert.IsTrue(identityToken.Method!.IsGenericMethodDefinition);
+        Assert.IsTrue(identityToken.Method.DeclaringType!.IsGenericTypeDefinition);
+        var fieldToken = (System.Reflection.FieldInfo)InstructionParser.Parse(texts[2], method.Context).Operand!;
+        Assert.AreEqual("Value", fieldToken.Name);
+    }
+
+    /// <summary>
+    /// A type whose name holds a delimiter prints quoted and parses back, whatever the delimiter.
+    /// </summary>
+    [TestMethod]
+    public void Disassemble_QuotedNamesWithDelimiters_ParseBack()
+    {
+        var method = Cecil((module, type) =>
+        {
+            var paren = new TypeDefinition("N", "Paren(Name", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            var comma = new TypeDefinition("N", "Comma,Name<T", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            module.Types.Add(paren);
+            module.Types.Add(comma);
+            var use = Static(type, "Use", module.TypeSystem.Void);
+            use.Parameters.Add(new ParameterDefinition(paren));
+            use.Parameters.Add(new ParameterDefinition(comma));
+            use.Body.GetILProcessor().Emit(OpCodes.Ret);
+            var m = Static(type, "M", module.TypeSystem.Void);
+            var il = m.Body.GetILProcessor();
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Call, use);
+            il.Emit(OpCodes.Ret);
+        });
+        var assembly = method.Method.Module.Assembly.GetName().Name;
+        var call = DisassemblyText.Instructions(method)[2];
+        Assert.AreEqual($"call void [{assembly}]N.Fixture::Use(class [{assembly}]N.'Paren(Name', class [{assembly}]N.'Comma,Name<T')", call);
+        var parsed = (ResolvedMethod)InstructionParser.Parse(call, method.Context).Operand!;
+        Assert.AreEqual("Use", parsed.Method!.Name);
+        Assert.AreEqual("[]", DisassemblyText.StackAt(method, method.Entries[2].Offset));
+    }
+
+    /// <summary>
+    /// A damaged field, method, or method instance token keeps its value on the line.
+    /// </summary>
+    [TestMethod]
+    public void Disassemble_DamagedDefinitionTokens_KeepTheirValue()
+    {
+        var session = new Session();
+        var (_, image, _) = CecilFixture.Build((module, type) =>
+        {
+            type.Fields.Add(new FieldDefinition("F", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static, module.TypeSystem.Int32));
+            var generic = Static(type, "G", module.TypeSystem.Void);
+            generic.GenericParameters.Add(new Mono.Cecil.GenericParameter("T", generic));
+            generic.Body.GetILProcessor().Emit(OpCodes.Ret);
+            var plain = Static(type, "P", module.TypeSystem.Void);
+            plain.Body.GetILProcessor().Emit(OpCodes.Ret);
+            var instance = new GenericInstanceMethod(generic);
+            instance.GenericArguments.Add(module.TypeSystem.Int32);
+            var m = Static(type, "M", module.TypeSystem.Void);
+            var il = m.Body.GetILProcessor();
+            il.Emit(OpCodes.Ldtoken, type.Fields[0]);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldtoken, plain);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldtoken, instance);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+        });
+
+        var patched = (byte[])image.Clone();
+        var found = 0;
+        for (var i = 0; i + 5 < patched.Length; i++)
+        {
+            if (patched[i] == 0xD0 && patched[i + 4] is 0x04 or 0x06 or 0x2B && patched[i + 5] == 0x26)
+            {
+                patched[i + 1] = 0xFF;
+                patched[i + 2] = 0xFF;
+                patched[i + 3] = 0xFF;
+                found++;
+            }
+        }
+
+        Assert.AreEqual(3, found, "three ldtoken operands should be in the image");
+        var assembly = session.Resolver.LoadImage(patched);
+        var listing = MethodDisassembler.Disassemble(assembly.GetType("N.Fixture")!.GetMethod("M")!, session);
+        Assert.AreSequenceEqual(["ldtoken 0x04ffffff", "pop", "ldtoken 0x06ffffff", "pop", "ldtoken 0x2bffffff", "pop", "ret"], DisassemblyText.Instructions(listing));
     }
 
     /// <summary>

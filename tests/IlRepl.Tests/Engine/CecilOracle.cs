@@ -86,9 +86,10 @@ internal static class CecilOracle
             }
         }
 
+        // Clause order is dispatch order, so it is compared as read, never sorted.
         Assert.HasCount(cecil.Body.ExceptionHandlers.Count, ours.Clauses, where + ": clause count");
-        var expectedClauses = cecil.Body.ExceptionHandlers.Select(h => Describe(h, cecil.Body.CodeSize)).OrderBy(x => x, StringComparer.Ordinal).ToList();
-        var actualClauses = ours.Clauses.Select(Describe).OrderBy(x => x, StringComparer.Ordinal).ToList();
+        var expectedClauses = cecil.Body.ExceptionHandlers.Select(h => Describe(h, cecil.Body.CodeSize)).ToList();
+        var actualClauses = ours.Clauses.Select(Describe).ToList();
         Assert.AreSequenceEqual(expectedClauses, actualClauses, where + ": clauses");
         Assert.AreEqual(cecil.Body.MaxStackSize, ours.MaxStack, where + ": maxstack");
         Assert.AreEqual(cecil.Body.InitLocals, ours.InitLocals, where + ": init locals");
@@ -102,9 +103,64 @@ internal static class CecilOracle
     /// </summary>
     /// <param name="original">The original method.</param>
     /// <param name="reassembled">The method assembled from the listing.</param>
-    /// <param name="originalScope">The simple name the original module's own references count as.</param>
-    /// <param name="reassembledScope">The simple name the reassembled module's own references count as.</param>
-    public static void AssertSameMeaning(MethodDefinition original, MethodDefinition reassembled, string originalScope, string reassembledScope)
+    /// <param name="originalScope">The full assembly name the original module's own references count as.</param>
+    /// <param name="reassembledScope">The full assembly name the reassembled module's own references count as.</param>
+    public static void AssertSameMeaning(MethodDefinition original, MethodDefinition reassembled, string originalScope, string reassembledScope) =>
+        AssertSameMeaning(original, reassembled, originalScope, reassembledScope, null, null);
+
+    /// <summary>
+    /// As above, and with both images at hand also compares the table each token operand comes
+    /// from, which Cecil hides: a TypeSpec wrapping a reference is not the reference itself, and
+    /// the runtime treats the two differently for an open generic type.
+    /// </summary>
+    /// <param name="original">The original method.</param>
+    /// <param name="reassembled">The method assembled from the listing.</param>
+    /// <param name="originalScope">The full assembly name the original module's own references count as.</param>
+    /// <param name="reassembledScope">The full assembly name the reassembled module's own references count as.</param>
+    /// <param name="originalImage">The original image, or null to skip the token table check.</param>
+    /// <param name="reassembledImage">The reassembled image, or null to skip the token table check.</param>
+    public static void AssertSameMeaning(MethodDefinition original, MethodDefinition reassembled, string originalScope, string reassembledScope, byte[]? originalImage, byte[]? reassembledImage)
+    {
+        var where = original.FullName;
+        if (originalImage is not null && reassembledImage is not null)
+        {
+            var a = RawTokens(originalImage, original);
+            var b = RawTokens(reassembledImage, reassembled);
+            Assert.AreSequenceEqual(a, b, where + ": operand token tables");
+        }
+
+        AssertSameMeaningCore(original, reassembled, originalScope, reassembledScope);
+    }
+
+    /// <summary>
+    /// The shape of every token operand in a body, in order: a type by reference against a type
+    /// signature, and a member against a generic method instance. Which table a reference came
+    /// through within a shape, a TypeDef or a TypeRef, a MethodDef or a MemberRef, is not part of
+    /// it, because a member of the module being reassembled is rightly a reference from outside.
+    /// </summary>
+    private static List<string> RawTokens(byte[] image, MethodDefinition method)
+    {
+        using var pe = new System.Reflection.PortableExecutable.PEReader(System.Collections.Immutable.ImmutableArray.Create(image));
+        var body = System.Reflection.Metadata.PEReaderExtensions.GetMethodBody(pe, method.RVA);
+        var read = IlReader.Read(body.GetILBytes()!);
+        Assert.IsEmpty(read.Problems, method.FullName + ": " + string.Join("; ", read.Problems));
+        return read.Instructions
+            .Where(i => i.Op.OperandType is System.Reflection.Emit.OperandType.InlineType or System.Reflection.Emit.OperandType.InlineTok or System.Reflection.Emit.OperandType.InlineMethod or System.Reflection.Emit.OperandType.InlineField)
+            .Select(i => $"IL_{i.Offset:x4} {i.Op.Name} {Shape(i.Operand.Token)}")
+            .ToList();
+    }
+
+    private static string Shape(int token) => (token >> 24) switch
+    {
+        0x01 or 0x02 => "type reference",
+        0x1B => "type signature",
+        0x04 or 0x06 or 0x0A => "member",
+        0x2B => "method instance",
+        0x11 => "signature",
+        var table => $"table 0x{table:x2}",
+    };
+
+    private static void AssertSameMeaningCore(MethodDefinition original, MethodDefinition reassembled, string originalScope, string reassembledScope)
     {
         var where = original.FullName;
         var a = original.Body.Instructions;
@@ -119,8 +175,9 @@ internal static class CecilOracle
             Assert.AreEqual(Identity(a[i].Operand, original.Module, originalScope), Identity(b[i].Operand, reassembled.Module, reassembledScope), at + ": operand");
         }
 
-        var ha = original.Body.ExceptionHandlers.Select(h => Describe(h, original.Body.CodeSize, original.Module, originalScope)).OrderBy(x => x, StringComparer.Ordinal).ToList();
-        var hb = reassembled.Body.ExceptionHandlers.Select(h => Describe(h, reassembled.Body.CodeSize, reassembled.Module, reassembledScope)).OrderBy(x => x, StringComparer.Ordinal).ToList();
+        // Clause order is dispatch order: the same clauses in another order mean something else.
+        var ha = original.Body.ExceptionHandlers.Select(h => Describe(h, original.Body.CodeSize, original.Module, originalScope)).ToList();
+        var hb = reassembled.Body.ExceptionHandlers.Select(h => Describe(h, reassembled.Body.CodeSize, reassembled.Module, reassembledScope)).ToList();
         Assert.AreSequenceEqual(ha, hb, where + ": clauses");
         Assert.AreEqual(original.Body.MaxStackSize, reassembled.Body.MaxStackSize, where + ": maxstack");
         Assert.AreEqual(original.Body.InitLocals, reassembled.Body.InitLocals, where + ": init locals");
@@ -217,31 +274,29 @@ internal static class CecilOracle
     }
 
     /// <summary>
-    /// The assembly a type lives in. A compiled reference names a facade such as System.Collections
-    /// that forwards the type on, and the listing names where the runtime finds it, so both sides
-    /// are followed to the runtime type when it can be loaded and its home named the way the
-    /// listing names it.
+    /// The full identity of the assembly a type lives in: name, version, culture, and public key
+    /// token. A compiled reference names a facade such as System.Collections that forwards the
+    /// type on, and the listing names where the runtime finds it, so a reference the runtime can
+    /// load is followed to the assembly that defines the type; one it cannot keeps the identity
+    /// written in the reference, so two versions of one name stay two identities.
     /// </summary>
     private static string ScopeName(TypeReference type, string self)
     {
-        var scope = type.Scope;
-        var assemblyName = scope switch
+        switch (type.Scope)
         {
-            AssemblyNameReference assembly => assembly.Name,
-            ModuleDefinition => self,
-            ModuleReference module => module.Name,
-            _ => scope?.Name ?? "?",
-        };
-        if (scope is AssemblyNameReference && assemblyName != self)
-        {
-            var runtime = Type.GetType(type.FullName.Replace('/', '+') + ", " + assemblyName, throwOnError: false);
-            if (runtime is not null)
+            case AssemblyNameReference assembly:
             {
-                return TypeNameFormatter.AssemblyReferenceName(runtime);
+                var runtime = Type.GetType(type.FullName.Replace('/', '+') + ", " + assembly.FullName, throwOnError: false);
+                return runtime is not null ? runtime.Assembly.GetName().FullName : assembly.FullName;
             }
-        }
 
-        return assemblyName;
+            case ModuleDefinition:
+                return self;
+            case ModuleReference module:
+                return module.Name;
+            default:
+                return type.Scope?.Name ?? "?";
+        }
     }
 
     private static string Dump(MethodDefinition method) => string.Join("\n", method.Body.Instructions.Select(i => i.ToString()));
