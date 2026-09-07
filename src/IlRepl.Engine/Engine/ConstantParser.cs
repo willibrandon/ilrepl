@@ -36,7 +36,13 @@ public static class ConstantParser
         }
 
         var expected = Nullable.GetUnderlyingType(target) ?? target;
-        if (expected.IsEnum)
+        if (expected is System.Reflection.Emit.TypeBuilder builder && builder.BaseType == typeof(Enum))
+        {
+            // An enum still being written cannot report its underlying type; the literal's own
+            // wrapper (int32(1), int64(2)) says what it is, and the value__ field is checked at close.
+            expected = typeof(object);
+        }
+        else if (expected.IsEnum)
         {
             expected = Enum.GetUnderlyingType(expected);
         }

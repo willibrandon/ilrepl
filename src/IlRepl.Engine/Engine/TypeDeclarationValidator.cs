@@ -64,16 +64,21 @@ public static class TypeDeclarationValidator
                 throw new ReplException($"{what} extends itself through {TypeNameFormatter.Pretty(current)}");
             }
 
-            if (declarationOf(definition) is { } baseDeclaration && ReferenceEquals(current, TypeRelations.BaseTypeOf(type, types)))
+            if (ReferenceEquals(current, TypeRelations.BaseTypeOf(type, types)))
             {
-                if (baseDeclaration.Attributes.HasFlag(TypeAttributes.Sealed))
+                var baseDeclaration = declarationOf(definition);
+                var isSealed = baseDeclaration?.Attributes.HasFlag(TypeAttributes.Sealed) ?? (definition is not System.Reflection.Emit.TypeBuilder && definition.IsSealed);
+                var isInterface = baseDeclaration?.Kind == TypeKind.Interface || (definition is not System.Reflection.Emit.TypeBuilder && definition.IsInterface);
+                var kindWord = baseDeclaration?.KindWord ?? (definition.IsEnum ? "enum" : definition.IsValueType ? "struct" : "class");
+                var baseName = baseDeclaration?.FullName ?? TypeNameFormatter.Pretty(definition);
+                if (isSealed)
                 {
-                    throw new ReplException($"{what} cannot extend sealed {baseDeclaration.KindWord} {baseDeclaration.FullName}");
+                    throw new ReplException($"{what} cannot extend sealed {kindWord} {baseName}");
                 }
 
-                if (baseDeclaration.Kind == TypeKind.Interface)
+                if (isInterface)
                 {
-                    throw new ReplException($"{what} cannot extend interface {baseDeclaration.FullName}; use implements");
+                    throw new ReplException($"{what} cannot extend interface {baseName}; use implements");
                 }
             }
         }
@@ -307,34 +312,32 @@ public static class TypeDeclarationValidator
         }
 
         var definition = TypeRelations.Definition(type);
-        if (declarationOf(definition) is { } declaration)
-        {
-            foreach (var method in declaration.Methods)
-            {
-                if (method.IsConstructor || method.IsTypeInitializer)
-                {
-                    continue;
-                }
-
-                var signature = method.Signature;
-                yield return new Shape(
-                    signature.Name,
-                    signature.IsStatic,
-                    TypeRelations.SubstituteFor(type, signature.ReturnType),
-                    [.. signature.ParameterTypes.Select(p => TypeRelations.SubstituteFor(type, p))],
-                    method.IsAbstract,
-                    method.IsVirtual,
-                    signature.Attributes.HasFlag(MethodAttributes.NewSlot),
-                    type);
-            }
-
-            yield break;
-        }
-
         if (definition is System.Reflection.Emit.TypeBuilder)
         {
-            // A prototype without a declaration is still open; its members come from the table.
-            if (types.TryGetMembers(definition, out var own))
+            // A prototype describes itself through its declaration, or through the table while
+            // its block is still open.
+            if (declarationOf(definition) is { } declaration)
+            {
+                foreach (var method in declaration.Methods)
+                {
+                    if (method.IsConstructor || method.IsTypeInitializer)
+                    {
+                        continue;
+                    }
+
+                    var signature = method.Signature;
+                    yield return new Shape(
+                        signature.Name,
+                        signature.IsStatic,
+                        TypeRelations.SubstituteFor(type, signature.ReturnType),
+                        [.. signature.ParameterTypes.Select(p => TypeRelations.SubstituteFor(type, p))],
+                        method.IsAbstract,
+                        method.IsVirtual,
+                        signature.Attributes.HasFlag(MethodAttributes.NewSlot),
+                        type);
+                }
+            }
+            else if (types.TryGetMembers(definition, out var own))
             {
                 foreach (var (signature, _, declared) in own.Methods)
                 {
@@ -358,14 +361,16 @@ public static class TypeDeclarationValidator
             yield break;
         }
 
+        // A loaded type, session or framework, answers through reflection on its definition,
+        // with the instantiation's arguments substituted in.
         var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
-        foreach (var method in type.GetMethods(flags))
+        foreach (var method in definition.GetMethods(flags))
         {
             yield return new Shape(
                 method.Name,
                 method.IsStatic,
-                method.ReturnType,
-                [.. method.GetParameters().Select(p => p.ParameterType)],
+                TypeRelations.SubstituteFor(type, method.ReturnType),
+                [.. method.GetParameters().Select(p => TypeRelations.SubstituteFor(type, p.ParameterType))],
                 method.IsAbstract,
                 method.IsVirtual,
                 method.Attributes.HasFlag(MethodAttributes.NewSlot),

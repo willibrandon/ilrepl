@@ -12,4 +12,10 @@ namespace IlRepl.Engine;
 /// <param name="State">The validated body, built against the method table in force when it was committed.</param>
 /// <param name="Trampoline">The stable entry point callers bind to.</param>
 /// <param name="Version">The compiled body the trampoline forwards to.</param>
-public sealed record SessionMethod(MethodSignature Signature, string HeaderLine, IReadOnlyList<string> BodyLines, CellState State, MethodTrampoline Trampoline, CompiledMethodVersion Version);
+public sealed record SessionMethod(MethodSignature Signature, string HeaderLine, IReadOnlyList<string> BodyLines, CellState State, MethodTrampoline Trampoline, CompiledMethodVersion Version)
+{
+    /// <summary>
+    /// The submission that accepted this definition, which orders a rebuild after its dependencies.
+    /// </summary>
+    public int Order { get; init; }
+}

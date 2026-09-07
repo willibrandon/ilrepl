@@ -20,6 +20,7 @@ public sealed partial class Session
     private OpenTypeBlock? _openType;
     private OpenMemberBlock? _openMember;
     private PendingAccessorBlock? _openAccessor;
+    private bool _rebuilding;
 
     /// <summary>
     /// The type families defined with <c>.class</c>, in definition order.
@@ -176,6 +177,15 @@ public sealed partial class Session
 
         Type[] generics = names.Length > 0 ? builder.DefineGenericParameters(names) : [];
         var table = _typeTable.Clone();
+        if (enclosing is not null)
+        {
+            foreach (var (closedPath, closed) in enclosing.Outermost.FamilyTypes)
+            {
+                table.Add(closedPath, closed.Prototype);
+                table.SetMembers(closed.Prototype, closed.Members);
+            }
+        }
+
         for (var outer = enclosing; outer is not null; outer = outer.Enclosing)
         {
             table.Add(outer.Path, outer.Prototype);
@@ -357,7 +367,10 @@ public sealed partial class Session
             return block.Prototype.DefineTypeInitializer();
         }
 
-        var method = block.Prototype.DefineMethod(signature.Name, signature.Attributes, signature.CallingConvention);
+        // Reflection.Emit refuses a static virtual builder; the prototype is only a stand-in
+        // for resolution, and the written definition carries the declared attributes.
+        var prototypeAttributes = signature.IsStatic ? signature.Attributes & ~(MethodAttributes.Virtual | MethodAttributes.Abstract | MethodAttributes.NewSlot | MethodAttributes.Final) : signature.Attributes;
+        var method = block.Prototype.DefineMethod(signature.Name, prototypeAttributes, signature.CallingConvention);
         if (signature.TypeParameters.Count > 0)
         {
             methodGenerics = method.DefineGenericParameters([.. signature.TypeParameters.Select(p => p.Name)]);
@@ -480,6 +493,11 @@ public sealed partial class Session
         var space = text.IndexOfAny([' ', '\t', '(']);
         var directive = space < 0 ? text : text[..space];
         var rest = space < 0 ? "" : text[space..].Trim();
+        if (directive is not (".custom" or ".field"))
+        {
+            block.AttributeField = -1;
+        }
+
         LineResult result;
         switch (directive)
         {
@@ -503,9 +521,23 @@ public sealed partial class Session
                 result = AddLayout(block, directive, rest);
                 break;
             case ".custom":
-                block.CustomAttributes.Add(CustomAttributeParser.Parse(rest, TypeContext(block), line));
-                result = new LineResult(LineOutcome.Custom, null, "custom " + block.CustomAttributes[^1].Describe());
-                break;
+                {
+                    var custom = CustomAttributeParser.Parse(rest, TypeContext(block), line);
+                    if (block.AttributeField >= 0)
+                    {
+                        // ILAsm attaches an attribute written after a field to that field.
+                        var field = block.Fields[block.AttributeField];
+                        block.Fields[block.AttributeField] = field with { CustomAttributes = [.. field.CustomAttributes, custom] };
+                        result = new LineResult(LineOutcome.Custom, null, $"custom {custom.Describe()} on field {field.Name}");
+                    }
+                    else
+                    {
+                        block.CustomAttributes.Add(custom);
+                        result = new LineResult(LineOutcome.Custom, null, "custom " + custom.Describe());
+                    }
+
+                    break;
+                }
             case ".locals":
             case ".try":
             case ".args":
@@ -579,6 +611,7 @@ public sealed partial class Session
         }
 
         block.Fields.Add(field);
+        block.AttributeField = block.Fields.Count - 1;
         block.Members.Add(field, builder);
         return new LineResult(LineOutcome.Field, null, "field " + field.Describe());
     }
@@ -1025,31 +1058,348 @@ public sealed partial class Session
 
     private LineResult CommitFamily(OpenTypeBlock block, TypeDeclaration declaration)
     {
-        // Compilation and publication arrive with the type emitter; for now the family is kept
-        // as its declaration and its prototypes answer name lookups.
         var replacing = _types.FindIndex(t => t.FullName == declaration.FullName);
-        var accepted = new SessionType(declaration, block.FamilyTypes.ToDictionary(p => p.Key, p => (Type)p.Value.Prototype, StringComparer.Ordinal), null);
-        if (replacing < 0)
+        var previous = replacing < 0 ? null : _types[replacing];
+        if (previous is not null && !_rebuilding)
+        {
+            var closure = ReplacementClosure(previous);
+            if (closure.Types.Count > 0 || closure.Methods.Count > 0)
+            {
+                return ReplaceWithDependents(block, declaration, previous, closure);
+            }
+        }
+
+        var compiled = CompileFamily(block, declaration, previous);
+        PublishFamily(declaration, previous, compiled);
+        return new LineResult(LineOutcome.TypeEnd, null, previous is null ? $"end of {block.KindWord} {block.Path}" : $"replaced {block.KindWord} {block.Path} (existing instances keep the previous definition)");
+    }
+
+    /// <summary>
+    /// Phase A of a family commit: everything that can fail. The family is written, loaded, and
+    /// prepared as new identities, and the cell is rebuilt against them; nothing the session
+    /// holds changes.
+    /// </summary>
+    private (CompiledFamily Family, TypeTable Table, CellState Cell) CompileFamily(OpenTypeBlock block, TypeDeclaration declaration, SessionType? previous)
+    {
+        var prototypes = block.FamilyTypes.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        var trampolines = _methods.ToDictionary(m => m.Signature.Name, m => m.Trampoline, StringComparer.Ordinal);
+        var compiled = TypeEmitter.Compile(declaration, prototypes, trampolines, MethodPreparation.IsSupported);
+        var table = _typeTable.Clone();
+        foreach (var (path, type) in compiled.Types)
+        {
+            table.Add(path, type);
+        }
+
+        CellState cell;
+        try
+        {
+            cell = BuildCell(Signatures(), table);
+        }
+        catch (ReplException ex)
+        {
+            SessionAssemblies.Release(compiled.Definition);
+            throw new ReplException($"cannot {(previous is null ? "define" : "redefine")} {block.KindWord} {block.Path}: the cell body would no longer compile: {ex.Message}  (.clear the cell first)", ex);
+        }
+
+        return (compiled, table, cell);
+    }
+
+    /// <summary>
+    /// Phase B of a family commit: record swaps only.
+    /// </summary>
+    private void PublishFamily(TypeDeclaration declaration, SessionType? previous, (CompiledFamily Family, TypeTable Table, CellState Cell) compiled)
+    {
+        Submissions++;
+        var accepted = new SessionType(declaration, compiled.Family.Types, compiled.Family.Types[declaration.FullName], compiled.Family.Definition) { Order = Submissions };
+        var index = previous is null ? -1 : _types.IndexOf(previous);
+        if (index < 0)
         {
             _types.Add(accepted);
         }
         else
         {
-            _types[replacing] = accepted;
+            _types[index] = accepted;
         }
 
-        var table = _typeTable.Clone();
-        foreach (var (path, entry) in block.FamilyTypes)
-        {
-            table.Add(path, entry.Prototype);
-            table.SetMembers(entry.Prototype, entry.Members);
-        }
-
-        _typeTable = table;
+        _typeTable = compiled.Table;
+        _cell = compiled.Cell;
         _openType = null;
-        Rebuild();
+        if (previous?.Definition is { } old && !_rebuilding)
+        {
+            // The session drops its reference; instances and delegates keep the old version alive.
+            SessionAssemblies.Release(old);
+        }
+    }
+
+    /// <summary>
+    /// Everything that mentions a family being replaced, directly or through another dependent:
+    /// families by the types they mention, methods by the types they mention and the methods
+    /// they call, transitively.
+    /// </summary>
+    private (List<SessionType> Types, List<SessionMethod> Methods) ReplacementClosure(SessionType replaced)
+    {
+        var types = new List<SessionType>();
+        var methods = new List<SessionMethod>();
+        var mentionedTypes = new HashSet<Type>(replaced.Types.Values, ReferenceEqualityComparer.Instance);
+        var mentionedMethods = new HashSet<string>(StringComparer.Ordinal);
+        bool changed;
+        do
+        {
+            changed = false;
+            foreach (var family in _types)
+            {
+                if (ReferenceEquals(family, replaced) || types.Contains(family))
+                {
+                    continue;
+                }
+
+                if (FamilyMentions(family.Declaration, mentionedTypes, mentionedMethods))
+                {
+                    types.Add(family);
+                    foreach (var type in family.Types.Values)
+                    {
+                        mentionedTypes.Add(type);
+                    }
+
+                    changed = true;
+                }
+            }
+
+            foreach (var method in _methods)
+            {
+                if (methods.Contains(method))
+                {
+                    continue;
+                }
+
+                if (BodyMentions(method.State, mentionedTypes, mentionedMethods) || method.Signature.ParameterTypes.Append(method.Signature.ReturnType).Any(t => Mentions(t, mentionedTypes)))
+                {
+                    methods.Add(method);
+                    mentionedMethods.Add(method.Signature.Name);
+                    changed = true;
+                }
+            }
+        }
+        while (changed);
+
+        return (types, methods);
+    }
+
+    private static bool FamilyMentions(TypeDeclaration family, HashSet<Type> types, HashSet<string> methods)
+    {
+        foreach (var declaration in family.Family)
+        {
+            var declared = new List<Type>();
+            if (declaration.BaseType is not null)
+            {
+                declared.Add(declaration.BaseType);
+            }
+
+            declared.AddRange(declaration.Interfaces);
+            declared.AddRange(declaration.TypeParameters.SelectMany(p => p.Constraints));
+            declared.AddRange(declaration.Fields.Select(f => f.Type));
+            declared.AddRange(declaration.Properties.Select(p => p.Type));
+            declared.AddRange(declaration.Events.Select(e => e.HandlerType));
+            declared.AddRange(declaration.CustomAttributes.Select(a => a.AttributeType));
+            declared.AddRange(declaration.Overrides.Select(o => o.Target.DeclaringType!));
+            foreach (var method in declaration.Methods)
+            {
+                declared.Add(method.Signature.ReturnType);
+                declared.AddRange(method.Signature.ParameterTypes);
+                declared.AddRange(method.Signature.TypeParameters.SelectMany(p => p.Constraints));
+                declared.AddRange(method.Overrides.Select(o => o.Target.DeclaringType!));
+                if (method.Body is { } body && BodyMentions(body, types, methods))
+                {
+                    return true;
+                }
+            }
+
+            if (declared.Any(t => Mentions(t, types)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool BodyMentions(CellState body, HashSet<Type> types, HashSet<string> methods)
+    {
+        if (SessionMentions.Types(body).Any(t => Mentions(t, types)))
+        {
+            return true;
+        }
+
+        return body.Entries.Any(e => e.Instruction?.Operand is ResolvedMethod { Definition: { } definition } && methods.Contains(definition.Name));
+    }
+
+    private static bool Mentions(Type? type, HashSet<Type> types)
+    {
+        while (type is not null)
+        {
+            if (type.HasElementType)
+            {
+                type = type.GetElementType();
+                continue;
+            }
+
+            if (type.IsGenericParameter)
+            {
+                return false;
+            }
+
+            if (type.IsConstructedGenericType && type.GetGenericArguments().Any(a => Mentions(a, types)))
+            {
+                return true;
+            }
+
+            return types.Contains(TypeRelations.Definition(type));
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Replaces a family other definitions depend on: the new family is published, then every
+    /// dependent is replayed from its lines against it, in the order they were accepted, as new
+    /// identities. Any refusal restores the session as it was.
+    /// </summary>
+    private LineResult ReplaceWithDependents(OpenTypeBlock block, TypeDeclaration declaration, SessionType previous, (List<SessionType> Types, List<SessionMethod> Methods) closure)
+    {
+        var savedTypes = _types.ToList();
+        var savedMethods = _methods.ToList();
+        var savedTable = _typeTable;
+        var savedCell = _cell;
+        var savedSubmissions = Submissions;
+        var released = new List<DefinitionAssembly>();
+        var created = new List<DefinitionAssembly>();
+        var rebuilt = new List<string>();
+        _rebuilding = true;
+        try
+        {
+            var compiled = CompileFamily(block, declaration, previous);
+            created.Add(compiled.Family.Definition);
+            PublishFamilyKeeping(declaration, previous, compiled);
+            released.Add(previous.Definition!);
+
+            var order = closure.Types.Select(t => (t.Order, Replay: (Action)(() => ReplayFamilyLines(t))))
+                .Concat(closure.Methods.Select(m => (m.Order, Replay: (Action)(() => ReplayMethodLines(m)))))
+                .OrderBy(p => p.Order)
+                .ToList();
+            var names = closure.Types.Select(t => (t.Order, Name: t.Declaration.KindWord + " " + t.FullName))
+                .Concat(closure.Methods.Select(m => (m.Order, Name: "method " + m.Signature.Name)))
+                .OrderBy(p => p.Order)
+                .Select(p => p.Name)
+                .ToList();
+            for (var i = 0; i < order.Count; i++)
+            {
+                var name = names[i];
+                try
+                {
+                    var before = (_types.Select(t => t.Definition).ToList(), _methods.Select(m => m.Version.Definition).Concat(_methods.Select(m => m.Trampoline.Definition)).ToList());
+                    order[i].Replay();
+                    var after = (_types.Select(t => t.Definition).ToList(), _methods.Select(m => m.Version.Definition).Concat(_methods.Select(m => m.Trampoline.Definition)).ToList());
+                    created.AddRange(after.Item1.Where(d => d is not null && !before.Item1.Contains(d))!);
+                    created.AddRange(after.Item2.Where(d => !before.Item2.Contains(d)));
+                    released.AddRange(before.Item1.Where(d => d is not null && !after.Item1.Contains(d))!);
+                    released.AddRange(before.Item2.Where(d => !after.Item2.Contains(d)));
+                }
+                catch (ReplException ex)
+                {
+                    throw new ReplException($"cannot redefine {block.KindWord} {block.Path}: {name}: {ex.Message}  (redefine {name} first without it, or .reset)", ex);
+                }
+
+                rebuilt.Add(name);
+            }
+        }
+        catch
+        {
+            _types.Clear();
+            _types.AddRange(savedTypes);
+            _methods.Clear();
+            _methods.AddRange(savedMethods);
+            _typeTable = savedTable;
+            _cell = savedCell;
+            Submissions = savedSubmissions;
+            _openType = null;
+            _open = null;
+            _openMember = null;
+            _openAccessor = null;
+            foreach (var definition in created)
+            {
+                SessionAssemblies.Release(definition);
+            }
+
+            throw;
+        }
+        finally
+        {
+            _rebuilding = false;
+        }
+
+        foreach (var definition in released.Distinct())
+        {
+            SessionAssemblies.Release(definition);
+        }
+
+        _openType = null;
+        var list = rebuilt.Count == 1 ? rebuilt[0] : string.Join(", ", rebuilt.Take(rebuilt.Count - 1)) + " and " + rebuilt[^1];
+        return new LineResult(LineOutcome.TypeEnd, null, $"replaced {block.KindWord} {block.Path}; rebuilt {list} (existing instances and delegates keep the previous definitions)");
+    }
+
+    /// <summary>
+    /// Publishes a family without releasing what it replaces; the caller releases at the end.
+    /// </summary>
+    private void PublishFamilyKeeping(TypeDeclaration declaration, SessionType? previous, (CompiledFamily Family, TypeTable Table, CellState Cell) compiled)
+    {
         Submissions++;
-        return new LineResult(LineOutcome.TypeEnd, null, replacing < 0 ? $"end of {block.KindWord} {block.Path}" : $"replaced {block.KindWord} {block.Path}");
+        var accepted = new SessionType(declaration, compiled.Family.Types, compiled.Family.Types[declaration.FullName], compiled.Family.Definition) { Order = Submissions };
+        var index = previous is null ? -1 : _types.IndexOf(previous);
+        if (index < 0)
+        {
+            _types.Add(accepted);
+        }
+        else
+        {
+            _types[index] = accepted;
+        }
+
+        _typeTable = compiled.Table;
+        _cell = compiled.Cell;
+        _openType = null;
+    }
+
+    private void ReplayFamilyLines(SessionType family)
+    {
+        var declaration = family.Declaration;
+        _openType = null;
+        _openMember = null;
+        _openAccessor = null;
+        AddLine(declaration.HeaderLine);
+        foreach (var line in declaration.Lines)
+        {
+            AddLine(line);
+        }
+
+        if (_openType is not null)
+        {
+            AddLine("}");
+        }
+    }
+
+    private void ReplayMethodLines(SessionMethod method)
+    {
+        _open = null;
+        AddLine(method.HeaderLine);
+        foreach (var line in method.BodyLines)
+        {
+            AddLine(line);
+        }
+
+        if (_open is not null)
+        {
+            AddLine("}");
+        }
     }
 
     private bool UndoTypeLine()

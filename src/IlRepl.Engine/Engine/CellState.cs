@@ -587,6 +587,11 @@ public sealed class CellState
         switch (instruction.Operand)
         {
             case System.Reflection.FieldInfo field:
+                if (field.IsLiteral && instruction.Op.Name is "ldsfld" or "ldsflda" or "stsfld")
+                {
+                    throw new ReplException($"{field.Name} is a literal; it has no storage, so {instruction.Op.Name} would fail with MissingFieldException at run time. Load its value instead{LiteralHint(field)}");
+                }
+
                 MemberAccess.CheckType(field.FieldType, scope, Types);
                 MemberAccess.CheckField(field, scope, Types);
                 break;
@@ -624,6 +629,28 @@ public sealed class CellState
                     break;
             }
         }
+    }
+
+    private string LiteralHint(System.Reflection.FieldInfo field)
+    {
+        object? value = null;
+        if (Types.TryGetMembers(field.DeclaringType!, out var own))
+        {
+            value = own.FindField(field.Name)?.Declaration.DefaultValue;
+        }
+        else if (field.DeclaringType is not System.Reflection.Emit.TypeBuilder)
+        {
+            value = field.GetRawConstantValue();
+        }
+
+        return value switch
+        {
+            int i => $": ldc.i4 {i.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+            long l => $": ldc.i8 {l.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+            string text => $": ldstr \"{text}\"",
+            Enum e => $": ldc.i4 {System.Convert.ToInt64(e, System.Globalization.CultureInfo.InvariantCulture).ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+            _ => "",
+        };
     }
 
     private void CheckInitOnlyStore(Instruction instruction)

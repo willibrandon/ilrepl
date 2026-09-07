@@ -16,6 +16,9 @@ namespace IlRepl.Engine;
 public sealed class CecilWriter
 {
     private readonly Dictionary<string, DefinitionAssembly> _dependencies = new(StringComparer.Ordinal);
+    private readonly Dictionary<Type, TypeReference> _definedTypes = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<FieldInfo, FieldReference> _definedFields = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<MethodBase, MethodReference> _definedMethods = new(ReferenceEqualityComparer.Instance);
     private MethodDefinition? _ignoresAccessChecksConstructor;
 
     /// <summary>
@@ -60,28 +63,161 @@ public sealed class CecilWriter
     public TypeReference Object => Module.TypeSystem.Object;
 
     /// <summary>
-    /// Imports a type, noting a session assembly it comes from.
+    /// Records that a prototype builder or a generic parameter builder is written as a definition
+    /// of this module, so bodies bound to the prototype emit against the real definition.
+    /// </summary>
+    /// <param name="prototype">The builder.</param>
+    /// <param name="definition">The definition or generic parameter in this module.</param>
+    public void Define(Type prototype, TypeReference definition)
+    {
+        ArgumentNullException.ThrowIfNull(prototype);
+        ArgumentNullException.ThrowIfNull(definition);
+        _definedTypes[prototype] = definition;
+    }
+
+    /// <summary>
+    /// Records that a prototype field builder is written as a field of this module.
+    /// </summary>
+    /// <param name="prototype">The builder.</param>
+    /// <param name="definition">The field definition.</param>
+    public void Define(FieldInfo prototype, FieldReference definition)
+    {
+        ArgumentNullException.ThrowIfNull(prototype);
+        ArgumentNullException.ThrowIfNull(definition);
+        _definedFields[prototype] = definition;
+    }
+
+    /// <summary>
+    /// Records that a prototype method builder is written as a method of this module.
+    /// </summary>
+    /// <param name="prototype">The builder.</param>
+    /// <param name="definition">The method definition.</param>
+    public void Define(MethodBase prototype, MethodReference definition)
+    {
+        ArgumentNullException.ThrowIfNull(prototype);
+        ArgumentNullException.ThrowIfNull(definition);
+        _definedMethods[prototype] = definition;
+    }
+
+    /// <summary>
+    /// Imports a type, noting a session assembly it comes from. A prototype maps to its
+    /// definition here; constructed types are rebuilt around their imported parts.
     /// </summary>
     /// <param name="type">The type.</param>
     /// <returns>The reference.</returns>
     public TypeReference Import(Type type)
     {
         ArgumentNullException.ThrowIfNull(type);
+        if (_definedTypes.TryGetValue(type, out var defined))
+        {
+            return defined;
+        }
+
+        if (type.IsByRef)
+        {
+            return new ByReferenceType(Import(type.GetElementType()!));
+        }
+
+        if (type.IsPointer)
+        {
+            return new PointerType(Import(type.GetElementType()!));
+        }
+
+        if (type.IsArray)
+        {
+            var element = Import(type.GetElementType()!);
+            if (type.IsSZArray)
+            {
+                return new ArrayType(element);
+            }
+
+            var array = new ArrayType(element, type.GetArrayRank());
+            for (var i = 0; i < array.Rank; i++)
+            {
+                array.Dimensions[i] = new ArrayDimension(0, null);
+            }
+
+            return array;
+        }
+
+        if (type.IsGenericType && !type.IsGenericTypeDefinition)
+        {
+            var instance = new GenericInstanceType(Import(type.GetGenericTypeDefinition()));
+            foreach (var argument in type.GetGenericArguments())
+            {
+                instance.GenericArguments.Add(Import(argument));
+            }
+
+            return instance;
+        }
+
         NoteSessionMembers(type);
         return Module.ImportReference(type);
     }
 
     /// <summary>
-    /// Imports a field, noting a session assembly it comes from.
+    /// Imports a field, noting a session assembly it comes from. A prototype field maps to its
+    /// definition; a field of an instantiated prototype becomes a reference on the instantiation.
     /// </summary>
     /// <param name="field">The field.</param>
     /// <returns>The reference.</returns>
     public FieldReference Import(FieldInfo field)
     {
         ArgumentNullException.ThrowIfNull(field);
-        NoteSessionMembers(field.DeclaringType);
+        if (_definedFields.TryGetValue(field, out var defined))
+        {
+            return defined;
+        }
+
+        var declaring = field.DeclaringType;
+        if (declaring is { IsGenericType: true, IsGenericTypeDefinition: false } && _definedTypes.TryGetValue(declaring.GetGenericTypeDefinition(), out var definitionType))
+        {
+            var definitionField = definitionType.Resolve()!.Fields.First(f => f.Name == field.Name);
+            return new FieldReference(field.Name, definitionField.FieldType, Import(declaring));
+        }
+
+        NoteSessionMembers(declaring);
         NoteSessionMembers(field.FieldType);
         return Module.ImportReference(field);
+    }
+
+    /// <summary>
+    /// Imports a member of a type, where the member may be a prototype builder and the declaring
+    /// type an instantiation of the prototype.
+    /// </summary>
+    /// <param name="method">The method or constructor.</param>
+    /// <param name="declaring">The declaring type as referenced, or null for the method's own.</param>
+    /// <returns>The reference.</returns>
+    public MethodReference Import(MethodBase method, Type? declaring)
+    {
+        ArgumentNullException.ThrowIfNull(method);
+        if (_definedMethods.TryGetValue(method, out var defined))
+        {
+            if (declaring is { IsGenericType: true, IsGenericTypeDefinition: false })
+            {
+                var onInstance = new MethodReference(defined.Name, defined.ReturnType, Import(declaring))
+                {
+                    HasThis = defined.HasThis,
+                    ExplicitThis = defined.ExplicitThis,
+                    CallingConvention = defined.CallingConvention,
+                };
+                foreach (var parameter in defined.Parameters)
+                {
+                    onInstance.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
+                }
+
+                foreach (var parameter in defined.GenericParameters)
+                {
+                    onInstance.GenericParameters.Add(new GenericParameter(parameter.Name, onInstance));
+                }
+
+                return onInstance;
+            }
+
+            return defined;
+        }
+
+        return Import(method);
     }
 
     /// <summary>
@@ -92,6 +228,11 @@ public sealed class CecilWriter
     public MethodReference Import(MethodBase method)
     {
         ArgumentNullException.ThrowIfNull(method);
+        if (_definedMethods.TryGetValue(method, out var defined))
+        {
+            return defined;
+        }
+
         NoteSessionMembers(method.DeclaringType);
         foreach (var parameter in method.GetParameters())
         {

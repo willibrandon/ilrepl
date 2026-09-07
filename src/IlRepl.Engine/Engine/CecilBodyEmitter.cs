@@ -208,7 +208,7 @@ public static class CecilBodyEmitter
         private MethodReference MethodOperand(ResolvedMethod resolved, bool callSite)
         {
             var target = resolved.Definition is { } definition ? map.SessionMethod(definition) : map.Map(resolved.Method!);
-            var reference = writer.Import(target);
+            var reference = resolved.Definition is null && resolved.Declared is not null ? writer.Import(target, resolved.DeclaringType) : writer.Import(target);
             if (!callSite || resolved.OptionalParameterTypes is not { Length: > 0 } optional)
             {
                 return reference;

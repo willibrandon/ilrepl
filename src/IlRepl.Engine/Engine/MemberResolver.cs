@@ -387,13 +387,9 @@ public static class MemberResolver
                 throw new ReplException($"newobj needs a constructor; {name} is a method");
             }
 
-            MethodBase bound = builder;
-            if (instantiated)
-            {
-                bound = builder is ConstructorBuilder ctor ? TypeBuilder.GetConstructor(declaring, ctor) : TypeBuilder.GetMethod(declaring, (MethodBuilder)builder);
-            }
-
-            return new ResolvedMethod(bound, effective, declaring) { OptionalParameterTypesOverride = optionalTypes };
+            // The builder itself is kept; the declaring type carries the instantiation, and the
+            // writer builds the member reference on it.
+            return new ResolvedMethod(builder, effective, declaring) { OptionalParameterTypesOverride = optionalTypes };
         }
 
         if (candidates.Count == 0 && returnType is not null && parameterTypes is not null && own.DefineForward is not null && !instantiated)
@@ -483,10 +479,13 @@ public static class MemberResolver
 
     private static GenericContext LenientGenerics(GenericContext generics)
     {
-        // While the declaring type is still unknown, !N cannot be resolved for real; any
-        // placeholder works because only the declaring type is kept from this pass.
+        // While the declaring type is still unknown, a !N that names the member's own type
+        // parameters cannot be resolved for real; any placeholder works because only the
+        // declaring type is kept from this pass. Parameters that are in scope, a generic type's
+        // own !N inside its body or a method's !!N, are real and stay so: they can appear in the
+        // declaring type itself, as in Box`1<!0>::Count.
         var placeholders = Enumerable.Repeat(typeof(object), 32).ToArray();
-        return new GenericContext(placeholders, generics.MethodArguments.Count > 0 ? generics.MethodArguments : placeholders);
+        return new GenericContext(generics.TypeArguments.Count > 0 ? generics.TypeArguments : placeholders, generics.MethodArguments.Count > 0 ? generics.MethodArguments : placeholders);
     }
 
     private static ConstructorInfo ResolveConstructor(Type declaring, string name, Type[]? parameterTypes)
@@ -510,6 +509,11 @@ public static class MemberResolver
         }
 
         var constructors = declaring.GetConstructors(flags);
+        if (constructors.Length == 0 && name == ".ctor" && TypeRelations.IsSessionType(declaring))
+        {
+            throw new ReplException($"{(declaring.IsValueType ? "struct" : "class")} {TypeNameFormatter.Pretty(declaring)} declares no constructor (add a .method public instance void .ctor(...) to it{(declaring.IsValueType ? ", or use initobj" : "")})");
+        }
+
         var matched = parameterTypes is null ? constructors : constructors.Where(c => ParametersMatch(c.GetParameters(), parameterTypes, null, null)).ToArray();
         if (matched.Length == 1)
         {

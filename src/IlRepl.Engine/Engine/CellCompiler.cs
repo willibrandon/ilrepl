@@ -111,7 +111,7 @@ public static class CellCompiler
         Type[] genericParameters = names.Count > 0 ? run.DefineGenericParameters([.. names]) : [];
 
         var signatures = session.Methods.Select(m => m.Signature).ToArray();
-        var state = new CellState(session.Resolver, new GenericContext([], genericParameters), signatures, null, false);
+        var state = new CellState(session.Resolver, new GenericContext([], genericParameters), signatures, null, false, session.TypeTable, null);
         foreach (var line in session.DeclarationLines)
         {
             state.Apply(line);
@@ -120,6 +120,14 @@ public static class CellCompiler
         foreach (var line in session.BodyLines)
         {
             state.Apply(line);
+        }
+
+        // Session types are checked by the REPL, not the runtime: the cell skips access checks
+        // for every session assembly it mentions, and holds those assemblies while it lives.
+        var typeDependencies = SessionMentions.Definitions(state).ToList();
+        if (!persisted)
+        {
+            AccessGrants.Grant(assembly, module, typeDependencies);
         }
 
         var parameterTypes = state.Arguments.Select(a => a.Type).ToArray();
@@ -145,7 +153,7 @@ public static class CellCompiler
         var created = CreateCellType(type, "the cell");
         var method = created.GetMethod(entry.Name, BindingFlags.Public | BindingFlags.Static)
             ?? throw new ReplException("the compiled cell has no entry point");
-        var dependencies = session.Methods.Select(m => m.Trampoline.Definition).Distinct().ToArray();
+        var dependencies = session.Methods.Select(m => m.Trampoline.Definition).Concat(typeDependencies).Distinct().ToArray();
         var definition = SessionAssemblies.RegisterCell(assembly, created, dependencies, context);
         return new CompiledCell(assembly, created, method, state.Arguments.Select(a => a.Value).ToArray(), definition);
     }

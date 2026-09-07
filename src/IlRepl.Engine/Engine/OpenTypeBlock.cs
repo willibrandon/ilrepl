@@ -160,6 +160,12 @@ internal sealed class OpenTypeBlock
     public Dictionary<string, (System.Reflection.Emit.TypeBuilder Prototype, OwnMembers Members)> FamilyTypes { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The index of the field a class-level <c>.custom</c> attaches to, as in ILAsm where an
+    /// attribute follows the field it describes, or -1 when the next one attaches to the type.
+    /// </summary>
+    public int AttributeField { get; set; } = -1;
+
+    /// <summary>
     /// The access scope of declarations in this type.
     /// </summary>
     public AccessScope Scope => new(Prototype, KindWord + " " + Path);

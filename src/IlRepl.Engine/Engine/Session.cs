@@ -262,7 +262,7 @@ public sealed partial class Session
         _open = null;
         foreach (var type in _types)
         {
-            if (type.RuntimeType is { } runtime && SessionAssemblies.TryGetDefinition(runtime.Assembly, out var definition))
+            if (type.Definition is { } definition)
             {
                 SessionAssemblies.Release(definition);
             }
@@ -341,7 +341,7 @@ public sealed partial class Session
             table[index] = signature;
         }
 
-        if (replacing is not null)
+        if (replacing is not null && !_rebuilding)
         {
             // Dependents bind to the signature, which is known now. Checking here, rather than at
             // the closing brace, means a refused redefinition costs nothing to recover from. A
@@ -355,6 +355,7 @@ public sealed partial class Session
                 }
             }
 
+            RequireCompatibleTypeReferences(signature);
             RequireCompatibleReferences(_cell, "the cell body", signature, "(.clear the cell first, or keep the signature)");
             try
             {
@@ -400,7 +401,7 @@ public sealed partial class Session
         var name = open.Signature.Name;
         var replacing = open.Replacing;
 
-        if (replacing is not null)
+        if (replacing is not null && !_rebuilding)
         {
             foreach (var existing in _methods)
             {
@@ -410,6 +411,7 @@ public sealed partial class Session
                 }
             }
 
+            RequireCompatibleTypeReferences(open.Signature);
             RequireCompatibleReferences(_cell, "the cell body", open.Signature, "(.clear the cell first, or keep the signature)");
         }
 
@@ -426,7 +428,7 @@ public sealed partial class Session
         // Phase A: everything that can fail. A same-signature replacement keeps its trampoline,
         // so every caller already bound to it sees the new body; a new signature is a new
         // identity, and nothing references it yet.
-        var sameSignature = replacing is not null && SameSignature(replacing.Signature, open.Signature);
+        var sameSignature = replacing is not null && !_rebuilding && SameSignature(replacing.Signature, open.Signature);
         var trampoline = sameSignature ? replacing!.Trampoline : MethodTrampoline.Create(open.Signature);
         var trampolines = _methods.Where(m => !ReferenceEquals(m, replacing)).ToDictionary(m => m.Signature.Name, m => m.Trampoline, StringComparer.Ordinal);
         trampolines[name] = trampoline;
@@ -456,7 +458,7 @@ public sealed partial class Session
             trampoline.Bind(version.Implementation);
         }
 
-        var committed = new SessionMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State, trampoline, version);
+        var committed = new SessionMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State, trampoline, version) { Order = Submissions };
         var index = replacing is null ? -1 : _methods.IndexOf(replacing);
         if (index < 0)
         {
@@ -471,7 +473,7 @@ public sealed partial class Session
         _open = null;
         Submissions++;
 
-        if (replacing is not null)
+        if (replacing is not null && !_rebuilding)
         {
             SessionAssemblies.Release(replacing.Version.Definition);
             if (!sameSignature)
@@ -543,6 +545,23 @@ public sealed partial class Session
         TypeArguments = types;
     }
 
+    private void RequireCompatibleTypeReferences(MethodSignature replacement)
+    {
+        foreach (var family in _types)
+        {
+            foreach (var declaration in family.Declaration.Family)
+            {
+                foreach (var method in declaration.Methods)
+                {
+                    if (method.Body is { } body)
+                    {
+                        RequireCompatibleReferences(body, $"{declaration.KindWord} {declaration.FullName}", replacement, "(the previous definition stays)");
+                    }
+                }
+            }
+        }
+    }
+
     private static void RequireCompatibleReferences(CellState state, string what, MethodSignature replacement, string hint)
     {
         foreach (var entry in state.Entries)
@@ -563,10 +582,12 @@ public sealed partial class Session
 
     private void Rebuild() => _cell = BuildCell(Signatures());
 
-    private CellState BuildCell(IReadOnlyList<MethodSignature> table)
+    private CellState BuildCell(IReadOnlyList<MethodSignature> table) => BuildCell(table, _typeTable);
+
+    private CellState BuildCell(IReadOnlyList<MethodSignature> table, TypeTable types)
     {
         var generics = new GenericContext([], PrototypeGenerics.Create(_typeParameterNames));
-        var state = new CellState(Resolver, generics, table, null, false, _typeTable, null);
+        var state = new CellState(Resolver, generics, table, null, false, types, null);
         foreach (var line in _declarationLines)
         {
             state.Apply(line);

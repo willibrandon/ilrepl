@@ -18,7 +18,8 @@ internal static class IlLines
         foreach (var spec in specs)
         {
             var open = spec.IndexOf("{ ", StringComparison.Ordinal);
-            if (open < 0 || !spec.EndsWith('}') || spec.EndsWith("{ }", StringComparison.Ordinal))
+            var isHeader = spec.StartsWith(".method ", StringComparison.Ordinal) || spec.StartsWith(".class ", StringComparison.Ordinal);
+            if (!isHeader || open < 0 || !spec.EndsWith('}') || spec.EndsWith("{ }", StringComparison.Ordinal))
             {
                 yield return spec;
                 continue;

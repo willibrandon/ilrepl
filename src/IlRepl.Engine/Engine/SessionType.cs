@@ -7,12 +7,18 @@ namespace IlRepl.Engine;
 /// <param name="Declaration">The outermost declaration.</param>
 /// <param name="Types">Every type of the family by its ILAsm path: the loaded runtime types once compiled, the prototypes until then.</param>
 /// <param name="RuntimeType">The loaded runtime type of the outermost declaration, or null while the family is only declared.</param>
-public sealed record SessionType(TypeDeclaration Declaration, IReadOnlyDictionary<string, Type> Types, Type? RuntimeType)
+/// <param name="Definition">The loaded session assembly, or null while the family is only declared.</param>
+public sealed record SessionType(TypeDeclaration Declaration, IReadOnlyDictionary<string, Type> Types, Type? RuntimeType, DefinitionAssembly? Definition)
 {
     /// <summary>
     /// The ILAsm path of the outermost type.
     /// </summary>
     public string FullName => Declaration.FullName;
+
+    /// <summary>
+    /// The submission that accepted this family, which orders a rebuild after its dependencies.
+    /// </summary>
+    public int Order { get; init; }
 
     /// <summary>
     /// Finds the declaration of a type of this family.

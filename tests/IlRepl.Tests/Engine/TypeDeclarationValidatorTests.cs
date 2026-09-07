@@ -122,15 +122,16 @@ public sealed class TypeDeclarationValidatorTests
     }
 
     /// <summary>
-    /// A sealed session type cannot be extended, and a type cannot extend itself.
+    /// A sealed session type cannot be extended: an accepted one is refused at the header like
+    /// any loaded type, and one still being written is refused when the family closes.
     /// </summary>
     [TestMethod]
     public void BaseChain_IsChecked()
     {
-        var sealedBase = Load(".class public sealed Final { }", ".class public More extends Final {");
-        Assert.Contains("class More cannot extend sealed class Final", CloseRefused(sealedBase));
-        var enumBase = Load(".class public Color extends [System.Runtime]System.Enum {", ".field public specialname rtspecialname int32 value__", "}", ".class public Shade extends Color {");
-        Assert.Contains("cannot extend sealed enum Color", CloseRefused(enumBase));
+        Assert.Contains("cannot extend sealed type Final", Assert.ThrowsExactly<ReplException>(() => Load(".class public sealed Final { }", ".class public More extends Final {")).Message);
+        Assert.Contains("cannot extend sealed type Color", Assert.ThrowsExactly<ReplException>(() => Load(".class public Color extends [System.Runtime]System.Enum {", ".field public specialname rtspecialname int32 value__", "}", ".class public Shade extends Color {")).Message);
+        var nested = Load(".class public Outer {", ".class nested public sealed Final { }", ".class nested public More extends Outer/Final { }");
+        Assert.Contains("class Outer/More cannot extend sealed class Outer/Final", CloseRefused(nested));
     }
 
     /// <summary>
