@@ -258,7 +258,8 @@ public sealed class IlReplAppTests
         string[] rows;
         using (var snapshot = auto.CreateSnapshot())
         {
-            rows = snapshot.GetScreenText().Split('\n');
+            // The scrollbar occupies the last column; its glyphs are not part of the text.
+            rows = snapshot.GetScreenText().Split('\n').Select(r => r.TrimEnd().TrimEnd('▉', '│').TrimEnd()).ToArray();
         }
 
         // Folded rows read back as one paragraph once the line breaks are folded away.
@@ -533,6 +534,56 @@ public sealed class IlReplAppTests
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("= 42 : int32");
         await auto.WaitUntilTextAsync("il[3]>");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// A class block shows its fact ahead of the method fact, and closing it starts a new cell.
+    /// </summary>
+    [TestMethod]
+    public async Task TypeClass_ShowsClassFactThenMethodFact()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = await HostPaths.StartEngineAsync(ct);
+        var transcript = new Transcript();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
+            .WithHeadless()
+            .WithDimensions(120, 30)
+            .Build();
+
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync(".class public Counter {", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("class Counter │ stack []");
+        using (var snapshot = auto.CreateSnapshot())
+        {
+            Assert.IsTrue(snapshot.HasForegroundColor(SpanPalette.Color(SpanStyle.Type)), "the class fact should use the type color");
+        }
+
+        await auto.TypeAsync(".field public static int32 Count", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("field public static int32 Count");
+        await auto.TypeAsync(".method public static int32 Next() {", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("class Counter │ method Next │ stack []");
+        foreach (var line in new[] { "ldsfld int32 Counter::Count", "ret", "}" })
+        {
+            await auto.TypeAsync(line, ct: ct);
+            await auto.EnterAsync(ct: ct);
+        }
+
+        await auto.WaitUntilTextAsync("end of method Next");
+        await auto.WaitUntilNoTextAsync("method Next │");
+        await auto.TypeAsync("}", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("end of class Counter");
+        await auto.WaitUntilTextAsync("il[2]>");
+        await auto.WaitUntilNoTextAsync("class Counter │");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;

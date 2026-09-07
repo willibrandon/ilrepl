@@ -55,6 +55,8 @@ public static class HelpText
         Plain("  ldtoken method void Console::WriteLine()");
         Plain("  calli int32(int32, int32)          call vararg int32 Hello::Count(..., int32)");
         Plain("  call int32 Fib(int32)              ldftn int32 Fib(int32)");
+        Plain("  newobj instance void Point::.ctor(int32, int32)  ldfld int32 Point::X");
+        Plain("  call int32 Outer/Inner::Bump()     callvirt instance !0 class Box`1<int32>::Get()");
         Plain("");
         Heading("declarations");
         Entry(".locals init (T name, ...)", "declare locals; kept across cells, values reset");
@@ -65,11 +67,18 @@ public static class HelpText
         Entry(".try {  } catch T {  }", "exception blocks, exit them with leave");
         Entry("} finally {  } fault {", "more handlers; also } filter {  } handler {");
         Entry(".method T Name(T a, ...) {", "define a method kept across cells; } ends it");
+        Entry(".class public Name extends T {", "define a type kept across cells; } ends it");
+        Entry(".field public [static] T Name", "a field of the open class; [N] before T sets its offset");
+        Entry(".method public instance T Name() {", "a member of the open class; ldarg.0 is this");
+        Entry(".property T Name() {  .get ...  }", "a property; .event T Name { .addon ... } an event");
+        Entry(".override T::Method", "inside a member: take that interface or base slot");
+        Entry(".pack N  .size N", "layout of the open class; .custom attaches an attribute");
         Plain("");
         Heading("commands");
         foreach (var c in Completer.Commands)
         {
-            if (c.Name is ".locals" or ".args" or ".typeparams" or ".typeargs" or ".vararg" or ".try" or ".method")
+            if (c.Name is ".locals" or ".args" or ".typeparams" or ".typeargs" or ".vararg" or ".try" or ".method"
+                or ".class" or ".field" or ".property" or ".event" or ".override" or ".param" or ".custom" or ".pack" or ".size")
             {
                 continue;
             }

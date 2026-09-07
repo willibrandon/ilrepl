@@ -282,24 +282,29 @@ public static class IlReplApp
                     status.Locals == 0 ? "no locals" : $"{status.Locals} local{(status.Locals == 1 ? "" : "s")}",
                     status.OpenBlocks > 0 ? $"{status.OpenBlocks} open block{(status.OpenBlocks == 1 ? "" : "s")}" : $"{status.Instructions} instruction{(status.Instructions == 1 ? "" : "s")}",
                 };
-                if (status.OpenMethod is { } method)
+                // The open blocks lead, because every fact after them describes the innermost one:
+                // the class, then the method inside it.
+                var leading = new List<(string Text, SpanStyle Style)>();
+                if (status.OpenType is { } openType)
                 {
-                    // The method fact leads, because every fact after it describes the method.
-                    facts.Insert(0, "method " + method);
+                    leading.Add(("class " + openType, SpanStyle.Type));
                 }
 
+                if (status.OpenMethod is { } method)
+                {
+                    leading.Add(("method " + method, SpanStyle.Label));
+                }
+
+                facts.InsertRange(0, leading.Select(l => l.Text));
                 var occupied = feedback.Notification is null ? facts : [.. facts, feedback.Notification];
                 var hints = StatusHints(occupied, size.Width, copyMode);
                 var children = new List<IInfoBarChild>();
-                if (status.OpenMethod is not null)
+                foreach (var (text, style) in leading)
                 {
-                    children.Add(s.Section(facts[0]).Theme(t => t.Clone().Set(GlobalTheme.ForegroundColor, SpanPalette.Color(SpanStyle.Label))));
-                    children.AddRange(facts.Skip(1).Select(f => (IInfoBarChild)s.Section(f)));
+                    children.Add(s.Section(text).Theme(t => t.Clone().Set(GlobalTheme.ForegroundColor, SpanPalette.Color(style))));
                 }
-                else
-                {
-                    children.AddRange(facts.Select(f => (IInfoBarChild)s.Section(f)));
-                }
+
+                children.AddRange(facts.Skip(leading.Count).Select(f => (IInfoBarChild)s.Section(f)));
 
                 children.Add(s.Spacer());
                 if (feedback.Notification is { } note)

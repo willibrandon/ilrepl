@@ -72,4 +72,18 @@ public sealed class CompleterTests
         Assert.AreEqual("T Name(T arg, ...) {", items[0].Detail);
         Assert.IsTrue(items[0].TakesOperand);
     }
+
+    /// <summary>
+    /// .cl offers the cell command first, then the class directive, and .ty both type commands.
+    /// </summary>
+    [TestMethod]
+    public void Complete_ClassPrefixes_ReturnCommandsAndDirectives()
+    {
+        Assert.AreSequenceEqual([".clear", ".class"], Completer.Complete(".cl").Select(i => i.Name));
+        Assert.AreSequenceEqual([".typeparams", ".typeargs", ".types"], Completer.Complete(".ty").Select(i => i.Name));
+        var field = Completer.Complete(".fi").Single();
+        Assert.AreEqual(".field", field.Name);
+        Assert.IsTrue(field.TakesOperand);
+        Assert.IsFalse(Completer.Complete(".types").Single().TakesOperand);
+    }
 }

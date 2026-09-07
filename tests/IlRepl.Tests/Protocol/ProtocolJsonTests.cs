@@ -65,4 +65,22 @@ public sealed class ProtocolJsonTests
         Assert.IsNull(back.OpenMethod);
         Assert.AreEqual(0, back.Methods);
     }
+
+    /// <summary>
+    /// The type fields round-trip, and a fresh status omits the open type.
+    /// </summary>
+    [TestMethod]
+    public void SessionStatus_RoundTripsTypeFields()
+    {
+        var status = SessionStatus.Initial with { OpenType = "Outer/Inner", Types = 3 };
+        var json = JsonSerializer.Serialize(status, ProtocolJsonContext.Default.SessionStatus);
+        Assert.Contains("\"openType\":\"Outer/Inner\"", json);
+        Assert.Contains("\"types\":3", json);
+        var back = JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.SessionStatus)!;
+        Assert.AreEqual("Outer/Inner", back.OpenType);
+        Assert.AreEqual(3, back.Types);
+        var initial = JsonSerializer.Serialize(SessionStatus.Initial, ProtocolJsonContext.Default.SessionStatus);
+        Assert.DoesNotContain("openType", initial);
+        Assert.AreEqual(0, JsonSerializer.Deserialize(initial, ProtocolJsonContext.Default.SessionStatus)!.Types);
+    }
 }

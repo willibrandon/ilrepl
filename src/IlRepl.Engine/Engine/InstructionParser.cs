@@ -194,7 +194,9 @@ public static class InstructionParser
         {
             if (argumentIndex >= context.Arguments.Count)
             {
-                throw new ReplException($"argument {argumentIndex} is not declared (declare it with .args)");
+                throw new ReplException(context.ThisIndex >= 0 || context.Arguments.Count > 0 && context.Arguments[0].Name is null
+                    ? $"argument {argumentIndex} is not declared (the parameters are in the method header)"
+                    : $"argument {argumentIndex} is not declared (declare it with .args)");
             }
 
             RequireNoOperand(op, operandText);

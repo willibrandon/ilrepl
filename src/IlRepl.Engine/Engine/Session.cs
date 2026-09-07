@@ -11,7 +11,7 @@ namespace IlRepl.Engine;
 /// written only by the thread that drives it; code a cell started on other threads reaches
 /// trampolines and types, never these records.
 /// </summary>
-public sealed class Session
+public sealed partial class Session
 {
     private readonly List<string> _declarationLines = [];
     private readonly List<string> _bodyLines = [];
@@ -47,7 +47,7 @@ public sealed class Session
     /// The validated state of the body being written: the open method while a <c>.method</c>
     /// block is open, otherwise the cell. The stack echo, listings, and the status bar read this.
     /// </summary>
-    public CellState State => _open?.State ?? _cell;
+    public CellState State => _openMember?.State ?? _open?.State ?? _cell;
 
     /// <summary>
     /// The validated state of the cell itself, whether or not a method block is open.
@@ -57,7 +57,7 @@ public sealed class Session
     /// <summary>
     /// The signature of the method block being typed, or null when lines go to the cell.
     /// </summary>
-    public MethodSignature? OpenMethod => _open?.Signature;
+    public MethodSignature? OpenMethod => _openMember?.Signature ?? _open?.Signature;
 
     /// <summary>
     /// The methods defined with <c>.method</c>, in definition order. A redefinition keeps its place.
@@ -111,9 +111,19 @@ public sealed class Session
             return new LineResult(LineOutcome.Empty, null, null);
         }
 
+        if (_openType is not null)
+        {
+            return AddTypeLine(line, text);
+        }
+
         if (_open is not null)
         {
             return AddMethodLine(line);
+        }
+
+        if (IsClassDirective(text))
+        {
+            return OpenTypeBlock(text[".class".Length..], line);
         }
 
         if (text.StartsWith(".method", StringComparison.Ordinal) && (text.Length == ".method".Length || !char.IsLetter(text[".method".Length])))
@@ -159,6 +169,11 @@ public sealed class Session
     /// <returns>True when a line was removed.</returns>
     public bool Undo()
     {
+        if (_openType is not null)
+        {
+            return UndoTypeLine();
+        }
+
         if (_open is not null)
         {
             if (_open.BodyLines.Count == 0)
@@ -188,12 +203,34 @@ public sealed class Session
     /// <returns>True when a block was open.</returns>
     public bool AbandonMethod()
     {
+        if (_openMember is not null)
+        {
+            _openMember = null;
+            return true;
+        }
+
         if (_open is null)
         {
             return false;
         }
 
         _open = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Drops the whole open type family without committing it. The cell, the methods, and the
+    /// accepted types are untouched.
+    /// </summary>
+    /// <returns>True when a family was open.</returns>
+    public bool AbandonType()
+    {
+        if (_openType is null)
+        {
+            return false;
+        }
+
+        AbandonTypeFamily();
         return true;
     }
 
@@ -223,6 +260,17 @@ public sealed class Session
 
         _methods.Clear();
         _open = null;
+        foreach (var type in _types)
+        {
+            if (type.RuntimeType is { } runtime && SessionAssemblies.TryGetDefinition(runtime.Assembly, out var definition))
+            {
+                SessionAssemblies.Release(definition);
+            }
+        }
+
+        _types.Clear();
+        _typeTable = new TypeTable();
+        AbandonTypeFamily();
         TypeArguments = null;
         Rebuild();
     }
@@ -279,7 +327,7 @@ public sealed class Session
     private LineResult OpenBlock(string spec, string line)
     {
         var signatures = Signatures();
-        var headerContext = new ParseContext([], [], GenericContext.Empty, Resolver, signatures);
+        var headerContext = new ParseContext([], [], GenericContext.Empty, Resolver, signatures, _typeTable);
         var signature = MethodHeaderParser.Parse(spec, headerContext, out var braceOpen);
         var replacing = _methods.FirstOrDefault(m => m.Signature.Name == signature.Name);
         var table = new List<MethodSignature>(signatures);
@@ -324,7 +372,7 @@ public sealed class Session
             Signature = signature,
             Replacing = replacing,
             Signatures = table,
-            State = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen),
+            State = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen, _typeTable, null),
         };
         return new LineResult(LineOutcome.MethodStart, null, "method " + signature.DescribeWithNames());
     }
@@ -485,7 +533,7 @@ public sealed class Session
             s = s[1..^1];
         }
 
-        var context = new ParseContext([], [], GenericContext.Empty, Resolver, Signatures());
+        var context = new ParseContext([], [], GenericContext.Empty, Resolver, Signatures(), _typeTable);
         var types = TypeParser.SplitTopLevel(s).Select(t => TypeParser.Parse(t, context)).ToArray();
         if (types.Length != _typeParameterNames.Count)
         {
@@ -518,7 +566,7 @@ public sealed class Session
     private CellState BuildCell(IReadOnlyList<MethodSignature> table)
     {
         var generics = new GenericContext([], PrototypeGenerics.Create(_typeParameterNames));
-        var state = new CellState(Resolver, generics, table, null, false);
+        var state = new CellState(Resolver, generics, table, null, false, _typeTable, null);
         foreach (var line in _declarationLines)
         {
             state.Apply(line);
@@ -537,7 +585,7 @@ public sealed class Session
     private CellState ReplayBody(MethodSignature signature, IReadOnlyList<string> lines, IReadOnlyList<MethodSignature> table)
     {
         // The opening brace is never stored, so a replay starts as if it had been seen.
-        var state = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen: true);
+        var state = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen: true, _typeTable, null);
         foreach (var line in lines)
         {
             state.Apply(line);

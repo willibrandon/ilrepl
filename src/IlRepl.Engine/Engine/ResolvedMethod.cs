@@ -20,7 +20,7 @@ public sealed record ResolvedMethod
     {
         ArgumentNullException.ThrowIfNull(method);
         Method = method;
-        OptionalParameterTypes = optionalParameterTypes;
+        _optionalParameterTypes = optionalParameterTypes;
     }
 
     /// <summary>
@@ -32,6 +32,30 @@ public sealed record ResolvedMethod
         ArgumentNullException.ThrowIfNull(definition);
         Definition = definition;
     }
+
+    /// <summary>
+    /// Initializes a reference to a member of a type still being written. The builder cannot
+    /// describe itself before its type is created, so the declaration answers for it.
+    /// </summary>
+    /// <param name="builder">The member's builder, or its instantiation over a constructed type.</param>
+    /// <param name="declared">The declared signature, with generic parameters substituted for a constructed type.</param>
+    /// <param name="declaringType">The declaring type as referenced.</param>
+    public ResolvedMethod(MethodBase builder, MethodSignature declared, Type declaringType)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(declared);
+        ArgumentNullException.ThrowIfNull(declaringType);
+        Method = builder;
+        Declared = declared;
+        DeclaredType = declaringType;
+    }
+
+    /// <summary>
+    /// The declared signature of a member of a type being written, or null.
+    /// </summary>
+    public MethodSignature? Declared { get; }
+
+    private Type? DeclaredType { get; }
 
     /// <summary>
     /// The framework method, or null for a session method.
@@ -46,7 +70,14 @@ public sealed record ResolvedMethod
     /// <summary>
     /// The types after <c>...</c> in a vararg call site, or null when the call is not vararg.
     /// </summary>
-    public Type[]? OptionalParameterTypes { get; }
+    public Type[]? OptionalParameterTypes => OptionalParameterTypesOverride ?? _optionalParameterTypes;
+
+    private readonly Type[]? _optionalParameterTypes;
+
+    /// <summary>
+    /// The vararg call-site types of a member reference.
+    /// </summary>
+    internal Type[]? OptionalParameterTypesOverride { get; init; }
 
     /// <summary>
     /// True when the reference names a method defined with <c>.method</c>.
@@ -56,42 +87,42 @@ public sealed record ResolvedMethod
     /// <summary>
     /// True when the reference names a constructor.
     /// </summary>
-    public bool IsConstructor => Method is ConstructorInfo;
+    public bool IsConstructor => Declared is not null ? Declared.Name == ".ctor" : Method is ConstructorInfo;
 
     /// <summary>
     /// True when the method takes no <c>this</c>. Session methods are always static.
     /// </summary>
-    public bool IsStatic => Definition is not null || Method!.IsStatic;
+    public bool IsStatic => Definition is not null || (Declared is not null ? Declared.IsStatic : Method!.IsStatic);
 
     /// <summary>
     /// True when the method uses the vararg calling convention.
     /// </summary>
-    public bool IsVarArg => Method is not null && Method.CallingConvention.HasFlag(CallingConventions.VarArgs);
+    public bool IsVarArg => Declared is not null ? Declared.CallingConvention.HasFlag(CallingConventions.VarArgs) : Method is not null && Method.CallingConvention.HasFlag(CallingConventions.VarArgs);
 
     /// <summary>
     /// The method name; <c>.ctor</c> or <c>.cctor</c> for constructors.
     /// </summary>
-    public string Name => Definition?.Name ?? (Method is ConstructorInfo ? (Method.IsStatic ? ".cctor" : ".ctor") : Method!.Name);
+    public string Name => Definition?.Name ?? Declared?.Name ?? (Method is ConstructorInfo ? (Method.IsStatic ? ".cctor" : ".ctor") : Method!.Name);
 
     /// <summary>
     /// The return type; <c>void</c> for constructors.
     /// </summary>
-    public Type ReturnType => Definition?.ReturnType ?? (Method is MethodInfo mi ? mi.ReturnType : typeof(void));
+    public Type ReturnType => Definition?.ReturnType ?? Declared?.ReturnType ?? (Method is MethodInfo mi ? mi.ReturnType : typeof(void));
 
     /// <summary>
     /// The fixed parameter types in order.
     /// </summary>
-    public IReadOnlyList<Type> ParameterTypes => Definition?.ParameterTypes ?? Method!.GetParameters().Select(p => p.ParameterType).ToArray();
+    public IReadOnlyList<Type> ParameterTypes => Definition?.ParameterTypes ?? Declared?.ParameterTypes ?? Method!.GetParameters().Select(p => p.ParameterType).ToArray();
 
     /// <summary>
     /// The declaring type of a framework method, or null for a session method.
     /// </summary>
-    public Type? DeclaringType => Method?.DeclaringType;
+    public Type? DeclaringType => DeclaredType ?? Method?.DeclaringType;
 
     /// <summary>
     /// The declaring type's display name; <c>IlRepl.Cell</c> for a session method.
     /// </summary>
-    public string DeclaringTypeName => Definition is not null ? "IlRepl.Cell" : TypeNameFormatter.Pretty(Method!.DeclaringType);
+    public string DeclaringTypeName => Definition is not null ? "IlRepl.Cell" : TypeNameFormatter.Pretty(DeclaringType);
 
     /// <summary>
     /// How many values a call pops: the fixed and optional parameters, plus the receiver for an

@@ -77,6 +77,11 @@ public static class CellCompiler
             throw new ReplException($"method {open.Name} is still open; close it with }}");
         }
 
+        if (session.OpenType is { } openType)
+        {
+            throw new ReplException($"class {openType} is still open; close it with }}");
+        }
+
         var cell = session.Cell;
         var pending = cell.ReferencedLabels().Where(l => !cell.DefinedLabels.Contains(l)).Distinct().ToList();
         if (pending.Count > 0)

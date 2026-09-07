@@ -34,4 +34,19 @@ public enum EntryKind
     /// The <c>.vararg</c> marker.
     /// </summary>
     VarArg,
+
+    /// <summary>
+    /// An <c>.override</c> line inside a member method.
+    /// </summary>
+    Override,
+
+    /// <summary>
+    /// A <c>.param</c> line inside a member method.
+    /// </summary>
+    Param,
+
+    /// <summary>
+    /// A <c>.custom</c> line inside a member method.
+    /// </summary>
+    Custom,
 }

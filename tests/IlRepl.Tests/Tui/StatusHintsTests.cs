@@ -11,6 +11,7 @@ public sealed class StatusHintsTests
 {
     private static readonly string[] s_facts = ["stack [int32, int32]", "no locals", "2 instructions"];
     private static readonly string[] s_methodFacts = ["method Fib", "stack [int32, int32]", "no locals", "2 instructions"];
+    private static readonly string[] s_classFacts = ["class Point", "method Sum", "stack [int32, int32]", "no locals", "2 instructions"];
     private static readonly string[] s_all = ["Tab complete", "Shift+↑ select", "Ctrl+Q quit"];
     private static readonly string[] s_two = ["Shift+↑ select", "Ctrl+Q quit"];
     private static readonly string[] s_one = ["Ctrl+Q quit"];
@@ -59,5 +60,16 @@ public sealed class StatusHintsTests
         Assert.AreSequenceEqual(s_all, IlReplApp.StatusHints(s_methodFacts, 110, copyMode: false));
         Assert.AreSequenceEqual(s_two, IlReplApp.StatusHints(s_methodFacts, 100, copyMode: false));
         Assert.AreSequenceEqual(s_one, IlReplApp.StatusHints(s_methodFacts, 83, copyMode: false));
+    }
+
+    /// <summary>
+    /// A class fact before the method fact takes room the same way.
+    /// </summary>
+    [TestMethod]
+    public void ClassFact_TakesRoomFromTheHints()
+    {
+        Assert.AreSequenceEqual(s_all, IlReplApp.StatusHints(s_classFacts, 125, copyMode: false));
+        Assert.AreSequenceEqual(s_two, IlReplApp.StatusHints(s_classFacts, 110, copyMode: false));
+        Assert.AreSequenceEqual(s_one, IlReplApp.StatusHints(s_classFacts, 90, copyMode: false));
     }
 }
