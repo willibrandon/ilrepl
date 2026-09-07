@@ -5,8 +5,8 @@ description: Write a cell to disk as an assembly, or look at it as ILAsm.
 
 ## As an assembly
 
-`.save` writes the current cell as a real assembly with a static `IlRepl.Cell.Run` method. The
-cell is kept, so you can still run it.
+`.save` writes the current cell as a real assembly with a static `IlRepl.Cell.Run` method, and
+every method defined with `.method` beside it. The cell is kept, so you can still run it.
 
 ```
 il[1]> .args (int32 n = 0)
@@ -25,12 +25,13 @@ var run = assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!;
 Console.WriteLine(run.Invoke(null, [21])); // 42
 ```
 
-Saving uses `PersistedAssemblyBuilder`, so the output has real metadata: declared parameters,
-locals, exception blocks, and tokens for every member the cell references.
+Session methods are public static methods on the same type, so `GetMethod("Fib")` finds them the
+same way. Saving uses `PersistedAssemblyBuilder`, so the output has real metadata: declared
+parameters, locals, exception blocks, and tokens for every member the cell references.
 
 ## As ILAsm
 
-`.il` renders the cell as ILAsm source and `.save` with an `.il` extension is not needed because
+`.il` renders the cell and its methods as ILAsm source, and `.save` with an `.il` extension is not needed because
 you can copy it from the transcript. Operands are fully qualified so the text assembles with
 `ilasm` after adding the assembly references it lists.
 

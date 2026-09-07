@@ -1,12 +1,12 @@
 using System.Reflection;
-using System.Reflection.Emit;
 using System.Text;
 
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Renders a cell as ILAsm source: assembly references, a static class, and a <c>Run</c> method
-/// with the same locals, arguments, blocks, and instructions.
+/// Renders a session as ILAsm source: assembly references, a static class, one method per
+/// <c>.method</c> definition, and a <c>Run</c> method with the cell's locals, arguments, blocks,
+/// and instructions.
 /// </summary>
 public static class IlAsmRenderer
 {
@@ -18,7 +18,7 @@ public static class IlAsmRenderer
     public static string Render(Session session)
     {
         ArgumentNullException.ThrowIfNull(session);
-        var state = session.State;
+        var cell = session.Cell;
         var sb = new StringBuilder();
         var assemblies = new SortedSet<string>(StringComparer.Ordinal) { "System.Runtime" };
 
@@ -45,37 +45,45 @@ public static class IlAsmRenderer
             }
         }
 
-        foreach (var l in state.Locals)
+        void NoteState(CellState state)
         {
-            Note(l.Type);
-        }
-
-        foreach (var a in state.Arguments)
-        {
-            Note(a.Type);
-        }
-
-        foreach (var e in state.Entries)
-        {
-            Note(e.CatchType);
-            switch (e.Instruction?.Operand)
+            foreach (var l in state.Locals)
             {
-                case Type t:
-                    Note(t);
-                    break;
-                case ResolvedMethod m:
-                    Note(m.Method.DeclaringType);
-                    break;
-                case MethodBase m:
-                    Note(m.DeclaringType);
-                    break;
-                case FieldInfo f:
-                    Note(f.DeclaringType);
-                    break;
-                default:
-                    break;
+                Note(l.Type);
+            }
+
+            foreach (var a in state.Arguments)
+            {
+                Note(a.Type);
+            }
+
+            foreach (var e in state.Entries)
+            {
+                Note(e.CatchType);
+                switch (e.Instruction?.Operand)
+                {
+                    case Type t:
+                        Note(t);
+                        break;
+                    case ResolvedMethod m:
+                        Note(m.DeclaringType);
+                        break;
+                    case FieldInfo f:
+                        Note(f.DeclaringType);
+                        break;
+                    default:
+                        break;
+                }
             }
         }
+
+        foreach (var method in session.Methods)
+        {
+            Note(method.Signature.ReturnType);
+            NoteState(method.State);
+        }
+
+        NoteState(cell);
 
         foreach (var a in assemblies)
         {
@@ -88,21 +96,39 @@ public static class IlAsmRenderer
         sb.AppendLine(".class public abstract sealed auto ansi beforefieldinit IlRepl.Cell extends [System.Runtime]System.Object");
         sb.AppendLine("{");
 
+        foreach (var method in session.Methods)
+        {
+            var signature = method.Signature;
+            var methodParameters = string.Join(", ", signature.Parameters.Select((p, i) => TypeNameFormatter.IlAsm(p.Type) + " " + TypeNameFormatter.IlAsmIdentifier(p.Name ?? "arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+            sb.Append("    .method public static ").Append(TypeNameFormatter.IlAsm(signature.ReturnType)).Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(signature.Name)).Append('(').Append(methodParameters).AppendLine(") cil managed");
+            sb.AppendLine("    {");
+            RenderBody(sb, method.State);
+            sb.AppendLine("    }");
+            sb.AppendLine();
+        }
+
         var generic = session.TypeParameterNames.Count > 0 ? "<" + string.Join(", ", session.TypeParameterNames) + ">" : "";
-        var convention = state.IsVarArg ? "vararg " : "";
-        var parameters = string.Join(", ", state.Arguments.Select((a, i) => TypeNameFormatter.IlAsm(a.Type) + " " + (a.Name ?? "arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        var convention = cell.IsVarArg ? "vararg " : "";
+        var parameters = string.Join(", ", cell.Arguments.Select((a, i) => TypeNameFormatter.IlAsm(a.Type) + " " + TypeNameFormatter.IlAsmIdentifier(a.Name ?? "arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))));
         sb.Append("    .method public static ").Append(convention).Append("object Run").Append(generic).Append('(').Append(parameters).AppendLine(") cil managed");
         sb.AppendLine("    {");
+        RenderBody(sb, cell);
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    private static void RenderBody(StringBuilder sb, CellState state)
+    {
         sb.AppendLine("        .maxstack 16");
         if (state.Locals.Count > 0)
         {
             var locals = state.Locals.Select((l, i) =>
-                $"[{i}] {TypeNameFormatter.IlAsm(l.Type)}{(l.IsPinned ? " pinned" : "")} {l.Name ?? "V_" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+                $"[{i}] {TypeNameFormatter.IlAsm(l.Type)}{(l.IsPinned ? " pinned" : "")} {TypeNameFormatter.IlAsmIdentifier(l.Name ?? "V_" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))}");
             sb.Append("        .locals init (").Append(string.Join(", ", locals)).AppendLine(")");
         }
 
         var indent = 2;
-        var lastEndsFlow = false;
         foreach (var e in state.Entries)
         {
             foreach (var l in e.Labels)
@@ -114,7 +140,7 @@ public static class IlAsmRenderer
             {
                 case EntryKind.Instruction:
                     var instruction = e.Instruction!;
-                    if (instruction.Op == OpCodes.Ret && instruction.RetPops == 0)
+                    if (instruction.RetNull)
                     {
                         sb.Append(Pad(indent)).AppendLine("ldnull");
                     }
@@ -124,10 +150,8 @@ public static class IlAsmRenderer
                     }
 
                     sb.Append(Pad(indent)).AppendLine(RenderInstruction(instruction));
-                    lastEndsFlow = instruction.Op.FlowControl is FlowControl.Return or FlowControl.Throw || instruction.Op == OpCodes.Br || instruction.Op == OpCodes.Br_S;
                     break;
                 case EntryKind.Block:
-                    lastEndsFlow = false;
                     switch (e.Block)
                     {
                         case BlockKind.Try:
@@ -183,7 +207,12 @@ public static class IlAsmRenderer
             }
         }
 
-        if (!lastEndsFlow)
+        if (state.LastInstructionEndsFlow)
+        {
+            return;
+        }
+
+        if (!state.IsMethod)
         {
             if (state.Stack.Count == 0)
             {
@@ -193,13 +222,9 @@ public static class IlAsmRenderer
             {
                 sb.Append(Pad(indent)).Append("box ").AppendLine(TypeNameFormatter.IlAsm(valueType));
             }
-
-            sb.Append(Pad(indent)).AppendLine("ret");
         }
 
-        sb.AppendLine("    }");
-        sb.AppendLine("}");
-        return sb.ToString();
+        sb.Append(Pad(indent)).AppendLine("ret");
     }
 
     /// <summary>
@@ -220,21 +245,41 @@ public static class IlAsmRenderer
             OperandKind.Token => name + " " + instruction.Operand switch
             {
                 Type t => TypeNameFormatter.IlAsm(t),
-                MethodBase m => "method " + MethodIlAsm(new ResolvedMethod(m, null)),
+                ResolvedMethod m => "method " + MethodIlAsm(m),
                 FieldInfo f => "field " + FieldIlAsm(f),
                 _ => "?",
             },
             OperandKind.Signature => name + " " + SignatureIlAsm((CalliSignature)instruction.Operand!),
             OperandKind.Labels => name + " (" + string.Join(", ", (string[])instruction.Operand!) + ")",
+            OperandKind.Local or OperandKind.Argument => NamedSlot(instruction),
             _ => instruction.Text,
         };
+    }
+
+    private static string NamedSlot(Instruction instruction)
+    {
+        // The user's operand is kept, quoted when it is a name ILAsm would read as a keyword.
+        var text = instruction.Text.Trim();
+        var space = text.IndexOfAny([' ', '\t']);
+        if (space < 0)
+        {
+            return text;
+        }
+
+        var operand = InstructionParser.Unquote(text[(space + 1)..].Trim());
+        return text[..space] + " " + (operand.All(char.IsDigit) ? operand : TypeNameFormatter.IlAsmIdentifier(operand));
     }
 
     private static string Pad(int level) => new(' ', level * 4);
 
     private static string MethodIlAsm(ResolvedMethod resolved)
     {
-        var method = resolved.Method;
+        if (resolved.Definition is { } definition)
+        {
+            return $"{TypeNameFormatter.IlAsm(definition.ReturnType)} IlRepl.Cell::{TypeNameFormatter.IlAsmIdentifier(definition.Name)}({string.Join(", ", definition.ParameterTypes.Select(TypeNameFormatter.IlAsm))})";
+        }
+
+        var method = resolved.Method!;
         var instance = method.IsStatic ? "" : "instance ";
         var vararg = method.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "";
         var returnType = method is MethodInfo mi ? TypeNameFormatter.IlAsm(mi.ReturnType) : "void";

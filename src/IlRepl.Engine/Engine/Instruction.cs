@@ -48,4 +48,16 @@ public sealed class Instruction
     /// For an inline <c>ret</c>: the value type to box before returning, or null.
     /// </summary>
     public Type? RetBox { get; init; }
+
+    /// <summary>
+    /// For an inline <c>ret</c> in the cell: true when the stack is empty and <c>ldnull</c> must be
+    /// pushed first, because the cell method returns <c>object</c>. Never set inside a <c>.method</c>.
+    /// </summary>
+    public bool RetNull { get; init; }
+
+    /// <summary>
+    /// True when nothing after this instruction is reachable on the same path: a return, a throw,
+    /// an unconditional branch, or a jump.
+    /// </summary>
+    public bool EndsFlow => Op.FlowControl is FlowControl.Return or FlowControl.Throw || Op == OpCodes.Br || Op == OpCodes.Br_S || Op == OpCodes.Jmp;
 }

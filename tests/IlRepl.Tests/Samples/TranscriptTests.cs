@@ -34,6 +34,7 @@ public sealed class TranscriptTests
             }
         }
 
+        Assert.IsNull(core.Status.OpenMethod, "a transcript must close its methods: " + Path.GetFileName(path));
         if (!core.Session.State.IsEmpty)
         {
             core.Handle("ret");
@@ -60,5 +61,28 @@ public sealed class TranscriptTests
         Assert.Contains("\"boom\"", results[0]);
         Assert.Contains("42", results[1]);
         Assert.Contains(l => l.Kind == LineKind.Output && l.PlainText == "finally ran", core.Transcript.Lines);
+    }
+
+    /// <summary>
+    /// The methods transcript: recursion, a void helper, calli, and a delegate over a session method.
+    /// </summary>
+    [TestMethod]
+    public void Transcripts_MethodsProduceExpectedValues()
+    {
+        var core = new ReplCore();
+        foreach (var line in File.ReadAllLines(Path.Combine(RepoPaths.Transcripts, "methods.il")))
+        {
+            core.Handle(line);
+        }
+
+        var results = core.Transcript.Lines.Where(l => l.Kind == LineKind.Result).Select(l => l.PlainText).ToList();
+        Assert.HasCount(4, results);
+        Assert.Contains("55", results[0]);
+        Assert.Contains("(void)", results[1]);
+        Assert.Contains("6765", results[2]);
+        Assert.Contains("610", results[3]);
+        Assert.Contains(l => l.Kind == LineKind.Output && l.PlainText == "hello, methods", core.Transcript.Lines);
+        Assert.AreEqual(2, core.Status.Methods);
+        Assert.AreEqual(7, core.CellNumber, "two closes and four runs");
     }
 }

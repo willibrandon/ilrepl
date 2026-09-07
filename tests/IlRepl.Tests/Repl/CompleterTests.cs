@@ -45,6 +45,8 @@ public sealed class CompleterTests
         Assert.Contains(i => i.Name == "constrained.", catalog);
         Assert.DoesNotContain(i => i.Name.StartsWith("prefix", StringComparison.Ordinal), catalog);
         Assert.Contains(i => i.Name == ".help", catalog);
+        Assert.Contains(i => i.Name == ".method" && i.TakesOperand, catalog);
+        Assert.Contains(i => i.Name == ".methods" && !i.TakesOperand, catalog);
         Assert.IsGreaterThan(220, catalog.Count);
     }
 
@@ -57,5 +59,17 @@ public sealed class CompleterTests
         var fromCatalog = CatalogCompleter.Complete(Completer.Catalog, "conv.ovf").Select(i => i.Name).ToList();
         var fromEngine = Completer.Complete("conv.ovf").Select(i => i.Name).ToList();
         Assert.AreSequenceEqual(fromEngine, fromCatalog);
+    }
+
+    /// <summary>
+    /// .me offers the directive first, then the listing command.
+    /// </summary>
+    [TestMethod]
+    public void Complete_MethodPrefix_ReturnsDirectiveThenCommand()
+    {
+        var items = Completer.Complete(".me");
+        Assert.AreSequenceEqual([".method", ".methods"], items.Select(i => i.Name));
+        Assert.AreEqual("T Name(T arg, ...) {", items[0].Detail);
+        Assert.IsTrue(items[0].TakesOperand);
     }
 }

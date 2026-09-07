@@ -6,11 +6,13 @@ namespace IlRepl.Repl;
 
 /// <summary>
 /// The REPL without a user interface: it takes lines, drives the <see cref="Session"/>, and
-/// writes what happened to the <see cref="Transcript"/>. The terminal UI and batch mode both sit on top of it.
+/// writes what happened to the <see cref="Transcript"/>. The terminal UI and batch mode both sit
+/// on top of it. While a <c>.method</c> block is open, lines go to the method, and the cell
+/// number advances when the block commits, as it does after a run.
 /// </summary>
 public sealed class ReplCore
 {
-    private static readonly string[] Directives = [".locals", ".args", ".typeparams", ".typeargs", ".vararg", ".try", ".maxstack"];
+    private static readonly string[] Directives = [".locals", ".args", ".typeparams", ".typeargs", ".vararg", ".method", ".try", ".maxstack"];
 
     /// <summary>
     /// Initializes a REPL over a new session.
@@ -49,9 +51,10 @@ public sealed class ReplCore
     public Transcript Transcript { get; }
 
     /// <summary>
-    /// The number of the cell being written, starting at 1.
+    /// The number of the cell being written, starting at 1. A run and a committed <c>.method</c>
+    /// block each complete a cell.
     /// </summary>
-    public int CellNumber => Session.CellsRun + 1;
+    public int CellNumber => Session.Submissions + 1;
 
     /// <summary>
     /// The prompt for the current cell, for example <c>il[3]&gt; </c>.
@@ -66,7 +69,7 @@ public sealed class ReplCore
         get
         {
             var state = Session.State;
-            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty);
+            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count);
         }
     }
 
@@ -78,7 +81,8 @@ public sealed class ReplCore
     public static IReadOnlyList<CompletionItem> Complete(string word) => Completer.Complete(word);
 
     /// <summary>
-    /// Handles one line: an instruction, a directive, a command, or an empty line that runs the cell.
+    /// Handles one line: an instruction, a directive, a command, or an empty line that runs the
+    /// cell. Inside a <c>.method</c> block every line, <c>ret</c> included, goes to the method.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <returns>Whether it succeeded and whether the user asked to leave.</returns>
@@ -92,6 +96,7 @@ public sealed class ReplCore
         {
             if (text.Length == 0)
             {
+                RequireNoOpenMethod();
                 if (!Session.State.IsEmpty)
                 {
                     Run();
@@ -107,6 +112,18 @@ public sealed class ReplCore
 
             if (text == "ret" || text.StartsWith("ret ", StringComparison.Ordinal) || text.StartsWith("ret//", StringComparison.Ordinal))
             {
+                if (Session.OpenMethod is not null)
+                {
+                    // ret returns from the method; only the closing brace ends the block.
+                    Session.AddLine(line);
+                    if (Options.EchoStack)
+                    {
+                        EchoStack();
+                    }
+
+                    return new HandleResult(true, false);
+                }
+
                 if (Session.State.HasPendingLabels || Session.State.OpenBlockDepth > 0)
                 {
                     var inline = Session.AddLine("ret");
@@ -146,6 +163,8 @@ public sealed class ReplCore
                 case LineOutcome.TypeParameters:
                 case LineOutcome.TypeArguments:
                 case LineOutcome.VarArg:
+                case LineOutcome.MethodStart:
+                case LineOutcome.MethodEnd:
                     Note(result.Message ?? "");
                     break;
                 default:
@@ -157,6 +176,12 @@ public sealed class ReplCore
         catch (ReplException ex)
         {
             Error(ex.Message);
+            return new HandleResult(false, false);
+        }
+        catch (Exception ex) when (ex is not (CellException or OperationCanceledException))
+        {
+            // A line must never take the session down with it; the host keeps serving.
+            Error("unexpected " + ex.GetType().Name + ": " + ex.Message);
             return new HandleResult(false, false);
         }
         catch (CellException ex)
@@ -190,8 +215,17 @@ public sealed class ReplCore
         return false;
     }
 
+    private void RequireNoOpenMethod()
+    {
+        if (Session.OpenMethod is { } open)
+        {
+            throw new ReplException($"method {open.Name} is still open; close it with }}");
+        }
+    }
+
     private void Run()
     {
+        RequireNoOpenMethod();
         if (Session.State.IsEmpty && Session.State.Stack.Count == 0)
         {
             Note("(empty cell)");
@@ -315,28 +349,64 @@ public sealed class ReplCore
             case ".show":
             case ".list":
             case ".ls":
-                Show();
+                if (Session.OpenMethod is { } shown)
+                {
+                    ShowMethod(shown);
+                }
+                else
+                {
+                    Show();
+                }
+
                 return new HandleResult(true, false);
 
             case ".undo":
             case ".u":
+            {
+                var wasOpen = Session.OpenMethod;
                 if (!Session.Undo())
                 {
                     Note("nothing to undo");
                     return new HandleResult(true, false);
                 }
 
+                if (wasOpen is not null && Session.OpenMethod is null)
+                {
+                    Note($"method {wasOpen.Name} abandoned");
+                }
+
                 EchoStack();
                 return new HandleResult(true, false);
+            }
 
             case ".clear":
+                if (Session.OpenMethod is { } abandoned)
+                {
+                    Session.AbandonMethod();
+                    Note($"method {abandoned.Name} abandoned");
+                    return new HandleResult(true, false);
+                }
+
                 Session.ClearCell();
                 Note("cell cleared (declarations kept)");
                 return new HandleResult(true, false);
 
             case ".reset":
                 Session.Reset();
-                Note("cell and declarations cleared");
+                Note("cell, declarations, and methods cleared");
+                return new HandleResult(true, false);
+
+            case ".methods":
+                foreach (var method in Session.Methods)
+                {
+                    Transcript.Add(LineKind.Listing, "  " + method.Signature.DescribeWithNames(), SpanStyle.Default);
+                }
+
+                if (Session.Methods.Count == 0)
+                {
+                    Note("no methods");
+                }
+
                 return new HandleResult(true, false);
 
             case ".stack":
@@ -395,8 +465,14 @@ public sealed class ReplCore
                     throw new ReplException("usage: .save <path.dll>");
                 }
 
+                RequireNoOpenMethod();
                 Session.Save(argument);
-                Note($"wrote {Path.GetFullPath(argument)} with IlRepl.Cell.Run");
+                {
+                    var count = Session.Methods.Count;
+                    var methods = count == 0 ? "" : $" and {count} method{(count == 1 ? "" : "s")}";
+                    Note($"wrote {Path.GetFullPath(argument)} with IlRepl.Cell.Run{methods}");
+                }
+
                 return new HandleResult(true, false);
 
             case ".il":
@@ -443,9 +519,16 @@ public sealed class ReplCore
         Note($"{list.Count} opcode{(list.Count == 1 ? "" : "s")}");
     }
 
-    private void Show()
+    private void Show() => ListBody(Session.State, showArguments: true, "(empty cell)");
+
+    private void ShowMethod(MethodSignature open)
     {
-        var state = Session.State;
+        Transcript.Add(LineKind.Listing, "  .method " + open.DescribeWithNames() + " {", SpanStyle.Label);
+        ListBody(Session.State, showArguments: false, "(empty method)");
+    }
+
+    private void ListBody(CellState state, bool showArguments, string emptyNote)
+    {
         if (state.Locals.Count > 0)
         {
             Transcript.Add(new TranscriptLine(LineKind.Listing,
@@ -456,7 +539,7 @@ public sealed class ReplCore
             ]));
         }
 
-        if (state.Arguments.Count > 0)
+        if (showArguments && state.Arguments.Count > 0)
         {
             Transcript.Add(new TranscriptLine(LineKind.Listing,
             [
@@ -468,7 +551,7 @@ public sealed class ReplCore
 
         if (state.IsEmpty)
         {
-            Note("(empty cell)");
+            Note(emptyNote);
             return;
         }
 

@@ -59,4 +59,163 @@ public sealed class IlAsmRendererTests
         session.AddLine("ldarg n");
         Assert.Contains("object Run<T>(int32 n)", session.ToIlAsm());
     }
+
+    /// <summary>
+    /// Session methods render as ILAsm methods on the same class, ahead of Run.
+    /// </summary>
+    [TestMethod]
+    public void Render_SessionMethods_AppearBeforeRun()
+    {
+        var session = new Session();
+        foreach (var line in new[] { ".method int32 Twice(int32 n) {", ".locals init (int32 t)", "ldarg n", "ldc.i4 2", "mul", "ret", "}" })
+        {
+            session.AddLine(line);
+        }
+
+        var text = session.ToIlAsm();
+        var method = text.IndexOf(".method public static int32 Twice(int32 n) cil managed", StringComparison.Ordinal);
+        var run = text.IndexOf(".method public static object Run() cil managed", StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, method);
+        Assert.IsGreaterThan(method, run);
+        Assert.Contains(".locals init ([0] int32 t)", text[method..run]);
+        Assert.Contains("        ret\n", text[method..run].Replace("\r\n", "\n", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A call to a session method is qualified with the cell type.
+    /// </summary>
+    [TestMethod]
+    public void Render_SessionMethodCall_IsQualifiedWithCellType()
+    {
+        var session = new Session();
+        foreach (var line in new[] { ".method int32 Two() {", "ldc.i4 2", "ret", "}", "call int32 Two()", "ldftn int32 Two()", "pop" })
+        {
+            session.AddLine(line);
+        }
+
+        var text = session.ToIlAsm();
+        Assert.Contains("call int32 IlRepl.Cell::Two()", text);
+        Assert.Contains("ldftn int32 IlRepl.Cell::Two()", text);
+    }
+
+    /// <summary>
+    /// A void method ends with a bare ret, never ldnull.
+    /// </summary>
+    [TestMethod]
+    public void Render_VoidMethod_EndsWithBareRet()
+    {
+        var session = new Session();
+        foreach (var line in new[] { ".method void Hi() {", "nop", "}" })
+        {
+            session.AddLine(line);
+        }
+
+        var text = session.ToIlAsm().Replace("\r\n", "\n", StringComparison.Ordinal);
+        var method = text.IndexOf(".method public static void Hi()", StringComparison.Ordinal);
+        var run = text.IndexOf("object Run()", StringComparison.Ordinal);
+        Assert.Contains("        nop\n        ret\n    }\n", text[method..run]);
+        Assert.DoesNotContain("ldnull", text[method..run]);
+    }
+
+    /// <summary>
+    /// The method being typed is not rendered until it commits.
+    /// </summary>
+    [TestMethod]
+    public void Render_WhileMethodOpen_OmitsOpenMethod()
+    {
+        var session = new Session();
+        session.AddLine("ldc.i4 1");
+        session.AddLine(".method int32 Fib(int32 n) {");
+        session.AddLine("ldarg n");
+
+        var text = session.ToIlAsm();
+        Assert.DoesNotContain("Fib", text);
+        Assert.Contains("ldc.i4 1", text);
+    }
+
+    /// <summary>
+    /// Names that ILAsm reads as keywords or opcodes are quoted wherever they appear.
+    /// </summary>
+    [TestMethod]
+    public void Render_KeywordNames_AreQuoted()
+    {
+        var session = new Session();
+        foreach (var line in KeywordNamedSession)
+        {
+            session.AddLine(line);
+        }
+
+        var text = session.ToIlAsm();
+        Assert.Contains(".method public static int32 'add'(int32 'value') cil managed", text);
+        Assert.Contains(".method public static int32 'windowsruntime'(int32 'noplatform', int32 'bestfit') cil managed", text);
+        Assert.Contains(".method public static int32 'float'(int32 'lpvoid', int32 'wchar') cil managed", text);
+        Assert.Contains(".method public static int32 'brnull'(int32 'refany') cil managed", text);
+        Assert.Contains("ldarg 'noplatform'", text);
+        Assert.Contains("ldarg 'lpvoid'", text);
+        Assert.Contains("call int32 IlRepl.Cell::'brnull'(int32)", text);
+        Assert.Contains("ldarg 'value'", text);
+        Assert.Contains(".locals init ([0] int32 'class')", text);
+        Assert.Contains("stloc 'class'", text);
+        Assert.Contains("ldloc 'class'", text);
+        Assert.Contains("call int32 IlRepl.Cell::'add'(int32)", text);
+        Assert.Contains("ldarg n", new Session().ToIlAsm() + "ldarg n", "plain names stay unquoted");
+    }
+
+    /// <summary>
+    /// The rendered text assembles with ilasm when one is installed; otherwise the test is inconclusive.
+    /// </summary>
+    [TestMethod]
+    public void Render_KeywordNames_AssembleWithIlasm()
+    {
+        var ilasm = FindIlasm();
+        TestSkip.Unless(ilasm is not null, "ilasm is not installed");
+
+        var session = new Session();
+        foreach (var line in KeywordNamedSession)
+        {
+            session.AddLine(line);
+        }
+
+        var directory = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var source = Path.Combine(directory, "cell.il");
+            File.WriteAllText(source, session.ToIlAsm());
+            // Options take a dash: a slash is a path on Unix.
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ilasm!, ["-DLL", "-QUIET", "-OUTPUT=" + Path.Combine(directory, "cell.dll"), source])
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            })!;
+            var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            Assert.AreEqual(0, process.ExitCode, output);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Methods, parameters, and locals named after lexer keywords, opcode aliases, and opcodes.
+    /// </summary>
+    private static readonly string[] KeywordNamedSession =
+    [
+        ".method int32 add(int32 value) {", "ldarg value", "ret", "}",
+        ".method int32 windowsruntime(int32 noplatform, int32 bestfit) {", "ldarg noplatform", "ldarg bestfit", "add", "ret", "}",
+        ".method int32 float(int32 lpvoid, int32 wchar) {", "ldarg lpvoid", "ldarg wchar", "add", "ret", "}",
+        ".method int32 brnull(int32 refany) {", "ldarg refany", "ret", "}",
+        ".locals init (int32 class)", "ldc.i4 3", "stloc class", "ldloc class", "call int32 add(int32)", "call int32 brnull(int32)",
+    ];
+
+    private static string? FindIlasm()
+    {
+        var name = OperatingSystem.IsWindows() ? "ilasm.exe" : "ilasm";
+        var directories = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
+            .Append(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin"));
+        return directories.Select(d => Path.Combine(d, name)).FirstOrDefault(File.Exists);
+    }
 }

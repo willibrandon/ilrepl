@@ -38,6 +38,9 @@ public sealed class HostServerRpcTests
             Assert.IsGreaterThan(220, hello.Catalog.Count);
             Assert.AreEqual("il[1]> ", hello.Status.Prompt);
             Assert.IsTrue(hello.Status.CellIsEmpty);
+            Assert.IsNull(hello.Status.OpenMethod);
+            Assert.AreEqual(0, hello.Status.Methods);
+            Assert.Contains(i => i.Name == ".method", hello.Catalog);
         }
     }
 
@@ -86,4 +89,37 @@ public sealed class HostServerRpcTests
     /// The test context, for cancellation.
     /// </summary>
     public TestContext TestContext { get; set; } = null!;
+
+    /// <summary>
+    /// The status reports the open method while a block is typed and the count once it commits.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    public async Task Handle_ReportsOpenMethodAndMethodCount()
+    {
+        var (server, client, proxy) = Connect();
+        using (server)
+        using (client)
+        {
+            var ct = TestContext.CancellationToken;
+            var open = await proxy.HandleAsync(".method int32 Two() {", ct);
+            Assert.IsTrue(open.Succeeded);
+            Assert.AreEqual("Two", open.Status.OpenMethod);
+            Assert.AreEqual(1, open.Status.CellNumber);
+
+            await proxy.HandleAsync("ldc.i4 2", ct);
+            await proxy.HandleAsync("ret", ct);
+            var close = await proxy.HandleAsync("}", ct);
+            Assert.IsTrue(close.Succeeded);
+            Assert.IsNull(close.Status.OpenMethod);
+            Assert.AreEqual(1, close.Status.Methods);
+            Assert.AreEqual(2, close.Status.CellNumber);
+            Assert.Contains(l => l.PlainText == "  end of method Two", close.Lines);
+
+            await proxy.HandleAsync("call int32 Two()", ct);
+            var run = await proxy.HandleAsync("ret", ct);
+            Assert.Contains(l => l.Kind == LineKind.Result && l.PlainText.Contains("= 2 : int32", StringComparison.Ordinal), run.Lines);
+            Assert.AreEqual(3, run.Status.CellNumber);
+        }
+    }
 }

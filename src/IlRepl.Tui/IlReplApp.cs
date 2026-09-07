@@ -282,10 +282,25 @@ public static class IlReplApp
                     status.Locals == 0 ? "no locals" : $"{status.Locals} local{(status.Locals == 1 ? "" : "s")}",
                     status.OpenBlocks > 0 ? $"{status.OpenBlocks} open block{(status.OpenBlocks == 1 ? "" : "s")}" : $"{status.Instructions} instruction{(status.Instructions == 1 ? "" : "s")}",
                 };
+                if (status.OpenMethod is { } method)
+                {
+                    // The method fact leads, because every fact after it describes the method.
+                    facts.Insert(0, "method " + method);
+                }
+
                 var occupied = feedback.Notification is null ? facts : [.. facts, feedback.Notification];
                 var hints = StatusHints(occupied, size.Width, copyMode);
                 var children = new List<IInfoBarChild>();
-                children.AddRange(facts.Select(f => (IInfoBarChild)s.Section(f)));
+                if (status.OpenMethod is not null)
+                {
+                    children.Add(s.Section(facts[0]).Theme(t => t.Clone().Set(GlobalTheme.ForegroundColor, SpanPalette.Color(SpanStyle.Label))));
+                    children.AddRange(facts.Skip(1).Select(f => (IInfoBarChild)s.Section(f)));
+                }
+                else
+                {
+                    children.AddRange(facts.Select(f => (IInfoBarChild)s.Section(f)));
+                }
+
                 children.Add(s.Spacer());
                 if (feedback.Notification is { } note)
                 {

@@ -27,6 +27,7 @@ export default defineConfig({
             { label: 'Cells and the stack', slug: 'usage/cells' },
             { label: 'Member references', slug: 'usage/member-references' },
             { label: 'Exception blocks', slug: 'usage/exception-blocks' },
+            { label: 'Methods', slug: 'usage/methods' },
             { label: 'Arguments and generics', slug: 'usage/arguments-and-generics' },
             { label: 'Saving cells', slug: 'usage/saving-cells' },
             { label: 'Commands', slug: 'usage/commands' },

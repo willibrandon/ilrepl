@@ -4,7 +4,8 @@ namespace IlRepl.Batch;
 
 /// <summary>
 /// Runs lines through an engine without the terminal UI and streams the transcript to a
-/// writer. Used for scripts, <c>-e</c>, and piped input.
+/// writer. Used for scripts, <c>-e</c>, and piped input. A cell left open at the end of the
+/// input is run; a <c>.method</c> block left open is an error.
 /// </summary>
 public sealed class BatchRunner
 {
@@ -51,7 +52,17 @@ public sealed class BatchRunner
             }
         }
 
-        if (!_engine.Status.CellIsEmpty)
+        var status = _engine.Status;
+        if (status.OpenMethod is { } open)
+        {
+            // Input that ends inside a .method block cannot be completed on the user's behalf.
+            AnsiWriter.Write(_output, new TranscriptLine(LineKind.Error,
+                [new TranscriptSpan("  error: ", SpanStyle.Error), new TranscriptSpan($"method {open} is still open; close it with }}")]), _color);
+            _output.Flush();
+            return 1;
+        }
+
+        if (!status.CellIsEmpty)
         {
             var reply = await _engine.HandleAsync("ret", cancellationToken).ConfigureAwait(false);
             ok &= reply.Succeeded;

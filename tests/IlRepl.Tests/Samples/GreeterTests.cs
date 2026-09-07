@@ -213,4 +213,36 @@ public sealed class GreeterTests
             "callvirt instance string [System.Runtime]System.Reflection.MemberInfo::get_Name()");
         Assert.AreEqual("Say", name);
     }
+
+    /// <summary>
+    /// ldtoken and ldftn of a vararg method take the plain method path, not the vararg call-site one.
+    /// </summary>
+    [TestMethod]
+    public void Tokens_VarargMethod()
+    {
+        var session = new Session();
+        session.Resolver.Load(SampleHost.Samples.GreeterDll);
+        Assert.AreEqual("CountArgs", Run(session,
+            "ldtoken method vararg int32 Greeter.Hello::CountArgs()",
+            "call class [System.Runtime]System.Reflection.MethodBase [System.Runtime]System.Reflection.MethodBase::GetMethodFromHandle(valuetype [System.Runtime]System.RuntimeMethodHandle)",
+            "callvirt instance string [System.Runtime]System.Reflection.MemberInfo::get_Name()"));
+
+        // ldftn emits without a call-site signature; whether the JIT then accepts a pointer to a
+        // vararg method is a runtime limitation, reported at the close rather than thrown.
+        foreach (var line in new[] { ".method native int Pointer() {", "ldftn vararg int32 Greeter.Hello::CountArgs()", "ret" })
+        {
+            session.AddLine(line);
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.AreEqual("end of method Pointer", session.AddLine("}").Message);
+            return;
+        }
+
+        var ex = Assert.ThrowsExactly<ReplException>(() => session.AddLine("}"));
+        Assert.Contains("vararg calling convention on Windows", ex.Message);
+        Assert.Contains("the block is still open", ex.Message);
+        Assert.AreEqual("Pointer", session.OpenMethod!.Name);
+    }
 }
