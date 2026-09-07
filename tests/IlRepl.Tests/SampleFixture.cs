@@ -13,12 +13,18 @@ internal sealed class SampleFixture
     public string GreeterDll { get; private set; } = null!;
 
     /// <summary>
+    /// The built Fixtures assembly: ordinary compiled C# for the disassembly tests.
+    /// </summary>
+    public string FixturesDll { get; private set; } = null!;
+
+    /// <summary>
     /// Builds the samples that are missing.
     /// </summary>
     /// <returns>A task that completes when every sample is built.</returns>
     public async Task InitializeAsync()
     {
         GreeterDll = await BuildAsync("Greeter", "Greeter.dll").ConfigureAwait(false);
+        FixturesDll = await BuildAsync("Fixtures", "Fixtures.dll").ConfigureAwait(false);
     }
 
     private static async Task<string> BuildAsync(string project, string assemblyFileName)

@@ -215,4 +215,55 @@ public sealed class ReplCoreDisassembleTests
         Assert.Contains(l => l.PlainText.Contains(".dis <method>", StringComparison.Ordinal), core.Transcript.Lines);
         Assert.Contains(i => i.Name == ".dis" && i.TakesOperand, Completer.Catalog);
     }
+
+    /// <summary>
+    /// The listing of a session method pastes back into a fresh method: the emitter forces zeroed
+    /// locals and writes its own transitions, and the pasted method runs to the same result.
+    /// </summary>
+    [TestMethod]
+    public void Handle_Dis_Listing_PastesBackIntoAMethod()
+    {
+        var core = Load(Fib);
+        foreach (var line in new[] { ".method int32 Safe(int32 d) {", ".locals init (int32 n)", ".try {", "ldc.i4 1", "ldarg d", "div", "stloc n", "leave END", "} filter {", "isinst DivideByZeroException", "ldnull", "cgt.un", "endfilter", "} handler {", "pop", "ldc.i4 42", "stloc n", "leave END", "}", "END: ldloc n", "ret", "}" })
+        {
+            core.Handle(line);
+        }
+
+        foreach (var (name, header, argument, expected) in new[] { ("Fib", ".method int32 Fib2(int32 n) {", "10", "55"), ("Safe", ".method int32 Safe2(int32 d) {", "0", "42") })
+        {
+            var before = core.Transcript.Lines.Count;
+            Assert.IsTrue(core.Handle(".dis " + name).Succeeded);
+            var listing = core.Transcript.Lines.Skip(before).Where(l => l.Kind == LineKind.Listing).ToList();
+            var pasted = new List<string>();
+            foreach (var line in listing.Skip(1).Take(listing.Count - 2))
+            {
+                var text = line.PlainText.Trim();
+                if (text.StartsWith(".maxstack", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                // An instruction line is three spans: the offset, the text, and the stack column.
+                var offsetColumn = line.Spans.Count == 3 && System.Text.RegularExpressions.Regex.IsMatch(line.Spans[0].Text, "^  [0-9a-f]{4} $");
+                pasted.Add(offsetColumn ? line.Spans[1].Text.Trim() : text);
+            }
+
+            Assert.Contains(l => l.StartsWith(".locals init", StringComparison.Ordinal) || name == "Fib", pasted, "the emitter forces zeroed locals, which the listing shows");
+            Assert.IsTrue(core.Handle(header).Succeeded, header);
+            foreach (var line in pasted)
+            {
+                var result = core.Handle(line);
+                Assert.IsTrue(result.Succeeded, line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
+            }
+
+            Assert.IsTrue(core.Handle("}").Succeeded, "closing the pasted method\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
+            var run = core.Transcript.Lines.Count;
+            core.Handle("ldc.i4 " + argument);
+            core.Handle("call int32 " + header.Split(' ')[2][..header.Split(' ')[2].IndexOf('(')] + "(int32)");
+            core.Handle("ret");
+            var results = core.Transcript.Lines.Skip(run).Where(l => l.Kind == LineKind.Result).Select(l => l.PlainText).ToList();
+            Assert.HasCount(1, results, string.Join("\n", core.Transcript.Lines.Skip(run).Select(l => l.PlainText)));
+            Assert.Contains(expected, results[0]);
+        }
+    }
 }

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Fixtures</RootNamespace>
+    <AssemblyName>Fixtures</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <Description>Ordinary compiled C# the disassembly tests read back: lambdas, local functions, async, filters, jump tables, function pointers, and the names the compiler makes up.</Description>
+  </PropertyGroup>
+
+</Project>

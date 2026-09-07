@@ -13,14 +13,16 @@
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
 
-  <!-- ilasm for the platform the tests run on, so the ILAsm the session renders can be assembled and run. -->
+  <!-- ilasm and ildasm for the platform the tests run on: the ILAsm the session renders is assembled and run, and disassembly listings are checked against ildasm. -->
   <PropertyGroup>
     <IlasmRid>$(NETCoreSdkRuntimeIdentifier)</IlasmRid>
     <IlasmPackageVersion>10.0.11</IlasmPackageVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageDownload Include="runtime.$(IlasmRid).Microsoft.NETCore.ILAsm" Version="[$(IlasmPackageVersion)]" />
+    <PackageDownload Include="runtime.$(IlasmRid).Microsoft.NETCore.ILDAsm" Version="[$(IlasmPackageVersion)]" />
     <AssemblyMetadata Include="IlasmPackagePath" Value="$(NuGetPackageRoot)runtime.$(IlasmRid.ToLowerInvariant()).microsoft.netcore.ilasm/$(IlasmPackageVersion)/runtimes/$(IlasmRid)/native/" />
+    <AssemblyMetadata Include="IldasmPackagePath" Value="$(NuGetPackageRoot)runtime.$(IlasmRid.ToLowerInvariant()).microsoft.netcore.ildasm/$(IlasmPackageVersion)/runtimes/$(IlasmRid)/native/" />
   </ItemGroup>
 
   <ItemGroup>
@@ -30,6 +32,7 @@
     <ProjectReference Include="../../src/IlRepl.Protocol/IlRepl.Protocol.csproj" />
     <ProjectReference Include="../../src/IlRepl.Tui/IlRepl.Tui.csproj" />
     <ProjectReference Include="../../samples/Greeter/Greeter.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../samples/Fixtures/Fixtures.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <Import Project="../../build/IlRepl.Host.targets" />

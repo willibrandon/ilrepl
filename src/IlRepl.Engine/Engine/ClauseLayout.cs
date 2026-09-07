@@ -14,8 +14,11 @@ public static class ClauseLayout
     /// </summary>
     /// <param name="clauses">The normalized clauses.</param>
     /// <param name="codeSize">The number of IL bytes, which a clause may end at.</param>
+    /// <param name="fold">True to fold a finally or fault over a try and its handlers into that region, the REPL's
+    /// own <c>} catch { } finally {</c> shape; false to keep every protected range its own region, which is how
+    /// native ILAsm reads the same clauses.</param>
     /// <returns>The block lines, the fallback clauses, and the offsets the fallback names.</returns>
-    public static ClauseLayoutResult Build(IReadOnlyList<IlExceptionClause> clauses, int codeSize)
+    public static ClauseLayoutResult Build(IReadOnlyList<IlExceptionClause> clauses, int codeSize, bool fold = true)
     {
         ArgumentNullException.ThrowIfNull(clauses);
         var fallback = new List<IlExceptionClause>();
@@ -25,7 +28,7 @@ public static class ClauseLayout
             .ToList();
 
         // A finally or fault over another region's try and handlers is that region's last handler.
-        var folded = true;
+        var folded = fold;
         while (folded)
         {
             folded = false;
