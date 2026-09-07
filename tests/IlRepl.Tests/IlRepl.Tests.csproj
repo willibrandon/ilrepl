@@ -13,6 +13,16 @@
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
 
+  <!-- ilasm for the platform the tests run on, so the ILAsm the session renders can be assembled and run. -->
+  <PropertyGroup>
+    <IlasmRid>$(NETCoreSdkRuntimeIdentifier)</IlasmRid>
+    <IlasmPackageVersion>10.0.11</IlasmPackageVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageDownload Include="runtime.$(IlasmRid).Microsoft.NETCore.ILAsm" Version="[$(IlasmPackageVersion)]" />
+    <AssemblyMetadata Include="IlasmPackagePath" Value="$(NuGetPackageRoot)runtime.$(IlasmRid.ToLowerInvariant()).microsoft.netcore.ilasm/$(IlasmPackageVersion)/runtimes/$(IlasmRid)/native/" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="../../src/IlRepl/IlRepl.csproj" />
     <ProjectReference Include="../../src/IlRepl.Engine/IlRepl.Engine.csproj" />

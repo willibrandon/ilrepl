@@ -1,4 +1,3 @@
-using System.Reflection.Emit;
 using System.Text;
 
 namespace IlRepl.Engine;
@@ -148,7 +147,7 @@ public static class TypeNameFormatter
 
         if (type.IsGenericParameter)
         {
-            return (type.DeclaringMethod is null && type is not GenericTypeParameterBuilder ? "!" : "!!") + type.Name;
+            return (type.DeclaringMethod is null ? "!" : "!!") + type.Name;
         }
 
         if (type.IsByRef)
@@ -167,7 +166,6 @@ public static class TypeNameFormatter
         }
 
         var kind = type.IsValueType ? "valuetype " : "class ";
-        var assembly = AssemblyReferenceName(type);
         var definition = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
         var full = (definition.FullName ?? definition.Name).Replace('+', '/');
         if (type.IsGenericType)
@@ -175,7 +173,8 @@ public static class TypeNameFormatter
             full += "<" + string.Join(", ", type.GetGenericArguments().Select(IlAsm)) + ">";
         }
 
-        return $"{kind}[{assembly}]{full}";
+        // A session type lives in the module being rendered, so it is named without an assembly.
+        return TypeRelations.IsSessionType(definition) ? kind + full : $"{kind}[{AssemblyReferenceName(type)}]{full}";
     }
 
     /// <summary>
@@ -186,6 +185,12 @@ public static class TypeNameFormatter
     public static string IlAsmDeclaring(Type type)
     {
         var text = IlAsm(type);
+        if (type.IsGenericType && !type.IsGenericTypeDefinition)
+        {
+            // A generic instantiation keeps its prefix in a member position: class Box`1<int32>::V.
+            return text;
+        }
+
         if (text.StartsWith("class ", StringComparison.Ordinal))
         {
             return text[6..];

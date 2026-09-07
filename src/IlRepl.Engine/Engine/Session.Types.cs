@@ -1085,7 +1085,7 @@ public sealed partial class Session
     /// prepared as new identities, and the cell is rebuilt against them; nothing the session
     /// holds changes.
     /// </summary>
-    private (CompiledFamily Family, TypeTable Table, CellState Cell) CompileFamily(OpenTypeBlock block, TypeDeclaration declaration, SessionType? previous)
+    private (CompiledFamily Family, TypeTable Table, CellState Cell, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> Prototypes) CompileFamily(OpenTypeBlock block, TypeDeclaration declaration, SessionType? previous)
     {
         var prototypes = block.FamilyTypes.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
         var trampolines = _methods.ToDictionary(m => m.Signature.Name, m => m.Trampoline, StringComparer.Ordinal);
@@ -1107,16 +1107,16 @@ public sealed partial class Session
             throw new ReplException($"cannot {(previous is null ? "define" : "redefine")} {block.KindWord} {block.Path}: the cell body would no longer compile: {ex.Message}  (.clear the cell first)", ex);
         }
 
-        return (compiled, table, cell);
+        return (compiled, table, cell, prototypes);
     }
 
     /// <summary>
     /// Phase B of a family commit: record swaps only.
     /// </summary>
-    private void PublishFamily(TypeDeclaration declaration, SessionType? previous, (CompiledFamily Family, TypeTable Table, CellState Cell) compiled)
+    private void PublishFamily(TypeDeclaration declaration, SessionType? previous, (CompiledFamily Family, TypeTable Table, CellState Cell, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> Prototypes) compiled)
     {
         Submissions++;
-        var accepted = new SessionType(declaration, compiled.Family.Types, compiled.Family.Types[declaration.FullName], compiled.Family.Definition) { Order = Submissions };
+        var accepted = new SessionType(declaration, compiled.Family.Types, compiled.Family.Types[declaration.FullName], compiled.Family.Definition, compiled.Prototypes) { Order = Submissions };
         var index = previous is null ? -1 : _types.IndexOf(previous);
         if (index < 0)
         {
@@ -1356,10 +1356,10 @@ public sealed partial class Session
     /// <summary>
     /// Publishes a family without releasing what it replaces; the caller releases at the end.
     /// </summary>
-    private void PublishFamilyKeeping(TypeDeclaration declaration, SessionType? previous, (CompiledFamily Family, TypeTable Table, CellState Cell) compiled)
+    private void PublishFamilyKeeping(TypeDeclaration declaration, SessionType? previous, (CompiledFamily Family, TypeTable Table, CellState Cell, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> Prototypes) compiled)
     {
         Submissions++;
-        var accepted = new SessionType(declaration, compiled.Family.Types, compiled.Family.Types[declaration.FullName], compiled.Family.Definition) { Order = Submissions };
+        var accepted = new SessionType(declaration, compiled.Family.Types, compiled.Family.Types[declaration.FullName], compiled.Family.Definition, compiled.Prototypes) { Order = Submissions };
         var index = previous is null ? -1 : _types.IndexOf(previous);
         if (index < 0)
         {

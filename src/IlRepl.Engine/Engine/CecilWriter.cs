@@ -33,6 +33,24 @@ public sealed class CecilWriter
     }
 
     /// <summary>
+    /// Starts an assembly with a name of the caller's choosing, for an export.
+    /// </summary>
+    /// <param name="name">The simple name.</param>
+    public CecilWriter(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        Kind = SessionAssemblyKind.Cell;
+        Name = name;
+        IsExport = true;
+        Assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0, 0, 0)), name, ModuleKind.Dll);
+    }
+
+    /// <summary>
+    /// True for an export, which carries every session type itself and may reference no session assembly.
+    /// </summary>
+    public bool IsExport { get; }
+
+    /// <summary>
     /// What the assembly holds.
     /// </summary>
     public SessionAssemblyKind Kind { get; }
@@ -245,7 +263,7 @@ public sealed class CecilWriter
             return defined;
         }
 
-        if (method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } instantiated && instantiated.GetGenericArguments().Any(MentionsBuilder))
+        if (method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } instantiated && (instantiated.GetGenericArguments().Any(MentionsBuilder) || _definedMethods.ContainsKey(instantiated.GetGenericMethodDefinition()) || IsDefinedInstantiationMember(instantiated.GetGenericMethodDefinition())))
         {
             var generic = new GenericInstanceMethod(Import(instantiated.GetGenericMethodDefinition()));
             foreach (var argument in instantiated.GetGenericArguments())
@@ -254,6 +272,33 @@ public sealed class CecilWriter
             }
 
             return generic;
+        }
+
+        if (method.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } definedInstance && _definedTypes.ContainsKey(definedInstance.GetGenericTypeDefinition()) && method is not System.Reflection.Emit.MethodBuilder and not System.Reflection.Emit.ConstructorBuilder)
+        {
+            // A member of a loaded session type, reached through an instantiation: the definition
+            // was written here, so the reference is built on the written instantiation.
+            var definitionMethod = method.Module.ResolveMethod(method.MetadataToken)!;
+            if (_definedMethods.TryGetValue(definitionMethod, out var written))
+            {
+                var onWritten = new MethodReference(written.Name, written.ReturnType, Import(definedInstance))
+                {
+                    HasThis = written.HasThis,
+                    ExplicitThis = written.ExplicitThis,
+                    CallingConvention = written.CallingConvention,
+                };
+                foreach (var parameter in written.Parameters)
+                {
+                    onWritten.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
+                }
+
+                foreach (var parameter in written.GenericParameters)
+                {
+                    onWritten.GenericParameters.Add(new GenericParameter(parameter.Name, onWritten));
+                }
+
+                return onWritten;
+            }
         }
 
         if (method.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } declaring && MentionsBuilder(declaring) && !(_definedTypes.ContainsKey(declaring.GetGenericTypeDefinition())))
@@ -367,6 +412,9 @@ public sealed class CecilWriter
         Assembly.CustomAttributes.Add(attribute);
     }
 
+    private bool IsDefinedInstantiationMember(MethodBase definition) =>
+        definition.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } declaring && _definedTypes.ContainsKey(declaring.GetGenericTypeDefinition());
+
     /// <summary>
     /// True when a builder, a prototype or one of its generic parameters, appears anywhere in the type.
     /// </summary>
@@ -412,6 +460,11 @@ public sealed class CecilWriter
 
             if (!type.IsGenericParameter && SessionAssemblies.TryGetDefinition(type.Assembly, out var definition))
             {
+                if (IsExport)
+                {
+                    throw new ReplException($"{TypeNameFormatter.Pretty(type)} belongs to session assembly {definition.Name}, which an export cannot reference (it is not part of the session's types)");
+                }
+
                 GrantAccessTo(definition);
             }
 

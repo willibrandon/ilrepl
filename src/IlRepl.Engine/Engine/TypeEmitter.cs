@@ -90,13 +90,14 @@ public static class TypeEmitter
     /// <param name="family">The outermost declaration.</param>
     /// <param name="prototypes">The prototype and members of every declaration, by path.</param>
     /// <param name="trampolines">The trampolines of the session methods, by name.</param>
-    public static void Write(CecilWriter writer, TypeDeclaration family, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> prototypes, IReadOnlyDictionary<string, MethodTrampoline> trampolines)
+    /// <param name="runtimeTypes">The loaded types of the family by path, whose members other bodies are bound to, or null.</param>
+    public static void Write(CecilWriter writer, TypeDeclaration family, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> prototypes, IReadOnlyDictionary<string, MethodTrampoline> trampolines, IReadOnlyDictionary<string, Type>? runtimeTypes)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(family);
         ArgumentNullException.ThrowIfNull(prototypes);
         ArgumentNullException.ThrowIfNull(trampolines);
-        new Emitter(writer, prototypes, trampolines).Write(family);
+        new Emitter(writer, prototypes, trampolines) { RuntimeTypes = runtimeTypes }.Write(family);
     }
 
     private static Type LoadType(Assembly assembly, TypeDeclaration declaration)
@@ -200,6 +201,13 @@ public static class TypeEmitter
         private readonly Dictionary<MethodDeclaration, MethodDefinition> _methods = new(ReferenceEqualityComparer.Instance);
         private readonly EmitMap _map = new(signature => trampolines.TryGetValue(signature.Name, out var trampoline) ? trampoline.Method : throw new ReplException($"no method '{signature.Name}' is bound in the session"));
 
+        /// <summary>
+        /// The loaded types of the family by path, for an export: their members map onto the definitions too.
+        /// </summary>
+        public IReadOnlyDictionary<string, Type>? RuntimeTypes { get; init; }
+
+        private Type? RuntimeTypeOf(string path) => RuntimeTypes is not null && RuntimeTypes.TryGetValue(path, out var type) ? type : null;
+
         public void Write(TypeDeclaration family)
         {
             // Every type and generic parameter exists before any reference is imported, so a
@@ -238,7 +246,14 @@ public static class TypeEmitter
 
             _definitions[declaration.FullName] = definition;
             writer.Define(prototype, definition);
+            var runtime = RuntimeTypeOf(declaration.FullName);
+            if (runtime is not null)
+            {
+                writer.Define(runtime, definition);
+            }
+
             var builders = prototype.IsGenericTypeDefinition ? prototype.GetGenericArguments() : [];
+            var runtimeParameters = runtime is { IsGenericTypeDefinition: true } ? runtime.GetGenericArguments() : [];
             for (var i = 0; i < declaration.TypeParameters.Count; i++)
             {
                 var parameter = new GenericParameter(declaration.TypeParameters[i].Name, definition);
@@ -246,6 +261,11 @@ public static class TypeEmitter
                 if (i < builders.Length)
                 {
                     writer.Define(builders[i], parameter);
+                }
+
+                if (i < runtimeParameters.Length)
+                {
+                    writer.Define(runtimeParameters[i], parameter);
                 }
             }
 
@@ -321,6 +341,11 @@ public static class TypeEmitter
                 {
                     writer.Define(builder, cecilField);
                 }
+
+                if (RuntimeTypeOf(declaration.FullName)?.GetField(field.Name, AllMembers) is { } runtimeField)
+                {
+                    writer.Define(runtimeField, cecilField);
+                }
             }
 
             foreach (var method in declaration.Methods)
@@ -340,6 +365,17 @@ public static class TypeEmitter
 
                 definition.Methods.Add(cecilMethod);
                 _methods[method] = cecilMethod;
+                if (RuntimeMethodOf(declaration, method) is { } runtimeMethod)
+                {
+                    writer.Define(runtimeMethod, cecilMethod);
+                    var runtimeGenerics = runtimeMethod is MethodInfo { IsGenericMethodDefinition: true } generic ? generic.GetGenericArguments() : [];
+                    for (var i = 0; i < runtimeGenerics.Length && i < signature.TypeParameters.Count; i++)
+                    {
+                        // Registered below once the definition's own parameters exist.
+                        _runtimeMethodParameters[(cecilMethod, i)] = runtimeGenerics[i];
+                    }
+                }
+
                 if (builder is not null)
                 {
                     writer.Define(builder, cecilMethod);
@@ -351,6 +387,11 @@ public static class TypeEmitter
                         if (i < methodBuilders.Length)
                         {
                             writer.Define(methodBuilders[i], parameter);
+                        }
+
+                        if (_runtimeMethodParameters.TryGetValue((cecilMethod, i), out var runtimeParameter))
+                        {
+                            writer.Define(runtimeParameter, parameter);
                         }
                     }
                 }
@@ -472,6 +513,32 @@ public static class TypeEmitter
                     ?? throw new ReplException($".override names {over.BodyName}, which {declaration.FullName} does not declare");
                 _methods[implementing].Overrides.Add(writer.Import(over.Target, over.Target.DeclaringType));
             }
+        }
+
+        private const BindingFlags AllMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+        private readonly Dictionary<(MethodDefinition, int), Type> _runtimeMethodParameters = [];
+
+        /// <summary>
+        /// The loaded method behind a declaration, matched by name, kind, and parameter shape.
+        /// </summary>
+        private MethodBase? RuntimeMethodOf(TypeDeclaration declaration, MethodDeclaration method)
+        {
+            var runtime = RuntimeTypeOf(declaration.FullName);
+            if (runtime is null)
+            {
+                return null;
+            }
+
+            var signature = method.Signature;
+            var wanted = signature.ParameterTypes.Select(TypeNameFormatter.Pretty).ToArray();
+            IEnumerable<MethodBase> candidates = method.IsConstructor || method.IsTypeInitializer
+                ? runtime.GetConstructors(AllMembers).Where(c => c.IsStatic == method.IsTypeInitializer)
+                : runtime.GetMethods(AllMembers).Where(m => m.Name == signature.Name && m.IsStatic == signature.IsStatic);
+            return candidates.FirstOrDefault(m =>
+            {
+                var parameters = m.GetParameters();
+                return parameters.Length == wanted.Length && parameters.Select(p => TypeNameFormatter.Pretty(p.ParameterType)).SequenceEqual(wanted);
+            });
         }
 
         private static MethodBase? FindBuilder(OwnMembers members, MethodSignature signature)

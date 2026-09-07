@@ -33,4 +33,13 @@ public static class ConstantText
         Array a => "{" + string.Join(", ", a.Cast<object?>().Select(Describe)) + "}",
         _ => value.ToString() ?? "",
     };
+
+    /// <summary>
+    /// Renders a constant the way ILAsm reads it after <c>=</c>: an enum value as its underlying integer.
+    /// </summary>
+    /// <param name="value">The constant.</param>
+    /// <returns>The ILAsm text.</returns>
+    public static string IlAsm(object? value) => value is Enum e
+        ? Describe(Convert.ChangeType(e, Enum.GetUnderlyingType(e.GetType()), CultureInfo.InvariantCulture))
+        : Describe(value);
 }

@@ -35,7 +35,12 @@ public static class IlAsmRenderer
                 return;
             }
 
-            assemblies.Add(TypeNameFormatter.AssemblyReferenceName(type));
+            var definition = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
+            if (!TypeRelations.IsSessionType(definition))
+            {
+                assemblies.Add(TypeNameFormatter.AssemblyReferenceName(type));
+            }
+
             if (type.IsGenericType)
             {
                 foreach (var a in type.GetGenericArguments())
@@ -83,6 +88,14 @@ public static class IlAsmRenderer
             NoteState(method.State);
         }
 
+        foreach (var family in session.Types)
+        {
+            foreach (var declaration in family.Declaration.Family)
+            {
+                NoteDeclaration(declaration, Note, NoteState);
+            }
+        }
+
         NoteState(cell);
 
         foreach (var a in assemblies)
@@ -93,6 +106,12 @@ public static class IlAsmRenderer
         sb.AppendLine(".assembly ilrepl_cell {}");
         sb.AppendLine(".module ilrepl_cell.dll");
         sb.AppendLine();
+        foreach (var family in session.Types)
+        {
+            RenderType(sb, family.Declaration, 0);
+            sb.AppendLine();
+        }
+
         sb.AppendLine(".class public abstract sealed auto ansi beforefieldinit IlRepl.Cell extends [System.Runtime]System.Object");
         sb.AppendLine("{");
 
@@ -118,17 +137,19 @@ public static class IlAsmRenderer
         return sb.ToString();
     }
 
-    private static void RenderBody(StringBuilder sb, CellState state)
+    private static void RenderBody(StringBuilder sb, CellState state) => RenderBody(sb, state, 2);
+
+    private static void RenderBody(StringBuilder sb, CellState state, int level)
     {
-        sb.AppendLine("        .maxstack 16");
+        sb.Append(Pad(level)).AppendLine(".maxstack 16");
         if (state.Locals.Count > 0)
         {
             var locals = state.Locals.Select((l, i) =>
                 $"[{i}] {TypeNameFormatter.IlAsm(l.Type)}{(l.IsPinned ? " pinned" : "")} {TypeNameFormatter.IlAsmIdentifier(l.Name ?? "V_" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))}");
-            sb.Append("        .locals init (").Append(string.Join(", ", locals)).AppendLine(")");
+            sb.Append(Pad(level)).Append(".locals init (").Append(string.Join(", ", locals)).AppendLine(")");
         }
 
-        var indent = 2;
+        var indent = level;
         foreach (var e in state.Entries)
         {
             foreach (var l in e.Labels)
@@ -336,5 +357,417 @@ public static class IlAsmRenderer
 
         sb.Append(string.Join(", ", parameters)).Append(')');
         return sb.ToString();
+    }
+
+    private static void NoteDeclaration(TypeDeclaration declaration, Action<Type?> note, Action<CellState> noteState)
+    {
+        note(declaration.BaseType);
+        foreach (var i in declaration.Interfaces)
+        {
+            note(i);
+        }
+
+        foreach (var parameter in declaration.TypeParameters)
+        {
+            foreach (var constraint in parameter.Constraints)
+            {
+                note(constraint);
+            }
+        }
+
+        foreach (var field in declaration.Fields)
+        {
+            note(field.Type);
+            foreach (var modifier in field.RequiredModifiers.Concat(field.OptionalModifiers))
+            {
+                note(modifier);
+            }
+
+            foreach (var attribute in field.CustomAttributes)
+            {
+                note(attribute.AttributeType);
+            }
+        }
+
+        foreach (var attribute in declaration.CustomAttributes)
+        {
+            note(attribute.AttributeType);
+        }
+
+        foreach (var property in declaration.Properties)
+        {
+            note(property.Type);
+            foreach (var parameterType in property.ParameterTypes)
+            {
+                note(parameterType);
+            }
+        }
+
+        foreach (var evt in declaration.Events)
+        {
+            note(evt.HandlerType);
+        }
+
+        foreach (var over in declaration.Overrides)
+        {
+            note(over.Target.DeclaringType);
+        }
+
+        foreach (var method in declaration.Methods)
+        {
+            var signature = method.Signature;
+            note(signature.ReturnType);
+            foreach (var modifier in signature.ReturnRequiredModifiers.Concat(signature.ReturnOptionalModifiers))
+            {
+                note(modifier);
+            }
+
+            foreach (var parameter in signature.Parameters)
+            {
+                note(parameter.Type);
+                foreach (var modifier in parameter.RequiredModifiers.Concat(parameter.OptionalModifiers))
+                {
+                    note(modifier);
+                }
+
+                foreach (var attribute in parameter.CustomAttributes)
+                {
+                    note(attribute.AttributeType);
+                }
+            }
+
+            foreach (var attribute in signature.CustomAttributes)
+            {
+                note(attribute.AttributeType);
+            }
+
+            foreach (var over in method.Overrides)
+            {
+                note(over.Target.DeclaringType);
+            }
+
+            if (method.Body is { } body)
+            {
+                noteState(body);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Renders a type declaration and its nested types as ILAsm.
+    /// </summary>
+    /// <param name="sb">The output.</param>
+    /// <param name="declaration">The declaration.</param>
+    /// <param name="level">The indentation level.</param>
+    public static void RenderType(StringBuilder sb, TypeDeclaration declaration, int level)
+    {
+        ArgumentNullException.ThrowIfNull(sb);
+        ArgumentNullException.ThrowIfNull(declaration);
+        var pad = Pad(level);
+        var inner = Pad(level + 1);
+        var header = new StringBuilder();
+        header.Append(pad).Append(".class ").Append(IlAsmWords.Type(declaration.Attributes, declaration.Kind, declaration.IsNested));
+        header.Append(TypeName(declaration.Name));
+        if (declaration.TypeParameters.Count > 0)
+        {
+            header.Append('<').Append(string.Join(", ", declaration.TypeParameters.Select(GenericParameterIlAsm))).Append('>');
+        }
+
+        if (declaration.BaseType is not null)
+        {
+            header.Append(" extends ").Append(TypeSpec(declaration.BaseType));
+        }
+
+        if (declaration.Interfaces.Count > 0)
+        {
+            header.Append(" implements ").Append(string.Join(", ", declaration.Interfaces.Select(TypeSpec)));
+        }
+
+        sb.AppendLine(header.ToString());
+        sb.Append(pad).AppendLine("{");
+        foreach (var attribute in declaration.CustomAttributes)
+        {
+            sb.Append(inner).AppendLine(CustomAttributeIlAsm(attribute));
+        }
+
+        if (declaration.PackingSize is { } pack)
+        {
+            sb.Append(inner).Append(".pack ").AppendLine(pack.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        if (declaration.ClassSize is { } size)
+        {
+            sb.Append(inner).Append(".size ").AppendLine(size.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        foreach (var nested in declaration.NestedTypes)
+        {
+            RenderType(sb, nested, level + 1);
+            sb.AppendLine();
+        }
+
+        foreach (var field in declaration.Fields)
+        {
+            sb.Append(inner).AppendLine(FieldIlAsm(field));
+            foreach (var attribute in field.CustomAttributes)
+            {
+                sb.Append(inner).AppendLine(CustomAttributeIlAsm(attribute));
+            }
+        }
+
+        foreach (var method in declaration.Methods)
+        {
+            sb.AppendLine();
+            RenderMember(sb, method, level + 1);
+        }
+
+        foreach (var property in declaration.Properties)
+        {
+            sb.AppendLine();
+            var parameters = property.ParameterTypes.Count == 0 ? "()" : "(" + string.Join(", ", property.ParameterTypes.Select(TypeNameFormatter.IlAsm)) + ")";
+            sb.Append(inner).Append(".property ").Append(property.IsStatic ? "" : "instance ").Append(TypeNameFormatter.IlAsm(property.Type)).Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(property.Name)).AppendLine(parameters);
+            sb.Append(inner).AppendLine("{");
+            foreach (var attribute in property.CustomAttributes)
+            {
+                sb.Append(Pad(level + 2)).AppendLine(CustomAttributeIlAsm(attribute));
+            }
+
+            if (property.Getter is { } getter)
+            {
+                sb.Append(Pad(level + 2)).Append(".get ").AppendLine(AccessorIlAsm(declaration, getter));
+            }
+
+            if (property.Setter is { } setter)
+            {
+                sb.Append(Pad(level + 2)).Append(".set ").AppendLine(AccessorIlAsm(declaration, setter));
+            }
+
+            foreach (var other in property.Others)
+            {
+                sb.Append(Pad(level + 2)).Append(".other ").AppendLine(AccessorIlAsm(declaration, other));
+            }
+
+            sb.Append(inner).AppendLine("}");
+        }
+
+        foreach (var evt in declaration.Events)
+        {
+            sb.AppendLine();
+            sb.Append(inner).Append(".event ").Append(TypeNameFormatter.IlAsmDeclaring(evt.HandlerType)).Append(' ').AppendLine(TypeNameFormatter.IlAsmIdentifier(evt.Name));
+            sb.Append(inner).AppendLine("{");
+            foreach (var attribute in evt.CustomAttributes)
+            {
+                sb.Append(Pad(level + 2)).AppendLine(CustomAttributeIlAsm(attribute));
+            }
+
+            sb.Append(Pad(level + 2)).Append(".addon ").AppendLine(AccessorIlAsm(declaration, evt.AddOn));
+            sb.Append(Pad(level + 2)).Append(".removeon ").AppendLine(AccessorIlAsm(declaration, evt.RemoveOn));
+            if (evt.Fire is { } fire)
+            {
+                sb.Append(Pad(level + 2)).Append(".fire ").AppendLine(AccessorIlAsm(declaration, fire));
+            }
+
+            sb.Append(inner).AppendLine("}");
+        }
+
+        foreach (var over in declaration.Overrides.Where(o => o.Source.Length > 0))
+        {
+            sb.Append(inner).Append(".override ").AppendLine(OverrideTargetIlAsm(over.Target) + " with method " + (over.BodyIsStatic ? "" : "instance ") + TypeNameFormatter.IlAsm(over.BodyReturnType) + " " + TypePath(declaration.FullName) + "::" + MemberName(over.BodyName) + "(" + string.Join(", ", over.BodyParameterTypes.Select(TypeNameFormatter.IlAsm)) + ")");
+        }
+
+        sb.Append(pad).AppendLine("}");
+    }
+
+    private static string GenericParameterIlAsm(GenericParameterDeclaration parameter)
+    {
+        var words = new List<string>();
+        if (parameter.Attributes.HasFlag(GenericParameterAttributes.Covariant))
+        {
+            words.Add("+");
+        }
+        else if (parameter.Attributes.HasFlag(GenericParameterAttributes.Contravariant))
+        {
+            words.Add("-");
+        }
+
+        if (parameter.Attributes.HasFlag(GenericParameterAttributes.ReferenceTypeConstraint))
+        {
+            words.Add("class");
+        }
+
+        if (parameter.Attributes.HasFlag(GenericParameterAttributes.NotNullableValueTypeConstraint))
+        {
+            words.Add("valuetype");
+        }
+
+        if (parameter.Attributes.HasFlag(GenericParameterAttributes.DefaultConstructorConstraint))
+        {
+            words.Add(".ctor");
+        }
+
+        if (parameter.Constraints.Count > 0)
+        {
+            words.Add("(" + string.Join(", ", parameter.Constraints.Select(TypeNameFormatter.IlAsm)) + ")");
+        }
+
+        words.Add(TypeNameFormatter.IlAsmIdentifier(parameter.Name));
+        return string.Join(" ", words).Replace("+ ", "+", StringComparison.Ordinal).Replace("- ", "-", StringComparison.Ordinal);
+    }
+
+    private static string FieldIlAsm(FieldDeclaration field)
+    {
+        var sb = new StringBuilder(".field ");
+        if (field.Offset is { } offset)
+        {
+            sb.Append('[').Append(offset.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append("] ");
+        }
+
+        sb.Append(IlAsmWords.Field(field.Attributes));
+        sb.Append(Modified(TypeNameFormatter.IlAsm(field.Type), field.RequiredModifiers, field.OptionalModifiers)).Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(field.Name));
+        if (field.HasDefault)
+        {
+            sb.Append(" = ").Append(ConstantText.IlAsm(field.DefaultValue));
+        }
+
+        return sb.ToString();
+    }
+
+    private static string Modified(string type, IReadOnlyList<Type> required, IReadOnlyList<Type> optional)
+    {
+        var text = type;
+        foreach (var modifier in optional)
+        {
+            text += " modopt(" + TypeNameFormatter.IlAsmDeclaring(modifier) + ")";
+        }
+
+        foreach (var modifier in required)
+        {
+            text += " modreq(" + TypeNameFormatter.IlAsmDeclaring(modifier) + ")";
+        }
+
+        return text;
+    }
+
+    private static void RenderMember(StringBuilder sb, MethodDeclaration method, int level)
+    {
+        var pad = Pad(level);
+        var signature = method.Signature;
+        var parameters = string.Join(", ", signature.Parameters.Select((p, i) => ParameterIlAsm(p, i)));
+        var generic = signature.TypeParameters.Count == 0 ? "" : "<" + string.Join(", ", signature.TypeParameters.Select(GenericParameterIlAsm)) + ">";
+        var convention = (signature.IsStatic ? "" : "instance ") + (signature.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "");
+        var returnType = Modified(TypeNameFormatter.IlAsm(signature.ReturnType), signature.ReturnRequiredModifiers, signature.ReturnOptionalModifiers);
+        sb.Append(pad).Append(".method ").Append(IlAsmWords.Method(signature.Attributes)).Append(convention).Append(returnType).Append(' ')
+            .Append(MemberName(signature.Name)).Append(generic).Append('(').Append(parameters).Append(") ").AppendLine(IlAsmWords.Implementation(signature.ImplAttributes));
+        sb.Append(pad).AppendLine("{");
+        var inner = Pad(level + 1);
+        foreach (var attribute in signature.CustomAttributes)
+        {
+            sb.Append(inner).AppendLine(CustomAttributeIlAsm(attribute));
+        }
+
+        for (var i = 0; i < signature.Parameters.Count; i++)
+        {
+            var parameter = signature.Parameters[i];
+            if (parameter.HasDefault || parameter.CustomAttributes.Count > 0)
+            {
+                sb.Append(inner).Append(".param [").Append((i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(']');
+                if (parameter.HasDefault)
+                {
+                    sb.Append(" = ").Append(ConstantText.IlAsm(parameter.DefaultValue));
+                }
+
+                sb.AppendLine();
+                foreach (var attribute in parameter.CustomAttributes)
+                {
+                    sb.Append(inner).AppendLine(CustomAttributeIlAsm(attribute));
+                }
+            }
+        }
+
+        foreach (var over in method.Overrides)
+        {
+            sb.Append(inner).Append(".override ").AppendLine(OverrideTargetIlAsm(over.Target));
+        }
+
+        if (method.Body is { } body)
+        {
+            RenderBody(sb, body, level + 1);
+        }
+
+        sb.Append(pad).AppendLine("}");
+    }
+
+    private static string ParameterIlAsm(ArgumentDeclaration parameter, int index)
+    {
+        var words = new StringBuilder();
+        if (parameter.Attributes.HasFlag(ParameterAttributes.In))
+        {
+            words.Append("[in] ");
+        }
+
+        if (parameter.Attributes.HasFlag(ParameterAttributes.Out))
+        {
+            words.Append("[out] ");
+        }
+
+        if (parameter.Attributes.HasFlag(ParameterAttributes.Optional))
+        {
+            words.Append("[opt] ");
+        }
+
+        words.Append(Modified(TypeNameFormatter.IlAsm(parameter.Type), parameter.RequiredModifiers, parameter.OptionalModifiers)).Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(parameter.Name ?? "arg" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        return words.ToString();
+    }
+
+    private static string AccessorIlAsm(TypeDeclaration declaration, MethodDeclaration accessor)
+    {
+        var signature = accessor.Signature;
+        return (signature.IsStatic ? "" : "instance ") + TypeNameFormatter.IlAsm(signature.ReturnType) + " " + TypePath(declaration.FullName) + "::" + MemberName(signature.Name) + "(" + string.Join(", ", signature.ParameterTypes.Select(TypeNameFormatter.IlAsm)) + ")";
+    }
+
+    private static string OverrideTargetIlAsm(MethodBase target)
+    {
+        var declaring = TypeNameFormatter.IlAsmDeclaring(target.DeclaringType!);
+        try
+        {
+            var returnType = target is MethodInfo info ? TypeNameFormatter.IlAsm(info.ReturnType) : "void";
+            var parameters = string.Join(", ", target.GetParameters().Select(p => TypeNameFormatter.IlAsm(p.ParameterType)));
+            return $"method {(target.IsStatic ? "" : "instance ")}{returnType} {declaring}::{MemberName(target.Name)}({parameters})";
+        }
+        catch (NotSupportedException)
+        {
+            return declaring + "::" + MemberName(target.Name);
+        }
+    }
+
+    /// <summary>
+    /// A member name as ILAsm reads it: the special names stay bare, anything else is quoted when it must be.
+    /// </summary>
+    private static string MemberName(string name) => name is ".ctor" or ".cctor" ? name : TypeNameFormatter.IlAsmIdentifier(name);
+
+    /// <summary>
+    /// A type name as ILAsm reads it: the arity suffix is part of the name and needs no quotes.
+    /// </summary>
+    private static string TypeName(string name)
+    {
+        var tick = name.IndexOf('`', StringComparison.Ordinal);
+        return tick > 0 && name[(tick + 1)..].All(char.IsDigit) ? TypeNameFormatter.IlAsmIdentifier(name[..tick]) + name[tick..] : TypeNameFormatter.IlAsmIdentifier(name);
+    }
+
+    /// <summary>
+    /// A nested path as ILAsm reads it, each segment quoted on its own when it must be.
+    /// </summary>
+    private static string TypePath(string path) => string.Join("/", path.Split('/').Select(TypeName));
+
+    /// <summary>
+    /// A base or interface reference: the framework types are spelled out, as ildasm does.
+    /// </summary>
+    private static string TypeSpec(Type type) => type == typeof(object) ? "[System.Runtime]System.Object" : TypeNameFormatter.IlAsmDeclaring(type);
+
+    private static string CustomAttributeIlAsm(CustomAttributeDeclaration attribute)
+    {
+        // The line as typed is ILAsm already, in either the blob or the typed form.
+        var source = attribute.Source.Trim();
+        return source.StartsWith(".custom", StringComparison.Ordinal) ? source : ".custom " + source;
     }
 }

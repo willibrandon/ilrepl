@@ -8,7 +8,8 @@ namespace IlRepl.Engine;
 /// <param name="Types">Every type of the family by its ILAsm path: the loaded runtime types once compiled, the prototypes until then.</param>
 /// <param name="RuntimeType">The loaded runtime type of the outermost declaration, or null while the family is only declared.</param>
 /// <param name="Definition">The loaded session assembly, or null while the family is only declared.</param>
-public sealed record SessionType(TypeDeclaration Declaration, IReadOnlyDictionary<string, Type> Types, Type? RuntimeType, DefinitionAssembly? Definition)
+/// <param name="Prototypes">The prototype builder and members of every declaration by path; the bodies are bound to these, and an export maps them onto what it writes.</param>
+public sealed record SessionType(TypeDeclaration Declaration, IReadOnlyDictionary<string, Type> Types, Type? RuntimeType, DefinitionAssembly? Definition, IReadOnlyDictionary<string, (System.Reflection.Emit.TypeBuilder Prototype, OwnMembers Members)> Prototypes)
 {
     /// <summary>
     /// The ILAsm path of the outermost type.

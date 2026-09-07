@@ -316,7 +316,7 @@ public sealed partial class Session
     /// </summary>
     /// <param name="path">The output path.</param>
     /// <exception cref="ReplException">The cell is incomplete, a method block is open, or the runtime rejected it.</exception>
-    public void Save(string path) => CellCompiler.Save(this, path);
+    public void Save(string path) => AssemblyExporter.Save(this, path);
 
     /// <summary>
     /// Renders the session methods and the current cell as ILAsm source.
