@@ -269,8 +269,8 @@ public sealed class CecilWriter
                 WithMetadataNames(specification.ElementType);
                 return reference;
             default:
+                // Only the simple name is escaped; reflection reports the namespace as the metadata has it.
                 reference.Name = ReflectionUnescape(reference.Name);
-                reference.Namespace = ReflectionUnescape(reference.Namespace);
                 if (reference.DeclaringType is not null)
                 {
                     WithMetadataNames(reference.DeclaringType);

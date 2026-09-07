@@ -247,9 +247,9 @@ public static class TypeNameFormatter
         var tick = name.IndexOf('`', StringComparison.Ordinal);
         if (tick > 0 && name[(tick + 1)..].All(char.IsDigit))
         {
-            // A name that needs quotes takes its arity inside them: ILAsm reads '<>c`1', not '<>c'`1.
-            var quoted = IlAsmIdentifier(name[..tick]);
-            return quoted.StartsWith('\'') ? "'" + name + "'" : name;
+            // A name that needs quotes takes its arity inside them, escaped like any quoted name:
+            // ILAsm reads '<>c`1', not '<>c'`1.
+            return IlAsmIdentifier(name[..tick]).StartsWith('\'') ? IlAsmIdentifier(name) : name;
         }
 
         return IlAsmIdentifier(name);
@@ -269,8 +269,9 @@ public static class TypeNameFormatter
             return QualifiedName(declaring) + "/" + IlAsmTypeName(Unescape(definition.Name));
         }
 
+        // Reflection escapes the simple name but reports the namespace as the metadata has it.
         var name = IlAsmTypeName(Unescape(definition.Name));
-        return string.IsNullOrEmpty(definition.Namespace) ? name : string.Join(".", Unescape(definition.Namespace).Split('.').Select(IlAsmIdentifier)) + "." + name;
+        return string.IsNullOrEmpty(definition.Namespace) ? name : string.Join(".", definition.Namespace.Split('.').Select(IlAsmIdentifier)) + "." + name;
     }
 
     /// <summary>

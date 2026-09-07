@@ -388,4 +388,37 @@ public sealed class ReplCoreDisassembleTests
         Assert.HasCount(1, results, string.Join("\n", core.Transcript.Lines.Skip(run).Select(l => l.Kind + ": " + l.PlainText)));
         Assert.Contains("= 1 ", results[0]);
     }
+
+    /// <summary>
+    /// A listing over types whose names carry special characters pastes back and runs against the
+    /// first type, which is also what the session's writer must emit.
+    /// </summary>
+    /// <param name="firstNamespace">The first type's namespace.</param>
+    /// <param name="firstName">The first type's name.</param>
+    /// <param name="secondNamespace">The colliding type's namespace.</param>
+    /// <param name="secondName">The colliding type's name.</param>
+    /// <param name="generic">True to make both types generic.</param>
+    [TestMethod]
+    [DataRow("N", "Slash\\Name", "N", "SlashName", true)]
+    [DataRow("N", "Quote'Name", "N", "QuoteName", true)]
+    [DataRow("Ns\\Part", "Plain", "NsPart", "Plain", false)]
+    public void Handle_Dis_SpecialCharactersInNames_PasteBackToTheSameType(string firstNamespace, string firstName, string secondNamespace, string secondName, bool generic)
+    {
+        var core = new ReplCore();
+        _ = Engine.CecilFixture.Build(Engine.MethodDisassemblerTests.CollidingTypes(firstNamespace, firstName, secondNamespace, secondName, generic), core.Session.Resolver);
+        var pasted = Pasteable(core, ".dis int32 N.Fixture::M()");
+        Assert.IsTrue(core.Handle(".method int32 M2() {").Succeeded);
+        foreach (var line in pasted)
+        {
+            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.Kind + ": " + l.PlainText)));
+        }
+
+        Assert.IsTrue(core.Handle("}").Succeeded, string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.Kind + ": " + l.PlainText)));
+        var run = core.Transcript.Lines.Count;
+        core.Handle("call int32 M2()");
+        core.Handle("ret");
+        var results = core.Transcript.Lines.Skip(run).Where(l => l.Kind == LineKind.Result).Select(l => l.PlainText).ToList();
+        Assert.HasCount(1, results, string.Join("\n", core.Transcript.Lines.Skip(run).Select(l => l.Kind + ": " + l.PlainText)));
+        Assert.Contains("= 1 ", results[0]);
+    }
 }

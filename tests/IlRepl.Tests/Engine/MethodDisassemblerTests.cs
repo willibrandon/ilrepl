@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using IlRepl.Engine;
 using Mono.Cecil;
@@ -953,6 +954,68 @@ public sealed class MethodDisassemblerTests
         var il = m.Body.GetILProcessor();
         il.Emit(OpCodes.Call, module.Types.First(t => t.Name == "Slash\\Name").Methods[0]);
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Writes two types that differ by one character reflection or ILAsm would treat specially,
+    /// each with a Value method returning 1 and 2, and a method M that calls the first, closed over
+    /// int32 when the types are generic.
+    /// </summary>
+    internal static Action<ModuleDefinition, TypeDefinition> CollidingTypes(string firstNamespace, string firstName, string secondNamespace, string secondName, bool generic) => (module, type) =>
+    {
+        var first = default(MethodDefinition);
+        foreach (var (ns, name, value) in new[] { (firstNamespace, firstName, 1), (secondNamespace, secondName, 2) })
+        {
+            var owner = new TypeDefinition(ns, generic ? name + "`1" : name, Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            module.Types.Add(owner);
+            if (generic)
+            {
+                owner.GenericParameters.Add(new Mono.Cecil.GenericParameter("T", owner));
+            }
+
+            var valueMethod = Static(owner, "Value", module.TypeSystem.Int32);
+            valueMethod.Body.GetILProcessor().Emit(OpCodes.Ldc_I4, value);
+            valueMethod.Body.GetILProcessor().Emit(OpCodes.Ret);
+            first ??= valueMethod;
+        }
+
+        var m = Static(type, "M", module.TypeSystem.Int32);
+        var il = m.Body.GetILProcessor();
+        MethodReference target = first!;
+        if (generic)
+        {
+            var closed = new GenericInstanceType(first!.DeclaringType);
+            closed.GenericArguments.Add(module.TypeSystem.Int32);
+            target = new MethodReference("Value", module.TypeSystem.Int32, closed);
+        }
+
+        il.Emit(OpCodes.Call, target);
+        il.Emit(OpCodes.Ret);
+    };
+
+    /// <summary>
+    /// A special character in a generic type name or a namespace survives escaping end to end: the
+    /// listing names the first type, and so does the parsed operand.
+    /// </summary>
+    /// <param name="firstNamespace">The first type's namespace.</param>
+    /// <param name="firstName">The first type's name.</param>
+    /// <param name="secondNamespace">The colliding type's namespace.</param>
+    /// <param name="secondName">The colliding type's name.</param>
+    /// <param name="generic">True to make both types generic.</param>
+    /// <param name="expectedOwner">The owner as the listing spells it, before the assembly hint is filled in.</param>
+    [TestMethod]
+    [DataRow("N", "Slash\\Name", "N", "SlashName", true, "class [{0}]N.'Slash\\\\Name`1'<int32>")]
+    [DataRow("N", "Quote'Name", "N", "QuoteName", true, "class [{0}]N.'Quote\\'Name`1'<int32>")]
+    [DataRow("Ns\\Part", "Plain", "NsPart", "Plain", false, "[{0}]'Ns\\\\Part'.Plain")]
+    public void Disassemble_SpecialCharactersInNames_KeepIdentity(string firstNamespace, string firstName, string secondNamespace, string secondName, bool generic, string expectedOwner)
+    {
+        var method = Cecil(CollidingTypes(firstNamespace, firstName, secondNamespace, secondName, generic));
+        var assembly = method.Method.Module.Assembly.GetName().Name;
+        var call = DisassemblyText.Instructions(method)[0];
+        Assert.AreEqual("call int32 " + string.Format(CultureInfo.InvariantCulture, expectedOwner, assembly) + "::Value()", call);
+        var parsed = (ResolvedMethod)InstructionParser.Parse(call, method.Context).Operand!;
+        Assert.AreEqual(1, parsed.Method!.Invoke(null, null), "the parsed operand is the first type's method");
+        Assert.AreEqual(1, method.Method.Invoke(null, null));
     }
 
     /// <summary>
