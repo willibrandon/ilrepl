@@ -461,7 +461,7 @@ public sealed partial class Session
                 var methodMap = new EmitMap(_ => throw new InvalidOperationException("no session methods are mapped here"));
                 foreach (var old in SignatureIdentity.MethodParametersOf(signature))
                 {
-                    if (old.GenericParameterPosition < methodGenerics.Length)
+                    if (old is not null && old.GenericParameterPosition < methodGenerics.Length)
                     {
                         methodMap.Add(old, methodGenerics[old.GenericParameterPosition]);
                     }

@@ -367,16 +367,17 @@ public static class TypeRelations
     /// <param name="from">The parameters.</param>
     /// <param name="to">The types to put in their place.</param>
     /// <returns>The rewritten type.</returns>
-    public static Type SubstituteParameters(Type type, IReadOnlyList<Type> from, IReadOnlyList<Type> to)
+    public static Type SubstituteParameters(Type type, IReadOnlyList<Type?> from, IReadOnlyList<Type> to)
     {
         ArgumentNullException.ThrowIfNull(type);
         ArgumentNullException.ThrowIfNull(from);
         ArgumentNullException.ThrowIfNull(to);
         if (type.IsGenericParameter)
         {
+            // Position i of the parameters is argument i; a gap is a parameter nothing mentions.
             for (var i = 0; i < from.Count && i < to.Count; i++)
             {
-                if (ReferenceEquals(from[i], type))
+                if (from[i] is not null && ReferenceEquals(from[i], type))
                 {
                     return to[i];
                 }

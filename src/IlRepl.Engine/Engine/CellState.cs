@@ -611,21 +611,6 @@ public sealed class CellState
                 MemberAccess.CheckField(field, scope, Types);
                 break;
             case ResolvedMethod { Method: not null } method:
-                // The declaring type and the type arguments are mentioned whatever assembly the
-                // method belongs to; the member's own access is judged for session members.
-                if (method.DeclaringType is { } declaring)
-                {
-                    MemberAccess.CheckType(declaring, scope, Types);
-                }
-
-                if (method.Method is System.Reflection.MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } generic)
-                {
-                    foreach (var argument in generic.GetGenericArguments())
-                    {
-                        MemberAccess.CheckType(argument, scope, Types);
-                    }
-                }
-
                 MemberAccess.CheckMethod(method, scope, Types);
                 break;
             case Type type:

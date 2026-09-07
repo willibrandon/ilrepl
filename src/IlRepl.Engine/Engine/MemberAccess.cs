@@ -169,7 +169,22 @@ public static class MemberAccess
             return null;
         }
 
+        // The declaring type and the arguments of the instantiation are mentioned whatever
+        // assembly the method belongs to; the member's own access is a session member's.
         var declaring = method.DeclaringType;
+        if (TypeVerdict(declaring, scope, types, judgeAll) is { } declaringProblem)
+        {
+            return declaringProblem;
+        }
+
+        foreach (var argument in method.InstantiationArguments)
+        {
+            if (TypeVerdict(argument, scope, types, judgeAll) is { } argumentProblem)
+            {
+                return argumentProblem;
+            }
+        }
+
         if (!judgeAll && !TypeRelations.IsSessionType(declaring))
         {
             return null;
@@ -179,8 +194,7 @@ public static class MemberAccess
         var description = method.Declared is { } declared
             ? $"{declared.DescribeMember()} on {TypeNameFormatter.Pretty(declaring)}"
             : MemberResolver.Describe(method.Method);
-        return TypeVerdict(declaring, scope, types, judgeAll)
-            ?? MemberVerdict(AccessWord(attributes), declaring, description, scope, types);
+        return MemberVerdict(AccessWord(attributes), declaring, description, scope, types);
     }
 
     /// <summary>

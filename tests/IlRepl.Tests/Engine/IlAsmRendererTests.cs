@@ -374,4 +374,34 @@ public sealed class IlAsmRendererTests
             context.Unload();
         }
     }
+
+    /// <summary>
+    /// The transitions the REPL supplies, leaving a try or a catch and ending a finally, are
+    /// rendered, so blocks written without them assemble and run.
+    /// </summary>
+    [TestMethod]
+    public void Render_ImplicitBlockTransitions_AreWritten()
+    {
+        var session = IlLines.Load(
+            ".method int32 BothImplicit() {", ".locals init (int32 v)", ".try {", "ldc.i4 1", "stloc v", "ldstr \"x\"", "newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)", "throw",
+            "} catch [System.Runtime]System.InvalidOperationException {", "pop", "ldc.i4 2", "stloc v",
+            "} finally {", "ldloc v", "ldc.i4 10", "add", "stloc v", "}",
+            "ldloc v", "ret", "}",
+            "call int32 BothImplicit()");
+        var text = session.ToIlAsm();
+        Assert.AreEqual(12, session.Run().Value);
+        Assert.Contains("leave IlReplEnd0", text);
+        Assert.Contains("endfinally", text);
+        Assert.Contains("IlReplEnd0:", text);
+        var image = IlasmLocator.Assemble(text);
+        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-implicit", isCollectible: true);
+        try
+        {
+            Assert.AreEqual(12, context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
 }

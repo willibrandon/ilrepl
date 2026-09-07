@@ -288,4 +288,21 @@ public sealed class TypeReplacementTests
         Assert.AreEqual(session.Types[0].RuntimeType, session.Types[1].RuntimeType!.GetField("V")!.GetOptionalCustomModifiers()[0]);
         _ = AssemblyExporter.Write(session, "modified");
     }
+
+    /// <summary>
+    /// A type that appears only as a generic argument of a call is a dependency of the caller.
+    /// </summary>
+    [TestMethod]
+    public void Redefine_TypeUsedOnlyAsAGenericArgument_RebuildsTheCaller()
+    {
+        var session = Load(".class public Point { }",
+            ".class public Host {",
+            ".method public static class [System.Runtime]System.Type TypeOf<T>() { ldtoken !!0; call class [System.Runtime]System.Type [System.Runtime]System.Type::GetTypeFromHandle(valuetype [System.Runtime]System.RuntimeTypeHandle); ret }",
+            ".method public static class [System.Runtime]System.Type Get() { call class [System.Runtime]System.Type Host::TypeOf<class Point>(); ret }",
+            "}");
+        var message = Add(session, ".class public Point {", ".field public int32 X", "}");
+        Assert.Contains("rebuilt class Host", message);
+        Assert.AreSame(session.Types[0].RuntimeType, Run(session, "call class [System.Runtime]System.Type Host::Get()"));
+        _ = AssemblyExporter.Write(session, "generic-argument");
+    }
 }

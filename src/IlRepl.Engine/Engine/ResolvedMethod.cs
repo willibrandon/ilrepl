@@ -65,6 +65,13 @@ public sealed record ResolvedMethod
     /// </summary>
     public IReadOnlyList<Type>? GenericArguments { get; init; }
 
+    /// <summary>
+    /// The generic arguments the call instantiates the method with, whether the method is a
+    /// builder of a type being written or a loaded generic method instance; empty otherwise.
+    /// </summary>
+    public IReadOnlyList<Type> InstantiationArguments =>
+        GenericArguments ?? (Method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } instance ? instance.GetGenericArguments() : []);
+
     private Type? DeclaredType { get; }
 
     /// <summary>

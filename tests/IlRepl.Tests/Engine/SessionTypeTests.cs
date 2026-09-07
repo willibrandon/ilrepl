@@ -527,4 +527,16 @@ public sealed class SessionTypeTests
         Assert.HasCount(2, properties);
         Assert.IsTrue(properties.Any(p => p.PropertyType == typeof(int)) && properties.Any(p => p.PropertyType == typeof(string)));
     }
+
+    /// <summary>
+    /// A method's generic arguments substitute by position, so a leading parameter the
+    /// signature never mentions does not shift the others.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_GenericArguments_SubstituteByPosition()
+    {
+        var session = IlLines.Load(".class public Pick {", ".method public static !!1 Id<TUnused, T>(!!1 v) { ldarg v; ret }",
+            ".method public static string Use() { ldstr \"ok\"; call !!1 Pick::Id<int32, string>(!!1); ret }", "}");
+        Assert.AreEqual("ok", session.Types[0].RuntimeType!.GetMethod("Use")!.Invoke(null, null));
+    }
 }

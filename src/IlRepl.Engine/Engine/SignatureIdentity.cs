@@ -52,11 +52,12 @@ public static class SignatureIdentity
     }
 
     /// <summary>
-    /// The method's own generic parameters as they appear in a signature's types, by position.
+    /// The method's own generic parameters as they appear in a signature's types, indexed by
+    /// position; a parameter the signature never mentions leaves a null at its position.
     /// </summary>
     /// <param name="signature">The signature.</param>
-    /// <returns>The parameters found, ordered by position.</returns>
-    public static IReadOnlyList<Type> MethodParametersOf(MethodSignature signature)
+    /// <returns>The parameters by position, as many as the signature declares.</returns>
+    public static IReadOnlyList<Type?> MethodParametersOf(MethodSignature signature)
     {
         ArgumentNullException.ThrowIfNull(signature);
         var found = new Dictionary<int, Type>();
@@ -99,7 +100,14 @@ public static class SignatureIdentity
             }
         }
 
-        return [.. found.OrderBy(p => p.Key).Select(p => p.Value)];
+        var count = Math.Max(signature.TypeParameters.Count, found.Count == 0 ? 0 : found.Keys.Max() + 1);
+        var byPosition = new Type?[count];
+        foreach (var (position, parameter) in found)
+        {
+            byPosition[position] = parameter;
+        }
+
+        return byPosition;
     }
 
     /// <summary>

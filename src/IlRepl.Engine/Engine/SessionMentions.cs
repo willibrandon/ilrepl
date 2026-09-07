@@ -84,12 +84,9 @@ public static class SessionMentions
                         yield return parameter;
                     }
 
-                    if (method.Method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } generic)
+                    foreach (var argument in method.InstantiationArguments)
                     {
-                        foreach (var argument in generic.GetGenericArguments())
-                        {
-                            yield return argument;
-                        }
+                        yield return argument;
                     }
 
                     break;

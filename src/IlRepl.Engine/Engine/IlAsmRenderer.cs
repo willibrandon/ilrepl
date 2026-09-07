@@ -188,7 +188,33 @@ public static class IlAsmRenderer
             }
         }
 
+        // The transitions the emitters write for the user, leave at the end of a try or a
+        // catch and endfinally at the end of a finally, are written out here with a label
+        // after each block as their target; the user's own leave stays as typed.
         var indent = level;
+        var open = new Stack<(string EndLabel, BlockKind Region)>();
+        var ends = 0;
+        string NextEnd()
+        {
+            string label;
+            do
+            {
+                label = "IlReplEnd" + ends.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                ends++;
+            }
+            while (state.DefinedLabels.Contains(label));
+            return label;
+        }
+
+        void LeaveCurrent()
+        {
+            var (endLabel, region) = open.Peek();
+            if (region is BlockKind.Try or BlockKind.Catch or BlockKind.Filter)
+            {
+                sb.Append(Pad(indent)).Append("leave ").AppendLine(endLabel);
+            }
+        }
+
         for (var index = 0; index < state.Entries.Count; index++)
         {
             var e = state.Entries[index];
@@ -226,8 +252,11 @@ public static class IlAsmRenderer
                             sb.Append(Pad(indent)).AppendLine(".try");
                             sb.Append(Pad(indent)).AppendLine("{");
                             indent++;
+                            open.Push((NextEnd(), BlockKind.Try));
                             break;
                         case BlockKind.Catch:
+                            LeaveCurrent();
+                            open.Push((open.Pop().EndLabel, BlockKind.Catch));
                             indent--;
                             sb.Append(Pad(indent)).AppendLine("}");
                             sb.Append(Pad(indent)).Append("catch ").AppendLine(TypeNameFormatter.IlAsmDeclaring(e.CatchType ?? typeof(object)));
@@ -235,6 +264,8 @@ public static class IlAsmRenderer
                             indent++;
                             break;
                         case BlockKind.Filter:
+                            LeaveCurrent();
+                            open.Push((open.Pop().EndLabel, BlockKind.Filter));
                             indent--;
                             sb.Append(Pad(indent)).AppendLine("}");
                             sb.Append(Pad(indent)).AppendLine("filter");
@@ -248,6 +279,8 @@ public static class IlAsmRenderer
                             indent++;
                             break;
                         case BlockKind.Finally:
+                            LeaveCurrent();
+                            open.Push((open.Pop().EndLabel, BlockKind.Finally));
                             indent--;
                             sb.Append(Pad(indent)).AppendLine("}");
                             if (nestedTerminals.Contains(index))
@@ -261,6 +294,8 @@ public static class IlAsmRenderer
                             indent++;
                             break;
                         case BlockKind.Fault:
+                            LeaveCurrent();
+                            open.Push((open.Pop().EndLabel, BlockKind.Fault));
                             indent--;
                             sb.Append(Pad(indent)).AppendLine("}");
                             if (nestedTerminals.Contains(index))
@@ -274,9 +309,14 @@ public static class IlAsmRenderer
                             indent++;
                             break;
                         case BlockKind.End:
-                            indent--;
-                            sb.Append(Pad(indent)).AppendLine("}");
-                            break;
+                            {
+                                var (endLabel, region) = open.Pop();
+                                sb.Append(Pad(indent)).AppendLine(region is BlockKind.Finally or BlockKind.Fault ? "endfinally" : "leave " + endLabel);
+                                indent--;
+                                sb.Append(Pad(indent)).AppendLine("}");
+                                sb.Append(Pad(indent - 1)).Append(endLabel).AppendLine(":");
+                                break;
+                            }
                         default:
                             break;
                     }

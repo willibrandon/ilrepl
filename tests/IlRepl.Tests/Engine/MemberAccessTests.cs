@@ -232,4 +232,15 @@ public sealed class MemberAccessTests
         var session = Load(".class public Outer {", ".class nested private Inner { }", "}");
         Assert.Contains("Outer/Inner is nested private", Refused(session, "call !!0[] [System.Runtime]System.Array::Empty<class Outer/Inner>()"));
     }
+
+    /// <summary>
+    /// The arguments a member of a type being written is instantiated with are judged too.
+    /// </summary>
+    [TestMethod]
+    public void GenericArguments_OfOwnMethods_AreJudged()
+    {
+        var session = Load(".class public Outer {", ".class nested private Inner { }", "}",
+            ".class public Host {", ".method public static int32 Touch<T>() { ldc.i4 1; ret }", ".method public static int32 Use() {");
+        Assert.Contains("Outer/Inner is nested private", Refused(session, "call int32 Host::Touch<class Outer/Inner>()"));
+    }
 }
