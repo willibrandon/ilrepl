@@ -8,12 +8,12 @@ processes.
 
 ```
 ilrepl (Native AOT)                          ilrepl-host (framework-dependent)
-┌──────────────────────────────┐   JSON-RPC  ┌──────────────────────────────┐
-│ command line                 │  over stdio │ type and member resolution   │
-│ Hex1b terminal UI            │ ──────────▶ │ stack simulation             │
-│ batch mode                   │ ◀────────── │ Reflection.Emit compilation  │
-│ transcript and completion    │             │ the session                  │
-└──────────────────────────────┘             └──────────────────────────────┘
++------------------------------+   JSON-RPC  +------------------------------+
+| command line                 |  over stdio | type and member resolution   |
+| Hex1b terminal UI            | ----------> | stack simulation             |
+| batch mode                   | <---------- | Reflection.Emit compilation  |
+| transcript and completion    |             | the session                  |
++------------------------------+             +------------------------------+
 ```
 
 The front-end owns the transcript, completion, and rendering. The host owns the session and
