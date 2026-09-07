@@ -30,6 +30,7 @@ public sealed class CecilWriter
         Kind = kind;
         Name = SessionAssemblies.NextName(kind);
         Assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(Name, SessionAssemblies.Version), Name, ModuleKind.Dll);
+        ReferenceCoreLibrary();
     }
 
     /// <summary>
@@ -43,7 +44,15 @@ public sealed class CecilWriter
         Name = name;
         IsExport = true;
         Assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0, 0, 0)), name, ModuleKind.Dll);
+        ReferenceCoreLibrary();
     }
+
+    /// <summary>
+    /// Cecil's default core library for a new module is mscorlib 4.0, which the desktop resolves
+    /// through a facade and the browser bundle does not carry. Referencing the runtime's own core
+    /// library first makes the module's type system name that instead.
+    /// </summary>
+    private void ReferenceCoreLibrary() => Module.ImportReference(typeof(object));
 
     /// <summary>
     /// True for an export, which carries every session type itself and may reference no session assembly.
@@ -78,7 +87,7 @@ public sealed class CecilWriter
     /// <summary>
     /// The <c>object</c> type reference.
     /// </summary>
-    public TypeReference Object => Module.TypeSystem.Object;
+    public TypeReference Object => Import(typeof(object));
 
     /// <summary>
     /// Records that a prototype builder or a generic parameter builder is written as a definition
