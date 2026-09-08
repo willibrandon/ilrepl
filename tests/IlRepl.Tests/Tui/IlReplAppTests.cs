@@ -329,8 +329,11 @@ public sealed class IlReplAppTests
         await auto.WaitUntilNoTextAsync("y yank");
         await auto.WaitUntilNoTextAsync("Yanked:", timeout: TimeSpan.FromSeconds(5));
 
-        Assert.Contains("\x1b[1 q", recorder.Output, "the prompt caret should be a blinking block");
-        Assert.DoesNotContain("\x1b[6 q", recorder.Output, "no bar caret should reach the terminal");
+        // The prompt paints its own caret cell in the prompt colour; no caret shape is ever asked for.
+        Assert.DoesNotContain("\x1b[1 q", recorder.Output, "no caret shape should reach the terminal");
+        Assert.DoesNotContain("\x1b[5 q", recorder.Output, "no caret shape should reach the terminal");
+        Assert.DoesNotContain("\x1b[6 q", recorder.Output, "no caret shape should reach the terminal");
+        Assert.Contains("48;2;97;175;239", recorder.Output, "the caret cell should be painted in the prompt colour");
 
         // Copy mode has ended; typing goes to the prompt again.
         await auto.TypeAsync("ret", ct: ct);
@@ -486,10 +489,13 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// A method block shows its fact in the status bar, closes into a new cell, and is callable.
+    /// A method block stays in the editor until its closing brace: Enter continues it with the
+    /// next line indented, the status bar counts the lines, and nothing reaches the engine. The
+    /// brace sends the block line by line, every line keeps its echo and its stack line, the
+    /// method fact shows only while the engine has it open, and the method is callable after.
     /// </summary>
     [TestMethod]
-    public async Task TypeMethod_ShowsMethodFactAndCallsIt()
+    public async Task TypeMethod_EnterContinuesAndCloseSubmits()
     {
         var ct = TestContext.CancellationToken;
         await using var engine = await HostPaths.StartEngineAsync(ct);
@@ -505,12 +511,10 @@ public sealed class IlReplAppTests
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync(".method int32 Twice(int32 n) {", ct: ct);
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilTextAsync("method int32 Twice(int32 n)");
-        await auto.WaitUntilTextAsync("method Twice │ stack []");
-        using (var snapshot = auto.CreateSnapshot())
-        {
-            Assert.IsTrue(snapshot.HasForegroundColor(SpanPalette.Color(SpanStyle.Label)), "the method fact should use the label color");
-        }
+        await auto.WaitUntilTextAsync("  ...> ");
+        await auto.WaitUntilTextAsync("editing 2 lines");
+        await auto.WaitUntilTextAsync("Enter continues");
+        Assert.DoesNotContain(l => l.PlainText.Contains("Twice", StringComparison.Ordinal), transcript.Lines, "nothing goes to the engine before the block closes");
 
         foreach (var line in new[] { "ldarg n", "ldc.i4 2", "mul", "ret" })
         {
@@ -518,12 +522,21 @@ public sealed class IlReplAppTests
             await auto.EnterAsync(ct: ct);
         }
 
-        await auto.WaitUntilTextAsync("method Twice │ stack [] │ no locals │ 4 instructions");
+        await auto.WaitUntilTextAsync("editing 6 lines");
         await auto.TypeAsync("}", ct: ct);
+        await auto.WaitUntilTextAsync("Enter sends 6 lines");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("end of method Twice");
         await auto.WaitUntilTextAsync("il[2]>");
         await auto.WaitUntilNoTextAsync("method Twice │");
+        await auto.WaitUntilNoTextAsync("editing");
+
+        // Every line went by in order, each with its echo and its stack line.
+        var echoes = transcript.Lines.Where(l => l.Kind == LineKind.Input).Select(l => l.PlainText).ToList();
+        Assert.AreSequenceEqual(["il[1]> .method int32 Twice(int32 n) {", "il[1]>   ldarg n", "il[1]>   ldc.i4 2", "il[1]>   mul", "il[1]>   ret", "il[1]> }"], echoes);
+        var afterLdarg = transcript.Lines.SkipWhile(l => l.PlainText != "il[1]>   ldarg n").Skip(1).First();
+        Assert.AreEqual(LineKind.Stack, afterLdarg.Kind);
+        Assert.Contains("[int32]", afterLdarg.PlainText);
 
         await auto.TypeAsync("ldc.i4 21", ct: ct);
         await auto.EnterAsync(ct: ct);
@@ -540,10 +553,12 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// A class block shows its fact ahead of the method fact, and closing it starts a new cell.
+    /// A class with a method inside is one block: the nested braces indent as they open, the
+    /// block stays in the editor until the outermost brace, and then it goes line by line, the
+    /// class ahead of its method.
     /// </summary>
     [TestMethod]
-    public async Task TypeClass_ShowsClassFactThenMethodFact()
+    public async Task TypeClass_NestedBlockIsOneSubmission()
     {
         var ct = TestContext.CancellationToken;
         await using var engine = await HostPaths.StartEngineAsync(ct);
@@ -559,31 +574,30 @@ public sealed class IlReplAppTests
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync(".class public Counter {", ct: ct);
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilTextAsync("class Counter │ stack []");
-        using (var snapshot = auto.CreateSnapshot())
-        {
-            Assert.IsTrue(snapshot.HasForegroundColor(SpanPalette.Color(SpanStyle.Type)), "the class fact should use the type color");
-        }
-
         await auto.TypeAsync(".field public static int32 Count", ct: ct);
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilTextAsync("field public static int32 Count");
         await auto.TypeAsync(".method public static int32 Next() {", ct: ct);
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilTextAsync("class Counter │ method Next │ stack []");
+        await auto.WaitUntilTextAsync("editing 4 lines");
+        Assert.IsEmpty(transcript.Lines.Where(l => l.PlainText.Contains("Counter", StringComparison.Ordinal)), "nothing goes to the engine before the block closes");
         foreach (var line in new[] { "ldsfld int32 Counter::Count", "ret", "}" })
         {
             await auto.TypeAsync(line, ct: ct);
             await auto.EnterAsync(ct: ct);
         }
 
-        await auto.WaitUntilTextAsync("end of method Next");
-        await auto.WaitUntilNoTextAsync("method Next │");
+        await auto.WaitUntilTextAsync("editing 7 lines");
+        await auto.WaitUntilTextAsync("Enter continues");
         await auto.TypeAsync("}", ct: ct);
+        await auto.WaitUntilTextAsync("Enter sends 7 lines");
         await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("end of method Next");
         await auto.WaitUntilTextAsync("end of class Counter");
         await auto.WaitUntilTextAsync("il[2]>");
         await auto.WaitUntilNoTextAsync("class Counter │");
+
+        var echoes = transcript.Lines.Where(l => l.Kind == LineKind.Input).Select(l => l.PlainText).ToList();
+        Assert.AreSequenceEqual(["il[1]> .class public Counter {", "il[1]>   .field public static int32 Count", "il[1]>   .method public static int32 Next() {", "il[1]>     ldsfld int32 Counter::Count", "il[1]>     ret", "il[1]>   }", "il[1]> }"], echoes);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;

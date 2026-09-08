@@ -38,6 +38,11 @@ public sealed class HostProcessEngine : IReplEngine
     public SessionStatus Status { get; private set; }
 
     /// <summary>
+    /// The host process's id, so a test can end it mid-block.
+    /// </summary>
+    internal int ProcessId => _process.Id;
+
+    /// <summary>
     /// Starts the host and waits for its hello.
     /// </summary>
     /// <param name="hostAssemblyPath">The host assembly, or null to locate it with <see cref="HostLocator"/>.</param>

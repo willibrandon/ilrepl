@@ -10,6 +10,7 @@ var evalOption = new Option<string[]>("--eval", "-e")
 var noColorOption = new Option<bool>("--no-color") { Description = "Plain output without ANSI colors." };
 var quietOption = new Option<bool>("--quiet", "-q") { Description = "Do not echo the stack after each instruction." };
 var batchOption = new Option<bool>("--batch") { Description = "Read lines from standard input without the terminal UI." };
+var noHistoryOption = new Option<bool>("--no-history") { Description = "Do not read or write the history file." };
 var scriptArgument = new Argument<FileInfo?>("script")
 {
     Description = "An IL script to run, one line per instruction.",
@@ -22,6 +23,7 @@ var root = new RootCommand("Interactive CIL REPL with a live evaluation stack. T
     noColorOption,
     quietOption,
     batchOption,
+    noHistoryOption,
     scriptArgument,
 };
 
@@ -30,6 +32,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
     var eval = parseResult.GetValue(evalOption) ?? [];
     var script = parseResult.GetValue(scriptArgument);
     var quiet = parseResult.GetValue(quietOption);
+    var noHistory = parseResult.GetValue(noHistoryOption);
     var batch = parseResult.GetValue(batchOption) || Console.IsInputRedirected || eval.Length > 0 || script is not null;
     var color = !parseResult.GetValue(noColorOption)
         && !Console.IsOutputRedirected
@@ -62,7 +65,8 @@ root.SetAction(async (parseResult, cancellationToken) =>
                 await engine.HandleAsync(line, cancellationToken).ConfigureAwait(false);
             }
 
-            return await IlReplApp.RunAsync(engine, cancellationToken).ConfigureAwait(false);
+            var history = noHistory ? null : new FileHistoryStore(FileHistoryStore.DefaultPath());
+            return await IlReplApp.RunAsync(engine, history, cancellationToken).ConfigureAwait(false);
         }
 
         IEnumerable<string> lines;

@@ -244,13 +244,13 @@ public sealed class ReplCore
             return new HandleResult(false, false);
         }
 
-        if (method is not null && Session.OpenMethod is null)
-        {
-            Note($"method {method} abandoned; the block is back in the editor");
-        }
-        else if (type is not null && Session.OpenType is null)
+        if (type is not null && Session.OpenType is null)
         {
             Note($"class {type} abandoned; the block is back in the editor");
+        }
+        else if (method is not null && Session.OpenMethod is null)
+        {
+            Note($"method {method} abandoned; the block is back in the editor");
         }
         else
         {

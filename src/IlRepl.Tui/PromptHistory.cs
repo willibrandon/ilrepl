@@ -111,6 +111,34 @@ public sealed class PromptHistory
     }
 
     /// <summary>
+    /// Writes an entry to the store, when there is one. The entry is durable when the task completes.
+    /// </summary>
+    /// <param name="entry">The entry.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>A task that completes when the entry is written.</returns>
+    public async Task PersistAsync(string entry, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (_store is not null)
+        {
+            await _store.AppendAsync(entry.TrimEnd('\n', '\r'), cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Replaces every entry, as when the store finishes loading, and ends browsing.
+    /// </summary>
+    /// <param name="entries">The entries, oldest first.</param>
+    public void Replace(IEnumerable<string> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        _entries.Clear();
+        _entries.AddRange(entries);
+        Trim();
+        Reset();
+    }
+
+    /// <summary>
     /// Moves to the previous entry, keeping the text the buffer holds now as the working copy of
     /// the place it came from.
     /// </summary>

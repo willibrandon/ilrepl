@@ -1,40 +1,226 @@
+using System.Collections.Concurrent;
+using Hex1b.Documents;
 using Hex1b.Widgets;
+using IlRepl.Protocol;
 
 namespace IlRepl.Tui;
 
 /// <summary>
-/// The hoisted state of the prompt: the text box, the completion palette selection, and the
-/// input history.
+/// What the prompt keeps between frames: the editor and its document, the history, the palette's
+/// selection, the submission in flight, and the queue other threads post to. It lives above the
+/// widget so the status bar, the frame's drain, and the key bindings all see the same thing.
 /// </summary>
 public sealed class PromptState
 {
     /// <summary>
-    /// The text box state the prompt is bound to.
+    /// Initializes the state.
     /// </summary>
-    public TextBoxState TextBox { get; } = new();
+    /// <param name="history">The history.</param>
+    /// <param name="tokenizer">The tokenizer that colours the buffer.</param>
+    public PromptState(PromptHistory history, CilTokenizer tokenizer)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        ArgumentNullException.ThrowIfNull(tokenizer);
+        History = history;
+        Editor = new EditorState(new Hex1bDocument("")) { TabSize = AutoIndent.Unit.Length };
+        Highlighter = new CilDecorationProvider(tokenizer);
+        Prediction = new PredictionHint();
+        View = new PromptView();
+    }
 
     /// <summary>
-    /// The highlighted row of the completion palette.
+    /// The editor: the document, the caret, the selection, and the undo history.
+    /// </summary>
+    public EditorState Editor { get; }
+
+    /// <summary>
+    /// The history Up and Down walk.
+    /// </summary>
+    public PromptHistory History { get; }
+
+    /// <summary>
+    /// Colours the buffer.
+    /// </summary>
+    public CilDecorationProvider Highlighter { get; }
+
+    /// <summary>
+    /// The ghost text after the caret.
+    /// </summary>
+    public PredictionHint Prediction { get; }
+
+    /// <summary>
+    /// Renders the buffer with the prompt in its gutter and keeps the caret in view.
+    /// </summary>
+    public PromptView View { get; }
+
+    /// <summary>
+    /// Events other threads posted, drained at the start of every frame.
+    /// </summary>
+    public ConcurrentQueue<SubmissionEvent> Events { get; } = new();
+
+    /// <summary>
+    /// Asks for a frame; set by the app.
+    /// </summary>
+    public Action? Invalidate { get; set; }
+
+    /// <summary>
+    /// The palette row the user has moved to.
     /// </summary>
     public int SelectedIndex { get; set; }
 
     /// <summary>
-    /// True once the user dismissed the palette with Escape; typing shows it again.
+    /// Whether Escape closed the palette for the word being typed.
     /// </summary>
     public bool PaletteDismissed { get; set; }
 
     /// <summary>
-    /// Previously submitted lines, oldest first.
+    /// Whether the user moved the palette's highlight since the word changed; only then does Enter accept.
     /// </summary>
-    public List<string> History { get; } = [];
+    public bool PaletteNavigated { get; set; }
 
     /// <summary>
-    /// The history row being viewed, or <see cref="History"/>.Count when editing a new line.
+    /// The submission in flight, or null.
     /// </summary>
-    public int HistoryIndex { get; set; }
+    public Submission? Submission { get; set; }
 
     /// <summary>
-    /// The unfinished line saved while walking history.
+    /// Buffers submitted while another submission was in flight, oldest first; each goes when
+    /// the one before it completes.
     /// </summary>
-    public string? Stash { get; set; }
+    public Queue<string> Pending { get; } = new();
+
+    /// <summary>
+    /// Whether the store's problem has been printed.
+    /// </summary>
+    public bool HistoryProblemShown { get; set; }
+
+    /// <summary>
+    /// The document's length after the last text change, for telling a single typed character apart.
+    /// </summary>
+    public int LastLength { get; set; }
+
+    /// <summary>
+    /// Whether a submission is in flight: from Enter until the frame that drains its last event.
+    /// </summary>
+    public bool Busy => Submission is not null;
+
+    /// <summary>
+    /// The buffer.
+    /// </summary>
+    public string Text => Editor.Document.GetText();
+
+    /// <summary>
+    /// How many lines the buffer has.
+    /// </summary>
+    public int LineCount => Editor.Document.LineCount;
+
+    /// <summary>
+    /// The caret's line, counted from one.
+    /// </summary>
+    public int CaretLine => Editor.Document.OffsetToPosition(ClampedCaret).Line;
+
+    /// <summary>
+    /// The caret's column, counted from zero.
+    /// </summary>
+    public int CaretColumn => Editor.Document.OffsetToPosition(ClampedCaret).Column - 1;
+
+    /// <summary>
+    /// The caret's line.
+    /// </summary>
+    public string CurrentLine => Editor.Document.GetLineText(CaretLine);
+
+    /// <summary>
+    /// The caret's line up to the caret.
+    /// </summary>
+    public string TextBeforeCaret
+    {
+        get
+        {
+            var line = CurrentLine;
+            return line[..Math.Min(CaretColumn, line.Length)];
+        }
+    }
+
+    /// <summary>
+    /// Whether a <c>/*</c> is open when a line of the buffer begins, counting from the engine's state.
+    /// </summary>
+    /// <param name="line">The line, counted from one.</param>
+    /// <returns>True when a block comment is open there.</returns>
+    public bool CommentOpenBefore(int line)
+    {
+        var open = Highlighter.CommentOpenAtStart;
+        for (var i = 1; i < line && i <= LineCount; i++)
+        {
+            CilLexer.StripComments(Editor.Document.GetLineText(i), ref open);
+        }
+
+        return open;
+    }
+
+    /// <summary>
+    /// Posts an event and asks for a frame. Safe from any thread.
+    /// </summary>
+    /// <param name="e">The event.</param>
+    public void Post(SubmissionEvent e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        Events.Enqueue(e);
+        Invalidate?.Invoke();
+    }
+
+    /// <summary>
+    /// Replaces the buffer, puts the caret somewhere in it, and forgets the undo history.
+    /// </summary>
+    /// <param name="text">The new buffer.</param>
+    /// <param name="caret">The caret's offset.</param>
+    public void SetText(string text, int caret)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var document = Editor.Document;
+        Editor.Cursor.ClearSelection();
+        ReturnedSelection = null;
+        document.Apply(new ReplaceOperation(new DocumentRange(DocumentOffset.Zero, new DocumentOffset(document.Length)), text));
+        Editor.History.Clear();
+        Editor.SetCursorPosition(new DocumentOffset(Math.Clamp(caret, 0, document.Length)));
+        LastLength = document.Length;
+    }
+
+    /// <summary>
+    /// Selects one line of the buffer and puts the caret at its end.
+    /// </summary>
+    /// <param name="line">The line, counted from zero.</param>
+    public void SelectLine(int line)
+    {
+        var document = Editor.Document;
+        var number = Math.Clamp(line + 1, 1, document.LineCount);
+        var start = document.PositionToOffset(new DocumentPosition(number, 1));
+        var end = new DocumentOffset(start.Value + document.GetLineText(number).Length);
+        Editor.SetCursorPosition(start);
+        Editor.SetCursorPosition(end, extend: true);
+        ReturnedSelection = Editor.Cursor.SelectionRange;
+    }
+
+    /// <summary>
+    /// How many rows the editor took on the last frame.
+    /// </summary>
+    public int LastEditorRows { get; set; } = 1;
+
+    /// <summary>
+    /// True when the editor's row count changed on the frame being built, so one more frame is
+    /// drawn to settle the transcript.
+    /// </summary>
+    public bool RowsChanged { get; set; }
+
+    /// <summary>
+    /// The line a refusal selected, so Ctrl+C on it clears rather than copies; null once the
+    /// buffer changes.
+    /// </summary>
+    public DocumentRange? ReturnedSelection { get; private set; }
+
+    /// <summary>
+    /// Empties the buffer.
+    /// </summary>
+    public void Clear() => SetText("", 0);
+
+    private DocumentOffset ClampedCaret => new(Math.Clamp(Editor.Cursor.Position.Value, 0, Editor.Document.Length));
 }
