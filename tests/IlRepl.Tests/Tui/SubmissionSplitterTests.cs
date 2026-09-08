@@ -177,4 +177,16 @@ public sealed class SubmissionSplitterTests
         Assert.HasCount(1, keywords);
         Assert.AreEqual(SubmissionUnitKind.Block, keywords[0].Kind);
     }
+
+    /// <summary>
+    /// A comment between the closing brace and the handler keyword does not end the block early.
+    /// </summary>
+    [TestMethod]
+    public void Split_HandlerPartedByAComment_IsOneBlock()
+    {
+        var units = SubmissionSplitter.Split([".try {", "  nop", "} /* note */ catch [System.Runtime]System.Exception {", "  pop", "}", "nop"]);
+        Assert.AreSequenceEqual(
+            [new SubmissionUnit(0, 5, [0, 1, 2, 3, 4], SubmissionUnitKind.Block), new SubmissionUnit(5, 6, [5], SubmissionUnitKind.Line)],
+            units);
+    }
 }

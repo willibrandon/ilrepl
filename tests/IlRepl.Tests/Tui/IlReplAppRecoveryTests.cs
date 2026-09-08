@@ -768,4 +768,40 @@ public sealed class IlReplAppRecoveryTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A comment between the closing brace and the handler keyword does not end the region in
+    /// the editor's eyes any more than in the engine's: a refused line in the handler brings the
+    /// whole region back, and the correction is accepted once.
+    /// </summary>
+    [TestMethod]
+    public async Task TryBlock_HandlerPartedByAComment_ComesBackWhole()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await adapter.PasteAsync(".try {\n  nop\n} /* note */ catch [System.Runtime]System.Exception {\n  pop\n  lcd.i4 1\n}\n");
+        await auto.WaitUntilTextAsync("Enter sends 6 lines");
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 4) == "  ...>   lcd.i4 1" && AppTest.CaretLine(s) == 4 && !s.ContainsText("open block"), description: "the whole region is back and no region is open");
+        Assert.AreEqual(0, engine.Status.OpenDepth);
+        await auto.TypeAsync("  ldc.i4 1", ct: ct);
+        await auto.WaitUntilTextAsync("Enter sends 6 lines");
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Count == 11, description: "the corrected region is sent whole");
+        Assert.HasCount(1, transcript.Lines.Where(l => l.Kind == LineKind.Error).ToList(), "only the first attempt was refused");
+        await AppTest.TypeLinesAsync(auto, [".show"], ct);
+        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.Kind != LineKind.Input && l.PlainText.Contains(".try", StringComparison.Ordinal)) == 1, description: ".show lists the region once");
+        Assert.AreEqual(0, engine.Status.OpenDepth);
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

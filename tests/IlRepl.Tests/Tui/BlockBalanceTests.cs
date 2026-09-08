@@ -182,4 +182,25 @@ public sealed class BlockBalanceTests
         Assert.AreEqual(0, BlockBalance.Scan("catcher: nop").Depth);
         Assert.AreEqual(0, BlockBalance.Scan("finallyDone: nop").Depth);
     }
+
+    /// <summary>
+    /// A comment between the brace and the keyword, or before the keyword, does not hide a
+    /// handler header; a keyword inside a comment is only a comment.
+    /// </summary>
+    [TestMethod]
+    public void Scan_HandlerPartedByAComment_IsStillAHandler()
+    {
+        var parted = BlockBalance.Scan(".try {\n  nop\n} /* note */ catch [System.Runtime]System.Exception");
+        Assert.AreEqual(1, parted.Depth);
+        Assert.IsTrue(parted.AwaitingBrace);
+        Assert.AreEqual(1, BlockBalance.Scan(".try {\n  nop\n} /* a */ /* b */ finally {").Depth);
+        Assert.AreEqual(1, BlockBalance.Scan(".try {\n  nop\n/* c */ catch [System.Runtime]System.Exception {").Depth);
+        Assert.AreEqual(1, BlockBalance.Scan("} /* note */ catch [System.Runtime]System.Exception", openDepth: 1).Depth);
+        Assert.IsTrue(BlockBalance.IsComplete(".try {\n  nop\n} /* note */ catch [System.Runtime]System.Exception\n{\n  pop\n}"));
+        Assert.IsFalse(BlockBalance.IsComplete(".try {\n  nop\n} /* note */ catch [System.Runtime]System.Exception"));
+
+        Assert.AreEqual(0, BlockBalance.Scan(".try {\n  nop\n} // catch [System.Runtime]System.Exception").Depth);
+        Assert.AreEqual(0, BlockBalance.Scan("/* .method */ nop").Depth);
+        Assert.AreEqual(0, BlockBalance.Scan("ldstr \"} catch\"").Depth);
+    }
 }

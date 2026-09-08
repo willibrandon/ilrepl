@@ -28,38 +28,36 @@ public static class BlockBalance
         {
             var line = raw.TrimEnd('\r');
             inString = false;
-            var first = true;
-            foreach (var segment in CilLexer.Segments(line, ref comment))
+            var segments = CilLexer.Segments(line, ref comment);
+
+            // A header takes its brace on the same line or the next: the block is open either
+            // way, so the brace is counted now and the next one is its own. A handler header ends
+            // the part before it and opens the next at the same depth, with or without a brace
+            // of its own; without a leading brace the part before it is closed by the keyword
+            // alone. The words of a header may be parted by a comment, so they are read from the
+            // line with its comments and quoted text taken out.
+            var code = Code(line, segments);
+            if (OpensADeclaration(code))
+            {
+                awaiting = true;
+                depth++;
+            }
+            else if (OpensAHandler(code, out var afterBrace))
+            {
+                awaiting = true;
+                if (!afterBrace)
+                {
+                    depth--;
+                }
+
+                depth++;
+            }
+
+            foreach (var segment in segments)
             {
                 switch (segment.Kind)
                 {
                     case CilSegmentKind.Code:
-                        var code = line.AsSpan(segment.Start, segment.End - segment.Start);
-                        if (first && !code.IsWhiteSpace())
-                        {
-                            // A header takes its brace on the same line or the next: the block is
-                            // open either way, so the brace is counted now and the next one is its
-                            // own. A handler header ends the part before it and opens the next at
-                            // the same depth, with or without a brace of its own; without a
-                            // leading brace the part before it is closed by the keyword alone.
-                            first = false;
-                            if (OpensADeclaration(code))
-                            {
-                                awaiting = true;
-                                depth++;
-                            }
-                            else if (OpensAHandler(code, out var afterBrace))
-                            {
-                                awaiting = true;
-                                if (!afterBrace)
-                                {
-                                    depth--;
-                                }
-
-                                depth++;
-                            }
-                        }
-
                         for (var i = segment.Start; i < segment.End; i++)
                         {
                             if (line[i] == '{')
@@ -105,6 +103,25 @@ public static class BlockBalance
     {
         var scan = Scan(text, openDepth, inBlockComment, awaitingBrace);
         return scan.Depth <= 0 && !scan.InBlockComment && !scan.InString;
+    }
+
+    // The line's code with a space where each comment, string, or quoted name was.
+    private static string Code(string line, IReadOnlyList<CilSegment> segments)
+    {
+        var code = new System.Text.StringBuilder(line.Length);
+        foreach (var segment in segments)
+        {
+            if (segment.Kind == CilSegmentKind.Code)
+            {
+                code.Append(line, segment.Start, segment.Length);
+            }
+            else
+            {
+                code.Append(' ');
+            }
+        }
+
+        return code.ToString();
     }
 
     private static bool OpensADeclaration(ReadOnlySpan<char> code)
