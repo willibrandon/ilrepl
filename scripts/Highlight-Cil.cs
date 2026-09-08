@@ -11,13 +11,15 @@
 // spans the terminal drew. Otherwise the input lines are tokenized and the output lines are
 // styled by the rules the engine styles its own by, and the block is named so the drift can be
 // seen. A block showing the editor's own rows is styled that way without a replay. The result
-// goes to docs/src/generated/cil-tokens.json, which the site reads at build. The engine needs
-// the JIT, which a file-based app's default of publishing native would take away.
+// goes to docs/src/generated/cil-tokens.json, with the palette for a dark ground and the one for
+// a light ground, which the site reads at build. The engine needs the JIT, which a file-based
+// app's default of publishing native would take away.
 
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Hex1b.Theming;
 using IlRepl.Protocol;
 using IlRepl.Repl;
 using IlRepl.Tui;
@@ -84,13 +86,19 @@ using (var json = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = 
 {
     json.WriteStartObject();
     json.WriteStartObject("palette");
-    foreach (var style in Enum.GetValues<SpanStyle>())
+    foreach (var (ground, colour) in new (string, Func<SpanStyle, Hex1bColor>)[] { ("dark", SpanPalette.Color), ("light", SpanPalette.LightColor) })
     {
-        var color = SpanPalette.Color(style);
-        if (!color.IsDefault)
+        json.WriteStartObject(ground);
+        foreach (var style in Enum.GetValues<SpanStyle>())
         {
-            json.WriteString(style.ToString(), $"#{color.R:x2}{color.G:x2}{color.B:x2}");
+            var color = colour(style);
+            if (!color.IsDefault)
+            {
+                json.WriteString(style.ToString(), $"#{color.R:x2}{color.G:x2}{color.B:x2}");
+            }
         }
+
+        json.WriteEndObject();
     }
 
     json.WriteEndObject();

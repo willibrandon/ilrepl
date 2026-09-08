@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace IlRepl.Docs.Tests;
 
@@ -64,8 +63,9 @@ public sealed class HighlightTests
     }
 
     /// <summary>
-    /// The built page carries the palette's colours on the tokens: the directive, the opcode,
-    /// the prompt, and the top of the stack on the methods page wear the terminal's colours.
+    /// The built page carries the palette's colours on the tokens, the terminal's own for the
+    /// dark theme and the light ground's for the light one: the directive, the opcode, the
+    /// prompt, and the top of the stack on the methods page.
     /// </summary>
     [TestMethod]
     public void MethodsPage_IsColouredByThePalette()
@@ -75,11 +75,11 @@ public sealed class HighlightTests
         var html = File.ReadAllText(page);
         using var map = JsonDocument.Parse(File.ReadAllText(s_map));
         var palette = map.RootElement.GetProperty("palette");
-        string Colour(string style) => palette.GetProperty(style).GetString()!;
+        string Span(string style, string text) => $"<span style=\"--0:{palette.GetProperty("dark").GetProperty(style).GetString()};--1:{palette.GetProperty("light").GetProperty(style).GetString()}\">{text}</span>";
 
-        Assert.IsTrue(Regex.IsMatch(html, $"""<span style="--0:{Colour("Directive")};--1:{Colour("Directive")}">\.method</span>"""), "the directive should wear the directive colour");
-        Assert.IsTrue(Regex.IsMatch(html, $"""<span style="--0:{Colour("Opcode")};--1:{Colour("Opcode")}">ldarg</span>"""), "the opcode should wear the opcode colour");
-        Assert.IsTrue(Regex.IsMatch(html, $"""<span style="--0:{Colour("Prompt")};--1:{Colour("Prompt")}">il\[1\]&gt; </span>"""), "the prompt should wear the prompt colour");
-        Assert.IsTrue(Regex.IsMatch(html, $"""<span style="--0:{Colour("TopType")};--1:{Colour("TopType")}">int32</span>"""), "the top of the stack should wear the top-type colour");
+        Assert.Contains(Span("Directive", ".method"), html, "the directive should wear the directive colours");
+        Assert.Contains(Span("Opcode", "ldarg"), html, "the opcode should wear the opcode colours");
+        Assert.Contains(Span("Prompt", "il[1]&gt; "), html, "the prompt should wear the prompt colours");
+        Assert.Contains(Span("TopType", "int32"), html, "the top of the stack should wear the top-type colours");
     }
 }

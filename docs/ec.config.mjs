@@ -1,6 +1,7 @@
 // Code blocks tagged cil or ilrepl are coloured with the terminal's own tokenizer and palette:
 // scripts/Highlight-Cil.cs writes their tokens to src/generated/cil-tokens.json, and this plugin
-// lays those colours on the rendered lines. Shiki never sees the two languages.
+// lays those colours on the rendered lines, the terminal's own on the dark theme and the same
+// roles in the palette for a light ground on the light one. Shiki never sees the two languages.
 import { definePlugin, InlineStyleAnnotation } from '@expressive-code/core';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -18,17 +19,21 @@ const key = (code) => {
 const terminalColours = definePlugin({
   name: 'cil-terminal',
   hooks: {
-    postprocessAnalyzedCode: ({ codeBlock }) => {
+    postprocessAnalyzedCode: ({ codeBlock, styleVariants }) => {
       if (!terminalLanguages.has(codeBlock.language)) return;
       const block = map.blocks[key(codeBlock.code)];
       if (!block) return;
       codeBlock.getLines().forEach((line, i) => {
         for (const [start, length, style] of block.lines[i] ?? []) {
-          line.addAnnotation(new InlineStyleAnnotation({
-            inlineRange: { columnStart: start, columnEnd: start + length },
-            color: map.palette[style],
-            underline: style === 'Error',
-          }));
+          styleVariants.forEach((variant, styleVariantIndex) => {
+            const palette = variant.theme.type === 'light' ? map.palette.light : map.palette.dark;
+            line.addAnnotation(new InlineStyleAnnotation({
+              inlineRange: { columnStart: start, columnEnd: start + length },
+              color: palette[style],
+              underline: style === 'Error',
+              styleVariantIndex,
+            }));
+          });
         }
       });
     },
