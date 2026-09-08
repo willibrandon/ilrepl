@@ -431,6 +431,43 @@ public sealed class IlReplAppViewportTests
     }
 
     /// <summary>
+    /// The scrolled left edge is a character index chosen for the caret's line; on another line
+    /// it may fall inside an emoji. Each row starts on a whole character of its own, and a click
+    /// on that row lands on the line it shows.
+    /// </summary>
+    [TestMethod]
+    public async Task Paste_EmojiOnAnotherLine_StartsOnWholeCharacters()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(80, 24);
+        PromptState? prompt = null;
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, onPrompt: p => prompt = p).WithPresentation(adapter).WithMouse().Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        // The second line is one column wider than the text area, so the left edge moves to
+        // character index one, which on the first line is inside the emoji.
+        await adapter.PasteAsync("😀 nop\n" + new string('x', 73));
+        await auto.WaitUntilAsync(s => AppTest.CaretLine(s) == 1 && AppTest.PromptRow(s, 0).StartsWith("il[1]> 😀 nop", StringComparison.Ordinal) && s.GetCell(7, AppTest.PromptTop(s)).Character == "😀", description: "the first row starts on the whole emoji while the caret's line is scrolled");
+        Assert.DoesNotContain("\uFFFD", terminal.CreateSnapshot().GetText(), "no replacement glyph");
+
+        int top;
+        using (var before = terminal.CreateSnapshot())
+        {
+            top = AppTest.PromptTop(before);
+        }
+
+        await auto.ClickAtAsync(7, top, ct: ct);
+        await auto.WaitUntilAsync(_ => prompt!.CaretLine == 1 && prompt.Editor.Cursor.Position.Value <= 2, description: "a click on the emoji's row puts the caret on that line, at the emoji");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
     /// A line of decomposed accents is many characters but few cells: it fits, so the whole line
     /// stays in view with the opcode at the left and the caret after the quote.
     /// </summary>

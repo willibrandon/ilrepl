@@ -140,9 +140,32 @@ public sealed class PromptView : IEditorViewRenderer
             context.WriteClipped(viewport.X, viewport.Y + row, text + reset);
         }
 
-        var decorations = decorationProviders is { Count: > 0 } && Offsets.Left > 0 ? [new ScrolledDecorations(decorationProviders, Offsets.Left)] : decorationProviders;
-        _inner.Render(context, state, new Rect(viewport.X + gutter, viewport.Y, columns, rows), Offsets.Top, Offsets.Left, isFocused, pendingNibble, decorations, inlineHints, wordWrap: false, foldingRegions: null);
+        // The left offset is a character index the caret's line was aligned for; on another
+        // line it may fall inside a character. Each row is drawn on its own, from the start of
+        // the text element that holds the index on that line, so no row begins with half a
+        // character.
+        for (var row = 0; row < rows; row++)
+        {
+            var line = Offsets.Top + row;
+            if (line > document.LineCount)
+            {
+                break;
+            }
+
+            var left = RowLeft(document, line);
+            var decorations = decorationProviders is { Count: > 0 } && left > 0 ? [new ScrolledDecorations(decorationProviders, left)] : decorationProviders;
+            _inner.Render(context, state, new Rect(viewport.X + gutter, viewport.Y + row, columns, 1), line, left, isFocused, pendingNibble, decorations, inlineHints, wordWrap: false, foldingRegions: null);
+        }
+
         DrawPrediction(context, viewport, gutter, columns, rows, document, caret);
+    }
+
+    // Where a line's visible text starts: the left offset, moved back to the start of the
+    // text element that holds it on that line.
+    private int RowLeft(IHex1bDocument document, int line)
+    {
+        var text = document.GetLineText(line);
+        return ElementStart(text, Math.Clamp(Offsets.Left, 0, text.Length));
     }
 
     /// <summary>
@@ -192,7 +215,8 @@ public sealed class PromptView : IEditorViewRenderer
             return line > document.LineCount ? new DocumentOffset(document.Length) : document.PositionToOffset(new DocumentPosition(Math.Max(1, line), 1));
         }
 
-        return _inner.HitTest(localX - gutter, localY, state, Math.Max(1, viewportColumns - gutter), viewportLines, Offsets.Top, Offsets.Left);
+        var hit = Math.Clamp(Offsets.Top + localY, 1, Math.Max(1, document.LineCount));
+        return _inner.HitTest(localX - gutter, 0, state, Math.Max(1, viewportColumns - gutter), 1, hit, RowLeft(document, hit));
     }
 
     /// <summary>
