@@ -283,7 +283,7 @@ public sealed partial class Session
     /// <see cref="Rollback"/> if a line of it is refused.
     /// </summary>
     /// <returns>The mark.</returns>
-    public SessionMark Mark() => new(Generation, _bodyLines.Count, _declarationLines.Count, _open?.BodyLines.Count, _openType?.Outermost.Lines.Count, InBlockComment);
+    public SessionMark Mark() => new(Generation, _bodyLines.Count, _declarationLines.Count, _open?.BodyLines.Count, _openType?.Outermost.Lines.Count, InBlockComment, BraceSeen: _open?.State.BraceSeen ?? true);
 
     /// <summary>
     /// Withdraws every line accepted since the mark: a method or class opened since is abandoned,
@@ -322,10 +322,17 @@ public sealed partial class Session
 
         if (mark.OpenMethodLines is int methodLines)
         {
-            if (_open is { } open && open.BodyLines.Count > methodLines)
+            // The brace is not a body line, so a mark taken while the header still waited for
+            // it is told apart by the flag: the body goes back to the mark's lines and the
+            // method to waiting for its brace when that is where it stood.
+            if (_open is { } open && (open.BodyLines.Count > methodLines || open.State.BraceSeen != mark.BraceSeen))
             {
-                open.BodyLines.RemoveRange(methodLines, open.BodyLines.Count - methodLines);
-                open.State = ReplayOpenBody(open);
+                if (open.BodyLines.Count > methodLines)
+                {
+                    open.BodyLines.RemoveRange(methodLines, open.BodyLines.Count - methodLines);
+                }
+
+                open.State = ReplayOpenBody(open, mark.BraceSeen);
             }
         }
         else if (_open is not null)
@@ -827,12 +834,12 @@ public sealed partial class Session
         return state;
     }
 
-    private CellState ReplayOpenBody(OpenMethodBlock open) => ReplayBody(open.Signature, open.BodyLines, open.Signatures);
+    private CellState ReplayOpenBody(OpenMethodBlock open, bool? braceSeen = null) => ReplayBody(open.Signature, open.BodyLines, open.Signatures, braceSeen ?? open.State.BraceSeen);
 
-    private CellState ReplayBody(MethodSignature signature, IReadOnlyList<string> lines, IReadOnlyList<MethodSignature> table)
+    private CellState ReplayBody(MethodSignature signature, IReadOnlyList<string> lines, IReadOnlyList<MethodSignature> table, bool braceSeen = true)
     {
-        // The opening brace is never stored, so a replay starts as if it had been seen.
-        var state = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen: true, _typeTable, null);
+        // The opening brace is never stored: a replay starts with it seen unless told otherwise.
+        var state = new CellState(Resolver, GenericContext.Empty, table, signature, braceSeen, _typeTable, null);
         foreach (var line in lines)
         {
             state.Apply(NormalizedLine.FromText(line));

@@ -300,4 +300,57 @@ public sealed class SessionMarkTests
         session.AddLine(".method int32 F() {");
         Assert.AreEqual(1, session.OpenDepth);
     }
+
+    /// <summary>
+    /// A mark taken while a method header still waits for its brace puts the method back to
+    /// waiting: after the rollback the depth is zero again and the brace is accepted once.
+    /// </summary>
+    [TestMethod]
+    public void Rollback_HeaderWithoutBrace_RestoresTheWaitingBrace()
+    {
+        var session = new Session();
+        session.AddLine(".method int32 One()");
+        var mark = session.Mark();
+        Assert.IsFalse(mark.BraceSeen);
+        Assert.AreEqual(0, session.OpenDepth);
+        session.AddLine("{");
+        session.AddLine("ldc.i4 1");
+        Assert.AreEqual(1, session.OpenDepth);
+        Assert.IsTrue(session.Rollback(mark));
+        Assert.AreEqual(0, session.OpenDepth, "the brace is waited for again");
+        Assert.IsNotNull(session.OpenMethod);
+        session.AddLine("{");
+        Assert.AreEqual(1, session.OpenDepth);
+        session.AddLine("ldc.i4 1");
+        session.AddLine("ret");
+        session.AddLine("}");
+        Assert.IsNull(session.OpenMethod);
+        Assert.HasCount(1, session.Methods);
+
+        // The brace alone, with no body line after it, is taken back the same way.
+        session.AddLine(".method int32 Two()");
+        var waiting = session.Mark();
+        session.AddLine("{");
+        Assert.AreEqual(1, session.OpenDepth);
+        Assert.IsTrue(session.Rollback(waiting));
+        Assert.AreEqual(0, session.OpenDepth);
+        session.AddLine("{");
+        session.AddLine("ldc.i4 2");
+        session.AddLine("ret");
+        session.AddLine("}");
+        Assert.HasCount(2, session.Methods);
+
+        // A mark taken after the brace keeps it.
+        session.AddLine(".method int32 Three()");
+        session.AddLine("{");
+        var seen = session.Mark();
+        Assert.IsTrue(seen.BraceSeen);
+        session.AddLine("ldc.i4 3");
+        Assert.IsTrue(session.Rollback(seen));
+        Assert.AreEqual(1, session.OpenDepth, "the brace stays seen");
+        session.AddLine("ldc.i4 3");
+        session.AddLine("ret");
+        session.AddLine("}");
+        Assert.HasCount(3, session.Methods);
+    }
 }

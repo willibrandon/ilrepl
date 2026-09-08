@@ -90,11 +90,12 @@ public sealed class ProtocolJsonTests
     [TestMethod]
     public void SessionMark_RoundTrips()
     {
-        var mark = new SessionMark(7, 3, 1, null, 4, true, EchoStack: false, ShowTiming: true);
+        var mark = new SessionMark(7, 3, 1, 0, 4, true, EchoStack: false, ShowTiming: true, BraceSeen: false);
         var json = JsonSerializer.Serialize(mark, ProtocolJsonContext.Default.SessionMark);
         Assert.Contains("\"generation\":7", json);
         Assert.Contains("\"openTypeLines\":4", json);
-        Assert.DoesNotContain("openMethodLines", json);
+        Assert.Contains("\"openMethodLines\":0", json);
+        Assert.Contains("\"braceSeen\":false", json);
         Assert.Contains("\"echoStack\":false", json);
         Assert.Contains("\"showTiming\":true", json);
         Assert.AreEqual(mark, JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.SessionMark));
