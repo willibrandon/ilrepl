@@ -13,6 +13,10 @@
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Protocol/Fixtures/highlight/*.il" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- ilasm and ildasm for the platform the tests run on: the ILAsm the session renders is assembled and run, and disassembly listings are checked against ildasm. -->
   <PropertyGroup>
     <IlasmRid>$(NETCoreSdkRuntimeIdentifier)</IlasmRid>

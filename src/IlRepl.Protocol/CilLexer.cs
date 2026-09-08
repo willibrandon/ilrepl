@@ -125,6 +125,29 @@ public static class CilLexer
     }
 
     /// <summary>
+    /// Removes the comments from a line and says what is left: text to parse, a blank line outside
+    /// any comment, or a comment and nothing else (a blank line inside an open <c>/* */</c> counts
+    /// as comment). The engine routes a line by this, and the editor splits a buffer by it, so the
+    /// two never disagree about which blank lines run the cell.
+    /// </summary>
+    /// <param name="raw">The line as typed.</param>
+    /// <param name="inBlockComment">Whether a <c>/*</c> from an earlier line is still open; updated for the next line.</param>
+    /// <param name="text">The line without its comments, trimmed.</param>
+    /// <returns>What the line amounts to.</returns>
+    public static SourceLineKind Classify(string raw, ref bool inBlockComment, out string text)
+    {
+        ArgumentNullException.ThrowIfNull(raw);
+        var before = inBlockComment;
+        text = StripComments(raw, ref inBlockComment).Trim();
+        if (text.Length > 0)
+        {
+            return SourceLineKind.Text;
+        }
+
+        return !before && raw.Trim().Length == 0 ? SourceLineKind.Blank : SourceLineKind.Comment;
+    }
+
+    /// <summary>
     /// Finds where a double-quoted string ends: the offset just past its closing quote, or the end
     /// of the line when it never closes. A backslash escapes the character after it.
     /// </summary>

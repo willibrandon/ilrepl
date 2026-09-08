@@ -17,6 +17,8 @@ namespace IlRepl.Protocol;
 [JsonSerializable(typeof(CompletionItem))]
 [JsonSerializable(typeof(SessionStatus))]
 [JsonSerializable(typeof(SessionMark))]
+[JsonSerializable(typeof(CilVocabulary))]
+[JsonSerializable(typeof(CilOperandKind))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(bool))]
 [JsonSerializable(typeof(int))]

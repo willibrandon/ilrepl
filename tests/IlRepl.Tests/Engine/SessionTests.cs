@@ -1,4 +1,5 @@
 using IlRepl.Engine;
+using IlRepl.Protocol;
 
 namespace IlRepl.Tests.Engine;
 

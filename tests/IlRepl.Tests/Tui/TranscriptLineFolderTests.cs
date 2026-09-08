@@ -78,4 +78,27 @@ public sealed class TranscriptLineFolderTests
     private static string Text(TranscriptLine line) => string.Concat(line.Spans.Select(s => s.Text));
 
     private static string Join(IReadOnlyList<TranscriptSpan> row) => string.Concat(row.Select(s => s.Text));
+
+    /// <summary>
+    /// An echoed line folds under its input at the prompt's width, however many runs the
+    /// tokenizer cut the input into.
+    /// </summary>
+    [TestMethod]
+    public void EchoLine_FoldsUnderTheInput()
+    {
+        var core = new ReplCore();
+        core.Handle("call int32 [System.Runtime]System.Math::Max(int32, int32)");
+        var echo = core.Transcript.Lines[0];
+        Assert.IsGreaterThan(3, echo.Spans.Count);
+        var rows = TranscriptLineFolder.Fold(echo.Spans, 40);
+        Assert.IsGreaterThanOrEqualTo(2, rows.Count);
+        Assert.StartsWith("il[1]> call int32", Join(rows[0]));
+        foreach (var row in rows.Skip(1))
+        {
+            Assert.StartsWith("       ", Join(row));
+            Assert.AreNotEqual(' ', Join(row)[7]);
+        }
+
+        Assert.AreEqual(echo.PlainText.Replace(" ", "", StringComparison.Ordinal), string.Concat(rows.Select(Join)).Replace(" ", "", StringComparison.Ordinal));
+    }
 }

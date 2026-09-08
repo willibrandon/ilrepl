@@ -1,4 +1,4 @@
-namespace IlRepl.Engine;
+namespace IlRepl.Protocol;
 
 /// <summary>
 /// What a line of input amounts to once its comments are gone.

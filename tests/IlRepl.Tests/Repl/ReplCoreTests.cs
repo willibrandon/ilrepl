@@ -283,4 +283,87 @@ public sealed class ReplCoreTests
         Assert.AreEqual("il[1]>   ldc.i4 1 // one", core.Transcript.Lines[0].PlainText);
         Assert.AreEqual("ldc.i4 1", core.Session.BodyLines[0]);
     }
+
+    /// <summary>
+    /// The echo is lit by the tokenizer after the prompt, and its text is the line as typed.
+    /// </summary>
+    [TestMethod]
+    public void Handle_EchoLine_IsTokenized()
+    {
+        var core = new ReplCore();
+        core.Handle("ldc.i4 6");
+        var echo = core.Transcript.Lines[0];
+        Assert.AreEqual(LineKind.Input, echo.Kind);
+        Assert.AreEqual(SpanStyle.Prompt, echo.Spans[0].Style);
+        Assert.AreEqual(new TranscriptSpan("ldc.i4", SpanStyle.Opcode), echo.Spans[1]);
+        Assert.AreEqual(new TranscriptSpan(" ", SpanStyle.Input), echo.Spans[2]);
+        Assert.AreEqual(new TranscriptSpan("6", SpanStyle.Number), echo.Spans[3]);
+        Assert.AreEqual("il[1]> ldc.i4 6", echo.PlainText);
+    }
+
+    /// <summary>
+    /// A listing keeps its columns: offset, instruction padded to a fixed width, stack.
+    /// </summary>
+    [TestMethod]
+    public void Handle_Show_KeepsColumnsAndColoursMembers()
+    {
+        var core = new ReplCore();
+        core.Handle("ldc.i4 -3");
+        core.Handle("call int32 Math::Abs(int32)");
+        core.Handle(".show");
+        var rows = core.Transcript.Lines.Where(l => l.Kind == LineKind.Listing).ToList();
+        Assert.AreEqual("  000  ldc.i4 -3                                [int32]", rows[0].PlainText);
+        Assert.AreEqual(47, rows[1].PlainText.IndexOf(" [int32]", StringComparison.Ordinal));
+        Assert.Contains(new TranscriptSpan("Abs", SpanStyle.Member), rows[1].Spans);
+        Assert.AreEqual(SpanStyle.Dim, rows[1].Spans[0].Style);
+        Assert.AreEqual(SpanStyle.Dim, rows[1].Spans[^1].Style);
+    }
+
+    /// <summary>
+    /// The block rows of a listing are lit like the block lines typed at the prompt.
+    /// </summary>
+    [TestMethod]
+    public void Handle_Show_BlockRowsAreTokenized()
+    {
+        var core = new ReplCore();
+        core.Handle(".try {");
+        core.Handle("nop");
+        core.Handle("leave END");
+        core.Handle("} catch [System.Runtime]System.Exception {");
+        core.Handle("pop");
+        core.Handle("leave END");
+        core.Handle("}");
+        core.Handle("END: nop");
+        core.Handle(".show");
+        var rows = core.Transcript.Lines.Where(l => l.Kind == LineKind.Listing).ToList();
+        var tryRow = rows.Single(r => r.PlainText.Contains(".try {", StringComparison.Ordinal));
+        Assert.Contains(new TranscriptSpan(".try", SpanStyle.Directive), tryRow.Spans);
+        Assert.Contains(new TranscriptSpan("{", SpanStyle.Punctuation), tryRow.Spans);
+        var catchRow = rows.Single(r => r.PlainText.Contains("catch", StringComparison.Ordinal));
+        Assert.Contains(new TranscriptSpan("catch", SpanStyle.Keyword), catchRow.Spans);
+        Assert.Contains(new TranscriptSpan("Exception", SpanStyle.Type), catchRow.Spans);
+        Assert.Contains(new TranscriptSpan("}", SpanStyle.Punctuation), catchRow.Spans);
+        Assert.AreEqual("} catch Exception {", catchRow.PlainText.Trim());
+        var label = rows.Single(r => r.PlainText == "END:");
+        Assert.AreEqual(SpanStyle.Label, label.Spans[0].Style);
+    }
+
+    /// <summary>
+    /// Nothing the REPL renders as ILAsm is an error token.
+    /// </summary>
+    [TestMethod]
+    public void Handle_Il_HasNoErrorSpan()
+    {
+        var core = new ReplCore();
+        foreach (var line in new[] { ".locals init (int32 i)", ".method int32 F(int32 n) {", ".locals init (int32 r)", ".try {", "ldarg n", "stloc r", "leave END", "} catch [System.Runtime]System.Exception {", "pop", "ldc.i4 0", "stloc r", "leave END", "}", "END: ldloc r", "ret", "}", "ldc.i4 1", "stloc i", ".il" })
+        {
+            Assert.IsTrue(core.Handle(line).Succeeded, line);
+        }
+
+        var listing = core.Transcript.Lines.Where(l => l.Kind == LineKind.Listing).ToList();
+        Assert.IsGreaterThan(10, listing.Count);
+        Assert.Contains(l => l.Spans.Contains(new TranscriptSpan(".assembly", SpanStyle.Directive)), listing);
+        Assert.Contains(l => l.Spans.Contains(new TranscriptSpan("managed", SpanStyle.Keyword)), listing);
+        Assert.DoesNotContain(l => l.Spans.Any(s => s.Style == SpanStyle.Error), listing, string.Join("\n", listing.Where(l => l.Spans.Any(s => s.Style == SpanStyle.Error)).Select(l => l.PlainText)));
+    }
 }

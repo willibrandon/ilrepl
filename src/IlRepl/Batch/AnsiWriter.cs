@@ -65,6 +65,10 @@ public static class AnsiWriter
         SpanStyle.Error => "31",
         SpanStyle.Command => "34",
         SpanStyle.Heading => "1",
+        SpanStyle.Directive => "34",
+        SpanStyle.Member => "34",
+        SpanStyle.Comment => "2",
+        SpanStyle.Punctuation => "2",
         _ => "",
     };
 }

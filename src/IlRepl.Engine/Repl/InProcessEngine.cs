@@ -32,6 +32,9 @@ public sealed class InProcessEngine : IReplEngine
     public IReadOnlyList<CompletionItem> Catalog => Completer.Catalog;
 
     /// <inheritdoc />
+    public CilVocabulary Vocabulary => CilVocabularyBuilder.Vocabulary;
+
+    /// <inheritdoc />
     public SessionStatus Status { get; private set; }
 
     /// <inheritdoc />

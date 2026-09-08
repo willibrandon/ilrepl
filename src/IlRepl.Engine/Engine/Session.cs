@@ -169,11 +169,8 @@ public sealed partial class Session
         ArgumentNullException.ThrowIfNull(raw);
         var before = InBlockComment;
         var state = before;
-        var text = CilLexer.StripComments(raw, ref state).Trim();
+        var kind = CilLexer.Classify(raw, ref state, out var text);
         InBlockComment = state;
-        var kind = text.Length > 0 ? SourceLineKind.Text
-            : !before && raw.Trim().Length == 0 ? SourceLineKind.Blank
-            : SourceLineKind.Comment;
         return new NormalizedLine(raw, text, kind, before);
     }
 

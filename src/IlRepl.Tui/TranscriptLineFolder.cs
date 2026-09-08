@@ -106,8 +106,12 @@ public static class TranscriptLineFolder
             return 0;
         }
 
-        // The indent is dropped when it would leave too little room for the text that follows.
-        var indent = runs.Take(runs.Count - 1).Sum(r => DisplayWidth.GetStringWidth(r.Text));
+        // An echoed line folds under its input, whatever the input's runs are; anything else folds
+        // under its last run. The indent is dropped when it would leave too little room for the
+        // text that follows.
+        var indent = runs[0].Style == SpanStyle.Prompt
+            ? DisplayWidth.GetStringWidth(runs[0].Text)
+            : runs.Take(runs.Count - 1).Sum(r => DisplayWidth.GetStringWidth(r.Text));
         return width - indent >= MinimumFoldWidth ? indent : 0;
     }
 

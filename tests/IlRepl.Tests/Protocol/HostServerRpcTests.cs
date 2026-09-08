@@ -41,6 +41,12 @@ public sealed class HostServerRpcTests
             Assert.IsNull(hello.Status.OpenMethod);
             Assert.AreEqual(0, hello.Status.Methods);
             Assert.Contains(i => i.Name == ".method", hello.Catalog);
+            Assert.IsTrue(hello.Vocabulary.Opcodes.ContainsKey("ldc.i4"));
+            Assert.AreEqual(CilOperandKind.Integer, hello.Vocabulary.Opcodes["ldc.i4"]);
+            Assert.Contains(".show", hello.Vocabulary.Commands);
+            Assert.Contains(".locals", hello.Vocabulary.Directives);
+            Assert.Contains("instance", hello.Vocabulary.Keywords);
+            Assert.Contains("int32", hello.Vocabulary.Primitives);
         }
     }
 
@@ -81,7 +87,7 @@ public sealed class HostServerRpcTests
             var second = await proxy.HandleAsync("ldc.i4 2", TestContext.CancellationToken);
             Assert.HasCount(2, first.Lines);
             Assert.HasCount(2, second.Lines);
-            Assert.AreEqual("ldc.i4 2", second.Lines[0].Spans[^1].Text);
+            Assert.AreEqual("il[1]> ldc.i4 2", second.Lines[0].PlainText);
         }
     }
 

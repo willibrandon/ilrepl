@@ -25,7 +25,7 @@ public sealed class HostServer : IReplHost
 
     /// <inheritdoc />
     public Task<HostHello> HelloAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(new HostHello(Completer.Catalog, _core.Status));
+        Task.FromResult(new HostHello(Completer.Catalog, CilVocabularyBuilder.Vocabulary, _core.Status));
 
     /// <inheritdoc />
     public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)

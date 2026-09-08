@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
 

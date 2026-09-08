@@ -13,6 +13,11 @@ public interface IReplEngine : IAsyncDisposable
     IReadOnlyList<CompletionItem> Catalog { get; }
 
     /// <summary>
+    /// The words the tokenizer colours with: the engine's opcodes, directives, commands, keywords, and primitives.
+    /// </summary>
+    CilVocabulary Vocabulary { get; }
+
+    /// <summary>
     /// The session status after the last handled line.
     /// </summary>
     SessionStatus Status { get; }

@@ -164,4 +164,26 @@ public sealed class CilLexerTests
         Assert.AreEqual(7, CilLexer.EndOfQuotedName("x 'a\\'' y", 2));
         Assert.AreEqual(4, CilLexer.EndOfString("x \"a", 2));
     }
+
+    /// <summary>
+    /// A blank line outside a comment is blank; a comment alone, or a blank line inside an open
+    /// comment, is a comment; anything else is text with its comments removed.
+    /// </summary>
+    [TestMethod]
+    public void Classify_Kinds()
+    {
+        var open = false;
+        Assert.AreEqual(SourceLineKind.Blank, CilLexer.Classify("   ", ref open, out _));
+        Assert.AreEqual(SourceLineKind.Comment, CilLexer.Classify("// note", ref open, out _));
+        Assert.AreEqual(SourceLineKind.Comment, CilLexer.Classify("/* a */", ref open, out _));
+        Assert.AreEqual(SourceLineKind.Text, CilLexer.Classify("  nop // note", ref open, out var text));
+        Assert.AreEqual("nop", text);
+        Assert.AreEqual(SourceLineKind.Comment, CilLexer.Classify("/* open", ref open, out _));
+        Assert.IsTrue(open);
+        Assert.AreEqual(SourceLineKind.Comment, CilLexer.Classify("", ref open, out _));
+        Assert.AreEqual(SourceLineKind.Comment, CilLexer.Classify(".reset", ref open, out _));
+        Assert.AreEqual(SourceLineKind.Text, CilLexer.Classify("*/ ret", ref open, out text));
+        Assert.AreEqual("ret", text);
+        Assert.IsFalse(open);
+    }
 }

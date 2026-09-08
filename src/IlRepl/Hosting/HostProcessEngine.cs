@@ -24,11 +24,15 @@ public sealed class HostProcessEngine : IReplEngine
         _host = host;
         _stderr = stderr;
         Catalog = hello.Catalog;
+        Vocabulary = hello.Vocabulary;
         Status = hello.Status;
     }
 
     /// <inheritdoc />
     public IReadOnlyList<CompletionItem> Catalog { get; }
+
+    /// <inheritdoc />
+    public CilVocabulary Vocabulary { get; }
 
     /// <inheritdoc />
     public SessionStatus Status { get; private set; }

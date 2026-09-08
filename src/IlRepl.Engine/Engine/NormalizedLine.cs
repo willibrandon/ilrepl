@@ -1,3 +1,5 @@
+using IlRepl.Protocol;
+
 namespace IlRepl.Engine;
 
 /// <summary>

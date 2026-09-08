@@ -243,9 +243,9 @@ public sealed class ReplCoreDisassembleTests
                     continue;
                 }
 
-                // An instruction line is three spans: the offset, the text, and the stack column.
-                var offsetColumn = line.Spans.Count == 3 && System.Text.RegularExpressions.Regex.IsMatch(line.Spans[0].Text, "^  [0-9a-f]{4} $");
-                pasted.Add(offsetColumn ? line.Spans[1].Text.Trim() : text);
+                // An instruction line is the offset, the tokenized text, and the stack column.
+                var offsetColumn = line.Spans.Count >= 3 && System.Text.RegularExpressions.Regex.IsMatch(line.Spans[0].Text, "^  [0-9a-f]{4} $");
+                pasted.Add(offsetColumn ? string.Concat(line.Spans.Skip(1).Take(line.Spans.Count - 2).Select(s => s.Text)).Trim() : text);
             }
 
             Assert.Contains(l => l.StartsWith(".locals init", StringComparison.Ordinal) || name == "Fib", pasted, "the emitter forces zeroed locals, which the listing shows");
@@ -327,8 +327,8 @@ public sealed class ReplCoreDisassembleTests
                 continue;
             }
 
-            var offsetColumn = line.Spans.Count == 3 && System.Text.RegularExpressions.Regex.IsMatch(line.Spans[0].Text, "^  [0-9a-f]{4} $");
-            pasted.Add(offsetColumn ? line.Spans[1].Text.Trim() : text);
+            var offsetColumn = line.Spans.Count >= 3 && System.Text.RegularExpressions.Regex.IsMatch(line.Spans[0].Text, "^  [0-9a-f]{4} $");
+            pasted.Add(offsetColumn ? string.Concat(line.Spans.Skip(1).Take(line.Spans.Count - 2).Select(s => s.Text)).Trim() : text);
         }
 
         return pasted;
