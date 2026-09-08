@@ -191,6 +191,25 @@
     // Selection and copy are the terminal's own: the app never takes the mouse, so a drag
     // selects here, and Ctrl+C, Cmd+C, or y copies the selection instead of sending the key,
     // y being the desktop's yank.
+    // Copies text with the copy command inside the key's own gesture, from a scratch textarea
+    // holding it, since the command copies a selection in the page and the terminal's is not one.
+    const copyNow = (text) => {
+      const scratch = document.createElement('textarea');
+      scratch.value = text;
+      scratch.setAttribute('readonly', '');
+      scratch.style.position = 'fixed';
+      scratch.style.top = '0';
+      scratch.style.opacity = '0';
+      document.body.appendChild(scratch);
+      scratch.focus();
+      scratch.select();
+      let copied = false;
+      try { copied = document.execCommand('copy'); } catch { copied = false; }
+      document.body.removeChild(scratch);
+      term.focus();
+      return copied;
+    };
+
     // A key that copied is swallowed whole: its keypress and the text it would put in the
     // helper textarea as well, or the y would reach the prompt too.
     let swallowed = null;
@@ -204,10 +223,19 @@
       if (e.type !== 'keydown' || e.altKey || !term.hasSelection()) return true;
       const copies = ((e.ctrlKey || e.metaKey) && key === 'c') || (!e.ctrlKey && !e.metaKey && key === 'y');
       if (!copies) return true;
+      // The copy command needs no permission and works on plain http; the clipboard API is the
+      // second try. The selection is cleared only once a copy has landed, so a copy that fails
+      // leaves it there to try again.
       const text = term.getSelection();
-      window.ilreplLastCopy = text;
-      if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
-      term.clearSelection();
+      if (copyNow(text)) {
+        window.ilreplLastCopy = text;
+        term.clearSelection();
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+          window.ilreplLastCopy = text;
+          term.clearSelection();
+        }).catch(() => {});
+      }
       swallowed = key;
       e.preventDefault();
       return false;

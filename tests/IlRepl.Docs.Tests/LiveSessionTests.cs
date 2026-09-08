@@ -208,6 +208,56 @@ public sealed class LiveSessionTests
     }
 
     /// <summary>
+    /// Without the clipboard API, as on plain http or with permission denied, a copy still lands
+    /// through the terminal's own copy handler, and a selection is cleared only once it has.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task Copy_WithoutClipboardApi_StillCopies(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        // The page script is served with the clipboard API taken away ahead of it.
+        await context.RouteAsync("**/try/main.js", async route =>
+        {
+            var response = await route.FetchAsync();
+            var body = await response.TextAsync();
+            await route.FulfillAsync(new RouteFulfillOptions
+            {
+                Response = response,
+                Body = "Object.defineProperty(navigator, 'clipboard', { value: undefined });\n" + body,
+                ContentType = "text/javascript",
+            });
+        });
+        var page = await OpenSessionAsync(context);
+        await TypeLineAsync(page, "ldc.i4 6");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("┊ [int32]", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+
+        var screen = await page.Locator(".xterm-screen").BoundingBoxAsync();
+        Assert.IsNotNull(screen);
+        var size = await page.EvaluateAsync<int[]>("() => [window.ilreplTerminal.cols, window.ilreplTerminal.rows]");
+        var cellWidth = screen.Width / size[0];
+        var cellHeight = screen.Height / size[1];
+        var y = screen.Y + (cellHeight * 1.5f);
+        await page.Mouse.MoveAsync(screen.X + (cellWidth * 0.5f), y);
+        await page.Mouse.DownAsync();
+        await page.Mouse.MoveAsync(screen.X + (cellWidth * 30.5f), y, new MouseMoveOptions { Steps = 8 });
+        await page.Mouse.UpAsync();
+        await page.WaitForFunctionAsync("() => window.ilreplTerminal.hasSelection()", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        await page.Keyboard.PressAsync("y");
+        await page.WaitForFunctionAsync("() => typeof window.ilreplLastCopy === 'string'", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        Assert.Contains("ldc.i4 6", await page.EvaluateAsync<string>("() => window.ilreplLastCopy"), "the selected row should be what was copied");
+        await page.WaitForFunctionAsync("() => !window.ilreplTerminal.hasSelection()", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 6 : int32", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+        Assert.DoesNotContain("il[1]> y", await page.Locator("#terminal").InnerTextAsync(), "y should copy, not type");
+    }
+
+    /// <summary>
     /// Ctrl+Q ends the session and a fresh one starts in the same runtime with an empty transcript.
     /// </summary>
     /// <param name="browser">The browser engine to drive.</param>
