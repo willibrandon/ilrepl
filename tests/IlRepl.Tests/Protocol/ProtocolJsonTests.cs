@@ -83,4 +83,23 @@ public sealed class ProtocolJsonTests
         Assert.DoesNotContain("openType", initial);
         Assert.AreEqual(0, JsonSerializer.Deserialize(initial, ProtocolJsonContext.Default.SessionStatus)!.Types);
     }
+
+    /// <summary>
+    /// A mark round-trips, and a null count is left out of the JSON.
+    /// </summary>
+    [TestMethod]
+    public void SessionMark_RoundTrips()
+    {
+        var mark = new SessionMark(7, 3, 1, null, 4, true);
+        var json = JsonSerializer.Serialize(mark, ProtocolJsonContext.Default.SessionMark);
+        Assert.Contains("\"generation\":7", json);
+        Assert.Contains("\"openTypeLines\":4", json);
+        Assert.DoesNotContain("openMethodLines", json);
+        Assert.AreEqual(mark, JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.SessionMark));
+
+        var status = SessionStatus.Initial with { Mark = mark, OpenDepth = 2 };
+        var statusJson = JsonSerializer.Serialize(status, ProtocolJsonContext.Default.SessionStatus);
+        Assert.Contains("\"openDepth\":2", statusJson);
+        Assert.AreEqual(status, JsonSerializer.Deserialize(statusJson, ProtocolJsonContext.Default.SessionStatus));
+    }
 }

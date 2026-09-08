@@ -24,4 +24,13 @@ public interface IReplEngine : IAsyncDisposable
     /// <param name="cancellationToken">Cancels the wait.</param>
     /// <returns>The host's reply.</returns>
     Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Withdraws the lines accepted since a mark was taken, when nothing has run, committed, or
+    /// been discarded since. The reply says what was withdrawn, or why nothing could be.
+    /// </summary>
+    /// <param name="mark">The mark to return to.</param>
+    /// <param name="cancellationToken">Cancels the wait.</param>
+    /// <returns>The host's reply.</returns>
+    Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken);
 }

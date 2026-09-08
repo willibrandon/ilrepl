@@ -18,6 +18,8 @@ namespace IlRepl.Protocol;
 /// <param name="Methods">The number of methods defined so far.</param>
 /// <param name="OpenType">The ILAsm path of the innermost type block being written, such as <c>Outer/Inner</c>, or null.</param>
 /// <param name="Types">The number of types defined so far, nested ones included.</param>
+/// <param name="Mark">Where the session stands, for withdrawing a block a line of which is refused.</param>
+/// <param name="OpenDepth">How many closing braces the engine is waiting for: open regions, methods, and types together.</param>
 public sealed record SessionStatus(
     string Prompt,
     int CellNumber,
@@ -30,10 +32,12 @@ public sealed record SessionStatus(
     string? OpenMethod,
     int Methods,
     string? OpenType,
-    int Types)
+    int Types,
+    SessionMark Mark,
+    int OpenDepth)
 {
     /// <summary>
     /// The status of a fresh session.
     /// </summary>
-    public static SessionStatus Initial { get; } = new("il[1]> ", 1, "[]", 0, 0, 0, 0, true, null, 0, null, 0);
+    public static SessionStatus Initial { get; } = new("il[1]> ", 1, "[]", 0, 0, 0, 0, true, null, 0, null, 0, SessionMark.Initial, 0);
 }

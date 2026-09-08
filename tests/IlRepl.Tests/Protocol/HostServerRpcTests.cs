@@ -122,4 +122,37 @@ public sealed class HostServerRpcTests
             Assert.AreEqual(3, run.Status.CellNumber);
         }
     }
+
+    /// <summary>
+    /// A rollback crosses the wire with its mark and comes back with the note and the status.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    public async Task Rollback_RoundTrips()
+    {
+        var (server, client, proxy) = Connect();
+        using (server)
+        using (client)
+        {
+            var hello = await proxy.HelloAsync(TestContext.CancellationToken);
+            var mark = hello.Status.Mark;
+            await proxy.HandleAsync(".method int32 F() {", TestContext.CancellationToken);
+            var refused = await proxy.HandleAsync("lcd.i4 1", TestContext.CancellationToken);
+            Assert.IsFalse(refused.Succeeded);
+            Assert.AreEqual(mark.Generation, refused.Status.Mark.Generation);
+            Assert.AreEqual(1, refused.Status.OpenDepth);
+
+            var reply = await proxy.RollbackAsync(mark, TestContext.CancellationToken);
+            Assert.IsTrue(reply.Succeeded);
+            Assert.Contains(l => l.Kind == LineKind.Info && l.PlainText.Contains("method F abandoned", StringComparison.Ordinal), reply.Lines);
+            Assert.IsNull(reply.Status.OpenMethod);
+            Assert.AreEqual(0, reply.Status.OpenDepth);
+
+            await proxy.HandleAsync("ldc.i4 1", TestContext.CancellationToken);
+            var ran = await proxy.HandleAsync("ret", TestContext.CancellationToken);
+            var stale = await proxy.RollbackAsync(mark, TestContext.CancellationToken);
+            Assert.IsFalse(stale.Succeeded);
+            Assert.AreNotEqual(mark.Generation, ran.Status.Mark.Generation);
+        }
+    }
 }

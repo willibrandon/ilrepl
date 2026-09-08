@@ -252,6 +252,7 @@ public sealed partial class Session
             _methods.Clear();
             _methods.AddRange(savedMethods);
             Submissions = savedSubmissions;
+            Generation++;
             var released = new List<DefinitionAssembly>();
             foreach (var (pending, family) in loaded)
             {
@@ -497,18 +498,19 @@ public sealed partial class Session
 
     private void ReplayFamilyLines(string headerLine, IReadOnlyList<string> lines)
     {
+        // Stored lines hold no comments; they are replayed as they are.
         _openType = null;
         _openMember = null;
         _openAccessor = null;
-        AddLine(headerLine);
+        AddLine(NormalizedLine.FromText(headerLine));
         foreach (var line in lines)
         {
-            AddLine(line);
+            AddLine(NormalizedLine.FromText(line));
         }
 
         if (_openType is not null)
         {
-            AddLine("}");
+            AddLine(NormalizedLine.FromText("}"));
         }
     }
 
@@ -518,15 +520,15 @@ public sealed partial class Session
         _openType = null;
         _openMember = null;
         _openAccessor = null;
-        AddLine(method.HeaderLine);
+        AddLine(NormalizedLine.FromText(method.HeaderLine));
         foreach (var line in method.BodyLines)
         {
-            AddLine(line);
+            AddLine(NormalizedLine.FromText(line));
         }
 
         if (_open is not null)
         {
-            AddLine("}");
+            AddLine(NormalizedLine.FromText("}"));
         }
     }
 }

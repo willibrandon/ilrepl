@@ -34,6 +34,13 @@ public sealed class HostServer : IReplHost
         return Task.FromResult(Handle(line));
     }
 
+    /// <inheritdoc />
+    public Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        return Task.FromResult(Rollback(mark));
+    }
+
     /// <summary>
     /// Handles one line and returns the transcript lines it produced.
     /// </summary>
@@ -42,7 +49,22 @@ public sealed class HostServer : IReplHost
     public HandleReply Handle(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        var result = _core.Handle(line);
+        return Reply(_core.Handle(line));
+    }
+
+    /// <summary>
+    /// Withdraws the lines accepted since a mark and returns the transcript lines that produced.
+    /// </summary>
+    /// <param name="mark">The mark to return to.</param>
+    /// <returns>The reply.</returns>
+    public HandleReply Rollback(SessionMark mark)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        return Reply(_core.Rollback(mark));
+    }
+
+    private HandleReply Reply(HandleResult result)
+    {
         var lines = _core.Transcript.Lines.ToArray();
         _core.Transcript.Clear();
         return new HandleReply(result.Succeeded, result.QuitRequested, lines, _core.Status);

@@ -119,13 +119,25 @@ public sealed class HostProcessEngine : IReplEngine
     }
 
     /// <inheritdoc />
-    public async Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
+    public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(line);
+        return CallAsync(() => _host.HandleAsync(line, cancellationToken));
+    }
+
+    /// <inheritdoc />
+    public Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        return CallAsync(() => _host.RollbackAsync(mark, cancellationToken));
+    }
+
+    private async Task<HandleReply> CallAsync(Func<Task<HandleReply>> call)
+    {
         ObjectDisposedException.ThrowIf(_disposed, this);
         try
         {
-            var reply = await _host.HandleAsync(line, cancellationToken).ConfigureAwait(false);
+            var reply = await call().ConfigureAwait(false);
             Status = reply.Status;
             return reply;
         }

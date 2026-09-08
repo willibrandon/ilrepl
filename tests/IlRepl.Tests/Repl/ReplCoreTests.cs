@@ -179,4 +179,108 @@ public sealed class ReplCoreTests
         Assert.AreEqual("[int32]", status.Stack);
         Assert.IsFalse(status.CellIsEmpty);
     }
+
+    /// <summary>
+    /// A line that is only a comment is not the blank line that runs the cell.
+    /// </summary>
+    [TestMethod]
+    public void Handle_CommentOnlyLine_WithPendingCell_DoesNotRun()
+    {
+        var core = new ReplCore();
+        core.Handle("ldc.i4 1");
+        Assert.IsTrue(core.Handle("// note").Succeeded);
+        Assert.IsTrue(core.Handle("/* aside */").Succeeded);
+        Assert.AreEqual(1, core.Status.StackDepth);
+        Assert.AreEqual(1, core.CellNumber);
+        Assert.DoesNotContain("= 1", Plain(core));
+        core.Handle("");
+        Assert.Contains("= 1 : int32", Plain(core));
+    }
+
+    /// <summary>
+    /// A comment inside an open method or class is ignored rather than reported as a blank line
+    /// that cannot run while the block is open.
+    /// </summary>
+    [TestMethod]
+    public void Handle_CommentOnlyLine_InsideBlock_Succeeds()
+    {
+        var core = new ReplCore();
+        core.Handle(".method int32 F() {");
+        Assert.IsTrue(core.Handle("// body follows").Succeeded);
+        Assert.AreEqual("F", core.Status.OpenMethod);
+        core.Handle("ldc.i4 1");
+        core.Handle("ret");
+        core.Handle("}");
+        core.Handle(".class public C {");
+        Assert.IsTrue(core.Handle("  // a field").Succeeded);
+        Assert.AreEqual("C", core.Status.OpenType);
+        Assert.DoesNotContain("error", Plain(core));
+    }
+
+    /// <summary>
+    /// A blank line inside an open block comment is part of the comment, and text after the
+    /// closing delimiter is handled.
+    /// </summary>
+    [TestMethod]
+    public void Handle_BlankLineInsideBlockComment_DoesNotRun()
+    {
+        var core = new ReplCore();
+        core.Handle("ldc.i4 1");
+        core.Handle("/*");
+        Assert.IsTrue(core.Handle("").Succeeded);
+        Assert.IsTrue(core.Handle("ret").Succeeded);
+        Assert.AreEqual(1, core.Status.StackDepth);
+        Assert.AreEqual(1, core.CellNumber);
+        core.Handle("*/ ldc.i4 2");
+        Assert.AreEqual(2, core.Status.StackDepth);
+    }
+
+    /// <summary>
+    /// A command inside a block comment is text in a comment, not a command.
+    /// </summary>
+    [TestMethod]
+    public void Handle_ResetInsideComment_IsIgnored()
+    {
+        var core = new ReplCore();
+        core.Handle(".method int32 F() {");
+        core.Handle("/* open");
+        Assert.IsTrue(core.Handle(".reset").Succeeded);
+        Assert.IsTrue(core.Handle(".quit").Succeeded);
+        core.Handle("*/");
+        Assert.AreEqual("F", core.Status.OpenMethod);
+        core.Handle("ldc.i4 1");
+        core.Handle("ret");
+        core.Handle("}");
+        Assert.AreEqual(1, core.Status.Methods);
+        Assert.DoesNotContain("cleared", Plain(core));
+    }
+
+    /// <summary>
+    /// A comment left open at the top level comments out every line until one closes it.
+    /// </summary>
+    [TestMethod]
+    public void Handle_UnterminatedTopLevelComment_SwallowsFollowingLines()
+    {
+        var core = new ReplCore();
+        core.Handle("/* open");
+        core.Handle("ldc.i4 1");
+        core.Handle("ret");
+        Assert.AreEqual(0, core.Status.StackDepth);
+        Assert.AreEqual(1, core.CellNumber);
+        core.Handle("*/ ldc.i4 3");
+        core.Handle("ret");
+        Assert.Contains("= 3 : int32", Plain(core));
+    }
+
+    /// <summary>
+    /// The echo keeps the line as typed, comment and all; the session keeps the text.
+    /// </summary>
+    [TestMethod]
+    public void Handle_EchoesRawLine_StoresText()
+    {
+        var core = new ReplCore();
+        core.Handle("  ldc.i4 1 // one");
+        Assert.AreEqual("il[1]>   ldc.i4 1 // one", core.Transcript.Lines[0].PlainText);
+        Assert.AreEqual("ldc.i4 1", core.Session.BodyLines[0]);
+    }
 }

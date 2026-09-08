@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
 
@@ -112,8 +113,72 @@ public sealed partial class Session
     public int Submissions { get; private set; }
 
     /// <summary>
-    /// Adds a line. Declarations are kept across runs; a <c>.method</c> header opens a block that
-    /// takes the following lines until <c>}</c>; everything else belongs to the current cell.
+    /// Changes whenever something happens that forgetting lines cannot undo: a run, a commit, an
+    /// undo, an abandon, a clear, a reset, a loaded assembly, or bound type parameters. A
+    /// <see cref="SessionMark"/> from an earlier generation cannot be rolled back to.
+    /// </summary>
+    public long Generation { get; private set; }
+
+    /// <summary>
+    /// Whether a <c>/*</c> comment is open at the end of the last line normalized.
+    /// </summary>
+    public bool InBlockComment { get; private set; }
+
+    /// <summary>
+    /// How many closing braces the session is waiting for: open protected regions, the open
+    /// method, the open member and accessor, and every open type block, together.
+    /// </summary>
+    public int OpenDepth
+    {
+        get
+        {
+            var depth = State.OpenBlockDepth;
+            for (var type = _openType; type is not null; type = type.Enclosing)
+            {
+                depth++;
+            }
+
+            if (_openMember is not null)
+            {
+                depth++;
+            }
+
+            if (_openAccessor is not null)
+            {
+                depth++;
+            }
+
+            if (_open is not null)
+            {
+                depth++;
+            }
+
+            return depth;
+        }
+    }
+
+    /// <summary>
+    /// Removes the comments from a line, carrying an open <c>/* */</c> from line to line, and says
+    /// what is left: something to parse, a blank line, or a comment and nothing else. This is the
+    /// only place a comment is removed; everything after it sees the text.
+    /// </summary>
+    /// <param name="raw">The line as typed.</param>
+    /// <returns>The line without its comments.</returns>
+    public NormalizedLine Normalize(string raw)
+    {
+        ArgumentNullException.ThrowIfNull(raw);
+        var before = InBlockComment;
+        var state = before;
+        var text = CilLexer.StripComments(raw, ref state).Trim();
+        InBlockComment = state;
+        var kind = text.Length > 0 ? SourceLineKind.Text
+            : !before && raw.Trim().Length == 0 ? SourceLineKind.Blank
+            : SourceLineKind.Comment;
+        return new NormalizedLine(raw, text, kind, before);
+    }
+
+    /// <summary>
+    /// Adds a line as typed. Its comments are removed first, see <see cref="Normalize"/>.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <returns>What the line was.</returns>
@@ -121,15 +186,29 @@ public sealed partial class Session
     public LineResult AddLine(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        var text = InstructionParser.StripComments(line).Trim();
-        if (text.Length == 0)
+        return AddLine(Normalize(line));
+    }
+
+    /// <summary>
+    /// Adds a line. Declarations are kept across runs; a <c>.method</c> header opens a block that
+    /// takes the following lines until <c>}</c>; everything else belongs to the current cell. A
+    /// comment or a blank line changes nothing.
+    /// </summary>
+    /// <param name="line">The line, its comments already removed.</param>
+    /// <returns>What the line was.</returns>
+    /// <exception cref="ReplException">The line is invalid.</exception>
+    public LineResult AddLine(NormalizedLine line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        if (line.Kind != SourceLineKind.Text)
         {
             return new LineResult(LineOutcome.Empty, null, null);
         }
 
+        var text = line.Text;
         if (_openType is not null)
         {
-            return AddTypeLine(line, text);
+            return AddTypeLine(line);
         }
 
         if (_open is not null)
@@ -139,18 +218,18 @@ public sealed partial class Session
 
         if (IsClassDirective(text))
         {
-            return OpenTypeBlock(text[".class".Length..], line);
+            return OpenTypeBlock(text[".class".Length..], text);
         }
 
         if (text.StartsWith(".method", StringComparison.Ordinal) && (text.Length == ".method".Length || !char.IsLetter(text[".method".Length])))
         {
-            return OpenBlock(text[".method".Length..], line);
+            return OpenBlock(text[".method".Length..], text);
         }
 
         if (text.StartsWith(".typeparams", StringComparison.Ordinal))
         {
             DeclareTypeParameters(text[".typeparams".Length..]);
-            _declarationLines.Add(line);
+            _declarationLines.Add(text);
             return new LineResult(LineOutcome.TypeParameters, null, "type parameters: " + string.Join(", ", _typeParameterNames.Select(n => "!!" + n)));
         }
 
@@ -168,15 +247,94 @@ public sealed partial class Session
             case LineOutcome.Locals:
             case LineOutcome.Arguments:
             case LineOutcome.VarArg:
-                _declarationLines.Add(line);
+                _declarationLines.Add(text);
                 break;
             default:
-                _bodyLines.Add(line);
+                _bodyLines.Add(text);
                 break;
         }
 
         return result;
     }
+
+    /// <summary>
+    /// Where the session stands, taken before a block is sent so the block can be withdrawn with
+    /// <see cref="Rollback"/> if a line of it is refused.
+    /// </summary>
+    /// <returns>The mark.</returns>
+    public SessionMark Mark() => new(Generation, _bodyLines.Count, _declarationLines.Count, _open?.BodyLines.Count, _openType?.Outermost.Lines.Count, InBlockComment);
+
+    /// <summary>
+    /// Withdraws every line accepted since the mark: a method or class opened since is abandoned,
+    /// one that was already open is cut back to the lines it had, and the cell is rebuilt from the
+    /// lines it had, so every earlier instruction, region, and declaration stays. Nothing is
+    /// re-run. Refused when something ran, committed, or was discarded since the mark, because
+    /// forgetting lines cannot undo that.
+    /// </summary>
+    /// <param name="mark">The mark to return to.</param>
+    /// <returns>True when the session is back at the mark.</returns>
+    public bool Rollback(SessionMark mark)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        if (mark.Generation != Generation)
+        {
+            return false;
+        }
+
+        if (mark.OpenTypeLines is int typeLines)
+        {
+            if (_openType is { } family && family.Outermost.Lines.Count > typeLines)
+            {
+                var outermost = family.Outermost;
+                var header = outermost.HeaderLine;
+                var kept = outermost.Lines.Take(typeLines).ToList();
+                _openType = null;
+                _openMember = null;
+                _openAccessor = null;
+                ReplayFamily(header, kept);
+            }
+        }
+        else if (_openType is not null)
+        {
+            AbandonTypeFamily();
+        }
+
+        if (mark.OpenMethodLines is int methodLines)
+        {
+            if (_open is { } open && open.BodyLines.Count > methodLines)
+            {
+                open.BodyLines.RemoveRange(methodLines, open.BodyLines.Count - methodLines);
+                open.State = ReplayOpenBody(open);
+            }
+        }
+        else if (_open is not null)
+        {
+            _open = null;
+        }
+
+        if (_bodyLines.Count > mark.BodyLines || _declarationLines.Count > mark.DeclarationLines)
+        {
+            if (_bodyLines.Count > mark.BodyLines)
+            {
+                _bodyLines.RemoveRange(mark.BodyLines, _bodyLines.Count - mark.BodyLines);
+            }
+
+            if (_declarationLines.Count > mark.DeclarationLines)
+            {
+                _declarationLines.RemoveRange(mark.DeclarationLines, _declarationLines.Count - mark.DeclarationLines);
+            }
+
+            Rebuild();
+        }
+
+        InBlockComment = mark.InBlockComment;
+        return true;
+    }
+
+    /// <summary>
+    /// Records a change forgetting lines cannot undo, such as a loaded assembly.
+    /// </summary>
+    internal void AdvanceGeneration() => Generation++;
 
     /// <summary>
     /// Removes the last line: of the open method block, or of the cell body. Removing a method
@@ -187,7 +345,13 @@ public sealed partial class Session
     {
         if (_openType is not null)
         {
-            return UndoTypeLine();
+            var undone = UndoTypeLine();
+            if (undone)
+            {
+                Generation++;
+            }
+
+            return undone;
         }
 
         if (_open is not null)
@@ -195,11 +359,13 @@ public sealed partial class Session
             if (_open.BodyLines.Count == 0)
             {
                 _open = null;
+                Generation++;
                 return true;
             }
 
             _open.BodyLines.RemoveAt(_open.BodyLines.Count - 1);
             _open.State = ReplayOpenBody(_open);
+            Generation++;
             return true;
         }
 
@@ -210,6 +376,7 @@ public sealed partial class Session
 
         _bodyLines.RemoveAt(_bodyLines.Count - 1);
         Rebuild();
+        Generation++;
         return true;
     }
 
@@ -230,6 +397,7 @@ public sealed partial class Session
             _openAccessor = null;
             _openType = null;
             ReplayFamily(header, kept);
+            Generation++;
             return true;
         }
 
@@ -239,6 +407,7 @@ public sealed partial class Session
         }
 
         _open = null;
+        Generation++;
         return true;
     }
 
@@ -255,6 +424,7 @@ public sealed partial class Session
         }
 
         AbandonTypeFamily();
+        Generation++;
         return true;
     }
 
@@ -265,6 +435,7 @@ public sealed partial class Session
     {
         _bodyLines.Clear();
         Rebuild();
+        Generation++;
     }
 
     /// <summary>
@@ -296,7 +467,9 @@ public sealed partial class Session
         _typeTable = new TypeTable();
         AbandonTypeFamily();
         TypeArguments = null;
+        InBlockComment = false;
         Rebuild();
+        Generation++;
     }
 
     /// <summary>
@@ -402,7 +575,7 @@ public sealed partial class Session
         return new LineResult(LineOutcome.MethodStart, null, "method " + signature.DescribeWithNames());
     }
 
-    private LineResult AddMethodLine(string line)
+    private LineResult AddMethodLine(NormalizedLine line)
     {
         var open = _open!;
         var result = open.State.Apply(line);
@@ -413,7 +586,7 @@ public sealed partial class Session
 
         if (result.Outcome != LineOutcome.Empty)
         {
-            open.BodyLines.Add(line);
+            open.BodyLines.Add(line.Text);
         }
 
         return result;
@@ -504,6 +677,7 @@ public sealed partial class Session
         _cell = cell;
         _open = null;
         Submissions++;
+        Generation++;
 
         if (replacing is not null && !_rebuilding)
         {
@@ -552,6 +726,7 @@ public sealed partial class Session
         _typeParameterNames.AddRange(names);
         TypeArguments = null;
         Rebuild();
+        Generation++;
     }
 
     private void BindTypeArguments(string spec)
@@ -575,6 +750,7 @@ public sealed partial class Session
         }
 
         TypeArguments = types;
+        Generation++;
     }
 
     private void RequireCompatibleTypeReferences(MethodSignature replacement)
@@ -619,12 +795,12 @@ public sealed partial class Session
         var state = new CellState(Resolver, generics, table, null, false, types, null);
         foreach (var line in _declarationLines)
         {
-            state.Apply(line);
+            state.Apply(NormalizedLine.FromText(line));
         }
 
         foreach (var line in _bodyLines)
         {
-            state.Apply(line);
+            state.Apply(NormalizedLine.FromText(line));
         }
 
         return state;
@@ -638,7 +814,7 @@ public sealed partial class Session
         var state = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen: true, _typeTable, null);
         foreach (var line in lines)
         {
-            state.Apply(line);
+            state.Apply(NormalizedLine.FromText(line));
         }
 
         return state;

@@ -280,7 +280,7 @@ public sealed class CellState
     }
 
     /// <summary>
-    /// Parses and records one line. Nothing changes when the line is rejected.
+    /// Parses and records one line as typed, comments and all. Nothing changes when the line is rejected.
     /// </summary>
     /// <param name="line">The line: an instruction, labels, a block boundary, or a declaration.</param>
     /// <returns>What the line was.</returns>
@@ -288,12 +288,25 @@ public sealed class CellState
     public LineResult Apply(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        var text = InstructionParser.StripComments(line).Trim();
-        if (text.Length == 0)
+        return Apply(NormalizedLine.FromText(InstructionParser.StripComments(line)));
+    }
+
+    /// <summary>
+    /// Parses and records one line whose comments are already gone. Nothing changes when the line is rejected.
+    /// </summary>
+    /// <param name="normalized">The line: an instruction, labels, a block boundary, or a declaration.</param>
+    /// <returns>What the line was.</returns>
+    /// <exception cref="ReplException">The line is invalid in the current state.</exception>
+    public LineResult Apply(NormalizedLine normalized)
+    {
+        ArgumentNullException.ThrowIfNull(normalized);
+        if (normalized.Kind != SourceLineKind.Text)
         {
             return new LineResult(LineOutcome.Empty, null, null);
         }
 
+        var line = normalized.Text;
+        var text = line;
         if (text.StartsWith('.'))
         {
             return ApplyDirective(text, line);

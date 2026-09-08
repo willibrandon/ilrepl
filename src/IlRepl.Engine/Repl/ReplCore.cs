@@ -74,7 +74,7 @@ public sealed class ReplCore
         get
         {
             var state = Session.State;
-            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count, Session.OpenType, Session.TypeCount);
+            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count, Session.OpenType, Session.TypeCount, Session.Mark(), Session.OpenDepth);
         }
     }
 
@@ -88,18 +88,26 @@ public sealed class ReplCore
     /// <summary>
     /// Handles one line: an instruction, a directive, a command, or an empty line that runs the
     /// cell. Inside a <c>.method</c> block every line, <c>ret</c> included, goes to the method.
+    /// Comments come off first, so a line that is only a comment is ignored wherever it appears,
+    /// and a <c>/*</c> left open comments out the lines that follow until one closes it.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <returns>Whether it succeeded and whether the user asked to leave.</returns>
     public HandleResult Handle(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        var text = line.Trim();
+        var normalized = Session.Normalize(line);
+        var text = normalized.Text;
         Transcript.Add(new TranscriptLine(LineKind.Input, [new TranscriptSpan(Prompt, SpanStyle.Prompt), new TranscriptSpan(line, SpanStyle.Input)]));
 
         try
         {
-            if (text.Length == 0)
+            if (normalized.Kind == SourceLineKind.Comment)
+            {
+                return new HandleResult(true, false);
+            }
+
+            if (normalized.Kind == SourceLineKind.Blank)
             {
                 RequireNoOpenBlock();
                 if (!Session.State.IsEmpty)
@@ -115,12 +123,12 @@ public sealed class ReplCore
                 return Command(text);
             }
 
-            if (text == "ret" || text.StartsWith("ret ", StringComparison.Ordinal) || text.StartsWith("ret//", StringComparison.Ordinal))
+            if (text == "ret" || text.StartsWith("ret ", StringComparison.Ordinal))
             {
                 if (Session.OpenMethod is not null)
                 {
                     // ret returns from the method; only the closing brace ends the block.
-                    Session.AddLine(line);
+                    Session.AddLine(normalized);
                     if (Options.EchoStack)
                     {
                         EchoStack();
@@ -131,7 +139,7 @@ public sealed class ReplCore
 
                 if (Session.State.HasPendingLabels || Session.State.OpenBlockDepth > 0)
                 {
-                    var inline = Session.AddLine("ret");
+                    var inline = Session.AddLine(NormalizedLine.FromText("ret"));
                     Note("ret inside the cell (a forward label or a block is still open)");
                     _ = inline;
                     return new HandleResult(true, false);
@@ -141,7 +149,7 @@ public sealed class ReplCore
                 return new HandleResult(true, false);
             }
 
-            var result = Session.AddLine(line);
+            var result = Session.AddLine(normalized);
             switch (result.Outcome)
             {
                 case LineOutcome.Instruction:
@@ -213,6 +221,41 @@ public sealed class ReplCore
 
             return new HandleResult(false, false);
         }
+    }
+
+    /// <summary>
+    /// Withdraws the lines accepted since a mark was taken, so a block a line of which was refused
+    /// can come back to the editor whole and be sent again from where the session stood before it.
+    /// Nothing that ran, committed, or was discarded since the mark is undone; when any of that
+    /// happened, nothing is withdrawn and the result says so.
+    /// </summary>
+    /// <param name="mark">The mark to return to.</param>
+    /// <returns>Whether the session is back at the mark.</returns>
+    public HandleResult Rollback(SessionMark mark)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        var method = Session.OpenMethod?.Name;
+        var type = Session.OpenType;
+        if (!Session.Rollback(mark))
+        {
+            Note("nothing withdrawn: the session has run, committed, or discarded something since the block began");
+            return new HandleResult(false, false);
+        }
+
+        if (method is not null && Session.OpenMethod is null)
+        {
+            Note($"method {method} abandoned; the block is back in the editor");
+        }
+        else if (type is not null && Session.OpenType is null)
+        {
+            Note($"class {type} abandoned; the block is back in the editor");
+        }
+        else
+        {
+            Note("lines withdrawn; the block is back in the editor");
+        }
+
+        return new HandleResult(true, false);
     }
 
     private static bool IsDirective(string text)
@@ -489,6 +532,7 @@ public sealed class ReplCore
 
                 {
                     var assembly = Session.Resolver.Load(argument);
+                    Session.AdvanceGeneration();
                     int count;
                     try
                     {

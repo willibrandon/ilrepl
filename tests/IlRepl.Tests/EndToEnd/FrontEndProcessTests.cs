@@ -66,6 +66,55 @@ public sealed class FrontEndProcessTests
     }
 
     /// <summary>
+    /// A block comment that spans lines inside a method reaches the host as one comment, and the
+    /// text after its closing delimiter is assembled.
+    /// </summary>
+    [TestMethod]
+    public async Task Script_MultiLineCommentInsideMethod()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllLinesAsync(path, [".method int32 F() {", "/* open", ".reset", "still */ ldc.i4.1", "ret", "}", "call int32 F()", "ret"], TestContext.CancellationToken);
+        try
+        {
+            var (code, stdout, stderr) = await RunAsync(["--no-color", path]);
+            Assert.AreEqual(0, code, stderr + stdout);
+            Assert.Contains("end of method F", stdout);
+            Assert.Contains("= 1 : int32", stdout);
+            Assert.DoesNotContain("unknown opcode", stdout);
+            Assert.DoesNotContain("cleared", stdout);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// A line that is only a comment never runs the cell, so a value stays on the stack until a
+    /// blank line or ret.
+    /// </summary>
+    [TestMethod]
+    public async Task Script_CommentOnlyLines_NeverRun()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllLinesAsync(path, ["ldc.i4 1", "// one", "/* two", "", "*/", "ldc.i4 2", "add", "", "ldc.i4 3", "// three", "ret"], TestContext.CancellationToken);
+        try
+        {
+            var (code, stdout, stderr) = await RunAsync(["--no-color", path]);
+            Assert.AreEqual(0, code, stderr + stdout);
+            Assert.Contains("= 3 : int32", stdout);
+            Assert.DoesNotContain("= 1 : int32", stdout);
+            Assert.AreEqual(2, stdout.Split("= 3 : int32").Length - 1, stdout);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
     /// A script that declares a class runs it through the host and shows the instance by its fields.
     /// </summary>
     [TestMethod]
