@@ -45,6 +45,7 @@
     "0602b5e9d811baa36bfdd6a7652ee032c41f7d3d44d07e9f86da235ed7b28ffe": {
       "where": "try.mdx:24",
       "language": "cil",
+      "editor": true,
       "lines": [
         [
           [
@@ -89,6 +90,7 @@
     "063fe4b92c21c5fa544726a29c492e589be25cb2cd807364903186a45064ab02": {
       "where": "usage/methods.md:141",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -114,6 +116,7 @@
     "0ac9e0f85f1091c067d2b37a7638362d89e73d42a2be486fc2bf89ca90c400c3": {
       "where": "usage/disassembly.md:89",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -360,6 +363,7 @@
     "0eaa42c952082d80f8808169ffe1b933c282c6edeb943e340e44dcc4922bffd6": {
       "where": "usage/arguments-and-generics.md:12",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -540,6 +544,7 @@
     "131881e42302ead3f52d7ff319d9d29440e73495101dc803b7ed2a080b86a58b": {
       "where": "getting-started/installation.md:40",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -629,6 +634,7 @@
     "16bad22936561ecd748ff86c8f8367b8162496217f57d333183971e85ff17a0d": {
       "where": "usage/member-references.md:52",
       "language": "cil",
+      "editor": true,
       "lines": [
         [
           [
@@ -770,6 +776,7 @@
     "1c155265cf3a83e77cc0cc4c4d707470a4557e61975085b743b31f7010b3e706": {
       "where": "getting-started/quick-start.md:74",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -824,6 +831,7 @@
     "21c3f30fc933998082ab8c5d7bffce2bd65d6cbf9c9378e13e173a16106fce3b": {
       "where": "usage/disassembly.md:166",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -1080,6 +1088,7 @@
     "2a35da4da9ecc5e56f3e60f1e2074740823c364954d81fa2e4b3ed3aee658102": {
       "where": "usage/types.md:12",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -2155,6 +2164,7 @@
     "32681b28c8dfcd73de7bdac89ec13a12ae91bdccae70878cb4705d7e64ef02ee": {
       "where": "usage/types.md:76",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -2481,6 +2491,7 @@
     "397aff5e7539ff58a5a64845070bcc47c23dc7036b1b7d4f426016b020c22ef7": {
       "where": "usage/member-references.md:9",
       "language": "cil",
+      "editor": true,
       "lines": [
         [
           [
@@ -2650,6 +2661,7 @@
     "3c8c0c3a71396509f8b54c9d4b1608e163728b049f64dd497e7964e1e50c6b47": {
       "where": "usage/disassembly.md:49",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -3187,6 +3199,7 @@
     "3d52606486237ef435796e45b6b52db2a8f87b21100d6ba44556a5e5ea6908a7": {
       "where": "usage/editing.md:148",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -3219,6 +3232,7 @@
     "443cabd9548de9fadbcfbd8e130ab6e8b44614d9cd04b35879ebba214d302aee": {
       "where": "usage/editing.md:12",
       "language": "ilrepl",
+      "editor": true,
       "lines": [
         [
           [
@@ -3297,6 +3311,7 @@
     "44c7074f764128f0bfc87cc5e0319411902acd4797d6e1d15c6037a12c69d525": {
       "where": "usage/disassembly.md:107",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -4064,6 +4079,7 @@
     "456d6cc40b2e79e2456a7ccc77218074744d26ed187a2d743c2ad3e2996ee5a9": {
       "where": "usage/member-references.md:31",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -4130,6 +4146,7 @@
     "5a66e9e12f7575688cc0badc6f10a0d18491bd93f07f6863f028cf87ce8877aa": {
       "where": "usage/cells.md:37",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -4346,6 +4363,7 @@
     "5e43805226b459129c10861805264fe6904bd03fcd52801b8f5f97f4ec12fa36": {
       "where": "usage/member-references.md:77",
       "language": "cil",
+      "editor": true,
       "lines": [
         [
           [
@@ -4443,6 +4461,7 @@
     "5fd371ba09be0be7633c83d9e3c6b8682c0b2c9f3a77ef252bce38de6318724c": {
       "where": "usage/arguments-and-generics.md:50",
       "language": "cil",
+      "editor": true,
       "lines": [
         [
           [
@@ -4553,6 +4572,7 @@
     "600247304ac13b17a5a04df2c481842be5bb044577eb78ae33dfdb00ef872c12": {
       "where": "usage/methods.md:122",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -4770,6 +4790,7 @@
     "621ef226344203e928cdd2f168729c3f115c216e9518bf5ac8eec89f18fd6f81": {
       "where": "usage/types.md:196",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -4942,6 +4963,7 @@
     "67b796ea7b915064da59f4764d0b41f16ad85a04a125c443027badeb99172f3e": {
       "where": "usage/types.md:244",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -4967,6 +4989,7 @@
     "6ed354abd3fe654608be5a8550928addcd1f42194193a2e120f0cd57d5a18812": {
       "where": "usage/methods.md:110",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -4987,6 +5010,7 @@
     "772fcaf9aab43018416e06e5be914171b990a5eb27c9ea7baf809cceabfea505": {
       "where": "usage/member-references.md:62",
       "language": "cil",
+      "editor": true,
       "lines": [
         [
           [
@@ -5176,6 +5200,7 @@
     "7902da67b3bd9e54d9de7010c2854aeafe6a1b3a640a6dede0c5d0ef2df9ea88": {
       "where": "usage/editing.md:32",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -5588,6 +5613,7 @@
     "80903b0bf4cc949921317a03e932bf5bf2d8db842d0d5cc79f4ff2ee47235a11": {
       "where": "usage/methods.md:35",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -6239,6 +6265,7 @@
     "84c9ed52ea1cdff9683dc6f81df9c068666113f4839d6ff26e8e3b6b4bfb71f8": {
       "where": "usage/types.md:153",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -6891,6 +6918,7 @@
     "85d8134297fba171d896d57a9c2fae0cdcf778896f7d12b6b66bc29028e5a2e0": {
       "where": "usage/editing.md:63",
       "language": "ilrepl",
+      "editor": true,
       "lines": [
         [
           [
@@ -7029,6 +7057,7 @@
     "969615bef3df9ff045f04379bed7b55446ad53673e8394b0fb8059118687bec8": {
       "where": "usage/saving-cells.md:13",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -7167,6 +7196,7 @@
     "96ef75eee24afe7595ccd60cd620f05db776d3e825b99876281cb7ce48d43d59": {
       "where": "usage/editing.md:114",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -7422,6 +7452,7 @@
     "9ec4bdd056d5bcc3394e066b5733e6b0df1ac27e0f027e45e323a3c82812b753": {
       "where": "usage/methods.md:11",
       "language": "cil",
+      "editor": true,
       "lines": [
         [
           [
@@ -7652,6 +7683,7 @@
     "a19bfbbfa847dc61a0d12ad05d8bccc755adf3d1a1f2902e1b3ea41ef35229d4": {
       "where": "usage/member-references.md:23",
       "language": "cil",
+      "editor": true,
       "lines": [
         [
           [
@@ -7789,6 +7821,7 @@
     "a2150f35b22462eb76ef380e588ece3023d17f073be942aee6b0b8a105378575": {
       "where": "usage/saving-cells.md:45",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -8048,6 +8081,7 @@
     "a4e65444c342d76493298f64d43e879b94890b914d2f7e5d89fbd23cab78d9b0": {
       "where": "usage/editing.md:88",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -8203,6 +8237,7 @@
     "a762f5a01422ec6a87fa530c655515becccf8d6db07f20cbe66fb5b88853d5db": {
       "where": "usage/disassembly.md:146",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -8518,6 +8553,7 @@
     "a86655b51e1030c2920baf70e15c850c716f4323dd18ab14d3d5437dbbb494b5": {
       "where": "usage/editing.md:167",
       "language": "ilrepl",
+      "editor": true,
       "lines": [
         [
           [
@@ -8632,6 +8668,7 @@
     "b4ce6a5122e276c2a797fd10458c02e6f8d9ff81fd87b995399ca7362cfa5b76": {
       "where": "usage/disassembly.md:16",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -9125,6 +9162,7 @@
     "b99fce5f3604c89258e258e6934fd1146c426dcdabedd5b81b30760c92a89dfa": {
       "where": "usage/editing.md:22",
       "language": "ilrepl",
+      "editor": true,
       "lines": [
         [
           [
@@ -9239,6 +9277,7 @@
     "ba50756f39f257568174b37ff181325b232e737b943baeb28b74d206047cc22b": {
       "where": "usage/exception-blocks.md:9",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -9756,6 +9795,7 @@
     "c0f143700a16225b16697016c99778494e3c66b6657b739990345b01cf6dc83b": {
       "where": "getting-started/quick-start.md:10",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -9928,6 +9968,7 @@
     "c2a10c46a55a5af08ccafd7a4d2d52762e463853977094117b2697d860f0b353": {
       "where": "getting-started/quick-start.md:29",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -10086,6 +10127,7 @@
     "c66e2405c64e7945137472734759d397839ee6ae728d34d551cb67ba529538b4": {
       "where": "usage/arguments-and-generics.md:31",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -10287,6 +10329,7 @@
     "d0d05497d208e4e68fd6faa80e5960f5aadafa070f495e1fb9309874f2cacb15": {
       "where": "usage/editing.md:98",
       "language": "ilrepl",
+      "editor": true,
       "lines": [
         [
           [
@@ -10401,6 +10444,7 @@
     "d15644566284ab5eacf8404713f6468272a428ac08c312a634e2d77da3f780a8": {
       "where": "usage/member-references.md:44",
       "language": "cil",
+      "editor": true,
       "lines": [
         [
           [
@@ -10598,6 +10642,7 @@
     "d15f97e2e729a5b0238e22c397e5b3a387f1354fd27145563c005bafe9bfac8e": {
       "where": "usage/member-references.md:90",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -10736,6 +10781,7 @@
     "da89123431d2be99063a08b397f0a4cd0eb22ebaa6a343a1312b8ef975daf029": {
       "where": "getting-started/quick-start.md:45",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -10995,6 +11041,7 @@
     "de7d89aa358de763e48b8da3f0c5b0b8a5391879a351b9b29f01f7129d040b3d": {
       "where": "usage/editing.md:138",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -11076,6 +11123,7 @@
     "e0898fd7f8790c6b74f77866dc2586e513554b92ab6e6e62de90394ddb1b6fdb": {
       "where": "usage/exception-blocks.md:47",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -11462,6 +11510,7 @@
     "e6e4edc353882c5ae81b98ea7ffda6cefdef1746012d2de9a4b2c9d8c88d1700": {
       "where": "usage/cells.md:15",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -11695,6 +11744,7 @@
     "e93cd40e9ee932c2e53f6f9fbc4d452f6f0a0bf0cbf265eca18bc3b37f983ba6": {
       "where": "usage/types.md:213",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -11790,6 +11840,7 @@
     "ef7dec58fd6076a94c5be94e00d921548a0a90082aa9a175592c8291e2de28e3": {
       "where": "usage/methods.md:85",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -12176,6 +12227,7 @@
     "f27a9a697955e61268a2cebca4f1027f1afc27dd1440ae007508fdf9e8ede52b": {
       "where": "usage/cells.md:67",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -12284,6 +12336,7 @@
     "fb2c7b76aef2c72b43be09d9a8429bec864f457da4da75e8080bef445231639e": {
       "where": "usage/types.md:101",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [
@@ -13247,6 +13300,7 @@
     "fe62981bc0fba0bb07ec2f70f35d2f0ec744a370dfc5f589c1db9a327bdfc15d": {
       "where": "usage/editing.md:154",
       "language": "ilrepl",
+      "editor": false,
       "lines": [
         [
           [

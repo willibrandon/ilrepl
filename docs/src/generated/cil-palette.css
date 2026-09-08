@@ -35,3 +35,5 @@
 [data-theme='light'] .cil-Comment { color: #7d828b; }
 [data-theme='light'] .cil-Member { color: #4078f2; }
 [data-theme='light'] .cil-Punctuation { color: #696c77; }
+.cil-error-underline { text-decoration: underline wavy #e06c75; text-underline-offset: 0.15em; }
+[data-theme='light'] .cil-error-underline { text-decoration-color: #e45649; }

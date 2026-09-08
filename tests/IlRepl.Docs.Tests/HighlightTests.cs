@@ -104,4 +104,26 @@ public sealed class HighlightTests
         var css = Directory.EnumerateFiles(Path.Combine(SitePaths.Dist, "_astro"), "*.css").Select(File.ReadAllText).ToList();
         Assert.Contains(c => c.Contains(".cil-Opcode{color:" + dark, StringComparison.Ordinal) && c.Contains(".cil-Opcode{color:" + light, StringComparison.Ordinal), css, "the stylesheet should colour the class on both grounds");
     }
+
+    /// <summary>
+    /// An error token is drawn as its host draws it: in a view of the editor a curly underline
+    /// under the text's own colour, in a transcript's echo the error colour.
+    /// </summary>
+    [TestMethod]
+    public void ErrorTokens_AreDrawnAsTheirHostDrawsThem()
+    {
+        var editing = File.ReadAllText(Path.Combine(SitePaths.Dist, "usage", "editing", "index.html"));
+        var quickStart = File.ReadAllText(Path.Combine(SitePaths.Dist, "getting-started", "quick-start", "index.html"));
+        using var map = JsonDocument.Parse(File.ReadAllText(s_map));
+        var palette = map.RootElement.GetProperty("palette");
+        var error = $"--0:{palette.GetProperty("dark").GetProperty("Error").GetString()};--1:{palette.GetProperty("light").GetProperty("Error").GetString()}";
+
+        // The underline wraps the token, which keeps the page's own text colour inside it.
+        var underlined = editing.IndexOf("<span class=\"cil-error-underline\">", StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, underlined, "the editor's view should underline the typo");
+        var wrapped = editing.Substring(underlined, Math.Min(240, editing.Length - underlined));
+        Assert.Contains(">lcd.i4</span></span>", wrapped, "the underline should wrap the typo");
+        Assert.DoesNotContain(error, wrapped[..wrapped.IndexOf("lcd.i4", StringComparison.Ordinal)], "the underlined typo should keep its own colour");
+        Assert.Contains($"<span style=\"{error}\">lcd.i4</span>", quickStart, "the transcript's echo should show the typo in the error colour");
+    }
 }

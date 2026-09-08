@@ -30,7 +30,7 @@ var root = FindRoot();
 var docs = Path.Combine(root, "docs", "src", "content", "docs");
 var output = Path.Combine(root, "docs", "src", "generated", "cil-tokens.json");
 var tokenizer = new CilTokenizer(CilVocabularyBuilder.Vocabulary);
-var blocks = new SortedDictionary<string, (string Where, string Language, List<IReadOnlyList<TranscriptSpan>> Lines)>(StringComparer.Ordinal);
+var blocks = new SortedDictionary<string, (string Where, string Language, bool Editor, List<IReadOnlyList<TranscriptSpan>> Lines)>(StringComparer.Ordinal);
 var warnings = new List<string>();
 var replayed = 0;
 var cwd = Directory.GetCurrentDirectory();
@@ -71,7 +71,10 @@ foreach (var file in Directory.EnumerateFiles(docs, "*.md*", SearchOption.AllDir
 
             var where = $"{relative}:{start + 1}";
             var spans = language == "cil" ? Cil(body) : await TranscriptAsync(engine, body, where);
-            blocks[Key(body)] = (where, language, spans);
+            // Source, or a view of the editor, is drawn as the editor draws it: an error is
+            // underlined under its own colour. A transcript's echo has the error in red.
+            var editor = language == "cil" || IsEditorView(body);
+            blocks[Key(body)] = (where, language, editor, spans);
             i = end;
         }
     }
@@ -110,6 +113,7 @@ using (var json = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = 
         json.WriteStartObject(key);
         json.WriteString("where", block.Where);
         json.WriteString("language", block.Language);
+        json.WriteBoolean("editor", block.Editor);
         json.WriteStartArray("lines");
         foreach (var line in block.Lines)
         {
@@ -212,6 +216,9 @@ async Task WriteHeroAsync()
         }
     }
 
+    // The editor's error: a curly underline in the error colour under the text's own colour.
+    css.Append($".cil-error-underline {{ text-decoration: underline wavy #{Hex(SpanPalette.Color(SpanStyle.Error))}; text-underline-offset: 0.15em; }}\n");
+    css.Append($"[data-theme='light'] .cil-error-underline {{ text-decoration-color: #{Hex(SpanPalette.LightColor(SpanStyle.Error))}; }}\n");
     File.WriteAllText(Path.Combine(root, "docs", "src", "generated", "cil-palette.css"), css.ToString());
 }
 
@@ -233,7 +240,7 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
     // which runs the cell.
     var inputs = body.Take(body.Count - 1).Where(l => Patterns.InputLine().IsMatch(l) || Patterns.BarePrompt().IsMatch(l)).Concat(body.TakeLast(1).Where(l => Patterns.InputLine().IsMatch(l)))
         .Select(l => Patterns.InputLine().IsMatch(l) ? l[(l.IndexOf("> ", StringComparison.Ordinal) + 2)..] : "").ToList();
-    if (inputs.Count == 0 || body.Any(l => l.StartsWith("  ...> ", StringComparison.Ordinal)))
+    if (inputs.Count == 0 || IsEditorView(body))
     {
         // The editor's own rows: a view of typing, not of the engine, so plain text is the
         // editor's own, as in a cil block.
@@ -311,6 +318,9 @@ static IReadOnlyList<TranscriptSpan> WithPagePrompt(IReadOnlyList<TranscriptSpan
     return [new TranscriptSpan(prompt.Value, SpanStyle.Prompt), .. spans.Skip(1)];
 }
 
+// A block that shows the editor's own rows is a view of typing, not of the engine.
+static bool IsEditorView(IReadOnlyList<string> body) => body.Any(l => l.StartsWith("  ...> ", StringComparison.Ordinal));
+
 // A transcript styled line by line, with a block comment carried from one input line to the next
 // as the engine carries it, and the given style for the plain text of an input line.
 List<IReadOnlyList<TranscriptSpan>> StyledLines(IReadOnlyList<string> body, SpanStyle plain)
@@ -345,7 +355,7 @@ IReadOnlyList<TranscriptSpan> Styled(string line, ref bool comment, SpanStyle pl
     if (m.Success)
     {
         var spans = new List<TranscriptSpan> { new(m.Groups[1].Value, SpanStyle.Dim) };
-        var names = m.Groups[2].Value.Length == 0 ? [] : m.Groups[2].Value.Split(", ");
+        var names = SplitStack(m.Groups[2].Value);
         for (var i = 0; i < names.Length; i++)
         {
             if (i > 0)
@@ -614,6 +624,42 @@ static bool ParseValue(string s, ref int i, List<TranscriptSpan> spans)
     return false;
 }
 
+// The entries of a stack as the engine lists them, split at the commas between them and not at
+// those inside a generic type's arguments.
+static string[] SplitStack(string stack)
+{
+    if (stack.Length == 0)
+    {
+        return [];
+    }
+
+    var entries = new List<string>();
+    var start = 0;
+    var depth = 0;
+    for (var i = 0; i < stack.Length; i++)
+    {
+        switch (stack[i])
+        {
+            case '<':
+                depth++;
+                break;
+            case '>':
+                depth--;
+                break;
+            case ',' when depth == 0 && i + 1 < stack.Length && stack[i + 1] == ' ':
+                entries.Add(stack[start..i]);
+                start = i + 2;
+                i++;
+                break;
+            default:
+                break;
+        }
+    }
+
+    entries.Add(stack[start..]);
+    return [.. entries];
+}
+
 static bool Word(string s, int i, string word) =>
     s.AsSpan(i).StartsWith(word, StringComparison.Ordinal) && (i + word.Length == s.Length || !char.IsLetterOrDigit(s[i + word.Length]));
 
@@ -643,6 +689,8 @@ static int NameEnd(string s, int i)
 
     return i;
 }
+
+static string Hex(Hex1bColor color) => $"{color.R:x2}{color.G:x2}{color.B:x2}";
 
 static string FindRoot()
 {
