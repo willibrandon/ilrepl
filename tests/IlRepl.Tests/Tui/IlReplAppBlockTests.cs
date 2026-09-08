@@ -888,4 +888,37 @@ public sealed class IlReplAppBlockTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A first word still being typed is not underlined while it can still become a known word;
+    /// it is underlined once nothing begins with it, or once the caret leaves it unfinished.
+    /// </summary>
+    [TestMethod]
+    public async Task Buffer_WordBeingTyped_IsUnderlinedOnlyOnceItCannotComplete()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        static bool Underlined(Hex1bTerminalSnapshot s, int x) => (s.GetCell(x, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) != 0;
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync("l", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> l", StringComparison.Ordinal) && AppTest.CaretAt(s, 8, 0) && !Underlined(s, 7), description: "a letter that starts many opcodes is not wrong yet");
+        await auto.TypeAsync("c", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> lc" && Underlined(s, 7) && Underlined(s, 8), description: "nothing begins with lc, so it is wrong already");
+        await auto.BackspaceAsync(ct: ct);
+        await auto.TypeAsync("d", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ld", StringComparison.Ordinal) && AppTest.CaretAt(s, 9, 0) && !Underlined(s, 7) && !Underlined(s, 8), description: "ld can still become ldc.i4");
+        await auto.TypeAsync(" ", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ld" && Underlined(s, 7) && Underlined(s, 8), description: "left unfinished, the word is wrong");
+        await auto.BackspaceAsync(ct: ct);
+        await auto.TypeAsync("c.i4 1", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 1" && !Underlined(s, 7) && !Underlined(s, 12), description: "a known opcode is not underlined");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

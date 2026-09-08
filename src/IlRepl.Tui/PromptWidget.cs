@@ -114,6 +114,7 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
         var state = State;
         state.View.Label = Label;
         state.Highlighter.CommentOpenAtStart = CommentOpen;
+        state.Highlighter.Caret = new DocumentPosition(state.CaretLine, state.CaretColumn + 1);
         var candidates = Candidates(state, Catalog);
         var paletteVisible = candidates.Count > 0 && Fit.PaletteRows > 0;
         state.SelectedIndex = paletteVisible ? Math.Clamp(state.SelectedIndex, 0, candidates.Count - 1) : 0;
