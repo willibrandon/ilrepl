@@ -1,6 +1,7 @@
 using IlRepl.Engine;
 using IlRepl.Protocol;
 using IlRepl.Repl;
+using System.Text.RegularExpressions;
 
 namespace IlRepl.Tests.Protocol;
 
@@ -10,7 +11,7 @@ namespace IlRepl.Tests.Protocol;
 /// that the transcript colours nothing by hand.
 /// </summary>
 [TestClass]
-public sealed class CilTokenizerTests
+public sealed partial class CilTokenizerTests
 {
     private static readonly CilTokenizer Tokenizer = new(CilVocabularyBuilder.Vocabulary);
 
@@ -231,7 +232,7 @@ public sealed class CilTokenizerTests
             else if (line.Kind == LineKind.Listing)
             {
                 var structural = new List<TranscriptSpan>(line.Spans);
-                if (structural.Count > 1 && structural[0].Style == SpanStyle.Dim && System.Text.RegularExpressions.Regex.IsMatch(structural[0].Text, "^  ([0-9a-f]{4} |[0-9]{3}  )$|^       $"))
+                if (structural.Count > 1 && structural[0].Style == SpanStyle.Dim && OffsetColumn().IsMatch(structural[0].Text))
                 {
                     structural.RemoveAt(0);
                     if (structural[^1].Style == SpanStyle.Dim && structural[^1].Text.StartsWith(' '))
@@ -288,4 +289,8 @@ public sealed class CilTokenizerTests
             }
         }
     }
+
+    // The offset column of a listing row, or the blank column of a block row.
+    [GeneratedRegex("^  ([0-9a-f]{4} |[0-9]{3}  )$|^       $")]
+    private static partial Regex OffsetColumn();
 }
