@@ -213,7 +213,7 @@ public sealed class IlReplAppViewportTests
         var start = recorder.Count;
         adapter.Resize(60, 12);
         await auto.WaitUntilAsync(s => s.Width == 60 && s.Height == 12 && AppTest.PromptRow(s, 3) == "  ...> }" && AppTest.CaretAt(s, 8, 3), description: "four rows at twelve lines, the caret still on the last line");
-        AssertEveryFrameShowsCaret(recorder.Since(start).Where(f => f.Width == 60 && f.Height == 12).ToList());
+        AssertEveryFrameShowsCaret(DrawnAt(recorder.Since(start), 60, 12));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -243,7 +243,7 @@ public sealed class IlReplAppViewportTests
         var start = recorder.Count;
         adapter.Resize(100, 40);
         await auto.WaitUntilAsync(s => s.Width == 100 && s.Height == 40 && AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.CaretAt(s, 8, 12), description: "all thirteen lines fit and the caret is on the last");
-        AssertEveryFrameShowsCaret(recorder.Since(start).Where(f => f.Width == 100 && f.Height == 40).ToList());
+        AssertEveryFrameShowsCaret(DrawnAt(recorder.Since(start), 100, 40));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -344,6 +344,12 @@ public sealed class IlReplAppViewportTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    // The terminal takes its new size before the app has drawn for it, so a frame in between can
+    // be the old layout cropped. A frame the app drew at the new size has the status bar, with
+    // the hint that names what Enter does, on the new last row.
+    private static List<Frame> DrawnAt(IReadOnlyList<Frame> frames, int width, int height) =>
+        frames.Where(f => f.Width == width && f.Height == height && f.Lines[^1].TrimEnd().EndsWith("lines", StringComparison.Ordinal)).ToList();
 
     private static void AssertEveryFrameShowsCaret(IReadOnlyList<Frame> frames)
     {
