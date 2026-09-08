@@ -30,6 +30,9 @@ dotnet_diagnostic.CS1574.severity = warning
 dotnet_diagnostic.CA1050.severity = warning
 dotnet_diagnostic.CA1068.severity = warning
 dotnet_diagnostic.CA1512.severity = warning
+
+# Every regular expression is compiled ahead of time with GeneratedRegex.
+dotnet_diagnostic.SYSLIB1045.severity = error
 dotnet_diagnostic.CA1806.severity = warning
 dotnet_diagnostic.CA1816.severity = warning
 dotnet_diagnostic.CA1822.severity = warning

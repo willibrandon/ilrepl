@@ -7,7 +7,8 @@ namespace IlRepl.Tui;
 
 /// <summary>
 /// The colours of the terminal UI, one per <see cref="SpanStyle"/>, muted in the way of One Dark.
-/// The transcript, the editor, and the status bar all draw from here.
+/// The transcript, the editor, and the status bar all draw from here, and so do the docs, which
+/// also have the same roles in the colours of One Light for a light ground.
 /// </summary>
 public static class SpanPalette
 {
@@ -36,6 +37,36 @@ public static class SpanPalette
         SpanStyle.Comment => Hex1bColor.FromRgb(92, 99, 112),
         SpanStyle.Member => Hex1bColor.FromRgb(97, 175, 239),
         SpanStyle.Punctuation => Hex1bColor.FromRgb(120, 124, 134),
+        _ => Hex1bColor.Default,
+    };
+
+    /// <summary>
+    /// The colour of a style on a light ground: the same role in the same hue, darker and more
+    /// saturated so it reads on white, in the way of One Light. The top of the stack, brighter
+    /// than a type on a dark ground, is a deeper teal than a type here.
+    /// </summary>
+    /// <param name="style">The style.</param>
+    /// <returns>The colour.</returns>
+    public static Hex1bColor LightColor(SpanStyle style) => style switch
+    {
+        SpanStyle.Dim => Hex1bColor.FromRgb(105, 108, 119),
+        SpanStyle.Prompt => Hex1bColor.FromRgb(64, 120, 242),
+        SpanStyle.Input => Hex1bColor.FromRgb(56, 58, 66),
+        SpanStyle.Opcode => Hex1bColor.FromRgb(1, 132, 188),
+        SpanStyle.Type => Hex1bColor.FromRgb(1, 132, 188),
+        SpanStyle.TopType => Hex1bColor.FromRgb(0, 128, 110),
+        SpanStyle.Label => Hex1bColor.FromRgb(193, 132, 1),
+        SpanStyle.Number => Hex1bColor.FromRgb(152, 104, 1),
+        SpanStyle.String => Hex1bColor.FromRgb(80, 161, 79),
+        SpanStyle.Keyword => Hex1bColor.FromRgb(166, 38, 164),
+        SpanStyle.Error => Hex1bColor.FromRgb(228, 86, 73),
+        SpanStyle.Command => Hex1bColor.FromRgb(64, 120, 242),
+        SpanStyle.Output => Hex1bColor.FromRgb(92, 99, 112),
+        SpanStyle.Heading => Hex1bColor.FromRgb(193, 132, 1),
+        SpanStyle.Directive => Hex1bColor.FromRgb(92, 99, 112),
+        SpanStyle.Comment => Hex1bColor.FromRgb(125, 130, 139),
+        SpanStyle.Member => Hex1bColor.FromRgb(64, 120, 242),
+        SpanStyle.Punctuation => Hex1bColor.FromRgb(105, 108, 119),
         _ => Hex1bColor.Default,
     };
 

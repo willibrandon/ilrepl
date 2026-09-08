@@ -9,7 +9,7 @@ description: Write a cell to disk as an assembly, or look at it as ILAsm.
 every method defined with `.method` beside it, and every type defined with `.class` before it.
 The cell is kept, so you can still run it.
 
-```
+```ilrepl
 il[1]> .args (int32 n = 0)
 il[1]> ldarg n
 il[1]> ldc.i4 2
@@ -41,7 +41,7 @@ extension is not needed because you can copy it from the transcript. Operands ar
 qualified and each class is written out with its fields, members, and nested types, so the text
 assembles with `ilasm` after adding the assembly references it lists.
 
-```
+```ilrepl
 il[2]> .il
 .assembly extern System.Runtime {}
 .assembly ilrepl_cell {}

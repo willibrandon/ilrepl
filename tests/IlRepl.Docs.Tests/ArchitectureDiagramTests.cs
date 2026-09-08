@@ -1,4 +1,5 @@
 using Microsoft.Playwright;
+using System.Text.RegularExpressions;
 
 namespace IlRepl.Docs.Tests;
 
@@ -7,7 +8,7 @@ namespace IlRepl.Docs.Tests;
 /// pointing at a part, tabbing to it, and tapping it all explain it in the caption.
 /// </summary>
 [TestClass]
-public sealed class ArchitectureDiagramTests
+public sealed partial class ArchitectureDiagramTests
 {
     private static StaticSite? s_site;
     private static IPlaywright? s_playwright;
@@ -112,7 +113,7 @@ public sealed class ArchitectureDiagramTests
         await session.ClickAsync();
         await page.Mouse.MoveAsync(5, 5);
         await Assertions.Expect(caption.Locator(".il-diagram-caption-title")).ToHaveTextAsync("the session");
-        await Assertions.Expect(session).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("is-active"));
+        await Assertions.Expect(session).ToHaveClassAsync(Active());
 
         await session.ClickAsync();
         await page.Mouse.MoveAsync(5, 5);
@@ -124,4 +125,8 @@ public sealed class ArchitectureDiagramTests
         "webkit" => await s_playwright!.Webkit.LaunchAsync(),
         _ => await s_playwright!.Chromium.LaunchAsync(),
     };
+
+    // The class a part of the diagram wears while it is the one described.
+    [GeneratedRegex("is-active")]
+    private static partial Regex Active();
 }

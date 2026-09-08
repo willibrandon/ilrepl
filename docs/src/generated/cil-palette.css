@@ -1,0 +1,39 @@
+/* Written by scripts/Highlight-Cil.cs from the terminal's palette; edit SpanPalette and run the script. */
+.cil-Dim { color: #787c86; }
+.cil-Prompt { color: #61afef; }
+.cil-Input { color: #dcdfe4; }
+.cil-Opcode { color: #56b6c2; }
+.cil-Type { color: #56b6c2; }
+.cil-TopType { color: #98ffee; }
+.cil-Label { color: #e5c07b; }
+.cil-Number { color: #d19a66; }
+.cil-String { color: #98c379; }
+.cil-Keyword { color: #c678dd; }
+.cil-Error { color: #e06c75; }
+.cil-Command { color: #61afef; }
+.cil-Output { color: #abb2bf; }
+.cil-Heading { color: #e5c07b; }
+.cil-Directive { color: #abb2bf; }
+.cil-Comment { color: #5c6370; }
+.cil-Member { color: #61afef; }
+.cil-Punctuation { color: #787c86; }
+[data-theme='light'] .cil-Dim { color: #696c77; }
+[data-theme='light'] .cil-Prompt { color: #4078f2; }
+[data-theme='light'] .cil-Input { color: #383a42; }
+[data-theme='light'] .cil-Opcode { color: #0184bc; }
+[data-theme='light'] .cil-Type { color: #0184bc; }
+[data-theme='light'] .cil-TopType { color: #00806e; }
+[data-theme='light'] .cil-Label { color: #c18401; }
+[data-theme='light'] .cil-Number { color: #986801; }
+[data-theme='light'] .cil-String { color: #50a14f; }
+[data-theme='light'] .cil-Keyword { color: #a626a4; }
+[data-theme='light'] .cil-Error { color: #e45649; }
+[data-theme='light'] .cil-Command { color: #4078f2; }
+[data-theme='light'] .cil-Output { color: #5c6370; }
+[data-theme='light'] .cil-Heading { color: #c18401; }
+[data-theme='light'] .cil-Directive { color: #5c6370; }
+[data-theme='light'] .cil-Comment { color: #7d828b; }
+[data-theme='light'] .cil-Member { color: #4078f2; }
+[data-theme='light'] .cil-Punctuation { color: #696c77; }
+.cil-error-underline { text-decoration: underline wavy #e06c75; text-underline-offset: 0.15em; }
+[data-theme='light'] .cil-error-underline { text-decoration-color: #e45649; }

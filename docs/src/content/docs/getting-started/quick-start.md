@@ -6,7 +6,7 @@ description: A first session, one instruction at a time.
 Start `ilrepl` and type an instruction. The line under it is the simulated evaluation stack,
 bottom to top.
 
-```
+```ilrepl
 il[1]> ldc.i4 6
   ┊ [int32]
 il[1]> ldc.i4 7
@@ -25,7 +25,7 @@ and prints whatever single value was left on the stack. An empty stack means the
 Member references use ILAsm syntax, with two conveniences: the return type and the `[assembly]`
 prefix are optional, and short type names resolve through the common `System` namespaces.
 
-```
+```ilrepl
 il[2]> ldstr "hello"
   ┊ [string]
 il[2]> callvirt instance int32 String::get_Length()
@@ -41,7 +41,7 @@ When a name is ambiguous the error lists the overloads so you can pick one.
 Locals are declared with `.locals` and persist across cells. Their values do not; each run starts
 fresh.
 
-```
+```ilrepl
 il[3]> .locals init (int32 i)
   locals: 0:int32 i
 il[3]> ldc.i4.0
@@ -70,7 +70,7 @@ and sends it, line by line, once they balance; a pasted block waits for Enter th
 
 The stack model catches the common ones before the runtime sees them.
 
-```
+```ilrepl
 il[4]> add
   error: stack underflow: 'add' pops 2 values but the stack has 0: []
 il[4]> lcd.i4 1

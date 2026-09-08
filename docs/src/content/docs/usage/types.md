@@ -8,7 +8,7 @@ description: Declare a class in one cell and use it from the next.
 with the metadata you declared and loaded once, so later cells make instances of it, read its
 statics, and call its members, and a value of the type is shown by its fields.
 
-```
+```ilrepl
 il[1]> .class public sequential ansi sealed Point extends [System.Runtime]System.ValueType {
   struct Point
 il[1]> .field public int32 X
@@ -72,7 +72,7 @@ The type is one runtime type for the whole session. A static keeps its value fro
 an instance made in one cell is the same object in the next, and a type initializer runs once,
 when the type is first touched.
 
-```
+```ilrepl
 il[3]> .locals init (valuetype Point p)
 il[3]> ldloca p
 il[3]> ldc.i4 5
@@ -97,7 +97,7 @@ a method of any name that says which slot it fills with `.override`. Abstract me
 default interface bodies, and `static abstract` members all work as they do in ILAsm, and the
 close checks that every slot is filled.
 
-```
+```ilrepl
 il[4]> .class interface public abstract IArea {
   interface IArea
 il[4]> .method public abstract virtual instance int32 Area() { }
@@ -149,7 +149,7 @@ it; each closed type has its own statics. A nested type is declared inside its e
 and named by its path, `Outer/Inner`, and a nested generic type redeclares the enclosing
 parameters first, as ECMA-335 has it.
 
-```
+```ilrepl
 il[6]> .class public Box`1<T> {
   class Box`1<T>
 il[6]> .field public !0 Value
@@ -192,7 +192,7 @@ allowed to skip the runtime's own checks for session types; the rules are ECMA-3
 difference that the runtime itself makes: a derived class may use a `family` member through
 any receiver, not only through its own type.
 
-```
+```ilrepl
 il[8]> .class public Base {
   class Base
 il[8]> .field private int32 Secret
@@ -209,7 +209,7 @@ il[9]> ldsfld int32 Base::Secret
 and the open method. `.il` renders each class before the cell type, and `.save` writes them into
 the assembly, so the file carries exactly the metadata you declared.
 
-```
+```ilrepl
 il[9]> .types
   struct Point
       public int32 X
@@ -240,7 +240,7 @@ class may refer back to one that refers to it: define `A`, define `B` using `A`,
 longer compiles, the redefinition is refused with that name and nothing changes: redefine the
 dependent first, or `.reset`.
 
-```
+```ilrepl
 il[10]> }
   replaced class Point; rebuilt method Make and class Line (existing instances and delegates keep the previous definitions)
 ```

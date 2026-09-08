@@ -12,7 +12,7 @@ bytes the REPL compiled for what you typed.
 
 ## A method you wrote
 
-```
+```ilrepl
 il[2]> .dis int32 Fib(int32)
   .method public hidebysig static int32 Fib(int32 n) cil managed {
   .maxstack 3
@@ -45,7 +45,7 @@ prints it.
 
 ## What the emitter added
 
-```
+```ilrepl
 il[3]> .dis Safe
   .method public hidebysig static int32 Safe(int32 d) cil managed {
   .maxstack 2
@@ -85,7 +85,7 @@ where the handler starts.
 
 ## A member of a class
 
-```
+```ilrepl
 il[4]> .dis instance int32 Point::Twice()
   .method public instance int32 Twice() cil managed {
   .maxstack 2
@@ -103,7 +103,7 @@ and the lookup declares nothing on your behalf.
 
 ## Framework methods
 
-```
+```ilrepl
 il[5]> .dis instance string String::Trim()
   .method public hidebysig instance string Trim() cil managed {
   .maxstack 8
@@ -142,7 +142,7 @@ browser, so expect the shape to match and the details to move.
 
 ## Generic definitions
 
-```
+```ilrepl
 il[5]> .dis instance void class List`1<int32>::Add(!0)
   .method public hidebysig newslot virtual final instance void Add(!T item) cil managed aggressiveinlining {
   .maxstack 3
@@ -162,7 +162,7 @@ through.
 
 ## Loaded assemblies
 
-```
+```ilrepl
 il[1]> .load samples/Greeter/bin/Debug/net10.0/Greeter.dll
   loaded Greeter 1.0.0.0 (12 public types)
 il[1]> .dis int32 Greeter.Hello::CallCountArgs()

@@ -9,6 +9,7 @@ on:
       - 'tests/IlRepl.Docs.Tests/**'
       - 'scripts/Publish-Wasm.cs'
       - 'scripts/Generate-OpcodeReference.cs'
+      - 'scripts/Highlight-Cil.cs'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -38,6 +39,12 @@ jobs:
 
       - name: Generate the opcode reference
         run: dotnet run --file scripts/Generate-OpcodeReference.cs
+
+      - name: Check the docs' CIL colours are the committed ones
+        run: |
+          dotnet build samples/Greeter --nologo -v quiet
+          dotnet run --file scripts/Highlight-Cil.cs
+          git diff --exit-code -- docs/src/generated || { echo "::error::the committed colours are stale: run scripts/Highlight-Cil.cs and commit docs/src/generated"; exit 1; }
 
       - name: Publish the browser build into the site
         run: dotnet run --file scripts/Publish-Wasm.cs

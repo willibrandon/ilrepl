@@ -136,18 +136,9 @@ starlight-toc {
   max-width: 100%;
 }
 
-.prompt-char {
-  color: var(--sl-color-accent);
+/* The prompt is not part of what a copy of the hero should carry. */
+.hero-prompt .cil-Prompt {
   user-select: none;
-}
-
-.prompt-stack {
-  color: var(--sl-color-gray-3);
-}
-
-.prompt-result {
-  color: var(--sl-color-gray-1);
-  font-weight: 600;
 }
 
 .feature-strip {

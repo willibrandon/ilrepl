@@ -36,7 +36,7 @@ ilrepl -e 'ldc.i4 6; ldc.i4 7; mul; ret'
 
 prints
 
-```
+```ilrepl
   ┊ [int32]
   ┊ [int32, int32] ◂ top
   ┊ [int32]

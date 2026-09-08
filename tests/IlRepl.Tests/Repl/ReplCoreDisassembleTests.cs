@@ -1,5 +1,6 @@
 using IlRepl.Protocol;
 using IlRepl.Repl;
+using System.Text.RegularExpressions;
 
 namespace IlRepl.Tests.Repl;
 
@@ -7,7 +8,7 @@ namespace IlRepl.Tests.Repl;
 /// Tests for the <c>.dis</c> command.
 /// </summary>
 [TestClass]
-public sealed class ReplCoreDisassembleTests
+public sealed partial class ReplCoreDisassembleTests
 {
     private static readonly string[] Fib =
     [
@@ -67,7 +68,7 @@ public sealed class ReplCoreDisassembleTests
         var lines = Listing(core, ".dis instance string [System.Runtime]System.String::Trim()");
         Assert.AreEqual("  .method public hidebysig instance string Trim() cil managed {", lines[0]);
         Assert.StartsWith("  .maxstack ", lines[1]);
-        Assert.Contains(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"^  [0-9a-f]{4} \S.* \[.*\]$|^  [0-9a-f]{4} \S.* \?$"), lines);
+        Assert.Contains(l => InstructionRow().IsMatch(l), lines);
         Assert.AreEqual("  }", lines[^1]);
         Assert.Contains(l => l.Kind == LineKind.Info && l.PlainText.StartsWith("  code size ", StringComparison.Ordinal), core.Transcript.Lines);
 
@@ -244,7 +245,7 @@ public sealed class ReplCoreDisassembleTests
                 }
 
                 // An instruction line is the offset, the tokenized text, and the stack column.
-                var offsetColumn = line.Spans.Count >= 3 && System.Text.RegularExpressions.Regex.IsMatch(line.Spans[0].Text, "^  [0-9a-f]{4} $");
+                var offsetColumn = line.Spans.Count >= 3 && OffsetColumn().IsMatch(line.Spans[0].Text);
                 pasted.Add(offsetColumn ? string.Concat(line.Spans.Skip(1).Take(line.Spans.Count - 2).Select(s => s.Text)).Trim() : text);
             }
 
@@ -327,7 +328,7 @@ public sealed class ReplCoreDisassembleTests
                 continue;
             }
 
-            var offsetColumn = line.Spans.Count >= 3 && System.Text.RegularExpressions.Regex.IsMatch(line.Spans[0].Text, "^  [0-9a-f]{4} $");
+            var offsetColumn = line.Spans.Count >= 3 && OffsetColumn().IsMatch(line.Spans[0].Text);
             pasted.Add(offsetColumn ? string.Concat(line.Spans.Skip(1).Take(line.Spans.Count - 2).Select(s => s.Text)).Trim() : text);
         }
 
@@ -421,4 +422,13 @@ public sealed class ReplCoreDisassembleTests
         Assert.HasCount(1, results, string.Join("\n", core.Transcript.Lines.Skip(run).Select(l => l.Kind + ": " + l.PlainText)));
         Assert.Contains("= 1 ", results[0]);
     }
+
+    // An instruction row of a disassembly: the offset, the instruction, and a stack column or a
+    // question mark where the stack is not known.
+    [GeneratedRegex(@"^  [0-9a-f]{4} \S.* \[.*\]$|^  [0-9a-f]{4} \S.* \?$")]
+    private static partial Regex InstructionRow();
+
+    // The offset column of a disassembly row.
+    [GeneratedRegex("^  [0-9a-f]{4} $")]
+    private static partial Regex OffsetColumn();
 }
