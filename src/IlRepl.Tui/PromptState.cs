@@ -24,6 +24,7 @@ public sealed class PromptState
         History = history;
         Editor = new EditorState(new Hex1bDocument("")) { TabSize = AutoIndent.Unit.Length };
         Highlighter = new CilDecorationProvider(tokenizer);
+        Commands = tokenizer.Vocabulary.Commands;
         Prediction = new PredictionHint();
         View = new PromptView();
         View.Prediction = Prediction;
@@ -43,6 +44,11 @@ public sealed class PromptState
     /// Colours the buffer.
     /// </summary>
     public CilDecorationProvider Highlighter { get; }
+
+    /// <summary>
+    /// The dot-words that are commands, whose arguments hold no brace that counts.
+    /// </summary>
+    public IReadOnlyList<string> Commands { get; }
 
     /// <summary>
     /// The ghost text after the caret.
@@ -256,7 +262,7 @@ public sealed class PromptState
         var comment = sending.CommentOpenAfter;
         foreach (var text in Pending)
         {
-            var scan = BlockBalance.Scan(text, depth, comment);
+            var scan = BlockBalance.Scan(text, depth, comment, commands: Commands);
             depth = Math.Max(0, scan.Depth);
             comment = scan.InBlockComment;
         }

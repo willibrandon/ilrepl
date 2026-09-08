@@ -16,8 +16,9 @@ public static class BlockBalance
     /// <param name="openDepth">How many closing braces the engine is already waiting for.</param>
     /// <param name="inBlockComment">Whether the engine has a <c>/*</c> open when the buffer starts.</param>
     /// <param name="awaitingBrace">True when the engine or the lines before hold a declaration header whose brace has not come yet.</param>
+    /// <param name="commands">The dot-words that are commands, whose arguments hold no brace that counts; null to know none.</param>
     /// <returns>What the scan found.</returns>
-    public static BlockScan Scan(string text, int openDepth = 0, bool inBlockComment = false, bool awaitingBrace = false)
+    public static BlockScan Scan(string text, int openDepth = 0, bool inBlockComment = false, bool awaitingBrace = false, IReadOnlyCollection<string>? commands = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         var depth = openDepth;
@@ -34,9 +35,11 @@ public static class BlockBalance
             // way, so the brace is counted now and the next one is its own. A handler header ends
             // the part before it and opens the next at the same depth, with or without a brace
             // of its own; without a leading brace the part before it is closed by the keyword
-            // alone. The words of a header may be parted by a comment, so they are read from the
-            // line with its comments and quoted text taken out.
+            // alone. A header is read from the line as the engine reads it, with its comments
+            // taken out and its quoted text set aside. A command's argument is text, not code,
+            // so a brace in it counts for nothing.
             var code = Code(line, segments);
+            var command = IsCommand(code, commands);
             if (OpensADeclaration(code))
             {
                 awaiting = true;
@@ -58,7 +61,7 @@ public static class BlockBalance
                 switch (segment.Kind)
                 {
                     case CilSegmentKind.Code:
-                        for (var i = segment.Start; i < segment.End; i++)
+                        for (var i = segment.Start; !command && i < segment.End; i++)
                         {
                             if (line[i] == '{')
                             {
@@ -98,30 +101,67 @@ public static class BlockBalance
     /// <param name="openDepth">How many closing braces the engine is already waiting for.</param>
     /// <param name="inBlockComment">Whether the engine has a <c>/*</c> open when the buffer starts.</param>
     /// <param name="awaitingBrace">True when a declaration header before the text still waits for its brace.</param>
+    /// <param name="commands">The dot-words that are commands, whose arguments hold no brace that counts; null to know none.</param>
     /// <returns>True when the braces balance and nothing is left open.</returns>
-    public static bool IsComplete(string text, int openDepth = 0, bool inBlockComment = false, bool awaitingBrace = false)
+    public static bool IsComplete(string text, int openDepth = 0, bool inBlockComment = false, bool awaitingBrace = false, IReadOnlyCollection<string>? commands = null)
     {
-        var scan = Scan(text, openDepth, inBlockComment, awaitingBrace);
+        var scan = Scan(text, openDepth, inBlockComment, awaitingBrace, commands);
         return scan.Depth <= 0 && !scan.InBlockComment && !scan.InString;
     }
 
-    // The line's code with a space where each comment, string, or quoted name was.
+    // The line's code as the engine sees it: comments taken out, so a word a comment parts is
+    // one word, and a space where each string or quoted name was.
     private static string Code(string line, IReadOnlyList<CilSegment> segments)
     {
         var code = new System.Text.StringBuilder(line.Length);
         foreach (var segment in segments)
         {
-            if (segment.Kind == CilSegmentKind.Code)
+            switch (segment.Kind)
             {
-                code.Append(line, segment.Start, segment.Length);
-            }
-            else
-            {
-                code.Append(' ');
+                case CilSegmentKind.Code:
+                    code.Append(line, segment.Start, segment.Length);
+                    break;
+                case CilSegmentKind.String:
+                case CilSegmentKind.QuotedName:
+                    code.Append(' ');
+                    break;
+                default:
+                    break;
             }
         }
 
         return code.ToString();
+    }
+
+    private static bool IsCommand(string code, IReadOnlyCollection<string>? commands)
+    {
+        if (commands is null)
+        {
+            return false;
+        }
+
+        var text = code.AsSpan().TrimStart();
+        var end = 0;
+        while (end < text.Length && !char.IsWhiteSpace(text[end]))
+        {
+            end++;
+        }
+
+        var word = text[..end];
+        if (word.Length < 2 || word[0] != '.')
+        {
+            return false;
+        }
+
+        foreach (var command in commands)
+        {
+            if (word.Equals(command, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool OpensADeclaration(ReadOnlySpan<char> code)

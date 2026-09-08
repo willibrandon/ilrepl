@@ -16,8 +16,9 @@ public static class SubmissionSplitter
     /// <param name="lines">The buffer's lines.</param>
     /// <param name="openDepth">How many closing braces the engine is already waiting for.</param>
     /// <param name="inBlockComment">Whether the engine has a <c>/*</c> open when the buffer starts.</param>
+    /// <param name="commands">The dot-words that are commands, whose arguments hold no brace that counts; null to know none.</param>
     /// <returns>The units, in order.</returns>
-    public static IReadOnlyList<SubmissionUnit> Split(IReadOnlyList<string> lines, int openDepth = 0, bool inBlockComment = false)
+    public static IReadOnlyList<SubmissionUnit> Split(IReadOnlyList<string> lines, int openDepth = 0, bool inBlockComment = false, IReadOnlyCollection<string>? commands = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
         var units = new List<SubmissionUnit>();
@@ -31,7 +32,7 @@ public static class SubmissionSplitter
             var line = lines[i];
             var before = comment;
             var kind = CilLexer.Classify(line, ref comment, out _);
-            var scan = BlockBalance.Scan(line, depth, before, awaiting);
+            var scan = BlockBalance.Scan(line, depth, before, awaiting, commands);
             if (kind == SourceLineKind.Text)
             {
                 awaiting = scan.AwaitingBrace;

@@ -69,7 +69,7 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
             return EnterAction.AcceptCompletion;
         }
 
-        return BlockBalance.IsComplete(state.Text, openDepth, commentOpen) ? EnterAction.Submit : EnterAction.Continue;
+        return BlockBalance.IsComplete(state.Text, openDepth, commentOpen, commands: state.Commands) ? EnterAction.Submit : EnterAction.Continue;
     }
 
     /// <summary>

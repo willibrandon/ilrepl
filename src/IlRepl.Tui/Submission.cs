@@ -42,11 +42,11 @@ public sealed class Submission
         ArgumentNullException.ThrowIfNull(post);
         _engine = engine;
         _lines = lines;
-        _units = SubmissionSplitter.Split(lines, openDepth, inBlockComment);
+        _units = SubmissionSplitter.Split(lines, openDepth, inBlockComment, engine.Vocabulary.Commands);
         _persist = persist;
         _post = post;
         Total = _units.Sum(u => u.Sends.Count);
-        var after = BlockBalance.Scan(string.Join('\n', lines), openDepth, inBlockComment);
+        var after = BlockBalance.Scan(string.Join('\n', lines), openDepth, inBlockComment, commands: engine.Vocabulary.Commands);
         DepthAfter = Math.Max(0, after.Depth);
         CommentOpenAfter = after.InBlockComment;
         Completion = RunAsync();

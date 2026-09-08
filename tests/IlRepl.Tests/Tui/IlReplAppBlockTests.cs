@@ -792,6 +792,32 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
+    /// A brace in a command's argument opens no block: Enter sends the command, which the engine
+    /// answers, and the prompt is empty again.
+    /// </summary>
+    [TestMethod]
+    public async Task Command_WithABraceInItsArgument_GoesOnEnter()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync(".load /nowhere/cell{draft.dll", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .load /nowhere/cell{draft.dll" && !s.ContainsText("Enter continues"), description: "the brace opens nothing");
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Contains("il[1]> .load /nowhere/cell{draft.dll") && transcript.Lines.Any(l => l.Kind == LineKind.Error), description: "the command went and was answered");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && !s.ContainsText("open block"), description: "the prompt is empty and no block is open");
+        Assert.AreEqual(0, engine.Status.OpenDepth);
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
     /// A comment before the header does not change what the header is: the block waits for its
     /// brace, a refused body line brings the whole block back, and the correction commits it.
     /// </summary>

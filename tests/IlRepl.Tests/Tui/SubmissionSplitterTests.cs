@@ -179,6 +179,18 @@ public sealed class SubmissionSplitterTests
     }
 
     /// <summary>
+    /// A command whose argument holds a brace is one line, not the start of a block.
+    /// </summary>
+    [TestMethod]
+    public void Split_CommandWithABraceInItsArgument_IsOneLine()
+    {
+        var units = SubmissionSplitter.Split([".load /tmp/cell{draft.dll", "nop"], commands: [".load"]);
+        Assert.AreSequenceEqual(
+            [new SubmissionUnit(0, 1, [0], SubmissionUnitKind.Line), new SubmissionUnit(1, 2, [1], SubmissionUnitKind.Line)],
+            units);
+    }
+
+    /// <summary>
     /// A comment between the closing brace and the handler keyword does not end the block early.
     /// </summary>
     [TestMethod]

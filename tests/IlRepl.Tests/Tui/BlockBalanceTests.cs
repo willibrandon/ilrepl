@@ -203,4 +203,34 @@ public sealed class BlockBalanceTests
         Assert.AreEqual(0, BlockBalance.Scan("/* .method */ nop").Depth);
         Assert.AreEqual(0, BlockBalance.Scan("ldstr \"} catch\"").Depth);
     }
+
+    /// <summary>
+    /// A comment inside a word leaves one word once it is taken out, as the engine reads it, so
+    /// a header parted that way is still a header.
+    /// </summary>
+    [TestMethod]
+    public void Scan_CommentInsideAWord_ReadsAsTheEngineDoes()
+    {
+        var method = BlockBalance.Scan(".met/* note */hod int32 F()");
+        Assert.AreEqual(1, method.Depth);
+        Assert.IsTrue(method.AwaitingBrace);
+        Assert.AreEqual(1, BlockBalance.Scan(".try {\n  nop\n} ca/* note */tch [System.Runtime]System.Exception").Depth);
+        Assert.AreEqual(0, BlockBalance.Scan("ldstr \"{\" /* { */").Depth);
+    }
+
+    /// <summary>
+    /// A command's argument is text: a brace in a path opens nothing. The scanner knows a
+    /// command only when told which dot-words are commands.
+    /// </summary>
+    [TestMethod]
+    public void Scan_CommandArguments_HaveNoBraces()
+    {
+        string[] commands = [".save", ".load"];
+        Assert.AreEqual(0, BlockBalance.Scan(".save /tmp/cell{draft.dll", commands: commands).Depth);
+        Assert.AreEqual(0, BlockBalance.Scan("  .load a{b", commands: commands).Depth);
+        Assert.AreEqual(1, BlockBalance.Scan(".load a{b", openDepth: 1, commands: commands).Depth, "a command inside a block leaves the block as it was");
+        Assert.IsTrue(BlockBalance.IsComplete(".save /tmp/cell{draft.dll", commands: commands));
+        Assert.AreEqual(1, BlockBalance.Scan(".method int32 F() {", commands: commands).Depth, "a declaration is not a command");
+        Assert.AreEqual(1, BlockBalance.Scan(".save /tmp/cell{draft.dll").Depth, "with no commands known, a brace is a brace");
+    }
 }
