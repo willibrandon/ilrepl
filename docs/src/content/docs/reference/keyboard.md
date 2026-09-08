@@ -13,6 +13,7 @@ description: Keys in the terminal UI.
 | Escape | Dismiss the palette. |
 | Home, End, Left, Right | Move within the line; with Ctrl, by word. |
 | Shift+arrows | Select in the buffer. Typing replaces the selection and Ctrl+C copies it. |
+| Ctrl+U | Delete from the caret back to the start of the line; at the start of a line, join it to the line above. |
 | Ctrl+Z, Ctrl+Y | Undo and redo. |
 | Ctrl+L | Clear the transcript. |
 | Shift+Up | On an empty prompt, select the last transcript line. Shift+Up and Shift+Down extend the selection, y copies it, Escape cancels. Dragging with the mouse selects as well. |

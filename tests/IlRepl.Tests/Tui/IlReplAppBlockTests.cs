@@ -921,4 +921,58 @@ public sealed class IlReplAppBlockTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// Ctrl+U cuts the current line from the caret back to its start and leaves the caret there;
+    /// at the start of a line it joins the line to the one above, the other lines stay, and undo
+    /// puts each step back.
+    /// </summary>
+    [TestMethod]
+    public async Task CtrlU_DeletesToTheStartOfTheLine()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync("ldc.i4 12", ct: ct);
+        await auto.LeftAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 15, 0), description: "the caret sits before the last digit");
+        await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> 2" && AppTest.CaretAt(s, 7, 0), description: "the text before the caret is gone and the caret is at the start");
+        await auto.Ctrl().KeyAsync(Hex1bKey.Z, ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 12" && AppTest.CaretAt(s, 15, 0) && s.GetCell(8, AppTest.PromptTop(s)).Background is null, description: "undo puts the line back with the caret where it was and nothing selected");
+        await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
+        await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
+        await auto.TypeAsync("q", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q2" && AppTest.CaretAt(s, 8, 0), description: "at the start of the only line, Ctrl+U does nothing and the text after the caret stays");
+        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "cleared");
+
+        await AppTest.TypeLinesAsync(auto, [".method void F() {", "ldarg n"], ct);
+        await auto.TypeAsync("nop", ct: ct);
+        await auto.UpAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.CaretLine(s) == 1 && AppTest.PromptRow(s, 1) == "  ...>   ldarg n", description: "the caret is on the middle line");
+        await auto.EndAsync(ct: ct);
+        await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.PromptRow(s, 1) == "  ...>" && AppTest.PromptRow(s, 2) == "  ...>   nop" && AppTest.CaretAt(s, 7, 1), description: "only the current line is cut");
+        await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.PromptRow(s, 1) == "  ...>   nop" && AppTest.CaretAt(s, 7 + ".method void F() {".Length, 0), description: "at the start of a line, Ctrl+U joins it to the line above");
+        await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && AppTest.PromptRow(s, 1) == "  ...>   nop" && AppTest.CaretAt(s, 7, 0), description: "and again cuts that line back to its start");
+        await auto.DownAsync(ct: ct);
+        await auto.HomeAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 7, 1), description: "at the start of the last line");
+        await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
+        await auto.WaitUntilAsync(s => !s.ContainsText("editing") && AppTest.PromptRow(s, 0) == "il[1]>   nop" && AppTest.CaretAt(s, 7, 0), description: "joining up keeps the rest of the line after the caret");
+        await auto.Ctrl().KeyAsync(Hex1bKey.Z, ct: ct);
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 1) == "  ...>   nop" && AppTest.CaretAt(s, 7, 1), description: "undo puts the line break back with the caret where it was");
+        Assert.IsEmpty(AppTest.Echoes(transcript));
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

@@ -244,6 +244,7 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
 
         b.Ctrl().Key(Hex1bKey.P).Action(_ => HistoryBack(state), "Previous entry");
         b.Ctrl().Key(Hex1bKey.N).Action(_ => HistoryForward(state), "Next entry");
+        b.Ctrl().Key(Hex1bKey.U).Action(_ => DeleteToLineStart(state), "Delete to the start of the line");
         b.Ctrl().Key(Hex1bKey.C).Action(c => CtrlC(state, c), "Copy, clear, or quit");
     }
 
@@ -342,6 +343,37 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
         context.RequestStop();
     }
 
+    // Ctrl+U as readline and prompt_toolkit have it: the line is cut from the caret back to
+    // its start, and at the start of a line the line break before the caret goes, so the caret
+    // lands at the end of the line above with the rest of this one following it. Each is one
+    // edit that undo puts back, caret included.
+    private static void DeleteToLineStart(PromptState state)
+    {
+        var editor = state.Editor;
+        var document = editor.Document;
+        var caret = editor.Cursor.Position;
+        var position = document.OffsetToPosition(caret);
+        var start = document.PositionToOffset(new DocumentPosition(position.Line, 1));
+        DocumentRange cut;
+        if (start.Value < caret.Value)
+        {
+            cut = new DocumentRange(start, caret);
+        }
+        else if (position.Line > 1)
+        {
+            cut = new DocumentRange(new DocumentOffset(start.Value - 1), start);
+        }
+        else
+        {
+            return;
+        }
+
+        Replace(editor, cut, "");
+        state.LastLength = document.Length;
+        state.PaletteDismissed = false;
+        state.PaletteNavigated = false;
+    }
+
     private static void HistoryBack(PromptState state)
     {
         var text = state.History.Back(state.Text);
@@ -404,7 +436,10 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
                 if (dedented.Length < indentation.Length)
                 {
                     editor.Undo();
-                    Dedent(editor, dedented + "}");
+                    var document = editor.Document;
+                    var caret = editor.Cursor.Position;
+                    var lineStart = document.PositionToOffset(new DocumentPosition(document.OffsetToPosition(caret).Line, 1));
+                    Replace(editor, new DocumentRange(lineStart, caret), dedented + "}");
                 }
             }
         }
@@ -412,20 +447,18 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
         state.LastLength = editor.Document.Length;
     }
 
-    private static void Dedent(EditorState editor, string replacement)
+    // One recorded edit that swaps a range for new text and puts the caret after it, so undo
+    // brings back the text and the caret as they were, with no selection left behind.
+    private static void Replace(EditorState editor, DocumentRange range, string replacement)
     {
         var document = editor.Document;
-        var caret = editor.Cursor.Position;
-        var line = document.OffsetToPosition(caret).Line;
-        var start = document.PositionToOffset(new DocumentPosition(line, 1));
-        var range = new DocumentRange(start, caret);
         var operation = new ReplaceOperation(range, replacement);
-        var inverse = new ReplaceOperation(new DocumentRange(start, new DocumentOffset(start.Value + replacement.Length)), document.GetText(range));
+        var inverse = new ReplaceOperation(new DocumentRange(range.Start, new DocumentOffset(range.Start.Value + replacement.Length)), document.GetText(range));
         var versionBefore = document.Version;
         editor.History.BeginGroup(editor.Cursors, versionBefore);
-        document.Apply(operation, "dedent");
+        document.Apply(operation, "prompt");
         editor.History.RecordEdit(operation, inverse, editor.Cursors, versionBefore, document.Version);
-        editor.SetCursorPosition(new DocumentOffset(start.Value + replacement.Length));
+        editor.SetCursorPosition(new DocumentOffset(range.Start.Value + replacement.Length));
         editor.History.CommitGroup(editor.Cursors, document.Version);
     }
 
