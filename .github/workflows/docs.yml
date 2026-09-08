@@ -44,7 +44,7 @@ jobs:
         run: |
           dotnet build samples/Greeter --nologo -v quiet
           dotnet run --file scripts/Highlight-Cil.cs
-          git diff --exit-code -- docs/src/generated/cil-tokens.json || { echo "::error::the committed token map is stale: run scripts/Highlight-Cil.cs and commit docs/src/generated/cil-tokens.json"; exit 1; }
+          git diff --exit-code -- docs/src/generated || { echo "::error::the committed colours are stale: run scripts/Highlight-Cil.cs and commit docs/src/generated"; exit 1; }
 
       - name: Publish the browser build into the site
         run: dotnet run --file scripts/Publish-Wasm.cs

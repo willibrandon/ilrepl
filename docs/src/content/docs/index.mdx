@@ -16,14 +16,9 @@ hero:
       variant: minimal
 ---
 
-<pre class="hero-prompt"><span class="prompt-char">il[1]&gt;</span> ldc.i4 6
-<span class="prompt-stack">  ┊ [int32]</span>
-<span class="prompt-char">il[1]&gt;</span> ldc.i4 7
-<span class="prompt-stack">  ┊ [int32, int32] ◂ top</span>
-<span class="prompt-char">il[1]&gt;</span> mul
-<span class="prompt-stack">  ┊ [int32]</span>
-<span class="prompt-char">il[1]&gt;</span> ret
-<span class="prompt-result">  = 42 : int32</span></pre>
+import HeroPrompt from '../../generated/HeroPrompt.astro';
+
+<HeroPrompt />
 
 <div class="feature-strip">
   <div class="feature-item">

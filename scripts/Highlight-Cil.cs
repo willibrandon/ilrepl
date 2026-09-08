@@ -12,8 +12,10 @@
 // styled by the rules the engine styles its own by, and the block is named so the drift can be
 // seen. A block showing the editor's own rows is styled that way without a replay. The result
 // goes to docs/src/generated/cil-tokens.json, with the palette for a dark ground and the one for
-// a light ground, which the site reads at build. The engine needs the JIT, which a file-based
-// app's default of publishing native would take away.
+// a light ground, which the site reads at build. The splash page's hero transcript, kept in
+// docs/src/hero.ilrepl, is replayed the same way into a component of spans with one class per
+// style, beside a stylesheet that gives each class its colour on either ground. The engine
+// needs the JIT, which a file-based app's default of publishing native would take away.
 
 using System.Security.Cryptography;
 using System.Text;
@@ -138,6 +140,8 @@ using (var json = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = 
     json.WriteEndObject();
 }
 
+await WriteHeroAsync();
+
 Console.WriteLine($"{blocks.Count} blocks coloured ({replayed} transcripts replayed exactly) into {Path.GetRelativePath(root, output)}");
 foreach (var warning in warnings)
 {
@@ -148,6 +152,68 @@ return 0;
 
 // The block's text as the site sees it: its lines, trailing blank lines dropped, joined by newlines.
 static string Key(IReadOnlyList<string> body) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', body))));
+
+// The splash page's hero: the transcript as a component of spans with one class per style, and
+// the stylesheet that colours each class on a dark ground and on a light one.
+async Task WriteHeroAsync()
+{
+    var source = Path.Combine(root, "docs", "src", "hero.ilrepl");
+    var body = File.ReadAllLines(source).ToList();
+    while (body.Count > 0 && body[^1].Trim().Length == 0)
+    {
+        body.RemoveAt(body.Count - 1);
+    }
+
+    var scratch = Directory.CreateTempSubdirectory("ilrepl-docs-");
+    Directory.SetCurrentDirectory(scratch.FullName);
+    List<IReadOnlyList<TranscriptSpan>> lines;
+    try
+    {
+        await using var engine = new InProcessEngine();
+        lines = await TranscriptAsync(engine, body, "hero.ilrepl:1");
+    }
+    finally
+    {
+        Directory.SetCurrentDirectory(cwd);
+        scratch.Delete(true);
+    }
+
+    var component = new StringBuilder();
+    component.Append("---\n// Written by scripts/Highlight-Cil.cs from src/hero.ilrepl; edit that and run the script.\n---\n");
+    component.Append("<pre class=\"hero-prompt\">");
+    for (var i = 0; i < lines.Count; i++)
+    {
+        if (i > 0)
+        {
+            component.Append('\n');
+        }
+
+        foreach (var span in lines[i])
+        {
+            var text = System.Net.WebUtility.HtmlEncode(span.Text);
+            component.Append(span.Style == SpanStyle.Default ? text : $"<span class=\"cil-{span.Style}\">{text}</span>");
+        }
+    }
+
+    component.Append("</pre>\n");
+    File.WriteAllText(Path.Combine(root, "docs", "src", "generated", "HeroPrompt.astro"), component.ToString());
+
+    var css = new StringBuilder();
+    css.Append("/* Written by scripts/Highlight-Cil.cs from the terminal's palette; edit SpanPalette and run the script. */\n");
+    foreach (var (selector, colour) in new (string, Func<SpanStyle, Hex1bColor>)[] { ("", SpanPalette.Color), ("[data-theme='light'] ", SpanPalette.LightColor) })
+    {
+        foreach (var style in Enum.GetValues<SpanStyle>())
+        {
+            var color = colour(style);
+            if (!color.IsDefault)
+            {
+                css.Append($"{selector}.cil-{style} {{ color: #{color.R:x2}{color.G:x2}{color.B:x2}; }}\n");
+            }
+        }
+    }
+
+    File.WriteAllText(Path.Combine(root, "docs", "src", "generated", "cil-palette.css"), css.ToString());
+}
 
 List<IReadOnlyList<TranscriptSpan>> Cil(IReadOnlyList<string> body)
 {

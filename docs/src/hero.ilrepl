@@ -1,0 +1,8 @@
+il[1]> ldc.i4 6
+  ┊ [int32]
+il[1]> ldc.i4 7
+  ┊ [int32, int32] ◂ top
+il[1]> mul
+  ┊ [int32]
+il[1]> ret
+  = 42 : int32

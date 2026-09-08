@@ -82,4 +82,26 @@ public sealed class HighlightTests
         Assert.Contains(Span("Prompt", "il[1]&gt; "), html, "the prompt should wear the prompt colours");
         Assert.Contains(Span("TopType", "int32"), html, "the top of the stack should wear the top-type colours");
     }
+
+    /// <summary>
+    /// The splash page's hero transcript is coloured the same way, through a generated component
+    /// with one class per style and a stylesheet holding both palettes.
+    /// </summary>
+    [TestMethod]
+    public void SplashPage_HeroIsColouredByThePalette()
+    {
+        var page = Path.Combine(SitePaths.Dist, "index.html");
+        Assert.IsTrue(File.Exists(page), "build the docs first");
+        var html = File.ReadAllText(page);
+        Assert.Contains("<span class=\"cil-Prompt\">il[1]&gt; </span>", html, "the prompt should wear the prompt class");
+        Assert.Contains("<span class=\"cil-Opcode\">ldc.i4</span>", html, "the opcode should wear the opcode class");
+        Assert.Contains("<span class=\"cil-TopType\">int32</span>", html, "the top of the stack should wear the top-type class");
+        Assert.Contains("<span class=\"cil-Number\">42</span>", html, "the result should wear the number class");
+
+        using var map = JsonDocument.Parse(File.ReadAllText(s_map));
+        var dark = map.RootElement.GetProperty("palette").GetProperty("dark").GetProperty("Opcode").GetString()!;
+        var light = map.RootElement.GetProperty("palette").GetProperty("light").GetProperty("Opcode").GetString()!;
+        var css = Directory.EnumerateFiles(Path.Combine(SitePaths.Dist, "_astro"), "*.css").Select(File.ReadAllText).ToList();
+        Assert.Contains(c => c.Contains(".cil-Opcode{color:" + dark, StringComparison.Ordinal) && c.Contains(".cil-Opcode{color:" + light, StringComparison.Ordinal), css, "the stylesheet should colour the class on both grounds");
+    }
 }
