@@ -804,4 +804,34 @@ public sealed class IlReplAppRecoveryTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A command that ends a block, pasted inside it, leaves the engine where the text was not
+    /// written for: the lines after it are read from where the engine now is, so a blank line
+    /// runs the cell and the stray closing brace is refused on its own.
+    /// </summary>
+    [TestMethod]
+    public async Task Paste_ClearInsideBlock_RestFollowsTheEngine()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await adapter.PasteAsync(".method void F() {\n  .clear\n  ldc.i4 7\n\n}\n");
+        await auto.WaitUntilTextAsync("Enter sends");
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("method F abandoned");
+        await auto.WaitUntilTextAsync("= 7 : int32");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]>" && transcript.Lines.Any(l => l.Kind == LineKind.Error), description: "the stray brace was refused on its own and the prompt is empty");
+        Assert.AreEqual(0, engine.Status.OpenDepth);
+        Assert.HasCount(1, transcript.Lines.Where(l => l.Kind == LineKind.Error).ToList(), "only the brace was refused");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

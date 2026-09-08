@@ -15,7 +15,10 @@ public sealed class Submission
 {
     private readonly IReplEngine _engine;
     private readonly IReadOnlyList<string> _lines;
-    private readonly IReadOnlyList<SubmissionUnit> _units;
+    private readonly List<SubmissionUnit> _units;
+    private readonly IReadOnlyList<string> _commands;
+    private readonly int _openDepth;
+    private readonly bool _inBlockComment;
     private readonly Func<CancellationToken, Task> _persist;
     private readonly Action<SubmissionEvent> _post;
     private volatile bool _cancelled;
@@ -42,7 +45,10 @@ public sealed class Submission
         ArgumentNullException.ThrowIfNull(post);
         _engine = engine;
         _lines = lines;
-        _units = SubmissionSplitter.Split(lines, openDepth, inBlockComment, engine.Vocabulary.Commands);
+        _commands = engine.Vocabulary.Commands;
+        _openDepth = openDepth;
+        _inBlockComment = inBlockComment;
+        _units = [.. SubmissionSplitter.Split(lines, openDepth, inBlockComment, _commands)];
         _persist = persist;
         _post = post;
         Total = _units.Sum(u => u.Sends.Count);
@@ -70,7 +76,7 @@ public sealed class Submission
     /// <summary>
     /// How many lines there are to send.
     /// </summary>
-    public int Total { get; }
+    public int Total { get; private set; }
 
     /// <summary>
     /// Whether lines are still going.
@@ -101,8 +107,12 @@ public sealed class Submission
         try
         {
             await _persist(CancellationToken.None).ConfigureAwait(false);
-            foreach (var unit in _units)
+            // What the text says the engine's depth should be after each line, so a command
+            // that ended a block, .clear or .reset among them, is noticed when it has.
+            var expect = new BlockScan(_openDepth, _inBlockComment, false);
+            for (var u = 0; u < _units.Count; u++)
             {
+                var unit = _units[u];
                 var mark = _engine.Status.Mark;
                 var restart = unit.Start;
                 var moved = false;
@@ -143,7 +153,8 @@ public sealed class Submission
                     }
 
                     Interlocked.Increment(ref _sent);
-                    var last = ReferenceEquals(unit, _units[^1]) && i == unit.Sends.Count - 1;
+                    expect = BlockBalance.Scan(_lines[index], expect.Depth, expect.InBlockComment, expect.AwaitingBrace, _commands);
+                    var cut = false;
                     if (reply.Quit)
                     {
                         _post(SubmissionEvent.QuitRequested(reply.Lines));
@@ -169,6 +180,17 @@ public sealed class Submission
                             _boundary = i < unit.Sends.Count - 1 ? restart : unit.End;
                             _mark = mark;
                             _provisional = provisional;
+                            if (index < _lines.Count - 1 && Diverged(reply.Status, expect))
+                            {
+                                // The engine is no longer where the text was written for: a
+                                // command ended a block. The lines after it are cut again from
+                                // where the engine now is, so a blank line among them runs the
+                                // cell and a brace closes what is open now.
+                                Recut(u, i, index, reply.Status);
+                                unit = _units[u];
+                                expect = new BlockScan(reply.Status.OpenDepth, reply.Status.Mark.InBlockComment, false);
+                                cut = true;
+                            }
 
                             break;
                         case SubmissionOutcome.Refused:
@@ -199,7 +221,12 @@ public sealed class Submission
                             break;
                     }
 
+                    var last = u == _units.Count - 1 && i == unit.Sends.Count - 1;
                     _post(last ? SubmissionEvent.Done(reply.Lines) : SubmissionEvent.Reply(reply.Lines));
+                    if (cut)
+                    {
+                        break;
+                    }
                 }
             }
 
@@ -228,6 +255,24 @@ public sealed class Submission
         {
             _running = false;
         }
+    }
+
+    // The engine's open depth counts braces it has seen; the text counts a header waiting for
+    // its brace as open as well.
+    private static bool Diverged(SessionStatus status, BlockScan expect) =>
+        status.OpenDepth != expect.Depth - (expect.AwaitingBrace ? 1 : 0) || status.Mark.InBlockComment != expect.InBlockComment;
+
+    // Ends the unit at the line just sent and cuts the lines after it afresh from the engine's state.
+    private void Recut(int u, int i, int index, SessionStatus status)
+    {
+        var unit = _units[u];
+        var from = index + 1;
+        var rest = SubmissionSplitter.Split([.. _lines.Skip(from)], status.OpenDepth, status.Mark.InBlockComment, _commands)
+            .Select(r => new SubmissionUnit(r.Start + from, r.End + from, [.. r.Sends.Select(send => send + from)], r.Kind));
+        _units[u] = new SubmissionUnit(unit.Start, from, [.. unit.Sends.Take(i + 1)], unit.Kind);
+        _units.RemoveRange(u + 1, _units.Count - u - 1);
+        _units.AddRange(rest);
+        Total = _units.Sum(x => x.Sends.Count);
     }
 
     private async Task<IReadOnlyList<TranscriptLine>> WithdrawAsync(SessionMark mark, bool provisional)
