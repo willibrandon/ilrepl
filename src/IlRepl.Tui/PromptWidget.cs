@@ -316,9 +316,10 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
 
     private void CtrlC(PromptState state, InputBindingActionContext context)
     {
-        if (state.Editor.Cursor.HasSelection && !state.SelectionIsReturned)
+        // Where the terminal copies itself there is no handler, and a selection clears like any buffer.
+        if (CopyHandler is { } copy && state.Editor.Cursor.HasSelection && !state.SelectionIsReturned)
         {
-            CopyHandler?.Invoke(state.Editor.Document.GetText(state.Editor.Cursor.SelectionRange));
+            copy(state.Editor.Document.GetText(state.Editor.Cursor.SelectionRange));
             return;
         }
 

@@ -51,8 +51,8 @@ il[2]> ret
 
 Up and Down move through the lines of the buffer and reach history only from its first and last
 line; Ctrl+P and Ctrl+N walk history from any line. Shift with the arrows selects inside the
-buffer, typing replaces the selection, and Ctrl+C copies it. Ctrl+C with nothing selected clears
-the buffer, and on an empty buffer it quits.
+buffer, typing replaces the selection, and on the desktop Ctrl+C copies it. Ctrl+C with nothing
+selected clears the buffer, and on an empty buffer it quits.
 
 ## Pasting
 

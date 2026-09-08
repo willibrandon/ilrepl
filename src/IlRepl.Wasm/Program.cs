@@ -45,10 +45,9 @@ static async Task<(int Columns, int Rows)> RunSessionAsync(int columns, int rows
     await using var engine = new InProcessEngine();
     var transcript = new Transcript { MaxLines = 500 };
     PromptState? prompt = null;
-    // Selection and copy live in the app, so mouse reports must reach it. The page turns the
-    // OSC 52 sequence a copy produces into a clipboard write.
-    await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder().WithPresentation(adapter), engine, transcript, history: history, onPrompt: p => prompt = p)
-        .WithMouse()
+    // Selection and copy are the terminal's own in the browser, so the mouse stays with it. Wheel
+    // notches still reach the app, as the reports a terminal sends; the page makes them.
+    await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder().WithPresentation(adapter), engine, transcript, history: history, onPrompt: p => prompt = p, ownSelection: false)
         .Build();
 
     WasmPresentationAdapter.NotifyReady(adapter.Width, adapter.Height);

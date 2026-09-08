@@ -346,6 +346,53 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
+    /// Where the terminal selects and copies itself, as in the browser, the app stays out of it:
+    /// a drag and Shift+Up select nothing, Ctrl+C on a buffer selection clears the buffer rather
+    /// than copying, the hints do not offer Shift+Up, and the wheel still scrolls the transcript.
+    /// </summary>
+    [TestMethod]
+    public async Task OwnSelectionOff_LeavesSelectionToTheTerminal()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var recorder = new PresentationRecorder();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, ownSelection: false)
+            .AddPresentationFilter(recorder)
+            .WithHeadless()
+            .WithDimensions(100, 30)
+            .WithMouse()
+            .Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.WaitUntilTextAsync("Tab complete │ Ctrl+Q quit");
+        await AppTest.TypeLinesAsync(auto, ["ldc.i4 6"], ct);
+        await auto.WaitUntilTextAsync("[int32]");
+
+        await auto.DragAsync(0, 1, 14, 1, ct: ct);
+        await auto.Shift().KeyAsync(Hex1bKey.UpArrow, ct: ct);
+        await auto.TypeAsync("nop", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop" && !s.ContainsText("y yank"), description: "nothing selects; typing goes to the prompt");
+        await auto.Shift().KeyAsync(Hex1bKey.LeftArrow, ct: ct);
+        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "Ctrl+C on a selection clears the buffer");
+        Assert.DoesNotContain("\x1b]52;", recorder.Output, "nothing is copied through the terminal");
+
+        await AppTest.TypeLinesAsync(auto, [".help"], ct);
+        await auto.WaitUntilTextAsync("Ctrl+Q leaves.");
+        await auto.MouseMoveToAsync(40, 5, ct: ct);
+        await auto.ScrollUpAsync(ct: ct);
+        await auto.WaitUntilNoTextAsync("Ctrl+Q leaves.");
+        await auto.ScrollDownAsync(ct: ct);
+        await auto.WaitUntilTextAsync("Ctrl+Q leaves.");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
     /// A click ends a transcript selection as Escape does, whether it lands on the transcript or
     /// on the prompt, and so does typing; the prompt is in charge again at once and a later drag
     /// selects afresh.

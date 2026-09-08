@@ -188,31 +188,37 @@
       resizeTimer = setTimeout(fitColumns, 100);
     });
 
-    // Selection and copy happen inside the app: a drag or F12 starts a selection and Enter, y,
-    // or a right click copies it, which reaches the page as an OSC 52 sequence.
-    term.parser.registerOscHandler(52, (data) => {
-      const parts = data.split(';');
-      if (parts.length < 2) return false;
-      let text;
-      try {
-        text = new TextDecoder().decode(Uint8Array.from(atob(parts[1]), (c) => c.charCodeAt(0)));
-      } catch {
-        return false;
-      }
-      window.ilreplLastCopy = text;
-      if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
-      return true;
-    });
-
-    // xterm's own selection still works with the platform's modifier held (Shift, or Option on
-    // macOS); Ctrl+C or Cmd+C copies that selection instead of sending the key.
+    // Selection and copy are the terminal's own: the app never takes the mouse, so a drag
+    // selects here, and Ctrl+C or Cmd+C copies the selection instead of sending the key.
     term.attachCustomKeyEventHandler((e) => {
       if (e.type === 'keydown' && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'c' && term.hasSelection()) {
-        if (navigator.clipboard) navigator.clipboard.writeText(term.getSelection()).catch(() => {});
+        const text = term.getSelection();
+        window.ilreplLastCopy = text;
+        if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
         term.clearSelection();
         return false;
       }
       return true;
+    });
+
+    // Wheel notches still scroll the transcript: with no mouse mode on, xterm would turn them
+    // into arrow keys, so they go to the app as the scroll reports a terminal sends, one per
+    // line, from the cell under the pointer.
+    term.attachCustomWheelEventHandler((e) => {
+      if (!worker) return true;
+      const screen = term.element && term.element.querySelector('.xterm-screen');
+      if (!screen) return true;
+      const rect = screen.getBoundingClientRect();
+      const cellWidth = rect.width / term.cols;
+      const cellHeight = rect.height / term.rows;
+      const col = Math.min(term.cols, Math.max(1, Math.floor((e.clientX - rect.left) / cellWidth) + 1));
+      const row = Math.min(term.rows, Math.max(1, Math.floor((e.clientY - rect.top) / cellHeight) + 1));
+      const lines = e.deltaMode === 1 ? e.deltaY : e.deltaMode === 2 ? e.deltaY * term.rows : e.deltaY / cellHeight;
+      const count = Math.min(50, Math.max(1, Math.round(Math.abs(lines))));
+      const button = e.deltaY < 0 ? 64 : 65;
+      send(`\x1b[<${button};${col};${row}M`.repeat(count));
+      e.preventDefault();
+      return false;
     });
 
     // A click anywhere in the box focuses the terminal. In the padding around the rows the

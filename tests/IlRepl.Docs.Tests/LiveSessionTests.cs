@@ -130,9 +130,9 @@ public sealed class LiveSessionTests
     }
 
     /// <summary>
-    /// Dragging across the transcript selects text in the app, Enter copies it, and the page puts
-    /// it on the clipboard. The prompt works again afterwards, the wheel scrolls the transcript,
-    /// and the caret is a blinking block.
+    /// In the browser, selection and copy are the terminal's own: a drag across the transcript
+    /// selects in the terminal and Ctrl+C or Cmd+C copies it, the app never enters copy mode,
+    /// the wheel still scrolls the transcript, and the caret is a blinking block.
     /// </summary>
     /// <param name="browser">The browser engine to drive.</param>
     /// <returns>A task that completes when the assertions have run.</returns>
@@ -140,7 +140,7 @@ public sealed class LiveSessionTests
     [DataRow("chromium")]
     [DataRow("webkit")]
     [Timeout(240_000, CooperativeCancellation = true)]
-    public async Task Drag_CopiesSelection_AndWheelScrolls(string browser)
+    public async Task Drag_SelectsInTheTerminal_AndWheelScrolls(string browser)
     {
         await using var launched = await LaunchAsync(browser);
         await using var context = await NewContextAsync(launched, clipboard: browser == "chromium");
@@ -152,7 +152,7 @@ public sealed class LiveSessionTests
         await TypeLineAsync(page, "ldc.i4 6");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("┊ [int32]", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
 
-        // Drag across the echoed line on the second row, then y yanks it and the status bar says so.
+        // Drag across the echoed line on the second row: the terminal selects it, the app does not.
         var screen = await page.Locator(".xterm-screen").BoundingBoxAsync();
         Assert.IsNotNull(screen);
         var size = await page.EvaluateAsync<int[]>("() => [window.ilreplTerminal.cols, window.ilreplTerminal.rows]");
@@ -161,36 +161,27 @@ public sealed class LiveSessionTests
         var y = screen.Y + (cellHeight * 1.5f);
         await page.Mouse.MoveAsync(screen.X + (cellWidth * 0.5f), y);
         await page.Mouse.DownAsync();
-        await page.Mouse.MoveAsync(screen.X + (cellWidth * 14.5f), y, new MouseMoveOptions { Steps = 8 });
+        await page.Mouse.MoveAsync(screen.X + (cellWidth * 30.5f), y, new MouseMoveOptions { Steps = 8 });
         await page.Mouse.UpAsync();
-        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("y yank", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
-        await page.Keyboard.PressAsync("y");
-        await page.WaitForFunctionAsync("() => typeof window.ilreplLastCopy === 'string'", null, new PageWaitForFunctionOptions { Timeout = 30_000 });
-        var copied = await page.EvaluateAsync<string>("() => window.ilreplLastCopy");
-        Assert.Contains("ldc.i4 6", copied, "the selected row should be what was copied");
-        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("Yanked: il[1]> ldc.i4 6", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
-        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("y yank", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
+        await page.WaitForFunctionAsync("() => window.ilreplTerminal.hasSelection()", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        Assert.Contains("ldc.i4 6", await page.EvaluateAsync<string>("() => window.ilreplTerminal.getSelection()"), "the terminal should hold the selection");
+        Assert.DoesNotContain("y yank", await page.Locator("#terminal").InnerTextAsync(), "the app should not enter copy mode");
+
+        // Ctrl+C copies the terminal's selection and clears it, instead of reaching the app.
+        await page.Keyboard.PressAsync("Control+c");
+        await page.WaitForFunctionAsync("() => typeof window.ilreplLastCopy === 'string'", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        Assert.Contains("ldc.i4 6", await page.EvaluateAsync<string>("() => window.ilreplLastCopy"), "the selected row should be what was copied");
+        await page.WaitForFunctionAsync("() => !window.ilreplTerminal.hasSelection()", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
         if (browser == "chromium")
         {
             Assert.Contains("ldc.i4 6", await page.EvaluateAsync<string>("() => navigator.clipboard.readText()"), "the copy should be on the clipboard");
         }
 
-        // Shift+Up selects from the keyboard: the last line, then the one above; y yanks both.
-        await page.EvaluateAsync("() => { window.ilreplLastCopy = null; }");
+        // Shift+Up is the desktop's; here the prompt is untouched and typing goes on.
         await page.Keyboard.PressAsync("Shift+ArrowUp");
-        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("y yank", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
-        await page.Keyboard.PressAsync("Shift+ArrowUp");
-        await page.Keyboard.PressAsync("y");
-        await page.WaitForFunctionAsync("() => typeof window.ilreplLastCopy === 'string'", null, new PageWaitForFunctionOptions { Timeout = 30_000 });
-        var yanked = await page.EvaluateAsync<string>("() => window.ilreplLastCopy");
-        Assert.Contains("ldc.i4 6", yanked, "the echoed line should be in the yank");
-        Assert.Contains("[int32]", yanked, "the stack line should be in the yank");
-        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("Yanked 2 lines", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
-
-        // Copy mode has ended; a click and typing go to the prompt.
-        await ClickIntoTerminalAsync(page);
         await TypeLineAsync(page, "ret");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 6 : int32", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+        Assert.DoesNotContain("y yank", await page.Locator("#terminal").InnerTextAsync(), "the app should not enter copy mode");
 
         // The help is taller than the box; the wheel scrolls the transcript up and back down.
         await TypeLineAsync(page, ".help");
@@ -200,15 +191,6 @@ public sealed class LiveSessionTests
         await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("Ctrl+Q leaves.", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
         await page.Mouse.WheelAsync(0, 1000);
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("Ctrl+Q leaves.", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
-
-        // The scrollbar thumb in the last column can be dragged up as well.
-        var thumbX = screen.X + (cellWidth * (size[0] - 0.5f));
-        await page.Mouse.MoveAsync(thumbX, screen.Y + (cellHeight * (size[1] - 5.5f)));
-        await page.Mouse.DownAsync();
-        await page.Mouse.MoveAsync(thumbX, screen.Y + (cellHeight * 1.5f), new MouseMoveOptions { Steps = 10 });
-        await page.Mouse.UpAsync();
-        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("Ctrl+Q leaves.", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
-        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("Type one IL instruction", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
     }
 
     /// <summary>

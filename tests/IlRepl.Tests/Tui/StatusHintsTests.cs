@@ -28,6 +28,7 @@ public sealed class StatusHintsTests
     public void Hints_DropFromTheLeftAsWidthShrinks()
     {
         Assert.AreSequenceEqual(s_all, IlReplApp.StatusHints(s_facts, 100, copyMode: false));
+        Assert.AreSequenceEqual(["Tab complete", "Ctrl+Q quit"], IlReplApp.StatusHints(s_facts, 100, false, EnterAction.Submit, 1, ownSelection: false), "without the app's own selection Shift+Up is not offered");
         Assert.AreSequenceEqual(s_two, IlReplApp.StatusHints(s_facts, 83, copyMode: false));
         Assert.AreSequenceEqual(s_one, IlReplApp.StatusHints(s_facts, 60, copyMode: false));
         Assert.AreSequenceEqual(s_one, IlReplApp.StatusHints(s_facts, 20, copyMode: false));
