@@ -252,4 +252,35 @@ public sealed class IlReplAppPasteTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A pasted buffer that ends with a run line is recalled with that line, so Enter runs again.
+    /// </summary>
+    [TestMethod]
+    public async Task Paste_TwoTrailingNewlines_RecallsWithTheRun()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await adapter.PasteAsync("ldc.i4.1\n\n");
+        await auto.WaitUntilTextAsync("Enter sends 2 lines");
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("il[2]>");
+        Assert.HasCount(1, transcript.Lines.Where(l => l.Kind == LineKind.Result).ToList());
+        await auto.UpAsync(ct: ct);
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 0) == "il[2]> ldc.i4.1" && AppTest.PromptRow(s, 1) == "  ...>", description: "the entry comes back with its run line");
+        await auto.WaitUntilTextAsync("Enter sends 2 lines");
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("il[3]>");
+        Assert.HasCount(2, transcript.Lines.Where(l => l.Kind == LineKind.Result).ToList(), "the recalled entry ran the cell again");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

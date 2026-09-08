@@ -15,7 +15,7 @@ public sealed class PromptHistoryTests
     public void Add_RefusesWhitespaceAndRepeats()
     {
         var history = new PromptHistory();
-        Assert.IsTrue(history.Add("ldc.i4 1\n"));
+        Assert.IsTrue(history.Add("ldc.i4 1"));
         Assert.IsFalse(history.Add("ldc.i4 1"));
         Assert.IsFalse(history.Add("   "));
         Assert.IsFalse(history.Add(""));
@@ -31,7 +31,7 @@ public sealed class PromptHistoryTests
     public void Add_KeepsABlockAsOneEntry()
     {
         var history = new PromptHistory();
-        history.Add(".method int32 F() {\n  ldc.i4 1\n  ret\n}\n");
+        history.Add(".method int32 F() {\n  ldc.i4 1\n  ret\n}");
         Assert.HasCount(1, history.Entries);
         Assert.AreEqual(".method int32 F() {\n  ldc.i4 1\n  ret\n}", history.Entries[0]);
     }
@@ -110,10 +110,11 @@ public sealed class PromptHistoryTests
     {
         var store = new MemoryHistoryStore();
         var history = new PromptHistory(store);
-        Assert.IsTrue(await history.AddAsync("ldc.i4 1\n", CancellationToken.None));
+        Assert.IsTrue(await history.AddAsync("ldc.i4 1", CancellationToken.None));
         Assert.IsFalse(await history.AddAsync("ldc.i4 1", CancellationToken.None));
         Assert.IsFalse(await history.AddAsync("  ", CancellationToken.None));
-        Assert.AreSequenceEqual(["ldc.i4 1"], store.Appended);
+        Assert.IsTrue(await history.AddAsync("ldc.i4 1\n", CancellationToken.None), "a trailing blank line is a run, so this is another entry");
+        Assert.AreSequenceEqual(["ldc.i4 1", "ldc.i4 1\n"], store.Appended);
     }
 
     /// <summary>
@@ -194,5 +195,22 @@ public sealed class PromptHistoryTests
         atDraft.Load(["ldc.i4 1"]);
         Assert.AreEqual("nop", atDraft.Back("draft"), "Up from the draft recalls the newest entry");
         Assert.AreEqual("draft", atDraft.Forward("nop"));
+    }
+
+    /// <summary>
+    /// A buffer that ends with a blank line ends with a run: the entry keeps that line, so the
+    /// recalled entry does what the original did; a buffer of nothing but blank lines is no entry.
+    /// </summary>
+    [TestMethod]
+    public void Add_KeepsATrailingRunLine()
+    {
+        var history = new PromptHistory();
+        Assert.IsTrue(history.Add("ldc.i4.1\n"));
+        Assert.AreEqual("ldc.i4.1\n", history.Entries[^1]);
+        Assert.IsFalse(history.Add("ldc.i4.1\n"));
+        Assert.IsFalse(history.Add("\n\n"));
+        Assert.IsTrue(history.Add("ldc.i4.1"));
+        Assert.AreEqual("ldc.i4.1", history.Back(""));
+        Assert.AreEqual("ldc.i4.1\n", history.Back("ldc.i4.1"), "the entry with the run line is its own entry");
     }
 }

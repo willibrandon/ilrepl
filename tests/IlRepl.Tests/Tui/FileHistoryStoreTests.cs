@@ -395,4 +395,15 @@ public sealed class FileHistoryStoreTests
         Assert.AreEqual(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
         Assert.AreSequenceEqual(["nop", "ldc.i4 1"], await store.LoadAsync(CancellationToken.None));
     }
+
+    /// <summary>
+    /// A trailing blank line is written as an empty plus line and read back as part of the entry.
+    /// </summary>
+    [TestMethod]
+    public void Format_Parse_RoundTripsTrailingBlankLine()
+    {
+        var record = FileHistoryStore.Format("ldc.i4.1\n", new DateTimeOffset(2026, 9, 7, 10, 30, 15, TimeSpan.Zero));
+        Assert.AreEqual("\n# 2026-09-07 10:30:15.000000\n+ldc.i4.1\n+\n", record);
+        Assert.AreSequenceEqual(["ldc.i4.1\n"], FileHistoryStore.Parse(record));
+    }
 }

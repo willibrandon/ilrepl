@@ -73,7 +73,9 @@ public sealed class PromptHistory
     public bool Add(string entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        var text = entry.TrimEnd('\n', '\r');
+        // The entry is the buffer as sent, a trailing blank line included: at the top level that
+        // line runs the cell, and a recalled entry must do what the original did.
+        var text = entry.Replace("\r\n", "\n", StringComparison.Ordinal);
         Reset();
         if (text.Trim().Length == 0 || (_entries.Count > 0 && _entries[^1] == text))
         {
@@ -101,7 +103,7 @@ public sealed class PromptHistory
 
         if (_store is not null)
         {
-            await _store.AppendAsync(entry.TrimEnd('\n', '\r'), cancellationToken).ConfigureAwait(false);
+            await _store.AppendAsync(entry.Replace("\r\n", "\n", StringComparison.Ordinal), cancellationToken).ConfigureAwait(false);
         }
 
         return true;
@@ -118,7 +120,7 @@ public sealed class PromptHistory
         ArgumentNullException.ThrowIfNull(entry);
         if (_store is not null)
         {
-            await _store.AppendAsync(entry.TrimEnd('\n', '\r'), cancellationToken).ConfigureAwait(false);
+            await _store.AppendAsync(entry.Replace("\r\n", "\n", StringComparison.Ordinal), cancellationToken).ConfigureAwait(false);
         }
     }
 
