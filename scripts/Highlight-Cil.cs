@@ -229,7 +229,10 @@ List<IReadOnlyList<TranscriptSpan>> Cil(IReadOnlyList<string> body)
 
 async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine engine, IReadOnlyList<string> body, string where)
 {
-    var inputs = body.Where(l => Patterns.InputLine().IsMatch(l)).Select(l => l[(l.IndexOf("> ", StringComparison.Ordinal) + 2)..]).ToList();
+    // A prompt with nothing after it, other than the block's last line, is a blank line sent,
+    // which runs the cell.
+    var inputs = body.Take(body.Count - 1).Where(l => Patterns.InputLine().IsMatch(l) || Patterns.BarePrompt().IsMatch(l)).Concat(body.TakeLast(1).Where(l => Patterns.InputLine().IsMatch(l)))
+        .Select(l => Patterns.InputLine().IsMatch(l) ? l[(l.IndexOf("> ", StringComparison.Ordinal) + 2)..] : "").ToList();
     if (inputs.Count == 0 || body.Any(l => l.StartsWith("  ...> ", StringComparison.Ordinal)))
     {
         // The editor's own rows: a view of typing, not of the engine, so plain text is the
@@ -266,7 +269,7 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
         var mismatch = -1;
         for (var i = 0; i < Math.Max(compared.Count, produced.Count); i++)
         {
-            if (i >= compared.Count || i >= produced.Count || SamePrompt(produced[i].PlainText) != SamePrompt(compared[i]))
+            if (i >= compared.Count || i >= produced.Count || SamePrompt(produced[i].PlainText).TrimEnd() != SamePrompt(compared[i]).TrimEnd())
             {
                 mismatch = i;
                 break;
@@ -362,14 +365,23 @@ IReadOnlyList<TranscriptSpan> Styled(string line, ref bool comment, SpanStyle pl
         return spans;
     }
 
-    m = Patterns.ResultLine().Match(line);
+    m = Patterns.ResultWithType().Match(line);
+    if (!m.Success)
+    {
+        m = Patterns.ResultLine().Match(line);
+    }
+
     if (m.Success)
     {
-        // A result: the value as the value formatter styles a literal of its shape.
-        var value = new TranscriptSpan(m.Groups[2].Value, ValueStyle(m.Groups[2].Value));
-        return m.Groups[3].Success
-            ? [new(m.Groups[1].Value, SpanStyle.Dim), value, new(m.Groups[3].Value, SpanStyle.Dim)]
-            : [new(m.Groups[1].Value, SpanStyle.Dim), value];
+        // A result: the value as the value formatter wrote it, read back by its shape.
+        var spans = new List<TranscriptSpan> { new(m.Groups[1].Value, SpanStyle.Dim) };
+        spans.AddRange(ValueSpans(m.Groups[2].Value));
+        if (m.Groups.Count > 3 && m.Groups[3].Success)
+        {
+            spans.Add(new TranscriptSpan(m.Groups[3].Value, SpanStyle.Dim));
+        }
+
+        return spans;
     }
 
     m = Patterns.ErrorLine().Match(line);
@@ -398,25 +410,239 @@ IReadOnlyList<TranscriptSpan> Styled(string line, ref bool comment, SpanStyle pl
         return tokenizer.Spans(line);
     }
 
-    // The engine's own notes are indented; a line that is not is what the program wrote.
+    // The engine's own notes are indented; a line that is not is what the program wrote. In a
+    // view of the editor an unindented line is its status bar, plain.
     if (line.Length > 0 && !char.IsWhiteSpace(line[0]))
     {
-        return [new(line, SpanStyle.Output)];
+        return plain == SpanStyle.Input ? [new(line, SpanStyle.Output)] : [new(line)];
     }
 
     return [new(line, SpanStyle.Dim)];
 }
 
-// The style the value formatter gives a literal of this shape.
-static SpanStyle ValueStyle(string value) => value switch
+// The value formatter's spans for a value, read back from the text it wrote: literals, a
+// sequence in brackets or braces, a session object as its type name and labelled fields, and
+// the placeholders it writes when it cannot say more. Text of no known shape is plain.
+static IReadOnlyList<TranscriptSpan> ValueSpans(string text)
 {
-    "null" or "true" or "false" => SpanStyle.Keyword,
-    "(void)" => SpanStyle.Dim,
-    _ when value.StartsWith('"') || value.StartsWith('\'') => SpanStyle.String,
-    _ when value.StartsWith("typeof(", StringComparison.Ordinal) => SpanStyle.Type,
-    _ when Patterns.NumberLiteral().IsMatch(value) => SpanStyle.Number,
-    _ => SpanStyle.Default,
-};
+    var spans = new List<TranscriptSpan>();
+    var i = 0;
+    return ParseValue(text, ref i, spans) && i == text.Length ? spans : [new TranscriptSpan(text)];
+}
+
+static bool ParseValue(string s, ref int i, List<TranscriptSpan> spans)
+{
+    if (i >= s.Length)
+    {
+        return false;
+    }
+
+    foreach (var word in new[] { "null", "true", "false" })
+    {
+        if (Word(s, i, word))
+        {
+            spans.Add(new TranscriptSpan(word, SpanStyle.Keyword));
+            i += word.Length;
+            return true;
+        }
+    }
+
+    if (s[i] is '"' or '\'')
+    {
+        var end = i + 1;
+        while (end < s.Length && s[end] != s[i])
+        {
+            end += s[end] == '\\' ? 2 : 1;
+        }
+
+        end = Math.Min(end + 1, s.Length);
+        spans.Add(new TranscriptSpan(s[i..end], SpanStyle.String));
+        i = end;
+        return true;
+    }
+
+    var number = Patterns.NumberAt().Match(s, i);
+    if (number.Success && number.Index == i)
+    {
+        spans.Add(new TranscriptSpan(number.Value, SpanStyle.Number));
+        i += number.Length;
+        return true;
+    }
+
+    if (s.AsSpan(i).StartsWith("typeof(", StringComparison.Ordinal) && s.IndexOf(')', i) is var paren && paren > i)
+    {
+        spans.Add(new TranscriptSpan(s[i..(paren + 1)], SpanStyle.Type));
+        i = paren + 1;
+        return true;
+    }
+
+    if (s.AsSpan(i).StartsWith("(void)", StringComparison.Ordinal))
+    {
+        spans.Add(new TranscriptSpan("(void)", SpanStyle.Dim));
+        i += "(void)".Length;
+        return true;
+    }
+
+    if (s[i] == '…')
+    {
+        spans.Add(new TranscriptSpan("…", SpanStyle.Dim));
+        i++;
+        return true;
+    }
+
+    if (s.AsSpan(i).StartsWith("↺ ", StringComparison.Ordinal))
+    {
+        var end = NameEnd(s, i + 2);
+        spans.Add(new TranscriptSpan(s[i..end], SpanStyle.Dim));
+        i = end;
+        return true;
+    }
+
+    if (s[i] == '{' && Patterns.Placeholder().Match(s, i) is { Success: true } placeholder && placeholder.Index == i)
+    {
+        spans.Add(new TranscriptSpan(placeholder.Value, SpanStyle.Dim));
+        i += placeholder.Length;
+        return true;
+    }
+
+    if (s[i] is '[' or '{')
+    {
+        var close = s[i] == '[' ? ']' : '}';
+        spans.Add(new TranscriptSpan(s[i].ToString()));
+        i++;
+        while (i < s.Length && s[i] != close)
+        {
+            if (!ParseValue(s, ref i, spans))
+            {
+                return false;
+            }
+
+            if (s.AsSpan(i).StartsWith(", ", StringComparison.Ordinal))
+            {
+                spans.Add(new TranscriptSpan(", "));
+                i += 2;
+            }
+        }
+
+        if (i >= s.Length)
+        {
+            return false;
+        }
+
+        spans.Add(new TranscriptSpan(close.ToString()));
+        i++;
+        return true;
+    }
+
+    if (char.IsLetter(s[i]) || s[i] == '_')
+    {
+        var end = NameEnd(s, i);
+        var name = s[i..end];
+        if (s.AsSpan(end).StartsWith(" {…}", StringComparison.Ordinal))
+        {
+            spans.Add(new TranscriptSpan(name + " {…}", SpanStyle.Dim));
+            i = end + " {…}".Length;
+            return true;
+        }
+
+        if (s.AsSpan(end).StartsWith(" { }", StringComparison.Ordinal))
+        {
+            spans.Add(new TranscriptSpan(name, SpanStyle.Type));
+            spans.Add(new TranscriptSpan(" { }"));
+            i = end + " { }".Length;
+            return true;
+        }
+
+        if (s.AsSpan(end).StartsWith(" { ", StringComparison.Ordinal))
+        {
+            spans.Add(new TranscriptSpan(name, SpanStyle.Type));
+            spans.Add(new TranscriptSpan(" { "));
+            i = end + " { ".Length;
+            while (true)
+            {
+                if (s[i] == '…')
+                {
+                    spans.Add(new TranscriptSpan("…", SpanStyle.Dim));
+                    i++;
+                }
+                else
+                {
+                    var label = Patterns.FieldLabel().Match(s, i);
+                    if (!label.Success || label.Index != i)
+                    {
+                        return false;
+                    }
+
+                    spans.Add(new TranscriptSpan(label.Groups[1].Value, SpanStyle.Label));
+                    spans.Add(new TranscriptSpan(" = "));
+                    i += label.Length;
+                    if (Patterns.Placeholder().Match(s, i) is { Success: true } threw && threw.Index == i)
+                    {
+                        spans.Add(new TranscriptSpan(threw.Value, SpanStyle.Dim));
+                        i += threw.Length;
+                    }
+                    else if (!ParseValue(s, ref i, spans))
+                    {
+                        return false;
+                    }
+                }
+
+                if (s.AsSpan(i).StartsWith(", ", StringComparison.Ordinal))
+                {
+                    spans.Add(new TranscriptSpan(", "));
+                    i += 2;
+                    continue;
+                }
+
+                if (s.AsSpan(i).StartsWith(" }", StringComparison.Ordinal))
+                {
+                    spans.Add(new TranscriptSpan(" }"));
+                    i += 2;
+                    return true;
+                }
+
+                return false;
+            }
+        }
+
+        // An enum value, or text a type wrote for itself.
+        spans.Add(new TranscriptSpan(name));
+        i = end;
+        return true;
+    }
+
+    return false;
+}
+
+static bool Word(string s, int i, string word) =>
+    s.AsSpan(i).StartsWith(word, StringComparison.Ordinal) && (i + word.Length == s.Length || !char.IsLetterOrDigit(s[i + word.Length]));
+
+// The end of a type or member name as the formatter prints one: dots, nesting, arity marks, and
+// generic arguments in angle brackets included.
+static int NameEnd(string s, int i)
+{
+    var depth = 0;
+    while (i < s.Length)
+    {
+        var c = s[i];
+        if (c == '<')
+        {
+            depth++;
+        }
+        else if (c == '>')
+        {
+            depth--;
+        }
+        else if (!(char.IsLetterOrDigit(c) || c is '_' or '.' or '`' or '/' or '[' or ']' || (depth > 0 && c is ',' or ' ')))
+        {
+            break;
+        }
+
+        i++;
+    }
+
+    return i;
+}
 
 static string FindRoot()
 {
@@ -450,18 +676,28 @@ static partial class Patterns
     [GeneratedRegex(@"^(  ┊ \[)(.*?)(\])( ◂ top)?$")]
     public static partial Regex StackLine();
 
-    [GeneratedRegex(@"^(  = )(.*?)( : .*)?$")]
+    [GeneratedRegex(@"^(  = )(.*)( : .+)$")]
+    public static partial Regex ResultWithType();
+
+    [GeneratedRegex(@"^(  = )(.*)$")]
     public static partial Regex ResultLine();
+
+    [GeneratedRegex(@"\G-?(\d+(\.\d+)?([eE][+-]?\d+)?|NaN|Infinity)(?![\w.])")]
+    public static partial Regex NumberAt();
+
+    [GeneratedRegex(@"\G\{(ToString threw [A-Za-z0-9_.]+|threw [A-Za-z0-9_.]+|[A-Za-z_][A-Za-z0-9_.`<>/\[\], ]*)\}")]
+    public static partial Regex Placeholder();
+
+    [GeneratedRegex(@"\G([A-Za-z_][A-Za-z0-9_]*) = ")]
+    public static partial Regex FieldLabel();
 
     [GeneratedRegex(@"^(  error: )(.*)$")]
     public static partial Regex ErrorLine();
 
-    [GeneratedRegex(@"^(\s*[0-9a-f]{3,4}\s+)(.*?)(\s{2,}\[.*\])?$")]
+    [GeneratedRegex(@"^(\s*[0-9a-f]{3,4}\s+)(.*?)(\s+(\[[^\[\]]*\]|unreachable|\?))?$")]
     public static partial Regex ListingRow();
 
     [GeneratedRegex(@"^\s*([A-Za-z_][A-Za-z0-9_]*:\s*$|\.[a-z]|\{|\})")]
     public static partial Regex ListingIl();
 
-    [GeneratedRegex(@"^-?(\d+(\.\d+)?([eE][+-]?\d+)?|NaN|Infinity)$")]
-    public static partial Regex NumberLiteral();
 }
