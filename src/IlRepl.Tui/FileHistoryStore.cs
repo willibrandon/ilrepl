@@ -130,29 +130,31 @@ public sealed class FileHistoryStore : IHistoryStore
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<string>> LoadAsync(CancellationToken cancellationToken)
+    public async Task<HistorySnapshot> LoadAsync(CancellationToken cancellationToken)
     {
         try
         {
             if (!File.Exists(Path))
             {
-                return [];
+                return new HistorySnapshot([], Written);
             }
 
             using var held = await LockAsync(cancellationToken).ConfigureAwait(false);
             if (held is null)
             {
-                return [];
+                return new HistorySnapshot([], Written);
             }
 
+            // No write of this store's can land while the lock is held, so the count read here
+            // is the count of its writes in the file.
             var content = await File.ReadAllTextAsync(Path, cancellationToken).ConfigureAwait(false);
             var entries = Parse(content);
-            return entries.Count > MaxEntries ? entries.Skip(entries.Count - MaxEntries).ToList() : entries;
+            return new HistorySnapshot(entries.Count > MaxEntries ? entries.Skip(entries.Count - MaxEntries).ToList() : entries, Written);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Problem = ex.Message;
-            return [];
+            return new HistorySnapshot([], Written);
         }
     }
 

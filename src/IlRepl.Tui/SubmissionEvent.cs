@@ -10,8 +10,7 @@ namespace IlRepl.Tui;
 /// <param name="Text">Text for the editor: a paste's payload, or the lines coming back after a refusal, a failure, or a cancel.</param>
 /// <param name="CaretLine">Which line of <paramref name="Text"/> the caret goes to, counted from zero.</param>
 /// <param name="Note">An information line to add to the transcript, or null.</param>
-/// <param name="Entries">History entries, for <see cref="SubmissionEventKind.HistoryLoaded"/>.</param>
-/// <param name="Own">How many of the entries, at the end, this session wrote itself before they were read.</param>
+/// <param name="Snapshot">What the history store held, for <see cref="SubmissionEventKind.HistoryLoaded"/>.</param>
 /// <param name="Select">For <see cref="SubmissionEventKind.Refused"/>, whether the line at <see cref="CaretLine"/> is selected: a block's refused line is, a line on its own is not put back at all.</param>
 public sealed record SubmissionEvent(
     SubmissionEventKind Kind,
@@ -19,8 +18,7 @@ public sealed record SubmissionEvent(
     string? Text = null,
     int CaretLine = 0,
     string? Note = null,
-    IReadOnlyList<string>? Entries = null,
-    int Own = 0,
+    HistorySnapshot? Snapshot = null,
     bool Select = false)
 {
     /// <summary>
@@ -80,10 +78,9 @@ public sealed record SubmissionEvent(
     public static SubmissionEvent Done(IReadOnlyList<TranscriptLine> lines) => new(SubmissionEventKind.Completed, Lines: lines);
 
     /// <summary>
-    /// The history store finished loading.
+    /// The history store has been read.
     /// </summary>
-    /// <param name="entries">The entries, oldest first.</param>
-    /// <param name="own">How many of the entries, at the end, this session wrote itself before they were read.</param>
+    /// <param name="snapshot">What it held.</param>
     /// <returns>The event.</returns>
-    public static SubmissionEvent HistoryLoaded(IReadOnlyList<string> entries, int own = 0) => new(SubmissionEventKind.HistoryLoaded, Entries: entries, Own: own);
+    public static SubmissionEvent HistoryLoaded(HistorySnapshot snapshot) => new(SubmissionEventKind.HistoryLoaded, Snapshot: snapshot);
 }

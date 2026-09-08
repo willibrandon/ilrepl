@@ -70,7 +70,7 @@ public sealed class FileHistoryStoreTests
     public async Task Load_MissingFile_Empty()
     {
         var store = new FileHistoryStore(TempPath());
-        Assert.IsEmpty(await store.LoadAsync(TestContext.CancellationToken));
+        Assert.IsEmpty((await store.LoadAsync(TestContext.CancellationToken)).Entries);
         Assert.IsNull(store.Problem);
     }
 
@@ -87,7 +87,7 @@ public sealed class FileHistoryStoreTests
         await store.AppendAsync(".method int32 F() {\n  ret\n}", TestContext.CancellationToken);
         Assert.IsTrue(File.Exists(path));
         Assert.IsNull(store.Problem);
-        var entries = await new FileHistoryStore(path).LoadAsync(TestContext.CancellationToken);
+        var entries = (await new FileHistoryStore(path).LoadAsync(TestContext.CancellationToken)).Entries;
         Assert.AreSequenceEqual(["ldc.i4 1", ".method int32 F() {\n  ret\n}"], entries);
     }
 
@@ -108,7 +108,7 @@ public sealed class FileHistoryStoreTests
 
         await File.WriteAllTextAsync(path, content.ToString(), TestContext.CancellationToken);
         var length = new FileInfo(path).Length;
-        var entries = await new FileHistoryStore(path).LoadAsync(TestContext.CancellationToken);
+        var entries = (await new FileHistoryStore(path).LoadAsync(TestContext.CancellationToken)).Entries;
         Assert.HasCount(FileHistoryStore.MaxEntries, entries);
         Assert.AreEqual("entry 5", entries[0]);
         Assert.AreEqual("entry 1004", entries[^1]);
@@ -128,7 +128,7 @@ public sealed class FileHistoryStoreTests
         var store = new FileHistoryStore(Path.Combine(file, "history"));
         await store.AppendAsync("ldc.i4 1", TestContext.CancellationToken);
         Assert.IsNotNull(store.Problem);
-        Assert.IsEmpty(await store.LoadAsync(TestContext.CancellationToken));
+        Assert.IsEmpty((await store.LoadAsync(TestContext.CancellationToken)).Entries);
     }
 
     /// <summary>
@@ -189,7 +189,7 @@ public sealed class FileHistoryStoreTests
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var store = new FileHistoryStore(path, TimeSpan.FromSeconds(10));
         await File.WriteAllTextAsync(path, FileHistoryStore.Format("first", DateTimeOffset.Now), TestContext.CancellationToken);
-        Task<IReadOnlyList<string>> load;
+        Task<HistorySnapshot> load;
         using (new FileStream(store.LockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1))
         {
             load = store.LoadAsync(TestContext.CancellationToken);
@@ -198,7 +198,7 @@ public sealed class FileHistoryStoreTests
             await File.AppendAllTextAsync(path, "\n# 2026-09-07 10:30:15.000000\n+second\n", TestContext.CancellationToken);
         }
 
-        Assert.AreSequenceEqual(["first", "second"], await load);
+        Assert.AreSequenceEqual(["first", "second"], (await load).Entries);
     }
 
     /// <summary>
@@ -393,7 +393,7 @@ public sealed class FileHistoryStoreTests
         await store.AppendAsync("ldc.i4 1", CancellationToken.None);
         Assert.IsNull(store.Problem);
         Assert.AreEqual(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
-        Assert.AreSequenceEqual(["nop", "ldc.i4 1"], await store.LoadAsync(CancellationToken.None));
+        Assert.AreSequenceEqual(["nop", "ldc.i4 1"], (await store.LoadAsync(CancellationToken.None)).Entries);
     }
 
     /// <summary>
@@ -420,10 +420,10 @@ public sealed class FileHistoryStoreTests
         var whole = FileHistoryStore.Format("nop", new DateTimeOffset(2026, 9, 7, 10, 30, 15, TimeSpan.Zero));
         await File.WriteAllTextAsync(path, whole + "\n# 2026-09-07 10:31:00.000000\n+thr", TestContext.CancellationToken);
         var store = new FileHistoryStore(path);
-        Assert.AreSequenceEqual(["nop"], await store.LoadAsync(TestContext.CancellationToken), "reading drops the cut record");
+        Assert.AreSequenceEqual(["nop"], (await store.LoadAsync(TestContext.CancellationToken)).Entries, "reading drops the cut record");
         await store.AppendAsync("ldc.i4 1", TestContext.CancellationToken);
         Assert.IsNull(store.Problem);
-        Assert.AreSequenceEqual(["nop", "ldc.i4 1"], await store.LoadAsync(TestContext.CancellationToken), "and writing does not bring it back");
+        Assert.AreSequenceEqual(["nop", "ldc.i4 1"], (await store.LoadAsync(TestContext.CancellationToken)).Entries, "and writing does not bring it back");
         Assert.DoesNotContain("thr", await File.ReadAllTextAsync(path, TestContext.CancellationToken));
 
         // A file whose only record is cut is emptied before the new one goes in.
@@ -432,7 +432,7 @@ public sealed class FileHistoryStoreTests
         await File.WriteAllTextAsync(lone, "\n# 2026-09-07 10:31:00.000000\n+thr", TestContext.CancellationToken);
         var loneStore = new FileHistoryStore(lone);
         await loneStore.AppendAsync("ret", TestContext.CancellationToken);
-        Assert.AreSequenceEqual(["ret"], await loneStore.LoadAsync(TestContext.CancellationToken));
+        Assert.AreSequenceEqual(["ret"], (await loneStore.LoadAsync(TestContext.CancellationToken)).Entries);
     }
 
     /// <summary>
@@ -448,8 +448,12 @@ public sealed class FileHistoryStoreTests
         await store.AppendAsync("nop", TestContext.CancellationToken);
         await store.AppendAsync("ldc.i4 1", TestContext.CancellationToken);
         Assert.AreEqual(2, store.Written);
+        var own = await store.LoadAsync(TestContext.CancellationToken);
+        Assert.AreEqual(2, own.Written, "a read says how many of its entries this store wrote");
         var other = new FileHistoryStore(path);
         Assert.AreEqual(0, other.Written, "another session's writes are not this store's");
-        Assert.AreSequenceEqual(["nop", "ldc.i4 1"], await other.LoadAsync(TestContext.CancellationToken));
+        var theirs = await other.LoadAsync(TestContext.CancellationToken);
+        Assert.AreSequenceEqual(["nop", "ldc.i4 1"], theirs.Entries);
+        Assert.AreEqual(0, theirs.Written);
     }
 }

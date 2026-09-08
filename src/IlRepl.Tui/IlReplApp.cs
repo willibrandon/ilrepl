@@ -279,10 +279,7 @@ public static class IlReplApp
 
     private static async Task LoadHistoryAsync(IHistoryStore store, PromptState prompt)
     {
-        // What the store has written before it is read is bound to be at the end of what it reads.
-        var own = store.Written;
-        var entries = await store.LoadAsync(CancellationToken.None).ConfigureAwait(false);
-        prompt.Post(SubmissionEvent.HistoryLoaded(entries, own));
+        prompt.Post(SubmissionEvent.HistoryLoaded(await store.LoadAsync(CancellationToken.None).ConfigureAwait(false)));
     }
 
     private static void StartSubmission(PromptState prompt, IReplEngine engine, string text)
@@ -367,7 +364,7 @@ public static class IlReplApp
 
                     break;
                 case SubmissionEventKind.HistoryLoaded:
-                    prompt.History.Load(e.Entries ?? [], e.Own);
+                    prompt.History.Load(e.Snapshot ?? new HistorySnapshot([], 0));
                     break;
                 default:
                     break;

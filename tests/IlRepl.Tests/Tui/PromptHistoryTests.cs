@@ -137,6 +137,30 @@ public sealed class PromptHistoryTests
     }
 
     /// <summary>
+    /// The store's writes before this session began are not the session's, however many there
+    /// were: a line written after the read was asked for stays recallable once the read lands.
+    /// </summary>
+    [TestMethod]
+    public async Task LoadAsync_CountsOnlyThisSessionsWrites()
+    {
+        var store = new MemoryHistoryStore { HoldLoad = new TaskCompletionSource() };
+        store.Appended.Add("earlier");
+        var history = new PromptHistory(store);
+        var load = history.LoadAsync(CancellationToken.None);
+        Assert.IsTrue(await history.AddAsync("nop", CancellationToken.None));
+        store.HoldLoad.SetResult();
+        await load;
+        Assert.AreSequenceEqual(["earlier", "nop"], history.Entries);
+
+        var settled = new MemoryHistoryStore();
+        settled.Appended.Add("earlier");
+        var again = new PromptHistory(settled);
+        Assert.IsTrue(await again.AddAsync("nop", CancellationToken.None));
+        await again.LoadAsync(CancellationToken.None);
+        Assert.AreSequenceEqual(["earlier", "nop"], again.Entries, "a write the read holds is not added again");
+    }
+
+    /// <summary>
     /// An entry added before the store answered stays, after the stored ones, and one the store
     /// had already taken is not doubled.
     /// </summary>

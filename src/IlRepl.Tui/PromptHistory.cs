@@ -14,6 +14,7 @@ public sealed class PromptHistory
 
     private readonly List<string> _entries = [];
     private readonly IHistoryStore? _store;
+    private readonly int _baseline;
     private List<string>? _working;
     private int _index;
 
@@ -25,6 +26,7 @@ public sealed class PromptHistory
     public PromptHistory(IHistoryStore? store = null, IEnumerable<string>? entries = null)
     {
         _store = store;
+        _baseline = store?.Written ?? 0;
         if (entries is not null)
         {
             _entries.AddRange(entries);
@@ -61,10 +63,15 @@ public sealed class PromptHistory
             return;
         }
 
-        var own = _store.Written;
-        var loaded = await _store.LoadAsync(cancellationToken).ConfigureAwait(false);
-        Load(loaded, own);
+        Load(await _store.LoadAsync(cancellationToken).ConfigureAwait(false));
     }
+
+    /// <summary>
+    /// Takes what the store held when it was read. The store's writes since this session began
+    /// are the session's own, and those the read holds are at its end.
+    /// </summary>
+    /// <param name="snapshot">What the store held.</param>
+    public void Load(HistorySnapshot snapshot) => Load(snapshot.Entries, snapshot.Written - _baseline);
 
     /// <summary>
     /// Adds an entry and ends browsing. Whitespace and a repeat of the newest entry are not added.

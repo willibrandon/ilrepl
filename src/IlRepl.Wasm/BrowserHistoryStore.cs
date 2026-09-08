@@ -20,19 +20,22 @@ public sealed partial class BrowserHistoryStore : IHistoryStore
     public int Written { get; private set; }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<string>> LoadAsync(CancellationToken cancellationToken)
+    public async Task<HistorySnapshot> LoadAsync(CancellationToken cancellationToken)
     {
+        // The database runs requests in the order they are made: a write finished before the
+        // read is asked for is in what it brings back, and one made after it is not.
+        var written = Written;
         try
         {
             // The entries cross the interop boundary as one JSON array, so any character an
             // entry holds comes through as itself.
             var json = await LoadHistory().ConfigureAwait(false);
-            return JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.StringArray) ?? [];
+            return new HistorySnapshot(JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.StringArray) ?? [], written);
         }
         catch (JSException ex)
         {
             Problem = Reason(ex);
-            return [];
+            return new HistorySnapshot([], written);
         }
     }
 

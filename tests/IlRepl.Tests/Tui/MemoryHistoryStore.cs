@@ -13,7 +13,8 @@ internal sealed class MemoryHistoryStore : IHistoryStore
     public List<string> Appended { get; } = [];
 
     /// <summary>
-    /// The entries a load returns.
+    /// The entries in the store from before this store wrote any; a load returns them followed
+    /// by what was appended.
     /// </summary>
     public List<string> Stored { get; } = [];
 
@@ -35,15 +36,17 @@ internal sealed class MemoryHistoryStore : IHistoryStore
     public int Written => Appended.Count;
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<string>> LoadAsync(CancellationToken cancellationToken)
+    public async Task<HistorySnapshot> LoadAsync(CancellationToken cancellationToken)
     {
+        // The read happens when it is asked for; the wait is the answer being slow to arrive.
         Loads++;
+        var snapshot = new HistorySnapshot([.. Stored, .. Appended], Appended.Count);
         if (HoldLoad is { } hold)
         {
             await hold.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        return Stored.ToList();
+        return snapshot;
     }
 
     /// <inheritdoc />

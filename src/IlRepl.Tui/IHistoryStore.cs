@@ -12,17 +12,17 @@ public interface IHistoryStore
     string? Problem { get; }
 
     /// <summary>
-    /// How many entries this store has written so far. Read before a load, it says how many of
-    /// the session's own entries the load is bound to bring back at its end.
+    /// How many entries this store has written so far. Read when a session begins, it is the
+    /// count the session's own writes start from.
     /// </summary>
     int Written { get; }
 
     /// <summary>
-    /// Reads every entry, oldest first.
+    /// Reads every entry, oldest first, with the count of this store's writes as of the read.
     /// </summary>
     /// <param name="cancellationToken">Cancels the read.</param>
-    /// <returns>The entries, or none when there is nothing to read.</returns>
-    Task<IReadOnlyList<string>> LoadAsync(CancellationToken cancellationToken);
+    /// <returns>What the store held, or nothing when there is nothing to read.</returns>
+    Task<HistorySnapshot> LoadAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// Adds one entry. The task completes once the entry is durable.

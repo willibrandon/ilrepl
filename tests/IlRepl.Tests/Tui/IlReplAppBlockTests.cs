@@ -757,6 +757,41 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
+    /// A store that wrote for an earlier session in the same process, as the browser's does, does
+    /// not count those writes as this session's: a line submitted before the load answers stays
+    /// recallable once it does.
+    /// </summary>
+    [TestMethod]
+    public async Task History_EarlierSessionsWrites_DoNotClaimTheNewLine()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var store = new MemoryHistoryStore { HoldLoad = new TaskCompletionSource() };
+        store.Appended.Add("earlier");
+        await using var terminal = AppTest.Build(engine, transcript, history: store);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, ["nop"], ct);
+        await auto.WaitUntilTextAsync("1 instruction");
+        await auto.WaitUntilAsync(_ => store.Loads == 1, description: "the store was asked");
+        store.HoldLoad.SetResult();
+        await auto.TypeAsync("q", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q", description: "a frame after the load");
+        await auto.BackspaceAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "empty again");
+        await auto.UpAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop", description: "the new line is the newest entry");
+        await auto.UpAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> earlier", description: "the earlier session's entry is before it");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
     /// A comment before the header does not change what the header is: the block waits for its
     /// brace, a refused body line brings the whole block back, and the correction commits it.
     /// </summary>
