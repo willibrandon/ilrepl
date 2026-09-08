@@ -131,8 +131,8 @@ public sealed class LiveSessionTests
 
     /// <summary>
     /// In the browser, selection and copy are the terminal's own: a drag across the transcript
-    /// selects in the terminal and Ctrl+C or Cmd+C copies it, the app never enters copy mode,
-    /// the wheel still scrolls the transcript, and the caret is a blinking block.
+    /// selects in the terminal and y, the desktop's yank, or Ctrl+C copies it, the app never
+    /// enters copy mode, the wheel still scrolls the transcript, and the caret is a blinking block.
     /// </summary>
     /// <param name="browser">The browser engine to drive.</param>
     /// <returns>A task that completes when the assertions have run.</returns>
@@ -167,7 +167,21 @@ public sealed class LiveSessionTests
         Assert.Contains("ldc.i4 6", await page.EvaluateAsync<string>("() => window.ilreplTerminal.getSelection()"), "the terminal should hold the selection");
         Assert.DoesNotContain("y yank", await page.Locator("#terminal").InnerTextAsync(), "the app should not enter copy mode");
 
-        // Ctrl+C copies the terminal's selection and clears it, instead of reaching the app.
+        // y copies the terminal's selection and clears it, as it yanks on the desktop, and no y
+        // reaches the prompt.
+        await page.Keyboard.PressAsync("y");
+        await page.WaitForFunctionAsync("() => typeof window.ilreplLastCopy === 'string'", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        Assert.Contains("ldc.i4 6", await page.EvaluateAsync<string>("() => window.ilreplLastCopy"), "the selected row should be what was copied");
+        await page.WaitForFunctionAsync("() => !window.ilreplTerminal.hasSelection()", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        Assert.DoesNotContain("il[1]> y", await page.Locator("#terminal").InnerTextAsync(), "y should copy, not type");
+
+        // Ctrl+C does the same.
+        await page.EvaluateAsync("() => { window.ilreplLastCopy = null; }");
+        await page.Mouse.MoveAsync(screen.X + (cellWidth * 0.5f), y);
+        await page.Mouse.DownAsync();
+        await page.Mouse.MoveAsync(screen.X + (cellWidth * 30.5f), y, new MouseMoveOptions { Steps = 8 });
+        await page.Mouse.UpAsync();
+        await page.WaitForFunctionAsync("() => window.ilreplTerminal.hasSelection()", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
         await page.Keyboard.PressAsync("Control+c");
         await page.WaitForFunctionAsync("() => typeof window.ilreplLastCopy === 'string'", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
         Assert.Contains("ldc.i4 6", await page.EvaluateAsync<string>("() => window.ilreplLastCopy"), "the selected row should be what was copied");

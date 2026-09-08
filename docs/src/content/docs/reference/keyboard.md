@@ -20,8 +20,8 @@ description: Keys in the terminal UI.
 | Ctrl+C | Copy the selection; otherwise clear the buffer, or cancel a block that is going by; otherwise quit. |
 | Ctrl+Q | Quit. |
 
-In the browser, selection and copy are the terminal's own: drag to select and press Cmd+C or
-Ctrl+C to copy. Shift+Up, y, and Ctrl+C's copy belong to the desktop.
+In the browser, selection and copy are the terminal's own: drag to select and press y, Cmd+C, or
+Ctrl+C to copy. Shift+Up and Ctrl+C's copy of a buffer selection belong to the desktop.
 
 The palette opens while the first word of the line is a prefix of an opcode or, when it starts
 with a dot, of a command. Each row shows the name, its stack transition, and a short description.

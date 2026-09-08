@@ -189,16 +189,28 @@
     });
 
     // Selection and copy are the terminal's own: the app never takes the mouse, so a drag
-    // selects here, and Ctrl+C or Cmd+C copies the selection instead of sending the key.
+    // selects here, and Ctrl+C, Cmd+C, or y copies the selection instead of sending the key,
+    // y being the desktop's yank.
+    // A key that copied is swallowed whole: its keypress and the text it would put in the
+    // helper textarea as well, or the y would reach the prompt too.
+    let swallowed = null;
     term.attachCustomKeyEventHandler((e) => {
-      if (e.type === 'keydown' && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'c' && term.hasSelection()) {
-        const text = term.getSelection();
-        window.ilreplLastCopy = text;
-        if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
-        term.clearSelection();
+      const key = e.key.toLowerCase();
+      if (swallowed === key) {
+        if (e.type === 'keyup') swallowed = null;
+        e.preventDefault();
         return false;
       }
-      return true;
+      if (e.type !== 'keydown' || e.altKey || !term.hasSelection()) return true;
+      const copies = ((e.ctrlKey || e.metaKey) && key === 'c') || (!e.ctrlKey && !e.metaKey && key === 'y');
+      if (!copies) return true;
+      const text = term.getSelection();
+      window.ilreplLastCopy = text;
+      if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+      term.clearSelection();
+      swallowed = key;
+      e.preventDefault();
+      return false;
     });
 
     // Wheel notches still scroll the transcript: with no mouse mode on, xterm would turn them
