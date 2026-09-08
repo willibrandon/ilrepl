@@ -101,8 +101,10 @@ public sealed class HighlightTests
         using var map = JsonDocument.Parse(File.ReadAllText(s_map));
         var dark = map.RootElement.GetProperty("palette").GetProperty("dark").GetProperty("Opcode").GetString()!;
         var light = map.RootElement.GetProperty("palette").GetProperty("light").GetProperty("Opcode").GetString()!;
+        // The bundler merges the classes that share a colour into one rule, so the class and the
+        // two colours are looked for on their own.
         var css = Directory.EnumerateFiles(Path.Combine(SitePaths.Dist, "_astro"), "*.css").Select(File.ReadAllText).ToList();
-        Assert.Contains(c => c.Contains(".cil-Opcode{color:" + dark, StringComparison.Ordinal) && c.Contains(".cil-Opcode{color:" + light, StringComparison.Ordinal), css, "the stylesheet should colour the class on both grounds");
+        Assert.Contains(c => c.Contains(".cil-Opcode", StringComparison.Ordinal) && c.Contains("{color:" + dark + "}", StringComparison.Ordinal) && c.Contains("{color:" + light + "}", StringComparison.Ordinal), css, "the stylesheet should colour the class on both grounds");
     }
 
     /// <summary>
@@ -138,9 +140,15 @@ public sealed class HighlightTests
         using var map = JsonDocument.Parse(File.ReadAllText(s_map));
         var palette = map.RootElement.GetProperty("palette");
         var label = $"--0:{palette.GetProperty("dark").GetProperty("Label").GetString()};--1:{palette.GetProperty("light").GetProperty("Label").GetString()}";
-        Assert.Contains($"<span style=\"{label}\">", types, "a type's header should wear the label colour");
-        var header = types.IndexOf("struct Point</span>", StringComparison.Ordinal);
-        Assert.IsGreaterThanOrEqualTo(0, header, "the listing should name the struct");
-        Assert.Contains(label, types[Math.Max(0, header - 80)..header], "the struct's header should wear the label colour");
+        // The page names the struct in a note first, dim; the listing's header is the one that
+        // wears the label colour, so every occurrence is looked at.
+        var headers = new List<string>();
+        for (var at = types.IndexOf("struct Point</span>", StringComparison.Ordinal); at >= 0; at = types.IndexOf("struct Point</span>", at + 1, StringComparison.Ordinal))
+        {
+            headers.Add(types[Math.Max(0, at - 120)..at]);
+        }
+
+        Assert.IsNotEmpty(headers, "the page should name the struct");
+        Assert.Contains(h => h.Contains(label, StringComparison.Ordinal), headers, "the listing's header should wear the label colour");
     }
 }
