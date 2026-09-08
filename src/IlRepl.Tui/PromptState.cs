@@ -226,9 +226,15 @@ public sealed class PromptState
     public long ReturnedVersion { get; private set; }
 
     /// <summary>
+    /// The document version when the transcript's copy mode was last seen to begin, so typing,
+    /// which changes it, ends the selection; null while copy mode is off.
+    /// </summary>
+    public long? CopyModeVersion { get; set; }
+
+    /// <summary>
     /// True while the current selection is the one a refusal made, untouched since.
     /// </summary>
-    public bool SelectionIsReturned => ReturnedSelection is { } returned && Editor.Document.Version == ReturnedVersion && Editor.Cursor.HasSelection && Editor.Cursor.SelectionRange == returned;
+    public bool SelectionIsReturned =>ReturnedSelection is { } returned && Editor.Document.Version == ReturnedVersion && Editor.Cursor.HasSelection && Editor.Cursor.SelectionRange == returned;
 
     /// <summary>
     /// The depth and comment state the next submission will start from: the engine's own while

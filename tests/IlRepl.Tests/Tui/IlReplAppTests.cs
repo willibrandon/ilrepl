@@ -2,6 +2,7 @@ using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
 using IlRepl.Protocol;
+using IlRepl.Repl;
 using IlRepl.Tui;
 
 namespace IlRepl.Tests.Tui;
@@ -337,6 +338,52 @@ public sealed class IlReplAppTests
 
         // Copy mode has ended; typing goes to the prompt again.
         await auto.TypeAsync("ret", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("= 6 : int32");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// A click ends a transcript selection as Escape does, whether it lands on the transcript or
+    /// on the prompt, and so does typing; the prompt is in charge again at once and a later drag
+    /// selects afresh.
+    /// </summary>
+    [TestMethod]
+    public async Task Click_EndsTranscriptSelection()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript, configure: b => b.WithMouse());
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, ["ldc.i4 6"], ct);
+        await auto.WaitUntilTextAsync("[int32]");
+
+        // A drag selects the echoed line on the second row; a click on the transcript ends it.
+        await auto.DragAsync(0, 1, 14, 1, ct: ct);
+        await auto.WaitUntilTextAsync("y yank");
+        await auto.ClickAtAsync(5, 1, ct: ct);
+        await auto.WaitUntilNoTextAsync("y yank");
+
+        // Selected again, a click on the prompt ends it as well.
+        await auto.DragAsync(0, 1, 14, 1, ct: ct);
+        await auto.WaitUntilTextAsync("y yank");
+        var promptRow = -1;
+        await auto.WaitUntilAsync(s => (promptRow = AppTest.PromptTop(s)) >= 0, description: "the prompt row");
+        await auto.ClickAtAsync(12, promptRow, ct: ct);
+        await auto.WaitUntilNoTextAsync("y yank");
+
+        // Selected from the keyboard, typing ends it and the text lands in the prompt.
+        await auto.Shift().KeyAsync(Hex1bKey.UpArrow, ct: ct);
+        await auto.WaitUntilTextAsync("y yank");
+        await auto.TypeAsync("ret", ct: ct);
+        await auto.WaitUntilNoTextAsync("y yank");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ret", description: "the typed text is in the prompt");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("= 6 : int32");
 

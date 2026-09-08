@@ -16,7 +16,7 @@ description: Keys in the terminal UI.
 | Ctrl+U | Delete from the caret back to the start of the line; at the start of a line, join it to the line above. |
 | Ctrl+Z, Ctrl+Y | Undo and redo. |
 | Ctrl+L | Clear the transcript. |
-| Shift+Up | On an empty prompt, select the last transcript line. Shift+Up and Shift+Down extend the selection, y copies it, Escape cancels. Dragging with the mouse selects as well. |
+| Shift+Up | On an empty prompt, select the last transcript line. Shift+Up and Shift+Down extend the selection, y copies it, and Escape or a click ends it. Dragging with the mouse selects as well. |
 | Ctrl+C | Copy the selection; otherwise clear the buffer, or cancel a block that is going by; otherwise quit. |
 | Ctrl+Q | Quit. |
 

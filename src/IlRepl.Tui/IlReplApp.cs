@@ -194,13 +194,7 @@ public static class IlReplApp
         where TNode : Hex1bNode
     {
         ArgumentNullException.ThrowIfNull(app);
-        var root = app.FocusedNode;
-        while (root?.Parent is not null)
-        {
-            root = root.Parent;
-        }
-
-        return root is null ? null : Descend(root);
+        return Root(app) is { } root ? Descend(root) : null;
 
         static TNode? Descend(Hex1bNode node)
         {
@@ -226,6 +220,29 @@ public static class IlReplApp
         FindNode<ScrollPanelNode>(app)?.ScrollBy(amount);
         context.FocusWhere(node => node is EditorNode);
         context.Invalidate();
+    }
+
+    private static void EndCopyMode(Hex1bApp app, SelectionPanelNode panel)
+    {
+        panel.ExitCopyMode();
+        app.ReleaseCapture();
+        app.FocusWhere(node => node is EditorNode);
+        app.Invalidate();
+    }
+
+    // The app's own root, the outermost stack built below: hex1b keeps it under layer nodes of
+    // its own, whose bindings are not the app's.
+    private static VStackNode? AppRoot(Hex1bApp app) => FindNode<VStackNode>(app);
+
+    private static Hex1bNode? Root(Hex1bApp app)
+    {
+        var node = app.FocusedNode;
+        while (node?.Parent is not null)
+        {
+            node = node.Parent;
+        }
+
+        return node;
     }
 
     private static DragHandler SelectionDrag(Hex1bApp app, SelectionMode mode)
@@ -442,6 +459,34 @@ public static class IlReplApp
 
         var status = engine.Status;
         var panel = FindNode<SelectionPanelNode>(app);
+        if (panel is { IsInCopyMode: true })
+        {
+            // While the transcript has a selection the root holds the input, not the panel, so
+            // a press anywhere on the screen reaches the root's bindings below and ends it. The
+            // panel's own keys still come first: they override capture wherever it is held.
+            if (app.CapturedNode == panel && AppRoot(app) is { } tree)
+            {
+                app.CaptureInput(tree);
+            }
+
+
+            // Typing ends the selection as well: copy mode's keys never reach the document, so
+            // a change to it is the user's.
+            var version = prompt.Editor.Document.Version;
+            if (prompt.CopyModeVersion is null)
+            {
+                prompt.CopyModeVersion = version;
+            }
+            else if (prompt.CopyModeVersion != version)
+            {
+                EndCopyMode(app, panel);
+            }
+        }
+        else
+        {
+            prompt.CopyModeVersion = null;
+        }
+
         var copyMode = panel?.IsInCopyMode == true;
         var candidates = PromptWidget.Candidates(prompt, engine.Catalog).Count;
         var fit = PromptLayout.Fit(size.Height, prompt.LineCount, candidates);
@@ -563,6 +608,28 @@ public static class IlReplApp
         ])
         .InputBindings(b =>
         {
+            // A click anywhere ends a selection in the transcript, as Escape does; a right click
+            // copies it first, as it does over the transcript. The next press and drag select afresh.
+            b.Mouse(MouseButton.Left).OverridesCapture().Action(_ =>
+            {
+                if (FindNode<SelectionPanelNode>(app) is { IsInCopyMode: true } selected)
+                {
+                    EndCopyMode(app, selected);
+                }
+            }, "End the selection");
+            b.Mouse(MouseButton.Right).OverridesCapture().Action(async _ =>
+            {
+                if (FindNode<SelectionPanelNode>(app) is { IsInCopyMode: true, HasSelection: true } selected)
+                {
+                    var handler = selected.CopyHandler;
+                    var args = selected.BuildCopyEventArgs();
+                    EndCopyMode(app, selected);
+                    if (handler is not null)
+                    {
+                        await handler(args).ConfigureAwait(false);
+                    }
+                }
+            }, "Copy the selection");
             // Shift+Up from the prompt selects the last transcript line; more Shift+Up extends it.
             b.Shift().Key(Hex1bKey.UpArrow).Action(c =>
             {
