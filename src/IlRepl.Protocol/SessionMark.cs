@@ -12,6 +12,8 @@ namespace IlRepl.Protocol;
 /// <param name="DeclarationLines">How many declaration lines the cell held.</param>
 /// <param name="OpenMethodLines">How many body lines the open <c>.method</c> block held, or null when none was open.</param>
 /// <param name="OpenTypeLines">How many lines the open <c>.class</c> family held, or null when none was open.</param>
+/// <param name="EchoStack">Whether the stack was echoed after each line when the mark was taken; a toggle inside a withdrawn block is undone with it.</param>
+/// <param name="ShowTiming">Whether run timings were shown when the mark was taken.</param>
 /// <param name="InBlockComment">Whether a <c>/*</c> comment was open.</param>
 public sealed record SessionMark(
     long Generation,
@@ -19,7 +21,9 @@ public sealed record SessionMark(
     int DeclarationLines,
     int? OpenMethodLines,
     int? OpenTypeLines,
-    bool InBlockComment)
+    bool InBlockComment,
+    bool EchoStack = true,
+    bool ShowTiming = false)
 {
     /// <summary>
     /// The mark of a fresh session.

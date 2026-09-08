@@ -624,4 +624,35 @@ public sealed class IlReplAppRecoveryTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A toggle inside a refused block is undone with the block, so the corrected block applies
+    /// it once: after it, the stack is quiet, not toggled back on.
+    /// </summary>
+    [TestMethod]
+    public async Task Recovery_QuietInsideBlock_IsAppliedOnce()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, [".method int32 F() {", ".quiet", "lcd.i4 1", "ret", "}"], ct);
+        await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 5 lines") && AppTest.CaretLine(s) == 2, description: "the block is back");
+        await auto.TypeAsync("  ldc.i4 1", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("end of method F");
+        await AppTest.TypeLinesAsync(auto, ["ldc.i4 7"], ct);
+        await auto.WaitUntilTextAsync("il[2]> ldc.i4 7");
+        await auto.WaitUntilTextAsync("stack [int32]");
+        var after = transcript.Lines.SkipWhile(l => l.PlainText != "il[2]> ldc.i4 7").Skip(1).ToList();
+        Assert.DoesNotContain(l => l.Kind == LineKind.Stack, after, "the toggle applied once leaves the stack quiet");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

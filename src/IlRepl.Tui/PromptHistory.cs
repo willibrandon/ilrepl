@@ -139,13 +139,25 @@ public sealed class PromptHistory
         _entries.Clear();
         _entries.AddRange(stored);
 
-        // Where each of the session's entries sits now; the first may already be the newest stored one.
+        // Where each of the session's entries sits now. Entries this session persisted before the
+        // store answered are already the newest stored ones: the longest run of them that matches
+        // the end of the store is not added again.
+        var overlap = 0;
+        for (var k = Math.Min(_entries.Count, added.Count); k > 0; k--)
+        {
+            if (_entries.Skip(_entries.Count - k).SequenceEqual(added.Take(k)))
+            {
+                overlap = k;
+                break;
+            }
+        }
+
         var positions = new int[added.Count];
         for (var i = 0; i < added.Count; i++)
         {
-            if (i == 0 && _entries.Count > 0 && _entries[^1] == added[i])
+            if (i < overlap)
             {
-                positions[i] = _entries.Count - 1;
+                positions[i] = _entries.Count - overlap + i;
                 continue;
             }
 

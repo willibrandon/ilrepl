@@ -75,7 +75,7 @@ public sealed class ReplCore
         get
         {
             var state = Session.State;
-            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count, Session.OpenType, Session.TypeCount, Session.Mark(), Session.OpenDepth);
+            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count, Session.OpenType, Session.TypeCount, Session.Mark() with { EchoStack = Options.EchoStack, ShowTiming = Options.ShowTiming }, Session.OpenDepth);
         }
     }
 
@@ -245,6 +245,10 @@ public sealed class ReplCore
             Note("nothing withdrawn: the session has run, committed, or discarded something since the block began");
             return new HandleResult(false, false);
         }
+
+        // A toggle the block carried, .quiet or .time, goes back with it: the block is sent again whole.
+        Options.EchoStack = mark.EchoStack;
+        Options.ShowTiming = mark.ShowTiming;
 
         if (type is not null && Session.OpenType is null)
         {

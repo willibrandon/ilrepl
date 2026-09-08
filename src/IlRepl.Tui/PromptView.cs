@@ -30,6 +30,46 @@ public sealed class PromptView : IEditorViewRenderer
     public ViewportOffsets Offsets { get; private set; } = new(1, 0);
 
     /// <summary>
+    /// Brings the caret into view. Rows are rows, but the horizontal reveal is worked out in
+    /// terminal cells, where a wide character takes two and a combining mark takes none, and
+    /// the chosen left edge is then mapped back to the start of a text element.
+    /// </summary>
+    /// <param name="offsets">The offsets now; the left one is a character index.</param>
+    /// <param name="rows">The rows the text has.</param>
+    /// <param name="columns">The columns the text has.</param>
+    /// <param name="line">The caret's line.</param>
+    /// <param name="caretLine">The caret's line number, from one.</param>
+    /// <param name="caret">The caret's character index on the line.</param>
+    /// <param name="lineCount">How many lines the document has.</param>
+    /// <returns>The offsets with the caret in view.</returns>
+    public static ViewportOffsets RevealCaret(ViewportOffsets offsets, int rows, int columns, string line, int caretLine, int caret, int lineCount)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        var end = Math.Clamp(caret, 0, line.Length);
+        var leftCells = DisplayWidth.GetStringWidth(line[..ElementStart(line, Math.Clamp(offsets.Left, 0, line.Length))]);
+        var caretCells = DisplayWidth.GetStringWidth(line[..end]);
+        var cells = PromptViewport.Reveal(new ViewportOffsets(offsets.Top, leftCells), rows, columns, caretLine, caretCells, lineCount);
+        var left = ElementAtOrAfterCell(line, cells.Left, end);
+        return RevealWide(new ViewportOffsets(cells.Top, left), columns, line, end);
+    }
+
+    // The first text element that starts at or after a cell, so the left edge never lands
+    // inside a character; never past the caret.
+    private static int ElementAtOrAfterCell(string line, int cell, int caret)
+    {
+        var index = 0;
+        var width = 0;
+        while (index < caret && width < cell)
+        {
+            var length = Math.Max(1, StringInfo.GetNextTextElementLength(line.AsSpan(index)));
+            width += DisplayWidth.GetStringWidth(line.Substring(index, Math.Min(length, line.Length - index)));
+            index += length;
+        }
+
+        return Math.Min(index, caret);
+    }
+
+    /// <summary>
     /// The offsets count characters and the screen counts cells: a wide character takes two.
     /// When the cells before the caret overflow the columns, the left offset moves on until
     /// the caret's cell fits.
@@ -86,8 +126,7 @@ public sealed class PromptView : IEditorViewRenderer
         var columns = Math.Max(1, viewport.Width - gutter);
         var document = state.Document;
         var caret = document.OffsetToPosition(new DocumentOffset(Math.Clamp(state.Cursor.Position.Value, 0, document.Length)));
-        Offsets = PromptViewport.Reveal(Offsets, rows, columns, caret.Line, caret.Column - 1, document.LineCount);
-        Offsets = RevealWide(Offsets, columns, document.GetLineText(caret.Line), caret.Column - 1);
+        Offsets = RevealCaret(Offsets, rows, columns, document.GetLineText(caret.Line), caret.Line, caret.Column - 1, document.LineCount);
 
         var prompt = SpanPalette.Color(SpanStyle.Prompt).ToForegroundAnsi();
         var dim = SpanPalette.Color(SpanStyle.Dim).ToForegroundAnsi();
@@ -101,7 +140,8 @@ public sealed class PromptView : IEditorViewRenderer
             context.WriteClipped(viewport.X, viewport.Y + row, text + reset);
         }
 
-        _inner.Render(context, state, new Rect(viewport.X + gutter, viewport.Y, columns, rows), Offsets.Top, Offsets.Left, isFocused, pendingNibble, decorationProviders, inlineHints, wordWrap: false, foldingRegions: null);
+        var decorations = decorationProviders is { Count: > 0 } && Offsets.Left > 0 ? [new ScrolledDecorations(decorationProviders, Offsets.Left)] : decorationProviders;
+        _inner.Render(context, state, new Rect(viewport.X + gutter, viewport.Y, columns, rows), Offsets.Top, Offsets.Left, isFocused, pendingNibble, decorations, inlineHints, wordWrap: false, foldingRegions: null);
     }
 
     /// <inheritdoc />

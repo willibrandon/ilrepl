@@ -117,4 +117,30 @@ public sealed class ReplCoreRollbackTests
         Assert.IsTrue(core.Handle("ret").Succeeded, "and it still runs against the class that stayed");
         Assert.Contains("= 1 : int32", Plain(core));
     }
+
+    /// <summary>
+    /// A toggle inside a withdrawn block is undone with the block, so sending the block again
+    /// applies it once, not twice.
+    /// </summary>
+    [TestMethod]
+    public void Rollback_RestoresOptionsToggledSinceTheMark()
+    {
+        var core = new ReplCore();
+        Assert.IsTrue(core.Options.EchoStack);
+        Assert.IsFalse(core.Options.ShowTiming);
+        var mark = core.Status.Mark;
+        Assert.IsTrue(mark.EchoStack);
+        Assert.IsFalse(mark.ShowTiming);
+        Assert.IsTrue(core.Handle(".method int32 F() {").Succeeded);
+        Assert.IsTrue(core.Handle(".quiet").Succeeded);
+        Assert.IsTrue(core.Handle(".time").Succeeded);
+        Assert.IsFalse(core.Options.EchoStack);
+        Assert.IsTrue(core.Options.ShowTiming);
+        Assert.IsFalse(core.Handle("lcd.i4 1").Succeeded);
+        Assert.AreEqual(mark.Generation, core.Status.Mark.Generation, "toggles are not changes the block cannot take back");
+        Assert.IsTrue(core.Rollback(mark).Succeeded);
+        Assert.IsTrue(core.Options.EchoStack, "the echo toggle went back with the block");
+        Assert.IsFalse(core.Options.ShowTiming, "the timing toggle went back with the block");
+        Assert.IsNull(core.Status.OpenMethod);
+    }
 }

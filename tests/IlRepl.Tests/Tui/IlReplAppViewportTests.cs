@@ -429,4 +429,52 @@ public sealed class IlReplAppViewportTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A line of decomposed accents is many characters but few cells: it fits, so the whole line
+    /// stays in view with the opcode at the left and the caret after the quote.
+    /// </summary>
+    [TestMethod]
+    public async Task Paste_DecomposedAccents_StaysFullyVisible()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(80, 24);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await adapter.PasteAsync("ldstr \"" + string.Concat(Enumerable.Repeat("e\u0301", 60)) + "\"");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldstr \"e", StringComparison.Ordinal) && AppTest.Caret(s) is { } c && c.Y == AppTest.PromptTop(s) && s.GetCell(c.X - 1, c.Y).Character == "\"" && c.X == 7 + 68, description: "the whole line is in view with the caret after the quote");
+        await auto.HomeAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 7, 0) && AppTest.PromptRow(s, 0).StartsWith("il[1]> ldstr", StringComparison.Ordinal), description: "Home keeps the line where it is");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// A line of joined emoji scrolls by whole joined characters and never shows a replacement glyph.
+    /// </summary>
+    [TestMethod]
+    public async Task Paste_JoinedEmoji_ScrollsWholeCharacters()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(80, 24);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await adapter.PasteAsync("ldstr \"" + string.Concat(Enumerable.Repeat("👩\u200D💻", 40)) + "\"");
+        await auto.WaitUntilAsync(s => AppTest.Caret(s) is { } c && c.Y == AppTest.PromptTop(s) && s.GetCell(c.X - 1, c.Y).Character == "\"" && s.GetCell(7, c.Y).Character.StartsWith("👩", StringComparison.Ordinal), description: "the row starts on a whole joined emoji and the caret follows the quote");
+        Assert.DoesNotContain("\uFFFD", terminal.CreateSnapshot().GetText(), "no replacement glyph");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

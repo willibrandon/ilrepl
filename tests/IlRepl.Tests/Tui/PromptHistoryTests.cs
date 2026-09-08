@@ -213,4 +213,41 @@ public sealed class PromptHistoryTests
         Assert.AreEqual("ldc.i4.1", history.Back(""));
         Assert.AreEqual("ldc.i4.1\n", history.Back("ldc.i4.1"), "the entry with the run line is its own entry");
     }
+
+    /// <summary>
+    /// Entries this session persisted before the store answered come back at the end of the
+    /// store: the whole matching run is recognised, not only the first entry.
+    /// </summary>
+    [TestMethod]
+    public void Load_MergesTheOverlappingSuffix()
+    {
+        var history = new PromptHistory();
+        history.Add("a");
+        history.Add("b");
+        history.Load(["x", "a", "b"]);
+        Assert.AreSequenceEqual(["x", "a", "b"], history.Entries);
+
+        var partial = new PromptHistory();
+        partial.Add("a");
+        partial.Add("b");
+        partial.Load(["x", "a"]);
+        Assert.AreSequenceEqual(["x", "a", "b"], partial.Entries);
+
+        var none = new PromptHistory();
+        none.Add("a");
+        none.Load(["b"]);
+        Assert.AreSequenceEqual(["b", "a"], none.Entries);
+
+        // Browsing keeps its place through the merge when the overlap moves the entries.
+        var browsing = new PromptHistory();
+        browsing.Add("a");
+        browsing.Add("b");
+        Assert.AreEqual("b", browsing.Back("draft"));
+        Assert.AreEqual("a", browsing.Back("b"));
+        browsing.Load(["x", "a", "b"]);
+        Assert.AreEqual("x", browsing.Back("a"));
+        Assert.AreEqual("a", browsing.Forward("x"));
+        Assert.AreEqual("b", browsing.Forward("a"));
+        Assert.AreEqual("draft", browsing.Forward("b"));
+    }
 }

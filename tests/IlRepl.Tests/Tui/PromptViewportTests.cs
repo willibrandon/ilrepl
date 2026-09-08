@@ -107,4 +107,54 @@ public sealed class PromptViewportTests
 
         Assert.Contains(family.Left, elements, "the scroll starts on a whole joined emoji");
     }
+
+    /// <summary>
+    /// The horizontal reveal counts cells, not characters: a line of decomposed accents, many
+    /// characters but few cells, that fits the columns is not scrolled at all; a line of wide
+    /// characters is scrolled by whole characters until the caret's cell fits; and a joined emoji
+    /// is never split.
+    /// </summary>
+    [TestMethod]
+    public void RevealCaret_CountsCellsAndLandsOnTextElements()
+    {
+        var accents = "ldstr \"" + string.Concat(Enumerable.Repeat("e\u0301", 60)) + "\"";
+        Assert.AreEqual(128, accents.Length);
+        Assert.AreEqual(68, Hex1b.DisplayWidth.GetStringWidth(accents));
+        var fits = PromptView.RevealCaret(new ViewportOffsets(1, 0), 1, 73, accents, 1, accents.Length, 1);
+        Assert.AreEqual(new ViewportOffsets(1, 0), fits, "a line that fits is not scrolled");
+
+        var wide = "ldstr \"" + new string('漢', 45) + "\"";
+        var scrolled = PromptView.RevealCaret(new ViewportOffsets(1, 0), 1, 73, wide, 1, wide.Length, 1);
+        Assert.IsGreaterThan(0, scrolled.Left);
+        Assert.IsLessThan(73, Hex1b.DisplayWidth.GetStringWidth(wide[scrolled.Left..]), "the caret's cell fits");
+        Assert.IsGreaterThanOrEqualTo(73, Hex1b.DisplayWidth.GetStringWidth(wide[(scrolled.Left - 1)..]), "and no further than needed");
+        Assert.AreEqual(new ViewportOffsets(1, 0), PromptView.RevealCaret(scrolled, 1, 73, wide, 1, 0, 1), "Home scrolls back to the start");
+
+        var joined = "ldstr \"" + string.Concat(Enumerable.Repeat("👩\u200D💻", 30)) + "\"";
+        var family = PromptView.RevealCaret(new ViewportOffsets(1, 0), 1, 40, joined, 1, joined.Length, 1);
+        var elements = new List<int>();
+        for (var i = 0; i < joined.Length; i += System.Globalization.StringInfo.GetNextTextElementLength(joined.AsSpan(i)))
+        {
+            elements.Add(i);
+        }
+
+        Assert.Contains(family.Left, elements, "the scroll starts on a whole joined emoji");
+        Assert.IsLessThan(40, Hex1b.DisplayWidth.GetStringWidth(joined[family.Left..]));
+    }
+
+    /// <summary>
+    /// A style cut at the scrolled edge starts at the next character that is a whole code unit,
+    /// so it never begins inside a character built from several: in a run of joined emoji that
+    /// is the closing quote, and in plain text it is the edge itself.
+    /// </summary>
+    [TestMethod]
+    public void SafeStart_SkipsSurrogatePairsAtTheEdge()
+    {
+        var joined = "ldstr \"" + string.Concat(Enumerable.Repeat("👩\u200D💻", 3)) + "\" nop";
+        Assert.AreEqual(joined.IndexOf('"', 8), ScrolledDecorations.SafeStart(joined, 12), "the quote is the first whole code unit after the edge");
+        Assert.AreEqual(joined.IndexOf('"', 8), ScrolledDecorations.SafeStart(joined, 14), "an edge inside a character moves on the same way");
+        Assert.AreEqual(3, ScrolledDecorations.SafeStart("ldc.i4 1", 3), "plain text starts at the edge");
+        Assert.AreEqual(9, ScrolledDecorations.SafeStart("ldstr \"漢漢\"", 9), "wide characters that are one code unit are fine");
+        Assert.AreEqual(4, ScrolledDecorations.SafeStart("😀😀", 1), "no whole code unit follows");
+    }
 }
