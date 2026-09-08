@@ -319,16 +319,31 @@ static IReadOnlyList<TranscriptSpan> WithPagePrompt(IReadOnlyList<TranscriptSpan
 }
 
 // A block that shows the editor's own rows is a view of typing, not of the engine.
-static bool IsEditorView(IReadOnlyList<string> body) => body.Any(l => l.StartsWith("  ...> ", StringComparison.Ordinal));
+static bool IsEditorView(IReadOnlyList<string> body) => body.Any(l => l.StartsWith("  ...>", StringComparison.Ordinal));
 
 // A transcript styled line by line, with a block comment carried from one input line to the next
 // as the engine carries it, and the given style for the plain text of an input line.
 List<IReadOnlyList<TranscriptSpan>> StyledLines(IReadOnlyList<string> body, SpanStyle plain)
 {
     var comment = false;
+    var listing = false;
     var result = new List<IReadOnlyList<TranscriptSpan>>();
     foreach (var line in body)
     {
+        // After .types or .methods the lines up to the next prompt are the listing: a type's
+        // header is a label and its members are plain, as the engine lists them.
+        var input = Patterns.InputLine().Match(line);
+        if (input.Success)
+        {
+            var text = line[input.Length..].TrimStart();
+            listing = text.StartsWith(".types", StringComparison.Ordinal) || text.StartsWith(".methods", StringComparison.Ordinal);
+        }
+        else if (listing && line.StartsWith("  ", StringComparison.Ordinal) && line.Trim() is not ("no types" or "no methods"))
+        {
+            result.Add([new TranscriptSpan(line, Patterns.TypeHeader().IsMatch(line) ? SpanStyle.Label : SpanStyle.Default)]);
+            continue;
+        }
+
         result.Add(Styled(line, ref comment, plain));
     }
 
@@ -718,8 +733,11 @@ static partial class Patterns
     [GeneratedRegex(@"^il\[\d+\]> ?")]
     public static partial Regex PagePrompt();
 
-    [GeneratedRegex(@"^(il\[\d+\]> |  \.\.\.> )(.*)$")]
+    [GeneratedRegex(@"^(il\[\d+\]> |  \.\.\.>(?: |$))(.*)$")]
     public static partial Regex Gutter();
+
+    [GeneratedRegex(@"^\s*(class|struct|interface|enum|delegate) \S")]
+    public static partial Regex TypeHeader();
 
     [GeneratedRegex(@"^(  ┊ \[)(.*?)(\])( ◂ top)?$")]
     public static partial Regex StackLine();

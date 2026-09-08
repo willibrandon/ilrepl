@@ -126,4 +126,21 @@ public sealed class HighlightTests
         Assert.DoesNotContain(error, wrapped[..wrapped.IndexOf("lcd.i4", StringComparison.Ordinal)], "the underlined typo should keep its own colour");
         Assert.Contains($"<span style=\"{error}\">lcd.i4</span>", quickStart, "the transcript's echo should show the typo in the error colour");
     }
+
+    /// <summary>
+    /// A .types listing shows each type's header in the label colour and its members plain, as
+    /// the engine lists them.
+    /// </summary>
+    [TestMethod]
+    public void TypesListing_HeadersWearTheLabelColour()
+    {
+        var types = File.ReadAllText(Path.Combine(SitePaths.Dist, "usage", "types", "index.html"));
+        using var map = JsonDocument.Parse(File.ReadAllText(s_map));
+        var palette = map.RootElement.GetProperty("palette");
+        var label = $"--0:{palette.GetProperty("dark").GetProperty("Label").GetString()};--1:{palette.GetProperty("light").GetProperty("Label").GetString()}";
+        Assert.Contains($"<span style=\"{label}\">", types, "a type's header should wear the label colour");
+        var header = types.IndexOf("struct Point</span>", StringComparison.Ordinal);
+        Assert.IsGreaterThanOrEqualTo(0, header, "the listing should name the struct");
+        Assert.Contains(label, types[Math.Max(0, header - 80)..header], "the struct's header should wear the label colour");
+    }
 }
