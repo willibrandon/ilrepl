@@ -163,7 +163,7 @@ List<IReadOnlyList<TranscriptSpan>> Cil(IReadOnlyList<string> body)
 
 async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine engine, IReadOnlyList<string> body, string where)
 {
-    var inputs = body.Where(l => Regex.IsMatch(l, @"^il\[\d+\]> ")).Select(l => l[(l.IndexOf("> ", StringComparison.Ordinal) + 2)..]).ToList();
+    var inputs = body.Where(l => Patterns.InputLine().IsMatch(l)).Select(l => l[(l.IndexOf("> ", StringComparison.Ordinal) + 2)..]).ToList();
     if (inputs.Count == 0 || body.Any(l => l.StartsWith("  ...> ", StringComparison.Ordinal)))
     {
         // The editor's own rows: a view of typing, not of the engine, so plain text is the
@@ -172,7 +172,7 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
     }
 
     // A transcript may end on the bare prompt that came next; it is not the engine's to say.
-    var trailingPrompt = body.Count > 0 && Regex.IsMatch(body[^1], @"^il\[\d+\]>\s*$");
+    var trailingPrompt = body.Count > 0 && Patterns.BarePrompt().IsMatch(body[^1]);
     var compared = trailingPrompt ? body.Take(body.Count - 1).ToList() : body;
     var produced = new List<TranscriptLine>();
     try
@@ -195,10 +195,12 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
 
     if (produced is not null)
     {
+        // A page's prompt numbers may count cells the page does not show, so they are not
+        // compared; the page's own prompt is kept and the engine's spans follow it.
         var mismatch = -1;
         for (var i = 0; i < Math.Max(compared.Count, produced.Count); i++)
         {
-            if (i >= compared.Count || i >= produced.Count || produced[i].PlainText != compared[i])
+            if (i >= compared.Count || i >= produced.Count || SamePrompt(produced[i].PlainText) != SamePrompt(compared[i]))
             {
                 mismatch = i;
                 break;
@@ -208,7 +210,7 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
         if (mismatch < 0)
         {
             replayed++;
-            var exact = produced.Select(l => l.Spans).ToList();
+            var exact = produced.Select((l, i) => WithPagePrompt(l.Spans, compared[i])).ToList();
             if (trailingPrompt)
             {
                 exact.Add([new TranscriptSpan(body[^1], SpanStyle.Prompt)]);
@@ -224,6 +226,20 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
 
     // An echoed line's plain text wears the input style, as the engine echoes it.
     return StyledLines(body, SpanStyle.Input);
+}
+
+static string SamePrompt(string line) => Patterns.PromptNumber().Replace(line, "il[#]>");
+
+// The engine's spans for a line, with the page's own prompt in place of the engine's.
+static IReadOnlyList<TranscriptSpan> WithPagePrompt(IReadOnlyList<TranscriptSpan> spans, string pageLine)
+{
+    var prompt = Patterns.PagePrompt().Match(pageLine);
+    if (!prompt.Success || spans.Count == 0 || spans[0].Style != SpanStyle.Prompt)
+    {
+        return spans;
+    }
+
+    return [new TranscriptSpan(prompt.Value, SpanStyle.Prompt), .. spans.Skip(1)];
 }
 
 // A transcript styled line by line, with a block comment carried from one input line to the next
@@ -243,14 +259,20 @@ List<IReadOnlyList<TranscriptSpan>> StyledLines(IReadOnlyList<string> body, Span
 // The rules the engine styles its own lines by, for a transcript the replay could not reproduce.
 IReadOnlyList<TranscriptSpan> Styled(string line, ref bool comment, SpanStyle plain)
 {
-    var m = Regex.Match(line, @"^(il\[\d+\]> |  \.\.\.> )(.*)$");
+    if (Patterns.BarePrompt().IsMatch(line))
+    {
+        // The bare prompt that came next.
+        return [new(line, SpanStyle.Prompt)];
+    }
+
+    var m = Patterns.Gutter().Match(line);
     if (m.Success)
     {
         var gutter = new TranscriptSpan(m.Groups[1].Value, m.Groups[1].Value.StartsWith("il", StringComparison.Ordinal) ? SpanStyle.Prompt : SpanStyle.Dim);
         return [gutter, .. tokenizer.Spans(m.Groups[2].Value, ref comment, plain)];
     }
 
-    m = Regex.Match(line, @"^(  ┊ \[)(.*?)(\])( ◂ top)?$");
+    m = Patterns.StackLine().Match(line);
     if (m.Success)
     {
         var spans = new List<TranscriptSpan> { new(m.Groups[1].Value, SpanStyle.Dim) };
@@ -274,22 +296,24 @@ IReadOnlyList<TranscriptSpan> Styled(string line, ref bool comment, SpanStyle pl
         return spans;
     }
 
-    m = Regex.Match(line, @"^(  = )(.*?)( : .*)?$");
+    m = Patterns.ResultLine().Match(line);
     if (m.Success)
     {
+        // A result: the value as the value formatter styles a literal of its shape.
+        var value = new TranscriptSpan(m.Groups[2].Value, ValueStyle(m.Groups[2].Value));
         return m.Groups[3].Success
-            ? [new(m.Groups[1].Value, SpanStyle.Dim), new(m.Groups[2].Value), new(m.Groups[3].Value, SpanStyle.Dim)]
-            : [new(m.Groups[1].Value, SpanStyle.Dim), new(m.Groups[2].Value)];
+            ? [new(m.Groups[1].Value, SpanStyle.Dim), value, new(m.Groups[3].Value, SpanStyle.Dim)]
+            : [new(m.Groups[1].Value, SpanStyle.Dim), value];
     }
 
-    m = Regex.Match(line, @"^(  error: )(.*)$");
+    m = Patterns.ErrorLine().Match(line);
     if (m.Success)
     {
         return [new(m.Groups[1].Value, SpanStyle.Error), new(m.Groups[2].Value)];
     }
 
     // An instruction row of a listing: the offset column, the instruction, the stack column.
-    m = Regex.Match(line, @"^(\s*[0-9a-f]{3,4}\s+)(.*?)(\s{2,}\[.*\])?$");
+    m = Patterns.ListingRow().Match(line);
     if (m.Success)
     {
         var spans = new List<TranscriptSpan> { new(m.Groups[1].Value, SpanStyle.Dim) };
@@ -303,13 +327,30 @@ IReadOnlyList<TranscriptSpan> Styled(string line, ref bool comment, SpanStyle pl
     }
 
     // A label, a directive, or a brace row of a listing is IL, and reads as the tokenizer says.
-    if (Regex.IsMatch(line, @"^\s*([A-Za-z_][A-Za-z0-9_]*:\s*$|\.[a-z]|\{|\})"))
+    if (Patterns.ListingIl().IsMatch(line))
     {
         return tokenizer.Spans(line);
     }
 
+    // The engine's own notes are indented; a line that is not is what the program wrote.
+    if (line.Length > 0 && !char.IsWhiteSpace(line[0]))
+    {
+        return [new(line, SpanStyle.Output)];
+    }
+
     return [new(line, SpanStyle.Dim)];
 }
+
+// The style the value formatter gives a literal of this shape.
+static SpanStyle ValueStyle(string value) => value switch
+{
+    "null" or "true" or "false" => SpanStyle.Keyword,
+    "(void)" => SpanStyle.Dim,
+    _ when value.StartsWith('"') || value.StartsWith('\'') => SpanStyle.String,
+    _ when value.StartsWith("typeof(", StringComparison.Ordinal) => SpanStyle.Type,
+    _ when Patterns.NumberLiteral().IsMatch(value) => SpanStyle.Number,
+    _ => SpanStyle.Default,
+};
 
 static string FindRoot()
 {
@@ -320,4 +361,41 @@ static string FindRoot()
     }
 
     return directory ?? throw new InvalidOperationException("run from inside the repository");
+}
+
+// The shapes of a transcript's lines, compiled ahead of time.
+static partial class Patterns
+{
+    [GeneratedRegex(@"^il\[\d+\]> ")]
+    public static partial Regex InputLine();
+
+    [GeneratedRegex(@"^il\[\d+\]>\s*$")]
+    public static partial Regex BarePrompt();
+
+    [GeneratedRegex(@"^il\[\d+\]>")]
+    public static partial Regex PromptNumber();
+
+    [GeneratedRegex(@"^il\[\d+\]> ?")]
+    public static partial Regex PagePrompt();
+
+    [GeneratedRegex(@"^(il\[\d+\]> |  \.\.\.> )(.*)$")]
+    public static partial Regex Gutter();
+
+    [GeneratedRegex(@"^(  ┊ \[)(.*?)(\])( ◂ top)?$")]
+    public static partial Regex StackLine();
+
+    [GeneratedRegex(@"^(  = )(.*?)( : .*)?$")]
+    public static partial Regex ResultLine();
+
+    [GeneratedRegex(@"^(  error: )(.*)$")]
+    public static partial Regex ErrorLine();
+
+    [GeneratedRegex(@"^(\s*[0-9a-f]{3,4}\s+)(.*?)(\s{2,}\[.*\])?$")]
+    public static partial Regex ListingRow();
+
+    [GeneratedRegex(@"^\s*([A-Za-z_][A-Za-z0-9_]*:\s*$|\.[a-z]|\{|\})")]
+    public static partial Regex ListingIl();
+
+    [GeneratedRegex(@"^-?(\d+(\.\d+)?([eE][+-]?\d+)?|NaN|Infinity)$")]
+    public static partial Regex NumberLiteral();
 }
