@@ -753,4 +753,83 @@ public sealed class IlReplAppBlockTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A comment before the header does not change what the header is: the block waits for its
+    /// brace, a refused body line brings the whole block back, and the correction commits it.
+    /// </summary>
+    [TestMethod]
+    public async Task TypeMethod_CommentBeforeHeader_RecoversWhole()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync("/* note */ .method int32 F()", ct: ct);
+        await auto.WaitUntilTextAsync("Enter continues");
+        await auto.EnterAsync(ct: ct);
+        await AppTest.TypeLinesAsync(auto, ["{", "lcd.i4 1", "ret"], ct);
+        await auto.TypeAsync("}", ct: ct);
+        await auto.WaitUntilTextAsync("Enter sends 5 lines");
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
+        await auto.WaitUntilTextAsync("method F abandoned; the block is back in the editor");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 5 lines") && AppTest.PromptRow(s, 0) == "il[1]> /* note */ .method int32 F()" && AppTest.PromptRow(s, 2) == "  ...>   lcd.i4 1" && AppTest.CaretLine(s) == 2, description: "the whole block is back with the refused line selected");
+        Assert.AreEqual(0, engine.Status.OpenDepth);
+        Assert.IsNull(engine.Status.OpenMethod);
+        await auto.TypeAsync("  ldc.i4 1", ct: ct);
+        await auto.WaitUntilTextAsync("Enter sends 5 lines");
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("end of method F");
+        await AppTest.TypeLinesAsync(auto, ["call int32 F()", "ret"], ct);
+        await auto.WaitUntilTextAsync("= 1 : int32");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// A history load that lands while the user is browsing keeps the draft they left.
+    /// </summary>
+    [TestMethod]
+    public async Task History_LoadWhileBrowsing_KeepsTheDraft()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var store = new MemoryHistoryStore { HoldLoad = new TaskCompletionSource() };
+        store.Stored.Add("ldc.i4 1");
+        await using var terminal = AppTest.Build(engine, transcript, history: store);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, ["nop"], ct);
+        await auto.WaitUntilTextAsync("1 instruction");
+        await auto.TypeAsync("ldc.i4 42", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 42", description: "a draft in the buffer");
+        await auto.UpAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop", description: "Up recalls the entry typed before the load");
+        await auto.WaitUntilAsync(_ => store.Loads == 1, description: "the store was asked");
+        store.HoldLoad.SetResult();
+
+        // A keystroke and its frame follow the load, which the frame drains before it draws.
+        await auto.EndAsync(ct: ct);
+        await auto.TypeAsync("x", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nopx", description: "a frame after the load");
+        await auto.BackspaceAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop", description: "the entry again");
+        await auto.DownAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 42", description: "Down brings the draft back");
+        await auto.UpAsync(ct: ct);
+        await auto.UpAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 1", description: "the stored entry is further back");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

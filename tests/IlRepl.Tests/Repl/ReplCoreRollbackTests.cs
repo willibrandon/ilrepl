@@ -93,4 +93,28 @@ public sealed class ReplCoreRollbackTests
         Assert.IsNull(reply.Status.OpenMethod);
         Assert.AreEqual(reply.Status, engine.Status);
     }
+
+    /// <summary>
+    /// A redefinition the cell cannot follow is refused at its close and changes nothing, the
+    /// generation included, so the block can be withdrawn and the cell keeps its lines.
+    /// </summary>
+    [TestMethod]
+    public void Rollback_AfterRedefinitionRefusedAtClose_Works()
+    {
+        var core = new ReplCore();
+        foreach (var line in new[] { ".class public C {", ".method public static int32 M() {", "ldc.i4 1", "ret", "}", "}", "call int32 C::M()" })
+        {
+            Assert.IsTrue(core.Handle(line).Succeeded, line);
+        }
+
+        var mark = core.Status.Mark;
+        Assert.IsTrue(core.Handle(".class public C {").Succeeded);
+        Assert.IsFalse(core.Handle("}").Succeeded, "the cell still calls the method the new class lacks");
+        Assert.AreEqual(mark.Generation, core.Status.Mark.Generation, "a refused redefinition is not a change");
+        Assert.IsTrue(core.Rollback(mark).Succeeded);
+        Assert.AreEqual(1, core.Status.Instructions, "the cell keeps its line");
+        Assert.IsNull(core.Status.OpenType);
+        Assert.IsTrue(core.Handle("ret").Succeeded, "and it still runs against the class that stayed");
+        Assert.Contains("= 1 : int32", Plain(core));
+    }
 }

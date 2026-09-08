@@ -156,4 +156,43 @@ public sealed class PromptHistoryTests
         repeated.Load(["nop"]);
         Assert.AreSequenceEqual(["nop"], repeated.Entries);
     }
+
+    /// <summary>
+    /// A load that lands while browsing keeps the place, the working copies, and the draft the
+    /// buffer held when browsing began; the stored entries are reachable further back.
+    /// </summary>
+    [TestMethod]
+    public void Load_WhileBrowsing_KeepsDraftAndPosition()
+    {
+        var history = new PromptHistory();
+        Assert.IsTrue(history.Add("nop"));
+        Assert.AreEqual("nop", history.Back("ldc.i4 42"));
+        history.Load(["ldc.i4 1", "ldc.i4 2"]);
+        Assert.IsTrue(history.Browsing);
+        Assert.AreEqual("ldc.i4 42", history.Forward("nop edited"), "Down brings the draft back and ends browsing");
+        Assert.AreEqual("nop", history.Back("ldc.i4 42"), "browsing starts again from the draft");
+        Assert.AreEqual("ldc.i4 2", history.Back("nop"));
+        Assert.AreEqual("ldc.i4 1", history.Back("ldc.i4 2"));
+        Assert.IsNull(history.Back("ldc.i4 1"));
+        Assert.AreSequenceEqual(["ldc.i4 1", "ldc.i4 2", "nop"], history.Entries);
+
+        // A working copy edited before the load is still there afterwards, until browsing ends.
+        var edited = new PromptHistory();
+        edited.Add("nop");
+        edited.Add("ldc.i4 2");
+        edited.Back("draft");
+        edited.Back("ldc.i4 2 edited");
+        edited.Load(["ldc.i4 1"]);
+        Assert.AreEqual("ldc.i4 2 edited", edited.Forward("nop"), "the working copy survived the load");
+        Assert.AreEqual("draft", edited.Forward("ldc.i4 2 edited"));
+
+        // Browsing the draft itself when the load lands keeps it too.
+        var atDraft = new PromptHistory();
+        atDraft.Add("nop");
+        atDraft.Back("draft");
+        atDraft.Forward("nop");
+        atDraft.Load(["ldc.i4 1"]);
+        Assert.AreEqual("nop", atDraft.Back("draft"), "Up from the draft recalls the newest entry");
+        Assert.AreEqual("draft", atDraft.Forward("nop"));
+    }
 }

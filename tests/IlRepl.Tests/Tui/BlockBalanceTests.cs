@@ -142,4 +142,19 @@ public sealed class BlockBalanceTests
         Assert.AreEqual(1, BlockBalance.Scan("{", 1, awaitingBrace: true).Depth);
         Assert.IsTrue(BlockBalance.IsComplete("{\n  ret\n}", 1, awaitingBrace: true));
     }
+
+    /// <summary>
+    /// Whitespace and a comment before the header change nothing: the header still waits for its brace.
+    /// </summary>
+    [TestMethod]
+    public void Scan_HeaderAfterWhitespaceOrComment_WaitsForIt()
+    {
+        var scan = BlockBalance.Scan("  /* note */ .method int32 F()");
+        Assert.AreEqual(1, scan.Depth);
+        Assert.IsTrue(scan.AwaitingBrace);
+        Assert.IsFalse(BlockBalance.IsComplete("  /* note */ .method int32 F()"));
+        Assert.IsTrue(BlockBalance.IsComplete("  /* note */ .method int32 F()\n{\n  ret\n}"));
+        Assert.IsFalse(BlockBalance.Scan("// .method int32 F()").AwaitingBrace, "a header inside a comment is text");
+        Assert.AreEqual(0, BlockBalance.Scan("// .method int32 F()").Depth);
+    }
 }

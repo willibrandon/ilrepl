@@ -1,3 +1,4 @@
+using System.Globalization;
 using Hex1b;
 using Hex1b.Documents;
 using Hex1b.Layout;
@@ -41,14 +42,33 @@ public sealed class PromptView : IEditorViewRenderer
     public static ViewportOffsets RevealWide(ViewportOffsets offsets, int columns, string line, int caret)
     {
         ArgumentNullException.ThrowIfNull(line);
-        var left = Math.Clamp(offsets.Left, 0, Math.Max(0, Math.Min(caret, line.Length)));
         var end = Math.Clamp(caret, 0, line.Length);
+        var left = ElementStart(line, Math.Clamp(offsets.Left, 0, end));
         while (left < end && DisplayWidth.GetStringWidth(line[left..end]) >= columns)
         {
-            left++;
+            left += Math.Max(1, StringInfo.GetNextTextElementLength(line.AsSpan(left)));
         }
 
-        return left == offsets.Left ? offsets : offsets with { Left = left };
+        return left == offsets.Left ? offsets : offsets with { Left = Math.Min(left, end) };
+    }
+
+    // The character reveal may land inside a surrogate pair or a grapheme; the scroll starts at
+    // the text element that holds the index, so the renderer never begins with half a character.
+    private static int ElementStart(string line, int index)
+    {
+        var start = 0;
+        while (start < index)
+        {
+            var length = Math.Max(1, StringInfo.GetNextTextElementLength(line.AsSpan(start)));
+            if (start + length > index)
+            {
+                return start;
+            }
+
+            start += length;
+        }
+
+        return start;
     }
 
     /// <summary>

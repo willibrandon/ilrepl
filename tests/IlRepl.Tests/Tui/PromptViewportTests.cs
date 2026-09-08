@@ -79,4 +79,32 @@ public sealed class PromptViewportTests
         Assert.AreEqual(new ViewportOffsets(1, 0), PromptView.RevealWide(new ViewportOffsets(1, 0), 40, "ldstr \"narrow\"", 14));
         Assert.AreEqual(new ViewportOffsets(1, 3), PromptView.RevealWide(new ViewportOffsets(1, 3), 40, line, 5), "a caret before the offset is left to the character reveal");
     }
+
+    /// <summary>
+    /// Scrolling never starts inside a surrogate pair or a joined emoji: the offset lands on a
+    /// text element, and one whose character index fell inside a pair is moved to its start.
+    /// </summary>
+    [TestMethod]
+    public void RevealWide_Emoji_KeepsTextElementBoundaries()
+    {
+        var line = "ldstr \"" + string.Concat(Enumerable.Repeat("😀", 40)) + "\"";
+        var caret = line.Length;
+        var offsets = PromptView.RevealWide(new ViewportOffsets(1, 0), 30, line, caret);
+        Assert.IsGreaterThan(0, offsets.Left);
+        Assert.IsFalse(char.IsLowSurrogate(line[offsets.Left]), "the scroll starts on a whole character");
+        Assert.IsLessThan(30, Hex1b.DisplayWidth.GetStringWidth(line[offsets.Left..caret]));
+
+        var inside = PromptView.RevealWide(new ViewportOffsets(1, 8), 200, line, caret);
+        Assert.AreEqual(7, inside.Left, "an offset inside a pair moves to the pair's start");
+
+        var joined = "ldstr \"" + string.Concat(Enumerable.Repeat("👩\u200D💻", 20)) + "\"";
+        var family = PromptView.RevealWide(new ViewportOffsets(1, 0), 20, joined, joined.Length);
+        var elements = new List<int>();
+        for (var i = 0; i < joined.Length; i += System.Globalization.StringInfo.GetNextTextElementLength(joined.AsSpan(i)))
+        {
+            elements.Add(i);
+        }
+
+        Assert.Contains(family.Left, elements, "the scroll starts on a whole joined emoji");
+    }
 }

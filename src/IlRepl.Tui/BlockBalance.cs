@@ -34,15 +34,19 @@ public static class BlockBalance
                 switch (segment.Kind)
                 {
                     case CilSegmentKind.Code:
-                        if (first && OpensADeclaration(line.AsSpan(segment.Start, segment.End - segment.Start)))
+                        var code = line.AsSpan(segment.Start, segment.End - segment.Start);
+                        if (first && !code.IsWhiteSpace())
                         {
                             // A header takes its brace on the same line or the next: the block is
                             // open either way, so the brace is counted now and the next one is its own.
-                            awaiting = true;
-                            depth++;
+                            first = false;
+                            if (OpensADeclaration(code))
+                            {
+                                awaiting = true;
+                                depth++;
+                            }
                         }
 
-                        first = false;
                         for (var i = segment.Start; i < segment.End; i++)
                         {
                             if (line[i] == '{')

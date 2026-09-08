@@ -21,6 +21,9 @@ public sealed class Submission
     private volatile bool _cancelled;
     private volatile bool _running = true;
     private int _sent;
+    private int _boundary;
+    private SessionMark? _mark;
+    private bool _provisional;
 
     /// <summary>
     /// Starts sending.
@@ -104,6 +107,9 @@ public sealed class Submission
                 var restart = unit.Start;
                 var moved = false;
                 var provisional = unit.Kind == SubmissionUnitKind.Block;
+                _boundary = restart;
+                _mark = mark;
+                _provisional = provisional;
                 for (var i = 0; i < unit.Sends.Count; i++)
                 {
                     var index = unit.Sends[i];
@@ -160,6 +166,10 @@ public sealed class Submission
                                 provisional = true;
                             }
 
+                            _boundary = i < unit.Sends.Count - 1 ? restart : unit.End;
+                            _mark = mark;
+                            _provisional = provisional;
+
                             break;
                         case SubmissionOutcome.Refused:
                         {
@@ -189,8 +199,19 @@ public sealed class Submission
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Whatever went wrong, the prompt must hear that the submission is over.
-            _post(SubmissionEvent.Failure([], ex.Message, ""));
+            // Whatever went wrong, the prompt must hear that the submission is over, and the
+            // lines that had not gone by come back with the unit in flight withdrawn if it can be.
+            IReadOnlyList<TranscriptLine> withdrawn = [];
+            try
+            {
+                withdrawn = _mark is { } mark ? await WithdrawAsync(mark, _provisional).ConfigureAwait(false) : [];
+            }
+            catch (Exception withdrawal) when (withdrawal is not OperationCanceledException)
+            {
+                // The engine is past helping; the text is what matters.
+            }
+
+            _post(SubmissionEvent.Failure(withdrawn, ex.Message, TextFrom(_boundary)));
         }
         finally
         {

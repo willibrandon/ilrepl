@@ -198,7 +198,16 @@ public sealed partial class Session
     public LineResult AddLine(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        return AddLine(Normalize(line));
+        var normalized = Normalize(line);
+        try
+        {
+            return AddLine(normalized);
+        }
+        catch (ReplException)
+        {
+            Forget(normalized);
+            throw;
+        }
     }
 
     /// <summary>

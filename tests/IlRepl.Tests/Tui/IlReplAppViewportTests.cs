@@ -383,4 +383,50 @@ public sealed class IlReplAppViewportTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A line of emoji scrolls by whole characters: nothing renders as a replacement glyph, the
+    /// caret's cell is in view, and a click on either cell of an emoji puts the caret before it.
+    /// </summary>
+    [TestMethod]
+    public async Task Paste_Emoji_ScrollsWholeCharactersAndClicksLand()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(80, 24);
+        PromptState? prompt = null;
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, onPrompt: p => prompt = p).WithPresentation(adapter).WithMouse().Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        var text = "ldstr \"" + string.Concat(Enumerable.Repeat("😀", 40)) + "\"";
+        await adapter.PasteAsync(text);
+        await auto.WaitUntilAsync(s => AppTest.Caret(s) is { } c && c.Y == AppTest.PromptTop(s) && s.GetCell(c.X - 1, c.Y).Character == "\"" && s.GetCell(7, c.Y).Character == "😀", description: "the row starts on a whole emoji and the caret follows the quote");
+        Assert.DoesNotContain("\uFFFD", terminal.CreateSnapshot().GetText(), "no replacement glyph");
+
+        // The last emoji takes the two cells before the quote; a click on either puts the caret
+        // before it, at the character index where that emoji starts.
+        var lastEmoji = text.Length - 3;
+        foreach (var back in new[] { 3, 2 })
+        {
+            int x, y;
+            using (var before = terminal.CreateSnapshot())
+            {
+                var caret = AppTest.Caret(before)!.Value;
+                (x, y) = (caret.X - back, caret.Y);
+            }
+
+            await auto.ClickAtAsync(x, y, ct: ct);
+            await auto.WaitUntilAsync(s => prompt!.Editor.Cursor.Position.Value == lastEmoji && AppTest.Caret(s) is { } c && c.Y == y && s.GetCell(c.X, c.Y).Character == "😀" && s.GetCell(c.X + 2, c.Y).Character == "\"", description: "the caret sits on the last emoji's first cell");
+            await auto.EndAsync(ct: ct);
+            await auto.WaitUntilAsync(s => prompt!.Editor.Cursor.Position.Value == text.Length && AppTest.Caret(s) is { } c && s.GetCell(c.X - 1, c.Y).Character == "\"", description: "End returns the caret, on screen too, to the end of the line");
+        }
+
+        Assert.DoesNotContain("\uFFFD", terminal.CreateSnapshot().GetText(), "still no replacement glyph");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

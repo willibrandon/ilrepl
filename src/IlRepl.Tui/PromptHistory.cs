@@ -124,25 +124,53 @@ public sealed class PromptHistory
 
     /// <summary>
     /// Takes the stored entries, which go before whatever this session has added while they
-    /// were being read, so a line submitted before the store answered stays recallable.
+    /// were being read, so a line submitted before the store answered stays recallable. Browsing
+    /// goes on where it was: the working copies and the draft the buffer held when it began stay.
     /// </summary>
     /// <param name="stored">The entries from the store, oldest first.</param>
     public void Load(IEnumerable<string> stored)
     {
         ArgumentNullException.ThrowIfNull(stored);
         var added = _entries.ToList();
+        var copies = _working;
+        var index = _index;
         _entries.Clear();
         _entries.AddRange(stored);
-        foreach (var entry in added)
+
+        // Where each of the session's entries sits now; the first may already be the newest stored one.
+        var positions = new int[added.Count];
+        for (var i = 0; i < added.Count; i++)
         {
-            if (_entries.Count == 0 || _entries[^1] != entry)
+            if (i == 0 && _entries.Count > 0 && _entries[^1] == added[i])
             {
-                _entries.Add(entry);
+                positions[i] = _entries.Count - 1;
+                continue;
+            }
+
+            _entries.Add(added[i]);
+            positions[i] = _entries.Count - 1;
+        }
+
+        var removed = Math.Max(0, _entries.Count - MaxEntries);
+        Trim();
+        if (copies is null)
+        {
+            _index = _entries.Count;
+            return;
+        }
+
+        var working = new List<string>(_entries) { copies[^1] };
+        for (var i = 0; i < added.Count; i++)
+        {
+            var at = positions[i] - removed;
+            if (at >= 0)
+            {
+                working[at] = copies[i];
             }
         }
 
-        Trim();
-        Reset();
+        _working = working;
+        _index = index < added.Count ? Math.Max(0, positions[index] - removed) : working.Count - 1;
     }
 
     /// <summary>

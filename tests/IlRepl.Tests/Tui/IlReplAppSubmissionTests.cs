@@ -394,4 +394,29 @@ public sealed class IlReplAppSubmissionTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A failure nobody planned for, from the engine or the store, still hands the unsent text
+    /// back and withdraws the block in flight.
+    /// </summary>
+    [TestMethod]
+    public async Task Submit_EngineThrowsUnexpectedly_KeepsRemainderAndShowsError()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new FaultingEngine(new InProcessEngine(), failAt: 3, () => new InvalidOperationException("the engine lost its footing"));
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, s_twice, ct);
+        await auto.WaitUntilTextAsync("engine error: the engine lost its footing");
+        await auto.WaitUntilTextAsync("method Twice abandoned; the block is back in the editor");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 5) == "  ...> }" && !s.ContainsText("sending"), description: "the whole block is back");
+        Assert.AreEqual(0, engine.Status.OpenDepth);
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

@@ -10,6 +10,7 @@ internal sealed class FaultingEngine : IReplEngine
 {
     private readonly IReplEngine _inner;
     private readonly int _failAt;
+    private readonly Func<Exception> _fault;
     private int _calls;
 
     /// <summary>
@@ -17,10 +18,12 @@ internal sealed class FaultingEngine : IReplEngine
     /// </summary>
     /// <param name="inner">The engine that answers.</param>
     /// <param name="failAt">The zero-based call that throws.</param>
-    public FaultingEngine(IReplEngine inner, int failAt)
+    /// <param name="fault">What it throws; a transport failure unless given.</param>
+    public FaultingEngine(IReplEngine inner, int failAt, Func<Exception>? fault = null)
     {
         _inner = inner;
         _failAt = failAt;
+        _fault = fault ?? (() => new ReplEngineException("the host has exited"));
     }
 
     /// <summary>
@@ -42,7 +45,7 @@ internal sealed class FaultingEngine : IReplEngine
     {
         var call = Interlocked.Increment(ref _calls) - 1;
         return call == _failAt
-            ? throw new ReplEngineException("the host has exited")
+            ? throw _fault()
             : _inner.HandleAsync(line, cancellationToken);
     }
 

@@ -393,4 +393,17 @@ public sealed class SessionTests
         session.AddLine("call int32 F()");
         Assert.AreEqual(1, session.Run().Value);
     }
+
+    /// <summary>
+    /// A line the session refuses leaves the comment state where it was, through the string
+    /// overload as well.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_RefusedString_LeavesNoCommentOpen()
+    {
+        var session = new Session();
+        Assert.ThrowsExactly<ReplException>(() => session.AddLine("bogus /*"));
+        Assert.IsFalse(session.InBlockComment);
+        Assert.AreEqual(LineOutcome.Instruction, session.AddLine("nop").Outcome);
+    }
 }

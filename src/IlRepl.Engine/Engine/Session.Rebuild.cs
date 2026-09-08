@@ -252,7 +252,6 @@ public sealed partial class Session
             _methods.Clear();
             _methods.AddRange(savedMethods);
             Submissions = savedSubmissions;
-            Generation++;
             var released = new List<DefinitionAssembly>();
             foreach (var (pending, family) in loaded)
             {
@@ -320,6 +319,10 @@ public sealed partial class Session
 
             _cell = cell;
             _openType = null;
+
+            // Only now has anything changed that a rollback could not undo: a redefinition the
+            // cell refuses leaves the session, its generation included, as it was.
+            Generation++;
             foreach (var definition in released.Distinct())
             {
                 SessionAssemblies.Release(definition);
