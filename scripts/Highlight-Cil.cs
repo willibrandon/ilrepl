@@ -166,8 +166,9 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
     var inputs = body.Where(l => Regex.IsMatch(l, @"^il\[\d+\]> ")).Select(l => l[(l.IndexOf("> ", StringComparison.Ordinal) + 2)..]).ToList();
     if (inputs.Count == 0 || body.Any(l => l.StartsWith("  ...> ", StringComparison.Ordinal)))
     {
-        // The editor's own rows: a view of typing, not of the engine.
-        return StyledLines(body);
+        // The editor's own rows: a view of typing, not of the engine, so plain text is the
+        // editor's own, as in a cil block.
+        return StyledLines(body, SpanStyle.Default);
     }
 
     // A transcript may end on the bare prompt that came next; it is not the engine's to say.
@@ -221,31 +222,32 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
         warnings.Add($"{where}: the replay reads differently at line {mismatch + 1}: the page has '{expected}', the engine says '{got}'");
     }
 
-    return StyledLines(body);
+    // An echoed line's plain text wears the input style, as the engine echoes it.
+    return StyledLines(body, SpanStyle.Input);
 }
 
 // A transcript styled line by line, with a block comment carried from one input line to the next
-// as the engine carries it.
-List<IReadOnlyList<TranscriptSpan>> StyledLines(IReadOnlyList<string> body)
+// as the engine carries it, and the given style for the plain text of an input line.
+List<IReadOnlyList<TranscriptSpan>> StyledLines(IReadOnlyList<string> body, SpanStyle plain)
 {
     var comment = false;
     var result = new List<IReadOnlyList<TranscriptSpan>>();
     foreach (var line in body)
     {
-        result.Add(Styled(line, ref comment));
+        result.Add(Styled(line, ref comment, plain));
     }
 
     return result;
 }
 
 // The rules the engine styles its own lines by, for a transcript the replay could not reproduce.
-IReadOnlyList<TranscriptSpan> Styled(string line, ref bool comment)
+IReadOnlyList<TranscriptSpan> Styled(string line, ref bool comment, SpanStyle plain)
 {
     var m = Regex.Match(line, @"^(il\[\d+\]> |  \.\.\.> )(.*)$");
     if (m.Success)
     {
         var gutter = new TranscriptSpan(m.Groups[1].Value, m.Groups[1].Value.StartsWith("il", StringComparison.Ordinal) ? SpanStyle.Prompt : SpanStyle.Dim);
-        return [gutter, .. tokenizer.Spans(m.Groups[2].Value, ref comment)];
+        return [gutter, .. tokenizer.Spans(m.Groups[2].Value, ref comment, plain)];
     }
 
     m = Regex.Match(line, @"^(  ┊ \[)(.*?)(\])( ◂ top)?$");
