@@ -159,7 +159,7 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
     if (inputs.Count == 0 || body.Any(l => l.StartsWith("  ...> ", StringComparison.Ordinal)))
     {
         // The editor's own rows: a view of typing, not of the engine.
-        return body.Select(Styled).ToList();
+        return StyledLines(body);
     }
 
     // A transcript may end on the bare prompt that came next; it is not the engine's to say.
@@ -213,17 +213,31 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
         warnings.Add($"{where}: the replay reads differently at line {mismatch + 1}: the page has '{expected}', the engine says '{got}'");
     }
 
-    return body.Select(Styled).ToList();
+    return StyledLines(body);
+}
+
+// A transcript styled line by line, with a block comment carried from one input line to the next
+// as the engine carries it.
+List<IReadOnlyList<TranscriptSpan>> StyledLines(IReadOnlyList<string> body)
+{
+    var comment = false;
+    var result = new List<IReadOnlyList<TranscriptSpan>>();
+    foreach (var line in body)
+    {
+        result.Add(Styled(line, ref comment));
+    }
+
+    return result;
 }
 
 // The rules the engine styles its own lines by, for a transcript the replay could not reproduce.
-IReadOnlyList<TranscriptSpan> Styled(string line)
+IReadOnlyList<TranscriptSpan> Styled(string line, ref bool comment)
 {
     var m = Regex.Match(line, @"^(il\[\d+\]> |  \.\.\.> )(.*)$");
     if (m.Success)
     {
         var gutter = new TranscriptSpan(m.Groups[1].Value, m.Groups[1].Value.StartsWith("il", StringComparison.Ordinal) ? SpanStyle.Prompt : SpanStyle.Dim);
-        return [gutter, .. tokenizer.Spans(m.Groups[2].Value)];
+        return [gutter, .. tokenizer.Spans(m.Groups[2].Value, ref comment)];
     }
 
     m = Regex.Match(line, @"^(  ┊ \[)(.*?)(\])( ◂ top)?$");

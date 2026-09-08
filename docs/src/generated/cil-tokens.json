@@ -11706,23 +11706,13 @@
           ],
           [
             7,
-            4,
-            "Error"
-          ],
-          [
-            17,
-            2,
-            "Keyword"
-          ],
-          [
-            20,
-            1,
-            "Punctuation"
+            15,
+            "Comment"
           ],
           [
             23,
             6,
-            "Type"
+            "Opcode"
           ],
           [
             30,
