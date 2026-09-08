@@ -406,4 +406,32 @@ public sealed class FileHistoryStoreTests
         Assert.AreEqual("\n# 2026-09-07 10:30:15.000000\n+ldc.i4.1\n+\n", record);
         Assert.AreSequenceEqual(["ldc.i4.1\n"], FileHistoryStore.Parse(record));
     }
+
+    /// <summary>
+    /// A record a crash cut short is cut away before the file grows, so a later append cannot
+    /// finish it and bring it back; the whole records before it stay.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    public async Task Append_CutsAnIncompleteTailFirst()
+    {
+        var path = TempPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var whole = FileHistoryStore.Format("nop", new DateTimeOffset(2026, 9, 7, 10, 30, 15, TimeSpan.Zero));
+        await File.WriteAllTextAsync(path, whole + "\n# 2026-09-07 10:31:00.000000\n+thr", TestContext.CancellationToken);
+        var store = new FileHistoryStore(path);
+        Assert.AreSequenceEqual(["nop"], await store.LoadAsync(TestContext.CancellationToken), "reading drops the cut record");
+        await store.AppendAsync("ldc.i4 1", TestContext.CancellationToken);
+        Assert.IsNull(store.Problem);
+        Assert.AreSequenceEqual(["nop", "ldc.i4 1"], await store.LoadAsync(TestContext.CancellationToken), "and writing does not bring it back");
+        Assert.DoesNotContain("thr", await File.ReadAllTextAsync(path, TestContext.CancellationToken));
+
+        // A file whose only record is cut is emptied before the new one goes in.
+        var lone = TempPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(lone)!);
+        await File.WriteAllTextAsync(lone, "\n# 2026-09-07 10:31:00.000000\n+thr", TestContext.CancellationToken);
+        var loneStore = new FileHistoryStore(lone);
+        await loneStore.AppendAsync("ret", TestContext.CancellationToken);
+        Assert.AreSequenceEqual(["ret"], await loneStore.LoadAsync(TestContext.CancellationToken));
+    }
 }

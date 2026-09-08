@@ -176,8 +176,10 @@ public sealed class FileHistoryStore : IHistoryStore
 
             // Every line typed ends up here, string literals included, so the file is the
             // owner's alone: created that way, and an older file tightened before it grows.
-            using var stream = new FileStream(Path, OwnerOnly(new FileStreamOptions { Mode = FileMode.Append, Access = FileAccess.Write, Share = FileShare.Read }));
+            using var stream = new FileStream(Path, OwnerOnly(new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.Read }));
             Tighten(Path);
+            await RepairTailAsync(stream, cancellationToken).ConfigureAwait(false);
+            stream.Seek(0, SeekOrigin.End);
             var bytes = Encoding.UTF8.GetBytes(Format(entry, DateTimeOffset.Now));
             await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
             await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
@@ -186,6 +188,31 @@ public sealed class FileHistoryStore : IHistoryStore
         {
             Problem = ex.Message;
         }
+    }
+
+    // A record a crash cut short ends without a newline. Reading drops it, and so must writing:
+    // a new record begins with a newline, which would otherwise finish the broken one and bring
+    // it back as history. The file is cut back to the last whole record under the lock.
+    private static async Task RepairTailAsync(FileStream stream, CancellationToken cancellationToken)
+    {
+        if (stream.Length == 0)
+        {
+            return;
+        }
+
+        stream.Seek(-1, SeekOrigin.End);
+        if (stream.ReadByte() == '\n')
+        {
+            return;
+        }
+
+        stream.Seek(0, SeekOrigin.Begin);
+        var buffer = new byte[stream.Length];
+        await stream.ReadExactlyAsync(buffer, cancellationToken).ConfigureAwait(false);
+        var content = Encoding.UTF8.GetString(buffer);
+        var lastHeader = content.LastIndexOf("\n# ", StringComparison.Ordinal);
+        var keep = lastHeader < 0 ? "" : content[..(lastHeader + 1)];
+        stream.SetLength(Encoding.UTF8.GetByteCount(keep));
     }
 
     private static void CreateDirectory(string directory)

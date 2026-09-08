@@ -347,16 +347,28 @@ public static class IlReplApp
     private static void Return(PromptState prompt, string text, int caretLine, bool select)
     {
         // What was queued behind the submission and what has been typed since come back too,
-        // after the returned lines, so nothing is lost.
-        var rest = string.Join('\n', prompt.Pending.Append(prompt.Text).Where(t => t.Length > 0));
+        // after the returned lines, so nothing is lost. A queued empty submission is a blank
+        // line, the run it was, not nothing.
+        var parts = new List<string>();
+        if (text.Length > 0)
+        {
+            parts.Add(text);
+        }
+
+        parts.AddRange(prompt.Pending);
         prompt.Pending.Clear();
-        if (text.Length == 0 && rest.Length == 0)
+        if (prompt.Text.Length > 0)
+        {
+            parts.Add(prompt.Text);
+        }
+
+        text = string.Join('\n', parts);
+        if (text.Length == 0)
         {
             prompt.Clear();
             return;
         }
 
-        text = text.Length == 0 ? rest : rest.Length == 0 ? text : text + "\n" + rest;
         var offset = 0;
         var lines = text.Split('\n');
         for (var i = 0; i < caretLine && i < lines.Length; i++)

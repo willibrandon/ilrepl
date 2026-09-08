@@ -419,4 +419,47 @@ public sealed class IlReplAppSubmissionTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// Enter on an empty buffer while a block is in flight queues a run; when the block is
+    /// withdrawn, that run comes back as a blank line after the block, and resending both
+    /// commits the block and runs the cell.
+    /// </summary>
+    [TestMethod]
+    public async Task Submit_CtrlC_WithQueuedBlankRun_ReturnsItAsABlankLine()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new DelayedEngine(new InProcessEngine());
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        engine.Allow(1);
+        await AppTest.TypeLinesAsync(auto, ["ldc.i4 7"], ct);
+        await auto.WaitUntilTextAsync("stack [int32]");
+        await AppTest.TypeLinesAsync(auto, s_twice, ct);
+        engine.Allow(2);
+        await auto.WaitUntilTextAsync("sending 2/6");
+        await auto.EnterAsync(ct: ct);
+        await auto.TypeAsync("x", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> x" && s.ContainsText("sending 2/6"), description: "the blank run is queued behind the block");
+        await auto.BackspaceAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "the buffer is empty again");
+        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
+        await auto.WaitUntilTextAsync("cancelling 2/6");
+        engine.Allow(1);
+        await auto.WaitUntilTextAsync("method Twice abandoned; the block is back in the editor");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 7 lines") && AppTest.PromptRow(s, 5) == "  ...> }" && AppTest.PromptRow(s, 6) == "  ...>", description: "the block is back with the blank run after it");
+        await auto.WaitUntilTextAsync("Enter sends 7 lines");
+        engine.Allow(7);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("end of method Twice");
+        await auto.WaitUntilAsync(_ => transcript.Lines.Any(l => l.Kind == LineKind.Result), description: "the blank line ran the cell that was waiting");
+        Assert.AreEqual("", engine.Handled[^1]);
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }
