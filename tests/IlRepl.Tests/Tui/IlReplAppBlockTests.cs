@@ -312,8 +312,8 @@ public sealed class IlReplAppBlockTests
         await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 7, 0), description: "caret at the start");
         await auto.Shift().KeyAsync(Hex1bKey.DownArrow, ct: ct);
         await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 7, 1), description: "the first line is selected");
-        await auto.TypeAsync("x", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> x  nop" && !s.ContainsText("...>"), description: "the selection is replaced by the typed character");
+        await auto.TypeAsync("q", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q  nop" && !s.ContainsText("...>"), description: "the selection is replaced by the typed character");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -609,8 +609,8 @@ public sealed class IlReplAppBlockTests
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
 
         await auto.WaitUntilTextAsync("il[1]>");
-        await auto.TypeAsync("nopx ", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nopx" && (s.GetCell(7, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) != 0 && (s.GetCell(10, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) != 0 && (s.GetCell(11, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) == 0, description: "the unknown word is underlined");
+        await auto.TypeAsync("nopq ", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nopq" && (s.GetCell(7, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) != 0 && (s.GetCell(10, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) != 0 && (s.GetCell(11, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) == 0, description: "the unknown word is underlined");
         Assert.IsEmpty(AppTest.Echoes(transcript));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -741,8 +741,8 @@ public sealed class IlReplAppBlockTests
         store.HoldLoad.SetResult();
 
         // A keystroke and its frame follow the load, which the frame drains before it draws.
-        await auto.TypeAsync("x", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> x", description: "a frame after the load");
+        await auto.TypeAsync("q", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q", description: "a frame after the load");
         await auto.BackspaceAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "empty again");
         await auto.UpAsync(ct: ct);
@@ -819,8 +819,8 @@ public sealed class IlReplAppBlockTests
 
         // A keystroke and its frame follow the load, which the frame drains before it draws.
         await auto.EndAsync(ct: ct);
-        await auto.TypeAsync("x", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nopx", description: "a frame after the load");
+        await auto.TypeAsync("q", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nopq", description: "a frame after the load");
         await auto.BackspaceAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop", description: "the entry again");
         await auto.DownAsync(ct: ct);
@@ -859,6 +859,31 @@ public sealed class IlReplAppBlockTests
         await auto.DownAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4.", description: "Down brings the draft back");
         Assert.IsFalse(terminal.CreateSnapshot().ContainsText("opcodes"), "the palette stays closed while the caret is past the word");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// The prediction's ghost text follows the caret; the caret stays on what was typed.
+    /// </summary>
+    [TestMethod]
+    public async Task Typing_WithPrediction_KeepsCaretOnTheText()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync("ld", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ld", StringComparison.Ordinal) && AppTest.PromptRow(s, 0).Length > "il[1]> ld".Length && AppTest.CaretAt(s, 9, 0), description: "a suggestion follows the typed text and the caret stays after it");
+        await auto.TypeAsync("c", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldc", StringComparison.Ordinal) && AppTest.CaretAt(s, 10, 0), description: "the caret moves by one, as typed");
+        await auto.RightAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).Length > "il[1]> ldc".Length && AppTest.Caret(s) is { } c && c.X == 7 + AppTest.PromptRow(s, 0).Length - 7, description: "Right accepts the suggestion and the caret is at its end");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;

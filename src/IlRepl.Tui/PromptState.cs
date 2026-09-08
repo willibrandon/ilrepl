@@ -26,6 +26,7 @@ public sealed class PromptState
         Highlighter = new CilDecorationProvider(tokenizer);
         Prediction = new PredictionHint();
         View = new PromptView();
+        View.Prediction = Prediction;
     }
 
     /// <summary>

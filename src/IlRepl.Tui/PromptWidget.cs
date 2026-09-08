@@ -133,7 +133,6 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
                 .ViewRenderer(state.View)
                 .WordWrap()
                 .Decorations(state.Highlighter)
-                .Decorations(state.Prediction)
                 .FixedHeight(Math.Max(1, Fit.EditorRows))
                 .OnTextChanged(_ => TextChanged(state))
                 .InputBindings(b => Bind(b, state));

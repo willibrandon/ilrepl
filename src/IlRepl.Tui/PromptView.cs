@@ -142,6 +142,42 @@ public sealed class PromptView : IEditorViewRenderer
 
         var decorations = decorationProviders is { Count: > 0 } && Offsets.Left > 0 ? [new ScrolledDecorations(decorationProviders, Offsets.Left)] : decorationProviders;
         _inner.Render(context, state, new Rect(viewport.X + gutter, viewport.Y, columns, rows), Offsets.Top, Offsets.Left, isFocused, pendingNibble, decorations, inlineHints, wordWrap: false, foldingRegions: null);
+        DrawPrediction(context, viewport, gutter, columns, rows, document, caret);
+    }
+
+    /// <summary>
+    /// The suggestion drawn after the text, or null.
+    /// </summary>
+    public PredictionHint? Prediction { get; set; }
+
+    // The suggestion starts in the caret's cell, which keeps the caret's colours, and runs on in
+    // the dim colour: the caret stays on what was typed and the suggestion follows it.
+    private void DrawPrediction(Hex1bRenderContext context, Rect viewport, int gutter, int columns, int rows, IHex1bDocument document, DocumentPosition caret)
+    {
+        if (Prediction is not { Suffix: { Length: > 0 } suffix, At: var at } || at != caret)
+        {
+            return;
+        }
+
+        var line = document.GetLineText(caret.Line);
+        var index = caret.Column - 1;
+        var row = caret.Line - Offsets.Top;
+        if (index != line.Length || row < 0 || row >= rows || Offsets.Left > index)
+        {
+            return;
+        }
+
+        var x = DisplayWidth.GetStringWidth(line[Offsets.Left..index]);
+        if (x >= columns)
+        {
+            return;
+        }
+
+        var room = columns - x;
+        var shown = suffix.Length > room ? suffix[..room] : suffix;
+        var text = SpanPalette.Color(SpanStyle.Dim).ToForegroundAnsi() + SpanPalette.Color(SpanStyle.Prompt).ToBackgroundAnsi() + shown[0]
+            + Hex1bColor.Default.ToBackgroundAnsi() + shown[1..] + Hex1bColor.Default.ToForegroundAnsi();
+        context.WriteClipped(viewport.X + gutter + x, viewport.Y + row, text);
     }
 
     /// <inheritdoc />

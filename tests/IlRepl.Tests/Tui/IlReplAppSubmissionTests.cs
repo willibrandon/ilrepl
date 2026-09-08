@@ -104,8 +104,8 @@ public sealed class IlReplAppSubmissionTests
         await auto.EnterAsync(ct: ct);
 
         // A typed character proves the Enters before it have been handled while the block was in flight.
-        await auto.TypeAsync("x", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> x" && s.ContainsText("sending 0/6") && engine.Handled.Count == 0, description: "the Enters were handled while busy and nothing was sent ahead of the block");
+        await auto.TypeAsync("q", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q" && s.ContainsText("sending 0/6") && engine.Handled.Count == 0, description: "the Enters were handled while busy and nothing was sent ahead of the block");
         await auto.BackspaceAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "the buffer is empty again");
         engine.Allow(6);
@@ -169,8 +169,8 @@ public sealed class IlReplAppSubmissionTests
         await auto.TypeAsync("abc", ct: ct);
         await auto.LeftAsync(ct: ct);
         await auto.LeftAsync(ct: ct);
-        await auto.TypeAsync("x", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> axbc" && AppTest.CaretAt(s, 9, 0), description: "the arrows moved the caret");
+        await auto.TypeAsync("q", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> aqbc" && AppTest.CaretAt(s, 9, 0), description: "the arrows moved the caret");
         await auto.Shift().KeyAsync(Hex1bKey.Home, ct: ct);
         await auto.TypeAsync("y", ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ybc", description: "typing replaced the selection");
@@ -443,8 +443,8 @@ public sealed class IlReplAppSubmissionTests
         engine.Allow(2);
         await auto.WaitUntilTextAsync("sending 2/6");
         await auto.EnterAsync(ct: ct);
-        await auto.TypeAsync("x", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> x" && s.ContainsText("sending 2/6"), description: "the blank run is queued behind the block");
+        await auto.TypeAsync("q", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q" && s.ContainsText("sending 2/6"), description: "the blank run is queued behind the block");
         await auto.BackspaceAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "the buffer is empty again");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);

@@ -678,8 +678,8 @@ public sealed class IlReplAppRecoveryTests
         engine.Allow(5);
         await auto.WaitUntilTextAsync("sending 5/6");
         await auto.EnterAsync(ct: ct);
-        await auto.TypeAsync("x", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> x" && s.ContainsText("sending 5/6"), description: "the blank run is queued behind the block");
+        await auto.TypeAsync("q", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q" && s.ContainsText("sending 5/6"), description: "the blank run is queued behind the block");
         await auto.BackspaceAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "the buffer is empty again");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
