@@ -87,13 +87,31 @@ public static class IlReplApp
         await using var terminal = Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, usePlatformClipboard: true, history: history, onPrompt: p => prompt = p)
             .WithMouse()
             .Build();
-        var code = await terminal.RunAsync(cancellationToken).ConfigureAwait(false);
-        if (prompt is not null)
-        {
-            await SettleAsync(prompt).ConfigureAwait(false);
-        }
+        return await RunAsync(terminal, prompt, cancellationToken).ConfigureAwait(false);
+    }
 
-        return code;
+    /// <summary>
+    /// Runs a terminal the app was configured on and settles the prompt afterwards, whether the
+    /// app stopped on its own or the token cancelled it, so no line runs behind the session.
+    /// </summary>
+    /// <param name="terminal">The terminal.</param>
+    /// <param name="prompt">The prompt's state, from <see cref="Configure"/>'s callback, or null.</param>
+    /// <param name="cancellationToken">Cancels the run.</param>
+    /// <returns>The exit code.</returns>
+    public static async Task<int> RunAsync(Hex1bTerminal terminal, PromptState? prompt, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(terminal);
+        try
+        {
+            return await terminal.RunAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (prompt is not null)
+            {
+                await SettleAsync(prompt).ConfigureAwait(false);
+            }
+        }
     }
 
     /// <summary>

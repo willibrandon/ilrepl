@@ -353,4 +353,50 @@ public sealed class SessionMarkTests
         session.AddLine("}");
         Assert.HasCount(3, session.Methods);
     }
+
+    /// <summary>
+    /// A member whose brace came on its own line is replayed with that brace: a rollback inside
+    /// the member keeps the class and puts the member back to where the mark stood.
+    /// </summary>
+    [TestMethod]
+    public void Rollback_MemberBraceOnItsOwnLine_ReplaysTheBrace()
+    {
+        var session = new Session();
+        session.AddLine(".class public C {");
+        session.AddLine(".method public static int32 M()");
+        Assert.AreEqual(1, session.OpenDepth);
+        var waiting = session.Mark();
+        session.AddLine("{");
+        session.AddLine("ldc.i4 1");
+        Assert.AreEqual(2, session.OpenDepth);
+        Assert.IsTrue(session.Rollback(waiting));
+        Assert.AreEqual(1, session.OpenDepth, "the member waits for its brace again");
+        Assert.IsNotNull(session.OpenType);
+        session.AddLine("{");
+        var seen = session.Mark();
+        session.AddLine("ldc.i4 1");
+        session.AddLine("ldc.i4 2");
+        Assert.IsTrue(session.Rollback(seen));
+        Assert.AreEqual(2, session.OpenDepth, "the brace stays seen and the body lines are gone");
+        session.AddLine("ldc.i4 1");
+        session.AddLine("ret");
+        session.AddLine("}");
+        session.AddLine("}");
+        Assert.IsNull(session.OpenType);
+        Assert.AreEqual(1, session.TypeCount);
+
+        // The brace alone is taken back the same way.
+        session.AddLine(".class public D {");
+        session.AddLine(".method public static int32 N()");
+        var before = session.Mark();
+        session.AddLine("{");
+        Assert.IsTrue(session.Rollback(before));
+        Assert.AreEqual(1, session.OpenDepth);
+        session.AddLine("{");
+        session.AddLine("ldc.i4 3");
+        session.AddLine("ret");
+        session.AddLine("}");
+        session.AddLine("}");
+        Assert.AreEqual(2, session.TypeCount);
+    }
 }

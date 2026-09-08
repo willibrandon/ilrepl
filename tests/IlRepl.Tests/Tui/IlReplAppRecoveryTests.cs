@@ -655,4 +655,45 @@ public sealed class IlReplAppRecoveryTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A blank run queued behind a block that commits before Ctrl+C takes comes back as the
+    /// empty buffer it is: Enter runs the cell once, and two queued runs come back as two lines.
+    /// </summary>
+    [TestMethod]
+    public async Task CtrlC_RacingFinalBrace_QueuedBlankRunIsTheEmptyBuffer()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new DelayedEngine(new InProcessEngine());
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        engine.Allow(1);
+        await AppTest.TypeLinesAsync(auto, ["ldc.i4 7"], ct);
+        await auto.WaitUntilTextAsync("stack [int32]");
+        await AppTest.TypeLinesAsync(auto, s_twice, ct);
+        engine.Allow(5);
+        await auto.WaitUntilTextAsync("sending 5/6");
+        await auto.EnterAsync(ct: ct);
+        await auto.TypeAsync("x", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> x" && s.ContainsText("sending 5/6"), description: "the blank run is queued behind the block");
+        await auto.BackspaceAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "the buffer is empty again");
+        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
+        await auto.WaitUntilTextAsync("cancelling 5/6");
+        engine.Allow(1);
+        await auto.WaitUntilTextAsync("end of method Twice");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]>" && !s.ContainsText("cancelling") && !s.ContainsText("editing"), description: "the block stays and the queued run is the empty buffer");
+        Assert.HasCount(7, engine.Handled, "the queued run did not run behind the cancel");
+        engine.Allow(1);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilAsync(_ => transcript.Lines.Any(l => l.Kind == LineKind.Result), description: "Enter runs the cell that was waiting");
+        Assert.AreEqual("", engine.Handled[^1]);
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

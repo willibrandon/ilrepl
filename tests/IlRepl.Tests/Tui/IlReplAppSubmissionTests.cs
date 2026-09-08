@@ -462,4 +462,41 @@ public sealed class IlReplAppSubmissionTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A run cancelled by the token still settles: the line with the engine is waited for and
+    /// nothing after it is sent.
+    /// </summary>
+    [TestMethod]
+    public async Task Submit_Cancelled_SettlesBeforeReturning()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new DelayedEngine(new InProcessEngine());
+        var transcript = new Transcript();
+        PromptState? prompt = null;
+        await using var terminal = AppTest.Build(engine, transcript, onPrompt: p => prompt = p);
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var run = IlReplApp.RunAsync(terminal, prompt, cancel.Token);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, s_twice, ct);
+        engine.Allow(2);
+        await auto.WaitUntilTextAsync("sending 2/6");
+        await cancel.CancelAsync();
+        await auto.WaitUntilAsync(_ => prompt!.Submission is { CancelRequested: true } && engine.Waiting == 1, description: "the run has asked the worker to stop and waits for the line with the engine");
+        Assert.IsFalse(run.IsCompleted, "the run waits for the line in flight");
+        engine.Allow(1);
+        try
+        {
+            await run.WaitAsync(AppTest.Timeout, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // The token ended the run; what matters is what was settled first.
+        }
+
+        Assert.HasCount(3, engine.Handled, "the line in flight went by and nothing after it");
+        Assert.AreEqual(0, engine.Waiting);
+    }
 }

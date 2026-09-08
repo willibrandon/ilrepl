@@ -832,4 +832,35 @@ public sealed class IlReplAppBlockTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A space after the first word moves the caret into the operand: the palette closes and Up
+    /// walks history again.
+    /// </summary>
+    [TestMethod]
+    public async Task Palette_ClosesAfterOperandSpace()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, ["nop"], ct);
+        await auto.WaitUntilTextAsync("il[1]> nop");
+        await auto.TypeAsync("ldc.i4.", ct: ct);
+        await auto.WaitUntilTextAsync("opcodes 1/11");
+        await auto.TypeAsync(" ", ct: ct);
+        await auto.WaitUntilNoTextAsync("opcodes");
+        await auto.UpAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop", description: "Up recalls history rather than moving the palette");
+        await auto.DownAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4.", description: "Down brings the draft back");
+        Assert.IsFalse(terminal.CreateSnapshot().ContainsText("opcodes"), "the palette stays closed while the caret is past the word");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

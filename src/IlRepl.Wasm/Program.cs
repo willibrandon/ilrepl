@@ -54,14 +54,9 @@ static async Task<(int Columns, int Rows)> RunSessionAsync(int columns, int rows
     WasmPresentationAdapter.NotifyReady(adapter.Width, adapter.Height);
     try
     {
-        await terminal.RunAsync();
-
-        // A block still going by when the session ends stops here, before the next session
-        // starts on the same worker.
-        if (prompt is not null)
-        {
-            await IlReplApp.SettleAsync(prompt);
-        }
+        // A block still going by when the session ends stops before the next session starts
+        // on the same worker, however the session ended.
+        await IlReplApp.RunAsync(terminal, prompt, CancellationToken.None);
     }
     catch (Exception ex) when (ex is not OperationCanceledException)
     {

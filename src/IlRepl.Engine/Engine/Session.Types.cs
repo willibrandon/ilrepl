@@ -805,6 +805,7 @@ public sealed partial class Session
     private LineResult AddMemberLine(NormalizedLine line)
     {
         var member = _openMember!;
+        var braceBefore = member.State.BraceSeen;
         var result = member.State.Apply(line);
         if (result.Outcome == LineOutcome.MethodEnd)
         {
@@ -815,6 +816,12 @@ public sealed partial class Session
         if (result.Outcome != LineOutcome.Empty)
         {
             member.BodyLines.Add(line.Text);
+            _openType!.Outermost.Lines.Add(line.Text);
+        }
+        else if (!braceBefore && member.State.BraceSeen)
+        {
+            // The brace on its own line is not a body line, but the family's log must replay
+            // it, or a member rebuilt from the log would never see its brace.
             _openType!.Outermost.Lines.Add(line.Text);
         }
 

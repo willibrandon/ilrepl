@@ -88,9 +88,13 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
             return [];
         }
 
+        // The palette completes the first word while the caret sits right after it; a space
+        // after the word moves the caret into the operand, where Up, Down, and Tab are the
+        // buffer's again.
         var line = state.CurrentLine;
         var word = FirstWord(line);
-        if (word.Length == 0 || word != line.Trim() || state.CaretColumn < line.TrimEnd().Length)
+        var start = line.Length - line.TrimStart().Length;
+        if (word.Length == 0 || word != line.Trim() || state.CaretColumn != start + word.Length)
         {
             return [];
         }
