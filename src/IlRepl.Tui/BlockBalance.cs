@@ -38,11 +38,24 @@ public static class BlockBalance
                         if (first && !code.IsWhiteSpace())
                         {
                             // A header takes its brace on the same line or the next: the block is
-                            // open either way, so the brace is counted now and the next one is its own.
+                            // open either way, so the brace is counted now and the next one is its
+                            // own. A handler header ends the part before it and opens the next at
+                            // the same depth, with or without a brace of its own; without a
+                            // leading brace the part before it is closed by the keyword alone.
                             first = false;
                             if (OpensADeclaration(code))
                             {
                                 awaiting = true;
+                                depth++;
+                            }
+                            else if (OpensAHandler(code, out var afterBrace))
+                            {
+                                awaiting = true;
+                                if (!afterBrace)
+                                {
+                                    depth--;
+                                }
+
                                 depth++;
                             }
                         }
@@ -104,7 +117,29 @@ public static class BlockBalance
         }
 
         var word = text[..end];
-        return word.SequenceEqual(".method") || word.SequenceEqual(".class") || word.SequenceEqual(".property") || word.SequenceEqual(".event");
+        return word.SequenceEqual(".method") || word.SequenceEqual(".class") || word.SequenceEqual(".property") || word.SequenceEqual(".event") || word.SequenceEqual(".try");
+    }
+
+    // catch, filter, finally, fault, or handler, either on its own or after the brace that closes
+    // the part before it.
+    private static bool OpensAHandler(ReadOnlySpan<char> code, out bool afterBrace)
+    {
+        var text = code.TrimStart();
+        afterBrace = text.Length > 0 && text[0] == '}';
+        if (afterBrace)
+        {
+            text = text[1..].TrimStart();
+        }
+
+        var end = 0;
+        while (end < text.Length && char.IsLetter(text[end]))
+        {
+            end++;
+        }
+
+        var word = text[..end];
+        var handler = word.SequenceEqual("catch") || word.SequenceEqual("filter") || word.SequenceEqual("finally") || word.SequenceEqual("fault") || word.SequenceEqual("handler");
+        return handler && (end == text.Length || !char.IsLetterOrDigit(text[end]));
     }
 
     private static bool IsUnterminated(string line, CilSegment segment)

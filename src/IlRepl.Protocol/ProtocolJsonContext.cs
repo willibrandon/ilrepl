@@ -11,6 +11,7 @@ namespace IlRepl.Protocol;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     GenerationMode = JsonSourceGenerationMode.Default)]
 [JsonSerializable(typeof(HostHello))]
+[JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(HandleReply))]
 [JsonSerializable(typeof(TranscriptLine))]
 [JsonSerializable(typeof(TranscriptSpan))]

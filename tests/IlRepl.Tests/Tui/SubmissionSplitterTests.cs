@@ -162,4 +162,19 @@ public sealed class SubmissionSplitterTests
             [new SubmissionUnit(0, 5, [0, 1, 2, 3, 4], SubmissionUnitKind.Block), new SubmissionUnit(5, 6, [5], SubmissionUnitKind.Line)],
             units);
     }
+
+    /// <summary>
+    /// A region whose braces sit on their own lines, or are left out, is still one block.
+    /// </summary>
+    [TestMethod]
+    public void Split_BracelessRegion_IsOneBlock()
+    {
+        var units = SubmissionSplitter.Split([".try", "{", "  nop", "} catch [System.Runtime]System.Exception", "{", "  pop", "}", "nop"]);
+        Assert.AreSequenceEqual(
+            [new SubmissionUnit(0, 7, [0, 1, 2, 3, 4, 5, 6], SubmissionUnitKind.Block), new SubmissionUnit(7, 8, [7], SubmissionUnitKind.Line)],
+            units);
+        var keywords = SubmissionSplitter.Split([".try {", "  nop", "catch [System.Runtime]System.Exception {", "  pop", "}"]);
+        Assert.HasCount(1, keywords);
+        Assert.AreEqual(SubmissionUnitKind.Block, keywords[0].Kind);
+    }
 }

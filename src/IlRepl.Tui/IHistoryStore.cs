@@ -12,6 +12,12 @@ public interface IHistoryStore
     string? Problem { get; }
 
     /// <summary>
+    /// How many entries this store has written so far. Read before a load, it says how many of
+    /// the session's own entries the load is bound to bring back at its end.
+    /// </summary>
+    int Written { get; }
+
+    /// <summary>
     /// Reads every entry, oldest first.
     /// </summary>
     /// <param name="cancellationToken">Cancels the read.</param>

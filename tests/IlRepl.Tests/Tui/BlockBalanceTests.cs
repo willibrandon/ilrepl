@@ -157,4 +157,29 @@ public sealed class BlockBalanceTests
         Assert.IsFalse(BlockBalance.Scan("// .method int32 F()").AwaitingBrace, "a header inside a comment is text");
         Assert.AreEqual(0, BlockBalance.Scan("// .method int32 F()").Depth);
     }
+
+    /// <summary>
+    /// A region may leave its braces out: .try alone waits for one, and a handler header ends
+    /// the part before it and opens the next at the same depth, with or without braces of its own.
+    /// </summary>
+    [TestMethod]
+    public void Scan_BracelessRegions_StayOpenUntilTheClose()
+    {
+        Assert.AreEqual(1, BlockBalance.Scan(".try").Depth);
+        Assert.IsTrue(BlockBalance.Scan(".try").AwaitingBrace);
+        Assert.AreEqual(1, BlockBalance.Scan(".try\n{").Depth);
+        Assert.AreEqual(1, BlockBalance.Scan(".try {\n  nop\n} catch [System.Runtime]System.Exception {").Depth);
+        Assert.AreEqual(1, BlockBalance.Scan(".try {\n  nop\n} catch [System.Runtime]System.Exception").Depth);
+        Assert.AreEqual(1, BlockBalance.Scan(".try {\n  nop\ncatch [System.Runtime]System.Exception {").Depth);
+        Assert.AreEqual(1, BlockBalance.Scan(".try {\n  nop\ncatch [System.Runtime]System.Exception").Depth);
+        Assert.AreEqual(1, BlockBalance.Scan(".try {\n  nop\n} finally").Depth);
+        Assert.IsTrue(BlockBalance.Scan(".try {\n  nop\n} finally").AwaitingBrace);
+        Assert.IsTrue(BlockBalance.IsComplete(".try\n{\n  nop\n} catch [System.Runtime]System.Exception\n{\n  pop\n}"));
+        Assert.IsTrue(BlockBalance.IsComplete(".try {\n  nop\nfinally\n{\n  nop\n}"));
+        Assert.IsFalse(BlockBalance.IsComplete(".try\n{\n  nop\n} catch [System.Runtime]System.Exception"));
+
+        // A word that merely starts with a keyword is not a header.
+        Assert.AreEqual(0, BlockBalance.Scan("catcher: nop").Depth);
+        Assert.AreEqual(0, BlockBalance.Scan("finallyDone: nop").Depth);
+    }
 }

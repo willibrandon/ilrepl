@@ -434,4 +434,22 @@ public sealed class FileHistoryStoreTests
         await loneStore.AppendAsync("ret", TestContext.CancellationToken);
         Assert.AreSequenceEqual(["ret"], await loneStore.LoadAsync(TestContext.CancellationToken));
     }
+
+    /// <summary>
+    /// The store counts the entries it has written, so a load knows how many of them it holds.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    public async Task Written_CountsTheEntriesThisStoreWrote()
+    {
+        var path = TempPath();
+        var store = new FileHistoryStore(path);
+        Assert.AreEqual(0, store.Written);
+        await store.AppendAsync("nop", TestContext.CancellationToken);
+        await store.AppendAsync("ldc.i4 1", TestContext.CancellationToken);
+        Assert.AreEqual(2, store.Written);
+        var other = new FileHistoryStore(path);
+        Assert.AreEqual(0, other.Written, "another session's writes are not this store's");
+        Assert.AreSequenceEqual(["nop", "ldc.i4 1"], await other.LoadAsync(TestContext.CancellationToken));
+    }
 }

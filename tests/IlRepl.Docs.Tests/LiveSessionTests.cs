@@ -1031,6 +1031,49 @@ public sealed class LiveSessionTests
     }
 
     // A method of exactly this many lines: the header, nops, ret, and the close.
+    /// <summary>
+    /// An entry that holds a NUL character comes back as one entry: the store's entries cross
+    /// to the session as JSON, not joined on a sentinel.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(300_000, CooperativeCancellation = true)]
+    public async Task LiveSession_History_EntryWithNul_StaysOneEntry(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await context.NewPageAsync();
+        await page.GotoAsync(s_site!.BaseUrl + "/try/");
+        await page.EvaluateAsync(@"() => new Promise((resolve, reject) => {
+            const q = indexedDB.open('ilrepl', 1);
+            q.onupgradeneeded = () => q.result.createObjectStore('history', { autoIncrement: true });
+            q.onsuccess = () => {
+                const tx = q.result.transaction('history', 'readwrite');
+                const store = tx.objectStore('history');
+                store.add('nop');
+                store.add('a\u0000b');
+                tx.oncomplete = () => { q.result.close(); resolve(); };
+                tx.onerror = () => reject(tx.error);
+            };
+            q.onerror = () => reject(q.error);
+        })");
+        await page.ReloadAsync();
+        await WaitForSessionAsync(page, 1, 180_000);
+        await ClickIntoTerminalAsync(page);
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+        await page.Keyboard.PressAsync("ArrowUp");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("il[1]> a", options);
+        await page.Keyboard.PressAsync("ArrowUp");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("il[1]> nop", options);
+        await page.Keyboard.PressAsync("ArrowUp");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("il[1]> nop", options);
+        var rows = await BufferRowsAsync(page);
+        Assert.Contains(r => r.TrimEnd() == "il[1]> nop", rows, "the oldest entry is nop, so the NUL entry was one entry, not two:\n" + string.Join('\n', rows));
+    }
+
     private static string LongMethod(int lines) => ".method void Long() {\n" + string.Concat(Enumerable.Repeat("  nop\n", lines - 3)) + "  ret\n}\n";
 
     private static async Task TypeBlockAsync(IPage page)

@@ -66,8 +66,8 @@ export async function loadHistory() {
     return await new Promise((resolve, reject) => {
       const tx = db.transaction('history', 'readonly');
       const request = tx.objectStore('history').getAll();
-      // One string crosses to .NET, the entries joined by a character none of them can hold.
-      request.onsuccess = () => resolve(request.result.map((e) => String(e)).join('\0'));
+      // One JSON array crosses to .NET, so any character an entry holds comes through as itself.
+      request.onsuccess = () => resolve(JSON.stringify(request.result.map((e) => String(e))));
       request.onerror = () => reject(request.error || new Error('the history could not be read'));
     });
   } finally {

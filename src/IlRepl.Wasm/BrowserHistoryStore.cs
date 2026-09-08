@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices.JavaScript;
+using System.Text.Json;
+using IlRepl.Protocol;
 using IlRepl.Tui;
 
 namespace IlRepl.Wasm;
@@ -15,14 +17,17 @@ public sealed partial class BrowserHistoryStore : IHistoryStore
     public string? Problem { get; private set; }
 
     /// <inheritdoc />
+    public int Written { get; private set; }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<string>> LoadAsync(CancellationToken cancellationToken)
     {
         try
         {
-            // The entries cross the interop boundary as one string, split on a character no
-            // entry can hold.
-            var joined = await LoadHistory().ConfigureAwait(false);
-            return joined.Length == 0 ? [] : joined.Split('\0');
+            // The entries cross the interop boundary as one JSON array, so any character an
+            // entry holds comes through as itself.
+            var json = await LoadHistory().ConfigureAwait(false);
+            return JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.StringArray) ?? [];
         }
         catch (JSException ex)
         {
@@ -40,6 +45,7 @@ public sealed partial class BrowserHistoryStore : IHistoryStore
         try
         {
             await append.ConfigureAwait(false);
+            Written++;
         }
         catch (JSException ex)
         {

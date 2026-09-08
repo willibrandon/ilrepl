@@ -61,8 +61,9 @@ public sealed class PromptHistory
             return;
         }
 
+        var own = _store.Written;
         var loaded = await _store.LoadAsync(cancellationToken).ConfigureAwait(false);
-        Load(loaded);
+        Load(loaded, own);
     }
 
     /// <summary>
@@ -126,11 +127,15 @@ public sealed class PromptHistory
 
     /// <summary>
     /// Takes the stored entries, which go before whatever this session has added while they
-    /// were being read, so a line submitted before the store answered stays recallable. Browsing
-    /// goes on where it was: the working copies and the draft the buffer held when it began stay.
+    /// were being read, so a line submitted before the store answered stays recallable. The
+    /// session's own writes that the store had taken before it was read are the last stored
+    /// entries and are not added again; a stored run that merely reads the same is left alone.
+    /// Browsing goes on where it was: the working copies and the draft the buffer held when it
+    /// began stay.
     /// </summary>
     /// <param name="stored">The entries from the store, oldest first.</param>
-    public void Load(IEnumerable<string> stored)
+    /// <param name="own">How many of them, at the end, this session wrote itself before the store was read.</param>
+    public void Load(IEnumerable<string> stored, int own = 0)
     {
         ArgumentNullException.ThrowIfNull(stored);
         var added = _entries.ToList();
@@ -139,25 +144,15 @@ public sealed class PromptHistory
         _entries.Clear();
         _entries.AddRange(stored);
 
-        // Where each of the session's entries sits now. Entries this session persisted before the
-        // store answered are already the newest stored ones: the longest run of them that matches
-        // the end of the store is not added again.
-        var overlap = 0;
-        for (var k = Math.Min(_entries.Count, added.Count); k > 0; k--)
-        {
-            if (_entries.Skip(_entries.Count - k).SequenceEqual(added.Take(k)))
-            {
-                overlap = k;
-                break;
-            }
-        }
-
+        // Where each of the session's entries sits now: the first own of them are already the
+        // last own stored ones.
+        own = Math.Clamp(own, 0, Math.Min(_entries.Count, added.Count));
         var positions = new int[added.Count];
         for (var i = 0; i < added.Count; i++)
         {
-            if (i < overlap)
+            if (i < own)
             {
-                positions[i] = _entries.Count - overlap + i;
+                positions[i] = _entries.Count - own + i;
                 continue;
             }
 

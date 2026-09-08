@@ -11,13 +11,15 @@ namespace IlRepl.Tui;
 /// <param name="CaretLine">Which line of <paramref name="Text"/> the caret goes to, counted from zero.</param>
 /// <param name="Note">An information line to add to the transcript, or null.</param>
 /// <param name="Entries">History entries, for <see cref="SubmissionEventKind.HistoryLoaded"/>.</param>
+/// <param name="Own">How many of the entries, at the end, this session wrote itself before they were read.</param>
 public sealed record SubmissionEvent(
     SubmissionEventKind Kind,
     IReadOnlyList<TranscriptLine>? Lines = null,
     string? Text = null,
     int CaretLine = 0,
     string? Note = null,
-    IReadOnlyList<string>? Entries = null)
+    IReadOnlyList<string>? Entries = null,
+    int Own = 0)
 {
     /// <summary>
     /// A paste with its payload.
@@ -78,6 +80,7 @@ public sealed record SubmissionEvent(
     /// The history store finished loading.
     /// </summary>
     /// <param name="entries">The entries, oldest first.</param>
+    /// <param name="own">How many of the entries, at the end, this session wrote itself before they were read.</param>
     /// <returns>The event.</returns>
-    public static SubmissionEvent HistoryLoaded(IReadOnlyList<string> entries) => new(SubmissionEventKind.HistoryLoaded, Entries: entries);
+    public static SubmissionEvent HistoryLoaded(IReadOnlyList<string> entries, int own = 0) => new(SubmissionEventKind.HistoryLoaded, Entries: entries, Own: own);
 }

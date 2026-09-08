@@ -157,6 +157,11 @@ public sealed class FileHistoryStore : IHistoryStore
     }
 
     /// <inheritdoc />
+    public int Written => Volatile.Read(ref _written);
+
+    private int _written;
+
+    /// <inheritdoc />
     public async Task AppendAsync(string entry, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -183,6 +188,7 @@ public sealed class FileHistoryStore : IHistoryStore
             var bytes = Encoding.UTF8.GetBytes(Format(entry, DateTimeOffset.Now));
             await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
             await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            Interlocked.Increment(ref _written);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

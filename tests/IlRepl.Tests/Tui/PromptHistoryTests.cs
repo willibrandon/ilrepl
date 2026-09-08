@@ -137,8 +137,8 @@ public sealed class PromptHistoryTests
     }
 
     /// <summary>
-    /// An entry added before the store answered stays, after the stored ones, and a repeat of the
-    /// newest stored entry is not doubled.
+    /// An entry added before the store answered stays, after the stored ones, and one the store
+    /// had already taken is not doubled.
     /// </summary>
     [TestMethod]
     public void Load_KeepsEntriesAddedMeanwhile()
@@ -146,16 +146,16 @@ public sealed class PromptHistoryTests
         var history = new PromptHistory();
         Assert.IsTrue(history.Add("nop"));
         Assert.IsTrue(history.Add("ldc.i4 2"));
-        history.Load(["ldc.i4 1", "nop"]);
+        history.Load(["ldc.i4 1", "nop"], own: 1);
         Assert.AreSequenceEqual(["ldc.i4 1", "nop", "ldc.i4 2"], history.Entries);
         Assert.AreEqual("ldc.i4 2", history.Back(""));
         Assert.AreEqual("nop", history.Back("ldc.i4 2"));
         Assert.AreEqual("ldc.i4 1", history.Back("nop"));
 
-        var repeated = new PromptHistory();
-        repeated.Add("nop");
-        repeated.Load(["nop"]);
-        Assert.AreSequenceEqual(["nop"], repeated.Entries);
+        var written = new PromptHistory();
+        written.Add("nop");
+        written.Load(["nop"], own: 1);
+        Assert.AreSequenceEqual(["nop"], written.Entries, "an entry the store had already taken is not added again");
     }
 
     /// <summary>
@@ -215,36 +215,42 @@ public sealed class PromptHistoryTests
     }
 
     /// <summary>
-    /// Entries this session persisted before the store answered come back at the end of the
-    /// store: the whole matching run is recognised, not only the first entry.
+    /// The session's own writes the store had taken come back at its end and are not added
+    /// again; a stored run that merely reads the same is another run and stays recallable.
     /// </summary>
     [TestMethod]
-    public void Load_MergesTheOverlappingSuffix()
+    public void Load_TakesItsOwnWritesFromTheStoredEnd()
     {
         var history = new PromptHistory();
         history.Add("a");
         history.Add("b");
-        history.Load(["x", "a", "b"]);
+        history.Load(["x", "a", "b"], own: 2);
         Assert.AreSequenceEqual(["x", "a", "b"], history.Entries);
 
         var partial = new PromptHistory();
         partial.Add("a");
         partial.Add("b");
-        partial.Load(["x", "a"]);
+        partial.Load(["x", "a"], own: 1);
         Assert.AreSequenceEqual(["x", "a", "b"], partial.Entries);
 
         var none = new PromptHistory();
         none.Add("a");
-        none.Load(["b"]);
+        none.Load(["b"], own: 0);
         Assert.AreSequenceEqual(["b", "a"], none.Entries);
 
-        // Browsing keeps its place through the merge when the overlap moves the entries.
+        var coincidence = new PromptHistory();
+        coincidence.Add("a");
+        coincidence.Add("b");
+        coincidence.Load(["x", "a", "b"], own: 0);
+        Assert.AreSequenceEqual(["x", "a", "b", "a", "b"], coincidence.Entries, "the same text written twice is two entries");
+
+        // Browsing keeps its place through the merge when the entries move.
         var browsing = new PromptHistory();
         browsing.Add("a");
         browsing.Add("b");
         Assert.AreEqual("b", browsing.Back("draft"));
         Assert.AreEqual("a", browsing.Back("b"));
-        browsing.Load(["x", "a", "b"]);
+        browsing.Load(["x", "a", "b"], own: 2);
         Assert.AreEqual("x", browsing.Back("a"));
         Assert.AreEqual("a", browsing.Forward("x"));
         Assert.AreEqual("b", browsing.Forward("a"));

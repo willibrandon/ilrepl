@@ -32,6 +32,9 @@ internal sealed class MemoryHistoryStore : IHistoryStore
     public TaskCompletionSource? HoldLoad { get; set; }
 
     /// <inheritdoc />
+    public int Written => Appended.Count;
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<string>> LoadAsync(CancellationToken cancellationToken)
     {
         Loads++;
