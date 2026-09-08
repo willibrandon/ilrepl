@@ -117,7 +117,8 @@ public sealed class PromptHistoryTests
     }
 
     /// <summary>
-    /// Loading replaces the entries with the store's, and the store's problem shows through.
+    /// Loading puts the store's entries before the ones this session already has, and the
+    /// store's problem shows through.
     /// </summary>
     /// <returns>A task that completes when the assertions have run.</returns>
     [TestMethod]
@@ -125,12 +126,34 @@ public sealed class PromptHistoryTests
     {
         var store = new MemoryHistoryStore();
         store.Stored.AddRange(["one", "two\nlines"]);
-        var history = new PromptHistory(store, ["stale"]);
+        var history = new PromptHistory(store, ["added meanwhile"]);
         await history.LoadAsync(CancellationToken.None);
-        Assert.AreSequenceEqual(["one", "two\nlines"], history.Entries);
+        Assert.AreSequenceEqual(["one", "two\nlines", "added meanwhile"], history.Entries);
         Assert.AreEqual(1, store.Loads);
         Assert.IsNull(history.Problem);
         store.Problem = "disk full";
         Assert.AreEqual("disk full", history.Problem);
+    }
+
+    /// <summary>
+    /// An entry added before the store answered stays, after the stored ones, and a repeat of the
+    /// newest stored entry is not doubled.
+    /// </summary>
+    [TestMethod]
+    public void Load_KeepsEntriesAddedMeanwhile()
+    {
+        var history = new PromptHistory();
+        Assert.IsTrue(history.Add("nop"));
+        Assert.IsTrue(history.Add("ldc.i4 2"));
+        history.Load(["ldc.i4 1", "nop"]);
+        Assert.AreSequenceEqual(["ldc.i4 1", "nop", "ldc.i4 2"], history.Entries);
+        Assert.AreEqual("ldc.i4 2", history.Back(""));
+        Assert.AreEqual("nop", history.Back("ldc.i4 2"));
+        Assert.AreEqual("ldc.i4 1", history.Back("nop"));
+
+        var repeated = new PromptHistory();
+        repeated.Add("nop");
+        repeated.Load(["nop"]);
+        Assert.AreSequenceEqual(["nop"], repeated.Entries);
     }
 }

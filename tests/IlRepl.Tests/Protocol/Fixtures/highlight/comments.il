@@ -69,3 +69,15 @@ done */ sub
 
 nop
 // <- opcode
+
+END/* comment */: nop
+// <- label
+// ^^^^^^^^^^^^^ comment
+//              ^ label
+//                ^^^ opcode
+
+ldc.r8 float64(/* one */0x3ff0000000000000)
+// <- opcode
+//     ^^^^^^^^ number
+//             ^^^^^^^^^ comment
+//                      ^^^^^^^^^^^^^^^^^^^ number

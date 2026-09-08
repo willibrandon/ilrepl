@@ -62,10 +62,7 @@ public sealed class PromptHistory
         }
 
         var loaded = await _store.LoadAsync(cancellationToken).ConfigureAwait(false);
-        _entries.Clear();
-        _entries.AddRange(loaded);
-        Trim();
-        Reset();
+        Load(loaded);
     }
 
     /// <summary>
@@ -126,14 +123,24 @@ public sealed class PromptHistory
     }
 
     /// <summary>
-    /// Replaces every entry, as when the store finishes loading, and ends browsing.
+    /// Takes the stored entries, which go before whatever this session has added while they
+    /// were being read, so a line submitted before the store answered stays recallable.
     /// </summary>
-    /// <param name="entries">The entries, oldest first.</param>
-    public void Replace(IEnumerable<string> entries)
+    /// <param name="stored">The entries from the store, oldest first.</param>
+    public void Load(IEnumerable<string> stored)
     {
-        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(stored);
+        var added = _entries.ToList();
         _entries.Clear();
-        _entries.AddRange(entries);
+        _entries.AddRange(stored);
+        foreach (var entry in added)
+        {
+            if (_entries.Count == 0 || _entries[^1] != entry)
+            {
+                _entries.Add(entry);
+            }
+        }
+
         Trim();
         Reset();
     }

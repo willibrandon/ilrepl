@@ -24,10 +24,11 @@ internal static class AppTest
     /// <param name="height">The height in rows.</param>
     /// <param name="configure">Extra builder steps.</param>
     /// <param name="history">The history store, or none.</param>
+    /// <param name="onPrompt">Receives the prompt's state.</param>
     /// <returns>The terminal, not yet running.</returns>
-    public static Hex1bTerminal Build(IReplEngine engine, Transcript transcript, int width = 100, int height = 30, Func<Hex1bTerminalBuilder, Hex1bTerminalBuilder>? configure = null, IHistoryStore? history = null)
+    public static Hex1bTerminal Build(IReplEngine engine, Transcript transcript, int width = 100, int height = 30, Func<Hex1bTerminalBuilder, Hex1bTerminalBuilder>? configure = null, IHistoryStore? history = null, Action<PromptState>? onPrompt = null)
     {
-        var builder = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, history: history)
+        var builder = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, history: history, onPrompt: onPrompt)
             .WithHeadless()
             .WithDimensions(width, height);
         return (configure?.Invoke(builder) ?? builder).Build();

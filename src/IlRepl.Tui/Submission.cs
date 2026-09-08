@@ -43,8 +43,21 @@ public sealed class Submission
         _persist = persist;
         _post = post;
         Total = _units.Sum(u => u.Sends.Count);
+        var after = BlockBalance.Scan(string.Join('\n', lines), openDepth, inBlockComment);
+        DepthAfter = Math.Max(0, after.Depth);
+        CommentOpenAfter = after.InBlockComment;
         Completion = RunAsync();
     }
+
+    /// <summary>
+    /// The open depth the engine will be at once every line has gone by.
+    /// </summary>
+    public int DepthAfter { get; }
+
+    /// <summary>
+    /// Whether a block comment will still be open once every line has gone by.
+    /// </summary>
+    public bool CommentOpenAfter { get; }
 
     /// <summary>
     /// How many lines have been answered.
@@ -103,8 +116,11 @@ public sealed class Submission
 
                     if (_cancelled)
                     {
-                        var withdrawn = await WithdrawAsync(mark, provisional).ConfigureAwait(false);
-                        _post(SubmissionEvent.Cancel(withdrawn, TextFrom(provisional ? restart : unit.End)));
+                        // A unit that has not started is neither withdrawn nor lost: it comes back
+                        // whole, ahead of everything after it.
+                        IReadOnlyList<TranscriptLine> withdrawn = i == 0 ? [] : await WithdrawAsync(mark, provisional).ConfigureAwait(false);
+                        var from = i == 0 ? unit.Start : provisional ? restart : unit.End;
+                        _post(SubmissionEvent.Cancel(withdrawn, TextFrom(from)));
                         return;
                     }
 
@@ -154,7 +170,9 @@ public sealed class Submission
                         }
 
                         case SubmissionOutcome.Failed:
-                            _post(SubmissionEvent.Failure(reply.Lines, null, TextFrom(unit.End)));
+                            // What ran stays run; the lines after it, a block's remainder included,
+                            // come back so nothing typed is lost.
+                            _post(SubmissionEvent.Failure(reply.Lines, null, TextFrom(index + 1)));
                             return;
                         default:
                             break;

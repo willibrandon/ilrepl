@@ -27,9 +27,10 @@ public static class IlReplApp
     /// <param name="transcript">The transcript to render and append to.</param>
     /// <param name="usePlatformClipboard">True to copy selections through the platform's clipboard command as well as the terminal.</param>
     /// <param name="onApp">Called once the app exists, before its first frame.</param>
+    /// <param name="onPrompt">Called with the prompt's state, so a host can settle it with <see cref="SettleAsync"/> once the app has stopped.</param>
     /// <param name="history">Where history is kept between runs, or null to keep it for this run only.</param>
     /// <returns>The same builder, for chaining.</returns>
-    public static Hex1bTerminalBuilder Configure(Hex1bTerminalBuilder builder, IReplEngine engine, Transcript transcript, bool usePlatformClipboard = false, Action<Hex1bApp>? onApp = null, IHistoryStore? history = null)
+    public static Hex1bTerminalBuilder Configure(Hex1bTerminalBuilder builder, IReplEngine engine, Transcript transcript, bool usePlatformClipboard = false, Action<Hex1bApp>? onApp = null, IHistoryStore? history = null, Action<PromptState>? onPrompt = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(engine);
@@ -43,6 +44,7 @@ public static class IlReplApp
         var size = new TerminalSizeFilter();
         var feedback = new YankFeedback();
         var prompt = new PromptState(new PromptHistory(history), new CilTokenizer(engine.Vocabulary));
+        onPrompt?.Invoke(prompt);
         return builder
             .AddPresentationFilter(size)
             .WithHex1bApp(
@@ -81,10 +83,35 @@ public static class IlReplApp
     {
         ArgumentNullException.ThrowIfNull(engine);
         var transcript = new Transcript { MaxLines = 1000 };
-        await using var terminal = Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, usePlatformClipboard: true, history: history)
+        PromptState? prompt = null;
+        await using var terminal = Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, usePlatformClipboard: true, history: history, onPrompt: p => prompt = p)
             .WithMouse()
             .Build();
-        return await terminal.RunAsync(cancellationToken).ConfigureAwait(false);
+        var code = await terminal.RunAsync(cancellationToken).ConfigureAwait(false);
+        if (prompt is not null)
+        {
+            await SettleAsync(prompt).ConfigureAwait(false);
+        }
+
+        return code;
+    }
+
+    /// <summary>
+    /// Ends what the prompt still has in flight once the app has stopped: the worker is asked to
+    /// stop, the queue is dropped, and the line with the engine is waited for, so no line runs
+    /// behind a session that has ended.
+    /// </summary>
+    /// <param name="prompt">The prompt's state.</param>
+    /// <returns>A task that completes once nothing is in flight.</returns>
+    public static async Task SettleAsync(PromptState prompt)
+    {
+        ArgumentNullException.ThrowIfNull(prompt);
+        prompt.Pending.Clear();
+        if (prompt.Submission is { } sending)
+        {
+            sending.Cancel();
+            await sending.Completion.ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -289,10 +316,21 @@ public static class IlReplApp
                     app.RequestStop();
                     break;
                 case SubmissionEventKind.Completed:
-                    StartPending(prompt, engine);
+                    if (prompt.Submission is { CancelRequested: true })
+                    {
+                        // The block finished before the cancel could take: it stays, and what was
+                        // queued behind it comes back to the editor instead of running.
+                        prompt.Submission = null;
+                        Return(prompt, "", 0, select: false);
+                    }
+                    else
+                    {
+                        StartPending(prompt, engine);
+                    }
+
                     break;
                 case SubmissionEventKind.HistoryLoaded:
-                    prompt.History.Replace(e.Entries ?? []);
+                    prompt.History.Load(e.Entries ?? []);
                     break;
                 default:
                     break;
@@ -388,7 +426,8 @@ public static class IlReplApp
         {
             following.ScrollToBottom();
         }
-        var enter = prompt.Busy ? EnterAction.Busy : PromptWidget.EnterActionFor(prompt, candidates > 0 && fit.PaletteRows > 0, status.OpenDepth, status.Mark.InBlockComment);
+        var (openDepth, commentOpen) = prompt.Expected(status);
+        var enter = prompt.Busy ? EnterAction.Busy : PromptWidget.EnterActionFor(prompt, candidates > 0 && fit.PaletteRows > 0, openDepth, commentOpen);
         // The scrollbar takes the last column of the transcript panel.
         var lineWidth = size.Width > 1 ? size.Width - 1 : 0;
         var root = ctx.VStack(v =>
@@ -427,7 +466,7 @@ public static class IlReplApp
                 .Follow()
                 .Fill(),
             v.Separator(),
-            v.IlPrompt(status.Prompt, engine.Catalog, prompt, fit, status.OpenDepth, status.Mark.InBlockComment)
+            v.IlPrompt(status.Prompt, engine.Catalog, prompt, fit, openDepth, commentOpen)
                 .OnSubmit(text => StartSubmission(prompt, engine, text))
                 .OnCopy(text => ClipboardWriter.Copy(app, text, usePlatformClipboard)),
             v.InfoBar(s =>
@@ -505,6 +544,7 @@ public static class IlReplApp
             }, "Select transcript lines");
             b.Ctrl().Key(Hex1bKey.Q).Action(c =>
             {
+                prompt.Submission?.Cancel();
                 c.RequestStop();
                 return Task.CompletedTask;
             }, "Quit");

@@ -165,7 +165,7 @@ public sealed class FileHistoryStore : IHistoryStore
             var directory = System.IO.Path.GetDirectoryName(Path);
             if (!string.IsNullOrEmpty(directory))
             {
-                Directory.CreateDirectory(directory);
+                CreateDirectory(directory);
             }
 
             using var held = await LockAsync(cancellationToken).ConfigureAwait(false);
@@ -174,7 +174,10 @@ public sealed class FileHistoryStore : IHistoryStore
                 return;
             }
 
-            using var stream = new FileStream(Path, FileMode.Append, FileAccess.Write, FileShare.Read);
+            // Every line typed ends up here, string literals included, so the file is the
+            // owner's alone: created that way, and an older file tightened before it grows.
+            using var stream = new FileStream(Path, OwnerOnly(new FileStreamOptions { Mode = FileMode.Append, Access = FileAccess.Write, Share = FileShare.Read }));
+            Tighten(Path);
             var bytes = Encoding.UTF8.GetBytes(Format(entry, DateTimeOffset.Now));
             await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
             await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
@@ -185,6 +188,36 @@ public sealed class FileHistoryStore : IHistoryStore
         }
     }
 
+    private static void CreateDirectory(string directory)
+    {
+        if (OperatingSystem.IsWindows() || Directory.Exists(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+        else
+        {
+            Directory.CreateDirectory(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    private static FileStreamOptions OwnerOnly(FileStreamOptions options)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        return options;
+    }
+
+    private static void Tighten(string path)
+    {
+        if (!OperatingSystem.IsWindows() && File.GetUnixFileMode(path) != (UnixFileMode.UserRead | UnixFileMode.UserWrite))
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+    }
+
     private async Task<FileStream?> LockAsync(CancellationToken cancellationToken)
     {
         var started = Stopwatch.GetTimestamp();
@@ -192,7 +225,7 @@ public sealed class FileHistoryStore : IHistoryStore
         {
             try
             {
-                return new FileStream(LockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1);
+                return new FileStream(LockPath, OwnerOnly(new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.None, BufferSize = 1 }));
             }
             catch (IOException) when (Stopwatch.GetElapsedTime(started) < _lockTimeout)
             {

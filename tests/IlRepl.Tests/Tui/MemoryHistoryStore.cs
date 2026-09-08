@@ -25,11 +25,22 @@ internal sealed class MemoryHistoryStore : IHistoryStore
     /// <inheritdoc />
     public string? Problem { get; set; }
 
+    /// <summary>
+    /// When set, a load waits for this before it answers, so a test can act while history is
+    /// still being read.
+    /// </summary>
+    public TaskCompletionSource? HoldLoad { get; set; }
+
     /// <inheritdoc />
-    public Task<IReadOnlyList<string>> LoadAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<string>> LoadAsync(CancellationToken cancellationToken)
     {
         Loads++;
-        return Task.FromResult<IReadOnlyList<string>>(Stored.ToList());
+        if (HoldLoad is { } hold)
+        {
+            await hold.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return Stored.ToList();
     }
 
     /// <inheritdoc />

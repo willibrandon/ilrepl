@@ -125,8 +125,9 @@ public sealed partial class Session
     public bool InBlockComment { get; private set; }
 
     /// <summary>
-    /// How many closing braces the session is waiting for: open protected regions, the open
-    /// method, the open member and accessor, and every open type block, together.
+    /// How many opening braces the session has seen and not yet closed: open protected regions,
+    /// the open method, the open member and accessor, and every open type block, together. A
+    /// header still waiting for its brace on the next line has not opened one yet.
     /// </summary>
     public int OpenDepth
     {
@@ -135,20 +136,23 @@ public sealed partial class Session
             var depth = State.OpenBlockDepth;
             for (var type = _openType; type is not null; type = type.Enclosing)
             {
-                depth++;
+                if (type.BraceSeen)
+                {
+                    depth++;
+                }
             }
 
-            if (_openMember is not null)
+            if (_openMember is { State.BraceSeen: true })
             {
                 depth++;
             }
 
-            if (_openAccessor is not null)
+            if (_openAccessor is { BraceSeen: true })
             {
                 depth++;
             }
 
-            if (_open is not null)
+            if (_open is { State.BraceSeen: true })
             {
                 depth++;
             }
@@ -172,6 +176,17 @@ public sealed partial class Session
         var kind = CilLexer.Classify(raw, ref state, out var text);
         InBlockComment = state;
         return new NormalizedLine(raw, text, kind, before);
+    }
+
+    /// <summary>
+    /// Puts the comment state back to where a line found it, for a line the session refused: a
+    /// refused line changes nothing, the <c>/*</c> it may have opened included.
+    /// </summary>
+    /// <param name="line">The refused line.</param>
+    public void Forget(NormalizedLine line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        InBlockComment = line.InBlockCommentBefore;
     }
 
     /// <summary>

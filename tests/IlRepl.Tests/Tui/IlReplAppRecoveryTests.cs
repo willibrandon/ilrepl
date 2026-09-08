@@ -531,4 +531,97 @@ public sealed class IlReplAppRecoveryTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// When Ctrl+C lands after the final brace committed, the queued text comes back to the
+    /// editor rather than running behind a cancel.
+    /// </summary>
+    [TestMethod]
+    public async Task CtrlC_RacingFinalBrace_QueuedTextComesBack()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new DelayedEngine(new InProcessEngine());
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, s_twice, ct);
+        engine.Allow(5);
+        await auto.WaitUntilTextAsync("sending 5/6");
+        await AppTest.TypeLinesAsync(auto, ["nop"], ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && s.ContainsText("sending 5/6"), description: "the line is queued behind the block");
+        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
+        await auto.WaitUntilTextAsync("cancelling 5/6");
+        engine.Allow(1);
+        await auto.WaitUntilTextAsync("end of method Twice");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]> nop" && !s.ContainsText("cancelling"), description: "the block stays and the queued line is back in the editor");
+        Assert.HasCount(6, engine.Handled, "the queued line did not run");
+        engine.Allow(1);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("1 instruction");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// A destructive command inside a block moves the boundary, and a run that fails after it
+    /// stays run: the lines after the failed run come back, the block's close included.
+    /// </summary>
+    [TestMethod]
+    public async Task Paste_ResetInsideBlock_ThenFailedRun_ReturnsLinesAfterIt()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await adapter.PasteAsync(".method void F() {\n.reset\nldnull\nthrow\nret\nldc.i4 42\n}\n");
+        await auto.WaitUntilTextAsync("Enter sends 7 lines");
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("threw System.NullReferenceException");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 0).EndsWith("> ldc.i4 42", StringComparison.Ordinal) && AppTest.PromptRow(s, 1) == "  ...> }", description: "the lines after the failed run are back");
+        Assert.DoesNotContain(l => l.PlainText.Contains("ldc.i4 42", StringComparison.Ordinal), transcript.Lines, "the lines after the run were never sent");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// Once the returned block has been edited, a selection the user makes is theirs: Ctrl+C copies it.
+    /// </summary>
+    [TestMethod]
+    public async Task Recovery_CtrlC_AfterEditing_CopiesTheSelection()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var recorder = new PresentationRecorder();
+        await using var terminal = AppTest.Build(engine, transcript, configure: b => b.AddPresentationFilter(recorder));
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, s_typo, ct);
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.CaretLine(s) == 2, description: "the block is back");
+        await auto.TypeAsync("  ldc.i4 2", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...>   ldc.i4 2", description: "the correction replaced the line");
+        await auto.Shift().KeyAsync(Hex1bKey.Home, ct: ct);
+        await auto.WaitUntilAsync(s => s.GetCell(9, AppTest.PromptTop(s) + 2).Background is not null && AppTest.CaretAt(s, 7, 2), description: "the corrected line is selected");
+        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
+        await auto.WaitUntilAsync(_ => recorder.Output.Contains("\x1b]52;c;", StringComparison.Ordinal), description: "the terminal is asked to copy");
+        var payload = recorder.Output[(recorder.Output.LastIndexOf("\x1b]52;c;", StringComparison.Ordinal) + 7)..];
+        payload = payload[..payload.IndexOfAny(['\x07', '\x1b'])];
+        Assert.AreEqual("  ldc.i4 2", System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload)));
+        Assert.IsTrue(terminal.CreateSnapshot().ContainsText("editing 6 lines"), "the block stays in the editor");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

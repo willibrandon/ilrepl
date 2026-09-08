@@ -29,6 +29,29 @@ public sealed class PromptView : IEditorViewRenderer
     public ViewportOffsets Offsets { get; private set; } = new(1, 0);
 
     /// <summary>
+    /// The offsets count characters and the screen counts cells: a wide character takes two.
+    /// When the cells before the caret overflow the columns, the left offset moves on until
+    /// the caret's cell fits.
+    /// </summary>
+    /// <param name="offsets">The offsets after the character-based reveal.</param>
+    /// <param name="columns">The columns the text has.</param>
+    /// <param name="line">The caret's line.</param>
+    /// <param name="caret">The caret's character index on the line.</param>
+    /// <returns>The offsets with the caret's cell in view.</returns>
+    public static ViewportOffsets RevealWide(ViewportOffsets offsets, int columns, string line, int caret)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        var left = Math.Clamp(offsets.Left, 0, Math.Max(0, Math.Min(caret, line.Length)));
+        var end = Math.Clamp(caret, 0, line.Length);
+        while (left < end && DisplayWidth.GetStringWidth(line[left..end]) >= columns)
+        {
+            left++;
+        }
+
+        return left == offsets.Left ? offsets : offsets with { Left = left };
+    }
+
+    /// <summary>
     /// How many columns the gutter takes.
     /// </summary>
     public int GutterWidth => DisplayWidth.GetStringWidth(Label);
@@ -44,6 +67,7 @@ public sealed class PromptView : IEditorViewRenderer
         var document = state.Document;
         var caret = document.OffsetToPosition(new DocumentOffset(Math.Clamp(state.Cursor.Position.Value, 0, document.Length)));
         Offsets = PromptViewport.Reveal(Offsets, rows, columns, caret.Line, caret.Column - 1, document.LineCount);
+        Offsets = RevealWide(Offsets, columns, document.GetLineText(caret.Line), caret.Column - 1);
 
         var prompt = SpanPalette.Color(SpanStyle.Prompt).ToForegroundAnsi();
         var dim = SpanPalette.Color(SpanStyle.Dim).ToForegroundAnsi();

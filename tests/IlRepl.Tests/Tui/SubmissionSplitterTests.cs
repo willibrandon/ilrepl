@@ -150,4 +150,16 @@ public sealed class SubmissionSplitterTests
         var units = SubmissionSplitter.Split(["ldstr \"{\"", "ret"]);
         Assert.AreSequenceEqual([Unit(0, 1, SubmissionUnitKind.Line, 0), Unit(1, 2, SubmissionUnitKind.Line, 1)], units);
     }
+
+    /// <summary>
+    /// A header with its brace on the next line is one block with the lines the brace encloses.
+    /// </summary>
+    [TestMethod]
+    public void Split_HeaderWithBraceOnNextLine_IsOneBlock()
+    {
+        var units = SubmissionSplitter.Split([".method int32 One()", "{", "  ldc.i4 1", "  ret", "}", "nop"]);
+        Assert.AreSequenceEqual(
+            [new SubmissionUnit(0, 5, [0, 1, 2, 3, 4], SubmissionUnitKind.Block), new SubmissionUnit(5, 6, [5], SubmissionUnitKind.Line)],
+            units);
+    }
 }

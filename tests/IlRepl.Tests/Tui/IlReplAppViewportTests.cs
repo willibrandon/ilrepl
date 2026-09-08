@@ -359,4 +359,28 @@ public sealed class IlReplAppViewportTests
             Assert.IsNotNull(frame.Caret, "a frame without the caret in view:\n" + frame);
         }
     }
+
+    /// <summary>
+    /// A line of wide characters scrolls by cells, not characters, so the caret's cell is in view.
+    /// </summary>
+    [TestMethod]
+    public async Task Paste_WideCharacters_ShowsCaretColumn()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(80, 24);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await adapter.PasteAsync("ldstr \"" + new string('漢', 45) + "\"");
+        await auto.WaitUntilAsync(s => AppTest.Caret(s) is { } c && c.Y == AppTest.PromptTop(s) && c.X > 7 && s.GetCell(c.X - 1, c.Y).Character == "\"", description: "the caret cell follows the closing quote, in view");
+        await auto.HomeAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldstr \"漢", StringComparison.Ordinal) && AppTest.CaretAt(s, 7, 0), description: "Home scrolls back to the start");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

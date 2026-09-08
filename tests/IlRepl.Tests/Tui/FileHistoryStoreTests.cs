@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.Versioning;
 using IlRepl.Tui;
 
 namespace IlRepl.Tests.Tui;
@@ -356,5 +357,42 @@ public sealed class FileHistoryStoreTests
         }
 
         return Process.Start(startInfo) ?? throw new InvalidOperationException("the probe did not start");
+    }
+
+    /// <summary>
+    /// The file and its directory are created for the owner alone: every typed line ends up there.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [OSCondition(ConditionMode.Exclude, OperatingSystems.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Append_CreatesFileForTheOwnerOnly()
+    {
+        var path = TempPath();
+        var store = new FileHistoryStore(path);
+        await store.AppendAsync("ldstr \"secret\"", CancellationToken.None);
+        Assert.IsNull(store.Problem);
+        Assert.AreEqual(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
+        Assert.AreEqual(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(Path.GetDirectoryName(path)!));
+    }
+
+    /// <summary>
+    /// An older file that others could read is tightened before it grows.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [OSCondition(ConditionMode.Exclude, OperatingSystems.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Append_TightensAnExistingFile()
+    {
+        var path = TempPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, FileHistoryStore.Format("nop", DateTimeOffset.Now), TestContext.CancellationToken);
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+        var store = new FileHistoryStore(path);
+        await store.AppendAsync("ldc.i4 1", CancellationToken.None);
+        Assert.IsNull(store.Problem);
+        Assert.AreEqual(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
+        Assert.AreSequenceEqual(["nop", "ldc.i4 1"], await store.LoadAsync(CancellationToken.None));
     }
 }

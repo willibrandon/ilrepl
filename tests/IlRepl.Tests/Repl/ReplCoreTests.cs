@@ -366,4 +366,56 @@ public sealed class ReplCoreTests
         Assert.Contains(l => l.Spans.Contains(new TranscriptSpan("managed", SpanStyle.Keyword)), listing);
         Assert.DoesNotContain(l => l.Spans.Any(s => s.Style == SpanStyle.Error), listing, string.Join("\n", listing.Where(l => l.Spans.Any(s => s.Style == SpanStyle.Error)).Select(l => l.PlainText)));
     }
+
+    /// <summary>
+    /// A header whose brace comes on the next line has opened nothing yet: the depth counts
+    /// braces the session has seen, so an editor adding the brace itself reaches zero at the close.
+    /// </summary>
+    [TestMethod]
+    public void Handle_HeaderWithoutBrace_OpenDepthCountsFromTheBrace()
+    {
+        var core = new ReplCore();
+        Assert.IsTrue(core.Handle(".method int32 One()").Succeeded);
+        Assert.AreEqual("One", core.Status.OpenMethod);
+        Assert.AreEqual(0, core.Status.OpenDepth, "the brace has not been seen");
+        Assert.IsTrue(core.Handle("{").Succeeded);
+        Assert.AreEqual(1, core.Status.OpenDepth);
+        Assert.IsTrue(core.Handle("ldc.i4 1").Succeeded);
+        Assert.IsTrue(core.Handle("ret").Succeeded);
+        Assert.IsTrue(core.Handle("}").Succeeded);
+        Assert.AreEqual(0, core.Status.OpenDepth);
+        Assert.IsNull(core.Status.OpenMethod);
+
+        Assert.IsTrue(core.Handle(".class C").Succeeded);
+        Assert.AreEqual(0, core.Status.OpenDepth);
+        Assert.IsTrue(core.Handle("{").Succeeded);
+        Assert.AreEqual(1, core.Status.OpenDepth);
+        Assert.IsTrue(core.Handle(".method public static int32 M()").Succeeded);
+        Assert.AreEqual(1, core.Status.OpenDepth, "the member's brace has not been seen");
+        Assert.IsTrue(core.Handle("{").Succeeded);
+        Assert.AreEqual(2, core.Status.OpenDepth);
+        Assert.IsTrue(core.Handle("ldc.i4 2").Succeeded);
+        Assert.IsTrue(core.Handle("ret").Succeeded);
+        Assert.IsTrue(core.Handle("}").Succeeded);
+        Assert.AreEqual(1, core.Status.OpenDepth);
+        Assert.IsTrue(core.Handle("}").Succeeded);
+        Assert.AreEqual(0, core.Status.OpenDepth);
+    }
+
+    /// <summary>
+    /// A refused line changes nothing, the block comment it opened included, so the corrected
+    /// line that follows is read as code.
+    /// </summary>
+    [TestMethod]
+    public void Handle_RefusedLine_LeavesNoCommentOpen()
+    {
+        var core = new ReplCore();
+        Assert.IsFalse(core.Handle("lcd.i4 2 /*").Succeeded);
+        Assert.IsFalse(core.Status.Mark.InBlockComment, "the refused line's comment is forgotten with it");
+        Assert.IsTrue(core.Handle("ldc.i4 2").Succeeded);
+        Assert.AreEqual(1, core.Status.Instructions);
+
+        Assert.IsTrue(core.Handle("ldc.i4 3 /* still open").Succeeded);
+        Assert.IsTrue(core.Status.Mark.InBlockComment, "an accepted line's comment stays open");
+    }
 }

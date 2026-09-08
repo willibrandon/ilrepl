@@ -60,4 +60,23 @@ public sealed class PromptViewportTests
     {
         Assert.AreEqual(new ViewportOffsets(4, 7), PromptViewport.Reveal(new ViewportOffsets(0, -1), 0, 0, caretLine: 4, caretColumn: 7, lineCount: 4));
     }
+
+    /// <summary>
+    /// The offsets count characters and the screen counts cells, so a line of wide characters
+    /// scrolls further than its character count says; narrow text is left as it was.
+    /// </summary>
+    [TestMethod]
+    public void RevealWide_WideCharacters_ScrollUntilTheCaretCellFits()
+    {
+        var line = "ldstr \"" + new string('漢', 40) + "\"";
+        var caret = line.Length;
+        var offsets = PromptView.RevealWide(new ViewportOffsets(1, 0), 40, line, caret);
+        Assert.IsGreaterThan(0, offsets.Left);
+        Assert.IsLessThan(40, Hex1b.DisplayWidth.GetStringWidth(line[offsets.Left..caret]), "the cells before the caret fit");
+        Assert.IsGreaterThanOrEqualTo(40, Hex1b.DisplayWidth.GetStringWidth(line[(offsets.Left - 1)..caret]), "and no further than needed");
+        Assert.AreEqual(1, offsets.Top);
+
+        Assert.AreEqual(new ViewportOffsets(1, 0), PromptView.RevealWide(new ViewportOffsets(1, 0), 40, "ldstr \"narrow\"", 14));
+        Assert.AreEqual(new ViewportOffsets(1, 3), PromptView.RevealWide(new ViewportOffsets(1, 3), 40, line, 5), "a caret before the offset is left to the character reveal");
+    }
 }

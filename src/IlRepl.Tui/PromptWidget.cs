@@ -311,7 +311,7 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
 
     private void CtrlC(PromptState state, InputBindingActionContext context)
     {
-        if (state.Editor.Cursor.HasSelection && state.Editor.Cursor.SelectionRange != state.ReturnedSelection)
+        if (state.Editor.Cursor.HasSelection && !state.SelectionIsReturned)
         {
             CopyHandler?.Invoke(state.Editor.Document.GetText(state.Editor.Cursor.SelectionRange));
             return;
@@ -319,7 +319,8 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
 
         if (state.Busy)
         {
-            state.Pending.Clear();
+            // What was queued behind the submission stays queued: it comes back to the editor
+            // with the withdrawn text once the cancel lands.
             state.Submission?.Cancel();
             return;
         }

@@ -198,6 +198,7 @@ public sealed class PromptState
         Editor.SetCursorPosition(start);
         Editor.SetCursorPosition(end, extend: true);
         ReturnedSelection = Editor.Cursor.SelectionRange;
+        ReturnedVersion = document.Version;
     }
 
     /// <summary>
@@ -216,6 +217,45 @@ public sealed class PromptState
     /// buffer changes.
     /// </summary>
     public DocumentRange? ReturnedSelection { get; private set; }
+
+    /// <summary>
+    /// The document version the returned selection was made at; an edit since means the
+    /// selection, whatever its offsets, is the user's own.
+    /// </summary>
+    public long ReturnedVersion { get; private set; }
+
+    /// <summary>
+    /// True while the current selection is the one a refusal made, untouched since.
+    /// </summary>
+    public bool SelectionIsReturned => ReturnedSelection is { } returned && Editor.Document.Version == ReturnedVersion && Editor.Cursor.HasSelection && Editor.Cursor.SelectionRange == returned;
+
+    /// <summary>
+    /// The depth and comment state the next submission will start from: the engine's own while
+    /// nothing is in flight, otherwise where the submission in flight and everything queued behind
+    /// it will leave the engine, so a line typed meanwhile is judged against that and not against
+    /// a block the worker is still closing.
+    /// </summary>
+    /// <param name="status">The engine's status now.</param>
+    /// <returns>The open depth and whether a block comment is open.</returns>
+    public (int Depth, bool CommentOpen) Expected(SessionStatus status)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        if (Submission is not { } sending)
+        {
+            return (status.OpenDepth, status.Mark.InBlockComment);
+        }
+
+        var depth = sending.DepthAfter;
+        var comment = sending.CommentOpenAfter;
+        foreach (var text in Pending)
+        {
+            var scan = BlockBalance.Scan(text, depth, comment);
+            depth = Math.Max(0, scan.Depth);
+            comment = scan.InBlockComment;
+        }
+
+        return (depth, comment);
+    }
 
     /// <summary>
     /// Empties the buffer.

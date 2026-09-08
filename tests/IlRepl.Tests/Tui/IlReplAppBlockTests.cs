@@ -684,4 +684,73 @@ public sealed class IlReplAppBlockTests
 
         return rows;
     }
+
+    /// <summary>
+    /// A method whose brace comes on the next line is one block: Enter continues from the header
+    /// until the close, and the engine takes the brace as the header's own.
+    /// </summary>
+    [TestMethod]
+    public async Task TypeMethod_BraceOnNextLine_SendsAtClose()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync(".method int32 One()", ct: ct);
+        await auto.WaitUntilTextAsync("Enter continues");
+        await auto.EnterAsync(ct: ct);
+        await AppTest.TypeLinesAsync(auto, ["{", "ldc.i4 1", "ret"], ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 1) == "  ...> {" && AppTest.PromptRow(s, 2) == "  ...>   ldc.i4 1", description: "the brace opens the body's indentation");
+        await auto.TypeAsync("}", ct: ct);
+        await auto.WaitUntilTextAsync("Enter sends 5 lines");
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("end of method One");
+        await auto.WaitUntilTextAsync("il[2]>");
+        Assert.DoesNotContain(l => l.Kind == LineKind.Error, transcript.Lines);
+        Assert.AreEqual(0, engine.Status.OpenDepth);
+        await AppTest.TypeLinesAsync(auto, ["call int32 One()", "ret"], ct);
+        await auto.WaitUntilTextAsync("= 1 : int32");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// A line submitted before the history store has answered stays recallable once it does.
+    /// </summary>
+    [TestMethod]
+    public async Task History_SubmittedBeforeLoad_StaysRecallable()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var store = new MemoryHistoryStore { HoldLoad = new TaskCompletionSource() };
+        store.Stored.Add("ldc.i4 1");
+        await using var terminal = AppTest.Build(engine, transcript, history: store);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, ["nop"], ct);
+        await auto.WaitUntilTextAsync("1 instruction");
+        await auto.WaitUntilAsync(_ => store.Loads == 1, description: "the store was asked");
+        store.HoldLoad.SetResult();
+
+        // A keystroke and its frame follow the load, which the frame drains before it draws.
+        await auto.TypeAsync("x", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> x", description: "a frame after the load");
+        await auto.BackspaceAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "empty again");
+        await auto.UpAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop", description: "the line typed before the load is the newest entry");
+        await auto.UpAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 1", description: "the stored entry is before it");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

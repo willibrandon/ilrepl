@@ -271,10 +271,73 @@ public sealed class IlReplAppSubmissionTests
     }
 
     /// <summary>
-    /// Ctrl+Q quits even while a block is in flight.
+    /// Ctrl+Q quits even while a block is in flight, and settling afterwards waits for the line
+    /// with the engine and sends nothing more.
     /// </summary>
     [TestMethod]
     public async Task Submit_Quit_StopsApp()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new DelayedEngine(new InProcessEngine());
+        var transcript = new Transcript();
+        PromptState? prompt = null;
+        await using var terminal = AppTest.Build(engine, transcript, onPrompt: p => prompt = p);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, s_twice, ct);
+        engine.Allow(2);
+        await auto.WaitUntilTextAsync("sending 2/6");
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run.WaitAsync(AppTest.Timeout, ct);
+
+        var settle = IlReplApp.SettleAsync(prompt!);
+        Assert.IsFalse(settle.IsCompleted, "the line in flight is still with the engine");
+        engine.Allow(1);
+        await settle.WaitAsync(AppTest.Timeout, ct);
+        Assert.HasCount(3, engine.Handled, "the line in flight went by and nothing after it");
+        Assert.AreEqual(0, engine.Waiting);
+    }
+
+    /// <summary>
+    /// Ctrl+C between two top-level lines keeps the line that had not started: it comes back to
+    /// the editor, nothing is withdrawn, and the lines that went by stay.
+    /// </summary>
+    [TestMethod]
+    public async Task Submit_CtrlC_BetweenTopLevelLines_KeepsTheUnsentLine()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new DelayedEngine(new InProcessEngine());
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await adapter.PasteAsync("ldc.i4 1\nldc.i4 2\nldc.i4 3\n");
+        await auto.WaitUntilTextAsync("Enter sends 3 lines");
+        await auto.EnterAsync(ct: ct);
+        engine.Allow(1);
+        await auto.WaitUntilTextAsync("sending 1/3");
+        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
+        await auto.WaitUntilTextAsync("cancelling 1/3");
+        engine.Allow(1);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 3" && !s.ContainsText("cancelling"), description: "the line that had not started is back");
+        await auto.WaitUntilTextAsync("stack [int32, int32]");
+        Assert.HasCount(2, engine.Handled);
+        Assert.DoesNotContain(l => l.PlainText.Contains("withdrawn", StringComparison.Ordinal), transcript.Lines, "nothing was withdrawn");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// Text queued behind a block comes back to the editor with the block when Ctrl+C withdraws it.
+    /// </summary>
+    [TestMethod]
+    public async Task Submit_CtrlC_WithQueuedText_ReturnsItToEditor()
     {
         var ct = TestContext.CancellationToken;
         await using var engine = new DelayedEngine(new InProcessEngine());
@@ -287,8 +350,48 @@ public sealed class IlReplAppSubmissionTests
         await AppTest.TypeLinesAsync(auto, s_twice, ct);
         engine.Allow(2);
         await auto.WaitUntilTextAsync("sending 2/6");
+        await AppTest.TypeLinesAsync(auto, ["nop"], ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && s.ContainsText("sending 2/6"), description: "the line is queued behind the block");
+        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
+        await auto.WaitUntilTextAsync("cancelling 2/6");
+        engine.Allow(1);
+        await auto.WaitUntilTextAsync("method Twice abandoned; the block is back in the editor");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 7 lines") && AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 6) == "  ...> nop", description: "the block and the queued line are both back");
+        Assert.HasCount(3, engine.Handled);
+
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
-        await run.WaitAsync(AppTest.Timeout, ct);
-        engine.Allow(4);
+        await run;
+    }
+
+    /// <summary>
+    /// A line typed while a block is in flight is judged against where the block will leave the
+    /// engine, not against the method the worker is still closing: it queues as a complete line.
+    /// </summary>
+    [TestMethod]
+    public async Task Submit_WhileSending_TypedLineQueuesAsComplete()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new DelayedEngine(new InProcessEngine());
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript);
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, s_twice, ct);
+        engine.Allow(1);
+        await auto.WaitUntilTextAsync("sending 1/6");
+        await auto.WaitUntilTextAsync("method Twice │");
+        await AppTest.TypeLinesAsync(auto, ["nop"], ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && !s.ContainsText("editing") && s.ContainsText("sending 1/6"), description: "the line queued instead of continuing a block");
+        engine.Allow(5);
+        await auto.WaitUntilTextAsync("end of method Twice");
+        engine.Allow(1);
+        await auto.WaitUntilTextAsync("il[2]> nop");
+        Assert.AreEqual("nop", engine.Handled[^1]);
+        Assert.HasCount(7, engine.Handled);
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
     }
 }

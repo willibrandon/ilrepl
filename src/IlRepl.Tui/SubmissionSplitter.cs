@@ -23,6 +23,7 @@ public static class SubmissionSplitter
         var units = new List<SubmissionUnit>();
         var depth = Math.Max(0, openDepth);
         var comment = inBlockComment;
+        var awaiting = false;
         int? blockStart = null;
         var sends = new List<int>();
         for (var i = 0; i < lines.Count; i++)
@@ -30,7 +31,12 @@ public static class SubmissionSplitter
             var line = lines[i];
             var before = comment;
             var kind = CilLexer.Classify(line, ref comment, out _);
-            var scan = BlockBalance.Scan(line, depth, before);
+            var scan = BlockBalance.Scan(line, depth, before, awaiting);
+            if (kind == SourceLineKind.Text)
+            {
+                awaiting = scan.AwaitingBrace;
+            }
+
             if (blockStart is null && depth == 0)
             {
                 if (kind == SourceLineKind.Blank)

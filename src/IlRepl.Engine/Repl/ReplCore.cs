@@ -198,12 +198,14 @@ public sealed class ReplCore
         }
         catch (ReplException ex)
         {
+            Session.Forget(normalized);
             Error(ex.Message);
             return new HandleResult(false, false);
         }
         catch (Exception ex) when (ex is not (CellException or OperationCanceledException))
         {
             // A line must never take the session down with it; the host keeps serving.
+            Session.Forget(normalized);
             Error("unexpected " + ex.GetType().Name + ": " + ex.Message);
             return new HandleResult(false, false);
         }

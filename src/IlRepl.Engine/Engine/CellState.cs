@@ -18,6 +18,11 @@ public sealed class CellState
     private bool _braceSeen;
 
     /// <summary>
+    /// For a method body: true once the opening brace has been seen, on the header line or on its own.
+    /// </summary>
+    public bool BraceSeen => _braceSeen;
+
+    /// <summary>
     /// Initializes an empty cell.
     /// </summary>
     /// <param name="resolver">The type resolver.</param>

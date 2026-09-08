@@ -115,9 +115,29 @@ internal sealed class CilLineReader
     public void EmitRange(int from, int to, SpanStyle style)
     {
         to = Math.Min(to, _lexemes.Count - 1);
-        if (from >= 0 && from <= to)
+        if (from < 0 || from > to)
         {
-            _tokens.Add(new CilToken(_lexemes[from].Start, _lexemes[to].End - _lexemes[from].Start, style));
+            return;
+        }
+
+        // A comment between the lexemes already has its token, so the run is emitted in the
+        // pieces around it and no two tokens overlap.
+        var start = _lexemes[from].Start;
+        var end = _lexemes[to].End;
+        var comments = _tokens.Where(t => t.Style == SpanStyle.Comment && t.Start < end && t.Start + t.Length > start).OrderBy(t => t.Start).ToList();
+        foreach (var comment in comments)
+        {
+            if (comment.Start > start)
+            {
+                _tokens.Add(new CilToken(start, comment.Start - start, style));
+            }
+
+            start = Math.Max(start, comment.Start + comment.Length);
+        }
+
+        if (end > start)
+        {
+            _tokens.Add(new CilToken(start, end - start, style));
         }
     }
 
