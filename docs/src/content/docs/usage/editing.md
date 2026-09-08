@@ -80,7 +80,9 @@ indentation.
 ## A refused line
 
 When the engine refuses a line, the block it belongs to is withdrawn, the method or class it
-opened is abandoned, and the whole block comes back with the refused line selected.
+opened is abandoned, and the whole block comes back with the refused line selected. A line on
+its own is not put back: the error is in the transcript and Up recalls the line. In a paste of
+separate lines, the ones after the refused line never went, and they come back.
 
 ```
 il[5]> .method int32 Half(int32 n) {

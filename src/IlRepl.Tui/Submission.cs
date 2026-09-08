@@ -175,7 +175,18 @@ public sealed class Submission
                         {
                             var withdrawn = await WithdrawAsync(mark, provisional).ConfigureAwait(false);
                             var note = moved ? $"the lines before '{_lines[restart - 1].Trim()}' stayed applied" : null;
-                            _post(SubmissionEvent.Refused([.. reply.Lines, .. withdrawn], TextFrom(restart), Math.Max(0, index - restart), note));
+                            if (unit.Kind == SubmissionUnitKind.Block)
+                            {
+                                // A block comes back whole with the refused line selected.
+                                _post(SubmissionEvent.Refused([.. reply.Lines, .. withdrawn], TextFrom(restart), Math.Max(0, index - restart), note));
+                            }
+                            else
+                            {
+                                // A line on its own is not put back: the error and history have
+                                // it, as in any REPL. Only what never went comes back.
+                                _post(SubmissionEvent.Refused([.. reply.Lines, .. withdrawn], TextFrom(index + 1), 0, note, select: false));
+                            }
+
                             return;
                         }
 

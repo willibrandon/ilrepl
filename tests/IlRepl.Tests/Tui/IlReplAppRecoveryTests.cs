@@ -731,4 +731,41 @@ public sealed class IlReplAppRecoveryTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A refused line on its own is not put back: the error is in the transcript, the prompt is
+    /// empty, and Up recalls the line. In a paste of separate lines, the line that went stays
+    /// applied, the refused one is gone, and the ones after it come back, unselected.
+    /// </summary>
+    [TestMethod]
+    public async Task Refused_LoneLine_LeavesThePromptEmpty()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        PromptState? prompt = null;
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, onPrompt: p => prompt = p).WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, ["lcd.i4 1"], ct);
+        await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && prompt is { Busy: false, Text.Length: 0 }, description: "the prompt is empty");
+        await auto.UpAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> lcd.i4 1", description: "Up recalls the refused line");
+        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "Ctrl+C clears it");
+
+        await adapter.PasteAsync("ldc.i4 1\nlcd.i4 2\nadd\n");
+        await auto.WaitUntilTextAsync("Enter sends 3 lines");
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> add" && AppTest.CaretLine(s) == 0 && s.ContainsText("stack [int32]"), description: "the value that went is on the stack and only the unsent line is back");
+        Assert.IsFalse(prompt!.Editor.Cursor.HasSelection, "nothing is selected");
+        Assert.HasCount(2, transcript.Lines.Where(l => l.Kind == LineKind.Error).ToList(), "each refusal was reported once");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

@@ -489,10 +489,12 @@ public sealed class IlReplAppBlockTests
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Contains("il[1]> ldc.i4.") && transcript.Lines.Any(l => l.Kind == LineKind.Error), description: "the text went to the engine, which refused it");
 
-        // A refused line comes back selected, so typing replaces it; Ctrl+C on that selection clears it.
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldc.i4.", StringComparison.Ordinal) && s.GetCell(7, AppTest.PromptTop(s)).Background is not null, description: "the refused line is back and selected");
+        // A refused line on its own is not put back; Up recalls it and Ctrl+C clears it again.
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "the prompt is empty after the refusal");
+        await auto.UpAsync(ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldc.i4.", StringComparison.Ordinal), description: "Up recalls the refused line");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "Ctrl+C clears the returned line in one press");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "Ctrl+C clears it in one press");
         Assert.IsFalse(run.IsCompleted);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);

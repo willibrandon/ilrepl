@@ -311,7 +311,7 @@ public static class IlReplApp
                     prompt.PaletteNavigated = false;
                     break;
                 case SubmissionEventKind.Refused:
-                    Return(prompt, e.Text ?? "", e.CaretLine, select: true);
+                    Return(prompt, e.Text ?? "", e.CaretLine, select: e.Select);
                     if (e.Note is { } note)
                     {
                         transcript.Add(LineKind.Info, "  " + note, SpanStyle.Dim);

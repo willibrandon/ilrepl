@@ -12,6 +12,7 @@ namespace IlRepl.Tui;
 /// <param name="Note">An information line to add to the transcript, or null.</param>
 /// <param name="Entries">History entries, for <see cref="SubmissionEventKind.HistoryLoaded"/>.</param>
 /// <param name="Own">How many of the entries, at the end, this session wrote itself before they were read.</param>
+/// <param name="Select">For <see cref="SubmissionEventKind.Refused"/>, whether the line at <see cref="CaretLine"/> is selected: a block's refused line is, a line on its own is not put back at all.</param>
 public sealed record SubmissionEvent(
     SubmissionEventKind Kind,
     IReadOnlyList<TranscriptLine>? Lines = null,
@@ -19,7 +20,8 @@ public sealed record SubmissionEvent(
     int CaretLine = 0,
     string? Note = null,
     IReadOnlyList<string>? Entries = null,
-    int Own = 0)
+    int Own = 0,
+    bool Select = false)
 {
     /// <summary>
     /// A paste with its payload.
@@ -42,8 +44,9 @@ public sealed record SubmissionEvent(
     /// <param name="text">The text coming back.</param>
     /// <param name="caretLine">The refused line within it.</param>
     /// <param name="note">A note to add, or null.</param>
+    /// <param name="select">Whether the line at <paramref name="caretLine"/> is selected.</param>
     /// <returns>The event.</returns>
-    public static SubmissionEvent Refused(IReadOnlyList<TranscriptLine> lines, string text, int caretLine, string? note = null) => new(SubmissionEventKind.Refused, Lines: lines, Text: text, CaretLine: caretLine, Note: note);
+    public static SubmissionEvent Refused(IReadOnlyList<TranscriptLine> lines, string text, int caretLine, string? note = null, bool select = true) => new(SubmissionEventKind.Refused, Lines: lines, Text: text, CaretLine: caretLine, Note: note, Select: select);
 
     /// <summary>
     /// A failure: the unsent text comes back and the message goes to the transcript.
