@@ -160,7 +160,7 @@ Repository utilities are file-based apps under `scripts/`:
 ```
 dotnet run --file scripts/Generate-OpcodeReference.cs
 dotnet run --file scripts/Publish-Wasm.cs
-dotnet run --file scripts/Publish-NativeAot.cs -- --rid osx-arm64 --package-version 0.2.0
+dotnet run --file scripts/Publish-NativeAot.cs -- --rid osx-arm64 --package-version 0.3.0
 ```
 
 ## License
