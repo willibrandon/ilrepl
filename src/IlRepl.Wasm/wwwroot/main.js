@@ -241,34 +241,58 @@
       return false;
     });
 
+    // The terminal cell under a point on the page, counted from one, or null before the
+    // terminal has opened.
+    const cellAt = (clientX, clientY) => {
+      const screen = term.element && term.element.querySelector('.xterm-screen');
+      if (!screen) return null;
+      const rect = screen.getBoundingClientRect();
+      const cellWidth = rect.width / term.cols;
+      const cellHeight = rect.height / term.rows;
+      return {
+        col: Math.min(term.cols, Math.max(1, Math.floor((clientX - rect.left) / cellWidth) + 1)),
+        row: Math.min(term.rows, Math.max(1, Math.floor((clientY - rect.top) / cellHeight) + 1)),
+        cellHeight,
+      };
+    };
+
     // Wheel notches still scroll the transcript: with no mouse mode on, xterm would turn them
     // into arrow keys, so they go to the app as the scroll reports a terminal sends, one per
     // line, from the cell under the pointer.
     term.attachCustomWheelEventHandler((e) => {
       if (!worker) return true;
-      const screen = term.element && term.element.querySelector('.xterm-screen');
-      if (!screen) return true;
-      const rect = screen.getBoundingClientRect();
-      const cellWidth = rect.width / term.cols;
-      const cellHeight = rect.height / term.rows;
-      const col = Math.min(term.cols, Math.max(1, Math.floor((e.clientX - rect.left) / cellWidth) + 1));
-      const row = Math.min(term.rows, Math.max(1, Math.floor((e.clientY - rect.top) / cellHeight) + 1));
-      const lines = e.deltaMode === 1 ? e.deltaY : e.deltaMode === 2 ? e.deltaY * term.rows : e.deltaY / cellHeight;
+      const cell = cellAt(e.clientX, e.clientY);
+      if (!cell) return true;
+      const lines = e.deltaMode === 1 ? e.deltaY : e.deltaMode === 2 ? e.deltaY * term.rows : e.deltaY / cell.cellHeight;
       const count = Math.min(50, Math.max(1, Math.round(Math.abs(lines))));
       const button = e.deltaY < 0 ? 64 : 65;
-      send(`\x1b[<${button};${col};${row}M`.repeat(count));
+      send(`\x1b[<${button};${cell.col};${cell.row}M`.repeat(count));
       e.preventDefault();
       return false;
     });
 
     // A click anywhere in the box focuses the terminal. In the padding around the rows the
     // default action of the mousedown would move focus to the body right after, so it is
-    // stopped there; inside the rows xterm handles the click itself.
+    // stopped there; inside the rows xterm handles the press itself, and selects on a drag.
+    // A plain left click that did not move still reaches the app, as the press and release
+    // reports a terminal sends, so a row of the palette can be taken with the mouse and a
+    // click in the buffer places the caret.
+    let press = null;
     container.addEventListener('mousedown', (e) => {
       if (!e.target.closest('.xterm')) e.preventDefault();
       term.focus();
+      press = e.button === 0 && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey ? { x: e.clientX, y: e.clientY } : null;
     });
-    container.addEventListener('mouseup', () => term.focus());
+    container.addEventListener('mouseup', (e) => {
+      term.focus();
+      const start = press;
+      press = null;
+      if (!worker || !start || e.button !== 0) return;
+      if (Math.abs(e.clientX - start.x) > 3 || Math.abs(e.clientY - start.y) > 3) return;
+      const cell = cellAt(e.clientX, e.clientY);
+      if (!cell) return;
+      send(`\x1b[<0;${cell.col};${cell.row}M\x1b[<0;${cell.col};${cell.row}m`);
+    });
 
     startWorker();
   } catch (err) {

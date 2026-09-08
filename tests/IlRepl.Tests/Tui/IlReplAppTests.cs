@@ -109,6 +109,44 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
+    /// A click on a row of the palette takes that suggestion, as Tab takes the highlighted one.
+    /// </summary>
+    [TestMethod]
+    public async Task Palette_ClickTakesTheRow()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript, configure: b => b.WithMouse());
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync("ldc.i4.", ct: ct);
+        await auto.WaitUntilTextAsync("❯ ldc.i4.0");
+        var row = -1;
+        using (var snapshot = terminal.CreateSnapshot())
+        {
+            for (var y = 0; y < snapshot.Height; y++)
+            {
+                if (AppTest.Row(snapshot, y).Contains(" ldc.i4.2 ", StringComparison.Ordinal))
+                {
+                    row = y;
+                }
+            }
+        }
+
+        Assert.IsGreaterThanOrEqualTo(0, row, "the palette should list ldc.i4.2");
+        await auto.ClickAtAsync(4, row, ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4.2" && !s.ContainsText("opcodes"), description: "the clicked row is in the prompt and the palette is closed");
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("[int32]");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
     /// Up recalls the previous line and errors show in red.
     /// </summary>
     [TestMethod]

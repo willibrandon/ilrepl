@@ -208,6 +208,38 @@ public sealed class LiveSessionTests
     }
 
     /// <summary>
+    /// A click on a row of the palette takes that suggestion in the browser too: the page sends
+    /// a plain click to the app while a drag stays with the terminal.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task Click_OnAPaletteRow_TakesIt(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        await page.Keyboard.TypeAsync("ldc.i4.");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("❯ ldc.i4.0", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+
+        var row = await page.EvaluateAsync<int>("() => { const t = window.ilreplTerminal; for (let i = 0; i < t.rows; i++) { const l = t.buffer.active.getLine(i); if (l && l.translateToString(true).includes(' ldc.i4.2 ')) return i; } return -1; }");
+        Assert.IsGreaterThanOrEqualTo(0, row, "the palette should list ldc.i4.2");
+        var screen = await page.Locator(".xterm-screen").BoundingBoxAsync();
+        Assert.IsNotNull(screen);
+        var size = await page.EvaluateAsync<int[]>("() => [window.ilreplTerminal.cols, window.ilreplTerminal.rows]");
+        var cellWidth = screen.Width / size[0];
+        var cellHeight = screen.Height / size[1];
+        await page.Mouse.ClickAsync(screen.X + (cellWidth * 4.5f), screen.Y + (cellHeight * (row + 0.5f)));
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("il[1]> ldc.i4.2", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("opcodes", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("┊ [int32]", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+    }
+
+    /// <summary>
     /// Without the clipboard API, as on plain http or with permission denied, a copy still lands
     /// through the terminal's own copy handler, and a selection is cleared only once it has.
     /// </summary>

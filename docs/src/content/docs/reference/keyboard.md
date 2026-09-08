@@ -24,7 +24,8 @@ In the browser, selection and copy are the terminal's own: drag to select and pr
 Ctrl+C to copy. Shift+Up and Ctrl+C's copy of a buffer selection belong to the desktop.
 
 The palette opens while the first word of the line is a prefix of an opcode or, when it starts
-with a dot, of a command. Each row shows the name, its stack transition, and a short description.
+with a dot, of a command. Each row shows the name, its stack transition, and a short description,
+and a click on a row takes it.
 
 A block goes to the engine line by line once Enter sends it. A paste lands in the editor and
 waits for Enter. A line the engine refuses brings its whole block back with that line selected;
