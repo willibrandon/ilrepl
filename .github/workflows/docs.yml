@@ -9,6 +9,7 @@ on:
       - 'tests/IlRepl.Docs.Tests/**'
       - 'scripts/Publish-Wasm.cs'
       - 'scripts/Generate-OpcodeReference.cs'
+      - 'scripts/Highlight-Cil.cs'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -38,6 +39,11 @@ jobs:
 
       - name: Generate the opcode reference
         run: dotnet run --file scripts/Generate-OpcodeReference.cs
+
+      - name: Colour the CIL in the docs with the terminal's tokenizer
+        run: |
+          dotnet build samples/Greeter --nologo -v quiet
+          dotnet run --file scripts/Highlight-Cil.cs
 
       - name: Publish the browser build into the site
         run: dotnet run --file scripts/Publish-Wasm.cs

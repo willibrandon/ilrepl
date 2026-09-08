@@ -5,7 +5,7 @@ description: try, catch, filter, finally, and fault inside a cell.
 
 Protected regions use the ILAsm block form. Each boundary is its own line.
 
-```
+```ilrepl
 il[1]> .locals init (string m)
 il[1]> .try {
 il[1]> ldstr "boom"
@@ -43,7 +43,7 @@ start of a catch, filter, or filter handler, where it holds the exception.
 
 ## A filter
 
-```
+```ilrepl
 il[2]> .try {
 il[2]> ldc.i4 1
 il[2]> ldc.i4 0

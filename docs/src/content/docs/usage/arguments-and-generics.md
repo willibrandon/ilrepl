@@ -8,7 +8,7 @@ description: Give the cell parameters and type parameters.
 `.args` declares parameters and the values passed on every run. `ldarg`, `ldarga`, and `starg`
 then work by name or by index.
 
-```
+```ilrepl
 il[1]> .args (int32 x = 5, string s = "ab")
   args: 0:int32 x = 5, 1:string s = "ab"
 il[1]> ldarg x
@@ -27,7 +27,7 @@ without a literal gets the default value for its type. Arguments persist across 
 `.typeparams` makes the cell a generic method. Its parameters are written `!!T` or `!!0` in any
 type position, including locals and member references.
 
-```
+```ilrepl
 il[2]> .typeparams (T)
   type parameters: !!T
 il[2]> .typeargs (int32)
@@ -46,7 +46,7 @@ cell without bound type arguments is refused with a reminder.
 Members on types instantiated over a cell parameter resolve through the generic definition, so
 `List`1<!!T>` behaves as you would expect:
 
-```
+```cil
 newobj instance void class List`1<!!T>::.ctor()
 callvirt instance int32 class List`1<!!T>::get_Count()
 ```

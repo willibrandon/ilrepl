@@ -11,7 +11,7 @@ Before a line is accepted, its effect on the evaluation stack is simulated. The 
 it follows the lines in the order you typed them, not the branches. That is enough to catch
 underflows, wrong arities, and most typos, and it is what the echo after each line shows.
 
-```
+```ilrepl
 il[1]> newobj instance void StringBuilder::.ctor()
   ┊ [StringBuilder]
 il[1]> ldstr "il"
@@ -33,7 +33,7 @@ point. One value is boxed and printed with its runtime type; zero values prints 
 waiting for its label, or inside a protected region. Inside a `.method` block it returns from the
 method. That is how early returns and `switch` tables work.
 
-```
+```ilrepl
 il[2]> ldloc x
 il[2]> switch (A, B)
 il[2]> ldstr "default"
@@ -63,7 +63,7 @@ The model cannot see control flow, so a stack that differs between two paths int
 is only found when the cell is compiled. The message names the JIT, and `.show` lists the cell with
 the stack after each instruction:
 
-```
+```ilrepl
 il[3]> .show
   000  ldc.i4 0                                 [int32]
   001  brfalse SKIP                             []

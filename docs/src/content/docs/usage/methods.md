@@ -7,7 +7,7 @@ description: Define a method in one cell and call it from the next.
 cell's type and stays for the rest of the session, so later cells and other methods call it by
 name. This is the source of a method; copy it, paste it into a session, and press Enter.
 
-```
+```cil
 .method int32 Fib(int32 n) {
   ldarg n
   ldc.i4 2
@@ -31,7 +31,7 @@ Enter continues the block while its braces are open and sends it once they balan
 a time, so the transcript reads the same whether the block was typed or pasted. See
 [Editing blocks](/usage/editing/).
 
-```
+```ilrepl
 il[1]> .method int32 Fib(int32 n) {
   method int32 Fib(int32 n)
 il[1]> ldarg n
@@ -81,7 +81,7 @@ delegates over it work too.
 
 ## A void helper
 
-```
+```ilrepl
 il[3]> .method void Greet(string name) {
   method void Greet(string name)
 il[3]> ldstr "hello, "
@@ -106,7 +106,7 @@ the stack after each instruction, and `.il` renders every method beside `Run`. O
 closed, `.dis Fib` reads the compiled body back, byte offsets and all, so what the emitter produced
 can be compared with what was typed. See [Disassembly](/usage/disassembly/).
 
-```
+```ilrepl
 il[5]> .methods
   int32 Fib(int32 n)
   void Greet(string name)
@@ -118,7 +118,7 @@ il[5]> .methods
 nothing for `void`, the `ret` is implied. A `ret` that does not match the declared type is refused
 where you typed it, so the block stays open and you can fix the stack:
 
-```
+```ilrepl
 il[5]> .method int32 Answer() {
   method int32 Answer()
 il[5]> ldstr "42"
@@ -137,7 +137,7 @@ il[6]>
 A close the JIT refuses works the same way: the error names the method, the block stays open, and
 `.undo` takes back the lines that need to change.
 
-```
+```ilrepl
 il[6]> }
   error: the JIT rejected method Bad: Common Language Runtime detected an invalid program. (check .show for a stack mismatch between branches; the block is still open)
 ```
