@@ -83,10 +83,12 @@ public sealed class IlReplAppSubmissionTests
     }
 
     /// <summary>
-    /// Enter on an empty buffer while lines are in flight does nothing: nothing extra is sent.
+    /// Enter while lines are in flight waits its turn: the buffer was cleared when the block was
+    /// sent, so the block cannot go twice, and each Enter on the empty buffer is one blank line,
+    /// run after the block in order.
     /// </summary>
     [TestMethod]
-    public async Task Submit_WhileSending_ExtraEnterDoesNothing()
+    public async Task Submit_WhileSending_ExtraEnterQueuesAfterBlock()
     {
         var ct = TestContext.CancellationToken;
         await using var engine = new DelayedEngine(new InProcessEngine());
@@ -100,19 +102,19 @@ public sealed class IlReplAppSubmissionTests
         await auto.WaitUntilTextAsync("sending 0/6");
         await auto.EnterAsync(ct: ct);
         await auto.EnterAsync(ct: ct);
-        await auto.EnterAsync(ct: ct);
 
         // A typed character proves the Enters before it have been handled while the block was in flight.
         await auto.TypeAsync("x", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> x" && s.ContainsText("sending 0/6"), description: "the Enters were handled while busy and sent nothing");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> x" && s.ContainsText("sending 0/6") && engine.Handled.Count == 0, description: "the Enters were handled while busy and nothing was sent ahead of the block");
         await auto.BackspaceAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "the buffer is empty again");
         engine.Allow(6);
         await auto.WaitUntilTextAsync("end of method Twice");
-        await auto.WaitUntilTextAsync("il[2]>");
-        await auto.WaitUntilNoTextAsync("sending");
-        Assert.HasCount(6, engine.Handled, "exactly the block's lines were handled");
-        Assert.HasCount(6, AppTest.Echoes(transcript));
+        await auto.WaitUntilTextAsync("sending 0/1");
+        engine.Allow(2);
+        await auto.WaitUntilAsync(s => !s.ContainsText("sending") && engine.Handled.Count == 8, description: "the two blank lines went after the block");
+        Assert.AreSequenceEqual([.. s_twice.Select((l, i) => i == 0 || i == 5 ? l : "  " + l), "", ""], engine.Handled);
+        Assert.DoesNotContain(l => l.Kind == LineKind.Error, transcript.Lines, "a blank line on an empty cell is not an error");
         Assert.AreEqual("il[2]>", AppTest.PromptRow(terminal.CreateSnapshot(), 0));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);

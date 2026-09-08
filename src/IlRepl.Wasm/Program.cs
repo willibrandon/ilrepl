@@ -27,14 +27,17 @@ if (TryParseSize(initialSize, out var initialColumns, out var initialRows))
 }
 
 // A session ends when the user quits with Ctrl+Q or .quit. The page is told, and the next session
-// starts in the same runtime with a fresh engine, so quitting never leaves the box empty.
+// starts in the same runtime with a fresh engine, so quitting never leaves the box empty. History
+// is in the browser's database, so the next session, and the next visit, start with it.
+var history = new BrowserHistoryStore();
 while (true)
 {
-    (columns, rows) = await RunSessionAsync(columns, rows);
+    (columns, rows) = await RunSessionAsync(columns, rows, history);
+    await history.SettleAsync();
     WasmPresentationAdapter.NotifyExited();
 }
 
-static async Task<(int Columns, int Rows)> RunSessionAsync(int columns, int rows)
+static async Task<(int Columns, int Rows)> RunSessionAsync(int columns, int rows, BrowserHistoryStore history)
 {
     var adapter = new WasmPresentationAdapter(columns, rows);
     WasmPresentationAdapter.Instance = adapter;
@@ -43,7 +46,7 @@ static async Task<(int Columns, int Rows)> RunSessionAsync(int columns, int rows
     var transcript = new Transcript { MaxLines = 500 };
     // Selection and copy live in the app, so mouse reports must reach it. The page turns the
     // OSC 52 sequence a copy produces into a clipboard write.
-    await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder().WithPresentation(adapter), engine, transcript)
+    await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder().WithPresentation(adapter), engine, transcript, history: history)
         .WithMouse()
         .Build();
 

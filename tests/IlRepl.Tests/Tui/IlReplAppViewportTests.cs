@@ -307,7 +307,7 @@ public sealed class IlReplAppViewportTests
         using var snapshot = terminal.CreateSnapshot();
         Assert.IsTrue(snapshot.GetLine(1).StartsWith("il[1]> nop", StringComparison.Ordinal) || snapshot.GetLine(0).Contains("il[1]> nop", StringComparison.Ordinal) || snapshot.GetLine(2).StartsWith("il[1]> nop", StringComparison.Ordinal), "the transcript keeps the rows above the separator:\n" + snapshot.GetText());
         Assert.IsFalse(snapshot.ContainsText("opcodes"), "no palette on a small screen");
-        Assert.IsTrue(snapshot.GetLine(9).Contains("Ctrl+Q quit", StringComparison.Ordinal), "the last hint fits: " + snapshot.GetLine(9));
+        Assert.IsTrue(snapshot.GetLine(9).Contains("Enter sends 6 lines", StringComparison.Ordinal), "what Enter does is the hint that fits: " + snapshot.GetLine(9));
         AssertEveryFrameShowsCaret(recorder.Since(start));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);

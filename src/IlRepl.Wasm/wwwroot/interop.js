@@ -38,6 +38,72 @@ export function pollResize() {
   return r;
 }
 
+// History lives in IndexedDB, which a worker can open: one record per entry under an
+// auto-incrementing key, so two tabs never write over each other, and the oldest records beyond
+// a thousand go in the same transaction that adds a new one. A missing database is a first visit,
+// not an error; a database that cannot be opened rejects, and the app says so once.
+const historyLimit = 1000;
+
+function openHistory() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined' || !indexedDB) {
+      reject(new Error('IndexedDB is not available'));
+      return;
+    }
+    const request = indexedDB.open('ilrepl', 1);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore('history', { autoIncrement: true });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('the history database could not be opened'));
+    request.onblocked = () => reject(new Error('the history database is blocked by another tab'));
+  });
+}
+
+export async function loadHistory() {
+  const db = await openHistory();
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction('history', 'readonly');
+      const request = tx.objectStore('history').getAll();
+      // One string crosses to .NET, the entries joined by a character none of them can hold.
+      request.onsuccess = () => resolve(request.result.map((e) => String(e)).join('\0'));
+      request.onerror = () => reject(request.error || new Error('the history could not be read'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+export async function appendHistory(entry) {
+  const db = await openHistory();
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('history', 'readwrite');
+      const store = tx.objectStore('history');
+      store.add(entry);
+      const count = store.count();
+      count.onsuccess = () => {
+        let extra = count.result - historyLimit;
+        if (extra <= 0) return;
+        const cursor = store.openCursor();
+        cursor.onsuccess = () => {
+          const c = cursor.result;
+          if (!c || extra <= 0) return;
+          c.delete();
+          extra--;
+          c.continue();
+        };
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('the history could not be written'));
+      tx.onabort = () => reject(tx.error || new Error('the history write was abandoned'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
 // Messages that arrive before this module is imported are queued by worker.js and replayed here.
 const queued = self.__ilreplQueuedMessages || [];
 self.__ilreplQueuedMessages = null;

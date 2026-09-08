@@ -52,8 +52,9 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
     }
 
     /// <summary>
-    /// What Enter does now: nothing while sending, accepts a completion the user moved to,
-    /// continues an open buffer, and submits a complete one.
+    /// What Enter does now: accepts a completion the user moved to, continues an open buffer,
+    /// and submits a complete one. While lines are in flight a submission waits its turn, so
+    /// nothing typed is lost and nothing runs out of order.
     /// </summary>
     /// <param name="state">The prompt's state.</param>
     /// <param name="paletteVisible">Whether the palette is showing.</param>
@@ -66,11 +67,6 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
         if (paletteVisible && state.PaletteNavigated)
         {
             return EnterAction.AcceptCompletion;
-        }
-
-        if (state.Busy && state.Text.Length == 0)
-        {
-            return EnterAction.Busy;
         }
 
         return BlockBalance.IsComplete(state.Text, openDepth, commentOpen) ? EnterAction.Submit : EnterAction.Continue;
@@ -251,8 +247,6 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
     {
         switch (enter)
         {
-            case EnterAction.Busy:
-                return;
             case EnterAction.AcceptCompletion:
                 Accept(state, candidates);
                 return;

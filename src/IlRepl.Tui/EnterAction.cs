@@ -22,7 +22,7 @@ public enum EnterAction
     AcceptCompletion,
 
     /// <summary>
-    /// Nothing: a submission is still in flight.
+    /// Lines are in flight: the bar offers cancel, and what Enter sends waits its turn.
     /// </summary>
     Busy,
 }

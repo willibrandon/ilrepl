@@ -75,9 +75,9 @@ public sealed class StatusHintsTests
         Assert.AreSequenceEqual(s_one, IlReplApp.StatusHints(s_classFacts, 90, copyMode: false));
     }
 
-    private static readonly string[] s_continue = ["Ctrl+C clears", "Enter continues", "Ctrl+Q quit"];
-    private static readonly string[] s_accept = ["Esc dismiss", "Enter accepts", "Ctrl+Q quit"];
-    private static readonly string[] s_busy = ["Ctrl+C cancels", "Ctrl+Q quit"];
+    private static readonly string[] s_continue = ["Ctrl+C clears", "Ctrl+Q quit", "Enter continues"];
+    private static readonly string[] s_accept = ["Esc dismiss", "Ctrl+Q quit", "Enter accepts"];
+    private static readonly string[] s_busy = ["Ctrl+Q quit", "Ctrl+C cancels"];
     private const string Block = ".method void F() {\n  nop\n  ret\n}";
 
     /// <summary>
@@ -88,7 +88,7 @@ public sealed class StatusHintsTests
     {
         var state = NewState(Block);
         Assert.AreEqual(EnterAction.Submit, PromptWidget.EnterActionFor(state, paletteVisible: false, openDepth: 0, commentOpen: false));
-        Assert.AreSequenceEqual(["Ctrl+C clears", "Enter sends 4 lines", "Ctrl+Q quit"], IlReplApp.StatusHints(s_facts, 100, copyMode: false, EnterAction.Submit, state.LineCount));
+        Assert.AreSequenceEqual(["Ctrl+C clears", "Ctrl+Q quit", "Enter sends 4 lines"], IlReplApp.StatusHints(s_facts, 100, copyMode: false, EnterAction.Submit, state.LineCount));
     }
 
     /// <summary>
@@ -108,7 +108,7 @@ public sealed class StatusHintsTests
     }
 
     /// <summary>
-    /// An open block continues, and the hint survives a narrow bar ahead of the less useful ones.
+    /// An open block continues, and that hint is the one a narrow bar keeps.
     /// </summary>
     [TestMethod]
     public void StatusHints_OpenBlock_SaysContinues()
@@ -116,7 +116,8 @@ public sealed class StatusHintsTests
         var state = NewState(".method void F() {");
         Assert.AreEqual(EnterAction.Continue, PromptWidget.EnterActionFor(state, paletteVisible: false, openDepth: 0, commentOpen: false));
         Assert.AreSequenceEqual(s_continue, IlReplApp.StatusHints(s_facts, 100, copyMode: false, EnterAction.Continue, 1));
-        Assert.AreSequenceEqual(["Enter continues", "Ctrl+Q quit"], IlReplApp.StatusHints(s_facts, 90, copyMode: false, EnterAction.Continue, 1));
+        Assert.AreSequenceEqual(["Ctrl+Q quit", "Enter continues"], IlReplApp.StatusHints(s_facts, 90, copyMode: false, EnterAction.Continue, 1));
+        Assert.AreSequenceEqual(["Enter continues"], IlReplApp.StatusHints(s_facts, 70, copyMode: false, EnterAction.Continue, 1));
     }
 
     /// <summary>
@@ -144,7 +145,8 @@ public sealed class StatusHintsTests
     }
 
     /// <summary>
-    /// While a submission is in flight Enter does nothing on an empty buffer, and the bar offers cancel.
+    /// While a submission is in flight the bar offers cancel, and keeps that offer on a narrow bar;
+    /// Enter itself still decides by the buffer, and what it sends waits its turn.
     /// </summary>
     [TestMethod]
     public async Task StatusHints_Busy_ShowsProgress()
@@ -152,9 +154,10 @@ public sealed class StatusHintsTests
         await using var engine = new InProcessEngine();
         var state = NewState("");
         state.Submission = new Submission(engine, [], 0, false, _ => Task.CompletedTask, _ => { });
-        Assert.AreEqual(EnterAction.Busy, PromptWidget.EnterActionFor(state, paletteVisible: false, openDepth: 0, commentOpen: false));
+        Assert.IsTrue(state.Busy);
+        Assert.AreEqual(EnterAction.Submit, PromptWidget.EnterActionFor(state, paletteVisible: false, openDepth: 0, commentOpen: false));
         Assert.AreSequenceEqual(s_busy, IlReplApp.StatusHints(s_facts, 100, copyMode: false, EnterAction.Busy, 1));
-        Assert.AreSequenceEqual(s_one, IlReplApp.StatusHints(s_facts, 40, copyMode: false, EnterAction.Busy, 1));
+        Assert.AreSequenceEqual(["Ctrl+C cancels"], IlReplApp.StatusHints(s_facts, 40, copyMode: false, EnterAction.Busy, 1));
     }
 
     /// <summary>

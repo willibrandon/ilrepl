@@ -28,6 +28,7 @@ export default defineConfig({
             { label: 'Member references', slug: 'usage/member-references' },
             { label: 'Exception blocks', slug: 'usage/exception-blocks' },
             { label: 'Methods', slug: 'usage/methods' },
+            { label: 'Editing blocks', slug: 'usage/editing' },
             { label: 'Disassembly', slug: 'usage/disassembly' },
             { label: 'Types', slug: 'usage/types' },
             { label: 'Arguments and generics', slug: 'usage/arguments-and-generics' },

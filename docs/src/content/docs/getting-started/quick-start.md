@@ -62,7 +62,9 @@ A label is a name followed by a colon, on its own line or before an instruction.
 label that has not been defined yet is fine; the cell will not run until it is.
 
 Methods persist the same way: `.method int32 Twice(int32 n) {` opens one, `}` closes it, and later
-cells call it with `call int32 Twice(int32)`. See [Methods](/usage/methods/).
+cells call it with `call int32 Twice(int32)`. Enter continues the block while its braces are open
+and sends it, line by line, once they balance; a pasted block waits for Enter the same way. See
+[Methods](/usage/methods/) and [Editing blocks](/usage/editing/).
 
 ## Mistakes
 
@@ -82,5 +84,5 @@ instruction, which is usually enough to find it.
 ## Getting around
 
 Tab completes opcodes and commands, with a palette that shows each candidate's stack transition.
-Up and Down walk history. `.help` prints the full command list, `.ops` lists opcodes, and Ctrl+Q
-leaves.
+Up and Down walk history, which keeps a block as one entry and lasts between runs. `.help` prints
+the full command list, `.ops` lists opcodes, and Ctrl+Q leaves.

@@ -118,8 +118,11 @@ il[6]> ret
   = Point { X = 3, Y = 4 } : Point
 ```
 
-Tab completes opcodes and commands, with a palette that shows each candidate's stack transition.
-Up and Down walk history. `.help` lists the commands and `.ops` lists the opcodes.
+Enter continues a block while its braces are open and sends it, line by line, once they balance;
+a pasted block waits for Enter, and a line the engine refuses brings the whole block back with
+that line selected. Tab completes opcodes and commands, with a palette that shows each
+candidate's stack transition. Up and Down walk history, which keeps a block as one entry in
+`~/.config/ilrepl/history` between runs. `.help` lists the commands and `.ops` lists the opcodes.
 
 ## Batch mode
 

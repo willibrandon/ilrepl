@@ -119,10 +119,10 @@ public static class IlReplApp
             ? new List<string> { "Shift+↑↓ extend", "y yank", "Esc cancel" }
             : enter switch
             {
-                EnterAction.Busy => new List<string> { "Ctrl+C cancels", "Ctrl+Q quit" },
-                EnterAction.Continue => new List<string> { "Ctrl+C clears", "Enter continues", "Ctrl+Q quit" },
-                EnterAction.AcceptCompletion => new List<string> { "Esc dismiss", "Enter accepts", "Ctrl+Q quit" },
-                _ when lineCount > 1 => new List<string> { "Ctrl+C clears", $"Enter sends {lineCount} lines", "Ctrl+Q quit" },
+                EnterAction.Busy => new List<string> { "Ctrl+Q quit", "Ctrl+C cancels" },
+                EnterAction.Continue => new List<string> { "Ctrl+C clears", "Ctrl+Q quit", "Enter continues" },
+                EnterAction.AcceptCompletion => new List<string> { "Esc dismiss", "Ctrl+Q quit", "Enter accepts" },
+                _ when lineCount > 1 => new List<string> { "Ctrl+C clears", "Ctrl+Q quit", $"Enter sends {lineCount} lines" },
                 _ => new List<string> { "Tab complete", "Shift+↑ select", "Ctrl+Q quit" },
             };
         if (width <= 0)
@@ -388,7 +388,7 @@ public static class IlReplApp
         {
             following.ScrollToBottom();
         }
-        var enter = PromptWidget.EnterActionFor(prompt, candidates > 0 && fit.PaletteRows > 0, status.OpenDepth, status.Mark.InBlockComment);
+        var enter = prompt.Busy ? EnterAction.Busy : PromptWidget.EnterActionFor(prompt, candidates > 0 && fit.PaletteRows > 0, status.OpenDepth, status.Mark.InBlockComment);
         // The scrollbar takes the last column of the transcript panel.
         var lineWidth = size.Width > 1 ? size.Width - 1 : 0;
         var root = ctx.VStack(v =>
