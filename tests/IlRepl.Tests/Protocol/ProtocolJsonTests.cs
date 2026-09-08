@@ -83,4 +83,49 @@ public sealed class ProtocolJsonTests
         Assert.DoesNotContain("openType", initial);
         Assert.AreEqual(0, JsonSerializer.Deserialize(initial, ProtocolJsonContext.Default.SessionStatus)!.Types);
     }
+
+    /// <summary>
+    /// A mark round-trips, and a null count is left out of the JSON.
+    /// </summary>
+    [TestMethod]
+    public void SessionMark_RoundTrips()
+    {
+        var mark = new SessionMark(7, 3, 1, 0, 4, true, EchoStack: false, ShowTiming: true, BraceSeen: false);
+        var json = JsonSerializer.Serialize(mark, ProtocolJsonContext.Default.SessionMark);
+        Assert.Contains("\"generation\":7", json);
+        Assert.Contains("\"openTypeLines\":4", json);
+        Assert.Contains("\"openMethodLines\":0", json);
+        Assert.Contains("\"braceSeen\":false", json);
+        Assert.Contains("\"echoStack\":false", json);
+        Assert.Contains("\"showTiming\":true", json);
+        Assert.AreEqual(mark, JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.SessionMark));
+
+        var status = SessionStatus.Initial with { Mark = mark, OpenDepth = 2 };
+        var statusJson = JsonSerializer.Serialize(status, ProtocolJsonContext.Default.SessionStatus);
+        Assert.Contains("\"openDepth\":2", statusJson);
+        Assert.AreEqual(status, JsonSerializer.Deserialize(statusJson, ProtocolJsonContext.Default.SessionStatus));
+    }
+
+    /// <summary>
+    /// The styles the tokenizer added travel by name, and the vocabulary round-trips with its enum values as strings.
+    /// </summary>
+    [TestMethod]
+    public void Vocabulary_AndNewStyles_RoundTrip()
+    {
+        var line = new TranscriptLine(LineKind.Input, [new TranscriptSpan("Max", SpanStyle.Member), new TranscriptSpan("(", SpanStyle.Punctuation), new TranscriptSpan("// c", SpanStyle.Comment), new TranscriptSpan(".locals", SpanStyle.Directive)]);
+        var json = JsonSerializer.Serialize(line, ProtocolJsonContext.Default.TranscriptLine);
+        Assert.Contains("\"style\":\"Member\"", json);
+        Assert.Contains("\"style\":\"Punctuation\"", json);
+        var backLine = JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.TranscriptLine);
+        Assert.IsNotNull(backLine);
+        Assert.AreSequenceEqual(line.Spans, backLine.Spans);
+
+        var vocabulary = new CilVocabulary(new Dictionary<string, CilOperandKind> { ["ldc.i4"] = CilOperandKind.Integer, ["no."] = CilOperandKind.Integer }, [".locals"], [".show", ".?"], ["instance"], ["int32"]);
+        var vocabularyJson = JsonSerializer.Serialize(vocabulary, ProtocolJsonContext.Default.CilVocabulary);
+        Assert.Contains("\"ldc.i4\":\"Integer\"", vocabularyJson);
+        var back = JsonSerializer.Deserialize(vocabularyJson, ProtocolJsonContext.Default.CilVocabulary);
+        Assert.IsNotNull(back);
+        Assert.AreEqual(CilOperandKind.Integer, back.Opcodes["no."]);
+        Assert.AreSequenceEqual(vocabulary.Commands, back.Commands);
+    }
 }

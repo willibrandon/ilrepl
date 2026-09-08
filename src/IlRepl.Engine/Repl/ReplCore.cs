@@ -13,11 +13,12 @@ namespace IlRepl.Repl;
 /// </summary>
 public sealed class ReplCore
 {
-    private static readonly string[] Directives =
-    [
-        ".locals", ".args", ".typeparams", ".typeargs", ".vararg", ".method", ".try", ".maxstack",
-        ".class", ".field", ".property", ".event", ".get", ".set", ".other", ".addon", ".removeon", ".fire", ".override", ".pack", ".size", ".param", ".custom",
-    ];
+    private static readonly CilTokenizer Tokenizer = new(CilVocabularyBuilder.Vocabulary);
+
+    /// <summary>
+    /// The dot-words the prompt takes as directives rather than commands.
+    /// </summary>
+    public static IReadOnlyList<string> Directives => ReplDirectives.Names;
 
     /// <summary>
     /// Initializes a REPL over a new session.
@@ -74,7 +75,7 @@ public sealed class ReplCore
         get
         {
             var state = Session.State;
-            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count, Session.OpenType, Session.TypeCount);
+            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count, Session.OpenType, Session.TypeCount, Session.Mark() with { EchoStack = Options.EchoStack, ShowTiming = Options.ShowTiming }, Session.OpenDepth);
         }
     }
 
@@ -88,18 +89,27 @@ public sealed class ReplCore
     /// <summary>
     /// Handles one line: an instruction, a directive, a command, or an empty line that runs the
     /// cell. Inside a <c>.method</c> block every line, <c>ret</c> included, goes to the method.
+    /// Comments come off first, so a line that is only a comment is ignored wherever it appears,
+    /// and a <c>/*</c> left open comments out the lines that follow until one closes it.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <returns>Whether it succeeded and whether the user asked to leave.</returns>
     public HandleResult Handle(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        var text = line.Trim();
-        Transcript.Add(new TranscriptLine(LineKind.Input, [new TranscriptSpan(Prompt, SpanStyle.Prompt), new TranscriptSpan(line, SpanStyle.Input)]));
+        var normalized = Session.Normalize(line);
+        var text = normalized.Text;
+        var commentOpen = normalized.InBlockCommentBefore;
+        Transcript.Add(new TranscriptLine(LineKind.Input, [new TranscriptSpan(Prompt, SpanStyle.Prompt), .. Tokenizer.Spans(line, ref commentOpen, SpanStyle.Input)]));
 
         try
         {
-            if (text.Length == 0)
+            if (normalized.Kind == SourceLineKind.Comment)
+            {
+                return new HandleResult(true, false);
+            }
+
+            if (normalized.Kind == SourceLineKind.Blank)
             {
                 RequireNoOpenBlock();
                 if (!Session.State.IsEmpty)
@@ -115,12 +125,12 @@ public sealed class ReplCore
                 return Command(text);
             }
 
-            if (text == "ret" || text.StartsWith("ret ", StringComparison.Ordinal) || text.StartsWith("ret//", StringComparison.Ordinal))
+            if (text == "ret" || text.StartsWith("ret ", StringComparison.Ordinal))
             {
                 if (Session.OpenMethod is not null)
                 {
                     // ret returns from the method; only the closing brace ends the block.
-                    Session.AddLine(line);
+                    Session.AddLine(normalized);
                     if (Options.EchoStack)
                     {
                         EchoStack();
@@ -131,7 +141,7 @@ public sealed class ReplCore
 
                 if (Session.State.HasPendingLabels || Session.State.OpenBlockDepth > 0)
                 {
-                    var inline = Session.AddLine("ret");
+                    var inline = Session.AddLine(NormalizedLine.FromText("ret"));
                     Note("ret inside the cell (a forward label or a block is still open)");
                     _ = inline;
                     return new HandleResult(true, false);
@@ -141,7 +151,7 @@ public sealed class ReplCore
                 return new HandleResult(true, false);
             }
 
-            var result = Session.AddLine(line);
+            var result = Session.AddLine(normalized);
             switch (result.Outcome)
             {
                 case LineOutcome.Instruction:
@@ -188,12 +198,14 @@ public sealed class ReplCore
         }
         catch (ReplException ex)
         {
+            Session.Forget(normalized);
             Error(ex.Message);
             return new HandleResult(false, false);
         }
         catch (Exception ex) when (ex is not (CellException or OperationCanceledException))
         {
             // A line must never take the session down with it; the host keeps serving.
+            Session.Forget(normalized);
             Error("unexpected " + ex.GetType().Name + ": " + ex.Message);
             return new HandleResult(false, false);
         }
@@ -213,6 +225,45 @@ public sealed class ReplCore
 
             return new HandleResult(false, false);
         }
+    }
+
+    /// <summary>
+    /// Withdraws the lines accepted since a mark was taken, so a block a line of which was refused
+    /// can come back to the editor whole and be sent again from where the session stood before it.
+    /// Nothing that ran, committed, or was discarded since the mark is undone; when any of that
+    /// happened, nothing is withdrawn and the result says so.
+    /// </summary>
+    /// <param name="mark">The mark to return to.</param>
+    /// <returns>Whether the session is back at the mark.</returns>
+    public HandleResult Rollback(SessionMark mark)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        var method = Session.OpenMethod?.Name;
+        var type = Session.OpenType;
+        if (!Session.Rollback(mark))
+        {
+            Note("nothing withdrawn: the session has run, committed, or discarded something since the block began");
+            return new HandleResult(false, false);
+        }
+
+        // A toggle the block carried, .quiet or .time, goes back with it: the block is sent again whole.
+        Options.EchoStack = mark.EchoStack;
+        Options.ShowTiming = mark.ShowTiming;
+
+        if (type is not null && Session.OpenType is null)
+        {
+            Note($"class {type} abandoned; the block is back in the editor");
+        }
+        else if (method is not null && Session.OpenMethod is null)
+        {
+            Note($"method {method} abandoned; the block is back in the editor");
+        }
+        else
+        {
+            Note("lines withdrawn; the block is back in the editor");
+        }
+
+        return new HandleResult(true, false);
     }
 
     private static bool IsDirective(string text)
@@ -322,6 +373,35 @@ public sealed class ReplCore
     }
 
     private void Note(string text) => Transcript.Add(LineKind.Info, "  " + text, SpanStyle.Dim);
+
+    /// <summary>
+    /// Adds a listing line coloured by the tokenizer, so it reads as it would at the prompt.
+    /// </summary>
+    private void Listing(string text) => Transcript.Add(new TranscriptLine(LineKind.Listing, Tokenizer.Spans(text)));
+
+    /// <summary>
+    /// Adds a block row of a listing: the offset column blank, then the row indented inside its region.
+    /// </summary>
+    private void BlockRow(int indent, string text) =>
+        Transcript.Add(new TranscriptLine(LineKind.Listing, [new TranscriptSpan("       ", SpanStyle.Dim), .. Tokenizer.Spans(new string(' ', indent * 2) + text)]));
+
+    /// <summary>
+    /// Adds an instruction row of a listing: the offset column, the instruction coloured by the
+    /// tokenizer and padded to a fixed width, then the stack column.
+    /// </summary>
+    private void InstructionRow(string offset, int indent, string text, string stack)
+    {
+        var padding = Math.Max(0, 40 - (indent * 2) - text.Length);
+        var spans = new List<TranscriptSpan> { new(offset, SpanStyle.Dim) };
+        spans.AddRange(Tokenizer.Spans(new string(' ', indent * 2) + text));
+        if (padding > 0)
+        {
+            spans.Add(new TranscriptSpan(new string(' ', padding)));
+        }
+
+        spans.Add(new TranscriptSpan(" " + stack, SpanStyle.Dim));
+        Transcript.Add(new TranscriptLine(LineKind.Listing, spans));
+    }
 
     private void Error(string message)
     {
@@ -489,6 +569,7 @@ public sealed class ReplCore
 
                 {
                     var assembly = Session.Resolver.Load(argument);
+                    Session.AdvanceGeneration();
                     int count;
                     try
                     {
@@ -549,12 +630,15 @@ public sealed class ReplCore
                 return new HandleResult(true, false);
 
             case ".il":
+            {
+                var commentOpen = false;
                 foreach (var l in Session.ToIlAsm().TrimEnd().Split('\n'))
                 {
-                    Transcript.Add(LineKind.Listing, l.TrimEnd('\r'), SpanStyle.Default);
+                    Transcript.Add(new TranscriptLine(LineKind.Listing, Tokenizer.Spans(l.TrimEnd('\r'), ref commentOpen)));
                 }
 
                 return new HandleResult(true, false);
+            }
 
             default:
                 throw new ReplException($"unknown command '{command}' (.help lists them)");
@@ -615,16 +699,11 @@ public sealed class ReplCore
 
         var listing = MethodDisassembler.Disassemble(method, Session);
         var column = StackAnalysis.Run(listing);
-        Transcript.Add(LineKind.Listing, "  " + listing.Header + " {", SpanStyle.Label);
-        Transcript.Add(LineKind.Listing, "  .maxstack " + listing.MaxStack.ToString(CultureInfo.InvariantCulture), SpanStyle.Dim);
+        Listing("  " + listing.Header + " {");
+        Listing("  .maxstack " + listing.MaxStack.ToString(CultureInfo.InvariantCulture));
         if (listing.Locals.Count > 0)
         {
-            Transcript.Add(new TranscriptLine(LineKind.Listing,
-            [
-                new TranscriptSpan(listing.InitLocals ? "  .locals init (" : "  .locals (", SpanStyle.Dim),
-                new TranscriptSpan(string.Join(", ", listing.Locals.Select((l, i) => $"{IlSignatureRenderer.IlAsmNamed(l)} V_{i.ToString(CultureInfo.InvariantCulture)}")), SpanStyle.Type),
-                new TranscriptSpan(")", SpanStyle.Dim),
-            ]));
+            Listing((listing.InitLocals ? "  .locals init (" : "  .locals (") + string.Join(", ", listing.Locals.Select((l, i) => $"{IlSignatureRenderer.IlAsmNamed(l)} V_{i.ToString(CultureInfo.InvariantCulture)}")) + ")");
         }
 
         var indent = 0;
@@ -634,7 +713,7 @@ public sealed class ReplCore
             switch (entry.Kind)
             {
                 case DisassembledEntryKind.Label:
-                    Transcript.Add(LineKind.Listing, entry.Label + ":", SpanStyle.Label);
+                    Listing(entry.Label + ":");
                     break;
                 case DisassembledEntryKind.Block:
                 {
@@ -653,7 +732,7 @@ public sealed class ReplCore
                         indent = Math.Max(0, indent - 1);
                     }
 
-                    Transcript.Add(LineKind.Listing, "       " + new string(' ', indent * 2) + text, SpanStyle.Label);
+                    BlockRow(indent, text);
                     if (entry.Block != BlockKind.End)
                     {
                         indent++;
@@ -663,20 +742,12 @@ public sealed class ReplCore
                 }
 
                 default:
-                {
-                    var padding = Math.Max(0, 40 - (indent * 2));
-                    Transcript.Add(new TranscriptLine(LineKind.Listing,
-                    [
-                        new TranscriptSpan("  " + entry.Offset.ToString("x4", CultureInfo.InvariantCulture) + " ", SpanStyle.Dim),
-                        new TranscriptSpan(new string(' ', indent * 2) + entry.DisplayText.PadRight(padding)),
-                        new TranscriptSpan(" " + (column[i] ?? ""), SpanStyle.Dim),
-                    ]));
+                    InstructionRow("  " + entry.Offset.ToString("x4", CultureInfo.InvariantCulture) + " ", indent, entry.DisplayText, column[i] ?? "");
                     break;
-                }
             }
         }
 
-        Transcript.Add(LineKind.Listing, "  }", SpanStyle.Label);
+        Listing("  }");
         Note($"code size {listing.CodeSize} (0x{listing.CodeSize:x})");
         foreach (var note in listing.Notes)
         {
@@ -692,14 +763,14 @@ public sealed class ReplCore
     private void ShowType()
     {
         var lines = Session.DescribeOpenType();
-        for (var i = 0; i < lines.Count; i++)
+        foreach (var l in lines)
         {
-            Transcript.Add(LineKind.Listing, "  " + lines[i], i == 0 || lines[i].TrimStart().StartsWith(".class", StringComparison.Ordinal) ? SpanStyle.Label : SpanStyle.Default);
+            Listing("  " + l);
         }
 
         if (Session.OpenMethod is { } open)
         {
-            Transcript.Add(LineKind.Listing, "    .method " + open.DescribeMember() + " {", SpanStyle.Label);
+            Listing("    .method " + open.DescribeMember() + " {");
             ListBody(Session.State, showArguments: false, "(empty method)");
         }
         else if (lines.Count == 1)
@@ -751,7 +822,7 @@ public sealed class ReplCore
 
     private void ShowMethod(MethodSignature open)
     {
-        Transcript.Add(LineKind.Listing, "  .method " + open.DescribeWithNames() + " {", SpanStyle.Label);
+        Listing("  .method " + open.DescribeWithNames() + " {");
         ListBody(Session.State, showArguments: false, "(empty method)");
     }
 
@@ -759,22 +830,12 @@ public sealed class ReplCore
     {
         if (state.Locals.Count > 0)
         {
-            Transcript.Add(new TranscriptLine(LineKind.Listing,
-            [
-                new TranscriptSpan("  .locals init (", SpanStyle.Dim),
-                new TranscriptSpan(string.Join(", ", state.Locals.Select((l, i) => $"{TypeNameFormatter.Pretty(l.Type)} {l.Name ?? "V_" + i.ToString(CultureInfo.InvariantCulture)}")), SpanStyle.Type),
-                new TranscriptSpan(")", SpanStyle.Dim),
-            ]));
+            Listing("  .locals init (" + string.Join(", ", state.Locals.Select((l, i) => $"{TypeNameFormatter.Pretty(l.Type)} {l.Name ?? "V_" + i.ToString(CultureInfo.InvariantCulture)}")) + ")");
         }
 
         if (showArguments && state.Arguments.Count > 0)
         {
-            Transcript.Add(new TranscriptLine(LineKind.Listing,
-            [
-                new TranscriptSpan("  .args (", SpanStyle.Dim),
-                new TranscriptSpan(string.Join(", ", state.Arguments.Select(a => $"{TypeNameFormatter.Pretty(a.Type)} {a.Name} = {a.ValueText}")), SpanStyle.Type),
-                new TranscriptSpan(")", SpanStyle.Dim),
-            ]));
+            Listing("  .args (" + string.Join(", ", state.Arguments.Select(a => $"{TypeNameFormatter.Pretty(a.Type)} {a.Name} = {a.ValueText}")) + ")");
         }
 
         if (state.IsEmpty)
@@ -791,19 +852,14 @@ public sealed class ReplCore
         {
             foreach (var l in entry.Labels)
             {
-                Transcript.Add(LineKind.Listing, l + ":", SpanStyle.Label);
+                Listing(l + ":");
             }
 
             switch (entry.Kind)
             {
                 case EntryKind.Instruction:
                     simulator.Apply(entry.Instruction!, context);
-                    Transcript.Add(new TranscriptLine(LineKind.Listing,
-                    [
-                        new TranscriptSpan("  " + index.ToString("D3", CultureInfo.InvariantCulture) + "  ", SpanStyle.Dim),
-                        new TranscriptSpan(new string(' ', indent * 2) + entry.Instruction!.Text.PadRight(40 - (indent * 2))),
-                        new TranscriptSpan(" " + simulator.Render(), SpanStyle.Dim),
-                    ]));
+                    InstructionRow("  " + index.ToString("D3", CultureInfo.InvariantCulture) + "  ", indent, entry.Instruction!.Text, simulator.Render());
                     index++;
                     break;
                 case EntryKind.Block:
@@ -823,7 +879,7 @@ public sealed class ReplCore
                         indent = Math.Max(0, indent - 1);
                     }
 
-                    Transcript.Add(LineKind.Listing, "       " + new string(' ', indent * 2) + text, SpanStyle.Label);
+                    BlockRow(indent, text);
                     if (entry.Block != BlockKind.End)
                     {
                         indent++;

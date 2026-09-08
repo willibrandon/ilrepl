@@ -24,4 +24,13 @@ public partial interface IReplHost
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>The transcript lines produced and the new status.</returns>
     Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Withdraws the lines accepted since a mark was taken, when nothing has run, committed, or
+    /// been discarded since.
+    /// </summary>
+    /// <param name="mark">The mark to return to.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns>What was withdrawn, or why nothing could be, and the new status.</returns>
+    Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken);
 }

@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
 
@@ -9,59 +10,17 @@ namespace IlRepl.Engine;
 public static class InstructionParser
 {
     /// <summary>
-    /// Removes <c>//</c> and <c>/* */</c> comments, leaving string literals untouched.
+    /// Removes <c>//</c> and <c>/* */</c> comments from a line on its own, leaving strings and
+    /// quoted names untouched. The session removes them with the state a <c>/*</c> carries from
+    /// line to line, see <see cref="Session.Normalize"/>; this is for a line with no lines around it.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <returns>The line without comments.</returns>
     public static string StripComments(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        var result = new System.Text.StringBuilder(line.Length);
-        var inString = false;
-        for (var i = 0; i < line.Length; i++)
-        {
-            var c = line[i];
-            if (inString)
-            {
-                result.Append(c);
-                if (c == '\\' && i + 1 < line.Length)
-                {
-                    result.Append(line[++i]);
-                }
-                else if (c == '"')
-                {
-                    inString = false;
-                }
-
-                continue;
-            }
-
-            if (c == '"')
-            {
-                inString = true;
-                result.Append(c);
-            }
-            else if (c == '/' && i + 1 < line.Length && line[i + 1] == '/')
-            {
-                break;
-            }
-            else if (c == '/' && i + 1 < line.Length && line[i + 1] == '*')
-            {
-                var end = line.IndexOf("*/", i + 2, StringComparison.Ordinal);
-                if (end < 0)
-                {
-                    break;
-                }
-
-                i = end + 1;
-            }
-            else
-            {
-                result.Append(c);
-            }
-        }
-
-        return result.ToString();
+        var closed = false;
+        return CilLexer.StripComments(line, ref closed);
     }
 
     /// <summary>

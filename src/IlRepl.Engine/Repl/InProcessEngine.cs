@@ -32,17 +32,31 @@ public sealed class InProcessEngine : IReplEngine
     public IReadOnlyList<CompletionItem> Catalog => Completer.Catalog;
 
     /// <inheritdoc />
+    public CilVocabulary Vocabulary => CilVocabularyBuilder.Vocabulary;
+
+    /// <inheritdoc />
     public SessionStatus Status { get; private set; }
 
     /// <inheritdoc />
     public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(line);
-        var result = _core.Handle(line);
+        return Task.FromResult(Reply(_core.Handle(line)));
+    }
+
+    /// <inheritdoc />
+    public Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        return Task.FromResult(Reply(_core.Rollback(mark)));
+    }
+
+    private HandleReply Reply(HandleResult result)
+    {
         var lines = _core.Transcript.Lines.ToArray();
         _core.Transcript.Clear();
         Status = _core.Status;
-        return Task.FromResult(new HandleReply(result.Succeeded, result.QuitRequested, lines, Status));
+        return new HandleReply(result.Succeeded, result.QuitRequested, lines, Status);
     }
 
     /// <inheritdoc />

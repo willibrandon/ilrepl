@@ -27,8 +27,11 @@ public static class IlReplApp
     /// <param name="transcript">The transcript to render and append to.</param>
     /// <param name="usePlatformClipboard">True to copy selections through the platform's clipboard command as well as the terminal.</param>
     /// <param name="onApp">Called once the app exists, before its first frame.</param>
+    /// <param name="onPrompt">Called with the prompt's state, so a host can settle it with <see cref="SettleAsync"/> once the app has stopped.</param>
+    /// <param name="history">Where history is kept between runs, or null to keep it for this run only.</param>
+    /// <param name="ownSelection">True when the app selects and copies transcript text itself; false where the terminal does, as in the browser, and the wheel is all the mouse brings.</param>
     /// <returns>The same builder, for chaining.</returns>
-    public static Hex1bTerminalBuilder Configure(Hex1bTerminalBuilder builder, IReplEngine engine, Transcript transcript, bool usePlatformClipboard = false, Action<Hex1bApp>? onApp = null)
+    public static Hex1bTerminalBuilder Configure(Hex1bTerminalBuilder builder, IReplEngine engine, Transcript transcript, bool usePlatformClipboard = false, Action<Hex1bApp>? onApp = null, IHistoryStore? history = null, Action<PromptState>? onPrompt = null, bool ownSelection = true)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(engine);
@@ -41,17 +44,32 @@ public static class IlReplApp
         // The terminal reports its size to this filter, and long lines are folded at that width.
         var size = new TerminalSizeFilter();
         var feedback = new YankFeedback();
+        var prompt = new PromptState(new PromptHistory(history), new CilTokenizer(engine.Vocabulary));
+        onPrompt?.Invoke(prompt);
         return builder
             .AddPresentationFilter(size)
-            .AddPresentationFilter(new PromptCursorFilter())
             .WithHex1bApp(
-                options => { },
+                options =>
+                {
+                    // The prompt paints its own caret cell, so no hardware caret follows the mouse,
+                    // and Ctrl+C is the prompt's: it copies, clears, or quits.
+                    options.EnableDefaultCtrlCExit = false;
+                    options.Theme = Hex1bThemes.Default.Clone()
+                        .Set(MouseTheme.ShowCursor, false)
+                        .Set(EditorTheme.CursorBackgroundColor, SpanPalette.Color(SpanStyle.Prompt));
+                },
                 app =>
                 {
                     onApp?.Invoke(app);
-                    app.RequestFocus(node => node is TextBoxNode);
+                    prompt.Invalidate = app.Invalidate;
+                    app.RequestFocus(node => node is EditorNode);
                     size.Changed += app.Invalidate;
-                    return ctx => BuildRoot(ctx, app, engine, transcript, size, feedback, usePlatformClipboard);
+                    if (history is not null)
+                    {
+                        _ = LoadHistoryAsync(history, prompt);
+                    }
+
+                    return ctx => BuildRoot(ctx, app, engine, transcript, size, feedback, prompt, usePlatformClipboard, ownSelection);
                 });
     }
 
@@ -59,16 +77,60 @@ public static class IlReplApp
     /// Runs the REPL on the current console until the user leaves.
     /// </summary>
     /// <param name="engine">The engine that handles lines.</param>
+    /// <param name="history">Where history is kept between runs, or null to keep it for this run only.</param>
     /// <param name="cancellationToken">Cancels the run.</param>
     /// <returns>The process exit code.</returns>
-    public static async Task<int> RunAsync(IReplEngine engine, CancellationToken cancellationToken)
+    public static async Task<int> RunAsync(IReplEngine engine, IHistoryStore? history, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(engine);
         var transcript = new Transcript { MaxLines = 1000 };
-        await using var terminal = Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, usePlatformClipboard: true)
+        PromptState? prompt = null;
+        await using var terminal = Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, usePlatformClipboard: true, history: history, onPrompt: p => prompt = p)
             .WithMouse()
             .Build();
-        return await terminal.RunAsync(cancellationToken).ConfigureAwait(false);
+        return await RunAsync(terminal, prompt, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs a terminal the app was configured on and settles the prompt afterwards, whether the
+    /// app stopped on its own or the token cancelled it, so no line runs behind the session.
+    /// </summary>
+    /// <param name="terminal">The terminal.</param>
+    /// <param name="prompt">The prompt's state, from <see cref="Configure"/>'s callback, or null.</param>
+    /// <param name="cancellationToken">Cancels the run.</param>
+    /// <returns>The exit code.</returns>
+    public static async Task<int> RunAsync(Hex1bTerminal terminal, PromptState? prompt, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(terminal);
+        try
+        {
+            return await terminal.RunAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (prompt is not null)
+            {
+                await SettleAsync(prompt).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Ends what the prompt still has in flight once the app has stopped: the worker is asked to
+    /// stop, the queue is dropped, and the line with the engine is waited for, so no line runs
+    /// behind a session that has ended.
+    /// </summary>
+    /// <param name="prompt">The prompt's state.</param>
+    /// <returns>A task that completes once nothing is in flight.</returns>
+    public static async Task SettleAsync(PromptState prompt)
+    {
+        ArgumentNullException.ThrowIfNull(prompt);
+        prompt.Pending.Clear();
+        if (prompt.Submission is { } sending)
+        {
+            sending.Cancel();
+            await sending.Completion.ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -80,18 +142,42 @@ public static class IlReplApp
     /// <param name="width">The terminal width, or zero when not known yet.</param>
     /// <param name="copyMode">True while the transcript is in copy mode.</param>
     /// <returns>The hints that fit.</returns>
-    public static IReadOnlyList<string> StatusHints(IReadOnlyList<string> occupied, int width, bool copyMode)
+    public static IReadOnlyList<string> StatusHints(IReadOnlyList<string> occupied, int width, bool copyMode) =>
+        StatusHints(occupied, width, copyMode, EnterAction.Submit, 1);
+
+    private static int Width(IReadOnlyList<string> sections) => sections.Sum(DisplayWidth.GetStringWidth) + (3 * Math.Max(0, sections.Count - 1));
+
+    /// <summary>
+    /// The key hints for the status bar, read from what Enter will do now, so the hint never
+    /// promises one thing while the key does another. The least important hint comes first,
+    /// because hints are dropped from the left when the bar is too narrow for them all.
+    /// </summary>
+    /// <param name="occupied">The sections already on the bar.</param>
+    /// <param name="width">The terminal width, or zero when not known yet.</param>
+    /// <param name="copyMode">True while the transcript is in copy mode.</param>
+    /// <param name="enter">What Enter will do.</param>
+    /// <param name="lineCount">How many lines the buffer has.</param>
+    /// <param name="ownSelection">True when the app selects transcript text itself, so Shift+Up is offered.</param>
+    /// <returns>The hints that fit.</returns>
+    public static IReadOnlyList<string> StatusHints(IReadOnlyList<string> occupied, int width, bool copyMode, EnterAction enter, int lineCount, bool ownSelection = true)
     {
         ArgumentNullException.ThrowIfNull(occupied);
         var hints = copyMode
             ? new List<string> { "Shift+↑↓ extend", "y yank", "Esc cancel" }
-            : new List<string> { "Tab complete", "Shift+↑ select", "Ctrl+Q quit" };
+            : enter switch
+            {
+                EnterAction.Busy => new List<string> { "Ctrl+Q quit", "Ctrl+C cancels" },
+                EnterAction.Continue => new List<string> { "Ctrl+C clears", "Ctrl+Q quit", "Enter continues" },
+                EnterAction.AcceptCompletion => new List<string> { "Esc dismiss", "Ctrl+Q quit", "Enter accepts" },
+                _ when lineCount > 1 => new List<string> { "Ctrl+C clears", "Ctrl+Q quit", $"Enter sends {lineCount} lines" },
+                _ when ownSelection => new List<string> { "Tab complete", "Shift+↑ select", "Ctrl+Q quit" },
+                _ => new List<string> { "Tab complete", "Ctrl+Q quit" },
+            };
         if (width <= 0)
         {
             return hints;
         }
 
-        static int Width(IReadOnlyList<string> sections) => sections.Sum(DisplayWidth.GetStringWidth) + (3 * Math.Max(0, sections.Count - 1));
         while (hints.Count > 1 && Width(occupied) + 2 + Width(hints) > width)
         {
             hints.RemoveAt(0);
@@ -111,13 +197,7 @@ public static class IlReplApp
         where TNode : Hex1bNode
     {
         ArgumentNullException.ThrowIfNull(app);
-        var root = app.FocusedNode;
-        while (root?.Parent is not null)
-        {
-            root = root.Parent;
-        }
-
-        return root is null ? null : Descend(root);
+        return Root(app) is { } root ? Descend(root) : null;
 
         static TNode? Descend(Hex1bNode node)
         {
@@ -141,13 +221,36 @@ public static class IlReplApp
     private static void Scroll(Hex1bApp app, int amount, InputBindingActionContext context)
     {
         FindNode<ScrollPanelNode>(app)?.ScrollBy(amount);
-        context.FocusWhere(node => node is TextBoxNode);
+        context.FocusWhere(node => node is EditorNode);
         context.Invalidate();
+    }
+
+    private static void EndCopyMode(Hex1bApp app, SelectionPanelNode panel)
+    {
+        panel.ExitCopyMode();
+        app.ReleaseCapture();
+        app.FocusWhere(node => node is EditorNode);
+        app.Invalidate();
+    }
+
+    // The app's own root, the outermost stack built below: hex1b keeps it under layer nodes of
+    // its own, whose bindings are not the app's.
+    private static VStackNode? AppRoot(Hex1bApp app) => FindNode<VStackNode>(app);
+
+    private static Hex1bNode? Root(Hex1bApp app)
+    {
+        var node = app.FocusedNode;
+        while (node?.Parent is not null)
+        {
+            node = node.Parent;
+        }
+
+        return node;
     }
 
     private static DragHandler SelectionDrag(Hex1bApp app, SelectionMode mode)
     {
-        app.FocusWhere(node => node is TextBoxNode);
+        app.FocusWhere(node => node is EditorNode);
         var panel = FindNode<SelectionPanelNode>(app);
         if (panel is null)
         {
@@ -177,6 +280,147 @@ public static class IlReplApp
             onEnd: context => context.Invalidate());
     }
 
+    private static async Task LoadHistoryAsync(IHistoryStore store, PromptState prompt)
+    {
+        prompt.Post(SubmissionEvent.HistoryLoaded(await store.LoadAsync(CancellationToken.None).ConfigureAwait(false)));
+    }
+
+    private static void StartSubmission(PromptState prompt, IReplEngine engine, string text)
+    {
+        if (prompt.Busy)
+        {
+            // Sent after the one in flight; nothing typed is lost and nothing runs out of order.
+            prompt.Pending.Enqueue(text);
+            return;
+        }
+
+        var status = engine.Status;
+        var isNew = prompt.History.Add(text);
+        var lines = text.Split('\n');
+        prompt.Submission = new Submission(engine, lines, status.OpenDepth, status.Mark.InBlockComment,
+            ct => isNew ? prompt.History.PersistAsync(text, ct) : Task.CompletedTask, prompt.Post);
+    }
+
+    private static void StartPending(PromptState prompt, IReplEngine engine)
+    {
+        prompt.Submission = null;
+        if (prompt.Pending.TryDequeue(out var next))
+        {
+            StartSubmission(prompt, engine, next);
+        }
+    }
+
+    private static void Drain(PromptState prompt, Transcript transcript, IReplEngine engine, Hex1bApp app)
+    {
+        while (prompt.Events.TryDequeue(out var e))
+        {
+            foreach (var line in e.Lines ?? [])
+            {
+                transcript.Add(line);
+            }
+
+            switch (e.Kind)
+            {
+                case SubmissionEventKind.Paste:
+                    prompt.Editor.InsertText(PastePayload.Prepare(e.Text ?? ""));
+                    prompt.LastLength = prompt.Editor.Document.Length;
+                    prompt.PaletteDismissed = false;
+                    prompt.PaletteNavigated = false;
+                    break;
+                case SubmissionEventKind.Refused:
+                    Return(prompt, e.Text ?? "", e.CaretLine, select: e.Select);
+                    if (e.Note is { } note)
+                    {
+                        transcript.Add(LineKind.Info, "  " + note, SpanStyle.Dim);
+                    }
+
+                    prompt.Submission = null;
+                    break;
+                case SubmissionEventKind.Cancelled:
+                    Return(prompt, e.Text ?? "", 0, select: false);
+                    prompt.Submission = null;
+                    break;
+                case SubmissionEventKind.Failed:
+                    if (e.Note is { } message)
+                    {
+                        transcript.Add(new TranscriptLine(LineKind.Error, [new TranscriptSpan("  engine error: ", SpanStyle.Error), new TranscriptSpan(message)]));
+                    }
+
+                    Return(prompt, e.Text ?? "", 0, select: false);
+                    prompt.Submission = null;
+                    break;
+                case SubmissionEventKind.Quit:
+                    app.RequestStop();
+                    break;
+                case SubmissionEventKind.Completed:
+                    if (prompt.Submission is { CancelRequested: true })
+                    {
+                        // The block finished before the cancel could take: it stays, and what was
+                        // queued behind it comes back to the editor instead of running.
+                        prompt.Submission = null;
+                        Return(prompt, "", 0, select: false);
+                    }
+                    else
+                    {
+                        StartPending(prompt, engine);
+                    }
+
+                    break;
+                case SubmissionEventKind.HistoryLoaded:
+                    prompt.History.Load(e.Snapshot ?? new HistorySnapshot([], 0));
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        if (prompt.History.Problem is { } problem && !prompt.HistoryProblemShown)
+        {
+            prompt.HistoryProblemShown = true;
+            transcript.Add(LineKind.Info, "  history is not being saved: " + problem, SpanStyle.Dim);
+        }
+    }
+
+    private static void Return(PromptState prompt, string text, int caretLine, bool select)
+    {
+        // What was queued behind the submission and what has been typed since come back too,
+        // after the returned lines, so nothing is lost. A queued empty submission is a blank
+        // line, the run it was, not nothing.
+        var parts = new List<string>();
+        if (text.Length > 0)
+        {
+            parts.Add(text);
+        }
+
+        parts.AddRange(prompt.Pending);
+        prompt.Pending.Clear();
+        if (prompt.Text.Length > 0)
+        {
+            parts.Add(prompt.Text);
+        }
+
+        text = string.Join('\n', parts);
+        if (text.Length == 0)
+        {
+            prompt.Clear();
+            return;
+        }
+
+        var offset = 0;
+        var lines = text.Split('\n');
+        for (var i = 0; i < caretLine && i < lines.Length; i++)
+        {
+            offset += lines[i].Length + 1;
+        }
+
+        prompt.SetText(text, offset);
+        prompt.PaletteDismissed = true;
+        if (select)
+        {
+            prompt.SelectLine(caretLine);
+        }
+    }
+
     private static Hex1bWidget[] TranscriptLines(Transcript transcript, int lineWidth, YankFeedback feedback)
     {
         var widgets = new Hex1bWidget[transcript.Lines.Count];
@@ -199,125 +443,227 @@ public static class IlReplApp
         return widgets;
     }
 
-    private static VStackWidget BuildRoot(RootContext ctx, Hex1bApp app, IReplEngine engine, Transcript transcript, TerminalSizeFilter size, YankFeedback feedback, bool usePlatformClipboard)
+    private static VStackWidget BuildRoot(RootContext ctx, Hex1bApp app, IReplEngine engine, Transcript transcript, TerminalSizeFilter size, YankFeedback feedback, PromptState prompt, bool usePlatformClipboard, bool ownSelection)
     {
+        // Whatever the submission worker and the paste handler posted since the last frame is
+        // applied here, on the render thread, before anything reads the transcript or the prompt.
+        Drain(prompt, transcript, engine, app);
+
         // The prompt is the only place input goes. A click on the scrollbar still focuses the
         // transcript panel, so focus is pulled back on the next render as a last resort; clicks
         // and wheel notches over the transcript itself are handed back at once, below.
-        if (app.FocusedNode is not null and not TextBoxNode)
+        if (app.FocusedNode is not null and not EditorNode)
         {
-            app.RequestFocus(node => node is TextBoxNode);
+            app.RequestFocus(node => node is EditorNode);
         }
 
         var status = engine.Status;
         var panel = FindNode<SelectionPanelNode>(app);
+        if (panel is { IsInCopyMode: true })
+        {
+            // While the transcript has a selection the root holds the input, not the panel, so
+            // a press anywhere on the screen reaches the root's bindings below and ends it. The
+            // panel's own keys still come first: they override capture wherever it is held.
+            if (app.CapturedNode == panel && AppRoot(app) is { } tree)
+            {
+                app.CaptureInput(tree);
+            }
+
+
+            // Typing ends the selection as well: copy mode's keys never reach the document, so
+            // a change to it is the user's.
+            var version = prompt.Editor.Document.Version;
+            if (prompt.CopyModeVersion is null)
+            {
+                prompt.CopyModeVersion = version;
+            }
+            else if (prompt.CopyModeVersion != version)
+            {
+                EndCopyMode(app, panel);
+            }
+        }
+        else
+        {
+            prompt.CopyModeVersion = null;
+        }
+
         var copyMode = panel?.IsInCopyMode == true;
+        var candidates = PromptWidget.Candidates(prompt, engine.Catalog).Count;
+        var fit = PromptLayout.Fit(size.Height, prompt.LineCount, candidates);
+        if (fit.EditorRows != prompt.LastEditorRows)
+        {
+            // The transcript keeps its newest rows in view while the editor takes or gives back
+            // rows: the panel snaps to its end when content grows, but not when its viewport
+            // shrinks, so the end is asked for again on the frame after the rows change.
+            prompt.LastEditorRows = fit.EditorRows;
+            prompt.RowsChanged = true;
+        }
+
+        if (FindNode<ScrollPanelNode>(app) is { IsFollowing: true } following)
+        {
+            following.ScrollToBottom();
+        }
+        var (openDepth, commentOpen) = prompt.Expected(status);
+        var enter = prompt.Busy ? EnterAction.Busy : PromptWidget.EnterActionFor(prompt, candidates > 0 && fit.PaletteRows > 0, openDepth, commentOpen);
         // The scrollbar takes the last column of the transcript panel.
         var lineWidth = size.Width > 1 ? size.Width - 1 : 0;
-        return ctx.VStack(v =>
-        [
-            // The selection panel adds copy mode to the transcript: drag with the mouse or press
-            // Shift+Up, then y copies the selection and the copied rows flash.
-            v.VScrollPanel(sv =>
-                [
-                    sv.SelectionPanel(sv.VStack(lines => TranscriptLines(transcript, lineWidth, feedback)))
-                        .OnCopy((SelectionPanelCopyEventArgs args) =>
-                        {
-                            ClipboardWriter.Copy(app, args.Text, usePlatformClipboard);
-                            feedback.Show(app, args);
-                        })
-                        .InputBindings(b =>
-                        {
-                            // Shift+Up starts a selection from the prompt (a root binding below), so the
-                            // panel's own entry key is not needed, and Shift keeps extending it.
-                            b.Remove(SelectionPanelWidget.EnterCopyMode);
-                            b.Shift().Key(Hex1bKey.UpArrow).OverridesCapture().Triggers(SelectionPanelWidget.CopyModeUp);
-                            b.Shift().Key(Hex1bKey.DownArrow).OverridesCapture().Triggers(SelectionPanelWidget.CopyModeDown);
-                        }),
-                ], showScrollbar: true)
-                .InputBindings(b =>
-                {
-                    // A press on the transcript focuses the panel before any binding runs. These
-                    // bindings hand focus back to the prompt inside the same event, so keys that
-                    // arrive right behind the mouse still reach it. A press that moves becomes a
-                    // selection in the panel; the scrollbar's own drag has already had first pick.
-                    b.Drag(MouseButton.Left).Action((x, y) => SelectionDrag(app, SelectionMode.Character), "Select");
-                    b.Drag(MouseButton.Left).Ctrl().Action((x, y) => SelectionDrag(app, SelectionMode.Line), "Select lines");
-                    b.Drag(MouseButton.Left).Alt().Action((x, y) => SelectionDrag(app, SelectionMode.Block), "Select a block");
-                    b.Mouse(MouseButton.ScrollUp).Action(c => Scroll(app, -3, c), "Scroll up");
-                    b.Mouse(MouseButton.ScrollDown).Action(c => Scroll(app, 3, c), "Scroll down");
-                })
-                .Follow()
-                .Fill(),
-            v.Separator(),
-            v.IlPrompt(status.Prompt, engine.Catalog)
-                .OnSubmit(async line =>
-                {
-                    try
-                    {
-                        var reply = await engine.HandleAsync(line, CancellationToken.None).ConfigureAwait(true);
-                        foreach (var l in reply.Lines)
-                        {
-                            transcript.Add(l);
-                        }
-
-                        if (reply.Quit)
-                        {
-                            app.RequestStop();
-                        }
-                    }
-                    catch (ReplEngineException ex)
-                    {
-                        transcript.Add(new TranscriptLine(LineKind.Error, [new TranscriptSpan("  engine error: ", SpanStyle.Error), new TranscriptSpan(ex.Message)]));
-                    }
-
-                    app.RequestFocus(node => node is TextBoxNode);
-                    app.Invalidate();
-                }),
-            v.InfoBar(s =>
+        var root = ctx.VStack(v =>
+        {
+            // Where the terminal selects and copies itself, as in the browser, the prompt does
+            // not copy either: Ctrl+C on a selection clears the buffer.
+            var promptWidget = v.IlPrompt(status.Prompt, engine.Catalog, prompt, fit, openDepth, commentOpen)
+                .OnSubmit(text => StartSubmission(prompt, engine, text));
+            if (ownSelection)
             {
-                var facts = new List<string>
-                {
-                    "stack " + status.Stack,
-                    status.Locals == 0 ? "no locals" : $"{status.Locals} local{(status.Locals == 1 ? "" : "s")}",
-                    status.OpenBlocks > 0 ? $"{status.OpenBlocks} open block{(status.OpenBlocks == 1 ? "" : "s")}" : $"{status.Instructions} instruction{(status.Instructions == 1 ? "" : "s")}",
-                };
-                // The open blocks lead, because every fact after them describes the innermost one:
-                // the class, then the method inside it.
-                var leading = new List<(string Text, SpanStyle Style)>();
-                if (status.OpenType is { } openType)
-                {
-                    leading.Add(("class " + openType, SpanStyle.Type));
-                }
+                promptWidget = promptWidget.OnCopy(text => ClipboardWriter.Copy(app, text, usePlatformClipboard));
+            }
 
-                if (status.OpenMethod is { } method)
+            return
+            [
+                // The selection panel adds copy mode to the transcript: drag with the mouse or press
+                // Shift+Up, then y copies the selection and the copied rows flash. Without the app's
+                // own selection the transcript is plain.
+                v.VScrollPanel(sv =>
+                    [
+                        ownSelection
+                            ? sv.SelectionPanel(sv.VStack(lines => TranscriptLines(transcript, lineWidth, feedback)))
+                                .OnCopy((SelectionPanelCopyEventArgs args) =>
+                                {
+                                    ClipboardWriter.Copy(app, args.Text, usePlatformClipboard);
+                                    feedback.Show(app, args);
+                                })
+                                .InputBindings(b =>
+                                {
+                                    // Shift+Up starts a selection from the prompt (a root binding below), so the
+                                    // panel's own entry key is not needed, and Shift keeps extending it.
+                                    b.Remove(SelectionPanelWidget.EnterCopyMode);
+                                    b.Shift().Key(Hex1bKey.UpArrow).OverridesCapture().Triggers(SelectionPanelWidget.CopyModeUp);
+                                    b.Shift().Key(Hex1bKey.DownArrow).OverridesCapture().Triggers(SelectionPanelWidget.CopyModeDown);
+                                })
+                            : sv.VStack(lines => TranscriptLines(transcript, lineWidth, feedback)),
+                    ], showScrollbar: true)
+                    .InputBindings(b =>
+                    {
+                        // A press on the transcript focuses the panel before any binding runs. These
+                        // bindings hand focus back to the prompt inside the same event, so keys that
+                        // arrive right behind the mouse still reach it. A press that moves becomes a
+                        // selection in the panel; the scrollbar's own drag has already had first pick.
+                        if (ownSelection)
+                        {
+                            b.Drag(MouseButton.Left).Action((x, y) => SelectionDrag(app, SelectionMode.Character), "Select");
+                            b.Drag(MouseButton.Left).Ctrl().Action((x, y) => SelectionDrag(app, SelectionMode.Line), "Select lines");
+                            b.Drag(MouseButton.Left).Alt().Action((x, y) => SelectionDrag(app, SelectionMode.Block), "Select a block");
+                        }
+
+                        b.Mouse(MouseButton.ScrollUp).Action(c => Scroll(app, -3, c), "Scroll up");
+                        b.Mouse(MouseButton.ScrollDown).Action(c => Scroll(app, 3, c), "Scroll down");
+                    })
+                    .Follow()
+                    .Fill(),
+                v.Separator(),
+                promptWidget,
+                v.InfoBar(s =>
                 {
-                    leading.Add(("method " + method, SpanStyle.Label));
-                }
+                    var facts = new List<string>
+                    {
+                        "stack " + status.Stack,
+                        status.Locals == 0 ? "no locals" : $"{status.Locals} local{(status.Locals == 1 ? "" : "s")}",
+                        status.OpenBlocks > 0 ? $"{status.OpenBlocks} open block{(status.OpenBlocks == 1 ? "" : "s")}" : $"{status.Instructions} instruction{(status.Instructions == 1 ? "" : "s")}",
+                    };
+                    if (prompt.Submission is { IsRunning: true } sending)
+                    {
+                        facts.Add(sending.CancelRequested ? $"cancelling {sending.Sent}/{sending.Total}" : $"sending {sending.Sent}/{sending.Total}");
+                    }
+                    else if (prompt.LineCount > 1)
+                    {
+                        facts.Add($"editing {prompt.LineCount} lines");
+                    }
 
-                facts.InsertRange(0, leading.Select(l => l.Text));
-                var occupied = feedback.Notification is null ? facts : [.. facts, feedback.Notification];
-                var hints = StatusHints(occupied, size.Width, copyMode);
-                var children = new List<IInfoBarChild>();
-                foreach (var (text, style) in leading)
-                {
-                    children.Add(s.Section(text).Theme(t => t.Clone().Set(GlobalTheme.ForegroundColor, SpanPalette.Color(style))));
-                }
+                    // The open blocks lead, because every fact after them describes the innermost one:
+                    // the class, then the method inside it.
+                    var leading = new List<(string Text, SpanStyle Style)>();
+                    if (status.OpenType is { } openType)
+                    {
+                        leading.Add(("class " + openType, SpanStyle.Type));
+                    }
 
-                children.AddRange(facts.Skip(leading.Count).Select(f => (IInfoBarChild)s.Section(f)));
+                    if (status.OpenMethod is { } method)
+                    {
+                        leading.Add(("method " + method, SpanStyle.Label));
+                    }
 
-                children.Add(s.Spacer());
-                if (feedback.Notification is { } note)
-                {
-                    children.Add(s.Section(note).Theme(t => t.Clone().Set(GlobalTheme.ForegroundColor, SpanPalette.Color(SpanStyle.String))));
-                }
+                    facts.InsertRange(0, leading.Select(l => l.Text));
+                    var occupied = feedback.Notification is null ? facts : [.. facts, feedback.Notification];
+                    var hints = StatusHints(occupied, size.Width, copyMode, enter, prompt.LineCount, ownSelection);
 
-                children.AddRange(hints.Select(h => (IInfoBarChild)s.Section(h)));
-                return children;
-            }).Divider(" │ "),
-        ])
+                    // When even the last hint does not fit beside the facts, the facts give way from
+                    // the left: the open block names first, then the stack; what the bar is doing now stays.
+                    var drop = 0;
+                    while (size.Width > 0 && facts.Count - drop > 1 && Width(facts.Skip(drop).ToList()) + 2 + Width(hints) > size.Width)
+                    {
+                        drop++;
+                    }
+
+                    var children = new List<IInfoBarChild>();
+                    foreach (var (text, style) in leading.Skip(drop))
+                    {
+                        children.Add(s.Section(text).Theme(t => t.Clone().Set(GlobalTheme.ForegroundColor, SpanPalette.Color(style))));
+                    }
+
+                    children.AddRange(facts.Skip(Math.Max(leading.Count, drop)).Select(f => (IInfoBarChild)s.Section(f)));
+
+                    children.Add(s.Spacer());
+                    if (feedback.Notification is { } note)
+                    {
+                        children.Add(s.Section(note).Theme(t => t.Clone().Set(GlobalTheme.ForegroundColor, SpanPalette.Color(SpanStyle.String))));
+                    }
+
+                    children.AddRange(hints.Select(h => (IInfoBarChild)s.Section(h)));
+                    return children;
+                }).Divider(" │ "),
+            ];
+        })
         .InputBindings(b =>
         {
+            b.Ctrl().Key(Hex1bKey.Q).Action(c =>
+            {
+                prompt.Submission?.Cancel();
+                c.RequestStop();
+                return Task.CompletedTask;
+            }, "Quit");
+            b.Ctrl().Key(Hex1bKey.L).Action(_ =>
+            {
+                transcript.Clear();
+                transcript.Add(LineKind.Info, Banner, SpanStyle.Dim);
+                app.Invalidate();
+            }, "Clear transcript");
+            if (!ownSelection)
+            {
+                return;
+            }
+
+            // A click anywhere ends a selection in the transcript, as Escape does; a right click
+            // copies it first, as it does over the transcript. The next press and drag select afresh.
+            b.Mouse(MouseButton.Left).OverridesCapture().Action(_ =>
+            {
+                if (FindNode<SelectionPanelNode>(app) is { IsInCopyMode: true } selected)
+                {
+                    EndCopyMode(app, selected);
+                }
+            }, "End the selection");
+            b.Mouse(MouseButton.Right).OverridesCapture().Action(async _ =>
+            {
+                if (FindNode<SelectionPanelNode>(app) is { IsInCopyMode: true, HasSelection: true } selected)
+                {
+                    var handler = selected.CopyHandler;
+                    var args = selected.BuildCopyEventArgs();
+                    EndCopyMode(app, selected);
+                    if (handler is not null)
+                    {
+                        await handler(args).ConfigureAwait(false);
+                    }
+                }
+            }, "Copy the selection");
             // Shift+Up from the prompt selects the last transcript line; more Shift+Up extends it.
             b.Shift().Key(Hex1bKey.UpArrow).Action(c =>
             {
@@ -329,17 +675,13 @@ public static class IlReplApp
                     c.Invalidate();
                 }
             }, "Select transcript lines");
-            b.Ctrl().Key(Hex1bKey.Q).Action(c =>
-            {
-                c.RequestStop();
-                return Task.CompletedTask;
-            }, "Quit");
-            b.Ctrl().Key(Hex1bKey.L).Action(_ =>
-            {
-                transcript.Clear();
-                transcript.Add(LineKind.Info, Banner, SpanStyle.Dim);
-                app.Invalidate();
-            }, "Clear transcript");
         });
+
+        // While lines are in flight the worker posts from another thread. A frame is asked for on
+        // every post, and the root also redraws on a timer, so a post that lands while a frame is
+        // already being drawn is still drained on the next one.
+        var again = prompt.RowsChanged;
+        prompt.RowsChanged = false;
+        return prompt.Busy || !prompt.Events.IsEmpty || again ? root.RedrawAfter(16) : root;
     }
 }

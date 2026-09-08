@@ -1,4 +1,5 @@
 using IlRepl.Engine;
+using IlRepl.Protocol;
 
 namespace IlRepl.Tests.Engine;
 
@@ -311,5 +312,98 @@ public sealed class SessionTests
         var session = Load("ldc.i4 0", "brfalse SKIP", "ldc.i4 1", "ldc.i4 2", "pop", "SKIP: pop");
         var ex = Assert.ThrowsExactly<ReplException>(() => session.Run());
         Assert.Contains("JIT rejected", ex.Message);
+    }
+
+    /// <summary>
+    /// A block comment opened on one line and closed on a later one is one comment, inside a
+    /// method as anywhere else; the text after the closing delimiter is parsed.
+    /// </summary>
+    [TestMethod]
+    public void Normalize_CommentSpansLinesInsideMethod()
+    {
+        var session = Load(".method int32 F() {", "/* open", "still */ ldc.i4.1", "ret", "}", "call int32 F()");
+        Assert.AreEqual(1, session.Run().Value);
+    }
+
+    /// <summary>
+    /// A closing brace inside a comment closes nothing.
+    /// </summary>
+    [TestMethod]
+    public void Normalize_CommentCoversBrace_DoesNotClose()
+    {
+        var session = Load(".method int32 F() {", "ldc.i4 1", "/* } */", "/*", "}", "*/");
+        Assert.AreEqual("F", session.OpenMethod?.Name);
+        session.AddLine("ret");
+        session.AddLine("}");
+        Assert.IsNull(session.OpenMethod);
+        Assert.HasCount(1, session.Methods);
+    }
+
+    /// <summary>
+    /// The state carries through nested class and method blocks.
+    /// </summary>
+    [TestMethod]
+    public void Normalize_NestedTypeAndMethod_KeepsState()
+    {
+        var session = Load(".class public C {", "/* about C", "*/ .method public static int32 One() {", "ldc.i4 1 /* one", "*/ ret", "}", "}", "call int32 C::One()");
+        Assert.AreEqual(1, session.Run().Value);
+    }
+
+    /// <summary>
+    /// Whitespace outside a comment is blank; a comment alone, or a blank line inside an open
+    /// comment, is a comment; anything left is text.
+    /// </summary>
+    [TestMethod]
+    public void Normalize_Kinds()
+    {
+        var session = new Session();
+        Assert.AreEqual(SourceLineKind.Blank, session.Normalize("   ").Kind);
+        Assert.AreEqual(SourceLineKind.Comment, session.Normalize("// note").Kind);
+        Assert.AreEqual(SourceLineKind.Comment, session.Normalize("/* a */").Kind);
+        var text = session.Normalize("nop // note");
+        Assert.AreEqual(SourceLineKind.Text, text.Kind);
+        Assert.AreEqual("nop", text.Text);
+        Assert.AreEqual("nop // note", text.Raw);
+        Assert.IsFalse(text.InBlockCommentBefore);
+
+        Assert.AreEqual(SourceLineKind.Comment, session.Normalize("/* open").Kind);
+        Assert.IsTrue(session.InBlockComment);
+        var inside = session.Normalize("   ");
+        Assert.AreEqual(SourceLineKind.Comment, inside.Kind);
+        Assert.IsTrue(inside.InBlockCommentBefore);
+        var closing = session.Normalize("still */ nop");
+        Assert.AreEqual(SourceLineKind.Text, closing.Kind);
+        Assert.AreEqual("nop", closing.Text);
+        Assert.IsTrue(closing.InBlockCommentBefore);
+        Assert.IsFalse(session.InBlockComment);
+    }
+
+    /// <summary>
+    /// Stored lines hold no comments, so a replay after an undo needs no comment state.
+    /// </summary>
+    [TestMethod]
+    public void Undo_AfterCommentedLines_ReplaysCleanText()
+    {
+        var session = Load(".method int32 F() {", "/* c */ ldc.i4 1", "ldc.i4 2 // two");
+        Assert.IsTrue(session.Undo());
+        Assert.AreEqual(1, session.State.Stack.Count);
+        session.AddLine("ret");
+        session.AddLine("}");
+        Assert.AreEqual("ldc.i4 1", session.Methods[0].BodyLines[0]);
+        session.AddLine("call int32 F()");
+        Assert.AreEqual(1, session.Run().Value);
+    }
+
+    /// <summary>
+    /// A line the session refuses leaves the comment state where it was, through the string
+    /// overload as well.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_RefusedString_LeavesNoCommentOpen()
+    {
+        var session = new Session();
+        Assert.ThrowsExactly<ReplException>(() => session.AddLine("bogus /*"));
+        Assert.IsFalse(session.InBlockComment);
+        Assert.AreEqual(LineOutcome.Instruction, session.AddLine("nop").Outcome);
     }
 }

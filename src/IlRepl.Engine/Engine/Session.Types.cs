@@ -473,7 +473,7 @@ public sealed partial class Session
         return null;
     }
 
-    private LineResult AddTypeLine(string line, string text)
+    private LineResult AddTypeLine(NormalizedLine line)
     {
         // Each path records the line on the outermost block once it is accepted, so an undo can
         // replay the family from its header.
@@ -482,7 +482,8 @@ public sealed partial class Session
             return AddMemberLine(line);
         }
 
-        return _openAccessor is not null ? AddAccessorLine(line, text) : AddClassLevelLine(line, text);
+        var text = line.Text;
+        return _openAccessor is not null ? AddAccessorLine(text, text) : AddClassLevelLine(text, text);
     }
 
     private LineResult AddClassLevelLine(string line, string text)
@@ -801,20 +802,27 @@ public sealed partial class Session
         return result;
     }
 
-    private LineResult AddMemberLine(string line)
+    private LineResult AddMemberLine(NormalizedLine line)
     {
         var member = _openMember!;
+        var braceBefore = member.State.BraceSeen;
         var result = member.State.Apply(line);
         if (result.Outcome == LineOutcome.MethodEnd)
         {
-            _openType!.Outermost.Lines.Add(line);
+            _openType!.Outermost.Lines.Add(line.Text);
             return CloseMember(fromHeader: false);
         }
 
         if (result.Outcome != LineOutcome.Empty)
         {
-            member.BodyLines.Add(line);
-            _openType!.Outermost.Lines.Add(line);
+            member.BodyLines.Add(line.Text);
+            _openType!.Outermost.Lines.Add(line.Text);
+        }
+        else if (!braceBefore && member.State.BraceSeen)
+        {
+            // The brace on its own line is not a body line, but the family's log must replay
+            // it, or a member rebuilt from the log would never see its brace.
+            _openType!.Outermost.Lines.Add(line.Text);
         }
 
         return result;
@@ -1193,6 +1201,7 @@ public sealed partial class Session
     private void PublishFamily(TypeDeclaration declaration, SessionType? previous, (CompiledFamily Family, TypeTable Table, CellState Cell, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> Prototypes) compiled)
     {
         Submissions++;
+        Generation++;
         var accepted = new SessionType(declaration, compiled.Family.Types, compiled.Family.Types[declaration.FullName], compiled.Family.Definition, compiled.Prototypes) { Order = Submissions };
         var index = previous is null ? -1 : _types.IndexOf(previous);
         if (index < 0)
@@ -1403,11 +1412,12 @@ public sealed partial class Session
 
     private void ReplayFamily(string headerLine, IReadOnlyList<string> lines)
     {
-        var text = InstructionParser.StripComments(headerLine).Trim();
-        OpenTypeBlock(text[".class".Length..], headerLine);
+        // Stored lines hold no comments; they are replayed as they are.
+        var text = headerLine.Trim();
+        OpenTypeBlock(text[".class".Length..], text);
         foreach (var line in lines)
         {
-            AddTypeLine(line, InstructionParser.StripComments(line).Trim());
+            AddTypeLine(NormalizedLine.FromText(line));
         }
     }
 

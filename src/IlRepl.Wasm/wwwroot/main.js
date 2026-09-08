@@ -188,31 +188,77 @@
       resizeTimer = setTimeout(fitColumns, 100);
     });
 
-    // Selection and copy happen inside the app: a drag or F12 starts a selection and Enter, y,
-    // or a right click copies it, which reaches the page as an OSC 52 sequence.
-    term.parser.registerOscHandler(52, (data) => {
-      const parts = data.split(';');
-      if (parts.length < 2) return false;
-      let text;
-      try {
-        text = new TextDecoder().decode(Uint8Array.from(atob(parts[1]), (c) => c.charCodeAt(0)));
-      } catch {
+    // Selection and copy are the terminal's own: the app never takes the mouse, so a drag
+    // selects here, and Ctrl+C, Cmd+C, or y copies the selection instead of sending the key,
+    // y being the desktop's yank.
+    // Copies text with the copy command inside the key's own gesture, from a scratch textarea
+    // holding it, since the command copies a selection in the page and the terminal's is not one.
+    const copyNow = (text) => {
+      const scratch = document.createElement('textarea');
+      scratch.value = text;
+      scratch.setAttribute('readonly', '');
+      scratch.style.position = 'fixed';
+      scratch.style.top = '0';
+      scratch.style.opacity = '0';
+      document.body.appendChild(scratch);
+      scratch.focus();
+      scratch.select();
+      let copied = false;
+      try { copied = document.execCommand('copy'); } catch { copied = false; }
+      document.body.removeChild(scratch);
+      term.focus();
+      return copied;
+    };
+
+    // A key that copied is swallowed whole: its keypress and the text it would put in the
+    // helper textarea as well, or the y would reach the prompt too.
+    let swallowed = null;
+    term.attachCustomKeyEventHandler((e) => {
+      const key = e.key.toLowerCase();
+      if (swallowed === key) {
+        if (e.type === 'keyup') swallowed = null;
+        e.preventDefault();
         return false;
       }
-      window.ilreplLastCopy = text;
-      if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
-      return true;
+      if (e.type !== 'keydown' || e.altKey || !term.hasSelection()) return true;
+      const copies = ((e.ctrlKey || e.metaKey) && key === 'c') || (!e.ctrlKey && !e.metaKey && key === 'y');
+      if (!copies) return true;
+      // The copy command needs no permission and works on plain http; the clipboard API is the
+      // second try. The selection is cleared only once a copy has landed, so a copy that fails
+      // leaves it there to try again.
+      const text = term.getSelection();
+      if (copyNow(text)) {
+        window.ilreplLastCopy = text;
+        term.clearSelection();
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+          window.ilreplLastCopy = text;
+          term.clearSelection();
+        }).catch(() => {});
+      }
+      swallowed = key;
+      e.preventDefault();
+      return false;
     });
 
-    // xterm's own selection still works with the platform's modifier held (Shift, or Option on
-    // macOS); Ctrl+C or Cmd+C copies that selection instead of sending the key.
-    term.attachCustomKeyEventHandler((e) => {
-      if (e.type === 'keydown' && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'c' && term.hasSelection()) {
-        if (navigator.clipboard) navigator.clipboard.writeText(term.getSelection()).catch(() => {});
-        term.clearSelection();
-        return false;
-      }
-      return true;
+    // Wheel notches still scroll the transcript: with no mouse mode on, xterm would turn them
+    // into arrow keys, so they go to the app as the scroll reports a terminal sends, one per
+    // line, from the cell under the pointer.
+    term.attachCustomWheelEventHandler((e) => {
+      if (!worker) return true;
+      const screen = term.element && term.element.querySelector('.xterm-screen');
+      if (!screen) return true;
+      const rect = screen.getBoundingClientRect();
+      const cellWidth = rect.width / term.cols;
+      const cellHeight = rect.height / term.rows;
+      const col = Math.min(term.cols, Math.max(1, Math.floor((e.clientX - rect.left) / cellWidth) + 1));
+      const row = Math.min(term.rows, Math.max(1, Math.floor((e.clientY - rect.top) / cellHeight) + 1));
+      const lines = e.deltaMode === 1 ? e.deltaY : e.deltaMode === 2 ? e.deltaY * term.rows : e.deltaY / cellHeight;
+      const count = Math.min(50, Math.max(1, Math.round(Math.abs(lines))));
+      const button = e.deltaY < 0 ? 64 : 65;
+      send(`\x1b[<${button};${col};${row}M`.repeat(count));
+      e.preventDefault();
+      return false;
     });
 
     // A click anywhere in the box focuses the terminal. In the padding around the rows the

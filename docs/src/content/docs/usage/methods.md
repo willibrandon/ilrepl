@@ -5,7 +5,31 @@ description: Define a method in one cell and call it from the next.
 
 `.method` opens a block the way `.try` does, and `}` closes it. The method is emitted onto the
 cell's type and stays for the rest of the session, so later cells and other methods call it by
-name.
+name. This is the source of a method; copy it, paste it into a session, and press Enter.
+
+```
+.method int32 Fib(int32 n) {
+  ldarg n
+  ldc.i4 2
+  blt BASE
+  ldarg n
+  ldc.i4 1
+  sub
+  call int32 Fib(int32)
+  ldarg n
+  ldc.i4 2
+  sub
+  call int32 Fib(int32)
+  add
+  ret
+BASE: ldarg n
+  ret
+}
+```
+
+Enter continues the block while its braces are open and sends it once they balance, one line at
+a time, so the transcript reads the same whether the block was typed or pasted. See
+[Editing blocks](/usage/editing/).
 
 ```
 il[1]> .method int32 Fib(int32 n) {

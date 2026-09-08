@@ -581,6 +581,11 @@ public static class TypeParser
     }
 
     /// <summary>
+    /// The primitive type keywords: <c>int32</c>, <c>string</c>, <c>void</c>, and the rest.
+    /// </summary>
+    public static IReadOnlyCollection<string> PrimitiveKeywords => Primitives.Keys;
+
+    /// <summary>
     /// True when <paramref name="c"/> can appear inside an IL type or member name.
     /// </summary>
     /// <param name="c">The character.</param>

@@ -14,6 +14,7 @@ ilrepl [options] [script]
 | `--batch` | Read lines from standard input without the terminal UI. Implied when input is piped. |
 | `-q, --quiet` | Do not echo the stack after each instruction. |
 | `--no-color` | Plain output. `NO_COLOR` in the environment does the same. |
+| `--no-history` | Do not read or write the history file. |
 | `--version` | Print the version. |
 | `--help` | Print the options. |
 
@@ -29,6 +30,14 @@ ilrepl samples/Transcripts/exceptions.il
 printf 'ldstr "piped"\nret\n' | ilrepl --no-color
 ```
 
+## History
+
+The terminal UI keeps every submission, a block as one entry, in `~/.config/ilrepl/history`, or
+in `$XDG_CONFIG_HOME/ilrepl/history` when that variable is set, and in `LocalApplicationData\ilrepl\history`
+on Windows. The file is only ever appended to, under a lock file beside it, and the newest
+thousand entries are loaded at start. When it cannot be written the session says so once and
+goes on. See [Editing blocks](/usage/editing/).
+
 ## Environment
 
 | Variable | Meaning |
@@ -36,3 +45,4 @@ printf 'ldstr "piped"\nret\n' | ilrepl --no-color
 | `ILREPL_HOST_PATH` | Path to `ilrepl-host.dll`. Defaults to `host/` beside the executable. |
 | `DOTNET_HOST_PATH` | The `dotnet` muxer used to run the host. Defaults to the running muxer or `dotnet` on the path. |
 | `NO_COLOR` | Disables colors in batch output. |
+| `XDG_CONFIG_HOME` | Where the history file is kept, under `ilrepl/`. |

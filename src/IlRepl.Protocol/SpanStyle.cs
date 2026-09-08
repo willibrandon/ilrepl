@@ -3,8 +3,8 @@ using System.Text.Json.Serialization;
 namespace IlRepl.Protocol;
 
 /// <summary>
-/// The role of a piece of transcript text. The terminal UI and the batch writer map each role
-/// to a color.
+/// How a span of transcript text is drawn. The terminal UI maps each style to a colour and the
+/// batch writer to an ANSI code; over the wire the name travels as a string.
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<SpanStyle>))]
 public enum SpanStyle
@@ -15,27 +15,27 @@ public enum SpanStyle
     Default,
 
     /// <summary>
-    /// De-emphasized text such as stack echoes and notes.
+    /// Text of secondary importance: notes, offsets, the stack column.
     /// </summary>
     Dim,
 
     /// <summary>
-    /// The prompt label.
+    /// The prompt.
     /// </summary>
     Prompt,
 
     /// <summary>
-    /// Text the user typed.
+    /// Text the user typed that has no more specific style.
     /// </summary>
     Input,
 
     /// <summary>
-    /// An opcode name.
+    /// An opcode.
     /// </summary>
     Opcode,
 
     /// <summary>
-    /// A type name on the stack.
+    /// A type.
     /// </summary>
     Type,
 
@@ -55,12 +55,12 @@ public enum SpanStyle
     Number,
 
     /// <summary>
-    /// A string or character literal.
+    /// A string literal.
     /// </summary>
     String,
 
     /// <summary>
-    /// A null or a boolean.
+    /// An ILAsm keyword such as <c>instance</c> or <c>cil managed</c>, or a null or boolean value.
     /// </summary>
     Keyword,
 
@@ -70,17 +70,37 @@ public enum SpanStyle
     Error,
 
     /// <summary>
-    /// A REPL command name.
+    /// A command.
     /// </summary>
     Command,
 
     /// <summary>
-    /// Text the cell wrote to standard output.
+    /// Output the cell wrote.
     /// </summary>
     Output,
 
     /// <summary>
-    /// A heading in help output.
+    /// A heading.
     /// </summary>
     Heading,
+
+    /// <summary>
+    /// A directive such as <c>.locals</c> or <c>.method</c>.
+    /// </summary>
+    Directive,
+
+    /// <summary>
+    /// A comment.
+    /// </summary>
+    Comment,
+
+    /// <summary>
+    /// A method, field, property, or event name.
+    /// </summary>
+    Member,
+
+    /// <summary>
+    /// Punctuation: parentheses, brackets, commas, and the <c>::</c> between a type and its member.
+    /// </summary>
+    Punctuation,
 }

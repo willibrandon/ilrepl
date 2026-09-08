@@ -24,6 +24,7 @@ public sealed class HostProcessEngine : IReplEngine
         _host = host;
         _stderr = stderr;
         Catalog = hello.Catalog;
+        Vocabulary = hello.Vocabulary;
         Status = hello.Status;
     }
 
@@ -31,7 +32,15 @@ public sealed class HostProcessEngine : IReplEngine
     public IReadOnlyList<CompletionItem> Catalog { get; }
 
     /// <inheritdoc />
+    public CilVocabulary Vocabulary { get; }
+
+    /// <inheritdoc />
     public SessionStatus Status { get; private set; }
+
+    /// <summary>
+    /// The host process's id, so a test can end it mid-block.
+    /// </summary>
+    internal int ProcessId => _process.Id;
 
     /// <summary>
     /// Starts the host and waits for its hello.
@@ -119,13 +128,25 @@ public sealed class HostProcessEngine : IReplEngine
     }
 
     /// <inheritdoc />
-    public async Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
+    public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(line);
+        return CallAsync(() => _host.HandleAsync(line, cancellationToken));
+    }
+
+    /// <inheritdoc />
+    public Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        return CallAsync(() => _host.RollbackAsync(mark, cancellationToken));
+    }
+
+    private async Task<HandleReply> CallAsync(Func<Task<HandleReply>> call)
+    {
         ObjectDisposedException.ThrowIf(_disposed, this);
         try
         {
-            var reply = await _host.HandleAsync(line, cancellationToken).ConfigureAwait(false);
+            var reply = await call().ConfigureAwait(false);
             Status = reply.Status;
             return reply;
         }

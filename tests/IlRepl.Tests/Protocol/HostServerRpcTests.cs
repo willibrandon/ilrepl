@@ -41,6 +41,12 @@ public sealed class HostServerRpcTests
             Assert.IsNull(hello.Status.OpenMethod);
             Assert.AreEqual(0, hello.Status.Methods);
             Assert.Contains(i => i.Name == ".method", hello.Catalog);
+            Assert.IsTrue(hello.Vocabulary.Opcodes.ContainsKey("ldc.i4"));
+            Assert.AreEqual(CilOperandKind.Integer, hello.Vocabulary.Opcodes["ldc.i4"]);
+            Assert.Contains(".show", hello.Vocabulary.Commands);
+            Assert.Contains(".locals", hello.Vocabulary.Directives);
+            Assert.Contains("instance", hello.Vocabulary.Keywords);
+            Assert.Contains("int32", hello.Vocabulary.Primitives);
         }
     }
 
@@ -81,7 +87,7 @@ public sealed class HostServerRpcTests
             var second = await proxy.HandleAsync("ldc.i4 2", TestContext.CancellationToken);
             Assert.HasCount(2, first.Lines);
             Assert.HasCount(2, second.Lines);
-            Assert.AreEqual("ldc.i4 2", second.Lines[0].Spans[^1].Text);
+            Assert.AreEqual("il[1]> ldc.i4 2", second.Lines[0].PlainText);
         }
     }
 
@@ -120,6 +126,39 @@ public sealed class HostServerRpcTests
             var run = await proxy.HandleAsync("ret", ct);
             Assert.Contains(l => l.Kind == LineKind.Result && l.PlainText.Contains("= 2 : int32", StringComparison.Ordinal), run.Lines);
             Assert.AreEqual(3, run.Status.CellNumber);
+        }
+    }
+
+    /// <summary>
+    /// A rollback crosses the wire with its mark and comes back with the note and the status.
+    /// </summary>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    public async Task Rollback_RoundTrips()
+    {
+        var (server, client, proxy) = Connect();
+        using (server)
+        using (client)
+        {
+            var hello = await proxy.HelloAsync(TestContext.CancellationToken);
+            var mark = hello.Status.Mark;
+            await proxy.HandleAsync(".method int32 F() {", TestContext.CancellationToken);
+            var refused = await proxy.HandleAsync("lcd.i4 1", TestContext.CancellationToken);
+            Assert.IsFalse(refused.Succeeded);
+            Assert.AreEqual(mark.Generation, refused.Status.Mark.Generation);
+            Assert.AreEqual(1, refused.Status.OpenDepth);
+
+            var reply = await proxy.RollbackAsync(mark, TestContext.CancellationToken);
+            Assert.IsTrue(reply.Succeeded);
+            Assert.Contains(l => l.Kind == LineKind.Info && l.PlainText.Contains("method F abandoned", StringComparison.Ordinal), reply.Lines);
+            Assert.IsNull(reply.Status.OpenMethod);
+            Assert.AreEqual(0, reply.Status.OpenDepth);
+
+            await proxy.HandleAsync("ldc.i4 1", TestContext.CancellationToken);
+            var ran = await proxy.HandleAsync("ret", TestContext.CancellationToken);
+            var stale = await proxy.RollbackAsync(mark, TestContext.CancellationToken);
+            Assert.IsFalse(stale.Succeeded);
+            Assert.AreNotEqual(mark.Generation, ran.Status.Mark.Generation);
         }
     }
 }

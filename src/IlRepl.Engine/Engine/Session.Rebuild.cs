@@ -319,6 +319,10 @@ public sealed partial class Session
 
             _cell = cell;
             _openType = null;
+
+            // Only now has anything changed that a rollback could not undo: a redefinition the
+            // cell refuses leaves the session, its generation included, as it was.
+            Generation++;
             foreach (var definition in released.Distinct())
             {
                 SessionAssemblies.Release(definition);
@@ -497,18 +501,19 @@ public sealed partial class Session
 
     private void ReplayFamilyLines(string headerLine, IReadOnlyList<string> lines)
     {
+        // Stored lines hold no comments; they are replayed as they are.
         _openType = null;
         _openMember = null;
         _openAccessor = null;
-        AddLine(headerLine);
+        AddLine(NormalizedLine.FromText(headerLine));
         foreach (var line in lines)
         {
-            AddLine(line);
+            AddLine(NormalizedLine.FromText(line));
         }
 
         if (_openType is not null)
         {
-            AddLine("}");
+            AddLine(NormalizedLine.FromText("}"));
         }
     }
 
@@ -518,15 +523,15 @@ public sealed partial class Session
         _openType = null;
         _openMember = null;
         _openAccessor = null;
-        AddLine(method.HeaderLine);
+        AddLine(NormalizedLine.FromText(method.HeaderLine));
         foreach (var line in method.BodyLines)
         {
-            AddLine(line);
+            AddLine(NormalizedLine.FromText(line));
         }
 
         if (_open is not null)
         {
-            AddLine("}");
+            AddLine(NormalizedLine.FromText("}"));
         }
     }
 }

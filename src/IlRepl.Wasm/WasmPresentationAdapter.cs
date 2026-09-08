@@ -45,7 +45,9 @@ public sealed partial class WasmPresentationAdapter : IHex1bTerminalPresentation
         SupportsAlternateScreen = true,
         SupportsBracketedPaste = true,
         SupportsSixel = false,
-        SupportsMouse = true,
+        // The page keeps the mouse for the terminal's own selection and copy; it sends wheel
+        // notches as the scroll reports a terminal would.
+        SupportsMouse = false,
     };
 
     /// <inheritdoc />

@@ -130,9 +130,9 @@ public sealed class LiveSessionTests
     }
 
     /// <summary>
-    /// Dragging across the transcript selects text in the app, Enter copies it, and the page puts
-    /// it on the clipboard. The prompt works again afterwards, the wheel scrolls the transcript,
-    /// and the caret is a blinking block.
+    /// In the browser, selection and copy are the terminal's own: a drag across the transcript
+    /// selects in the terminal and y, the desktop's yank, or Ctrl+C copies it, the app never
+    /// enters copy mode, the wheel still scrolls the transcript, and the caret is a blinking block.
     /// </summary>
     /// <param name="browser">The browser engine to drive.</param>
     /// <returns>A task that completes when the assertions have run.</returns>
@@ -140,7 +140,7 @@ public sealed class LiveSessionTests
     [DataRow("chromium")]
     [DataRow("webkit")]
     [Timeout(240_000, CooperativeCancellation = true)]
-    public async Task Drag_CopiesSelection_AndWheelScrolls(string browser)
+    public async Task Drag_SelectsInTheTerminal_AndWheelScrolls(string browser)
     {
         await using var launched = await LaunchAsync(browser);
         await using var context = await NewContextAsync(launched, clipboard: browser == "chromium");
@@ -152,7 +152,7 @@ public sealed class LiveSessionTests
         await TypeLineAsync(page, "ldc.i4 6");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("┊ [int32]", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
 
-        // Drag across the echoed line on the second row, then y yanks it and the status bar says so.
+        // Drag across the echoed line on the second row: the terminal selects it, the app does not.
         var screen = await page.Locator(".xterm-screen").BoundingBoxAsync();
         Assert.IsNotNull(screen);
         var size = await page.EvaluateAsync<int[]>("() => [window.ilreplTerminal.cols, window.ilreplTerminal.rows]");
@@ -161,36 +161,41 @@ public sealed class LiveSessionTests
         var y = screen.Y + (cellHeight * 1.5f);
         await page.Mouse.MoveAsync(screen.X + (cellWidth * 0.5f), y);
         await page.Mouse.DownAsync();
-        await page.Mouse.MoveAsync(screen.X + (cellWidth * 14.5f), y, new MouseMoveOptions { Steps = 8 });
+        await page.Mouse.MoveAsync(screen.X + (cellWidth * 30.5f), y, new MouseMoveOptions { Steps = 8 });
         await page.Mouse.UpAsync();
-        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("y yank", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
+        await page.WaitForFunctionAsync("() => window.ilreplTerminal.hasSelection()", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        Assert.Contains("ldc.i4 6", await page.EvaluateAsync<string>("() => window.ilreplTerminal.getSelection()"), "the terminal should hold the selection");
+        Assert.DoesNotContain("y yank", await page.Locator("#terminal").InnerTextAsync(), "the app should not enter copy mode");
+
+        // y copies the terminal's selection and clears it, as it yanks on the desktop, and no y
+        // reaches the prompt.
         await page.Keyboard.PressAsync("y");
-        await page.WaitForFunctionAsync("() => typeof window.ilreplLastCopy === 'string'", null, new PageWaitForFunctionOptions { Timeout = 30_000 });
-        var copied = await page.EvaluateAsync<string>("() => window.ilreplLastCopy");
-        Assert.Contains("ldc.i4 6", copied, "the selected row should be what was copied");
-        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("Yanked: il[1]> ldc.i4 6", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
-        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("y yank", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
+        await page.WaitForFunctionAsync("() => typeof window.ilreplLastCopy === 'string'", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        Assert.Contains("ldc.i4 6", await page.EvaluateAsync<string>("() => window.ilreplLastCopy"), "the selected row should be what was copied");
+        await page.WaitForFunctionAsync("() => !window.ilreplTerminal.hasSelection()", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        Assert.DoesNotContain("il[1]> y", await page.Locator("#terminal").InnerTextAsync(), "y should copy, not type");
+
+        // Ctrl+C does the same.
+        await page.EvaluateAsync("() => { window.ilreplLastCopy = null; }");
+        await page.Mouse.MoveAsync(screen.X + (cellWidth * 0.5f), y);
+        await page.Mouse.DownAsync();
+        await page.Mouse.MoveAsync(screen.X + (cellWidth * 30.5f), y, new MouseMoveOptions { Steps = 8 });
+        await page.Mouse.UpAsync();
+        await page.WaitForFunctionAsync("() => window.ilreplTerminal.hasSelection()", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        await page.Keyboard.PressAsync("Control+c");
+        await page.WaitForFunctionAsync("() => typeof window.ilreplLastCopy === 'string'", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        Assert.Contains("ldc.i4 6", await page.EvaluateAsync<string>("() => window.ilreplLastCopy"), "the selected row should be what was copied");
+        await page.WaitForFunctionAsync("() => !window.ilreplTerminal.hasSelection()", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
         if (browser == "chromium")
         {
             Assert.Contains("ldc.i4 6", await page.EvaluateAsync<string>("() => navigator.clipboard.readText()"), "the copy should be on the clipboard");
         }
 
-        // Shift+Up selects from the keyboard: the last line, then the one above; y yanks both.
-        await page.EvaluateAsync("() => { window.ilreplLastCopy = null; }");
+        // Shift+Up is the desktop's; here the prompt is untouched and typing goes on.
         await page.Keyboard.PressAsync("Shift+ArrowUp");
-        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("y yank", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
-        await page.Keyboard.PressAsync("Shift+ArrowUp");
-        await page.Keyboard.PressAsync("y");
-        await page.WaitForFunctionAsync("() => typeof window.ilreplLastCopy === 'string'", null, new PageWaitForFunctionOptions { Timeout = 30_000 });
-        var yanked = await page.EvaluateAsync<string>("() => window.ilreplLastCopy");
-        Assert.Contains("ldc.i4 6", yanked, "the echoed line should be in the yank");
-        Assert.Contains("[int32]", yanked, "the stack line should be in the yank");
-        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("Yanked 2 lines", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
-
-        // Copy mode has ended; a click and typing go to the prompt.
-        await ClickIntoTerminalAsync(page);
         await TypeLineAsync(page, "ret");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 6 : int32", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+        Assert.DoesNotContain("y yank", await page.Locator("#terminal").InnerTextAsync(), "the app should not enter copy mode");
 
         // The help is taller than the box; the wheel scrolls the transcript up and back down.
         await TypeLineAsync(page, ".help");
@@ -200,15 +205,56 @@ public sealed class LiveSessionTests
         await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("Ctrl+Q leaves.", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
         await page.Mouse.WheelAsync(0, 1000);
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("Ctrl+Q leaves.", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
+    }
 
-        // The scrollbar thumb in the last column can be dragged up as well.
-        var thumbX = screen.X + (cellWidth * (size[0] - 0.5f));
-        await page.Mouse.MoveAsync(thumbX, screen.Y + (cellHeight * (size[1] - 5.5f)));
+    /// <summary>
+    /// Without the clipboard API, as on plain http or with permission denied, a copy still lands
+    /// through the terminal's own copy handler, and a selection is cleared only once it has.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task Copy_WithoutClipboardApi_StillCopies(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        // The page script is served with the clipboard API taken away ahead of it.
+        await context.RouteAsync("**/try/main.js", async route =>
+        {
+            var response = await route.FetchAsync();
+            var body = await response.TextAsync();
+            await route.FulfillAsync(new RouteFulfillOptions
+            {
+                Response = response,
+                Body = "Object.defineProperty(navigator, 'clipboard', { value: undefined });\n" + body,
+                ContentType = "text/javascript",
+            });
+        });
+        var page = await OpenSessionAsync(context);
+        await TypeLineAsync(page, "ldc.i4 6");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("┊ [int32]", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+
+        var screen = await page.Locator(".xterm-screen").BoundingBoxAsync();
+        Assert.IsNotNull(screen);
+        var size = await page.EvaluateAsync<int[]>("() => [window.ilreplTerminal.cols, window.ilreplTerminal.rows]");
+        var cellWidth = screen.Width / size[0];
+        var cellHeight = screen.Height / size[1];
+        var y = screen.Y + (cellHeight * 1.5f);
+        await page.Mouse.MoveAsync(screen.X + (cellWidth * 0.5f), y);
         await page.Mouse.DownAsync();
-        await page.Mouse.MoveAsync(thumbX, screen.Y + (cellHeight * 1.5f), new MouseMoveOptions { Steps = 10 });
+        await page.Mouse.MoveAsync(screen.X + (cellWidth * 30.5f), y, new MouseMoveOptions { Steps = 8 });
         await page.Mouse.UpAsync();
-        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("Ctrl+Q leaves.", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
-        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("Type one IL instruction", new LocatorAssertionsToContainTextOptions { Timeout = 10_000 });
+        await page.WaitForFunctionAsync("() => window.ilreplTerminal.hasSelection()", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        await page.Keyboard.PressAsync("y");
+        await page.WaitForFunctionAsync("() => typeof window.ilreplLastCopy === 'string'", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        Assert.Contains("ldc.i4 6", await page.EvaluateAsync<string>("() => window.ilreplLastCopy"), "the selected row should be what was copied");
+        await page.WaitForFunctionAsync("() => !window.ilreplTerminal.hasSelection()", null, new PageWaitForFunctionOptions { Timeout = 10_000 });
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 6 : int32", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+        Assert.DoesNotContain("il[1]> y", await page.Locator("#terminal").InnerTextAsync(), "y should copy, not type");
     }
 
     /// <summary>
@@ -382,13 +428,15 @@ public sealed class LiveSessionTests
         var terminal = page.Locator("#terminal");
 
         await TypeLineAsync(page, ".method int32 Twice(int32 n) {");
-        await Assertions.Expect(terminal).ToContainTextAsync("method int32 Twice(int32 n)", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
-        await Assertions.Expect(terminal).ToContainTextAsync("method Twice", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await Assertions.Expect(terminal).ToContainTextAsync("...>", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await Assertions.Expect(terminal).ToContainTextAsync("Enter continues", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        Assert.DoesNotContain("\n  method int32 Twice(int32 n)", await BufferTextAsync(page), "nothing reaches the engine before the block closes");
         foreach (var line in new[] { "ldarg n", "ldc.i4 2", "mul", "ret", "}" })
         {
             await TypeLineAsync(page, line);
         }
 
+        await Assertions.Expect(terminal).ToContainTextAsync("method int32 Twice(int32 n)", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
         await Assertions.Expect(terminal).ToContainTextAsync("end of method Twice", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
         await Assertions.Expect(terminal).ToContainTextAsync("il[2]>", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
 
@@ -501,7 +549,7 @@ public sealed class LiveSessionTests
         var terminal = page.Locator("#terminal");
 
         await TypeLineAsync(page, ".class public sequential ansi sealed Point extends [System.Runtime]System.ValueType {");
-        await Assertions.Expect(terminal).ToContainTextAsync("struct Point", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await Assertions.Expect(terminal).ToContainTextAsync("Enter continues", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
         foreach (var line in new[]
         {
             ".field public int32 X", ".field public int32 Y", ".field public static int32 Made",
@@ -514,6 +562,7 @@ public sealed class LiveSessionTests
             await TypeLineAsync(page, line);
         }
 
+        await Assertions.Expect(terminal).ToContainTextAsync("struct Point", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
         await Assertions.Expect(terminal).ToContainTextAsync("end of struct Point", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
         await Assertions.Expect(terminal).ToContainTextAsync("il[2]>", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
 
@@ -564,4 +613,532 @@ public sealed class LiveSessionTests
         await TypeLineAsync(page, "ret");
         await Assertions.Expect(terminal).ToContainTextAsync("error: the JIT rejected the cell", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
     }
+
+    /// <summary>
+    /// A block typed in the browser continues at Enter until its braces balance, then goes by
+    /// line by line, and Up brings the whole block back as one entry.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_TypesBlockInBrowser(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+
+        await TypeLineAsync(page, ".method int32 Twice(int32 n) {");
+        await Assertions.Expect(terminal).ToContainTextAsync("editing 2 lines", options);
+        await TypeLineAsync(page, "ldarg n");
+        await TypeLineAsync(page, "ldc.i4 2");
+        await TypeLineAsync(page, "mul");
+        await TypeLineAsync(page, "ret");
+        await page.Keyboard.TypeAsync("}");
+        await Assertions.Expect(terminal).ToContainTextAsync("Enter sends 6 lines", options);
+        var rows = await BufferRowsAsync(page);
+        Assert.Contains(r => r.TrimEnd() == "  ...>   ldarg n", rows, "the continuation rows carry the indentation:\n" + string.Join('\n', rows));
+        Assert.Contains(r => r.TrimEnd() == "  ...> }", rows, "the close brace stepped out:\n" + string.Join('\n', rows));
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Twice", options);
+        await Assertions.Expect(terminal).ToContainTextAsync("il[2]>", options);
+
+        await page.Keyboard.PressAsync("ArrowUp");
+        await Assertions.Expect(terminal).ToContainTextAsync("editing 6 lines", options);
+        rows = await BufferRowsAsync(page);
+        Assert.Contains(r => r.TrimEnd() == "il[2]> .method int32 Twice(int32 n) {", rows, "the recalled block starts at the prompt:\n" + string.Join('\n', rows));
+        await page.Keyboard.PressAsync("Control+c");
+        await Assertions.Expect(terminal).Not.ToContainTextAsync("editing", options);
+
+        await TypeLineAsync(page, "ldc.i4 21");
+        await TypeLineAsync(page, "call int32 Twice(int32)");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(terminal).ToContainTextAsync("= 42 : int32", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+    }
+
+    /// <summary>
+    /// A paste lands in the editor and waits for Enter; nothing runs until then.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_PasteWaitsForEnter(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+
+        await PasteAsync(page, "ldc.i4 6\nldc.i4 7\nmul\nret\n");
+        await Assertions.Expect(terminal).ToContainTextAsync("Enter sends 4 lines", options);
+        var text = await BufferTextAsync(page);
+        Assert.DoesNotContain("┊ [int32]", text, "nothing runs on paste");
+        Assert.Contains("...> ret", text, "the pasted lines sit in the editor");
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("= 42 : int32", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+    }
+
+    /// <summary>
+    /// The copy button on the methods page yields text the session runs: pasted, it waits for
+    /// Enter, then Fib is defined and returns 55.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(300_000, CooperativeCancellation = true)]
+    public async Task Docs_FibSource_CopiesPastesAndRuns(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var docs = await context.NewPageAsync();
+        await docs.GotoAsync(s_site!.BaseUrl + "/usage/methods/");
+        var source = await docs.Locator("pre code").First.InnerTextAsync();
+        Assert.StartsWith(".method int32 Fib(int32 n) {", source.TrimStart(), "the first block on the page is the method's source");
+        Assert.DoesNotContain("il[", source, "the source block carries no prompts");
+        Assert.DoesNotContain("┊", source, "the source block carries no stack lines");
+
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 60_000 };
+        await PasteAsync(page, source.TrimEnd('\n') + "\n");
+        await Assertions.Expect(terminal).ToContainTextAsync("Enter sends 17 lines", options);
+        Assert.DoesNotContain("method int32 Fib(int32 n)", await BufferTextAsync(page), "nothing reaches the engine before Enter");
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Fib", options);
+        await TypeLineAsync(page, "ldc.i4 10");
+        await TypeLineAsync(page, "call int32 Fib(int32)");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(terminal).ToContainTextAsync("= 55 : int32", options);
+    }
+
+    /// <summary>
+    /// History survives a quit: the next session in the same runtime recalls the block.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(300_000, CooperativeCancellation = true)]
+    public async Task LiveSession_HistorySurvivesQuitRestart(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+
+        await TypeBlockAsync(page);
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Twice", options);
+        await page.Keyboard.PressAsync("Control+q");
+        await WaitForSessionAsync(page, 2, 60_000);
+        await page.Keyboard.PressAsync("ArrowUp");
+        await Assertions.Expect(terminal).ToContainTextAsync("editing 6 lines", options);
+        Assert.Contains("il[1]> .method int32 Twice(int32 n) {", await BufferTextAsync(page));
+        Assert.HasCount(1, await StoredHistoryAsync(page));
+    }
+
+    /// <summary>
+    /// History survives the restart button, which starts a new worker.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(300_000, CooperativeCancellation = true)]
+    public async Task LiveSession_HistorySurvivesRestartButton(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+
+        await TypeBlockAsync(page);
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Twice", options);
+        await page.WaitForFunctionAsync("() => new Promise(r => { const q = indexedDB.open('ilrepl', 1); q.onsuccess = () => { const c = q.result.transaction('history').objectStore('history').count(); c.onsuccess = () => { q.result.close(); r(c.result === 1); }; }; q.onerror = () => r(false); })", null, new PageWaitForFunctionOptions { Timeout = 30_000 });
+        await page.Locator("#session-restart").ClickAsync();
+        await WaitForSessionAsync(page, 2, 180_000);
+        await ClickIntoTerminalAsync(page);
+        await page.Keyboard.PressAsync("ArrowUp");
+        await Assertions.Expect(terminal).ToContainTextAsync("editing 6 lines", options);
+        Assert.Contains("il[1]> .method int32 Twice(int32 n) {", await BufferTextAsync(page));
+    }
+
+    /// <summary>
+    /// History survives a reload of the page.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(300_000, CooperativeCancellation = true)]
+    public async Task LiveSession_HistorySurvivesReload(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+
+        await TypeBlockAsync(page);
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Twice", options);
+        await page.WaitForFunctionAsync("() => new Promise(r => { const q = indexedDB.open('ilrepl', 1); q.onsuccess = () => { const c = q.result.transaction('history').objectStore('history').count(); c.onsuccess = () => { q.result.close(); r(c.result === 1); }; }; q.onerror = () => r(false); })", null, new PageWaitForFunctionOptions { Timeout = 30_000 });
+        await page.ReloadAsync();
+        await WaitForSessionAsync(page, 1, 180_000);
+        await ClickIntoTerminalAsync(page);
+        await page.Keyboard.PressAsync("ArrowUp");
+        await Assertions.Expect(terminal).ToContainTextAsync("editing 6 lines", options);
+        Assert.Contains("il[1]> .method int32 Twice(int32 n) {", await BufferTextAsync(page));
+    }
+
+    /// <summary>
+    /// A first visit has no history and says nothing about it.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_FirstVisit_NoHistoryNoMessage(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+
+        await page.Keyboard.PressAsync("ArrowUp");
+        await TypeLineAsync(page, "ldc.i4 6");
+        await Assertions.Expect(terminal).ToContainTextAsync("┊ [int32]", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        var text = await BufferTextAsync(page);
+        Assert.DoesNotContain("history is not being saved", text);
+        Assert.HasCount(1, await StoredHistoryAsync(page));
+    }
+
+    /// <summary>
+    /// Two tabs that both loaded the same history and each append end with both entries.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(400_000, CooperativeCancellation = true)]
+    public async Task LiveSession_TwoTabs_BothAppendsSurvive(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var first = await OpenSessionAsync(context);
+        var second = await OpenSessionAsync(context);
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+
+        await first.BringToFrontAsync();
+        await ClickIntoTerminalAsync(first);
+        await TypeBlockAsync(first);
+        await Assertions.Expect(first.Locator("#terminal")).ToContainTextAsync("end of method Twice", options);
+        await second.BringToFrontAsync();
+        await ClickIntoTerminalAsync(second);
+        await TypeLineAsync(second, "ldc.i4 6");
+        await Assertions.Expect(second.Locator("#terminal")).ToContainTextAsync("┊ [int32]", options);
+
+        var stored = await StoredHistoryAsync(second);
+        Assert.HasCount(2, stored, "both tabs' entries are records");
+        Assert.StartsWith(".method int32 Twice(int32 n) {", stored[0]);
+        Assert.AreEqual("ldc.i4 6", stored[1]);
+
+        foreach (var page in new[] { first, second })
+        {
+            await page.BringToFrontAsync();
+            await page.ReloadAsync();
+            await WaitForSessionAsync(page, 1, 180_000);
+            await ClickIntoTerminalAsync(page);
+            await page.Keyboard.PressAsync("ArrowUp");
+            await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("il[1]> ldc.i4 6", options);
+            await page.Keyboard.PressAsync("ArrowUp");
+            await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("editing 6 lines", options);
+        }
+    }
+
+    /// <summary>
+    /// The store keeps the newest thousand entries: an append beyond that drops the oldest.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(300_000, CooperativeCancellation = true)]
+    public async Task LiveSession_History_PrunesBeyondThousand(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await context.NewPageAsync();
+        await page.GotoAsync(s_site!.BaseUrl + "/try/");
+        await page.EvaluateAsync(@"() => new Promise((resolve, reject) => {
+            const q = indexedDB.open('ilrepl', 1);
+            q.onupgradeneeded = () => q.result.createObjectStore('history', { autoIncrement: true });
+            q.onsuccess = () => {
+                const tx = q.result.transaction('history', 'readwrite');
+                const store = tx.objectStore('history');
+                for (let i = 0; i < 1000; i++) store.add('ldc.i4 ' + i);
+                tx.oncomplete = () => { q.result.close(); resolve(); };
+                tx.onerror = () => reject(tx.error);
+            };
+            q.onerror = () => reject(q.error);
+        })");
+        await page.ReloadAsync();
+        await WaitForSessionAsync(page, 1, 180_000);
+        await ClickIntoTerminalAsync(page);
+        await TypeLineAsync(page, "nop");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("1 instruction", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await page.WaitForFunctionAsync("() => new Promise(r => { const q = indexedDB.open('ilrepl', 1); q.onsuccess = () => { const c = q.result.transaction('history').objectStore('history').count(); c.onsuccess = () => { q.result.close(); r(c.result === 1000); }; }; q.onerror = () => r(false); })", null, new PageWaitForFunctionOptions { Timeout = 30_000 });
+        var stored = await StoredHistoryAsync(page);
+        Assert.HasCount(1000, stored);
+        Assert.AreEqual("ldc.i4 1", stored[0], "the oldest entry is gone");
+        Assert.AreEqual("nop", stored[^1], "the new entry is the newest");
+    }
+
+    /// <summary>
+    /// When the database is not available the session says so once and goes on.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_StorageUnavailable_PrintsLine(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        // The worker's interop module is served with the database taken away ahead of it, so the
+        // real load path is what rejects.
+        await context.RouteAsync("**/try/interop.js", async route =>
+        {
+            var response = await route.FetchAsync();
+            var body = await response.TextAsync();
+            await route.FulfillAsync(new RouteFulfillOptions
+            {
+                Response = response,
+                Body = "Object.defineProperty(self, 'indexedDB', { value: undefined });\n" + body,
+                ContentType = "text/javascript",
+            });
+        });
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+
+        await Assertions.Expect(terminal).ToContainTextAsync("history is not being saved: IndexedDB is not available", options);
+        await TypeLineAsync(page, "ldc.i4 6");
+        await Assertions.Expect(terminal).ToContainTextAsync("┊ [int32]", options);
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(terminal).ToContainTextAsync("= 6 : int32", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+        var text = await BufferTextAsync(page);
+        Assert.AreEqual(1, text.Split("history is not being saved").Length - 1, "the problem is reported once");
+        await page.Keyboard.PressAsync("ArrowUp");
+        await Assertions.Expect(terminal).ToContainTextAsync("il[2]> ret", options);
+    }
+
+    /// <summary>
+    /// A long block shows its progress while it goes by, and a viewport change during it lays
+    /// the status bar out again at the new width.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(400_000, CooperativeCancellation = true)]
+    public async Task LiveSession_WhileSending_ShowsProgressAndRepaints(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 60_000 };
+
+        await PasteAsync(page, LongMethod(3002));
+        await Assertions.Expect(terminal).ToContainTextAsync("Enter sends 3002 lines", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("sending", options);
+        await Assertions.Expect(terminal).ToContainTextAsync("Ctrl+C cancels", options);
+        var before = await page.EvaluateAsync<int>("() => window.ilreplTerminal.cols");
+        await page.SetViewportSizeAsync(900, 1000);
+        await page.WaitForFunctionAsync($"() => window.ilreplTerminal.cols < {before}", null, new PageWaitForFunctionOptions { Timeout = 30_000 });
+        await Assertions.Expect(terminal).ToContainTextAsync("sending", options);
+        var rows = await BufferRowsAsync(page);
+        Assert.Contains("sending", rows[^1], "the status bar is on the last row at the new width");
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Long", new LocatorAssertionsToContainTextOptions { Timeout = 180_000 });
+        await Assertions.Expect(terminal).Not.ToContainTextAsync("sending", options);
+    }
+
+    /// <summary>
+    /// Ctrl+C during a long block stops it, withdraws it, and leaves its text in the editor.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(400_000, CooperativeCancellation = true)]
+    public async Task LiveSession_WhileSending_CtrlCStopsWithRemainderInEditor(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 60_000 };
+
+        await PasteAsync(page, LongMethod(3002));
+        await Assertions.Expect(terminal).ToContainTextAsync("Enter sends 3002 lines", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("sending", options);
+        await page.Keyboard.PressAsync("Control+c");
+        await Assertions.Expect(terminal).ToContainTextAsync("method Long abandoned; the block is back in the editor", options);
+        await Assertions.Expect(terminal).ToContainTextAsync("editing 3002 lines", options);
+        Assert.DoesNotContain("end of method Long", await BufferTextAsync(page));
+        await page.Keyboard.PressAsync("Control+c");
+        await Assertions.Expect(terminal).Not.ToContainTextAsync("editing", options);
+        await TypeLineAsync(page, "ldc.i4 6");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(terminal).ToContainTextAsync("= 6 : int32", options);
+    }
+
+    /// <summary>
+    /// Enter during a long block runs nothing of its own: the block cannot go twice, and the
+    /// blank line waits its turn.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(400_000, CooperativeCancellation = true)]
+    public async Task LiveSession_WhileSending_ExtraEnterRunsNothing(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 60_000 };
+
+        await PasteAsync(page, LongMethod(3002));
+        await Assertions.Expect(terminal).ToContainTextAsync("Enter sends 3002 lines", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("sending", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Long", new LocatorAssertionsToContainTextOptions { Timeout = 180_000 });
+        await Assertions.Expect(terminal).Not.ToContainTextAsync("sending", options);
+        var text = await BufferTextAsync(page);
+        Assert.AreEqual(1, text.Split("end of method Long").Length - 1, "the block went once");
+        Assert.DoesNotContain("error", text);
+        await TypeLineAsync(page, "ldc.i4 6");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(terminal).ToContainTextAsync("= 6 : int32", options);
+    }
+
+    /// <summary>
+    /// A sixty-line method pasted into the browser goes by in well under ten seconds.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(300_000, CooperativeCancellation = true)]
+    public async Task LiveSession_Pastes60LineMethod_CompletesWithinTenSeconds(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+
+        await PasteAsync(page, LongMethod(60));
+        await Assertions.Expect(terminal).ToContainTextAsync("Enter sends 60 lines", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Long", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+        watch.Stop();
+        TestContext.WriteLine($"60 lines in {browser} in {watch.Elapsed.TotalSeconds:F2} s");
+        Assert.IsLessThan(TimeSpan.FromSeconds(10), watch.Elapsed, $"took {watch.Elapsed}");
+    }
+
+    // A method of exactly this many lines: the header, nops, ret, and the close.
+    /// <summary>
+    /// An entry that holds a NUL character comes back as one entry: the store's entries cross
+    /// to the session as JSON, not joined on a sentinel.
+    /// </summary>
+    /// <param name="browser">The browser engine to drive.</param>
+    /// <returns>A task that completes when the assertions have run.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(300_000, CooperativeCancellation = true)]
+    public async Task LiveSession_History_EntryWithNul_StaysOneEntry(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await context.NewPageAsync();
+        await page.GotoAsync(s_site!.BaseUrl + "/try/");
+        await page.EvaluateAsync(@"() => new Promise((resolve, reject) => {
+            const q = indexedDB.open('ilrepl', 1);
+            q.onupgradeneeded = () => q.result.createObjectStore('history', { autoIncrement: true });
+            q.onsuccess = () => {
+                const tx = q.result.transaction('history', 'readwrite');
+                const store = tx.objectStore('history');
+                store.add('nop');
+                store.add('a\u0000b');
+                tx.oncomplete = () => { q.result.close(); resolve(); };
+                tx.onerror = () => reject(tx.error);
+            };
+            q.onerror = () => reject(q.error);
+        })");
+        await page.ReloadAsync();
+        await WaitForSessionAsync(page, 1, 180_000);
+        await ClickIntoTerminalAsync(page);
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+        await page.Keyboard.PressAsync("ArrowUp");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("il[1]> a", options);
+        await page.Keyboard.PressAsync("ArrowUp");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("il[1]> nop", options);
+        await page.Keyboard.PressAsync("ArrowUp");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("il[1]> nop", options);
+        var rows = await BufferRowsAsync(page);
+        Assert.Contains(r => r.TrimEnd() == "il[1]> nop", rows, "the oldest entry is nop, so the NUL entry was one entry, not two:\n" + string.Join('\n', rows));
+    }
+
+    private static string LongMethod(int lines) => ".method void Long() {\n" + string.Concat(Enumerable.Repeat("  nop\n", lines - 3)) + "  ret\n}\n";
+
+    private static async Task TypeBlockAsync(IPage page)
+    {
+        foreach (var line in new[] { ".method int32 Twice(int32 n) {", "ldarg n", "ldc.i4 2", "mul", "ret", "}" })
+        {
+            await TypeLineAsync(page, line);
+        }
+    }
+
+    // A paste reaches xterm the way the browser delivers one: as a paste event on its textarea,
+    // which xterm wraps in the bracketed paste markers the app asked for.
+    private static async Task PasteAsync(IPage page, string text)
+    {
+        await page.EvaluateAsync(
+            "text => { const t = document.querySelector('.xterm-helper-textarea'); const dt = new DataTransfer(); dt.setData('text/plain', text); t.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); }",
+            text);
+    }
+
+    private static Task<string[]> StoredHistoryAsync(IPage page) => page.EvaluateAsync<string[]>(
+        "() => new Promise((resolve, reject) => { const q = indexedDB.open('ilrepl', 1); q.onupgradeneeded = () => q.result.createObjectStore('history', { autoIncrement: true }); q.onsuccess = () => { const r = q.result.transaction('history').objectStore('history').getAll(); r.onsuccess = () => { q.result.close(); resolve(r.result); }; r.onerror = () => reject(r.error); }; q.onerror = () => reject(q.error); })");
 }

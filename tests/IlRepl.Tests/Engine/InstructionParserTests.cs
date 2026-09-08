@@ -22,6 +22,19 @@ public sealed class InstructionParserTests
     }
 
     /// <summary>
+    /// A quoted name keeps its slashes, a comment needs no space before it, and a block comment
+    /// with no close runs to the end of the line.
+    /// </summary>
+    [TestMethod]
+    public void StripComments_QuotedNamesAndUnspacedComments()
+    {
+        Assert.AreEqual("ldarg 'a//b' ", InstructionParser.StripComments("ldarg 'a//b' // c"));
+        Assert.AreEqual("ldc.i4.1", InstructionParser.StripComments("ldc.i4.1// comment"));
+        Assert.AreEqual("ldc.i4.2", InstructionParser.StripComments("ldc.i4.2/* comment */"));
+        Assert.AreEqual("add ", InstructionParser.StripComments("add /* open"));
+    }
+
+    /// <summary>
     /// Leading labels are split off and member separators are left alone.
     /// </summary>
     [TestMethod]

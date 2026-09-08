@@ -12,6 +12,11 @@ public static class TypeNameFormatter
     /// (dotnet/runtime, src/coreclr/inc/il_kywd.h) and every opcode name and alias
     /// (src/coreclr/inc/opcode.def). A name in this set must be quoted to be read as a name.
     /// </summary>
+    /// <summary>
+    /// Every ILAsm keyword, the opcode mnemonics included, as il_kywd.h lists them.
+    /// </summary>
+    public static IReadOnlyCollection<string> IlAsmKeywordNames => IlAsmKeywords;
+
     private static readonly HashSet<string> IlAsmKeywords = new(StringComparer.Ordinal)
     {
         "abstract", "add", "aggressiveinlining", "aggressiveoptimization", "algorithm", "alignment", "amd64", "and",

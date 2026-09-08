@@ -2,6 +2,7 @@ using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
 using IlRepl.Protocol;
+using IlRepl.Repl;
 using IlRepl.Tui;
 
 namespace IlRepl.Tests.Tui;
@@ -329,11 +330,107 @@ public sealed class IlReplAppTests
         await auto.WaitUntilNoTextAsync("y yank");
         await auto.WaitUntilNoTextAsync("Yanked:", timeout: TimeSpan.FromSeconds(5));
 
-        Assert.Contains("\x1b[1 q", recorder.Output, "the prompt caret should be a blinking block");
-        Assert.DoesNotContain("\x1b[6 q", recorder.Output, "no bar caret should reach the terminal");
+        // The prompt paints its own caret cell in the prompt colour; no caret shape is ever asked for.
+        Assert.DoesNotContain("\x1b[1 q", recorder.Output, "no caret shape should reach the terminal");
+        Assert.DoesNotContain("\x1b[5 q", recorder.Output, "no caret shape should reach the terminal");
+        Assert.DoesNotContain("\x1b[6 q", recorder.Output, "no caret shape should reach the terminal");
+        Assert.Contains("48;2;97;175;239", recorder.Output, "the caret cell should be painted in the prompt colour");
 
         // Copy mode has ended; typing goes to the prompt again.
         await auto.TypeAsync("ret", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("= 6 : int32");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// Where the terminal selects and copies itself, as in the browser, the app stays out of it:
+    /// a drag and Shift+Up select nothing, Ctrl+C on a buffer selection clears the buffer rather
+    /// than copying, the hints do not offer Shift+Up, and the wheel still scrolls the transcript.
+    /// </summary>
+    [TestMethod]
+    public async Task OwnSelectionOff_LeavesSelectionToTheTerminal()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var recorder = new PresentationRecorder();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, ownSelection: false)
+            .AddPresentationFilter(recorder)
+            .WithHeadless()
+            .WithDimensions(100, 30)
+            .WithMouse()
+            .Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.WaitUntilTextAsync("Tab complete │ Ctrl+Q quit");
+        await AppTest.TypeLinesAsync(auto, ["ldc.i4 6"], ct);
+        await auto.WaitUntilTextAsync("[int32]");
+
+        await auto.DragAsync(0, 1, 14, 1, ct: ct);
+        await auto.Shift().KeyAsync(Hex1bKey.UpArrow, ct: ct);
+        await auto.TypeAsync("nop", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop" && !s.ContainsText("y yank"), description: "nothing selects; typing goes to the prompt");
+        await auto.Shift().KeyAsync(Hex1bKey.LeftArrow, ct: ct);
+        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "Ctrl+C on a selection clears the buffer");
+        Assert.DoesNotContain("\x1b]52;", recorder.Output, "nothing is copied through the terminal");
+
+        await AppTest.TypeLinesAsync(auto, [".help"], ct);
+        await auto.WaitUntilTextAsync("Ctrl+Q leaves.");
+        await auto.MouseMoveToAsync(40, 5, ct: ct);
+        await auto.ScrollUpAsync(ct: ct);
+        await auto.WaitUntilNoTextAsync("Ctrl+Q leaves.");
+        await auto.ScrollDownAsync(ct: ct);
+        await auto.WaitUntilTextAsync("Ctrl+Q leaves.");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// A click ends a transcript selection as Escape does, whether it lands on the transcript or
+    /// on the prompt, and so does typing; the prompt is in charge again at once and a later drag
+    /// selects afresh.
+    /// </summary>
+    [TestMethod]
+    public async Task Click_EndsTranscriptSelection()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        await using var terminal = AppTest.Build(engine, transcript, configure: b => b.WithMouse());
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto, ["ldc.i4 6"], ct);
+        await auto.WaitUntilTextAsync("[int32]");
+
+        // A drag selects the echoed line on the second row; a click on the transcript ends it.
+        await auto.DragAsync(0, 1, 14, 1, ct: ct);
+        await auto.WaitUntilTextAsync("y yank");
+        await auto.ClickAtAsync(5, 1, ct: ct);
+        await auto.WaitUntilNoTextAsync("y yank");
+
+        // Selected again, a click on the prompt ends it as well.
+        await auto.DragAsync(0, 1, 14, 1, ct: ct);
+        await auto.WaitUntilTextAsync("y yank");
+        var promptRow = -1;
+        await auto.WaitUntilAsync(s => (promptRow = AppTest.PromptTop(s)) >= 0, description: "the prompt row");
+        await auto.ClickAtAsync(12, promptRow, ct: ct);
+        await auto.WaitUntilNoTextAsync("y yank");
+
+        // Selected from the keyboard, typing ends it and the text lands in the prompt.
+        await auto.Shift().KeyAsync(Hex1bKey.UpArrow, ct: ct);
+        await auto.WaitUntilTextAsync("y yank");
+        await auto.TypeAsync("ret", ct: ct);
+        await auto.WaitUntilNoTextAsync("y yank");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ret", description: "the typed text is in the prompt");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("= 6 : int32");
 
@@ -486,10 +583,13 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// A method block shows its fact in the status bar, closes into a new cell, and is callable.
+    /// A method block stays in the editor until its closing brace: Enter continues it with the
+    /// next line indented, the status bar counts the lines, and nothing reaches the engine. The
+    /// brace sends the block line by line, every line keeps its echo and its stack line, the
+    /// method fact shows only while the engine has it open, and the method is callable after.
     /// </summary>
     [TestMethod]
-    public async Task TypeMethod_ShowsMethodFactAndCallsIt()
+    public async Task TypeMethod_EnterContinuesAndCloseSubmits()
     {
         var ct = TestContext.CancellationToken;
         await using var engine = await HostPaths.StartEngineAsync(ct);
@@ -505,12 +605,10 @@ public sealed class IlReplAppTests
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync(".method int32 Twice(int32 n) {", ct: ct);
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilTextAsync("method int32 Twice(int32 n)");
-        await auto.WaitUntilTextAsync("method Twice │ stack []");
-        using (var snapshot = auto.CreateSnapshot())
-        {
-            Assert.IsTrue(snapshot.HasForegroundColor(SpanPalette.Color(SpanStyle.Label)), "the method fact should use the label color");
-        }
+        await auto.WaitUntilTextAsync("  ...> ");
+        await auto.WaitUntilTextAsync("editing 2 lines");
+        await auto.WaitUntilTextAsync("Enter continues");
+        Assert.DoesNotContain(l => l.PlainText.Contains("Twice", StringComparison.Ordinal), transcript.Lines, "nothing goes to the engine before the block closes");
 
         foreach (var line in new[] { "ldarg n", "ldc.i4 2", "mul", "ret" })
         {
@@ -518,12 +616,21 @@ public sealed class IlReplAppTests
             await auto.EnterAsync(ct: ct);
         }
 
-        await auto.WaitUntilTextAsync("method Twice │ stack [] │ no locals │ 4 instructions");
+        await auto.WaitUntilTextAsync("editing 6 lines");
         await auto.TypeAsync("}", ct: ct);
+        await auto.WaitUntilTextAsync("Enter sends 6 lines");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("end of method Twice");
         await auto.WaitUntilTextAsync("il[2]>");
         await auto.WaitUntilNoTextAsync("method Twice │");
+        await auto.WaitUntilNoTextAsync("editing");
+
+        // Every line went by in order, each with its echo and its stack line.
+        var echoes = transcript.Lines.Where(l => l.Kind == LineKind.Input).Select(l => l.PlainText).ToList();
+        Assert.AreSequenceEqual(["il[1]> .method int32 Twice(int32 n) {", "il[1]>   ldarg n", "il[1]>   ldc.i4 2", "il[1]>   mul", "il[1]>   ret", "il[1]> }"], echoes);
+        var afterLdarg = transcript.Lines.SkipWhile(l => l.PlainText != "il[1]>   ldarg n").Skip(1).First();
+        Assert.AreEqual(LineKind.Stack, afterLdarg.Kind);
+        Assert.Contains("[int32]", afterLdarg.PlainText);
 
         await auto.TypeAsync("ldc.i4 21", ct: ct);
         await auto.EnterAsync(ct: ct);
@@ -540,10 +647,12 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// A class block shows its fact ahead of the method fact, and closing it starts a new cell.
+    /// A class with a method inside is one block: the nested braces indent as they open, the
+    /// block stays in the editor until the outermost brace, and then it goes line by line, the
+    /// class ahead of its method.
     /// </summary>
     [TestMethod]
-    public async Task TypeClass_ShowsClassFactThenMethodFact()
+    public async Task TypeClass_NestedBlockIsOneSubmission()
     {
         var ct = TestContext.CancellationToken;
         await using var engine = await HostPaths.StartEngineAsync(ct);
@@ -559,31 +668,30 @@ public sealed class IlReplAppTests
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync(".class public Counter {", ct: ct);
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilTextAsync("class Counter │ stack []");
-        using (var snapshot = auto.CreateSnapshot())
-        {
-            Assert.IsTrue(snapshot.HasForegroundColor(SpanPalette.Color(SpanStyle.Type)), "the class fact should use the type color");
-        }
-
         await auto.TypeAsync(".field public static int32 Count", ct: ct);
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilTextAsync("field public static int32 Count");
         await auto.TypeAsync(".method public static int32 Next() {", ct: ct);
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilTextAsync("class Counter │ method Next │ stack []");
+        await auto.WaitUntilTextAsync("editing 4 lines");
+        Assert.IsEmpty(transcript.Lines.Where(l => l.PlainText.Contains("Counter", StringComparison.Ordinal)), "nothing goes to the engine before the block closes");
         foreach (var line in new[] { "ldsfld int32 Counter::Count", "ret", "}" })
         {
             await auto.TypeAsync(line, ct: ct);
             await auto.EnterAsync(ct: ct);
         }
 
-        await auto.WaitUntilTextAsync("end of method Next");
-        await auto.WaitUntilNoTextAsync("method Next │");
+        await auto.WaitUntilTextAsync("editing 7 lines");
+        await auto.WaitUntilTextAsync("Enter continues");
         await auto.TypeAsync("}", ct: ct);
+        await auto.WaitUntilTextAsync("Enter sends 7 lines");
         await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("end of method Next");
         await auto.WaitUntilTextAsync("end of class Counter");
         await auto.WaitUntilTextAsync("il[2]>");
         await auto.WaitUntilNoTextAsync("class Counter │");
+
+        var echoes = transcript.Lines.Where(l => l.Kind == LineKind.Input).Select(l => l.PlainText).ToList();
+        Assert.AreSequenceEqual(["il[1]> .class public Counter {", "il[1]>   .field public static int32 Count", "il[1]>   .method public static int32 Next() {", "il[1]>     ldsfld int32 Counter::Count", "il[1]>     ret", "il[1]>   }", "il[1]> }"], echoes);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
