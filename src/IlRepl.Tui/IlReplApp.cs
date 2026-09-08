@@ -554,6 +554,15 @@ public static class IlReplApp
                             b.Drag(MouseButton.Left).Ctrl().Action((x, y) => SelectionDrag(app, SelectionMode.Line), "Select lines");
                             b.Drag(MouseButton.Left).Alt().Action((x, y) => SelectionDrag(app, SelectionMode.Block), "Select a block");
                         }
+                        else
+                        {
+                            // Without a selection to start, a press still hands focus back at once.
+                            b.Drag(MouseButton.Left).Action((x, y) =>
+                            {
+                                app.FocusWhere(node => node is EditorNode);
+                                return new DragHandler();
+                            }, "Keep typing at the prompt");
+                        }
 
                         b.Mouse(MouseButton.ScrollUp).Action(c => Scroll(app, -3, c), "Scroll up");
                         b.Mouse(MouseButton.ScrollDown).Action(c => Scroll(app, 3, c), "Scroll down");
