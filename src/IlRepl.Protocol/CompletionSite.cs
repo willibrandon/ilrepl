@@ -55,6 +55,11 @@ public sealed record CompletionSite(
     public bool IsOperand => Kind != CompletionSiteKind.None;
 
     /// <summary>
+    /// Whether the caret names a function pointer's return type, even inside an outer parameter declaration.
+    /// </summary>
+    public bool IsFunctionPointerReturn { get; init; }
+
+    /// <summary>
     /// The offset just past the range.
     /// </summary>
     public int ReplaceEnd => ReplaceStart + ReplaceLength;

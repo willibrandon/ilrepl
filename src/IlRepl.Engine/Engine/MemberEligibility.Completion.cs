@@ -106,7 +106,8 @@ public static partial class MemberEligibility
             return false;
         }
 
-        if (site.Owner is ".locals" or ".args" && !hasElementSuffix && SymbolIdentity.Equal(type, TypeSymbol.Void))
+        var variableSite = site.Owner is ".locals" or ".args" || site.Owner == ".method" && site.ArgumentIndex >= 0;
+        if (variableSite && !site.IsFunctionPointerReturn && !hasElementSuffix && !IsVariableType(type))
         {
             return false;
         }
@@ -223,6 +224,14 @@ public static partial class MemberEligibility
         TypeSymbolKind.ByRef or TypeSymbolKind.Pinned => false,
         TypeSymbolKind.Pointer => IsPointerTarget(type.Element!),
         _ => !type.IsByRefLike && type.Keyword is not ("void" or "typedref"),
+    };
+
+    private static bool IsVariableType(TypeSymbol type) => type.Kind switch
+    {
+        TypeSymbolKind.Modified or TypeSymbolKind.ByRef or TypeSymbolKind.Pinned => IsVariableType(type.Element!),
+        TypeSymbolKind.Array or TypeSymbolKind.SzArray => IsArrayElement(type.Element!),
+        TypeSymbolKind.Pointer => IsPointerTarget(type.Element!),
+        _ => !SymbolIdentity.Equal(type, TypeSymbol.Void),
     };
 
     private static bool IsPointerTarget(TypeSymbol type) => type.Kind switch

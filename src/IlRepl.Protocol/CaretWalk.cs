@@ -719,7 +719,10 @@ internal sealed class CaretWalk
             var returnEnd = _r.ReadType(k);
             if (TypeAfter(k, returnEnd, owner, complete) is { } returnSite)
             {
-                return returnSite;
+                return returnSite with
+                {
+                    IsFunctionPointerReturn = returnSite.IsFunctionPointerReturn || returnSite.ArgumentIndex < 0,
+                };
             }
 
             var star = _r.IsPunct(returnEnd, '*') ? returnEnd + 1 : returnEnd;

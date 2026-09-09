@@ -5,6 +5,36 @@ namespace IlRepl.Docs.Tests;
 public sealed partial class LiveSessionTests
 {
     /// <summary>
+    /// Removing a pointer suffix excludes void from an unfinished parameter, and restoring it yields executable IL.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_VoidParameterCompletion_RequiresPointer(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        await PasteAsync(page, ".method void M(vo*");
+        await page.Keyboard.PressAsync("ArrowLeft");
+        await CompletionAtCaretAsync(page, "il[1]> .method void M(vo", "❯ void");
+        await page.Keyboard.PressAsync("Delete");
+        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ void");
+        await page.Keyboard.TypeAsync("*");
+        await page.Keyboard.PressAsync("ArrowLeft");
+        await CompletionAtCaretAsync(page, "il[1]> .method void M(vo", "❯ void");
+        await page.Keyboard.PressAsync("Tab");
+        await page.Keyboard.PressAsync("End");
+        await PromptAtCaretAsync(page, "il[1]> .method void M(void*");
+        await PasteAsync(page, " value) {\nret\n}\nldc.i4.0\nconv.u\ncall M\nldc.i4.7\nret");
+        await page.Keyboard.PressAsync("Enter");
+        await ExpectCompletionAsync(page, "= 7 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// Jump completion excludes incompatible overloads before accepting and running the matching target.
     /// </summary>
     /// <param name="browser">The browser engine.</param>

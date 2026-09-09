@@ -25,6 +25,16 @@ public sealed partial class OperandCompleter
 
             var original = query.Identity.Document.Lines[query.Identity.Document.Line];
             var line = original[..site.ReplaceStart] + insertion + original[site.ReplaceEnd..];
+            if (candidate.Type is not null && site.Kind == CompletionSiteKind.Type && site.Owner is ".locals" or ".args" or ".method")
+            {
+                var position = site.ReplaceStart;
+                var declaredType = SymbolBinder.BindType(CilSyntaxParser.ParseTypeAt(line, ref position), scope).Type;
+                if (!MemberEligibility.Admits(declaredType, site, query.View))
+                {
+                    return null;
+                }
+            }
+
             var continues = candidate.Type is not null && candidate.Slot < 0
                 && site.Kind == CompletionSiteKind.MemberHead && !site.NextIsDoubleColon;
             BoundInstruction? instruction = null;
