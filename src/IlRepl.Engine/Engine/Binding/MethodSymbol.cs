@@ -1,0 +1,179 @@
+using System.Reflection;
+
+namespace IlRepl.Engine.Binding;
+
+/// <summary>
+/// A method or constructor: its definition, the type it is referenced on, its instantiation, and
+/// its signature as that reference sees it. Two symbols are equal when they name the same member
+/// on the same declaring construction with the same generic arguments.
+/// </summary>
+public sealed class MethodSymbol : IEquatable<MethodSymbol>
+{
+    /// <summary>
+    /// The definition's identity.
+    /// </summary>
+    public required DefinitionId Definition { get; init; }
+
+    /// <summary>
+    /// Where the member comes from.
+    /// </summary>
+    public required MethodSymbolSource Source { get; init; }
+
+    /// <summary>
+    /// The type the member is referenced on, constructed when the reference names an instantiation; null for a session method.
+    /// </summary>
+    public TypeSymbol? DeclaringType { get; init; }
+
+    /// <summary>
+    /// The member name; <c>.ctor</c> or <c>.cctor</c> for constructors.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// The method attributes.
+    /// </summary>
+    public MethodAttributes Attributes { get; init; }
+
+    /// <summary>
+    /// The implementation attributes.
+    /// </summary>
+    public MethodImplAttributes ImplAttributes { get; init; }
+
+    /// <summary>
+    /// The calling convention.
+    /// </summary>
+    public CallingConventions CallingConvention { get; init; } = CallingConventions.Standard;
+
+    /// <summary>
+    /// The return type, with the declaring construction's and the instantiation's arguments substituted.
+    /// </summary>
+    public required TypeSymbol ReturnType { get; init; }
+
+    /// <summary>
+    /// The fixed parameters, substituted the same way.
+    /// </summary>
+    public IReadOnlyList<ParameterSymbol> Parameters { get; init; } = [];
+
+    /// <summary>
+    /// The generic parameters the definition declares.
+    /// </summary>
+    public IReadOnlyList<GenericParameterSymbol> GenericParameters { get; init; } = [];
+
+    /// <summary>
+    /// The generic arguments of an instantiated generic method; empty for a definition or a non-generic method.
+    /// </summary>
+    public IReadOnlyList<TypeSymbol> GenericArguments { get; init; } = [];
+
+    /// <summary>
+    /// The <c>modreq</c> types on the return type.
+    /// </summary>
+    public IReadOnlyList<TypeSymbol> ReturnRequiredModifiers { get; init; } = [];
+
+    /// <summary>
+    /// The <c>modopt</c> types on the return type.
+    /// </summary>
+    public IReadOnlyList<TypeSymbol> ReturnOptionalModifiers { get; init; } = [];
+
+    /// <summary>
+    /// True when a declared member's header has been seen; false for a forward reference.
+    /// </summary>
+    public bool IsDeclared { get; init; } = true;
+
+    /// <summary>
+    /// True when the method has a body a listing can read: not abstract, not a P/Invoke, not
+    /// runtime-provided or an internal call.
+    /// </summary>
+    public bool HasIlBody => !IsAbstract
+        && !Attributes.HasFlag(MethodAttributes.PinvokeImpl)
+        && (ImplAttributes & MethodImplAttributes.CodeTypeMask) == MethodImplAttributes.IL
+        && !ImplAttributes.HasFlag(MethodImplAttributes.InternalCall);
+
+    /// <summary>
+    /// True for a static member.
+    /// </summary>
+    public bool IsStatic => Source == MethodSymbolSource.Session || Attributes.HasFlag(MethodAttributes.Static);
+
+    /// <summary>
+    /// True for a virtual member.
+    /// </summary>
+    public bool IsVirtual => Attributes.HasFlag(MethodAttributes.Virtual);
+
+    /// <summary>
+    /// True for an abstract member.
+    /// </summary>
+    public bool IsAbstract => Attributes.HasFlag(MethodAttributes.Abstract);
+
+    /// <summary>
+    /// True for a public member.
+    /// </summary>
+    public bool IsPublic => (Attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public;
+
+    /// <summary>
+    /// True for a constructor or a type initializer.
+    /// </summary>
+    public bool IsConstructor => Name is ".ctor" or ".cctor";
+
+    /// <summary>
+    /// True for a vararg member.
+    /// </summary>
+    public bool IsVarArg => (CallingConvention & CallingConventions.VarArgs) != 0;
+
+    /// <summary>
+    /// True for a generic method definition that has not been instantiated.
+    /// </summary>
+    public bool IsGenericDefinition => GenericParameters.Count > 0 && GenericArguments.Count == 0;
+
+    /// <summary>
+    /// The number of generic parameters.
+    /// </summary>
+    public int Arity => GenericParameters.Count;
+
+    /// <summary>
+    /// The parameter types in order.
+    /// </summary>
+    public IReadOnlyList<TypeSymbol> ParameterTypes => [.. Parameters.Select(p => p.Type)];
+
+    /// <summary>
+    /// A copy with a different declaring construction and signature, for a member seen through an instantiation.
+    /// </summary>
+    /// <param name="declaringType">The declaring construction.</param>
+    /// <param name="returnType">The substituted return type.</param>
+    /// <param name="parameters">The substituted parameters.</param>
+    /// <param name="genericArguments">The instantiation, or empty.</param>
+    /// <returns>The copy.</returns>
+    public MethodSymbol With(TypeSymbol? declaringType, TypeSymbol returnType, IReadOnlyList<ParameterSymbol> parameters, IReadOnlyList<TypeSymbol> genericArguments)
+    {
+        ArgumentNullException.ThrowIfNull(returnType);
+        ArgumentNullException.ThrowIfNull(parameters);
+        ArgumentNullException.ThrowIfNull(genericArguments);
+        return new MethodSymbol
+        {
+            Definition = Definition,
+            Source = Source,
+            DeclaringType = declaringType,
+            Name = Name,
+            Attributes = Attributes,
+            ImplAttributes = ImplAttributes,
+            CallingConvention = CallingConvention,
+            ReturnType = returnType,
+            Parameters = parameters,
+            GenericParameters = GenericParameters,
+            GenericArguments = genericArguments,
+            ReturnRequiredModifiers = ReturnRequiredModifiers,
+            ReturnOptionalModifiers = ReturnOptionalModifiers,
+            IsDeclared = IsDeclared,
+        };
+    }
+
+    /// <inheritdoc/>
+    public bool Equals(MethodSymbol? other) => SymbolIdentity.Equal(this, other);
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => obj is MethodSymbol other && Equals(other);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => SymbolIdentity.Hash(this);
+
+    /// <inheritdoc/>
+    public override string ToString() => SymbolRenderer.Describe(this);
+}

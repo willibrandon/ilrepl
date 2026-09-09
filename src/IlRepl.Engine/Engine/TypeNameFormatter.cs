@@ -283,7 +283,7 @@ public static class TypeNameFormatter
     /// Reflection escapes the characters its own type-name grammar reserves, writing a comma in a
     /// name as <c>\,</c>; the metadata name has no backslash, and neither does ILAsm's quoted form.
     /// </summary>
-    private static string Unescape(string name)
+    internal static string Unescape(string name)
     {
         // Reflection escapes the characters its own grammar reserves, a comma as \, and a
         // backslash as \\; each pair decodes to the character it escapes, so a literal backslash

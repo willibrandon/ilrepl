@@ -1,0 +1,125 @@
+using System.Reflection;
+using System.Reflection.Emit;
+
+namespace IlRepl.Engine.Binding;
+
+/// <summary>
+/// Projects what the binder bound in a <see cref="RuntimeBindingScope"/> onto the objects the
+/// emitter and the stack model take: a <see cref="Type"/>, a <see cref="ResolvedMethod"/>, a
+/// <see cref="FieldInfo"/>. The projection is by the exact identity the scope recorded, never by a
+/// fresh name lookup, so a bound reference means the same member when it is emitted.
+/// </summary>
+public sealed class RuntimeBindingAdapter
+{
+    private readonly RuntimeBindingScope _scope;
+
+    /// <summary>
+    /// Initializes an adapter over the scope a reference was bound in.
+    /// </summary>
+    /// <param name="scope">The scope.</param>
+    public RuntimeBindingAdapter(RuntimeBindingScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        _scope = scope;
+    }
+
+    /// <summary>
+    /// The runtime type of a bound type symbol.
+    /// </summary>
+    /// <param name="type">The symbol.</param>
+    /// <returns>The type.</returns>
+    public Type ToType(TypeSymbol type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        return _scope.TypeOf(type);
+    }
+
+    /// <summary>
+    /// The runtime types of bound type symbols.
+    /// </summary>
+    /// <param name="types">The symbols.</param>
+    /// <returns>The types, in order.</returns>
+    public Type[] ToTypes(IEnumerable<TypeSymbol> types)
+    {
+        ArgumentNullException.ThrowIfNull(types);
+        return [.. types.Select(ToType)];
+    }
+
+    /// <summary>
+    /// The method reference the emitter takes for a bound member.
+    /// </summary>
+    /// <param name="bound">The bound member.</param>
+    /// <returns>The resolved method.</returns>
+    /// <exception cref="InvalidOperationException">The member was not bound in this adapter's scope.</exception>
+    public ResolvedMethod ToResolvedMethod(BoundMethod bound)
+    {
+        ArgumentNullException.ThrowIfNull(bound);
+        var method = bound.Method;
+        var optional = bound.OptionalParameterTypes is null ? null : ToTypes(bound.OptionalParameterTypes);
+        switch (_scope.PayloadOf(method))
+        {
+            case MethodSignature session:
+                return new ResolvedMethod(session);
+            case RuntimeBindingScope.DeclaredMember declared:
+            {
+                var declaringType = ToType(method.DeclaringType!);
+                var effective = declared.Signature with
+                {
+                    ReturnType = ToType(method.ReturnType),
+                    Parameters = [.. declared.Signature.Parameters.Select((p, i) => p with { Type = ToType(method.Parameters[i].Type) })],
+                };
+                return new ResolvedMethod(declared.Builder, effective, declaringType)
+                {
+                    OptionalParameterTypesOverride = optional,
+                    DeclaredDefinition = bound.Definition is null ? null : declared.Signature,
+                    GenericArguments = method.GenericArguments.Count > 0 ? ToTypes(method.GenericArguments) : null,
+                };
+            }
+
+            case RuntimeBindingScope.DefinitionMember definition:
+            {
+                var declaringType = ToType(method.DeclaringType!);
+                MethodBase mapped = definition.Method switch
+                {
+                    ConstructorInfo constructor => TypeBuilder.GetConstructor(declaringType, constructor),
+                    MethodInfo info => TypeBuilder.GetMethod(declaringType, info),
+                    _ => throw new InvalidOperationException("a definition member is a method or a constructor"),
+                };
+                return new ResolvedMethod(mapped, optional);
+            }
+
+            case MethodBase runtime:
+                return new ResolvedMethod(runtime, optional);
+            default:
+                throw new InvalidOperationException($"{SymbolRenderer.Describe(method)} was not bound in this scope");
+        }
+    }
+
+    /// <summary>
+    /// The field the emitter takes for a bound field.
+    /// </summary>
+    /// <param name="field">The bound field.</param>
+    /// <returns>The field.</returns>
+    /// <exception cref="InvalidOperationException">The field was not bound in this adapter's scope.</exception>
+    public FieldInfo ToField(FieldSymbol field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        switch (_scope.PayloadOf(field))
+        {
+            case RuntimeBindingScope.DeclaredField declared:
+            {
+                var declaringType = ToType(field.DeclaringType);
+                return declaringType.IsGenericType && !declaringType.IsGenericTypeDefinition && declared.Builder is FieldBuilder fieldBuilder
+                    ? TypeBuilder.GetField(declaringType, fieldBuilder)
+                    : declared.Builder;
+            }
+
+            case RuntimeBindingScope.DefinitionField definition:
+                return TypeBuilder.GetField(ToType(field.DeclaringType), definition.Field);
+            case FieldInfo runtime:
+                return runtime;
+            default:
+                throw new InvalidOperationException($"{field} was not bound in this scope");
+        }
+    }
+}
