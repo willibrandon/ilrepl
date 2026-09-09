@@ -451,6 +451,14 @@ public sealed partial class LiveSessionTests
         Assert.DoesNotContain("error:", await BufferTextAsync(page));
     }
 
+    private static Task<IJSHandle> PromptAtCaretAsync(IPage page, string prompt) => page.WaitForFunctionAsync("""
+        prompt => {
+          const terminal = window.ilreplTerminal;
+          const row = terminal.buffer.active.getLine(terminal.rows - 2);
+          return row?.translateToString(true).trim() === prompt && row.getCell(prompt.length)?.getBgColor() === 0x61afef;
+        }
+        """, prompt, new() { PollingInterval = 16, Timeout = 30_000 });
+
     private static Task<IJSHandle> CompletionAtCaretAsync(IPage page, string prompt, string choice) => page.WaitForFunctionAsync("""
         ({ prompt, choice }) => {
           const terminal = window.ilreplTerminal;

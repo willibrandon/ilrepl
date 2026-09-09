@@ -26,8 +26,7 @@ public sealed partial class LiveSessionTests
             await CompletionAtCaretAsync(page, $"il[{cell}]> call {prefix}", "members 1/1");
             await page.Keyboard.PressAsync("Tab");
             await Assertions.Expect(terminal).Not.ToContainTextAsync("members 1/1");
-            var rows = await BufferRowsAsync(page);
-            Assert.Contains("call Environment::get_CurrentManagedThreadId()", rows[^2]);
+            await PromptAtCaretAsync(page, $"il[{cell}]> call Environment::get_CurrentManagedThreadId()");
             await page.Keyboard.PressAsync("Enter");
             await TypeLineAsync(page, "ret");
             await ExpectCompletionAsync(page, ": int32");
@@ -67,20 +66,13 @@ public sealed partial class LiveSessionTests
         }
 
         await Assertions.Expect(terminal).Not.ToContainTextAsync("members 1/1");
-        Assert.Contains("call Environment::get_CurrentManagedThreadId()", (await BufferRowsAsync(page))[^2]);
+        await PromptAtCaretAsync(page, "il[1]> call Environment::get_CurrentManagedThreadId()");
         Assert.AreEqual("TEXTAREA", await page.EvaluateAsync<string>("() => document.activeElement.tagName"));
         await page.Keyboard.PressAsync("Control+z");
         await CompletionAtCaretAsync(page, "il[1]> " + original, "members 1/1");
         await page.Keyboard.PressAsync("Escape");
         await Assertions.Expect(terminal).Not.ToContainTextAsync("members 1/1");
-        await page.WaitForFunctionAsync("""
-            prompt => {
-              const terminal = window.ilreplTerminal;
-              const row = terminal.buffer.active.getLine(terminal.rows - 2);
-              return row?.translateToString(true).trim() === prompt;
-            }
-            """, "il[1]> " + original, new PageWaitForFunctionOptions { PollingInterval = 16, Timeout = 30_000 });
-        Assert.AreEqual("il[1]> " + original, (await BufferRowsAsync(page))[^2].Trim());
+        await PromptAtCaretAsync(page, "il[1]> " + original);
         await page.Keyboard.PressAsync("Tab");
         await CompletionAtCaretAsync(page, "il[1]> " + original, "members 1/1");
         await page.Keyboard.PressAsync("Tab");
