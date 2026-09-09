@@ -414,7 +414,10 @@ public static class IlAsmRenderer
             }
 
             var declaredVarArg = written.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "";
-            var declaredName = MemberName(written.Name) + (resolved.GenericArguments is { Count: > 0 } arguments ? "<" + string.Join(", ", arguments.Select(TypeNameFormatter.IlAsm)) + ">" : "");
+            var declaredArguments = resolved.GenericArguments is { Count: > 0 } arguments
+                ? "<" + string.Join(", ", arguments.Select(TypeNameFormatter.IlAsm)) + ">"
+                : written.TypeParameters.Count == 0 ? "" : "<[" + written.TypeParameters.Count + "]>";
+            var declaredName = MemberName(written.Name) + declaredArguments;
             return $"{(written.IsStatic ? "" : "instance ")}{declaredVarArg}{SignatureType(written.ReturnType)} {TypeNameFormatter.IlAsmDeclaring(resolved.DeclaringType!)}::{declaredName}({string.Join(", ", declaredParameters)})";
         }
 

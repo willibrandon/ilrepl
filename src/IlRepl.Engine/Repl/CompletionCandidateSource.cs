@@ -15,6 +15,8 @@ internal sealed class CompletionCandidateSource
     private readonly CompletionSite _site;
     private readonly string? _assemblyHint;
     private readonly TypeSyntax? _typeSyntax;
+    private readonly string _retainedTypeSuffix = "";
+    private TypeSpeller? _typeSpeller;
     private readonly List<OperandCandidate> _candidates = [];
 
     private TypeIndex Index => _index ??= new TypeIndex(_view.Snapshot);
@@ -45,8 +47,24 @@ internal sealed class CompletionCandidateSource
 
             try
             {
+                var comment = view.InBlockComment;
+                var characters = line.ToCharArray();
+                foreach (var segment in CilLexer.Segments(line, ref comment))
+                {
+                    if (segment.Kind is CilSegmentKind.BlockComment or CilSegmentKind.LineComment)
+                    {
+                        characters.AsSpan(segment.Start, segment.Length).Fill(' ');
+                    }
+                }
+
+                var syntaxLine = new string(characters);
                 var position = site.ReplaceStart;
-                var parsed = CilSyntaxParser.ParseTypeAt(line, ref position);
+                var parsed = CilSyntaxParser.ParseTypeAt(syntaxLine, ref position);
+                if (site.Kind == CompletionSiteKind.TypeArgument && parsed.End > site.ReplaceEnd)
+                {
+                    _retainedTypeSuffix = syntaxLine[site.ReplaceEnd..parsed.End];
+                }
+
                 while (parsed.Element is not null)
                 {
                     parsed = parsed.Element;
@@ -363,9 +381,16 @@ internal sealed class CompletionCandidateSource
         };
         if (_site.Kind == CompletionSiteKind.TypeArgument)
         {
+            var supplied = type;
+            if (!type.IsGenericDefinition && _retainedTypeSuffix.Length > 0)
+            {
+                _typeSpeller ??= new TypeSpeller(_scope);
+                supplied = SymbolBinder.BindType(CilSyntaxParser.ParseType(_typeSpeller.Spell(type) + _retainedTypeSuffix), _scope).Type;
+            }
+
             foreach (var argument in arguments)
             {
-                if (!type.IsGenericDefinition && argument.Allows(type, _scope))
+                if (!type.IsGenericDefinition && argument.Allows(supplied, _scope))
                 {
                     _candidates.Add(candidate with { Kind = CompletionKind.TypeArguments, GenericOwner = argument.Target });
                 }

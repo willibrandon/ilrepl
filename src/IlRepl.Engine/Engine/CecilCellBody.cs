@@ -12,7 +12,7 @@ namespace IlRepl.Engine;
 internal static class CecilCellBody
 {
     /// <summary>
-    /// Detects generic references whose array dimensions or function-pointer flags Reflection.Emit would discard.
+    /// Detects generic references whose nested signature details Reflection.Emit would discard.
     /// </summary>
     /// <param name="state">The cell body.</param>
     /// <returns>Whether its body requires metadata emission.</returns>
@@ -45,9 +45,8 @@ internal static class CecilCellBody
         return false;
     }
 
-    private static bool NeedsMetadata(Type type) => TypeNameFormatter.IsFunctionPointer(type) || type.IsArray && !type.IsSZArray
-        || type.HasElementType && NeedsMetadata(type.GetElementType()!)
-        || type.IsGenericType && !type.IsGenericTypeDefinition && type.GetGenericArguments().Any(NeedsMetadata);
+    private static bool NeedsMetadata(Type type) => TypeNameFormatter.IsFunctionPointer(type)
+        || type.HasElementType || type.IsConstructedGenericType;
 
     /// <summary>
     /// Emits a callable cell body with exact metadata references and the cell's existing session bindings.

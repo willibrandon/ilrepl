@@ -230,8 +230,12 @@ public sealed class RuntimeBindingScope : IBindingScope
     {
         ArgumentNullException.ThrowIfNull(declaring);
         var type = TypeOf(declaring);
-        return type.IsGenericType && type.GetGenericArguments().Any(a => a is GenericTypeParameterBuilder);
+        return type.IsGenericType && type.GetGenericArguments().Any(ContainsBuilder);
     }
+
+    private static bool ContainsBuilder(Type type) => type is GenericTypeParameterBuilder or TypeBuilder
+        || type.HasElementType && ContainsBuilder(type.GetElementType()!)
+        || type.IsConstructedGenericType && type.GetGenericArguments().Any(ContainsBuilder);
 
     /// <inheritdoc/>
     public IReadOnlyList<MethodSymbol> Methods(TypeSymbol declaring, string name)
@@ -245,7 +249,7 @@ public sealed class RuntimeBindingScope : IBindingScope
             // the definition answers, with the instantiation's arguments put in for its parameters.
             var definition = type.GetGenericTypeDefinition();
             return [.. definition.GetMethods(AllMembers)
-                .Where(m => m.Name == name && !m.IsGenericMethodDefinition)
+                .Where(m => m.Name == name)
                 .Select(m => Register(SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(m), declaring, []),
                     new RuntimeDefinitionMember(m)))];
         }
@@ -262,7 +266,6 @@ public sealed class RuntimeBindingScope : IBindingScope
         {
             var definition = type.GetGenericTypeDefinition();
             return [.. definition.GetMethods(AllMembers)
-                .Where(m => !m.IsGenericMethodDefinition)
                 .Select(m => Register(SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(m), declaring, []),
                     new RuntimeDefinitionMember(m)))];
         }
@@ -341,6 +344,12 @@ public sealed class RuntimeBindingScope : IBindingScope
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(arguments);
+        if (PayloadOf(definition) is RuntimeDefinitionMember { Method: MethodInfo { IsGenericMethodDefinition: true } } member)
+        {
+            return GenericConstraints.SatisfiesMethod(definition, definition.DeclaringType, arguments, this)
+                ? Register(SymbolRelations.Instantiate(definition, definition.DeclaringType, arguments), member) : null;
+        }
+
         if (PayloadOf(definition) is not MethodInfo { IsGenericMethodDefinition: true } method)
         {
             return null;

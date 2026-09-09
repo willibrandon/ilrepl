@@ -26,10 +26,10 @@ internal static class RuntimeSignatureShapes
         {
             var handle = (MethodDefinitionHandle)MetadataTokens.Handle(symbol.Definition.Token);
             var signature = source.Reader.GetMethodDefinition(handle).DecodeSignature(provider, SymbolGenericOwner.None);
-            return symbol.With(symbol.DeclaringType, Restore(symbol.ReturnType, signature.ReturnType),
+            return symbol.With(symbol.DeclaringType, RestoreRoot(symbol.ReturnType, signature.ReturnType),
                 [.. symbol.Parameters.Select((parameter, index) => parameter with
                 {
-                    Type = Restore(parameter.Type, signature.ParameterTypes[index]),
+                    Type = RestoreRoot(parameter.Type, signature.ParameterTypes[index]),
                 })], symbol.GenericArguments);
         });
     }
@@ -45,7 +45,7 @@ internal static class RuntimeSignatureShapes
         {
             var handle = (FieldDefinitionHandle)MetadataTokens.Handle(symbol.Definition.Token);
             var type = source.Reader.GetFieldDefinition(handle).DecodeSignature(provider, SymbolGenericOwner.None);
-            return symbol.With(symbol.DeclaringType, Restore(symbol.FieldType, type));
+            return symbol.With(symbol.DeclaringType, RestoreRoot(symbol.FieldType, type));
         });
 
     private static T Read<T>(MemberInfo member, T fallback, Func<AssemblySymbolSource, SymbolSignatureProvider, T> read)
@@ -58,7 +58,8 @@ internal static class RuntimeSignatureShapes
             }
 
             using var lease = source.Lease();
-            var provider = new SymbolSignatureProvider(source, new LoadedBindingCatalog([]));
+            var provider = new SymbolSignatureProvider(source, new LoadedBindingCatalog([]),
+                (handle, _) => RuntimeSymbolImporter.Import(member.Module.ResolveType(MetadataTokens.GetToken(handle))));
             return read(source, provider);
         }
         catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
@@ -68,12 +69,19 @@ internal static class RuntimeSignatureShapes
         }
     }
 
-    private static bool NeedsMetadata(TypeSymbol type) => type.Kind is TypeSymbolKind.Array or TypeSymbolKind.FunctionPointer
-        || type.Element is { } element && NeedsMetadata(element) || type.Arguments.Any(NeedsMetadata);
+    private static bool NeedsMetadata(TypeSymbol type) => type.Element is not null
+        || type.Kind == TypeSymbolKind.FunctionPointer;
+
+    private static TypeSymbol RestoreRoot(TypeSymbol actual, TypeSymbol metadata) =>
+        Restore(actual, SymbolSignatureProvider.StripModifiers(metadata, out _, out _));
 
     private static TypeSymbol Restore(TypeSymbol actual, TypeSymbol metadata)
     {
-        metadata = SymbolSignatureProvider.StripModifiers(metadata, out _, out _);
+        if (metadata.Kind == TypeSymbolKind.Modified)
+        {
+            return TypeSymbol.Modified(Restore(actual.Unwrapped, metadata.Element!), metadata.Modifier!, metadata.IsRequired);
+        }
+
         if (actual.Kind != metadata.Kind)
         {
             // Substitution can turn a metadata generic parameter into any runtime type.

@@ -129,13 +129,24 @@ public sealed class RuntimeBindingAdapter
             case RuntimeDefinitionMember definition:
             {
                 var declaringType = ToType(method.DeclaringType!);
-                MethodBase mapped = definition.Method switch
+                var mapped = definition.Method switch
                 {
-                    ConstructorInfo constructor => TypeBuilder.GetConstructor(declaringType, constructor),
+                    ConstructorInfo constructor => (MethodBase)TypeBuilder.GetConstructor(declaringType, constructor),
                     MethodInfo info => TypeBuilder.GetMethod(declaringType, info),
                     _ => throw new InvalidOperationException("a definition member is a method or a constructor"),
                 };
-                return new ResolvedMethod(mapped, optional);
+                var arguments = ToTypes(method.GenericArguments);
+                if (arguments.Length > 0)
+                {
+                    mapped = ((MethodInfo)mapped).MakeGenericMethod(arguments);
+                }
+
+                return new ResolvedMethod(mapped, ToSignature(method), declaringType)
+                {
+                    OptionalParameterTypesOverride = optional,
+                    GenericArguments = arguments,
+                    DeclaredDefinition = ToSignature(RuntimeSymbolImporter.Import(definition.Method)),
+                };
             }
 
             case MethodBase runtime:
@@ -144,6 +155,23 @@ public sealed class RuntimeBindingAdapter
                 throw new InvalidOperationException($"{SymbolRenderer.Describe(method)} was not bound in this scope");
         }
     }
+
+    private MethodSignature ToSignature(MethodSymbol method) => new(method.Name, ToType(method.ReturnType),
+        [.. method.Parameters.Select(parameter => new ArgumentDeclaration(ToType(parameter.Type), parameter.Name, null, "")
+        {
+            Attributes = parameter.Attributes,
+            RequiredModifiers = ToTypes(parameter.RequiredModifiers),
+            OptionalModifiers = ToTypes(parameter.OptionalModifiers),
+        })])
+    {
+        Attributes = method.Attributes,
+        ImplAttributes = method.ImplAttributes,
+        CallingConvention = method.CallingConvention,
+        ReturnRequiredModifiers = ToTypes(method.ReturnRequiredModifiers),
+        ReturnOptionalModifiers = ToTypes(method.ReturnOptionalModifiers),
+        TypeParameters = [.. method.GenericParameters.Select(parameter =>
+            new GenericParameterDeclaration(parameter.Name, parameter.Attributes, ToTypes(parameter.Constraints)))],
+    };
 
     /// <summary>
     /// The <c>calli</c> signature the emitter takes for a bound signature.

@@ -56,6 +56,9 @@ il[1]> newobj StringBuilderr::.ctor()
 
 Generic instantiations use ILAsm syntax with or without the arity suffix. Inside a member
 reference, `!0` is the declaring type's first type argument and `!!0` is the method's.
+The declaring type and explicit generic arguments use the caller's scope. Completion also works
+when those arguments are still generic parameters. A retained suffix participates in constraint
+checks: `int32[]` satisfies `class`, while `int32` satisfies `valuetype`.
 
 ```cil
 newobj instance void class [System.Collections]System.Collections.Generic.List`1<int32>::.ctor()

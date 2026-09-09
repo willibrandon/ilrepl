@@ -116,14 +116,9 @@ public static class SymbolBinder
             case TypeSyntaxKind.FunctionPointer:
                 return TypeSymbol.FunctionPointer(BindFunctionPointer(syntax.FunctionPointer!, scope, lenient));
             case TypeSyntaxKind.Modified:
+                return TypeSymbol.Modified(BindCore(syntax.Element!, scope, lenient),
+                    BindType(syntax.Modifier!, scope, lenient).Type, syntax.IsRequired);
             case TypeSyntaxKind.Pinned:
-                // A modifier or pinning inside another type has no place in the type model; the
-                // modifier itself is still bound, so a wrong name in it is reported.
-                foreach (var modifier in syntax.Modifiers(true).Concat(syntax.Modifiers(false)))
-                {
-                    BindType(modifier, scope, lenient);
-                }
-
                 return BindCore(syntax.Unwrapped, scope, lenient);
             default:
                 throw new ReplException("expected a type");
@@ -529,7 +524,7 @@ public static class SymbolBinder
             ? scope.Generics.MethodArguments
             : [.. syntax.GenericArguments.Select(a => BindType(a, scope).Type)];
         var memberScope = scope.WithGenerics(new SymbolGenericContext(typeArguments, methodArguments));
-        BindType(syntax.DeclaringType!, memberScope);
+        BindType(syntax.DeclaringType!, scope);
         var returnType = syntax.ReturnType is null ? null : BindType(syntax.ReturnType, memberScope).Type;
 
         IReadOnlyList<TypeSymbol>? parameterTypes = null;
@@ -967,7 +962,7 @@ public static class SymbolBinder
         {
             var candidateScope = scope.WithGenerics(new SymbolGenericContext(typeArguments,
                 [.. candidate.GenericParameters.Select(p => p.AsType)]));
-            BindType(syntax.DeclaringType!, candidateScope);
+            BindType(syntax.DeclaringType!, scope);
             var returnType = syntax.ReturnType is null ? null : BindType(syntax.ReturnType, candidateScope).Type;
             if (returnType is not null && !SymbolIdentity.Equal(candidate.ReturnType, returnType))
             {
@@ -1060,7 +1055,7 @@ public static class SymbolBinder
         IBindingScope scope)
     {
         var name = syntax.Name;
-        if (scope.RequiresDefinitionLookup(declaring))
+        if (scope.RequiresDefinitionLookup(declaring) && methodGenericArguments is null)
         {
             var candidates = scope.Methods(declaring, name)
                 .Where(m => !m.IsGenericDefinition)

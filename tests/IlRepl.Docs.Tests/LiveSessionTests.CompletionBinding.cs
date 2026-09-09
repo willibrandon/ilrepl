@@ -5,6 +5,72 @@ namespace IlRepl.Docs.Tests;
 public sealed partial class LiveSessionTests
 {
     /// <summary>
+    /// Generic constraints include retained array suffixes when accepting a type argument.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_GenericSuffixCompletion_ChecksTheArray(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        await PasteAsync(page, ".class public RefSuffix<class T> { }\nldtoken RefSuffix<int3[]>");
+        for (var index = 0; index < 3; index++)
+        {
+            await page.Keyboard.PressAsync("ArrowLeft");
+        }
+
+        await CompletionAtCaretAsync(page, "  ...> ldtoken RefSuffix<int3", "❯ int32");
+        await page.Keyboard.PressAsync("Delete");
+        await page.Keyboard.PressAsync("Delete");
+        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ int32");
+        await page.Keyboard.TypeAsync("[]");
+        await page.Keyboard.PressAsync("ArrowLeft");
+        await page.Keyboard.PressAsync("ArrowLeft");
+        await CompletionAtCaretAsync(page, "  ...> ldtoken RefSuffix<int3", "❯ int32");
+        await page.Keyboard.PressAsync("Tab");
+        await page.Keyboard.PressAsync("End");
+        await CompletionAtCaretAsync(page, "  ...> ldtoken RefSuffix<int32[]>", "RefSuffix<int32[]>");
+        await PasteAsync(page, "\npop\nldc.i4.7\nret");
+        await page.Keyboard.PressAsync("Enter");
+        await ExpectCompletionAsync(page, "= 7 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
+    /// A generic method on an open framework owner completes and executes inside a generic session type.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_OpenOwnerCompletion_ExecutesTheGenericMethod(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        await PasteAsync(page, ".class public GenericCaller<T> {\n.method public static int32 Check() {\n"
+            + "newobj List<!0>::.ctor()\nldnull\nldftn string Convert::ToString(object)\n"
+            + "newobj Converter<!0, string>::.ctor(object, native int)\ncallvirt List<!0>::Conv");
+        await CompletionAtCaretAsync(page, "  ...> callvirt List<!0>::Conv", "ConvertAll");
+        await page.Keyboard.PressAsync("Tab");
+        await PromptContainsAsync(page, "::ConvertAll<");
+        await page.Keyboard.TypeAsync("string>");
+        await CompletionAtCaretAsync(page, "  ...> callvirt List`1<!0>::ConvertAll<string>", "signatures 1/1");
+        await page.Keyboard.PressAsync("Tab");
+        await PromptContainsAsync(page, "::ConvertAll<string>(");
+        await PasteAsync(page, "\ncallvirt int32 List<string>::get_Count()\nret\n}\n}\n"
+            + "call GenericCaller<object>::Check()\nret");
+        await page.Keyboard.PressAsync("Enter");
+        await ExpectCompletionAsync(page, "= 0 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// An unfinished field excludes void but accepts a void pointer that survives class creation and field access.
     /// </summary>
     /// <param name="browser">The browser engine.</param>
@@ -549,16 +615,26 @@ public sealed partial class LiveSessionTests
         }
         """, prompt, new() { PollingInterval = 16, Timeout = 30_000 });
 
-    private static Task<IJSHandle> CompletionAtCaretAsync(IPage page, string prompt, string choice) => page.WaitForFunctionAsync("""
-        ({ prompt, choice }) => {
-          const terminal = window.ilreplTerminal;
-          const row = terminal.buffer.active.getLine(terminal.rows - 2);
-          if (row?.getCell(prompt.length)?.getBgColor() !== 0x61afef) return false;
-          const rows = Array.from({ length: terminal.rows }, (_, index) =>
-            terminal.buffer.active.getLine(index)?.translateToString(true) ?? '');
-          return rows.some(line => line.includes(choice)) && !rows.some(line => line.includes('updating '));
+    private static async Task<IJSHandle> CompletionAtCaretAsync(IPage page, string prompt, string choice)
+    {
+        try
+        {
+            return await page.WaitForFunctionAsync("""
+                ({ prompt, choice }) => {
+                  const terminal = window.ilreplTerminal;
+                  const row = terminal.buffer.active.getLine(terminal.rows - 2);
+                  if (row?.getCell(prompt.length)?.getBgColor() !== 0x61afef) return false;
+                  const rows = Array.from({ length: terminal.rows }, (_, index) =>
+                    terminal.buffer.active.getLine(index)?.translateToString(true) ?? '');
+                  return rows.some(line => line.includes(choice)) && !rows.some(line => line.includes('updating '));
+                }
+                """, new { prompt, choice }, new() { PollingInterval = 16, Timeout = 30_000 });
         }
-        """, new { prompt, choice }, new() { PollingInterval = 16, Timeout = 30_000 });
+        catch (TimeoutException exception)
+        {
+            throw new TimeoutException($"Expected {choice} at caret {prompt.Length}:\n{await BufferTextAsync(page)}", exception);
+        }
+    }
 
     private static Task<IJSHandle> EmptyPromptAsync(IPage page) => page.WaitForFunctionAsync("""
         () => {

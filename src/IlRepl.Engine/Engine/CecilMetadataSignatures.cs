@@ -4,7 +4,7 @@ using Mono.Cecil;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Imports loaded function-pointer signatures directly from metadata instead of Cecil's reflection importer.
+/// Imports loaded compound signatures directly from metadata instead of Cecil's reflection importer.
 /// </summary>
 internal static class CecilMetadataSignatures
 {
@@ -12,20 +12,19 @@ internal static class CecilMetadataSignatures
     /// Detects a method signature that Cecil cannot import through reflection.
     /// </summary>
     /// <param name="method">The loaded method.</param>
-    /// <returns>Whether its signature contains a function pointer.</returns>
-    public static bool IsRequired(MethodBase method) => method is MethodInfo info && ContainsPointer(info.ReturnType)
-        || method.GetParameters().Any(parameter => ContainsPointer(parameter.ParameterType));
+    /// <returns>Whether reflection can omit details inside its signature types.</returns>
+    public static bool IsRequired(MethodBase method) => method is MethodInfo info && NeedsMetadata(info.ReturnType)
+        || method.GetParameters().Any(parameter => NeedsMetadata(parameter.ParameterType));
 
     /// <summary>
     /// Detects a field signature that Cecil cannot import through reflection.
     /// </summary>
     /// <param name="field">The loaded field.</param>
-    /// <returns>Whether its signature contains a function pointer.</returns>
-    public static bool IsRequired(FieldInfo field) => ContainsPointer(field.FieldType);
+    /// <returns>Whether reflection can omit details inside its signature type.</returns>
+    public static bool IsRequired(FieldInfo field) => NeedsMetadata(field.FieldType);
 
-    private static bool ContainsPointer(Type type) => TypeNameFormatter.IsFunctionPointer(type)
-        || type.HasElementType && ContainsPointer(type.GetElementType()!)
-        || type.IsGenericType && !type.IsGenericTypeDefinition && type.GetGenericArguments().Any(ContainsPointer);
+    private static bool NeedsMetadata(Type type) => TypeNameFormatter.IsFunctionPointer(type)
+        || type.HasElementType || type.IsConstructedGenericType;
 
     /// <summary>
     /// Imports a loaded method using its definition's complete signature and the referenced construction.

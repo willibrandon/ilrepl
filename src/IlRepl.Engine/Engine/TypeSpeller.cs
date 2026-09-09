@@ -120,6 +120,25 @@ public sealed class TypeSpeller
 
     private IEnumerable<string> Candidates(TypeSymbol type)
     {
+        if (ContainsParameter(type))
+        {
+            for (var index = 0; index < _scope.Generics.TypeArguments.Count; index++)
+            {
+                if (SymbolIdentity.Equal(type, _scope.Generics.TypeArguments[index]))
+                {
+                    yield return "!" + SymbolRenderer.Number(index);
+                }
+            }
+
+            for (var index = 0; index < _scope.Generics.MethodArguments.Count; index++)
+            {
+                if (SymbolIdentity.Equal(type, _scope.Generics.MethodArguments[index]))
+                {
+                    yield return "!!" + SymbolRenderer.Number(index);
+                }
+            }
+        }
+
         switch (type.Kind)
         {
             case TypeSymbolKind.Primitive:
@@ -196,6 +215,9 @@ public sealed class TypeSpeller
             yield return "[" + type.AssemblyName + "]" + qualified;
         }
     }
+
+    private static bool ContainsParameter(TypeSymbol type) => type.IsGenericParameter
+        || type.Element is { } element && ContainsParameter(element) || type.Arguments.Any(ContainsParameter);
 
     private static string NestedPath(TypeSymbol type) => type.Declaring is null
         ? TypeNameFormatter.IlAsmTypeName(type.Name)

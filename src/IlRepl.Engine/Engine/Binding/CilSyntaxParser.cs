@@ -290,6 +290,13 @@ public static partial class CilSyntaxParser
         // Suffixes: [] [,] [0...] & * pinned modreq(T) modopt(T)
         while (pos < end)
         {
+            var suffixStart = pos;
+            SkipWhitespace(s, ref pos);
+            if (pos >= end || s[pos] is not ('[' or '&' or '*'))
+            {
+                pos = suffixStart;
+            }
+
             if (s[pos] == '[' && IsArraySuffix(s, pos, end, out var close))
             {
                 var inner = s.Substring(pos + 1, close - pos - 1).Replace(" ", "", StringComparison.Ordinal);
