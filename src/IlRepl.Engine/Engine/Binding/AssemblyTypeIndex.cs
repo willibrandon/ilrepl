@@ -15,25 +15,27 @@ namespace IlRepl.Engine.Binding;
 /// </remarks>
 public sealed class AssemblyTypeIndex
 {
+    private readonly AssemblySymbolSource _source;
+    private readonly Lock _entryGate = new();
     private readonly Dictionary<(string Namespace, string Name), TypeDefinitionHandle> _topLevel = [];
     private readonly Dictionary<TypeDefinitionHandle, Dictionary<string, TypeDefinitionHandle>> _nested = [];
     private readonly Dictionary<(string Namespace, string Name), AssemblyReferenceHandle> _forwarders = [];
     private readonly Dictionary<(string Namespace, string Name), ExportedTypeHandle> _exportedTopLevel = [];
     private readonly Dictionary<ExportedTypeHandle, Dictionary<string, ExportedTypeHandle>> _exportedNested = [];
     private readonly Dictionary<string, List<TypeDefinitionHandle>> _bySimpleName = new(StringComparer.Ordinal);
-    private readonly List<TypeIndexEntry> _entries = [];
-    private readonly Dictionary<TypeDefinitionHandle, TypeIndexEntry> _entryByHandle = [];
+    private IReadOnlyList<TypeIndexEntry>? _entries;
 
     internal AssemblyTypeIndex(AssemblySymbolSource source, MetadataReader reader)
-        : this()
+        : this(source)
     {
-        foreach (var _ in BuildSteps(source, reader))
+        foreach (var _ in BuildSteps(reader))
         {
         }
     }
 
-    private AssemblyTypeIndex()
+    private AssemblyTypeIndex(AssemblySymbolSource source)
     {
+        _source = source;
     }
 
     /// <summary>
@@ -46,10 +48,10 @@ public sealed class AssemblyTypeIndex
     internal static async ValueTask<AssemblyTypeIndex> CreateAsync(
         AssemblySymbolSource source, MetadataReader reader, CancellationToken cancellationToken)
     {
-        var index = new AssemblyTypeIndex();
+        var index = new AssemblyTypeIndex(source);
         var processed = 0;
         var slice = Stopwatch.GetTimestamp();
-        foreach (var _ in index.BuildSteps(source, reader))
+        foreach (var _ in index.BuildSteps(reader))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (++processed % 128 == 0 && Stopwatch.GetElapsedTime(slice) >= TimeSpan.FromMilliseconds(4))
@@ -63,7 +65,7 @@ public sealed class AssemblyTypeIndex
         return index;
     }
 
-    private IEnumerable<byte> BuildSteps(AssemblySymbolSource source, MetadataReader reader)
+    private IEnumerable<byte> BuildSteps(MetadataReader reader)
     {
         foreach (var handle in reader.TypeDefinitions)
         {
@@ -99,28 +101,6 @@ public sealed class AssemblyTypeIndex
                 }
 
                 same.Add(handle);
-            }
-            catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
-            {
-                // An unreadable type cannot hide the healthy definitions beside it.
-            }
-
-            yield return 0;
-        }
-
-        foreach (var handle in reader.TypeDefinitions)
-        {
-            try
-            {
-                var definition = reader.GetTypeDefinition(handle);
-                if (definition.GetDeclaringType().IsNil && reader.GetString(definition.Name) == "<Module>")
-                {
-                    continue;
-                }
-
-                var entry = source.Entry(handle);
-                _entries.Add(entry);
-                _entryByHandle[handle] = entry;
             }
             catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
             {
@@ -170,16 +150,89 @@ public sealed class AssemblyTypeIndex
     }
 
     /// <summary>
-    /// Every type definition of the assembly, the module pseudo-type excluded.
+    /// Every type definition of the assembly, materialized on demand with the module pseudo-type excluded.
     /// </summary>
-    public IReadOnlyList<TypeIndexEntry> Entries => _entries;
+    public IReadOnlyList<TypeIndexEntry> Entries
+    {
+        get
+        {
+            lock (_entryGate)
+            {
+                return _entries ??= [.. ReadEntries()];
+            }
+        }
+    }
+
+    /// <summary>
+    /// Materializes completion details cooperatively without making known-name lookups wait for every type's facts.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels unpublished work between definitions.</param>
+    /// <returns>A task that completes once the shared entries are available.</returns>
+    public async ValueTask WarmEntriesAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_entryGate)
+        {
+            if (_entries is not null)
+            {
+                return;
+            }
+        }
+
+        using var lease = _source.Lease();
+        var entries = new List<TypeIndexEntry>();
+        var processed = 0;
+        var slice = Stopwatch.GetTimestamp();
+        foreach (var handle in _source.Reader.TypeDefinitions)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (EntryOf(handle) is { } entry)
+            {
+                entries.Add(entry);
+            }
+            if (++processed % 128 == 0 && Stopwatch.GetElapsedTime(slice) >= TimeSpan.FromMilliseconds(4))
+            {
+                await Task.Yield();
+                slice = Stopwatch.GetTimestamp();
+            }
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_entryGate)
+        {
+            _entries ??= entries;
+        }
+    }
+
+    private IEnumerable<TypeIndexEntry> ReadEntries()
+    {
+        foreach (var handle in _source.Reader.TypeDefinitions)
+        {
+            if (EntryOf(handle) is { } entry)
+            {
+                yield return entry;
+            }
+        }
+    }
 
     /// <summary>
     /// The entry for a definition.
     /// </summary>
     /// <param name="handle">The definition.</param>
     /// <returns>The entry, or null for the module pseudo-type.</returns>
-    public TypeIndexEntry? EntryOf(TypeDefinitionHandle handle) => _entryByHandle.TryGetValue(handle, out var entry) ? entry : null;
+    public TypeIndexEntry? EntryOf(TypeDefinitionHandle handle)
+    {
+        try
+        {
+            var definition = _source.Reader.GetTypeDefinition(handle);
+            return definition.GetDeclaringType().IsNil && _source.Reader.GetString(definition.Name) == "<Module>"
+                ? null : _source.Entry(handle);
+        }
+        catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Finds a top-level definition by namespace and name.
@@ -280,7 +333,7 @@ public sealed class AssemblyTypeIndex
         ArgumentNullException.ThrowIfNull(name);
         foreach (var handle in Named(name))
         {
-            if (_entryByHandle.TryGetValue(handle, out var entry) && entry.IsVisible)
+            if (EntryOf(handle) is { IsVisible: true })
             {
                 yield return handle;
             }

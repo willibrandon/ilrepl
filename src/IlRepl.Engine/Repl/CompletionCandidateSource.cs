@@ -81,6 +81,44 @@ internal sealed class CompletionCandidateSource
     }
 
     /// <summary>
+    /// Warms full type details only when discovery needs a broad name search.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels metadata work before discovery.</param>
+    /// <returns>A task that settles when the required indexes are ready.</returns>
+    public async ValueTask PrepareAsync(CancellationToken cancellationToken)
+    {
+        if (_site.Kind is CompletionSiteKind.Method or CompletionSiteKind.Constructor or CompletionSiteKind.Field)
+        {
+            if (string.IsNullOrWhiteSpace(_site.DeclaringTypeText))
+            {
+                return;
+            }
+
+            try
+            {
+                if (ExactOwner(CilSyntaxParser.ParseType(_site.DeclaringTypeText)) is not null)
+                {
+                    return;
+                }
+            }
+            catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+            {
+                // Case correction still searches every captured type when the exact qualifier does not bind.
+            }
+        }
+        else if (_site.Kind is not (CompletionSiteKind.Type or CompletionSiteKind.MemberHead
+            or CompletionSiteKind.TypeArgument or CompletionSiteKind.Signature))
+        {
+            return;
+        }
+
+        foreach (var source in _view.Snapshot.Catalog.Sources)
+        {
+            await source.Index.WarmEntriesAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// Collects every eligible matching symbol while yielding during broad type searches.
     /// </summary>
     /// <param name="genericArguments">The generic argument owners selected by syntax and valid anchors.</param>
@@ -225,17 +263,9 @@ internal sealed class CompletionCandidateSource
             return [];
         }
 
-        try
+        if (ExactOwner(syntax) is { } exact)
         {
-            var found = SymbolBinder.BindType(syntax, _scope).Type;
-            if (HintNames(hinted, found))
-            {
-                return [found];
-            }
-        }
-        catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
-        {
-            // A mistyped qualifier is matched against the captured index without changing runtime lookup rules.
+            return [exact];
         }
 
         if (syntax.Kind != TypeSyntaxKind.Named)
@@ -284,6 +314,19 @@ internal sealed class CompletionCandidateSource
         }
 
         return result;
+    }
+
+    private TypeSymbol? ExactOwner(TypeSyntax syntax)
+    {
+        try
+        {
+            var found = SymbolBinder.BindType(syntax, _scope).Type;
+            return HintNames(syntax.AssemblyHint, found) ? found : null;
+        }
+        catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+        {
+            return null;
+        }
     }
 
     private async ValueTask AddTypesAsync(
