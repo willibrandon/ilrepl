@@ -44,8 +44,10 @@ public sealed class TypeLifetimeTests
     /// A definition dropped by .reset collects while other threads keep resolving names, with
     /// and without a did-you-mean: a name search never walks the runtime's assembly list, whose
     /// walk keeps every collectible assembly alive for its duration.
+    /// Other tests capture process-wide assembly snapshots, so only this test's resolver workers may run alongside its collection checks.
     /// </remarks>
     [TestMethod]
+    [DoNotParallelize]
     public void Reset_CollectsWhileOtherThreadsResolveNames()
     {
         var resolver = new TypeResolver();

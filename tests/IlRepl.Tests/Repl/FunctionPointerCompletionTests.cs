@@ -31,7 +31,7 @@ public sealed class FunctionPointerCompletionTests
     [DataRow(MethodCallingConvention.ThisCall, false)]
     [DataRow(MethodCallingConvention.FastCall, false)]
     [DataRow(MethodCallingConvention.Default, false)]
-    [DataRow((MethodCallingConvention)9, false)]
+    [DataRow(MethodCallingConvention.Unmanaged, false)]
     [DataRow(MethodCallingConvention.C, true)]
     [DataRow(MethodCallingConvention.StdCall, true)]
     [DataRow(MethodCallingConvention.ThisCall, true)]
@@ -51,7 +51,7 @@ public sealed class FunctionPointerCompletionTests
                     MethodCallingConvention.ThisCall => typeof(System.Runtime.CompilerServices.CallConvThiscall),
                     _ => typeof(System.Runtime.CompilerServices.CallConvFastcall),
                 };
-                pointer.CallingConvention = (MethodCallingConvention)9;
+                pointer.CallingConvention = MethodCallingConvention.Unmanaged;
                 pointer.ReturnType = new OptionalModifierType(module.ImportReference(marker), pointer.ReturnType);
             }
 
@@ -66,9 +66,9 @@ public sealed class FunctionPointerCompletionTests
             get.Body.Instructions.Add(Instruction.Create(OpCodes.Ldsfld, type.Fields[0]));
             get.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
             type.Methods.Add(get);
-        }, session.State.Resolver);
+        }, session.State.Resolver, "FunctionPointers" + Guid.NewGuid().ToString("N"));
         using var completer = new OperandCompleter(session);
-        var owner = $"[{assembly.GetName().Name}]N.Fixture";
+        var owner = $"[{assembly.GetName().Name}]{fixture.FullName}";
         var methodLine = await Complete(completer, $"call {owner}::Accept");
         var fieldLine = await Complete(completer, $"ldsfld {owner}::Native");
         var returnLine = await Complete(completer, $"call {owner}::FetchPointer");
@@ -103,10 +103,10 @@ public sealed class FunctionPointerCompletionTests
             outer.Parameters.Add(new ParameterDefinition(new PointerType(inner)));
             outer.Parameters.Add(new ParameterDefinition(new ByReferenceType(inner)));
             type.Fields.Add(new FieldDefinition("Nested", FieldAttributes.Public | FieldAttributes.Static, new ArrayType(outer)));
-        }, session.State.Resolver);
+        }, session.State.Resolver, "NestedPointers" + Guid.NewGuid().ToString("N"));
         using var snapshot = BindingSnapshot.Capture(session.State.Context);
         var scope = new SnapshotBindingScope(snapshot);
-        var syntax = CilSyntaxParser.ParseFieldReference($"[{assembly.GetName().Name}]N.Fixture::Nested");
+        var syntax = CilSyntaxParser.ParseFieldReference($"[{assembly.GetName().Name}]{fixture.FullName}::Nested");
         var expected = SymbolBinder.BindFieldReference(syntax, scope).FieldType;
         Assert.AreEqual(expected, RuntimeSymbolImporter.Import(fixture.GetField("Nested")!).FieldType);
     }

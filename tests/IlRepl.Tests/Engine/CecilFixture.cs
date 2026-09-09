@@ -15,18 +15,20 @@ internal static class CecilFixture
     private static int s_counter;
 
     /// <summary>
-    /// Builds and loads an assembly holding one public class <c>N.Fixture</c>.
+    /// Builds and loads an assembly holding one public class in namespace <c>N</c>.
     /// </summary>
     /// <param name="populate">Adds members to the class; the module is the first argument.</param>
     /// <param name="resolver">When given, the assembly is loaded through the resolver, which keeps its image for listings.</param>
+    /// <param name="typeName">The fixture's simple name, which may distinguish concurrently loaded test types.</param>
     /// <returns>The loaded assembly, its bytes, and the fixture type.</returns>
-    public static (Assembly Assembly, byte[] Image, Type Fixture) Build(Action<ModuleDefinition, TypeDefinition> populate, TypeResolver? resolver = null)
+    public static (Assembly Assembly, byte[] Image, Type Fixture) Build(Action<ModuleDefinition, TypeDefinition> populate,
+        TypeResolver? resolver = null, string typeName = "Fixture")
     {
         var name = "IlReplCecilFixture" + Interlocked.Increment(ref s_counter);
         using var definition = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0, 0, 0)), name, ModuleKind.Dll);
         var module = definition.MainModule;
         module.ImportReference(typeof(object));
-        var type = new TypeDefinition("N", "Fixture", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        var type = new TypeDefinition("N", typeName, TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
         module.Types.Add(type);
         populate(module, type);
         using var stream = new MemoryStream();
@@ -35,6 +37,6 @@ internal static class CecilFixture
         var assembly = resolver is null
             ? new AssemblyLoadContext(name, isCollectible: false).LoadFromStream(new MemoryStream(image))
             : resolver.LoadImage(image);
-        return (assembly, image, assembly.GetType("N.Fixture")!);
+        return (assembly, image, assembly.GetType("N." + typeName)!);
     }
 }
