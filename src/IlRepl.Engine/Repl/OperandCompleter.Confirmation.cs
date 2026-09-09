@@ -49,6 +49,12 @@ public sealed partial class OperandCompleter
                         return null;
                     }
 
+                    if (site.Owner == "jmp" && instruction.Operand.Method is { } target
+                        && !MemberEligibility.Admits(target.Method, site, query.View))
+                    {
+                        return null;
+                    }
+
                     if (!Matches(instruction, candidate, site))
                     {
                         return null;

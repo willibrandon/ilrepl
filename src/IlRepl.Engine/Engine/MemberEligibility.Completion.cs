@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
@@ -41,7 +42,8 @@ public static partial class MemberEligibility
             "newobj" => method.Name == ".ctor" && method.DeclaringType is { IsAbstract: false },
             ".custom" => method.Name == ".ctor" && method.DeclaringType is { IsAbstract: false } owner
                 && HasBase(owner, "System.Attribute", scope),
-            "ldftn" or "jmp" => !method.IsAbstract,
+            "ldftn" => !method.IsAbstract,
+            "jmp" => !method.IsAbstract && IsJumpTarget(method, view),
             "ldvirtftn" => !method.IsStatic && method.IsVirtual && !method.IsConstructor,
             "ldtoken method" => true,
             ".override" => IsOverrideTarget(method, view),
@@ -139,6 +141,80 @@ public static partial class MemberEligibility
     {
         ArgumentNullException.ThrowIfNull(method);
         return method.IsDeclared && method.Source != MethodSymbolSource.Forward && method.HasIlBody;
+    }
+
+    private static bool IsJumpTarget(MethodSymbol method, EditingView view)
+    {
+        var source = view.OpenMethod;
+        var convention = source?.CallingConvention
+            ?? (view.IsVarArg ? CallingConventions.VarArgs : CallingConventions.Standard);
+        var parameters = source?.Parameters
+            ?? view.Scope.Arguments.Select(argument => new ParameterSymbol(argument.Type, argument.Name)).ToArray();
+        if (method.IsStatic != (source?.IsStatic ?? true) || method.CallingConvention != convention
+            || method.Arity != view.Scope.Generics.MethodArguments.Count || method.Parameters.Count != parameters.Count)
+        {
+            return false;
+        }
+
+        // Generic starters may acquire compatible arguments later. Match their parameter shapes
+        // consistently now, then compare the actual instantiation when its signature is complete.
+        var substitutions = method.IsGenericDefinition ? new Dictionary<int, TypeSymbol>() : null;
+        bool Match(TypeSymbol target, TypeSymbol current) => substitutions is null ? SymbolIdentity.Equal(target, current)
+            : MatchJumpType(target, current, method.Definition, substitutions);
+        bool MatchList(IReadOnlyList<TypeSymbol> targets, IReadOnlyList<TypeSymbol> current) => targets.Count == current.Count
+            && targets.Zip(current).All(pair => Match(pair.First, pair.Second));
+        if (!Match(method.ReturnType, source?.ReturnType ?? TypeSymbol.Object)
+            || !MatchList(method.ReturnRequiredModifiers, source?.ReturnRequiredModifiers ?? [])
+            || !MatchList(method.ReturnOptionalModifiers, source?.ReturnOptionalModifiers ?? [])
+            || !method.Parameters.Zip(parameters).All(pair => Match(pair.First.Type, pair.Second.Type)
+                && MatchList(pair.First.RequiredModifiers, pair.Second.RequiredModifiers)
+                && MatchList(pair.First.OptionalModifiers, pair.Second.OptionalModifiers)))
+        {
+            return false;
+        }
+
+        if (!method.IsStatic)
+        {
+            var receiver = view.Scope.Arguments.Count == 0 ? null : view.Scope.Arguments[0].Type;
+            var owner = method.DeclaringType!;
+            return receiver is not null && (owner.IsValueTypeShape
+                ? SymbolIdentity.Equal(receiver, TypeSymbol.ByRef(owner))
+                : SymbolRelations.IsAssignable(receiver, owner, view.Scope));
+        }
+
+        return true;
+    }
+
+    private static bool MatchJumpType(TypeSymbol target, TypeSymbol current, DefinitionId definition,
+        Dictionary<int, TypeSymbol> substitutions)
+    {
+        if (target.Kind == TypeSymbolKind.MethodParameter && target.Owner == definition)
+        {
+            if (substitutions.TryGetValue(target.Position, out var previous))
+            {
+                return SymbolIdentity.Equal(previous, current);
+            }
+
+            substitutions.Add(target.Position, current);
+            return true;
+        }
+
+        bool Match(TypeSymbol first, TypeSymbol second) => MatchJumpType(first, second, definition, substitutions);
+        bool MatchList(IReadOnlyList<TypeSymbol> first, IReadOnlyList<TypeSymbol> second) => first.Count == second.Count
+            && first.Zip(second).All(pair => Match(pair.First, pair.Second));
+        if (target.Kind != current.Kind
+            || target.Element is { } element && !Match(element, current.Element!)
+            || !MatchList(target.Arguments, current.Arguments)
+            || target.Modifier is { } modifier && !Match(modifier, current.Modifier!)
+            || target.Signature is { } signature && (!Match(signature.ReturnType, current.Signature!.ReturnType)
+                || !MatchList(signature.Parameters, current.Signature.Parameters)))
+        {
+            return false;
+        }
+
+        var substituted = SymbolRelations.Rewrite(target, type => type.Kind == TypeSymbolKind.MethodParameter && type.Owner == definition
+            ? substitutions.GetValueOrDefault(type.Position) : null);
+        return SymbolIdentity.Equal(substituted, current);
     }
 
     private static bool IsArrayElement(TypeSymbol type) => type.Kind switch

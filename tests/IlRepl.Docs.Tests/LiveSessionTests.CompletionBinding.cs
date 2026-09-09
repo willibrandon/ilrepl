@@ -5,6 +5,29 @@ namespace IlRepl.Docs.Tests;
 public sealed partial class LiveSessionTests
 {
     /// <summary>
+    /// Jump completion excludes incompatible overloads before accepting and running the matching target.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_JumpCompletion_FiltersSignatures(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        await PasteAsync(page, ".method int32 Bridge(int32 value) {\njmp Math::Abs");
+        await ExpectCompletionAsync(page, "❯ Abs(int32)");
+        await ExpectCompletionAsync(page, "members 1/1");
+        await page.Keyboard.PressAsync("Tab");
+        await PasteAsync(page, "\n}\nldc.i4.s -7\ncall Bridge\nret");
+        await page.Keyboard.PressAsync("Enter");
+        await ExpectCompletionAsync(page, "= 7 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// Jump targets and nested types beneath generic owners complete and execute in the browser.
     /// </summary>
     /// <param name="browser">The browser engine.</param>

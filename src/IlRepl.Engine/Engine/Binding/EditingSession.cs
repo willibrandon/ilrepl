@@ -215,6 +215,7 @@ public sealed partial class EditingSession : IDisposable
             body.LabelSpace, _state.InBlockComment, [.. _skipped])
         {
             TypeArguments = _state.TypeArguments,
+            IsVarArg = body.IsVarArg,
             ThisSlots = [.. Enumerable.Range(0, body.Stack.Items.Count).Select(body.Stack.IsThisAt)],
             OwnerKind = _state.OpenTypes.LastOrDefault()?.Header.Kind,
             DeclarationContext = DeclarationContext(),

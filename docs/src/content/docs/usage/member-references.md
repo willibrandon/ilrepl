@@ -22,6 +22,11 @@ Three shortcuts make the prompt friendlier:
 Tab completes the type and, after `::`, the member in these short forms. Each overload has its
 own row; the detail pane shows its complete signature.
 
+For `jmp`, the palette offers targets whose calling convention, return type, and parameters
+match the enclosing method, including a compatible receiver for instance methods. At cell
+level it uses the cell's `object` return type and `.args` declarations. `ldftn` does not require
+the target to share the enclosing signature.
+
 ```cil
 call Console::WriteLine(string)
 call Math::Max(int32, int32)

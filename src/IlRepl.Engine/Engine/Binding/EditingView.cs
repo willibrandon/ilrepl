@@ -38,6 +38,11 @@ public sealed record EditingView(
     public IReadOnlyList<TypeSymbol>? TypeArguments { get; init; }
 
     /// <summary>
+    /// Whether the cell or open method uses the vararg calling convention.
+    /// </summary>
+    public bool IsVarArg { get; init; }
+
+    /// <summary>
     /// The original receiver provenance of each stack slot, ordered from bottom to top.
     /// </summary>
     public IReadOnlyList<bool> ThisSlots { get; init; } = [];
