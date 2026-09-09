@@ -94,7 +94,8 @@ public sealed partial class LiveSessionTests
             lastSource = $".class public {name}<T> {{\n.field public !0 value\n"
                 + ".class nested public Inner<U> { }\n}\n.typeparams (TPreview)\n";
             await PasteAsync(page, lastSource + $"ldtoken {name}");
-            await Assertions.Expect(terminal).ToContainTextAsync("❯ " + name + "<", options);
+            await page.WaitForFunctionAsync("name => document.querySelector('#terminal').textContent.includes('❯ ' + name + '<')",
+                name, new() { PollingInterval = 16, Timeout = 30_000 });
         }
 
         TestContext.WriteLine($"1000 generic editor previews in {browser}: {started.Elapsed.TotalSeconds:F1} s");
