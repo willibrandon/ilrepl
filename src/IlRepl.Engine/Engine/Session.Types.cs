@@ -211,7 +211,7 @@ public sealed partial class Session
 
         var path = enclosing is null ? (header.Namespace.Length == 0 ? name : header.Namespace + "." + name) : enclosing.Path + "/" + name;
         table.Add(path, builder);
-        var context = new ParseContext([], [], new GenericContext(generics, []), Resolver, Signatures(), table);
+        var context = new ParseContext([], [], new GenericContext(generics, []), Resolver, Signatures(), table) { Scope = enclosing?.Scope };
 
         Type? baseType = null;
         var kind = header.Kind;
@@ -429,7 +429,7 @@ public sealed partial class Session
         }
 
         table.Forward = (name, valueType) => ForwardType(block, name, valueType);
-        return new ParseContext([], [], new GenericContext(block.GenericParameters, []), Resolver, Signatures(), table);
+        return new ParseContext([], [], new GenericContext(block.GenericParameters, []), Resolver, Signatures(), table) { Scope = block.Scope };
     }
 
     private static TypeBuilder? ForwardType(OpenTypeBlock block, string name, bool valueType)
@@ -1202,6 +1202,7 @@ public sealed partial class Session
     {
         Submissions++;
         Generation++;
+        CompletionRevision++;
         var accepted = new SessionType(declaration, compiled.Family.Types, compiled.Family.Types[declaration.FullName], compiled.Family.Definition, compiled.Prototypes) { Order = Submissions };
         var index = previous is null ? -1 : _types.IndexOf(previous);
         if (index < 0)

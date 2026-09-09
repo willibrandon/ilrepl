@@ -59,6 +59,18 @@ public sealed partial class ReplCoreDisassembleTests
     }
 
     /// <summary>
+    /// A mistyped method under .dis gets the same suggestion a call would.
+    /// </summary>
+    [TestMethod]
+    public void Handle_Dis_MistypedMethod_ShowsDidYouMean()
+    {
+        var core = new ReplCore();
+        var errors = Errors(core, ".dis instance string String::Trmi()");
+        Assert.Contains("no method 'Trmi' on string (did you mean 'Trim'?)", errors);
+        Assert.IsTrue(core.Handle(".dis instance string String::Trim()").Succeeded);
+    }
+
+    /// <summary>
     /// A framework method lists with its header, maxstack, hex offsets, a stack column, and a closing brace.
     /// </summary>
     [TestMethod]

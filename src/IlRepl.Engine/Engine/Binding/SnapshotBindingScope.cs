@@ -77,7 +77,7 @@ public sealed class SnapshotBindingScope : IBindingScope
     }
 
     /// <summary>
-    /// Finds a type by its IL name the way <see cref="TypeResolver.Resolve"/> does, over the
+    /// Finds a type by its IL name the way <see cref="TypeResolver.Resolve(string, string?)"/> does, over the
     /// snapshot's assemblies: the hinted assembly, the engine's and the core library, every
     /// assembly in search order, the common namespaces, and last a scan of exported short names.
     /// </summary>
@@ -143,7 +143,8 @@ public sealed class SnapshotBindingScope : IBindingScope
         }
 
         var hint = assemblyHint is null ? "" : $" in [{assemblyHint}]";
-        throw new ReplException($"type '{ilName}' not found{hint} (load its assembly with .load)");
+        var suggestion = NameSuggestions.NearestType(ilName, assemblyHint, _shared.Index ??= new TypeIndex(_snapshot), Access, this);
+        throw new ReplException($"type '{ilName}' not found{hint}{(suggestion is null ? " (load its assembly with .load)" : NameSuggestions.Parenthetical(suggestion.Spelling))}");
     }
 
     private TypeSymbol? FindEverywhere(string ns, string typeName, string[] nested)
@@ -217,7 +218,7 @@ public sealed class SnapshotBindingScope : IBindingScope
     {
         ArgumentNullException.ThrowIfNull(declaring);
         ArgumentNullException.ThrowIfNull(name);
-        return [.. AllMethods(declaring).Where(m => m.Name == name)];
+        return [.. AllMethodsOf(declaring).Where(m => m.Name == name)];
     }
 
     /// <summary>
@@ -225,7 +226,7 @@ public sealed class SnapshotBindingScope : IBindingScope
     /// and non-family static members of a base left out and an overridden virtual listed once.
     /// Constructors are not among them.
     /// </summary>
-    private List<MethodSymbol> AllMethods(TypeSymbol declaring)
+    private List<MethodSymbol> AllMethodsOf(TypeSymbol declaring)
     {
         var collected = new List<MethodSymbol>();
         var first = true;
@@ -340,6 +341,23 @@ public sealed class SnapshotBindingScope : IBindingScope
 
             first = false;
         }
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<MethodSymbol> AllMethods(TypeSymbol declaring)
+    {
+        ArgumentNullException.ThrowIfNull(declaring);
+        return AllMethodsOf(declaring);
+    }
+
+    /// <inheritdoc/>
+    public AccessContext Access => _snapshot.Access;
+
+    /// <inheritdoc/>
+    public IBindingScope ForSuggestions(out IDisposable? lease)
+    {
+        lease = null;
+        return this;
     }
 
     /// <inheritdoc/>
@@ -605,5 +623,7 @@ public sealed class SnapshotBindingScope : IBindingScope
         public Dictionary<TypeSymbol, IReadOnlyList<FieldSymbol>> Fields { get; } = [];
 
         public Dictionary<DefinitionId, IReadOnlyList<GenericParameterSymbol>> Parameters { get; } = [];
+
+        public TypeIndex? Index { get; set; }
     }
 }

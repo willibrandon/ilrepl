@@ -35,6 +35,47 @@ public sealed class RuntimeBindingAdapter
     }
 
     /// <summary>
+    /// The runtime type a symbol stands for, built from the definitions the runtime registry
+    /// remembers, with no scope: for symbols that were imported from runtime types and are
+    /// projected back outside a binding.
+    /// </summary>
+    /// <param name="symbol">The symbol.</param>
+    /// <returns>The type.</returns>
+    /// <exception cref="InvalidOperationException">The symbol names a definition no runtime object stands for.</exception>
+    public static Type Materialize(TypeSymbol symbol)
+    {
+        ArgumentNullException.ThrowIfNull(symbol);
+        switch (symbol.Kind)
+        {
+            case TypeSymbolKind.Primitive:
+                return CilPrimitives.TypeOf(symbol.Keyword!);
+            case TypeSymbolKind.Named:
+                return RuntimeDefinitions.TypeOf(symbol.Definition) ?? throw new InvalidOperationException($"no runtime type stands for {SymbolRenderer.IlPath(symbol)}");
+            case TypeSymbolKind.Constructed:
+                return Materialize(symbol.Element!).MakeGenericType([.. symbol.Arguments.Select(Materialize)]);
+            case TypeSymbolKind.TypeParameter:
+            case TypeSymbolKind.MethodParameter:
+                return RuntimeDefinitions.ParameterOf(symbol.Owner, symbol.Kind == TypeSymbolKind.MethodParameter, symbol.Position)
+                    ?? throw new InvalidOperationException($"no runtime type stands for the generic parameter {SymbolRenderer.Pretty(symbol)}");
+            case TypeSymbolKind.SzArray:
+                return Materialize(symbol.Element!).MakeArrayType();
+            case TypeSymbolKind.Array:
+                return Materialize(symbol.Element!).MakeArrayType(symbol.Rank);
+            case TypeSymbolKind.ByRef:
+                return Materialize(symbol.Element!).MakeByRefType();
+            case TypeSymbolKind.Pointer:
+                return Materialize(symbol.Element!).MakePointerType();
+            case TypeSymbolKind.FunctionPointer:
+                return typeof(nint);
+            case TypeSymbolKind.Modified:
+            case TypeSymbolKind.Pinned:
+                return Materialize(symbol.Element!);
+            default:
+                throw new InvalidOperationException($"no runtime type for a {symbol.Kind} symbol");
+        }
+    }
+
+    /// <summary>
     /// The runtime types of bound type symbols.
     /// </summary>
     /// <param name="types">The symbols.</param>

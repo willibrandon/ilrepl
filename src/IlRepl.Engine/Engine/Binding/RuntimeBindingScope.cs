@@ -154,7 +154,7 @@ public sealed class RuntimeBindingScope : IBindingScope
         }
 
         var lookupName = writtenArity > 0 && !name.Contains('`') ? name + "`" + SymbolRenderer.Number(writtenArity) : name;
-        return new TypeLookupResult(ImportType(Context.Resolver.Resolve(lookupName, assemblyHint)), false);
+        return new TypeLookupResult(ImportType(Context.Resolver.Resolve(lookupName, assemblyHint, Context)), false);
     }
 
     /// <inheritdoc/>
@@ -225,6 +225,40 @@ public sealed class RuntimeBindingScope : IBindingScope
         }
 
         return [.. type.GetMethods(AllMembers).Where(m => m.Name == name).Select(m => Register(RuntimeSymbolImporter.Import(m), m))];
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<MethodSymbol> AllMethods(TypeSymbol declaring)
+    {
+        ArgumentNullException.ThrowIfNull(declaring);
+        var type = TypeOf(declaring);
+        if (RequiresDefinitionLookup(declaring))
+        {
+            var definition = type.GetGenericTypeDefinition();
+            return [.. definition.GetMethods(AllMembers)
+                .Where(m => !m.IsGenericMethodDefinition)
+                .Select(m => Register(SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(m), declaring, []), new DefinitionMember(m)))];
+        }
+
+        return [.. type.GetMethods(AllMembers).Select(m => Register(RuntimeSymbolImporter.Import(m), m))];
+    }
+
+    /// <inheritdoc/>
+    public AccessContext Access
+    {
+        get
+        {
+            var scope = Context.Scope ?? AccessScope.Cell;
+            return new AccessContext(scope.Type is null ? null : ImportType(scope.Type), scope.Description);
+        }
+    }
+
+    /// <inheritdoc/>
+    public IBindingScope ForSuggestions(out IDisposable? lease)
+    {
+        var snapshot = BindingSnapshot.Capture(Context);
+        lease = snapshot;
+        return new SnapshotBindingScope(snapshot);
     }
 
     /// <inheritdoc/>

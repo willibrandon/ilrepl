@@ -38,4 +38,14 @@ public sealed record TypeIndexEntry(DefinitionId Definition, string Name, string
     /// True when the type and every type enclosing it are public: what an assembly exports.
     /// </summary>
     public bool IsVisible { get; init; }
+
+    /// <summary>
+    /// The simple name of the defining assembly; empty for a type being written.
+    /// </summary>
+    public string AssemblyName { get; init; } = "";
+
+    /// <summary>
+    /// True for a type the session declared, written or accepted.
+    /// </summary>
+    public bool IsSession { get; init; }
 }

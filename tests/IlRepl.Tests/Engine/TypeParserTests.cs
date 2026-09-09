@@ -121,6 +121,94 @@ public sealed class TypeParserTests
     }
 
     /// <summary>
+    /// A mistyped type names the nearest type, and the load hint goes.
+    /// </summary>
+    [TestMethod]
+    public void Parse_MistypedType_NamesTheNearest()
+    {
+        var ex = Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("StringBuilderr", Context));
+        Assert.AreEqual("type 'StringBuilderr' not found (did you mean 'StringBuilder'?)", ex.Message);
+        Assert.AreEqual("type 'Cosnole' not found (did you mean 'Console'?)", Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("Cosnole", Context)).Message);
+        Assert.AreEqual("type 'Xonsole' not found (did you mean 'Console'?)", Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("Xonsole", Context)).Message);
+    }
+
+    /// <summary>
+    /// When nothing is near, the message still points at .load.
+    /// </summary>
+    [TestMethod]
+    public void Parse_NothingNear_KeepsTheLoadHint()
+    {
+        Assert.AreEqual("type 'NoSuchTypeAnywhere' not found (load its assembly with .load)", Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("NoSuchTypeAnywhere", Context)).Message);
+        Assert.AreEqual("type 'Foo' not found in [Nope] (load its assembly with .load)", Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("[Nope]Foo", Context)).Message);
+    }
+
+    /// <summary>
+    /// A nearest name that is ambiguous as a short name is spelled qualified.
+    /// </summary>
+    [TestMethod]
+    public void Parse_AmbiguousNearest_IsSpelledQualified()
+    {
+        var resolver = new TypeResolver();
+        resolver.Load(SampleHost.Samples.GreeterDll);
+        var context = new ParseContext([], [], GenericContext.Empty, resolver, []);
+        var ex = Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("Countr", context));
+        Assert.AreEqual("type 'Countr' not found (did you mean 'Greeter.Counter'?)", ex.Message);
+        Assert.Contains("ambiguous", Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("Counter", context)).Message);
+    }
+
+    /// <summary>
+    /// Short names that resolve today still resolve, and the one that is ambiguous still is.
+    /// </summary>
+    [TestMethod]
+    public void Parse_ShortNamesThatResolveToday_StillResolve()
+    {
+        Assert.AreEqual(typeof(System.Net.WebUtility), TypeParser.Parse("WebUtility", Context));
+        Assert.AreEqual(typeof(System.Collections.Immutable.ImmutableArray<>), TypeParser.Parse("ImmutableArray`1", Context));
+        var ex = Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("JsonSerializer", Context));
+        Assert.Contains("ambiguous", ex.Message);
+    }
+
+    /// <summary>
+    /// A mistyped session type is suggested by its own name.
+    /// </summary>
+    [TestMethod]
+    public void Parse_SessionTypeTypo_SuggestsTheSessionType()
+    {
+        var session = IlLines.Load(".class public Point { }");
+        var ex = Assert.ThrowsExactly<ReplException>(() => session.AddLine("newobj instance void Poit::.ctor()"));
+        Assert.AreEqual("type 'Poit' not found (did you mean 'Point'?)", ex.Message);
+    }
+
+    /// <summary>
+    /// A nested session type the cell cannot use is not suggested to it, and is to a body that can.
+    /// </summary>
+    [TestMethod]
+    public void Parse_MistypedType_NeverSuggestsAnInaccessibleNestedSessionType()
+    {
+        var session = IlLines.Load(
+            ".class public Outer {",
+            ".class nested private Secret { }",
+            "}");
+        var ex = Assert.ThrowsExactly<ReplException>(() => session.AddLine("newobj instance void Secrt::.ctor()"));
+        Assert.StartsWith("type 'Secrt' not found", ex.Message);
+        Assert.DoesNotContain("Secret", ex.Message, "the cell cannot use a nested private type, so it is not offered one");
+    }
+
+    /// <summary>
+    /// A header inside a class judges its suggestions from that class, not from the cell.
+    /// </summary>
+    [TestMethod]
+    public void Parse_HeaderContext_UsesTheEnclosingScope()
+    {
+        var session = IlLines.Load(
+            ".class public Outer {",
+            ".class nested private Secret { }");
+        // Outer/Secrt would name a nested type declared later; a bare Secrt names nothing, and the block may see Secret.
+        var ex = Assert.ThrowsExactly<ReplException>(() => session.AddLine(".field public static class Secrt Holder"));
+        Assert.AreEqual("type 'Secrt' not found (did you mean 'Secret'?)", ex.Message);
+    }
+
+    /// <summary>
     /// A bare short name that exists in more than one namespace is reported as ambiguous.
     /// </summary>
     [TestMethod]

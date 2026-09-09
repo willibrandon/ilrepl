@@ -159,7 +159,7 @@ public static class InstructionParser
                 continue;
             }
 
-            var d = Levenshtein(typo, name);
+            var d = EditDistance.Levenshtein(typo, name);
             if (d < bestDistance)
             {
                 bestDistance = d;
@@ -168,28 +168,5 @@ public static class InstructionParser
         }
 
         return best;
-    }
-
-    private static int Levenshtein(string a, string b)
-    {
-        var previous = new int[b.Length + 1];
-        var current = new int[b.Length + 1];
-        for (var j = 0; j <= b.Length; j++)
-        {
-            previous[j] = j;
-        }
-
-        for (var i = 1; i <= a.Length; i++)
-        {
-            current[0] = i;
-            for (var j = 1; j <= b.Length; j++)
-            {
-                current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
-            }
-
-            (previous, current) = (current, previous);
-        }
-
-        return previous[b.Length];
     }
 }

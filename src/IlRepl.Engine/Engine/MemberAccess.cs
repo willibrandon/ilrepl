@@ -1,4 +1,5 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -147,8 +148,11 @@ public static class MemberAccess
         }
 
         var description = $"{TypeNameFormatter.Pretty(field.FieldType)} {TypeNameFormatter.Pretty(declaring)}::{field.Name}";
-        return TypeVerdict(declaring, scope, types, judgeAll)
-            ?? MemberVerdict(AccessWord(field.Attributes), declaring, description, scope, types);
+        var facts = Facts(types);
+        var where = Context(scope);
+        var declaringSymbol = RuntimeSymbolImporter.Import(declaring);
+        return MemberEligibility.TypeVerdict(declaringSymbol, where, facts, judgeAll)
+            ?? MemberEligibility.MemberVerdict(AccessWord(field.Attributes), declaringSymbol, description, where, facts);
     }
 
     /// <summary>
@@ -194,7 +198,7 @@ public static class MemberAccess
         var description = method.Declared is { } declared
             ? $"{declared.DescribeMember()} on {TypeNameFormatter.Pretty(declaring)}"
             : MemberResolver.Describe(method.Method);
-        return MemberVerdict(AccessWord(attributes), declaring, description, scope, types);
+        return MemberEligibility.MemberVerdict(AccessWord(attributes), RuntimeSymbolImporter.Import(declaring), description, Context(scope), Facts(types));
     }
 
     /// <summary>
@@ -211,99 +215,16 @@ public static class MemberAccess
         ArgumentNullException.ThrowIfNull(type);
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(types);
-        if (type.IsGenericParameter)
-        {
-            return null;
-        }
-
-        while (type.HasElementType)
-        {
-            type = type.GetElementType()!;
-            if (type.IsGenericParameter)
-            {
-                return null;
-            }
-        }
-
-        if (type.IsGenericType && !type.IsGenericTypeDefinition)
-        {
-            foreach (var argument in type.GetGenericArguments())
-            {
-                if (TypeVerdict(argument, scope, types, judgeAll) is { } problem)
-                {
-                    return problem;
-                }
-            }
-        }
-
-        var definition = TypeRelations.Definition(type);
-        if (!judgeAll && !TypeRelations.IsSessionType(definition))
-        {
-            return null;
-        }
-
-        if (!definition.IsNested)
-        {
-            // A top-level session type is visible throughout the session, public or not.
-            return null;
-        }
-
-        var enclosing = definition.DeclaringType!;
-        if (TypeVerdict(enclosing, scope, types, judgeAll) is { } outerProblem)
-        {
-            return outerProblem;
-        }
-
-        var name = TypeNameFormatter.Pretty(definition);
-        var outerName = TypeNameFormatter.Pretty(enclosing);
-        switch (definition.Attributes & TypeAttributes.VisibilityMask)
-        {
-            case TypeAttributes.NestedPublic:
-            case TypeAttributes.NestedAssembly:
-            case TypeAttributes.NestedFamORAssem:
-                return null;
-            case TypeAttributes.NestedPrivate:
-                return scope.Type is not null && TypeRelations.IsWithin(scope.Type, enclosing)
-                    ? null
-                    : $"{name} is nested private; only {outerName} and the types nested in it can use it, not {scope.Description}";
-            default:
-                return FamilyAccessor(scope.Type, enclosing, types) is not null
-                    ? null
-                    : $"{name} is {VisibilityWord(definition.Attributes)}; only {outerName} and types derived from it can use it, not {scope.Description}";
-        }
-    }
-
-    private static string? MemberVerdict(string access, Type declaring, string description, AccessScope scope, TypeTable types)
-    {
-        var owner = TypeNameFormatter.Pretty(declaring);
-        return access switch
-        {
-            "public" or "assembly" or "famorassem" => null,
-            "private" => scope.Type is not null && TypeRelations.IsWithin(scope.Type, declaring)
-                ? null
-                : $"{description} is private; only {owner} and the types nested in it can use it, not {scope.Description}",
-            "privatescope" => scope.Type is not null && ReferenceEquals(TypeRelations.Outermost(scope.Type), TypeRelations.Outermost(declaring))
-                ? null
-                : $"{description} is privatescope (no access word); only {owner}'s own module can use it, not {scope.Description} (give it an access word such as public)",
-            _ => FamilyAccessor(scope.Type, declaring, types) is not null
-                ? null
-                : $"{description} is {access}; only {owner} and types derived from it can use it, not {scope.Description}",
-        };
+        return MemberEligibility.TypeVerdict(RuntimeSymbolImporter.Import(type), Context(scope), Facts(types), judgeAll);
     }
 
     /// <summary>
-    /// The type in the scope, or one enclosing it, that is the declaring type or derives from it.
+    /// The facts the symbol rules need, answered by reflection and the table of types being written.
     /// </summary>
-    private static Type? FamilyAccessor(Type? scopeType, Type declaring, TypeTable types)
-    {
-        for (var current = scopeType; current is not null; current = current.DeclaringType)
-        {
-            if (TypeRelations.IsSameOrSubclassDefinition(current, declaring, types))
-            {
-                return current;
-            }
-        }
+    private static AccessFacts Facts(TypeTable types) => new(
+        symbol => TypeRelations.BaseTypeOf(RuntimeBindingAdapter.Materialize(symbol), types) is { } baseType ? RuntimeSymbolImporter.Import(baseType) : null,
+        symbol => TypeRelations.IsSessionType(RuntimeBindingAdapter.Materialize(symbol)),
+        symbol => symbol is null ? "?" : TypeNameFormatter.Pretty(RuntimeBindingAdapter.Materialize(symbol)));
 
-        return null;
-    }
+    private static AccessContext Context(AccessScope scope) => new(scope.Type is null ? null : RuntimeSymbolImporter.Import(scope.Type), scope.Description);
 }

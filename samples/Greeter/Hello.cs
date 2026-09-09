@@ -35,6 +35,16 @@ public static class Hello
     public static int Add(int a, int b) => a + b;
 
     /// <summary>
+    /// A second method whose name differs from <see cref="Add(int, int)"/> only in case, as IL allows.
+    /// </summary>
+    /// <param name="a">The first number.</param>
+    /// <param name="b">The second number.</param>
+    /// <returns>The sum.</returns>
+#pragma warning disable CA1707, IDE1006 // The lowercase name is the point: a member that differs from Add only in case.
+    public static int add(int a, int b) => a + b;
+#pragma warning restore CA1707, IDE1006
+
+    /// <summary>
     /// Adds two numbers of a different type, to exercise overload resolution by parameter types.
     /// </summary>
     /// <param name="a">The first number.</param>

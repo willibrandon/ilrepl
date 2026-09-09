@@ -76,7 +76,7 @@ public sealed class ReplCore
         get
         {
             var state = Session.State;
-            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count, Session.OpenType, Session.TypeCount, Session.Mark() with { EchoStack = Options.EchoStack, ShowTiming = Options.ShowTiming }, Session.OpenDepth);
+            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count, Session.OpenType, Session.TypeCount, Session.Mark() with { EchoStack = Options.EchoStack, ShowTiming = Options.ShowTiming }, Session.OpenDepth, Session.CompletionRevision);
         }
     }
 

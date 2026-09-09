@@ -150,6 +150,26 @@ public interface IBindingScope
     TypeSymbol? EnumUnderlyingType(TypeSymbol type);
 
     /// <summary>
+    /// Every loaded method a declaring type offers, whatever its name, as reflection lists them.
+    /// </summary>
+    /// <param name="declaring">The declaring type.</param>
+    /// <returns>The methods.</returns>
+    IReadOnlyList<MethodSymbol> AllMethods(TypeSymbol declaring);
+
+    /// <summary>
+    /// Where accesses in this scope are judged from.
+    /// </summary>
+    AccessContext Access { get; }
+
+    /// <summary>
+    /// A scope that answers from captured metadata alone, for the suggestions a failed lookup
+    /// makes: this scope when it already is one, else a snapshot of it, which the lease releases.
+    /// </summary>
+    /// <param name="lease">What to dispose once the suggestion is made, or null.</param>
+    /// <returns>The scope.</returns>
+    IBindingScope ForSuggestions(out IDisposable? lease);
+
+    /// <summary>
     /// The methods defined with <c>.method</c> at the top level, resolvable by bare name.
     /// </summary>
     IReadOnlyList<MethodSymbol> SessionMethods { get; }

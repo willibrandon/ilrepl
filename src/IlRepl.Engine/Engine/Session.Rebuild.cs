@@ -323,6 +323,7 @@ public sealed partial class Session
             // Only now has anything changed that a rollback could not undo: a redefinition the
             // cell refuses leaves the session, its generation included, as it was.
             Generation++;
+            CompletionRevision++;
             foreach (var definition in released.Distinct())
             {
                 SessionAssemblies.Release(definition);

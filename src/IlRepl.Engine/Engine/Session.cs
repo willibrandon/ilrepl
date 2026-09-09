@@ -120,6 +120,14 @@ public sealed partial class Session
     public long Generation { get; private set; }
 
     /// <summary>
+    /// Changes whenever anything a completion could depend on changes: an accepted line, a
+    /// commit, a run, an undo, a rollback, a clear, a reset, a load, bound type arguments, and a
+    /// change of the comment state a line left behind. Two equal statuses across such a change
+    /// have different revisions.
+    /// </summary>
+    public long CompletionRevision { get; private set; }
+
+    /// <summary>
     /// Whether a <c>/*</c> comment is open at the end of the last line normalized.
     /// </summary>
     public bool InBlockComment { get; private set; }
@@ -175,6 +183,11 @@ public sealed partial class Session
         var state = before;
         var kind = CilLexer.Classify(raw, ref state, out var text);
         InBlockComment = state;
+        if (state != before)
+        {
+            CompletionRevision++;
+        }
+
         return new NormalizedLine(raw, text, kind, before);
     }
 
@@ -186,6 +199,11 @@ public sealed partial class Session
     public void Forget(NormalizedLine line)
     {
         ArgumentNullException.ThrowIfNull(line);
+        if (InBlockComment != line.InBlockCommentBefore)
+        {
+            CompletionRevision++;
+        }
+
         InBlockComment = line.InBlockCommentBefore;
     }
 
@@ -226,6 +244,17 @@ public sealed partial class Session
             return new LineResult(LineOutcome.Empty, null, null);
         }
 
+        var accepted = AddTextLine(line);
+        if (accepted.Outcome != LineOutcome.Empty)
+        {
+            CompletionRevision++;
+        }
+
+        return accepted;
+    }
+
+    private LineResult AddTextLine(NormalizedLine line)
+    {
         var text = line.Text;
         if (_openType is not null)
         {
@@ -356,13 +385,18 @@ public sealed partial class Session
         }
 
         InBlockComment = mark.InBlockComment;
+        CompletionRevision++;
         return true;
     }
 
     /// <summary>
     /// Records a change forgetting lines cannot undo, such as a loaded assembly.
     /// </summary>
-    internal void AdvanceGeneration() => Generation++;
+    internal void AdvanceGeneration()
+    {
+        Generation++;
+        CompletionRevision++;
+    }
 
     /// <summary>
     /// Removes the last line: of the open method block, or of the cell body. Removing a method
@@ -377,6 +411,7 @@ public sealed partial class Session
             if (undone)
             {
                 Generation++;
+                CompletionRevision++;
             }
 
             return undone;
@@ -388,12 +423,14 @@ public sealed partial class Session
             {
                 _open = null;
                 Generation++;
+                CompletionRevision++;
                 return true;
             }
 
             _open.BodyLines.RemoveAt(_open.BodyLines.Count - 1);
             _open.State = ReplayOpenBody(_open);
             Generation++;
+            CompletionRevision++;
             return true;
         }
 
@@ -405,6 +442,7 @@ public sealed partial class Session
         _bodyLines.RemoveAt(_bodyLines.Count - 1);
         Rebuild();
         Generation++;
+        CompletionRevision++;
         return true;
     }
 
@@ -426,6 +464,7 @@ public sealed partial class Session
             _openType = null;
             ReplayFamily(header, kept);
             Generation++;
+            CompletionRevision++;
             return true;
         }
 
@@ -436,6 +475,7 @@ public sealed partial class Session
 
         _open = null;
         Generation++;
+        CompletionRevision++;
         return true;
     }
 
@@ -453,6 +493,7 @@ public sealed partial class Session
 
         AbandonTypeFamily();
         Generation++;
+        CompletionRevision++;
         return true;
     }
 
@@ -464,6 +505,7 @@ public sealed partial class Session
         _bodyLines.Clear();
         Rebuild();
         Generation++;
+        CompletionRevision++;
     }
 
     /// <summary>
@@ -498,6 +540,7 @@ public sealed partial class Session
         InBlockComment = false;
         Rebuild();
         Generation++;
+        CompletionRevision++;
     }
 
     /// <summary>
@@ -706,6 +749,7 @@ public sealed partial class Session
         _open = null;
         Submissions++;
         Generation++;
+        CompletionRevision++;
 
         if (replacing is not null && !_rebuilding)
         {
@@ -755,6 +799,7 @@ public sealed partial class Session
         TypeArguments = null;
         Rebuild();
         Generation++;
+        CompletionRevision++;
     }
 
     private void BindTypeArguments(string spec)
@@ -779,6 +824,7 @@ public sealed partial class Session
 
         TypeArguments = types;
         Generation++;
+        CompletionRevision++;
     }
 
     private void RequireCompatibleTypeReferences(MethodSignature replacement)

@@ -20,6 +20,7 @@ namespace IlRepl.Protocol;
 /// <param name="Types">The number of types defined so far, nested ones included.</param>
 /// <param name="Mark">Where the session stands, for withdrawing a block a line of which is refused.</param>
 /// <param name="OpenDepth">How many closing braces the engine is waiting for: open regions, methods, and types together.</param>
+/// <param name="Revision">A number that changes whenever anything a completion could depend on changes, including what equal statuses cannot show.</param>
 public sealed record SessionStatus(
     string Prompt,
     int CellNumber,
@@ -34,7 +35,8 @@ public sealed record SessionStatus(
     string? OpenType,
     int Types,
     SessionMark Mark,
-    int OpenDepth)
+    int OpenDepth,
+    long Revision = 0)
 {
     /// <summary>
     /// The status of a fresh session.

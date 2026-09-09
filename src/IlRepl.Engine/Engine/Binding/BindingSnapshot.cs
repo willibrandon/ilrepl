@@ -84,6 +84,11 @@ public sealed class BindingSnapshot : IDisposable
     public bool Inspecting { get; private init; }
 
     /// <summary>
+    /// Where accesses in the body are judged from.
+    /// </summary>
+    public AccessContext Access { get; private init; } = AccessContext.Cell;
+
+    /// <summary>
     /// Captures the context of a session's current body.
     /// </summary>
     /// <param name="session">The session.</param>
@@ -140,9 +145,15 @@ public sealed class BindingSnapshot : IDisposable
             }
         }
 
-        foreach (var assembly in context.Resolver.Assemblies)
+        // Reading the first assembly's metadata can itself bring the reader's assemblies into the
+        // process, after the list was enumerated; a second pass takes what the first one loaded, in
+        // the order the resolver would search them.
+        for (var pass = 0; pass < 2; pass++)
         {
-            Take(assembly, searched: true);
+            foreach (var assembly in context.Resolver.Assemblies.ToList())
+            {
+                Take(assembly, searched: true);
+            }
         }
 
         foreach (var assembly in sessionAssemblies ?? [])
@@ -201,6 +212,7 @@ public sealed class BindingSnapshot : IDisposable
             Arguments = [.. context.Arguments.Select(a => new VariableSymbol(RuntimeSymbolImporter.Import(a.Type), a.Name, false))],
             ThisIndex = context.ThisIndex,
             Inspecting = context.Inspecting,
+            Access = context.Scope is { } scope ? new AccessContext(scope.Type is null ? null : RuntimeSymbolImporter.Import(scope.Type), scope.Description) : AccessContext.Cell,
         };
         snapshot._leases.AddRange(leases);
         return snapshot;

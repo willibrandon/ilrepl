@@ -212,7 +212,7 @@ public sealed class CellState
     /// <summary>
     /// The parse context for the next line.
     /// </summary>
-    public ParseContext Context => new(_locals, _arguments, Generics, Resolver, Methods, Types) { ThisIndex = Member?.ThisType is null ? -1 : 0 };
+    public ParseContext Context => new(_locals, _arguments, Generics, Resolver, Methods, Types) { ThisIndex = Member?.ThisType is null ? -1 : 0, Scope = Scope };
 
     /// <summary>
     /// Checks that a <c>.method</c> body can close: every label is defined, and either the last

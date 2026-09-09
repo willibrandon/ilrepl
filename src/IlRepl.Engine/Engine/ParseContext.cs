@@ -43,6 +43,12 @@ public sealed record ParseContext(
     public bool Inspecting { get; init; }
 
     /// <summary>
+    /// The scope accesses in this context are judged from, for the suggestions a failed lookup
+    /// makes: a body's owner, or null for the cell. Null never means inspection.
+    /// </summary>
+    public AccessScope? Scope { get; init; }
+
+    /// <summary>
     /// Returns a copy with different generic parameters in scope.
     /// </summary>
     /// <param name="generics">The generic context.</param>

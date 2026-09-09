@@ -87,11 +87,25 @@ public static partial class SymbolRelations
     /// <returns>True when the definitions are related.</returns>
     public static bool IsSameOrSubclassDefinition(TypeSymbol derived, TypeSymbol baseType, IBindingScope scope)
     {
+        ArgumentNullException.ThrowIfNull(scope);
+        return IsSameOrSubclassDefinition(derived, baseType, scope.BaseOf);
+    }
+
+    /// <summary>
+    /// True when the definition of <paramref name="baseType"/> appears in the base chain of
+    /// <paramref name="derived"/>, with the base chain supplied as a function.
+    /// </summary>
+    /// <param name="derived">The candidate derived type.</param>
+    /// <param name="baseType">The base type.</param>
+    /// <param name="baseOf">The base type of a type, or null.</param>
+    /// <returns>True when the definitions are related.</returns>
+    public static bool IsSameOrSubclassDefinition(TypeSymbol derived, TypeSymbol baseType, Func<TypeSymbol, TypeSymbol?> baseOf)
+    {
         ArgumentNullException.ThrowIfNull(derived);
         ArgumentNullException.ThrowIfNull(baseType);
-        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(baseOf);
         var target = baseType.DefinitionOrSelf;
-        for (var current = derived; current is not null; current = scope.BaseOf(current))
+        for (var current = derived; current is not null; current = baseOf(current))
         {
             if (SymbolIdentity.Equal(current.DefinitionOrSelf, target))
             {

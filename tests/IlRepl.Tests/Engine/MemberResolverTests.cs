@@ -108,6 +108,102 @@ public sealed class MemberResolverTests
         Assert.AreEqual("int32 Math::Max(int32, int32)", text);
     }
 
+    /// <summary>
+    /// A mistyped method name gets the nearest member the context may call, confirmed to bind.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_MistypedName_SuggestsNearest()
+    {
+        var ex = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("String::Concta(string, string)", Context, false));
+        Assert.AreEqual("no method 'Concta' on string (did you mean 'Concat'?)", ex.Message);
+        Assert.AreEqual("no method 'Trmi' on string (did you mean 'Trim'?)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance string String::Trmi()", Context, false)).Message);
+        Assert.AreEqual("no method 'tolowerinvariant' on string (did you mean 'ToLowerInvariant'?)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance string String::tolowerinvariant()", Context, false)).Message);
+    }
+
+    /// <summary>
+    /// When nothing is near, the message is as it was.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_NoNearName_KeepsPlainMessage()
+    {
+        var ex = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("String::Zqxwv()", Context, false));
+        Assert.AreEqual("no method 'Zqxwv' on string", ex.Message);
+    }
+
+    /// <summary>
+    /// A name that exists with other parameters is an overload problem, not a spelling one.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_WrongParameters_KeepsNoOverloadMessage()
+    {
+        var ex = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("String::Concat(int32)", Context, false));
+        Assert.StartsWith("no overload string::Concat(int32); candidates:", ex.Message);
+        Assert.DoesNotContain("did you mean", ex.Message);
+    }
+
+    /// <summary>
+    /// A member the context cannot call is not suggested to it.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_SuggestionIsEligibleFromTheScope()
+    {
+        var context = ContextWithGreeter();
+        var ex = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance int32 Greeter.Account::Audti()", context, false));
+        Assert.AreEqual("no method 'Audti' on Account", ex.Message, "Audit is private to Account; the cell cannot call it");
+        var visible = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance void Greeter.Account::Depsit(int32)", context, false));
+        Assert.AreEqual("no method 'Depsit' on Account (did you mean 'Deposit'?)", visible.Message);
+    }
+
+    /// <summary>
+    /// A mistyped field gets the nearest field and the list of fields as before.
+    /// </summary>
+    [TestMethod]
+    public void ResolveField_MistypedName_SuggestsAndListsFields()
+    {
+        var ex = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveField("int32 Greeter.Counter::Cout", ContextWithGreeter()));
+        Assert.StartsWith("no field 'Cout' on Counter (did you mean 'Count'?); fields: ", ex.Message);
+        Assert.Contains("Count", ex.Message["no field 'Cout' on Counter (did you mean 'Count'?); fields: ".Length..]);
+    }
+
+    /// <summary>
+    /// The ambiguity and the missing-constructor messages are untouched.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_Ambiguous_AndConstructor_MessagesUnchanged()
+    {
+        var ambiguous = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Console::WriteLine", Context, false));
+        Assert.StartsWith("ambiguous: Console::WriteLine; give parameter types. candidates:", ambiguous.Message);
+        Assert.DoesNotContain("did you mean", ambiguous.Message);
+        var constructor = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance void String::.ctor(int32)", Context, true));
+        Assert.StartsWith("no constructor string(int32); candidates:", constructor.Message);
+        Assert.DoesNotContain("did you mean", constructor.Message);
+    }
+
+    /// <summary>
+    /// Inside a class being written, a mistyped member is matched against the declared members
+    /// and what the base offers, and the list of methods stays.
+    /// </summary>
+    [TestMethod]
+    public void ResolveMethod_OpenClassTypo_SuggestsDeclaredOrInherited()
+    {
+        var session = IlLines.Load(
+            ".class public Base {",
+            ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }",
+            ".method family instance int32 Inherited() { ldc.i4 1; ret }",
+            "}",
+            ".class public Point extends Base {",
+            ".method public instance int32 Sum() { ldc.i4 3; ret }",
+            ".method public instance int32 Twice() {",
+            "ldarg.0");
+        // A reference with a full signature declares the member ahead; one without a return type must name a member that exists.
+        var own = Assert.ThrowsExactly<ReplException>(() => session.AddLine("call Point::Sumx()"));
+        Assert.StartsWith("no method 'Sumx' on Point (did you mean 'Sum'?); methods: ", own.Message);
+        var inherited = Assert.ThrowsExactly<ReplException>(() => session.AddLine("call Point::Inherted()"));
+        Assert.StartsWith("no method 'Inherted' on Point (did you mean 'Inherited'?); methods: ", inherited.Message);
+        var undeclared = Assert.ThrowsExactly<ReplException>(() => session.AddLine("call Point::Nothing()"));
+        Assert.StartsWith("no method 'Nothing' on Point; methods: ", undeclared.Message);
+    }
+
     private static ParseContext ContextWithGreeter()
     {
         var resolver = new TypeResolver();
@@ -167,7 +263,7 @@ public sealed class MemberResolverTests
     public void ResolveMethod_UnknownSessionMethod_SuggestsDotMethod()
     {
         Assert.Contains("no method 'Fib' in the session (define one with .method, or write Type::Fib(...) for a framework method)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fib(int32)", Context, false)).Message);
-        Assert.Contains("no method 'Fibb' in the session; defined: int32 Fib(int32)  (define one with .method)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fibb(int32)", ContextWith(Fib()), false)).Message);
+        Assert.Contains("no method 'Fibb' in the session (did you mean 'Fib'?); defined: int32 Fib(int32)  (define one with .method)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fibb(int32)", ContextWith(Fib()), false)).Message);
     }
 
     /// <summary>
