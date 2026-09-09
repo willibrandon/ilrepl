@@ -1,4 +1,4 @@
-using System.Reflection.Emit;
+using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
@@ -95,7 +95,9 @@ public static class InstructionParser
     }
 
     /// <summary>
-    /// Parses an instruction (opcode plus operand) with no labels or comments.
+    /// Parses an instruction (opcode plus operand) with no labels or comments. The grammar is
+    /// <see cref="CilSyntaxParser"/>'s and the operand decisions are <see cref="SymbolBinder"/>'s;
+    /// this entry point binds in the runtime scope and hands back the instruction the emitter takes.
     /// </summary>
     /// <param name="text">The instruction text.</param>
     /// <param name="context">The parse context.</param>
@@ -105,219 +107,10 @@ public static class InstructionParser
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(context);
-        text = text.Trim();
-        var space = IndexOfWhitespace(text);
-        var mnemonic = space < 0 ? text : text[..space];
-        var operandText = space < 0 ? "" : text[(space + 1)..].Trim();
-
-        if (mnemonic == "no.")
-        {
-            throw new ReplException("the 'no.' prefix has no ILGenerator representation and cannot be emitted");
-        }
-
-        if (!OpcodeTable.TryGet(mnemonic, out var op) || op.Name is null || OpcodeTable.IsReserved(op.Name))
-        {
-            var suggestion = Suggest(mnemonic);
-            throw new ReplException($"unknown opcode '{mnemonic}'" + (suggestion is null ? "" : $" (did you mean '{suggestion}'?)"));
-        }
-
-        var opName = op.Name;
-        var implicitLocal = opName switch
-        {
-            "ldloc.0" or "stloc.0" => 0,
-            "ldloc.1" or "stloc.1" => 1,
-            "ldloc.2" or "stloc.2" => 2,
-            "ldloc.3" or "stloc.3" => 3,
-            _ => (int?)null,
-        };
-        if (implicitLocal is int localIndex)
-        {
-            if (localIndex >= context.Locals.Count)
-            {
-                throw new ReplException($"local {localIndex} is not declared (declare it with .locals)");
-            }
-
-            RequireNoOperand(op, operandText);
-            return new Instruction { Op = op, Text = text, Kind = OperandKind.None, LocalIndex = localIndex };
-        }
-
-        var implicitArgument = opName switch
-        {
-            "ldarg.0" => 0,
-            "ldarg.1" => 1,
-            "ldarg.2" => 2,
-            "ldarg.3" => 3,
-            _ => (int?)null,
-        };
-        if (implicitArgument is int argumentIndex)
-        {
-            if (argumentIndex >= context.Arguments.Count)
-            {
-                throw new ReplException(context.ThisIndex >= 0 || context.Arguments.Count > 0 && context.Arguments[0].Name is null
-                    ? $"argument {argumentIndex} is not declared (the parameters are in the method header)"
-                    : $"argument {argumentIndex} is not declared (declare it with .args)");
-            }
-
-            RequireNoOperand(op, operandText);
-            return new Instruction { Op = op, Text = text, Kind = OperandKind.None, ArgumentIndex = argumentIndex };
-        }
-
-        if (opName == "arglist")
-        {
-            RequireNoOperand(op, operandText);
-            return new Instruction { Op = op, Text = text };
-        }
-
-        switch (op.OperandType)
-        {
-            case OperandType.InlineNone:
-                RequireNoOperand(op, operandText);
-                return new Instruction { Op = op, Text = text };
-
-            case OperandType.ShortInlineI:
-                if (opName == "ldc.i4.s")
-                {
-                    var v = LiteralParser.ParseInteger(operandText, opName);
-                    if (v is < sbyte.MinValue or > sbyte.MaxValue)
-                    {
-                        throw new ReplException($"{v} does not fit ldc.i4.s (int8); use ldc.i4");
-                    }
-
-                    return new Instruction { Op = op, Text = text, Kind = OperandKind.SByte, Operand = (sbyte)v };
-                }
-
-                {
-                    var v = LiteralParser.ParseInteger(operandText, opName);
-                    if (v is < byte.MinValue or > byte.MaxValue)
-                    {
-                        throw new ReplException($"{v} does not fit an unsigned byte operand");
-                    }
-
-                    return new Instruction { Op = op, Text = text, Kind = OperandKind.Byte, Operand = (byte)v };
-                }
-
-            case OperandType.InlineI:
-            {
-                var v = LiteralParser.ParseInteger(operandText, opName);
-                if (v is < int.MinValue or > uint.MaxValue)
-                {
-                    throw new ReplException($"{v} does not fit int32; use ldc.i8");
-                }
-
-                return new Instruction { Op = op, Text = text, Kind = OperandKind.Int32, Operand = unchecked((int)v) };
-            }
-
-            case OperandType.InlineI8:
-                return new Instruction { Op = op, Text = text, Kind = OperandKind.Int64, Operand = LiteralParser.ParseInteger(operandText, opName) };
-
-            case OperandType.ShortInlineR:
-                return new Instruction { Op = op, Text = text, Kind = OperandKind.Single, Operand = LiteralParser.ParseFloat32(operandText, opName) };
-
-            case OperandType.InlineR:
-                return new Instruction { Op = op, Text = text, Kind = OperandKind.Double, Operand = LiteralParser.ParseFloat(operandText, opName) };
-
-            case OperandType.InlineString:
-                if (operandText.Length == 0)
-                {
-                    throw new ReplException("ldstr needs a string operand, e.g. ldstr \"hello\"");
-                }
-
-                return new Instruction { Op = op, Text = text, Kind = OperandKind.String, Operand = LiteralParser.ParseString(operandText) };
-
-            case OperandType.ShortInlineBrTarget:
-            case OperandType.InlineBrTarget:
-                if (!IsIdentifier(operandText))
-                {
-                    throw new ReplException($"'{opName}' needs a label name, e.g. {opName} LOOP");
-                }
-
-                return new Instruction { Op = op, Text = text, Kind = OperandKind.Label, Operand = operandText };
-
-            case OperandType.InlineSwitch:
-            {
-                var inner = operandText.Trim();
-                if (inner.StartsWith('(') && inner.EndsWith(')'))
-                {
-                    inner = inner[1..^1];
-                }
-
-                var labels = inner.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-                if (labels.Length == 0 || labels.Any(l => !IsIdentifier(l)))
-                {
-                    throw new ReplException("switch needs a list of labels: switch (A, B, C)");
-                }
-
-                return new Instruction { Op = op, Text = text, Kind = OperandKind.Labels, Operand = labels };
-            }
-
-            case OperandType.ShortInlineVar:
-            case OperandType.InlineVar:
-                if (opName.StartsWith("ldarg", StringComparison.Ordinal) || opName.StartsWith("starg", StringComparison.Ordinal))
-                {
-                    var index = ResolveArgument(operandText, context);
-                    return new Instruction { Op = op, Text = text, Kind = OperandKind.Argument, Operand = index, ArgumentIndex = index };
-                }
-
-                {
-                    var index = ResolveLocal(operandText, context);
-                    return new Instruction { Op = op, Text = text, Kind = OperandKind.Local, Operand = index, LocalIndex = index };
-                }
-
-            case OperandType.InlineType:
-                if (operandText.Length == 0)
-                {
-                    throw new ReplException($"'{opName}' needs a type operand");
-                }
-
-                return new Instruction { Op = op, Text = text, Kind = OperandKind.Type, Operand = TypeParser.Parse(operandText, context) };
-
-            case OperandType.InlineMethod:
-                if (operandText.Length == 0)
-                {
-                    throw new ReplException($"'{opName}' needs a method reference, e.g. {opName} void Console::WriteLine(string)");
-                }
-
-                return new Instruction
-                {
-                    Op = op,
-                    Text = text,
-                    Kind = OperandKind.Method,
-                    Operand = MemberResolver.ResolveMethod(operandText, context, op == OpCodes.Newobj),
-                };
-
-            case OperandType.InlineField:
-                if (operandText.Length == 0)
-                {
-                    throw new ReplException($"'{opName}' needs a field reference, e.g. {opName} string String::Empty");
-                }
-
-                return new Instruction { Op = op, Text = text, Kind = OperandKind.Field, Operand = MemberResolver.ResolveField(operandText, context) };
-
-            case OperandType.InlineTok:
-            {
-                object token;
-                if (operandText.StartsWith("method ", StringComparison.Ordinal))
-                {
-                    token = MemberResolver.ResolveMethod(operandText[7..], context, wantConstructor: false);
-                }
-                else if (operandText.StartsWith("field ", StringComparison.Ordinal))
-                {
-                    token = MemberResolver.ResolveField(operandText[6..], context);
-                }
-                else
-                {
-                    token = TypeParser.Parse(operandText, context);
-                }
-
-                return new Instruction { Op = op, Text = text, Kind = OperandKind.Token, Operand = token };
-            }
-
-            case OperandType.InlineSig:
-                return new Instruction { Op = op, Text = text, Kind = OperandKind.Signature, Operand = CalliSignatureParser.Parse(operandText, context) };
-
-            default:
-                throw new ReplException($"unsupported operand type {op.OperandType} for '{opName}'");
-        }
+        var syntax = CilSyntaxParser.ParseInstruction(text);
+        var scope = new RuntimeBindingScope(context);
+        var bound = SymbolBinder.BindInstruction(syntax, scope);
+        return new RuntimeBindingAdapter(scope).ToInstruction(bound);
     }
 
     /// <summary>
@@ -331,34 +124,7 @@ public static class InstructionParser
     {
         ArgumentNullException.ThrowIfNull(operand);
         ArgumentNullException.ThrowIfNull(context);
-        var locals = context.Locals;
-        if (operand.Length == 0)
-        {
-            throw new ReplException("expected a local name or index");
-        }
-
-        if (int.TryParse(operand, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var index))
-        {
-            if (index < 0 || index >= locals.Count)
-            {
-                throw new ReplException($"local {index} is not declared ({locals.Count} declared; use .locals)");
-            }
-
-            return index;
-        }
-
-        var name = Unquote(operand);
-        for (var i = 0; i < locals.Count; i++)
-        {
-            if (locals[i].Name == name)
-            {
-                return i;
-            }
-        }
-
-        throw new ReplException(locals.Count == 0
-            ? $"no local '{name}'; declare one with: .locals init (int32 {name})"
-            : $"no local '{name}'; declared: {string.Join(", ", locals.Select((l, i) => $"{i}:{l.Name ?? "?"}"))}");
+        return SymbolBinder.BindLocal(operand, new RuntimeBindingScope(context));
     }
 
     /// <summary>
@@ -372,56 +138,15 @@ public static class InstructionParser
     {
         ArgumentNullException.ThrowIfNull(operand);
         ArgumentNullException.ThrowIfNull(context);
-        var arguments = context.Arguments;
-        if (operand.Length == 0)
-        {
-            throw new ReplException("expected an argument name or index");
-        }
-
-        if (int.TryParse(operand, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var index))
-        {
-            if (index < 0 || index >= arguments.Count)
-            {
-                throw new ReplException($"argument {index} is not declared ({arguments.Count} declared; use .args)");
-            }
-
-            return index;
-        }
-
-        var name = Unquote(operand);
-        for (var i = 0; i < arguments.Count; i++)
-        {
-            if (arguments[i].Name == name)
-            {
-                return i;
-            }
-        }
-
-        throw new ReplException(arguments.Count == 0
-            ? $"no argument '{name}'; declare one with: .args (int32 {name} = 0)"
-            : $"no argument '{name}'; declared: {string.Join(", ", arguments.Select((a, i) => $"{i}:{a.Name ?? "?"}"))}");
+        return SymbolBinder.BindArgument(operand, new RuntimeBindingScope(context));
     }
 
-    private static void RequireNoOperand(OpCode op, string operandText)
-    {
-        if (operandText.Length > 0)
-        {
-            throw new ReplException($"'{op.Name}' takes no operand");
-        }
-    }
-
-    private static int IndexOfWhitespace(string s)
-    {
-        for (var i = 0; i < s.Length; i++)
-        {
-            if (char.IsWhiteSpace(s[i]))
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
+    /// <summary>
+    /// The opcode nearest to a mistyped mnemonic, or null when nothing is near.
+    /// </summary>
+    /// <param name="typo">The mnemonic as typed.</param>
+    /// <returns>The suggestion, or null.</returns>
+    internal static string? SuggestOpcode(string typo) => Suggest(typo);
 
     private static string? Suggest(string typo)
     {

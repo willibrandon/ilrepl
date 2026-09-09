@@ -96,6 +96,53 @@ public sealed class RuntimeBindingAdapter
     }
 
     /// <summary>
+    /// The <c>calli</c> signature the emitter takes for a bound signature.
+    /// </summary>
+    /// <param name="signature">The signature.</param>
+    /// <returns>The calli signature.</returns>
+    public CalliSignature ToCalliSignature(MethodSignatureSymbol signature)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        return new CalliSignature(
+            signature.IsUnmanaged,
+            signature.UnmanagedConvention,
+            signature.ManagedConvention,
+            ToType(signature.ReturnType),
+            ToTypes(signature.FixedParameters),
+            signature.OptionalParameters is null ? null : ToTypes(signature.OptionalParameters));
+    }
+
+    /// <summary>
+    /// The instruction the emitter and the stack model take for a bound instruction.
+    /// </summary>
+    /// <param name="bound">The bound instruction.</param>
+    /// <returns>The instruction.</returns>
+    public Instruction ToInstruction(BoundInstruction bound)
+    {
+        ArgumentNullException.ThrowIfNull(bound);
+        var operand = bound.Operand;
+        object? value = operand.Kind switch
+        {
+            OperandKind.None => null,
+            OperandKind.Type => ToType(operand.Type!),
+            OperandKind.Method => ToResolvedMethod(operand.Method!),
+            OperandKind.Field => ToField(operand.Field!),
+            OperandKind.Signature => ToCalliSignature(operand.Signature!),
+            OperandKind.Token => operand.Type is not null ? ToType(operand.Type) : operand.Field is not null ? ToField(operand.Field) : ToResolvedMethod(operand.Method!),
+            _ => operand.Value,
+        };
+        return new Instruction
+        {
+            Op = bound.Op,
+            Text = bound.Text,
+            Kind = operand.Kind,
+            Operand = value,
+            LocalIndex = bound.LocalIndex,
+            ArgumentIndex = bound.ArgumentIndex,
+        };
+    }
+
+    /// <summary>
     /// The field the emitter takes for a bound field.
     /// </summary>
     /// <param name="field">The bound field.</param>

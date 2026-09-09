@@ -126,6 +126,21 @@ public interface IBindingScope
     IReadOnlyList<MethodSymbol> SessionMethods { get; }
 
     /// <summary>
+    /// The declared locals, by index.
+    /// </summary>
+    IReadOnlyList<VariableSymbol> Locals { get; }
+
+    /// <summary>
+    /// The declared arguments or parameters, by index.
+    /// </summary>
+    IReadOnlyList<VariableSymbol> Arguments { get; }
+
+    /// <summary>
+    /// The argument index that holds <c>this</c> inside an instance member, or -1.
+    /// </summary>
+    int ThisIndex { get; }
+
+    /// <summary>
     /// Spells a type the way a message names it.
     /// </summary>
     /// <param name="type">The type, or null for an unknown one.</param>

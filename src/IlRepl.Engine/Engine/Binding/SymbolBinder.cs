@@ -108,12 +108,288 @@ public static class SymbolBinder
         }
     }
 
-    private static MethodSignatureSymbol BindFunctionPointer(FunctionPointerSyntax syntax, IBindingScope scope, bool lenient)
+    private static MethodSignatureSymbol BindFunctionPointer(SignatureSyntax syntax, IBindingScope scope, bool lenient)
     {
         var (managed, unmanaged, convention) = Conventions(syntax.ConventionWords);
         var returnType = BindType(syntax.ReturnType, scope, lenient).Type;
         var parameters = syntax.Parameters.Select(p => BindType(p, scope, lenient).Type).ToList();
         return new MethodSignatureSymbol(managed, unmanaged, convention, returnType, parameters, syntax.SentinelIndex);
+    }
+
+    /// <summary>
+    /// Binds a standalone signature, as <c>calli</c> takes it: a <c>...</c> in the parameters makes it vararg.
+    /// </summary>
+    /// <param name="syntax">The signature syntax.</param>
+    /// <param name="scope">The scope.</param>
+    /// <returns>The signature.</returns>
+    /// <exception cref="ReplException">A type in the signature cannot be found.</exception>
+    public static MethodSignatureSymbol BindSignature(SignatureSyntax syntax, IBindingScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(syntax);
+        ArgumentNullException.ThrowIfNull(scope);
+        var (managed, unmanaged, convention) = Conventions(syntax.ConventionWords);
+        var returnType = BindType(syntax.ReturnType, scope).Type;
+        var parameters = syntax.Parameters.Select(p => BindType(p, scope).Type).ToList();
+        if (syntax.SentinelIndex is not null)
+        {
+            managed = (managed & ~CallingConventions.Standard) | CallingConventions.VarArgs;
+        }
+
+        return new MethodSignatureSymbol(managed, unmanaged, convention, returnType, parameters, syntax.SentinelIndex);
+    }
+
+    /// <summary>
+    /// Binds an instruction: the literal is checked against its opcode, a slot is found by name
+    /// or index, and a type, member, field, or signature operand is bound in the scope.
+    /// </summary>
+    /// <param name="syntax">The instruction syntax.</param>
+    /// <param name="scope">The scope.</param>
+    /// <returns>The bound instruction.</returns>
+    /// <exception cref="ReplException">The operand is invalid or names nothing.</exception>
+    public static BoundInstruction BindInstruction(InstructionSyntax syntax, IBindingScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(syntax);
+        ArgumentNullException.ThrowIfNull(scope);
+        var op = syntax.Op;
+        var opName = op.Name!;
+        var text = syntax.Text;
+        var operand = syntax.Operand;
+
+        var implicitLocal = opName switch
+        {
+            "ldloc.0" or "stloc.0" => 0,
+            "ldloc.1" or "stloc.1" => 1,
+            "ldloc.2" or "stloc.2" => 2,
+            "ldloc.3" or "stloc.3" => 3,
+            _ => (int?)null,
+        };
+        if (implicitLocal is int localIndex)
+        {
+            if (localIndex >= scope.Locals.Count)
+            {
+                throw new ReplException($"local {localIndex} is not declared (declare it with .locals)");
+            }
+
+            RequireNoOperand(opName, operand.Text);
+            return new BoundInstruction(op, text, BoundOperand.None, localIndex, null);
+        }
+
+        var implicitArgument = opName switch
+        {
+            "ldarg.0" => 0,
+            "ldarg.1" => 1,
+            "ldarg.2" => 2,
+            "ldarg.3" => 3,
+            _ => (int?)null,
+        };
+        if (implicitArgument is int argumentIndex)
+        {
+            if (argumentIndex >= scope.Arguments.Count)
+            {
+                throw new ReplException(scope.ThisIndex >= 0 || scope.Arguments.Count > 0 && scope.Arguments[0].Name is null
+                    ? $"argument {argumentIndex} is not declared (the parameters are in the method header)"
+                    : $"argument {argumentIndex} is not declared (declare it with .args)");
+            }
+
+            RequireNoOperand(opName, operand.Text);
+            return new BoundInstruction(op, text, BoundOperand.None, null, argumentIndex);
+        }
+
+        if (opName == "arglist")
+        {
+            RequireNoOperand(opName, operand.Text);
+            return new BoundInstruction(op, text, BoundOperand.None, null, null);
+        }
+
+        switch (operand.Kind)
+        {
+            case OperandSyntaxKind.None:
+                RequireNoOperand(opName, operand.Text);
+                return new BoundInstruction(op, text, BoundOperand.None, null, null);
+
+            case OperandSyntaxKind.Integer:
+                if (op.OperandType == System.Reflection.Emit.OperandType.ShortInlineI)
+                {
+                    var v = LiteralParser.ParseInteger(operand.Text, opName);
+                    if (opName == "ldc.i4.s")
+                    {
+                        if (v is < sbyte.MinValue or > sbyte.MaxValue)
+                        {
+                            throw new ReplException($"{v} does not fit ldc.i4.s (int8); use ldc.i4");
+                        }
+
+                        return Literal(OperandKind.SByte, (sbyte)v);
+                    }
+
+                    if (v is < byte.MinValue or > byte.MaxValue)
+                    {
+                        throw new ReplException($"{v} does not fit an unsigned byte operand");
+                    }
+
+                    return Literal(OperandKind.Byte, (byte)v);
+                }
+
+                if (op.OperandType == System.Reflection.Emit.OperandType.InlineI)
+                {
+                    var v = LiteralParser.ParseInteger(operand.Text, opName);
+                    if (v is < int.MinValue or > uint.MaxValue)
+                    {
+                        throw new ReplException($"{v} does not fit int32; use ldc.i8");
+                    }
+
+                    return Literal(OperandKind.Int32, unchecked((int)v));
+                }
+
+                return Literal(OperandKind.Int64, LiteralParser.ParseInteger(operand.Text, opName));
+
+            case OperandSyntaxKind.Float:
+                return op.OperandType == System.Reflection.Emit.OperandType.ShortInlineR
+                    ? Literal(OperandKind.Single, LiteralParser.ParseFloat32(operand.Text, opName))
+                    : Literal(OperandKind.Double, LiteralParser.ParseFloat(operand.Text, opName));
+
+            case OperandSyntaxKind.String:
+                if (operand.Text.Length == 0)
+                {
+                    throw new ReplException("ldstr needs a string operand, e.g. ldstr \"hello\"");
+                }
+
+                return Literal(OperandKind.String, LiteralParser.ParseString(operand.Text));
+
+            case OperandSyntaxKind.Label:
+                return Literal(OperandKind.Label, operand.Text);
+
+            case OperandSyntaxKind.Labels:
+                return Literal(OperandKind.Labels, operand.Labels.ToArray());
+
+            case OperandSyntaxKind.Variable:
+                if (operand.IsArgument)
+                {
+                    var index = BindArgument(operand.Text, scope);
+                    return new BoundInstruction(op, text, new BoundOperand { Kind = OperandKind.Argument, Value = index }, null, index);
+                }
+                else
+                {
+                    var index = BindLocal(operand.Text, scope);
+                    return new BoundInstruction(op, text, new BoundOperand { Kind = OperandKind.Local, Value = index }, index, null);
+                }
+
+            case OperandSyntaxKind.Type:
+                return new BoundInstruction(op, text, new BoundOperand { Kind = OperandKind.Type, Type = BindType(operand.Type!, scope).Type }, null, null);
+
+            case OperandSyntaxKind.Member:
+                return new BoundInstruction(op, text, new BoundOperand { Kind = OperandKind.Method, Method = BindMethodReference(operand.Member!, scope, op == System.Reflection.Emit.OpCodes.Newobj) }, null, null);
+
+            case OperandSyntaxKind.Field:
+                return new BoundInstruction(op, text, new BoundOperand { Kind = OperandKind.Field, Field = BindFieldReference(operand.Member!, scope) }, null, null);
+
+            case OperandSyntaxKind.Token:
+            {
+                var token = operand.IsMethodToken
+                    ? new BoundOperand { Kind = OperandKind.Token, Method = BindMethodReference(operand.Member!, scope, wantConstructor: false) }
+                    : operand.IsFieldToken
+                        ? new BoundOperand { Kind = OperandKind.Token, Field = BindFieldReference(operand.Member!, scope) }
+                        : new BoundOperand { Kind = OperandKind.Token, Type = BindType(operand.Type!, scope).Type };
+                return new BoundInstruction(op, text, token, null, null);
+            }
+
+            case OperandSyntaxKind.Signature:
+                return new BoundInstruction(op, text, new BoundOperand { Kind = OperandKind.Signature, Signature = BindSignature(operand.Signature!, scope) }, null, null);
+
+            default:
+                throw new ReplException($"unsupported operand type {op.OperandType} for '{opName}'");
+        }
+
+        BoundInstruction Literal(OperandKind kind, object value) => new(op, text, new BoundOperand { Kind = kind, Value = value }, null, null);
+    }
+
+    private static void RequireNoOperand(string opName, string operandText)
+    {
+        if (operandText.Length > 0)
+        {
+            throw new ReplException($"'{opName}' takes no operand");
+        }
+    }
+
+    /// <summary>
+    /// Finds a local written as a name or an index.
+    /// </summary>
+    /// <param name="operand">The operand text.</param>
+    /// <param name="scope">The scope.</param>
+    /// <returns>The local index.</returns>
+    /// <exception cref="ReplException">No such local is declared.</exception>
+    public static int BindLocal(string operand, IBindingScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(operand);
+        ArgumentNullException.ThrowIfNull(scope);
+        var locals = scope.Locals;
+        if (operand.Length == 0)
+        {
+            throw new ReplException("expected a local name or index");
+        }
+
+        if (int.TryParse(operand, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var index))
+        {
+            if (index < 0 || index >= locals.Count)
+            {
+                throw new ReplException($"local {index} is not declared ({locals.Count} declared; use .locals)");
+            }
+
+            return index;
+        }
+
+        var name = InstructionParser.Unquote(operand);
+        for (var i = 0; i < locals.Count; i++)
+        {
+            if (locals[i].Name == name)
+            {
+                return i;
+            }
+        }
+
+        throw new ReplException(locals.Count == 0
+            ? $"no local '{name}'; declare one with: .locals init (int32 {name})"
+            : $"no local '{name}'; declared: {string.Join(", ", locals.Select((l, i) => $"{i}:{l.Name ?? "?"}"))}");
+    }
+
+    /// <summary>
+    /// Finds an argument written as a name or an index.
+    /// </summary>
+    /// <param name="operand">The operand text.</param>
+    /// <param name="scope">The scope.</param>
+    /// <returns>The argument index.</returns>
+    /// <exception cref="ReplException">No such argument is declared.</exception>
+    public static int BindArgument(string operand, IBindingScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(operand);
+        ArgumentNullException.ThrowIfNull(scope);
+        var arguments = scope.Arguments;
+        if (operand.Length == 0)
+        {
+            throw new ReplException("expected an argument name or index");
+        }
+
+        if (int.TryParse(operand, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var index))
+        {
+            if (index < 0 || index >= arguments.Count)
+            {
+                throw new ReplException($"argument {index} is not declared ({arguments.Count} declared; use .args)");
+            }
+
+            return index;
+        }
+
+        var name = InstructionParser.Unquote(operand);
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            if (arguments[i].Name == name)
+            {
+                return i;
+            }
+        }
+
+        throw new ReplException(arguments.Count == 0
+            ? $"no argument '{name}'; declare one with: .args (int32 {name} = 0)"
+            : $"no argument '{name}'; declared: {string.Join(", ", arguments.Select((a, i) => $"{i}:{a.Name ?? "?"}"))}");
     }
 
     /// <summary>

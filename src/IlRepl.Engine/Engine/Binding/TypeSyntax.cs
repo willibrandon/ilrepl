@@ -106,7 +106,7 @@ public sealed record TypeSyntax
     /// <summary>
     /// The signature of a function pointer.
     /// </summary>
-    public FunctionPointerSyntax? FunctionPointer { get; init; }
+    public SignatureSyntax? FunctionPointer { get; init; }
 
     /// <summary>
     /// The modifier type of a modified type.

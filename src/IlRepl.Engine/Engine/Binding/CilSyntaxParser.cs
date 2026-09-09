@@ -419,7 +419,7 @@ public static partial class CilSyntaxParser
             Kind = TypeSyntaxKind.FunctionPointer,
             Start = start,
             End = pos,
-            FunctionPointer = new FunctionPointerSyntax(words, returnType, parameters, sentinel),
+            FunctionPointer = new SignatureSyntax(words, returnType, parameters, sentinel),
         };
     }
 
@@ -465,12 +465,26 @@ public static partial class CilSyntaxParser
     public static MemberSyntax ParseMethodReference(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var s = text;
-        var pos = 0;
+        return ParseMethodReferenceIn(text, 0, text.Length);
+    }
+
+    /// <summary>
+    /// Parses the method reference between two positions of a longer text, so its parts keep
+    /// positions in that text.
+    /// </summary>
+    /// <param name="s">The text.</param>
+    /// <param name="start">The index the reference starts at.</param>
+    /// <param name="end">The index the reference ends by.</param>
+    /// <returns>The syntax.</returns>
+    /// <exception cref="ReplException">The reference is malformed.</exception>
+    public static MemberSyntax ParseMethodReferenceIn(string s, int start, int end)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        var pos = start;
         var explicitInstance = false;
         var isVarArg = false;
         SkipWhitespace(s, ref pos);
-        var start = pos;
+        start = pos;
         while (true)
         {
             SkipWhitespace(s, ref pos);
@@ -493,7 +507,7 @@ public static partial class CilSyntaxParser
         }
 
         var typesStart = pos;
-        var endOfText = s.Length;
+        var endOfText = end;
         while (endOfText > pos && char.IsWhiteSpace(s[endOfText - 1]))
         {
             endOfText--;
@@ -627,10 +641,23 @@ public static partial class CilSyntaxParser
     public static MemberSyntax ParseFieldReference(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var s = text;
-        var pos = 0;
+        return ParseFieldReferenceIn(text, 0, text.Length);
+    }
+
+    /// <summary>
+    /// Parses the field reference between two positions of a longer text.
+    /// </summary>
+    /// <param name="s">The text.</param>
+    /// <param name="start">The index the reference starts at.</param>
+    /// <param name="end">The index the reference ends by.</param>
+    /// <returns>The syntax.</returns>
+    /// <exception cref="ReplException">The reference is malformed.</exception>
+    public static MemberSyntax ParseFieldReferenceIn(string s, int start, int end)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        var pos = start;
         SkipWhitespace(s, ref pos);
-        var endOfText = s.Length;
+        var endOfText = end;
         while (endOfText > pos && char.IsWhiteSpace(s[endOfText - 1]))
         {
             endOfText--;
@@ -774,6 +801,232 @@ public static partial class CilSyntaxParser
         }
 
         return (first, second);
+    }
+
+    /// <summary>
+    /// Parses a <c>calli</c> signature: <c>[instance] [vararg] RetType(Params)</c> for managed
+    /// pointers and <c>unmanaged [cdecl|stdcall|thiscall|fastcall] RetType(Params)</c> for native ones.
+    /// </summary>
+    /// <param name="text">The signature text.</param>
+    /// <returns>The syntax.</returns>
+    /// <exception cref="ReplException">The signature is malformed.</exception>
+    public static SignatureSyntax ParseCalliSignature(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return ParseCalliSignatureIn(text, 0, text.Length);
+    }
+
+    /// <summary>
+    /// Parses the <c>calli</c> signature between two positions of a longer text.
+    /// </summary>
+    /// <param name="s">The text.</param>
+    /// <param name="start">The index the signature starts at.</param>
+    /// <param name="end">The index the signature ends by.</param>
+    /// <returns>The syntax.</returns>
+    /// <exception cref="ReplException">The signature is malformed.</exception>
+    public static SignatureSyntax ParseCalliSignatureIn(string s, int start, int end)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        var pos = start;
+        SkipWhitespace(s, ref pos);
+        while (end > pos && char.IsWhiteSpace(s[end - 1]))
+        {
+            end--;
+        }
+
+        if (pos >= end)
+        {
+            throw new ReplException("calli needs a signature, e.g. calli int32(int32, int32)");
+        }
+
+        var words = new List<string>();
+        while (true)
+        {
+            SkipWhitespace(s, ref pos);
+            var wordStart = pos;
+            if (TryKeyword(s, ref pos, "instance") || TryKeyword(s, ref pos, "explicit") || TryKeyword(s, ref pos, "vararg")
+                || TryKeyword(s, ref pos, "unmanaged") || TryKeyword(s, ref pos, "cdecl") || TryKeyword(s, ref pos, "stdcall")
+                || TryKeyword(s, ref pos, "thiscall") || TryKeyword(s, ref pos, "fastcall") || TryKeyword(s, ref pos, "default"))
+            {
+                words.Add(s[wordStart..pos]);
+                continue;
+            }
+
+            break;
+        }
+
+        var open = s.IndexOf('(', pos);
+        if (open < 0 || open >= end)
+        {
+            throw new ReplException("calli needs a parameter list in parentheses");
+        }
+
+        var close = FindMatchingParen(s, open);
+        var returnType = ParseTypeIn(s, pos, open);
+        var parameters = new List<TypeSyntax>();
+        int? sentinel = null;
+        foreach (var (itemStart, itemEnd) in SplitTopLevelRanges(s, open + 1, close))
+        {
+            if (s[itemStart..itemEnd].Trim() == "...")
+            {
+                if (sentinel is not null)
+                {
+                    throw new ReplException("only one '...' is allowed in a signature");
+                }
+
+                sentinel = parameters.Count;
+                continue;
+            }
+
+            parameters.Add(ParseTypeIn(s, itemStart, itemEnd));
+        }
+
+        if (close + 1 < end && s[(close + 1)..end].Trim().Length > 0)
+        {
+            throw new ReplException($"unexpected '{s[(close + 1)..end].Trim()}' after calli signature");
+        }
+
+        return new SignatureSyntax(words, returnType, parameters, sentinel);
+    }
+
+    /// <summary>
+    /// Parses an instruction, opcode plus operand, with no labels or comments: the opcode decides
+    /// what shape the operand takes, and a type, member, or signature operand is read in full.
+    /// </summary>
+    /// <param name="text">The instruction text.</param>
+    /// <returns>The syntax.</returns>
+    /// <exception cref="ReplException">The opcode is unknown or the operand is malformed.</exception>
+    public static InstructionSyntax ParseInstruction(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        text = text.Trim();
+        var mnemonicEnd = 0;
+        while (mnemonicEnd < text.Length && !char.IsWhiteSpace(text[mnemonicEnd]))
+        {
+            mnemonicEnd++;
+        }
+
+        var mnemonic = text[..mnemonicEnd];
+        var operandStart = mnemonicEnd;
+        SkipWhitespace(text, ref operandStart);
+        var operandEnd = text.Length;
+        var operandText = text[operandStart..operandEnd];
+
+        if (mnemonic == "no.")
+        {
+            throw new ReplException("the 'no.' prefix has no ILGenerator representation and cannot be emitted");
+        }
+
+        if (!OpcodeTable.TryGet(mnemonic, out var op) || op.Name is null || OpcodeTable.IsReserved(op.Name))
+        {
+            var suggestion = InstructionParser.SuggestOpcode(mnemonic);
+            throw new ReplException($"unknown opcode '{mnemonic}'" + (suggestion is null ? "" : $" (did you mean '{suggestion}'?)"));
+        }
+
+        var opName = op.Name;
+        OperandSyntax operand;
+        switch (op.OperandType)
+        {
+            case System.Reflection.Emit.OperandType.InlineNone:
+                operand = Plain(OperandSyntaxKind.None);
+                break;
+            case System.Reflection.Emit.OperandType.ShortInlineI:
+            case System.Reflection.Emit.OperandType.InlineI:
+            case System.Reflection.Emit.OperandType.InlineI8:
+                operand = Plain(OperandSyntaxKind.Integer);
+                break;
+            case System.Reflection.Emit.OperandType.ShortInlineR:
+            case System.Reflection.Emit.OperandType.InlineR:
+                operand = Plain(OperandSyntaxKind.Float);
+                break;
+            case System.Reflection.Emit.OperandType.InlineString:
+                operand = Plain(OperandSyntaxKind.String);
+                break;
+            case System.Reflection.Emit.OperandType.ShortInlineBrTarget:
+            case System.Reflection.Emit.OperandType.InlineBrTarget:
+                if (!InstructionParser.IsIdentifier(operandText))
+                {
+                    throw new ReplException($"'{opName}' needs a label name, e.g. {opName} LOOP");
+                }
+
+                operand = Plain(OperandSyntaxKind.Label);
+                break;
+            case System.Reflection.Emit.OperandType.InlineSwitch:
+            {
+                var inner = operandText;
+                if (inner.StartsWith('(') && inner.EndsWith(')'))
+                {
+                    inner = inner[1..^1];
+                }
+
+                var labels = inner.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                if (labels.Length == 0 || labels.Any(l => !InstructionParser.IsIdentifier(l)))
+                {
+                    throw new ReplException("switch needs a list of labels: switch (A, B, C)");
+                }
+
+                operand = Plain(OperandSyntaxKind.Labels) with { Labels = labels };
+                break;
+            }
+
+            case System.Reflection.Emit.OperandType.ShortInlineVar:
+            case System.Reflection.Emit.OperandType.InlineVar:
+                operand = Plain(OperandSyntaxKind.Variable) with { IsArgument = opName.StartsWith("ldarg", StringComparison.Ordinal) || opName.StartsWith("starg", StringComparison.Ordinal) };
+                break;
+            case System.Reflection.Emit.OperandType.InlineType:
+                if (operandText.Length == 0)
+                {
+                    throw new ReplException($"'{opName}' needs a type operand");
+                }
+
+                operand = Plain(OperandSyntaxKind.Type) with { Type = ParseTypeIn(text, operandStart, operandEnd) };
+                break;
+            case System.Reflection.Emit.OperandType.InlineMethod:
+                if (operandText.Length == 0)
+                {
+                    throw new ReplException($"'{opName}' needs a method reference, e.g. {opName} void Console::WriteLine(string)");
+                }
+
+                operand = Plain(OperandSyntaxKind.Member) with { Member = ParseMethodReferenceIn(text, operandStart, operandEnd) };
+                break;
+            case System.Reflection.Emit.OperandType.InlineField:
+                if (operandText.Length == 0)
+                {
+                    throw new ReplException($"'{opName}' needs a field reference, e.g. {opName} string String::Empty");
+                }
+
+                operand = Plain(OperandSyntaxKind.Field) with { Member = ParseFieldReferenceIn(text, operandStart, operandEnd) };
+                break;
+            case System.Reflection.Emit.OperandType.InlineTok:
+                if (operandText.StartsWith("method ", StringComparison.Ordinal))
+                {
+                    operand = Plain(OperandSyntaxKind.Token) with { IsMethodToken = true, Member = ParseMethodReferenceIn(text, operandStart + 7, operandEnd) };
+                }
+                else if (operandText.StartsWith("field ", StringComparison.Ordinal))
+                {
+                    operand = Plain(OperandSyntaxKind.Token) with { IsFieldToken = true, Member = ParseFieldReferenceIn(text, operandStart + 6, operandEnd) };
+                }
+                else
+                {
+                    if (operandText.Length == 0)
+                    {
+                        throw new ReplException("expected a type");
+                    }
+
+                    operand = Plain(OperandSyntaxKind.Token) with { Type = ParseTypeIn(text, operandStart, operandEnd) };
+                }
+
+                break;
+            case System.Reflection.Emit.OperandType.InlineSig:
+                operand = Plain(OperandSyntaxKind.Signature) with { Signature = ParseCalliSignatureIn(text, operandStart, operandEnd) };
+                break;
+            default:
+                throw new ReplException($"unsupported operand type {op.OperandType} for '{opName}'");
+        }
+
+        return new InstructionSyntax(op, text, mnemonicEnd, operand);
+
+        OperandSyntax Plain(OperandSyntaxKind kind) => new() { Kind = kind, Text = operandText, Start = operandStart, End = operandEnd };
     }
 
     /// <summary>

@@ -314,6 +314,29 @@ public sealed class RuntimeBindingScope : IBindingScope
     }
 
     /// <inheritdoc/>
+    public IReadOnlyList<VariableSymbol> Locals
+    {
+        get
+        {
+            _registry.Locals ??= [.. Context.Locals.Select(l => new VariableSymbol(ImportType(l.Type), l.Name, l.IsPinned))];
+            return _registry.Locals;
+        }
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<VariableSymbol> Arguments
+    {
+        get
+        {
+            _registry.Arguments ??= [.. Context.Arguments.Select(a => new VariableSymbol(ImportType(a.Type), a.Name, false))];
+            return _registry.Arguments;
+        }
+    }
+
+    /// <inheritdoc/>
+    public int ThisIndex => Context.ThisIndex;
+
+    /// <inheritdoc/>
     public string Pretty(TypeSymbol? type)
     {
         if (type is null)
@@ -435,5 +458,9 @@ public sealed class RuntimeBindingScope : IBindingScope
         public Dictionary<DefinitionId, object> Declarations { get; } = [];
 
         public IReadOnlyList<MethodSymbol>? SessionMethods { get; set; }
+
+        public IReadOnlyList<VariableSymbol>? Locals { get; set; }
+
+        public IReadOnlyList<VariableSymbol>? Arguments { get; set; }
     }
 }
