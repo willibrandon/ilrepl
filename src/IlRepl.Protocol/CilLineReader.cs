@@ -43,6 +43,25 @@ internal sealed class CilLineReader
     public CilLexemeKind KindAt(int i) => i >= 0 && i < _lexemes.Count ? _lexemes[i].Kind : CilLexemeKind.Other;
 
     /// <summary>
+    /// The index in the line where the lexeme at an index starts, or the line's length past the end.
+    /// </summary>
+    /// <param name="i">The index.</param>
+    /// <returns>The start offset.</returns>
+    public int StartOf(int i) => i >= 0 && i < _lexemes.Count ? _lexemes[i].Start : _line.Length;
+
+    /// <summary>
+    /// The index in the line just past the lexeme at an index, or the line's length past the end.
+    /// </summary>
+    /// <param name="i">The index.</param>
+    /// <returns>The end offset.</returns>
+    public int EndOf(int i) => i >= 0 && i < _lexemes.Count ? _lexemes[i].End : _line.Length;
+
+    /// <summary>
+    /// The line the lexemes were cut from.
+    /// </summary>
+    public string Line => _line;
+
+    /// <summary>
     /// The text of the lexeme at an index, or empty past the end.
     /// </summary>
     /// <param name="i">The index.</param>
@@ -650,7 +669,12 @@ internal sealed class CilLineReader
         return i;
     }
 
-    private bool IsTypeStart(int i) =>
+    /// <summary>
+    /// Whether a type could begin at an index: a primitive, <c>class</c>, <c>valuetype</c>, <c>method</c>, or a multi-word primitive.
+    /// </summary>
+    /// <param name="i">The index.</param>
+    /// <returns>True when a type could begin here.</returns>
+    internal bool IsTypeStart(int i) =>
         IsPrimitive(i)
         || IsWord(i, "class") || IsWord(i, "valuetype") || IsWord(i, "method")
         || ((IsWord(i, "native") || IsWord(i, "unsigned")) && (IsPrimitive(i + 1) || IsWord(i + 1, "native") || IsWord(i + 1, "unsigned")));
@@ -720,7 +744,13 @@ internal sealed class CilLineReader
         return i;
     }
 
-    private bool IsBareMemberName(int i)
+    /// <summary>
+    /// Whether the name at an index is a member on its own: followed by its parameter list, by
+    /// generic arguments and then the list, or by nothing.
+    /// </summary>
+    /// <param name="i">The index.</param>
+    /// <returns>True for a bare member name.</returns>
+    internal bool IsBareMemberName(int i)
     {
         if (i + 1 >= Count || IsPunct(i + 1, '('))
         {

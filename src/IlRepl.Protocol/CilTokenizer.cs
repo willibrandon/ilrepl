@@ -181,7 +181,9 @@ public sealed class CilTokenizer
 
     internal bool IsPrimitive(ReadOnlySpan<char> word) => _primitiveLookup.Contains(word);
 
-    private CilOperandKind OperandKindOf(ReadOnlySpan<char> word) => _opcodeLookup.TryGetValue(word, out var kind) ? kind : CilOperandKind.None;
+    internal CilOperandKind OperandKindOf(ReadOnlySpan<char> word) => _opcodeLookup.TryGetValue(word, out var kind) ? kind : CilOperandKind.None;
+
+    internal static bool IsBlockKeywordWord(ReadOnlySpan<char> word) => IsBlockKeyword(word);
 
     private void ReadLine(CilLineReader r)
     {
