@@ -46,8 +46,11 @@ public sealed record MethodSignatureSymbol(
     public bool IsVarArg => (ManagedConvention & CallingConventions.VarArgs) != 0;
 
     /// <summary>
+    /// Returns the argument count consumed by a call, including an implicit instance receiver.
+    /// </summary>
+    /// <remarks>
     /// How many values a call through this signature pops for its arguments: the parameters, and
     /// the receiver of an instance signature that does not name it as a parameter.
-    /// </summary>
+    /// </remarks>
     public int ArgumentPopCount => Parameters.Count + (HasThis && !ExplicitThis ? 1 : 0);
 }

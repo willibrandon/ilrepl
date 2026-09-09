@@ -1,10 +1,13 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Represents parsed type syntax and source positions before name binding.
+/// </summary>
+/// <remarks>
 /// A type as written in IL, with the position of every part in the text it was read from. Nothing
 /// is looked up: a named type keeps its hint, its path, and its arguments as syntax, and the
 /// binder decides what they mean.
-/// </summary>
+/// </remarks>
 public sealed record TypeSyntax
 {
     /// <summary>
@@ -23,7 +26,7 @@ public sealed record TypeSyntax
     public int End { get; init; }
 
     /// <summary>
-    /// The canonical IL keyword of a primitive, <c>int32</c> for <c>int</c>, or <c>decimal</c> for the C# alias that names no CIL primitive.
+    /// The canonical primitive keyword, or <c>decimal</c> for the accepted C# alias that is not a CIL primitive.
     /// </summary>
     public string? Keyword { get; init; }
 
@@ -43,9 +46,12 @@ public sealed record TypeSyntax
     public int HintEnd { get; init; } = -1;
 
     /// <summary>
+    /// Stores the decoded ILAsm type path while retaining any written generic arity.
+    /// </summary>
+    /// <remarks>
     /// The decoded path of a named type as ILAsm writes it: <c>System.String</c>, <c>Outer/Inner</c>,
     /// <c>List`1</c>. A quoted segment is decoded; the arity suffix is kept when written.
-    /// </summary>
+    /// </remarks>
     public string? Name { get; init; }
 
     /// <summary>
@@ -119,9 +125,12 @@ public sealed record TypeSyntax
     public bool IsRequired { get; init; }
 
     /// <summary>
+    /// Returns the type beneath custom modifiers and pinned annotations.
+    /// </summary>
+    /// <remarks>
     /// The core type under every modifier and pinned wrapper: what the type is once the
     /// annotations the CLI keeps beside it are set apart.
-    /// </summary>
+    /// </remarks>
     public TypeSyntax Unwrapped => Kind is TypeSyntaxKind.Modified or TypeSyntaxKind.Pinned ? Element!.Unwrapped : this;
 
     /// <summary>

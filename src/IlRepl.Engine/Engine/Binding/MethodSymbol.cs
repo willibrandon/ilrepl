@@ -3,10 +3,13 @@ using System.Reflection;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Identifies a method or constructor on a particular declaring construction and generic instantiation.
+/// </summary>
+/// <remarks>
 /// A method or constructor: its definition, the type it is referenced on, its instantiation, and
 /// its signature as that reference sees it. Two symbols are equal when they name the same member
 /// on the same declaring construction with the same generic arguments.
-/// </summary>
+/// </remarks>
 public sealed class MethodSymbol : IEquatable<MethodSymbol>
 {
     /// <summary>
@@ -184,7 +187,8 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
     /// <param name="parameters">The substituted parameters.</param>
     /// <param name="genericArguments">The instantiation, or empty.</param>
     /// <returns>The copy.</returns>
-    public MethodSymbol With(TypeSymbol? declaringType, TypeSymbol returnType, IReadOnlyList<ParameterSymbol> parameters, IReadOnlyList<TypeSymbol> genericArguments)
+    public MethodSymbol With(TypeSymbol? declaringType, TypeSymbol returnType, IReadOnlyList<ParameterSymbol> parameters,
+        IReadOnlyList<TypeSymbol> genericArguments)
     {
         ArgumentNullException.ThrowIfNull(returnType);
         ArgumentNullException.ThrowIfNull(parameters);

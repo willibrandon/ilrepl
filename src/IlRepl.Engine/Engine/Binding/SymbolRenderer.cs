@@ -5,11 +5,14 @@ using System.Text;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Renders symbolic types and members using the REPL's runtime-compatible spellings.
+/// </summary>
+/// <remarks>
 /// Spells symbols the way the REPL spells runtime types: the short, IL-flavored form the stack
 /// column and messages use, and the shapes ildasm prints for the forms reflection cannot carry.
 /// A symbol imported from a runtime type renders as <see cref="TypeNameFormatter.Pretty(Type)"/>
 /// renders the type.
-/// </summary>
+/// </remarks>
 public static class SymbolRenderer
 {
     /// <summary>
@@ -106,9 +109,12 @@ public static class SymbolRenderer
     }
 
     /// <summary>
+    /// Renders a member reference in the spelling accepted by the resolver.
+    /// </summary>
+    /// <remarks>
     /// Renders a member in the shape the resolver accepts, for candidate lists and diagnostics:
     /// <c>instance string Object::ToString()</c>.
-    /// </summary>
+    /// </remarks>
     /// <param name="method">The member.</param>
     /// <returns>The IL-style signature.</returns>
     public static string Describe(MethodSymbol method) => Describe(method, Pretty);
@@ -154,7 +160,8 @@ public static class SymbolRenderer
     {
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(pretty);
-        var generic = method.GenericParameters.Count == 0 ? "" : "<" + string.Join(", ", method.GenericParameters.Select(p => p.Name)) + ">";
+        var generic = method.GenericParameters.Count == 0 ? "" : "<" + string.Join(", ", method.GenericParameters.Select(p => p.Name))
+            + ">";
         return $"{pretty(method.ReturnType)} {method.Name}{generic}({string.Join(", ", method.Parameters.Select(p => pretty(p.Type)))})";
     }
 

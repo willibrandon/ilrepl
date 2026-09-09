@@ -1,10 +1,13 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Represents a session type's declaration and provisional members without creating runtime builders.
+/// </summary>
+/// <remarks>
 /// A type the session is writing, or a placeholder for one, as a snapshot copies it: the facts of
 /// its header and the members declared so far, held as symbols with no builder behind them. A
 /// snapshot may add members a reference declares ahead of its line; the real block never sees them.
-/// </summary>
+/// </remarks>
 public sealed class DeclarationSymbol
 {
     private readonly List<FieldSymbol> _fields;
@@ -20,7 +23,9 @@ public sealed class DeclarationSymbol
     /// <param name="fields">The fields declared so far.</param>
     /// <param name="methods">The methods declared so far, forward references included.</param>
     /// <param name="canDefineForward">True when the type takes references to members declared later.</param>
-    public DeclarationSymbol(TypeSymbol type, TypeSymbol? baseType, IReadOnlyList<TypeSymbol> interfaces, IReadOnlyList<GenericParameterSymbol> genericParameters, IEnumerable<FieldSymbol> fields, IEnumerable<MethodSymbol> methods, bool canDefineForward)
+    public DeclarationSymbol(TypeSymbol type, TypeSymbol? baseType, IReadOnlyList<TypeSymbol> interfaces,
+        IReadOnlyList<GenericParameterSymbol> genericParameters, IEnumerable<FieldSymbol> fields, IEnumerable<MethodSymbol> methods,
+        bool canDefineForward)
     {
         ArgumentNullException.ThrowIfNull(type);
         ArgumentNullException.ThrowIfNull(interfaces);
@@ -97,6 +102,7 @@ public sealed class DeclarationSymbol
     /// <returns>The copy.</returns>
     public DeclarationSymbol Clone() => new(Type, BaseType, Interfaces, GenericParameters, _fields, _methods, CanDefineForward)
     {
-        IsPlaceholder = IsPlaceholder, Properties = [.. Properties],
+        IsPlaceholder = IsPlaceholder,
+        Properties = [.. Properties],
     };
 }

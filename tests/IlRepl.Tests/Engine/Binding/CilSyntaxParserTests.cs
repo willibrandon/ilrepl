@@ -4,9 +4,12 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Tests.Engine.Binding;
 
 /// <summary>
+/// Verifies supported IL type and member grammar while retaining source positions.
+/// </summary>
+/// <remarks>
 /// Tests for <see cref="CilSyntaxParser"/>: the grammar reads every shape the type and member
 /// parsers accept and keeps the position of every part.
-/// </summary>
+/// </remarks>
 [TestClass]
 public sealed class CilSyntaxParserTests
 {
@@ -318,8 +321,10 @@ public sealed class CilSyntaxParserTests
         Assert.AreEqual("value", quoted.Name);
         Assert.IsTrue(quoted.NameQuoted);
 
-        Assert.AreEqual("expected 'Type::field' in field reference", Assert.ThrowsExactly<ReplException>(() => CilSyntaxParser.ParseFieldReference("Count")).Message);
-        Assert.AreEqual("missing field name", Assert.ThrowsExactly<ReplException>(() => CilSyntaxParser.ParseFieldReference("Counter::")).Message);
+        Assert.AreEqual("expected 'Type::field' in field reference", Assert.ThrowsExactly<ReplException>(()
+            => CilSyntaxParser.ParseFieldReference("Count")).Message);
+        Assert.AreEqual("missing field name", Assert.ThrowsExactly<ReplException>(() => CilSyntaxParser.ParseFieldReference(
+            "Counter::")).Message);
     }
 
     /// <summary>

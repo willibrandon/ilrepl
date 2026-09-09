@@ -3,13 +3,16 @@ using System.Reflection;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Represents a type's structural shape and definition identity independently of runtime objects.
+/// </summary>
+/// <remarks>
 /// The shape of a type, with no runtime object behind it: a primitive by keyword, a definition by
 /// identity with the facts its metadata states, a construction over arguments, a generic parameter
 /// by owner and position, or an array, byref, pointer, function pointer, modified, or pinned form
 /// of another symbol. Two symbols are equal when they name the same type, by
 /// <see cref="SymbolIdentity"/>; the facts a definition carries are for rendering and eligibility
 /// and play no part in equality.
-/// </summary>
+/// </remarks>
 public sealed class TypeSymbol : IEquatable<TypeSymbol>
 {
     private TypeSymbol(TypeSymbolKind kind)
@@ -152,12 +155,15 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
     /// <summary>
     /// True when the symbol wraps an element: an array, byref, pointer, modified, or pinned type.
     /// </summary>
-    public bool HasElement => Kind is TypeSymbolKind.SzArray or TypeSymbolKind.Array or TypeSymbolKind.ByRef or TypeSymbolKind.Pointer or TypeSymbolKind.Modified or TypeSymbolKind.Pinned;
+    public bool HasElement
+        => Kind is TypeSymbolKind.SzArray or TypeSymbolKind.Array or TypeSymbolKind.ByRef or TypeSymbolKind.Pointer
+            or TypeSymbolKind.Modified or TypeSymbolKind.Pinned;
 
     /// <summary>
     /// True for an interface definition or a construction of one.
     /// </summary>
-    public bool IsInterface => DefinitionOrSelf.Kind == TypeSymbolKind.Named && DefinitionOrSelf.Attributes.HasFlag(TypeAttributes.Interface);
+    public bool IsInterface => DefinitionOrSelf.Kind == TypeSymbolKind.Named && DefinitionOrSelf.Attributes.HasFlag(
+        TypeAttributes.Interface);
 
     /// <summary>
     /// True for an abstract definition or a construction of one.
@@ -288,7 +294,8 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
     /// <param name="name">The declared name.</param>
     /// <param name="attributes">The variance and special constraints.</param>
     /// <returns>The symbol.</returns>
-    public static TypeSymbol Parameter(DefinitionId owner, bool isMethodParameter, int position, string name, GenericParameterAttributes attributes)
+    public static TypeSymbol Parameter(DefinitionId owner, bool isMethodParameter, int position, string name,
+        GenericParameterAttributes attributes)
     {
         ArgumentNullException.ThrowIfNull(name);
         return new TypeSymbol(isMethodParameter ? TypeSymbolKind.MethodParameter : TypeSymbolKind.TypeParameter)
@@ -399,7 +406,8 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
         ArgumentNullException.ThrowIfNull(ns);
         ArgumentNullException.ThrowIfNull(assemblyName);
         var tick = name.LastIndexOf('`');
-        var arity = tick > 0 && int.TryParse(name[(tick + 1)..], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var count) ? count : 0;
+        var arity = tick > 0 && int.TryParse(name[(tick + 1)..], System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var count) ? count : 0;
         return new TypeSymbol(TypeSymbolKind.Unresolved)
         {
             Name = name,
@@ -419,7 +427,8 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
         TypeSymbolKind.Constructed => Element!.HasUnresolved || Arguments.Any(a => a.HasUnresolved),
         TypeSymbolKind.FunctionPointer => Signature!.ReturnType.HasUnresolved || Signature.Parameters.Any(p => p.HasUnresolved),
         TypeSymbolKind.Modified => Element!.HasUnresolved || Modifier!.HasUnresolved,
-        TypeSymbolKind.SzArray or TypeSymbolKind.Array or TypeSymbolKind.ByRef or TypeSymbolKind.Pointer or TypeSymbolKind.Pinned => Element!.HasUnresolved,
+        TypeSymbolKind.SzArray or TypeSymbolKind.Array or TypeSymbolKind.ByRef or TypeSymbolKind.Pointer or TypeSymbolKind.Pinned
+            => Element!.HasUnresolved,
         _ => false,
     };
 

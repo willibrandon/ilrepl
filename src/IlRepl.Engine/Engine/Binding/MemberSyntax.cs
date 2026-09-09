@@ -1,10 +1,13 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Represents a source-positioned method, field, or session-member reference.
+/// </summary>
+/// <remarks>
 /// A member reference as written in IL: <c>[instance] [vararg] [RetType] Declaring::Name[&lt;Args&gt;][(Params)]</c>,
 /// the field form <c>[FieldType] Declaring::Name</c>, or the session form <c>[RetType] Name(Params)</c>
 /// that names a method defined with <c>.method</c>. Every part keeps its position.
-/// </summary>
+/// </remarks>
 public sealed record MemberSyntax
 {
     /// <summary>
@@ -115,10 +118,12 @@ public sealed record MemberSyntax
     /// <summary>
     /// The fixed parameters: those before the <c>...</c>, or all of them when there is none.
     /// </summary>
-    public IReadOnlyList<TypeSyntax> FixedParameters => Parameters is null ? [] : SentinelIndex is int s ? [.. Parameters.Take(s)] : Parameters;
+    public IReadOnlyList<TypeSyntax> FixedParameters => Parameters is null ? [] : SentinelIndex is int s ? [.. Parameters.Take(
+        s)] : Parameters;
 
     /// <summary>
     /// The parameters after the <c>...</c>, or null when there is none.
     /// </summary>
-    public IReadOnlyList<TypeSyntax>? OptionalParameters => Parameters is not null && SentinelIndex is int s ? [.. Parameters.Skip(s)] : null;
+    public IReadOnlyList<TypeSyntax>? OptionalParameters => Parameters is not null && SentinelIndex is int s ? [.. Parameters.Skip(
+        s)] : null;
 }

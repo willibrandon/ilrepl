@@ -95,10 +95,13 @@ public static class InstructionParser
     }
 
     /// <summary>
+    /// Parses and binds an instruction through the shared syntax and runtime binding scope.
+    /// </summary>
+    /// <remarks>
     /// Parses an instruction (opcode plus operand) with no labels or comments. The grammar is
     /// <see cref="CilSyntaxParser"/>'s and the operand decisions are <see cref="SymbolBinder"/>'s;
     /// this entry point binds in the runtime scope and hands back the instruction the emitter takes.
-    /// </summary>
+    /// </remarks>
     /// <param name="text">The instruction text.</param>
     /// <param name="context">The parse context.</param>
     /// <returns>The instruction.</returns>

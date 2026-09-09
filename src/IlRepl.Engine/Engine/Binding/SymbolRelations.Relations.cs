@@ -1,10 +1,13 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Computes symbolic inheritance, interfaces, and assignability using the runtime's type rules.
+/// </summary>
+/// <remarks>
 /// How types relate, answered over symbols through a scope: the base chain, the interfaces, and
 /// assignability, with the rules the runtime model applies to session types and the ones
 /// reflection applies to loaded ones.
-/// </summary>
+/// </remarks>
 public static partial class SymbolRelations
 {
     private static readonly HashSet<string> VectorInterfaces = new(StringComparer.Ordinal)
@@ -84,9 +87,12 @@ public static partial class SymbolRelations
     }
 
     /// <summary>
+    /// Checks whether a base definition occurs in a derived type's hierarchy, ignoring generic arguments.
+    /// </summary>
+    /// <remarks>
     /// True when the definition of <paramref name="baseType"/> appears in the base chain of
     /// <paramref name="derived"/>, whatever the generic arguments.
-    /// </summary>
+    /// </remarks>
     /// <param name="derived">The candidate derived type.</param>
     /// <param name="baseType">The base type.</param>
     /// <param name="scope">The scope.</param>
@@ -98,9 +104,12 @@ public static partial class SymbolRelations
     }
 
     /// <summary>
+    /// Checks for a base definition using the supplied hierarchy lookup.
+    /// </summary>
+    /// <remarks>
     /// True when the definition of <paramref name="baseType"/> appears in the base chain of
     /// <paramref name="derived"/>, with the base chain supplied as a function.
-    /// </summary>
+    /// </remarks>
     /// <param name="derived">The candidate derived type.</param>
     /// <param name="baseType">The base type.</param>
     /// <param name="baseOf">The base type of a type, or null.</param>
@@ -124,10 +133,13 @@ public static partial class SymbolRelations
     }
 
     /// <summary>
+    /// Checks reference assignability, including inheritance, interface variance, and array conversions.
+    /// </summary>
+    /// <remarks>
     /// True when a reference of type <paramref name="from"/> can stand where <paramref name="to"/>
     /// is expected: the same type, a base type, an implemented interface, or a variant
     /// instantiation of one, with the array rules the runtime applies.
-    /// </summary>
+    /// </remarks>
     /// <param name="from">The type of the value.</param>
     /// <param name="to">The expected type.</param>
     /// <param name="scope">The scope.</param>
@@ -171,14 +183,16 @@ public static partial class SymbolRelations
             // A vector implements the generic collection interfaces over its element type, and
             // over any reference type the element converts to, whatever the interface's own
             // variance: the runtime treats arrays specially here.
-            if (!to.IsInterface || to.Kind != TypeSymbolKind.Constructed || from.Kind != TypeSymbolKind.SzArray || !VectorInterfaces.Contains(SymbolRenderer.ReflectionFullName(to.Element!)))
+            if (!to.IsInterface || to.Kind != TypeSymbolKind.Constructed || from.Kind != TypeSymbolKind.SzArray
+                || !VectorInterfaces.Contains(SymbolRenderer.ReflectionFullName(to.Element!)))
             {
                 return false;
             }
 
             var element = from.Element!;
             var wanted = to.Arguments[0];
-            return SymbolIdentity.Equal(element, wanted) || (!element.IsValueTypeShape && !wanted.IsValueTypeShape && IsAssignable(element, wanted, scope));
+            return SymbolIdentity.Equal(element, wanted) || (!element.IsValueTypeShape && !wanted.IsValueTypeShape && IsAssignable(element,
+                wanted, scope));
         }
 
         if (from.HasElement || to.HasElement || from.Kind == TypeSymbolKind.FunctionPointer || to.Kind == TypeSymbolKind.FunctionPointer)
@@ -186,7 +200,8 @@ public static partial class SymbolRelations
             return false;
         }
 
-        if (to.Kind == TypeSymbolKind.Constructed && SymbolRenderer.ReflectionFullName(to.Element!) == "System.Nullable`1" && SymbolIdentity.Equal(to.Arguments[0], from))
+        if (to.Kind == TypeSymbolKind.Constructed && SymbolRenderer.ReflectionFullName(to.Element!) == "System.Nullable`1"
+            && SymbolIdentity.Equal(to.Arguments[0], from))
         {
             return true;
         }
@@ -220,7 +235,8 @@ public static partial class SymbolRelations
             return true;
         }
 
-        if (candidate.Kind != TypeSymbolKind.Constructed || target.Kind != TypeSymbolKind.Constructed || !SymbolIdentity.Equal(candidate.Element, target.Element))
+        if (candidate.Kind != TypeSymbolKind.Constructed || target.Kind != TypeSymbolKind.Constructed || !SymbolIdentity.Equal(
+            candidate.Element, target.Element))
         {
             return false;
         }
@@ -240,7 +256,9 @@ public static partial class SymbolRelations
                 return false;
             }
 
-            var variance = i < parameters.Count ? parameters[i].Attributes & System.Reflection.GenericParameterAttributes.VarianceMask : System.Reflection.GenericParameterAttributes.None;
+            var variance = i < parameters.Count
+                ? parameters[i].Attributes & System.Reflection.GenericParameterAttributes.VarianceMask
+                : System.Reflection.GenericParameterAttributes.None;
             var ok = variance switch
             {
                 System.Reflection.GenericParameterAttributes.Covariant => IsAssignable(a, b, scope),

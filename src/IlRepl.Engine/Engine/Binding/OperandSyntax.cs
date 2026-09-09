@@ -1,9 +1,12 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Represents a parsed instruction operand while retaining literal text for opcode-specific validation.
+/// </summary>
+/// <remarks>
 /// An instruction's operand as written, with the syntax of a type, member, or signature operand
 /// already read and the text of a literal kept for the binder to check against its opcode.
-/// </summary>
+/// </remarks>
 public sealed record OperandSyntax
 {
     /// <summary>

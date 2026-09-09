@@ -4,20 +4,6 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Where an access happens: the type whose body is being written, or null for the cell and for
-/// session methods, and a short description for messages.
-/// </summary>
-/// <param name="Type">The prototype or runtime type of the body's owner, or null.</param>
-/// <param name="Description">How messages name the accessor: <c>the cell</c>, <c>method Twice</c>, <c>class Line</c>.</param>
-public sealed record AccessScope(Type? Type, string Description)
-{
-    /// <summary>
-    /// The cell.
-    /// </summary>
-    public static AccessScope Cell { get; } = new(null, "the cell");
-}
-
-/// <summary>
 /// The accessibility rules of ECMA-335 as the REPL teaches them, and the words ILAsm uses for
 /// them. Because a consumer skips the runtime's checks for session assemblies, this is the only
 /// place a session member's access is enforced.
@@ -198,7 +184,8 @@ public static class MemberAccess
         var description = method.Declared is { } declared
             ? $"{declared.DescribeMember()} on {TypeNameFormatter.Pretty(declaring)}"
             : MemberResolver.Describe(method.Method);
-        return MemberEligibility.MemberVerdict(AccessWord(attributes), RuntimeSymbolImporter.Import(declaring), description, Context(scope), Facts(types));
+        return MemberEligibility.MemberVerdict(AccessWord(attributes), RuntimeSymbolImporter.Import(declaring), description, Context(scope),
+            Facts(types));
     }
 
     /// <summary>
@@ -222,9 +209,11 @@ public static class MemberAccess
     /// The facts the symbol rules need, answered by reflection and the table of types being written.
     /// </summary>
     private static AccessFacts Facts(TypeTable types) => new(
-        symbol => TypeRelations.BaseTypeOf(RuntimeBindingAdapter.Materialize(symbol), types) is { } baseType ? RuntimeSymbolImporter.Import(baseType) : null,
+        symbol => TypeRelations.BaseTypeOf(RuntimeBindingAdapter.Materialize(symbol), types) is { } baseType ? RuntimeSymbolImporter.Import(
+            baseType) : null,
         symbol => TypeRelations.IsSessionType(RuntimeBindingAdapter.Materialize(symbol)),
         symbol => symbol is null ? "?" : TypeNameFormatter.Pretty(RuntimeBindingAdapter.Materialize(symbol)));
 
-    private static AccessContext Context(AccessScope scope) => new(scope.Type is null ? null : RuntimeSymbolImporter.Import(scope.Type), scope.Description);
+    private static AccessContext Context(AccessScope scope) => new(scope.Type is null ? null : RuntimeSymbolImporter.Import(scope.Type),
+        scope.Description);
 }

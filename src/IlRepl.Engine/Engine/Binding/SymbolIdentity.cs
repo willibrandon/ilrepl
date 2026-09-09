@@ -1,13 +1,16 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Compares symbol identities across definitions, constructions, parameters, and member instantiations.
+/// </summary>
+/// <remarks>
 /// Decides when two symbols name the same thing, for every source alike. Definitions compare by
 /// <see cref="DefinitionId"/>, so two loads of the same bytes are different; constructions compare
 /// their definition and every argument; generic parameters compare owner, kind, and position, so
 /// <c>!0</c> is never <c>!!0</c> and the <c>T</c> of one type is never the <c>T</c> of another;
 /// members compare definition, declaring construction, and instantiation. Facts carried for
 /// rendering play no part.
-/// </summary>
+/// </remarks>
 public static class SymbolIdentity
 {
     /// <summary>
@@ -34,7 +37,8 @@ public static class SymbolIdentity
             TypeSymbolKind.Named => a.Definition == b.Definition,
             TypeSymbolKind.Constructed => Equal(a.Element, b.Element) && SequenceEqual(a.Arguments, b.Arguments),
             TypeSymbolKind.TypeParameter or TypeSymbolKind.MethodParameter => a.Owner == b.Owner && a.Position == b.Position,
-            TypeSymbolKind.SzArray or TypeSymbolKind.ByRef or TypeSymbolKind.Pointer or TypeSymbolKind.Pinned => Equal(a.Element, b.Element),
+            TypeSymbolKind.SzArray or TypeSymbolKind.ByRef or TypeSymbolKind.Pointer or TypeSymbolKind.Pinned => Equal(a.Element,
+                b.Element),
             TypeSymbolKind.Array => a.Rank == b.Rank && Equal(a.Element, b.Element),
             TypeSymbolKind.FunctionPointer => Equal(a.Signature!, b.Signature!),
             TypeSymbolKind.Modified => a.IsRequired == b.IsRequired && Equal(a.Element, b.Element) && Equal(a.Modifier, b.Modifier),
@@ -61,9 +65,12 @@ public static class SymbolIdentity
     }
 
     /// <summary>
+    /// Compares a member's definition, declaring construction, and method arguments.
+    /// </summary>
+    /// <remarks>
     /// True when the two members are the same definition on the same declaring construction with
     /// the same generic arguments.
-    /// </summary>
+    /// </remarks>
     /// <param name="a">The first member.</param>
     /// <param name="b">The second member.</param>
     /// <returns>True when they match.</returns>

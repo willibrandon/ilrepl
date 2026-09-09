@@ -8,11 +8,14 @@ using MA = Mono.Cecil.MethodAttributes;
 namespace IlRepl.Tests.Engine.Binding;
 
 /// <summary>
+/// Checks metadata-only resolution, exact forwarding, load-context identity, and missing dependencies.
+/// </summary>
+/// <remarks>
 /// A snapshot answers from metadata alone: binding against it loads nothing, raises no resolution
 /// event, follows facade forwarders to the defining assembly, keeps references inside the load
 /// context that made them, and leaves a reference nothing defines unresolved without dropping
 /// the healthy members beside it.
-/// </summary>
+/// </remarks>
 [TestClass]
 public sealed class SnapshotResolutionTests
 {
@@ -46,14 +49,18 @@ public sealed class SnapshotResolutionTests
         {
             using var snapshot = BindingSnapshot.Capture(context);
             var scope = new SnapshotBindingScope(snapshot);
-            foreach (var text in new[] { "[System.Runtime]System.String", "class [System.Collections]System.Collections.Generic.List`1<int32>", "Console", "Dictionary<string, int32>" })
+            foreach (var text in new[] { "[System.Runtime]System.String",
+                "class [System.Collections]System.Collections.Generic.List`1<int32>", "Console", "Dictionary<string, int32>" })
             {
                 SymbolBinder.BindType(CilSyntaxParser.ParseType(text), scope);
             }
 
-            SymbolBinder.BindMethodReference(CilSyntaxParser.ParseMethodReference("void [System.Console]System.Console::WriteLine(string)"), scope, false);
-            SymbolBinder.BindMethodReference(CilSyntaxParser.ParseMethodReference("!!0 Enumerable::First<int32>(class IEnumerable`1<!!0>)"), scope, false);
-            Assert.ThrowsExactly<ReplException>(() => SymbolBinder.BindType(CilSyntaxParser.ParseType("[Unknown.Assembly]Some.Type"), scope));
+            SymbolBinder.BindMethodReference(CilSyntaxParser.ParseMethodReference("void [System.Console]System.Console::WriteLine(string)"),
+                scope, false);
+            SymbolBinder.BindMethodReference(CilSyntaxParser.ParseMethodReference("!!0 Enumerable::First<int32>(class IEnumerable`1<!!0>)"),
+                scope, false);
+            Assert.ThrowsExactly<ReplException>(() => SymbolBinder.BindType(CilSyntaxParser.ParseType("[Unknown.Assembly]Some.Type"),
+                scope));
             Assert.ThrowsExactly<ReplException>(() => SymbolBinder.BindType(CilSyntaxParser.ParseType("NoSuchTypeAnywhere"), scope));
             Assert.ThrowsExactly<ReplException>(() => SymbolBinder.BindType(CilSyntaxParser.ParseType("Enumerator"), scope));
         }
@@ -69,9 +76,12 @@ public sealed class SnapshotResolutionTests
     }
 
     /// <summary>
+    /// Checks facade references resolve to the same core definition as runtime lookup.
+    /// </summary>
+    /// <remarks>
     /// A reference through a facade lands on the definition in the core library, by the same
     /// identity a runtime type has.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Snapshot_FollowsFacadeForwarders()
     {
@@ -82,7 +92,8 @@ public sealed class SnapshotResolutionTests
         Assert.AreEqual(RuntimeSymbolImporter.Import(typeof(System.Text.StringBuilder)), viaRuntime);
         Assert.AreEqual("System.Private.CoreLib", viaRuntime.AssemblyName);
 
-        var list = SymbolBinder.BindType(CilSyntaxParser.ParseType("class [System.Collections]System.Collections.Generic.List`1<int32>"), scope).Type;
+        var list = SymbolBinder.BindType(CilSyntaxParser.ParseType("class [System.Collections]System.Collections.Generic.List`1<int32>"),
+            scope).Type;
         Assert.AreEqual(RuntimeSymbolImporter.Import(typeof(List<int>)), list);
 
         var runtimeSource = snapshot.Catalog.FindAssembly("System.Runtime");
@@ -92,9 +103,12 @@ public sealed class SnapshotResolutionTests
     }
 
     /// <summary>
+    /// Keeps unresolved signatures without withholding neighboring healthy members.
+    /// </summary>
+    /// <remarks>
     /// A member whose signature names a type no loaded assembly defines is kept with an unresolved
     /// part, and the healthy members beside it bind and confirm.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Snapshot_MissingDependency_IsolatesTheAffectedMember()
     {
@@ -157,18 +171,23 @@ public sealed class SnapshotResolutionTests
     }
 
     /// <summary>
+    /// Resolves identical dependency names to the copy in the requesting load context.
+    /// </summary>
+    /// <remarks>
     /// The same dependency loaded into two contexts resolves to the copy in the requester's own
     /// context, never to the other by a matching name or token.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Snapshot_ReferencesStayInTheirLoadContext()
     {
         var dependencyName = "IlRepl.Parity.Dependency" + Guid.NewGuid().ToString("N");
         byte[] dependencyImage;
-        using (var definition = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(dependencyName, new Version(1, 0, 0, 0)), dependencyName, ModuleKind.Dll))
+        using (var definition = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(dependencyName, new Version(1, 0, 0, 0)),
+            dependencyName, ModuleKind.Dll))
         {
             var module = definition.MainModule;
-            module.Types.Add(new TypeDefinition("D", "Shared", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object));
+            module.Types.Add(new TypeDefinition("D", "Shared", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class,
+                module.TypeSystem.Object));
             using var stream = new MemoryStream();
             definition.Write(stream);
             dependencyImage = stream.ToArray();
@@ -176,13 +195,15 @@ public sealed class SnapshotResolutionTests
 
         var userName = "IlRepl.Parity.User" + Guid.NewGuid().ToString("N");
         byte[] userImage;
-        using (var definition = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(userName, new Version(1, 0, 0, 0)), userName, ModuleKind.Dll))
+        using (var definition = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(userName, new Version(1, 0, 0, 0)), userName,
+            ModuleKind.Dll))
         {
             var module = definition.MainModule;
             var reference = new AssemblyNameReference(dependencyName, new Version(1, 0, 0, 0));
             module.AssemblyReferences.Add(reference);
             var shared = new TypeReference("D", "Shared", module, reference);
-            var type = new TypeDefinition("U", "Holder", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            var type = new TypeDefinition("U", "Holder", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class,
+                module.TypeSystem.Object);
             type.Fields.Add(new FieldDefinition("Value", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static, shared));
             module.Types.Add(type);
             using var stream = new MemoryStream();
@@ -204,8 +225,10 @@ public sealed class SnapshotResolutionTests
             var holderB = catalog.FindType(sources[2].Item2, "U", "Holder")!;
             var fieldA = sources[0].Item2.Fields(sources[0].Item2.TypeHandleOf(holderA.Definition)!.Value, catalog)[0];
             var fieldB = sources[2].Item2.Fields(sources[2].Item2.TypeHandleOf(holderB.Definition)!.Value, catalog)[0];
-            Assert.AreEqual(RuntimeDefinitions.AssemblyInstance(dependencyA), fieldA.FieldType.Definition.Assembly, "Holder in the first context sees the first context's dependency");
-            Assert.AreEqual(RuntimeDefinitions.AssemblyInstance(dependencyB), fieldB.FieldType.Definition.Assembly, "Holder in the second context sees the second context's dependency");
+            Assert.AreEqual(RuntimeDefinitions.AssemblyInstance(dependencyA), fieldA.FieldType.Definition.Assembly,
+                "Holder in the first context sees the first context's dependency");
+            Assert.AreEqual(RuntimeDefinitions.AssemblyInstance(dependencyB), fieldB.FieldType.Definition.Assembly,
+                "Holder in the second context sees the second context's dependency");
             Assert.AreEqual(fieldA.FieldType.Definition.Token, fieldB.FieldType.Definition.Token);
             Assert.AreNotEqual(fieldA.FieldType, fieldB.FieldType);
             Assert.AreEqual(RuntimeSymbolImporter.Import(dependencyA.GetType("D.Shared")!), fieldA.FieldType);
@@ -230,7 +253,8 @@ public sealed class SnapshotResolutionTests
             {
                 var missing = new AssemblyNameReference("IlRepl.Absent", new Version(1, 0, 0, 0));
                 module.AssemblyReferences.Add(missing);
-                type.Fields.Add(new FieldDefinition("Absent", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static, new TypeReference("A", "B", module, missing)));
+                type.Fields.Add(new FieldDefinition("Absent", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static,
+                    new TypeReference("A", "B", module, missing)));
             });
         var source = AssemblySymbolSource.For(fixture.Assembly)!;
         var catalog = new LoadedBindingCatalog([(fixture.Assembly, source)]);
@@ -239,7 +263,8 @@ public sealed class SnapshotResolutionTests
         Assert.AreEqual(TypeSymbolKind.Unresolved, field.FieldType.Kind);
         Assert.IsTrue(field.FieldType.HasUnresolved);
         var again = source.Fields(handle, catalog)[0];
-        Assert.IsFalse(SymbolIdentity.Equal(field.FieldType, again.FieldType), "two readings of a reference nothing defines are not one type");
+        Assert.IsFalse(SymbolIdentity.Equal(field.FieldType, again.FieldType),
+            "two readings of a reference nothing defines are not one type");
     }
 
     /// <summary>
@@ -250,7 +275,8 @@ public sealed class SnapshotResolutionTests
     {
         var context = new ParseContext([], [], GenericContext.Empty, new TypeResolver(), []);
         using var snapshot = BindingSnapshot.Capture(context);
-        foreach (var type in new[] { typeof(List<>), typeof(Dictionary<,>.Enumerator), typeof(Environment.SpecialFolder), typeof(Action<>), typeof(IComparable<>), typeof(ValueTuple<,>), typeof(Enum), typeof(ValueType), typeof(System.Text.StringBuilder) })
+        foreach (var type in new[] { typeof(List<>), typeof(Dictionary<,>.Enumerator), typeof(Environment.SpecialFolder), typeof(Action<>),
+            typeof(IComparable<>), typeof(ValueTuple<,>), typeof(Enum), typeof(ValueType), typeof(System.Text.StringBuilder) })
         {
             var expected = RuntimeSymbolImporter.Import(type);
             var located = snapshot.Catalog.Locate(expected);

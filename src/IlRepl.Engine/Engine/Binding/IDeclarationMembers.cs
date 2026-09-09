@@ -1,10 +1,13 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Exposes a type's declared and provisional members before runtime creation.
+/// </summary>
+/// <remarks>
 /// The members a type being written has declared so far, as symbols. A builder cannot describe
 /// itself before its type is created, so a reference to a member of an open type resolves through
 /// the declarations, whichever scope is asking.
-/// </summary>
+/// </remarks>
 public interface IDeclarationMembers
 {
     /// <summary>
@@ -35,9 +38,12 @@ public interface IDeclarationMembers
     FieldSymbol? FindField(string name);
 
     /// <summary>
+    /// Lists declared methods and forward references whose headers have not yet been accepted.
+    /// </summary>
+    /// <remarks>
     /// The methods declared so far, and the ones referenced before their declaration, which
     /// answer false to <see cref="MethodSymbol.IsDeclared"/>.
-    /// </summary>
+    /// </remarks>
     IReadOnlyList<MethodSymbol> Methods { get; }
 
     /// <summary>

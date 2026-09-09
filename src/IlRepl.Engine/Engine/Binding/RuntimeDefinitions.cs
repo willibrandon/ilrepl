@@ -4,12 +4,15 @@ using System.Runtime.CompilerServices;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Assigns stable definition identities while holding collectible runtime objects weakly.
+/// </summary>
+/// <remarks>
 /// Gives every runtime definition one <see cref="DefinitionId"/> and finds the definition again
 /// from its id while it is alive. A loaded definition is keyed by its assembly instance, module,
 /// and token, so the metadata reader and reflection agree on it without meeting; a builder is
 /// keyed by the object itself. The tables hold their runtime objects weakly, so nothing here keeps
 /// a collectible session assembly alive.
-/// </summary>
+/// </remarks>
 public static class RuntimeDefinitions
 {
     private static readonly Lock Gate = new();
@@ -35,9 +38,12 @@ public static class RuntimeDefinitions
     }
 
     /// <summary>
+    /// Identifies types whose dynamic assemblies have no readable metadata definition.
+    /// </summary>
+    /// <remarks>
     /// True when a type belongs to a dynamic assembly: a builder, a placeholder, or a type emitted
     /// for a cell, none of which has a token the metadata reader could see.
-    /// </summary>
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <returns>True for a dynamic type.</returns>
     public static bool IsDynamic(Type type)
@@ -69,7 +75,8 @@ public static class RuntimeDefinitions
         DefinitionId id;
         if (IsDynamic(definition))
         {
-            id = DeclarationIds.GetValue(definition, t => new StrongBox<DefinitionId>(DefinitionId.ForDeclaration(AssemblyInstance(((Type)t).Assembly), Interlocked.Increment(ref s_nextDeclaration)))).Value;
+            id = DeclarationIds.GetValue(definition, t => new StrongBox<DefinitionId>(DefinitionId.ForDeclaration(AssemblyInstance(((
+                Type)t).Assembly), Interlocked.Increment(ref s_nextDeclaration)))).Value;
         }
         else
         {
@@ -81,9 +88,12 @@ public static class RuntimeDefinitions
     }
 
     /// <summary>
+    /// Identifies the underlying method or constructor definition independently of its construction.
+    /// </summary>
+    /// <remarks>
     /// The identity of a method or constructor definition. A method on a constructed type and an
     /// instantiated generic method share the identity of their definition.
-    /// </summary>
+    /// </remarks>
     /// <param name="method">The method.</param>
     /// <returns>The identity.</returns>
     public static DefinitionId Of(MethodBase method)
@@ -99,7 +109,8 @@ public static class RuntimeDefinitions
         else
         {
             id = DefinitionId.Loaded(AssemblyInstance(method.Module.Assembly), method.Module.ModuleVersionId, method.MetadataToken);
-            if (method is not MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } && (method.DeclaringType is null || !method.DeclaringType.IsGenericType || method.DeclaringType.IsGenericTypeDefinition))
+            if (method is not MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } && (method.DeclaringType is null
+                || !method.DeclaringType.IsGenericType || method.DeclaringType.IsGenericTypeDefinition))
             {
                 Remember(Methods, id, method);
             }
@@ -137,16 +148,20 @@ public static class RuntimeDefinitions
     }
 
     /// <summary>
+    /// Allocates an identity for a declaration that has no runtime object yet.
+    /// </summary>
+    /// <remarks>
     /// A fresh identity for a declaration no runtime object stands for yet, such as a session
     /// method's signature.
-    /// </summary>
+    /// </remarks>
     /// <param name="declaration">The declaration object, which keeps the identity while it lives.</param>
     /// <param name="assembly">The assembly instance the declaration belongs to, or 0 for the session itself.</param>
     /// <returns>The identity.</returns>
     public static DefinitionId OfDeclaration(object declaration, long assembly)
     {
         ArgumentNullException.ThrowIfNull(declaration);
-        return DeclarationIds.GetValue(declaration, _ => new StrongBox<DefinitionId>(DefinitionId.ForDeclaration(assembly, Interlocked.Increment(ref s_nextDeclaration)))).Value;
+        return DeclarationIds.GetValue(declaration, _ => new StrongBox<DefinitionId>(DefinitionId.ForDeclaration(assembly,
+            Interlocked.Increment(ref s_nextDeclaration)))).Value;
     }
 
     /// <summary>

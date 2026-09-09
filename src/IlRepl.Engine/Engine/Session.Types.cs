@@ -212,7 +212,11 @@ public sealed partial class Session
 
         var path = enclosing is null ? (header.Namespace.Length == 0 ? name : header.Namespace + "." + name) : enclosing.Path + "/" + name;
         table.Add(path, builder);
-        var context = new ParseContext([], [], new GenericContext(generics, []), Resolver, Signatures(), table) { Scope = enclosing?.Scope };
+        var context = new ParseContext([], [], new GenericContext(generics, []), Resolver, Signatures(), table)
+        {
+            Scope
+            = enclosing?.Scope
+        };
 
         Type? baseType = null;
         var kind = header.Kind;
@@ -430,7 +434,11 @@ public sealed partial class Session
         }
 
         table.Forward = (name, valueType) => ForwardType(block, name, valueType);
-        return new ParseContext([], [], new GenericContext(block.GenericParameters, []), Resolver, Signatures(), table) { Scope = block.Scope };
+        return new ParseContext([], [], new GenericContext(block.GenericParameters, []), Resolver, Signatures(), table)
+        {
+            Scope
+            = block.Scope
+        };
     }
 
     private static TypeBuilder? ForwardType(OpenTypeBlock block, string name, bool valueType)
@@ -535,24 +543,24 @@ public sealed partial class Session
         switch (directive)
         {
             case ".class":
+            {
+                // A nested builder cannot be taken back from its enclosing builder, so a
+                // header the checks refuse is undone by replaying the family without it.
+                var outermost = block.Outermost;
+                var accepted = outermost.Lines.ToList();
+                try
                 {
-                    // A nested builder cannot be taken back from its enclosing builder, so a
-                    // header the checks refuse is undone by replaying the family without it.
-                    var outermost = block.Outermost;
-                    var accepted = outermost.Lines.ToList();
-                    try
-                    {
-                        return OpenTypeBlock(rest, line);
-                    }
-                    catch (ReplException)
-                    {
-                        _openType = null;
-                        _openMember = null;
-                        _openAccessor = null;
-                        ReplayFamily(outermost.HeaderLine, accepted);
-                        throw;
-                    }
+                    return OpenTypeBlock(rest, line);
                 }
+                catch (ReplException)
+                {
+                    _openType = null;
+                    _openMember = null;
+                    _openAccessor = null;
+                    ReplayFamily(outermost.HeaderLine, accepted);
+                    throw;
+                }
+            }
 
             case ".field":
                 result = AddField(block, rest, line);
@@ -572,23 +580,23 @@ public sealed partial class Session
                 result = AddLayout(block, directive, rest);
                 break;
             case ".custom":
+            {
+                var custom = CustomAttributeParser.Parse(rest, TypeContext(block), line);
+                if (block.AttributeField >= 0)
                 {
-                    var custom = CustomAttributeParser.Parse(rest, TypeContext(block), line);
-                    if (block.AttributeField >= 0)
-                    {
-                        // ILAsm attaches an attribute written after a field to that field.
-                        var field = block.Fields[block.AttributeField];
-                        block.Fields[block.AttributeField] = field with { CustomAttributes = [.. field.CustomAttributes, custom] };
-                        result = new LineResult(LineOutcome.Custom, null, $"custom {custom.Describe()} on field {field.Name}");
-                    }
-                    else
-                    {
-                        block.CustomAttributes.Add(custom);
-                        result = new LineResult(LineOutcome.Custom, null, "custom " + custom.Describe());
-                    }
-
-                    break;
+                    // ILAsm attaches an attribute written after a field to that field.
+                    var field = block.Fields[block.AttributeField];
+                    block.Fields[block.AttributeField] = field with { CustomAttributes = [.. field.CustomAttributes, custom] };
+                    result = new LineResult(LineOutcome.Custom, null, $"custom {custom.Describe()} on field {field.Name}");
                 }
+                else
+                {
+                    block.CustomAttributes.Add(custom);
+                    result = new LineResult(LineOutcome.Custom, null, "custom " + custom.Describe());
+                }
+
+                break;
+            }
             case ".locals":
             case ".try":
             case ".args":
@@ -1238,7 +1246,8 @@ public sealed partial class Session
             _methods,
             family => family.Types.Values.Concat(family.Prototypes.Values.Select(p => (Type)p.Prototype)),
             (family, types, methods) => FamilyMentions(family.Declaration, types, methods),
-            (method, types, methods) => BodyMentions(method.State, types, methods) || method.Signature.ParameterTypes.Append(method.Signature.ReturnType).Any(t => Mentions(t, types)),
+            (method, types, methods) => BodyMentions(method.State, types, methods) || method.Signature.ParameterTypes.Append(
+                method.Signature.ReturnType).Any(t => Mentions(t, types)),
             method => method.Signature.Name,
             ReferenceEqualityComparer.Instance);
         return ([.. closure.Families], [.. closure.Methods]);

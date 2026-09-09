@@ -3,10 +3,13 @@ using System.Globalization;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Describes the type and method arguments used when binding generic parameter references.
+/// </summary>
+/// <remarks>
 /// The generic parameters that <c>!N</c> and <c>!!N</c> refer to while a reference is bound, as
 /// symbols: the declaring type's arguments and the method's arguments, each of which may be a
 /// parameter or a type an outer construction supplied.
-/// </summary>
+/// </remarks>
 /// <param name="TypeArguments">The declaring type's generic arguments, addressed by <c>!N</c>.</param>
 /// <param name="MethodArguments">The method's generic arguments, addressed by <c>!!N</c>.</param>
 public sealed record SymbolGenericContext(IReadOnlyList<TypeSymbol> TypeArguments, IReadOnlyList<TypeSymbol> MethodArguments)
@@ -17,15 +20,21 @@ public sealed record SymbolGenericContext(IReadOnlyList<TypeSymbol> TypeArgument
     public static SymbolGenericContext Empty { get; } = new([], []);
 
     /// <summary>
+    /// Specifies the placeholder count used before a member's declaring type is known.
+    /// </summary>
+    /// <remarks>
     /// How many placeholders a lenient context adds beyond what is in scope, for the first pass
     /// over a member reference whose declaring type is not yet known.
-    /// </summary>
+    /// </remarks>
     public const int LenientPlaceholders = 32;
 
     /// <summary>
+    /// Extends both argument lists with placeholders for the first pass over a member reference.
+    /// </summary>
+    /// <remarks>
     /// A copy with placeholders appended to both lists, so a <c>!N</c> that belongs to the
     /// referenced type resolves to <c>object</c> until the declaring type is known.
-    /// </summary>
+    /// </remarks>
     /// <returns>The lenient context.</returns>
     public SymbolGenericContext Lenient()
     {

@@ -1,9 +1,12 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Supplies symbolic stack operations with markers corresponding to the runtime stack model.
+/// </summary>
+/// <remarks>
 /// The stack type algebra over symbols. Its markers are the symbols of the same marker types the
 /// runtime model uses, so a preview's stack and an actual stack name the same things.
-/// </summary>
+/// </remarks>
 public sealed class SymbolStackAlgebra : IStackTypeAlgebra<TypeSymbol>
 {
     private static readonly TypeSymbol BoxedDefinition = RuntimeSymbolImporter.Import(typeof(Boxed<>));
@@ -33,7 +36,8 @@ public sealed class SymbolStackAlgebra : IStackTypeAlgebra<TypeSymbol>
     public TypeSymbol CoreLib(string fullName)
     {
         ArgumentNullException.ThrowIfNull(fullName);
-        return CoreLibTypes.TryGetValue(fullName, out var symbol) ? symbol : throw new ArgumentException($"'{fullName}' is not a type the stack model names", nameof(fullName));
+        return CoreLibTypes.TryGetValue(fullName, out var symbol) ? symbol : throw new ArgumentException(
+            $"'{fullName}' is not a type the stack model names", nameof(fullName));
     }
 
     /// <inheritdoc/>
@@ -64,7 +68,9 @@ public sealed class SymbolStackAlgebra : IStackTypeAlgebra<TypeSymbol>
     public TypeSymbol MakeArray(TypeSymbol type) => TypeSymbol.SzArray(type);
 
     /// <inheritdoc/>
-    public TypeSymbol? ElementOf(TypeSymbol type) => type.Kind is TypeSymbolKind.ByRef or TypeSymbolKind.Pointer or TypeSymbolKind.SzArray or TypeSymbolKind.Array ? type.Element : null;
+    public TypeSymbol? ElementOf(TypeSymbol type)
+        => type.Kind is TypeSymbolKind.ByRef or TypeSymbolKind.Pointer or TypeSymbolKind.SzArray or TypeSymbolKind.Array ? type.Element
+            : null;
 
     /// <inheritdoc/>
     public bool IsByRef(TypeSymbol type) => type.Kind == TypeSymbolKind.ByRef;

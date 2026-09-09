@@ -3,9 +3,12 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Supplies runtime stack operations and markers for null, unknown references, and boxed values.
+/// </summary>
+/// <remarks>
 /// The stack type algebra over runtime types, with <see cref="NullReferenceMarker"/>,
 /// <see cref="UnknownReferenceMarker"/>, and <see cref="Boxed{T}"/> as its markers.
-/// </summary>
+/// </remarks>
 public sealed class RuntimeStackAlgebra : IStackTypeAlgebra<Type>
 {
     /// <summary>

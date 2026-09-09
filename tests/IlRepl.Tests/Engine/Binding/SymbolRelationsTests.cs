@@ -4,12 +4,15 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Tests.Engine.Binding;
 
 /// <summary>
+/// Checks symbolic type relations and constraints against independent runtime constructions.
+/// </summary>
+/// <remarks>
 /// Tests for <see cref="SymbolRelations"/> and <see cref="GenericConstraints"/>: relations over
 /// symbols agree with the runtime's answers for loaded and session types, and constraint
 /// verdicts agree with the runtime's construction.
-/// </summary>
+/// </remarks>
 [TestClass]
-public sealed class SymbolRelationsTests
+public sealed partial class SymbolRelationsTests
 {
     private static readonly ParseContext Context = new([], [], GenericContext.Empty, new TypeResolver(), []);
 
@@ -23,12 +26,17 @@ public sealed class SymbolRelationsTests
         var scope = new SnapshotBindingScope(snapshot);
         var types = new[]
         {
-            typeof(object), typeof(string), typeof(int), typeof(long), typeof(int?), typeof(ValueType), typeof(Enum), typeof(Environment.SpecialFolder),
+            typeof(object), typeof(string), typeof(int), typeof(long), typeof(int?), typeof(ValueType), typeof(Enum), typeof(
+                Environment.SpecialFolder),
             typeof(Exception), typeof(ArgumentException), typeof(IDisposable), typeof(System.IO.Stream), typeof(System.IO.MemoryStream),
-            typeof(IEnumerable<string>), typeof(IEnumerable<object>), typeof(List<string>), typeof(IList<string>), typeof(IReadOnlyList<string>),
-            typeof(string[]), typeof(object[]), typeof(int[]), typeof(int[,]), typeof(Array), typeof(System.Collections.IList), typeof(System.Collections.IEnumerable),
-            typeof(Action<string>), typeof(Action<object>), typeof(Delegate), typeof(Func<object>), typeof(Func<string>), typeof(IComparable<int>),
-            typeof(KeyValuePair<string, int>), typeof(Dictionary<string, int>), typeof(IDictionary<string, int>), typeof(IReadOnlyCollection<string>),
+            typeof(IEnumerable<string>), typeof(IEnumerable<object>), typeof(List<string>), typeof(IList<string>), typeof(
+                IReadOnlyList<string>),
+            typeof(string[]), typeof(object[]), typeof(int[]), typeof(int[,]), typeof(Array), typeof(System.Collections.IList), typeof(
+                System.Collections.IEnumerable),
+            typeof(Action<string>), typeof(Action<object>), typeof(Delegate), typeof(Func<object>), typeof(Func<string>), typeof(
+                IComparable<int>),
+            typeof(KeyValuePair<string, int>), typeof(Dictionary<string, int>), typeof(IDictionary<string, int>), typeof(
+                IReadOnlyCollection<string>),
         };
         var disagreements = new List<string>();
         foreach (var from in types)
@@ -39,7 +47,8 @@ public sealed class SymbolRelationsTests
                 var actual = SymbolRelations.IsAssignable(RuntimeSymbolImporter.Import(from), RuntimeSymbolImporter.Import(to), scope);
                 if (expected != actual)
                 {
-                    disagreements.Add($"{TypeNameFormatter.Pretty(from)} -> {TypeNameFormatter.Pretty(to)}: runtime {expected}, symbols {actual}");
+                    disagreements.Add(
+                        $"{TypeNameFormatter.Pretty(from)} -> {TypeNameFormatter.Pretty(to)}: runtime {expected}, symbols {actual}");
                 }
             }
         }
@@ -85,10 +94,13 @@ public sealed class SymbolRelationsTests
         var boxOfString = RuntimeSymbolImporter.Import(box.MakeGenericType(typeof(string)));
         var ioutOfObject = RuntimeSymbolImporter.Import(iout.MakeGenericType(typeof(object)));
         Assert.IsTrue(SymbolRelations.IsAssignable(boxOfString, ioutOfObject, scope), "IOut is covariant");
-        Assert.IsFalse(SymbolRelations.IsAssignable(RuntimeSymbolImporter.Import(box.MakeGenericType(typeof(int))), ioutOfObject, scope), "variance never applies to value types");
-        Assert.IsTrue(SymbolRelations.IsAssignable(RuntimeSymbolImporter.Import(circle.MakeArrayType()), RuntimeSymbolImporter.Import(shape.MakeArrayType()), scope));
+        Assert.IsFalse(SymbolRelations.IsAssignable(RuntimeSymbolImporter.Import(box.MakeGenericType(typeof(int))), ioutOfObject, scope),
+            "variance never applies to value types");
+        Assert.IsTrue(SymbolRelations.IsAssignable(RuntimeSymbolImporter.Import(circle.MakeArrayType()), RuntimeSymbolImporter.Import(
+            shape.MakeArrayType()), scope));
         Assert.IsTrue(SymbolRelations.IsAssignable(RuntimeSymbolImporter.Import(circle), TypeSymbol.Object, scope));
-        Assert.IsFalse(SymbolRelations.IsAssignable(RuntimeSymbolImporter.Import(circle), RuntimeSymbolImporter.Import(typeof(IComparable)), scope));
+        Assert.IsFalse(SymbolRelations.IsAssignable(RuntimeSymbolImporter.Import(circle), RuntimeSymbolImporter.Import(typeof(IComparable)),
+            scope));
     }
 
     /// <summary>
@@ -123,8 +135,11 @@ public sealed class SymbolRelationsTests
     {
         using var snapshot = BindingSnapshot.Capture(Context);
         var scope = new SnapshotBindingScope(snapshot);
-        var owners = new[] { typeof(Nullable<>), typeof(NeedsClass<>), typeof(NeedsStruct<>), typeof(NeedsNew<>), typeof(NeedsComparable<>), typeof(NeedsStream<>), typeof(List<>) };
-        var arguments = new[] { typeof(int), typeof(string), typeof(object), typeof(int?), typeof(System.IO.MemoryStream), typeof(System.IO.Stream), typeof(Exception), typeof(int[]), typeof(IDisposable), typeof(Environment.SpecialFolder), typeof(KeyValuePair<int, int>) };
+        var owners = new[] { typeof(Nullable<>), typeof(NeedsClass<>), typeof(NeedsStruct<>), typeof(NeedsNew<>), typeof(NeedsComparable<>),
+            typeof(NeedsStream<>), typeof(List<>) };
+        var arguments = new[] { typeof(int), typeof(string), typeof(object), typeof(int?), typeof(System.IO.MemoryStream), typeof(
+            System.IO.Stream), typeof(Exception), typeof(int[]), typeof(IDisposable), typeof(Environment.SpecialFolder), typeof(
+            KeyValuePair<int, int>) };
         var disagreements = new List<string>();
         foreach (var owner in owners)
         {
@@ -143,10 +158,12 @@ public sealed class SymbolRelationsTests
                 }
 
                 var symbol = RuntimeSymbolImporter.Import(argument);
-                var actual = GenericConstraints.Satisfies(parameter, symbol, c => SymbolRelations.SubstituteTypeParameters(c, parameter.Owner, [symbol]), scope);
+                var actual = GenericConstraints.Satisfies(parameter, symbol, c => SymbolRelations.SubstituteTypeParameters(c,
+                    parameter.Owner, [symbol]), scope);
                 if (expected != actual)
                 {
-                    disagreements.Add($"{TypeNameFormatter.Pretty(owner)}<{TypeNameFormatter.Pretty(argument)}>: runtime {expected}, symbols {actual}");
+                    disagreements.Add(
+                        $"{TypeNameFormatter.Pretty(owner)}<{TypeNameFormatter.Pretty(argument)}>: runtime {expected}, symbols {actual}");
                 }
             }
         }
@@ -167,38 +184,11 @@ public sealed class SymbolRelationsTests
         var chained = RuntimeSymbolImporter.Import(typeof(Chain<,>).GetGenericArguments()[1]);
         var streamOnly = RuntimeSymbolImporter.Import(typeof(StreamOnly<>).GetGenericArguments()[0]);
         var unconstrained = RuntimeSymbolImporter.Import(typeof(List<>).GetGenericArguments()[0]);
-        Assert.IsTrue(GenericConstraints.Satisfies(needsClass, streamOnly, c => c, scope), "T : Stream proves a reference type without the class flag");
+        Assert.IsTrue(GenericConstraints.Satisfies(needsClass, streamOnly, c => c, scope),
+            "T : Stream proves a reference type without the class flag");
         Assert.IsTrue(GenericConstraints.Satisfies(needsClass, chained, c => c, scope), "S : T, T : Stream proves it through the chain");
         Assert.IsTrue(GenericConstraints.Satisfies(needsStream, chained, c => c, scope), "S : T, T : Stream satisfies a Stream constraint");
         Assert.IsFalse(GenericConstraints.Satisfies(needsClass, unconstrained, c => c, scope), "an unconstrained parameter proves nothing");
         Assert.IsFalse(GenericConstraints.Satisfies(needsStream, unconstrained, c => c, scope));
-    }
-
-    private sealed class NeedsClass<T> where T : class
-    {
-    }
-
-    private sealed class NeedsStruct<T> where T : struct
-    {
-    }
-
-    private sealed class NeedsNew<T> where T : new()
-    {
-    }
-
-    private sealed class NeedsComparable<T> where T : IComparable<T>
-    {
-    }
-
-    private sealed class NeedsStream<T> where T : System.IO.Stream
-    {
-    }
-
-    private sealed class StreamOnly<T> where T : System.IO.Stream
-    {
-    }
-
-    private sealed class Chain<T, S> where T : System.IO.Stream where S : T
-    {
     }
 }

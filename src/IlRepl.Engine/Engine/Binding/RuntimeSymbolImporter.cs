@@ -5,11 +5,14 @@ using System.Runtime.CompilerServices;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Imports known runtime types, members, and declarations as symbols with their original identities.
+/// </summary>
+/// <remarks>
 /// Describes runtime objects as symbols: a <see cref="Type"/>, a builder, a <see cref="MethodBase"/>,
 /// a <see cref="FieldInfo"/>, or a session declaration becomes the symbol a metadata reader would
 /// produce for the same definition, with the same identity. Nothing is loaded; only what reflection
 /// already knows is read.
-/// </summary>
+/// </remarks>
 public static class RuntimeSymbolImporter
 {
     private static readonly ConditionalWeakTable<Type, TypeSymbol> LoadedDefinitions = [];
@@ -93,7 +96,8 @@ public static class RuntimeSymbolImporter
             id,
             TypeNameFormatter.Unescape(type.Name),
             type.Namespace ?? "",
-            type.DeclaringType is { } declaring ? Import(declaring.IsGenericType && !declaring.IsGenericTypeDefinition ? declaring.GetGenericTypeDefinition() : declaring) : null,
+            type.DeclaringType is { } declaring ? Import(declaring.IsGenericType
+                && !declaring.IsGenericTypeDefinition ? declaring.GetGenericTypeDefinition() : declaring) : null,
             assemblyName,
             type.Attributes,
             type.IsValueType,
@@ -277,14 +281,16 @@ public static class RuntimeSymbolImporter
     /// <param name="source">Where the member comes from.</param>
     /// <param name="declared">True when the member's header has been seen.</param>
     /// <returns>The symbol.</returns>
-    public static MethodSymbol Import(MethodSignature signature, TypeSymbol? declaring, DefinitionId id, MethodSymbolSource source, bool declared)
+    public static MethodSymbol Import(MethodSignature signature, TypeSymbol? declaring, DefinitionId id, MethodSymbolSource source,
+        bool declared)
     {
         ArgumentNullException.ThrowIfNull(signature);
         var genericParameters = new List<GenericParameterSymbol>();
         for (var i = 0; i < signature.TypeParameters.Count; i++)
         {
             var declaration = signature.TypeParameters[i];
-            genericParameters.Add(new GenericParameterSymbol(id, true, i, declaration.Name, declaration.Attributes, [.. declaration.Constraints.Select(Import)]));
+            genericParameters.Add(new GenericParameterSymbol(id, true, i, declaration.Name, declaration.Attributes,
+                [.. declaration.Constraints.Select(Import)]));
         }
 
         return new MethodSymbol
@@ -334,5 +340,6 @@ public static class RuntimeSymbolImporter
         };
     }
 
-    private static Type Definition(Type type) => type.IsGenericType && !type.IsGenericTypeDefinition ? type.GetGenericTypeDefinition() : type;
+    private static Type Definition(Type type) => type.IsGenericType && !type.IsGenericTypeDefinition ? type.GetGenericTypeDefinition(
+        ) : type;
 }

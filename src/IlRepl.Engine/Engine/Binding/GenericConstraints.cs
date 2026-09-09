@@ -1,11 +1,14 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Checks substituted type arguments against CLI generic constraints without runtime construction.
+/// </summary>
+/// <remarks>
 /// Decides whether a type argument satisfies a generic parameter's constraints, by the CLI's
 /// rules (ECMA-335 II.9.11) as the runtime applies them: the special constraints <c>class</c>,
 /// <c>valuetype</c>, and <c>.ctor</c>, and the type constraints after substitution, with an
 /// argument that is itself a generic parameter judged by what its own constraints promise.
-/// </summary>
+/// </remarks>
 public static class GenericConstraints
 {
     /// <summary>
@@ -52,13 +55,15 @@ public static class GenericConstraints
     /// <param name="substitute">Rewrites a constraint in terms of the arguments supplied for the owner's other parameters.</param>
     /// <param name="scope">The scope that knows bases, interfaces, and constructors.</param>
     /// <returns>True when the argument fits.</returns>
-    public static bool Satisfies(GenericParameterSymbol parameter, TypeSymbol argument, Func<TypeSymbol, TypeSymbol> substitute, IBindingScope scope)
+    public static bool Satisfies(GenericParameterSymbol parameter, TypeSymbol argument, Func<TypeSymbol, TypeSymbol> substitute,
+        IBindingScope scope)
     {
         ArgumentNullException.ThrowIfNull(parameter);
         ArgumentNullException.ThrowIfNull(argument);
         ArgumentNullException.ThrowIfNull(substitute);
         ArgumentNullException.ThrowIfNull(scope);
-        if (argument.Kind is TypeSymbolKind.ByRef or TypeSymbolKind.Pointer or TypeSymbolKind.FunctionPointer or TypeSymbolKind.Unresolved || SymbolIdentity.Equal(argument, TypeSymbol.Void))
+        if (argument.Kind is TypeSymbolKind.ByRef or TypeSymbolKind.Pointer or TypeSymbolKind.FunctionPointer or TypeSymbolKind.Unresolved
+            || SymbolIdentity.Equal(argument, TypeSymbol.Void))
         {
             return false;
         }
@@ -117,7 +122,8 @@ public static class GenericConstraints
 
         if (!argument.IsGenericParameter)
         {
-            return argument.Kind is TypeSymbolKind.Named or TypeSymbolKind.Constructed or TypeSymbolKind.Primitive && !argument.IsValueTypeShape;
+            return argument.Kind is TypeSymbolKind.Named or TypeSymbolKind.Constructed or TypeSymbolKind.Primitive
+                && !argument.IsValueTypeShape;
         }
 
         if (!visiting.Add(argument))
@@ -149,7 +155,8 @@ public static class GenericConstraints
             }
 
             // A class constraint that is a reference type other than object proves the argument is one; an interface does not.
-            if (constraint.Kind is TypeSymbolKind.Named or TypeSymbolKind.Constructed && !constraint.IsInterface && !constraint.IsValueTypeShape
+            if (constraint.Kind is TypeSymbolKind.Named or TypeSymbolKind.Constructed && !constraint.IsInterface
+                && !constraint.IsValueTypeShape
                 && SymbolRenderer.ReflectionFullName(constraint) is not ("System.Object" or "System.ValueType" or "System.Enum"))
             {
                 return true;
@@ -178,7 +185,8 @@ public static class GenericConstraints
             return false;
         }
 
-        return !(argument.Kind == TypeSymbolKind.Constructed && SymbolRenderer.ReflectionFullName(argument.Element!) == "System.Nullable`1");
+        return !(argument.Kind == TypeSymbolKind.Constructed && SymbolRenderer.ReflectionFullName(
+            argument.Element!) == "System.Nullable`1");
     }
 
     private static bool HasDefaultConstructor(TypeSymbol argument, IBindingScope scope, HashSet<TypeSymbol> visiting)

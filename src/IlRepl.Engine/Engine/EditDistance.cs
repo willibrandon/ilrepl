@@ -37,10 +37,13 @@ public static class EditDistance
     }
 
     /// <summary>
+    /// Checks an edit-distance bound with length pruning and early termination.
+    /// </summary>
+    /// <remarks>
     /// True when the distance is at most <paramref name="bound"/>, decided without computing the
     /// whole table: a length difference beyond the bound settles it at once, and the rows are
     /// abandoned as soon as every cell in the band exceeds the bound.
-    /// </summary>
+    /// </remarks>
     /// <param name="a">The first string.</param>
     /// <param name="b">The second string.</param>
     /// <param name="bound">The largest distance that counts.</param>

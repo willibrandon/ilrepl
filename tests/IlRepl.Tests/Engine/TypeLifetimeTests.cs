@@ -38,10 +38,13 @@ public sealed class TypeLifetimeTests
     }
 
     /// <summary>
+    /// Checks reset releases definitions while concurrent threads continue resolving names.
+    /// </summary>
+    /// <remarks>
     /// A definition dropped by .reset collects while other threads keep resolving names, with
     /// and without a did-you-mean: a name search never walks the runtime's assembly list, whose
     /// walk keeps every collectible assembly alive for its duration.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Reset_CollectsWhileOtherThreadsResolveNames()
     {

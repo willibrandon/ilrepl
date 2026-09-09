@@ -11,7 +11,8 @@ namespace IlRepl.Engine.Binding;
 /// <param name="Name">The declared name.</param>
 /// <param name="Attributes">The variance and special constraints.</param>
 /// <param name="Constraints">The type constraints, in declaration order.</param>
-public sealed record GenericParameterSymbol(DefinitionId Owner, bool IsMethodParameter, int Position, string Name, GenericParameterAttributes Attributes, IReadOnlyList<TypeSymbol> Constraints)
+public sealed record GenericParameterSymbol(DefinitionId Owner, bool IsMethodParameter, int Position, string Name,
+    GenericParameterAttributes Attributes, IReadOnlyList<TypeSymbol> Constraints)
 {
     /// <summary>
     /// The parameter as a type, for signatures that mention it.

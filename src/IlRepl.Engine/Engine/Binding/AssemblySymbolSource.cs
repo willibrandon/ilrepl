@@ -7,12 +7,15 @@ using System.Runtime.CompilerServices;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Reads a loaded assembly's definitions and references from raw metadata without runtime resolution.
+/// </summary>
+/// <remarks>
 /// Describes one loaded assembly's definitions as symbols from its raw metadata, on either
 /// runtime: type definitions with their facts, their members with decoded signatures, their bases,
 /// interfaces, and generic parameters, and the types they export from elsewhere. It never resolves
 /// a name through the runtime and never loads. References into other assemblies go through the
 /// catalog a query supplies, so an answer is always relative to the assemblies that were loaded.
-/// </summary>
+/// </remarks>
 public sealed class AssemblySymbolSource
 {
     private static readonly ConditionalWeakTable<Assembly, AssemblySymbolSource> Cache = [];
@@ -235,7 +238,8 @@ public sealed class AssemblySymbolSource
         }
         else
         {
-            var parameterNames = definition.GetGenericParameters().Select(p => _reader.GetString(_reader.GetGenericParameter(p).Name)).ToList();
+            var parameterNames = definition.GetGenericParameters()
+                .Select(p => _reader.GetString(_reader.GetGenericParameter(p).Name)).ToList();
             var byRefLike = definition.GetCustomAttributes().Any(attribute =>
                 AttributeTypeName(_reader.GetCustomAttribute(attribute), qualified: true)
                     == "System.Runtime.CompilerServices.IsByRefLikeAttribute");
@@ -267,7 +271,10 @@ public sealed class AssemblySymbolSource
 
         var symbol = Definition(handle);
         var definition = _reader.GetTypeDefinition(handle);
-        var entry = new TypeIndexEntry(IdOf(handle), symbol.Name, symbol.Namespace, SymbolRenderer.IlPath(symbol), definition.Attributes, symbol.GenericParameterNames.Count, symbol.Kind == TypeSymbolKind.Primitive ? TypeIndexKind.Primitive : KindOf(definition, symbol), IsCompilerGenerated(definition, symbol.Name))
+        var entry = new TypeIndexEntry(IdOf(handle), symbol.Name, symbol.Namespace, SymbolRenderer.IlPath(symbol), definition.Attributes,
+            symbol.GenericParameterNames.Count,
+            symbol.Kind == TypeSymbolKind.Primitive ? TypeIndexKind.Primitive : KindOf(definition, symbol),
+            IsCompilerGenerated(definition, symbol.Name))
         {
             IsVisible = IsVisible(handle),
         };
@@ -304,7 +311,8 @@ public sealed class AssemblySymbolSource
         }
 
         // System.Enum itself extends ValueType and is a class; so is ValueType, whose base is object.
-        return baseName == "ValueType" && !(_reader.GetString(definition.Namespace) == "System" && _reader.GetString(definition.Name) == "Enum");
+        return baseName == "ValueType"
+            && !(_reader.GetString(definition.Namespace) == "System" && _reader.GetString(definition.Name) == "Enum");
     }
 
     private TypeIndexKind KindOf(TypeDefinition definition, TypeSymbol symbol)
@@ -423,7 +431,8 @@ public sealed class AssemblySymbolSource
     {
         var reference = _reader.GetTypeReference(handle);
         var scope = reference.ResolutionScope;
-        var assemblyName = scope.Kind == HandleKind.AssemblyReference ? _reader.GetString(_reader.GetAssemblyReference((AssemblyReferenceHandle)scope).Name) : Name;
+        var assemblyName = scope.Kind == HandleKind.AssemblyReference
+            ? _reader.GetString(_reader.GetAssemblyReference((AssemblyReferenceHandle)scope).Name) : Name;
         return TypeSymbol.Unresolved(_reader.GetString(reference.Name), _reader.GetString(reference.Namespace), assemblyName, isValueType);
     }
 
@@ -468,7 +477,8 @@ public sealed class AssemblySymbolSource
         ArgumentNullException.ThrowIfNull(catalog);
         var definition = _reader.GetTypeDefinition(handle);
         var owner = OwnerOf(handle);
-        return [.. definition.GetInterfaceImplementations().Select(i => Decode(_reader.GetInterfaceImplementation(i).Interface, owner, catalog))];
+        return [.. definition.GetInterfaceImplementations()
+            .Select(i => Decode(_reader.GetInterfaceImplementation(i).Interface, owner, catalog))];
     }
 
     /// <summary>
@@ -485,14 +495,17 @@ public sealed class AssemblySymbolSource
         return GenericParameters(definition.GetGenericParameters(), owner.Type, false, owner, catalog);
     }
 
-    private List<GenericParameterSymbol> GenericParameters(GenericParameterHandleCollection handles, DefinitionId ownerId, bool isMethod, SymbolGenericOwner owner, LoadedBindingCatalog catalog)
+    private List<GenericParameterSymbol> GenericParameters(GenericParameterHandleCollection handles, DefinitionId ownerId, bool isMethod,
+        SymbolGenericOwner owner, LoadedBindingCatalog catalog)
     {
         var parameters = new List<GenericParameterSymbol>();
         foreach (var handle in handles)
         {
             var parameter = _reader.GetGenericParameter(handle);
-            var constraints = parameter.GetConstraints().Select(c => Decode(_reader.GetGenericParameterConstraint(c).Type, owner, catalog)).ToList();
-            parameters.Add(new GenericParameterSymbol(ownerId, isMethod, parameter.Index, _reader.GetString(parameter.Name), parameter.Attributes, constraints));
+            var constraints = parameter.GetConstraints().Select(c => Decode(_reader.GetGenericParameterConstraint(c).Type, owner,
+                catalog)).ToList();
+            parameters.Add(new GenericParameterSymbol(ownerId, isMethod, parameter.Index, _reader.GetString(parameter.Name),
+                parameter.Attributes, constraints));
         }
 
         return parameters;

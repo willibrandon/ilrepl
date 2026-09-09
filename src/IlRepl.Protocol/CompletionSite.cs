@@ -1,13 +1,16 @@
 namespace IlRepl.Protocol;
 
 /// <summary>
+/// Describes the caret's syntactic completion site and the complete replacement range.
+/// </summary>
+/// <remarks>
 /// Where the caret stands in a line and what a completion there would replace. The range is
 /// decided by the syntax, not by the caret: the whole identifier under the caret, or the whole
 /// member reference, however far it runs past the caret. A following comment, another argument, a
 /// suffix, and an existing <c>::</c> are never inside it.
-/// </summary>
+/// </remarks>
 /// <param name="Kind">What is completed here.</param>
-/// <param name="Owner">The word that owns the operand: <c>call</c>, <c>ldsfld</c>, <c>ldtoken method</c>, <c>.locals</c>, <c>extends</c>, <c>.dis</c>, <c>.override with</c>.</param>
+/// <param name="Owner">The opcode or directive owning the operand, such as <c>call</c> or <c>.override with</c>.</param>
 /// <param name="Prefix">The text from the start of the identifier being typed to the caret; what is matched.</param>
 /// <param name="ReplaceStart">The offset the accepted text replaces from.</param>
 /// <param name="ReplaceLength">How many characters it replaces; may run past the caret.</param>
@@ -43,7 +46,8 @@ public sealed record CompletionSite(
     /// <summary>
     /// No site.
     /// </summary>
-    public static CompletionSite None { get; } = new(CompletionSiteKind.None, "", "", 0, 0, 0, null, null, false, -1, 0, null, false, false, false, true);
+    public static CompletionSite None { get; } = new(CompletionSiteKind.None, "", "", 0, 0, 0, null, null, false, -1, 0, null, false, false,
+        false, true);
 
     /// <summary>
     /// True when the caret is in an operand something can be listed for.

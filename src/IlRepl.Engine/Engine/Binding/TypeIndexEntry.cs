@@ -3,10 +3,13 @@ using System.Reflection;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Describes an indexed type's identity, names, arity, and presentation facts.
+/// </summary>
+/// <remarks>
 /// One type definition as an index lists it: its identity, its names in every form a reference
 /// can take, its arity, and the facts ranking and presentation need. The symbol with its full
 /// facts comes from the definition's source.
-/// </summary>
+/// </remarks>
 /// <param name="Definition">The identity.</param>
 /// <param name="Name">The metadata name, arity suffix included.</param>
 /// <param name="Namespace">The namespace of the outermost type, or empty.</param>
@@ -15,7 +18,8 @@ namespace IlRepl.Engine.Binding;
 /// <param name="Arity">The number of generic parameters, inherited ones included.</param>
 /// <param name="Kind">The kind.</param>
 /// <param name="IsCompilerGenerated">True for a compiler-generated type.</param>
-public sealed record TypeIndexEntry(DefinitionId Definition, string Name, string Namespace, string IlPath, TypeAttributes Attributes, int Arity, TypeIndexKind Kind, bool IsCompilerGenerated)
+public sealed record TypeIndexEntry(DefinitionId Definition, string Name, string Namespace, string IlPath, TypeAttributes Attributes,
+    int Arity, TypeIndexKind Kind, bool IsCompilerGenerated)
 {
     /// <summary>
     /// The name without its arity suffix.

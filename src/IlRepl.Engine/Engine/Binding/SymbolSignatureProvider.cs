@@ -5,10 +5,13 @@ using System.Reflection.Metadata;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Decodes metadata signatures into symbols while retaining unresolved external references.
+/// </summary>
+/// <remarks>
 /// Turns signature blobs into symbols for the metadata signature decoder.
 /// A type definition of the module is its symbol; a type reference resolves through the catalog
 /// to the definition it names in another loaded assembly, or stays an unresolved spelling.
-/// </summary>
+/// </remarks>
 public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol, SymbolGenericOwner>
 {
     private readonly AssemblySymbolSource _source;
@@ -60,7 +63,8 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
     });
 
     /// <inheritdoc/>
-    public TypeSymbol GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind) => _source.Definition(handle);
+    public TypeSymbol GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind) => _source.Definition(
+        handle);
 
     /// <inheritdoc/>
     public TypeSymbol GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind)
@@ -71,11 +75,13 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
             return _reference(handle, rawTypeKind);
         }
 
-        return _catalog.ResolveTypeReference(_source, handle) ?? _source.UnresolvedReference(handle, rawTypeKind == (byte)SignatureTypeKind.ValueType);
+        return _catalog.ResolveTypeReference(_source, handle) ?? _source.UnresolvedReference(handle, rawTypeKind == (
+            byte)SignatureTypeKind.ValueType);
     }
 
     /// <inheritdoc/>
-    public TypeSymbol GetTypeFromSpecification(MetadataReader reader, SymbolGenericOwner genericContext, TypeSpecificationHandle handle, byte rawTypeKind)
+    public TypeSymbol GetTypeFromSpecification(MetadataReader reader, SymbolGenericOwner genericContext, TypeSpecificationHandle handle,
+        byte rawTypeKind)
     {
         ArgumentNullException.ThrowIfNull(reader);
         return reader.GetTypeSpecification(handle).DecodeSignature(this, genericContext);
@@ -85,7 +91,8 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
     public TypeSymbol GetSZArrayType(TypeSymbol elementType) => TypeSymbol.SzArray(elementType);
 
     /// <inheritdoc/>
-    public TypeSymbol GetArrayType(TypeSymbol elementType, ArrayShape shape) => TypeSymbol.Array(elementType, shape.Rank, shape.Sizes, shape.LowerBounds);
+    public TypeSymbol GetArrayType(TypeSymbol elementType, ArrayShape shape) => TypeSymbol.Array(elementType, shape.Rank, shape.Sizes,
+        shape.LowerBounds);
 
     /// <inheritdoc/>
     public TypeSymbol GetByReferenceType(TypeSymbol elementType) => TypeSymbol.ByRef(elementType);
@@ -117,7 +124,8 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
     }
 
     /// <inheritdoc/>
-    public TypeSymbol GetModifiedType(TypeSymbol modifier, TypeSymbol unmodifiedType, bool isRequired) => TypeSymbol.Modified(unmodifiedType, modifier, isRequired);
+    public TypeSymbol GetModifiedType(TypeSymbol modifier, TypeSymbol unmodifiedType, bool isRequired) => TypeSymbol.Modified(
+        unmodifiedType, modifier, isRequired);
 
     /// <inheritdoc/>
     public TypeSymbol GetPinnedType(TypeSymbol elementType) => TypeSymbol.Pinned(elementType);
@@ -130,7 +138,8 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
     public static MethodSignatureSymbol Convert(MethodSignature<TypeSymbol> signature)
     {
         var header = signature.Header;
-        var managed = header.CallingConvention == SignatureCallingConvention.VarArgs ? CallingConventions.VarArgs : CallingConventions.Standard;
+        var managed = header.CallingConvention == SignatureCallingConvention.VarArgs
+            ? CallingConventions.VarArgs : CallingConventions.Standard;
         if (header.IsInstance)
         {
             managed |= CallingConventions.HasThis;
@@ -152,13 +161,17 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
         var isUnmanaged = header.CallingConvention is SignatureCallingConvention.CDecl or SignatureCallingConvention.StdCall
             or SignatureCallingConvention.ThisCall or SignatureCallingConvention.FastCall or SignatureCallingConvention.Unmanaged;
         int? sentinel = signature.RequiredParameterCount < signature.ParameterTypes.Length ? signature.RequiredParameterCount : null;
-        return new MethodSignatureSymbol(managed, isUnmanaged, unmanaged, StripModifiers(signature.ReturnType, out _, out _), [.. signature.ParameterTypes.Select(p => StripModifiers(p, out _, out _))], sentinel);
+        return new MethodSignatureSymbol(managed, isUnmanaged, unmanaged, StripModifiers(signature.ReturnType, out _, out _),
+            [.. signature.ParameterTypes.Select(p => StripModifiers(p, out _, out _))], sentinel);
     }
 
     /// <summary>
+    /// Separates a type from the custom modifiers carried beside its signature.
+    /// </summary>
+    /// <remarks>
     /// The type under its custom modifiers, with the modifiers set apart the way the runtime
     /// reports them beside a parameter.
-    /// </summary>
+    /// </remarks>
     /// <param name="type">The decoded type.</param>
     /// <param name="required">The <c>modreq</c> types, in order.</param>
     /// <param name="optional">The <c>modopt</c> types, in order.</param>

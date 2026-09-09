@@ -1,15 +1,21 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Rewrites and relates type symbols through shared structural operations.
+/// </summary>
+/// <remarks>
 /// Rewrites and relates symbols structurally: substitution of generic parameters, and the
 /// walks over constructions that every scope shares.
-/// </summary>
+/// </remarks>
 public static partial class SymbolRelations
 {
     /// <summary>
+    /// Replaces matching type nodes and rebuilds the constructed forms containing them.
+    /// </summary>
+    /// <remarks>
     /// Rewrites a type, replacing every node the function answers for and rebuilding constructed
     /// forms around the replaced parts.
-    /// </summary>
+    /// </remarks>
     /// <param name="type">The type to rewrite.</param>
     /// <param name="replace">Returns the replacement for a node, or null to keep it.</param>
     /// <returns>The rewritten type, or the same symbol when nothing changed.</returns>
@@ -47,7 +53,8 @@ public static partial class SymbolRelations
             case TypeSymbolKind.Array:
             {
                 var element = Rewrite(type.Element!, replace);
-                return ReferenceEquals(element, type.Element) ? type : TypeSymbol.Array(element, type.Rank, type.Sizes, type.LowerBounds);
+                return ReferenceEquals(element, type.Element)
+                    ? type : TypeSymbol.Array(element, type.Rank, type.Sizes, type.LowerBounds);
             }
 
             case TypeSymbolKind.ByRef:
@@ -66,7 +73,8 @@ public static partial class SymbolRelations
             {
                 var element = Rewrite(type.Element!, replace);
                 var modifier = Rewrite(type.Modifier!, replace);
-                return ReferenceEquals(element, type.Element) && ReferenceEquals(modifier, type.Modifier) ? type : TypeSymbol.Modified(element, modifier, type.IsRequired);
+                return ReferenceEquals(element, type.Element) && ReferenceEquals(modifier, type.Modifier) ? type : TypeSymbol.Modified(
+                    element, modifier, type.IsRequired);
             }
 
             case TypeSymbolKind.Pinned:
@@ -80,7 +88,8 @@ public static partial class SymbolRelations
                 var signature = type.Signature!;
                 var returnType = Rewrite(signature.ReturnType, replace);
                 var parameters = signature.Parameters.Select(p => Rewrite(p, replace)).ToArray();
-                var changed = !ReferenceEquals(returnType, signature.ReturnType) || parameters.Zip(signature.Parameters).Any(p => !ReferenceEquals(p.First, p.Second));
+                var changed = !ReferenceEquals(returnType, signature.ReturnType) || parameters.Zip(signature.Parameters).Any(p
+                    => !ReferenceEquals(p.First, p.Second));
                 return changed ? TypeSymbol.FunctionPointer(signature with { ReturnType = returnType, Parameters = parameters }) : type;
             }
 
@@ -100,7 +109,8 @@ public static partial class SymbolRelations
     {
         ArgumentNullException.ThrowIfNull(type);
         ArgumentNullException.ThrowIfNull(arguments);
-        return Rewrite(type, t => t.Kind == TypeSymbolKind.TypeParameter && t.Owner == definition && t.Position < arguments.Count ? arguments[t.Position] : null);
+        return Rewrite(type, t => t.Kind == TypeSymbolKind.TypeParameter && t.Owner == definition
+            && t.Position < arguments.Count ? arguments[t.Position] : null);
     }
 
     /// <summary>
@@ -114,7 +124,8 @@ public static partial class SymbolRelations
     {
         ArgumentNullException.ThrowIfNull(type);
         ArgumentNullException.ThrowIfNull(arguments);
-        return Rewrite(type, t => t.Kind == TypeSymbolKind.MethodParameter && t.Owner == method && t.Position < arguments.Count ? arguments[t.Position] : null);
+        return Rewrite(type, t => t.Kind == TypeSymbolKind.MethodParameter && t.Owner == method
+            && t.Position < arguments.Count ? arguments[t.Position] : null);
     }
 
     /// <summary>

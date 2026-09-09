@@ -1,18 +1,24 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Computes the dependent definitions and replay order required for an atomic replacement.
+/// </summary>
+/// <remarks>
 /// Plans the replacement of a definition other definitions depend on: the closure of families and
 /// methods that must be rebuilt with it, and the order they replay in. The walk is over whatever
 /// stands for a type's identity, a runtime type for the live session or a symbol for a preview,
 /// so both compute the same closure from the same mentions.
-/// </summary>
+/// </remarks>
 public static class DefinitionReplacementPlanner
 {
     /// <summary>
+    /// Finds the complete closure of families and methods affected by a replacement.
+    /// </summary>
+    /// <remarks>
     /// Computes the closure of a replacement: starting from the identities the replaced family
     /// defines, every family whose declarations or bodies mention a collected identity or method
     /// joins, and so does every method whose signature or body does, until nothing new joins.
-    /// </summary>
+    /// </remarks>
     /// <typeparam name="TFamily">A type family record.</typeparam>
     /// <typeparam name="TMethod">A session method record.</typeparam>
     /// <typeparam name="TType">What stands for a type's identity.</typeparam>
@@ -94,9 +100,12 @@ public static class DefinitionReplacementPlanner
     }
 
     /// <summary>
+    /// Orders accepted members before the edited block for dependency replay.
+    /// </summary>
+    /// <remarks>
     /// The order a group replays in: every member in the order it was accepted, the edited block
     /// last, so each replay binds to what was declared before it.
-    /// </summary>
+    /// </remarks>
     /// <typeparam name="T">A replay descriptor.</typeparam>
     /// <param name="members">The members with their acceptance order; the edited block carries <see cref="int.MaxValue"/>.</param>
     /// <returns>The members in replay order.</returns>

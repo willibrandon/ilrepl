@@ -263,10 +263,13 @@ public sealed class StackSimulator
     }
 
     /// <summary>
+    /// Applies shared stack-transfer rules, preserving the stack when an instruction underflows.
+    /// </summary>
+    /// <remarks>
     /// Applies an instruction. Throws without changing the stack when it would underflow. The
     /// pops and pushes come from <see cref="StackTransfer{T}"/>, the rules the completer's
     /// preview uses over symbols.
-    /// </summary>
+    /// </remarks>
     /// <param name="instruction">The instruction.</param>
     /// <param name="context">The parse context, for local and argument types.</param>
     /// <exception cref="ReplException">The instruction pops more values than the stack holds.</exception>

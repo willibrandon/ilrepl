@@ -5,12 +5,15 @@ using System.Runtime.Loader;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Resolves captured assembly references through exact load-context bindings and forwarded aliases.
+/// </summary>
+/// <remarks>
 /// The assemblies a snapshot can see and how a reference from one reaches a definition in
 /// another: by the requesting assembly's own load context first, then the default context, never
 /// by running a load or a resolution handler. A reference that no rule settles stays unresolved
 /// until an actual operation establishes it. Forwarders are followed from the assembly that
 /// exports the type to the one that defines it, with cycles cut.
-/// </summary>
+/// </remarks>
 public sealed class LoadedBindingCatalog
 {
     private readonly List<AssemblySymbolSource> _sources = [];
@@ -126,10 +129,13 @@ public sealed class LoadedBindingCatalog
     }
 
     /// <summary>
+    /// Finds the loaded assembly selected by a captured reference, leaving ambiguous bindings unresolved.
+    /// </summary>
+    /// <remarks>
     /// The assembly a reference from another assembly binds to: one with that name in the
     /// requester's own load context, else one in the default context. Two candidates in the same
     /// context, or none, leave the reference unresolved.
-    /// </summary>
+    /// </remarks>
     /// <param name="requester">The assembly making the reference.</param>
     /// <param name="reference">The reference.</param>
     /// <returns>The source, or null.</returns>
@@ -227,9 +233,12 @@ public sealed class LoadedBindingCatalog
     }
 
     /// <summary>
+    /// Finds a top-level type definition through an assembly's declarations and forwarded aliases.
+    /// </summary>
+    /// <remarks>
     /// The top-level type an assembly defines or exports under a name, following forwarders to
     /// the defining assembly, as <see cref="Assembly.GetType(string)"/> would find it.
-    /// </summary>
+    /// </remarks>
     /// <param name="source">The assembly asked.</param>
     /// <param name="ns">The namespace, or empty.</param>
     /// <param name="name">The metadata name, arity suffix included.</param>

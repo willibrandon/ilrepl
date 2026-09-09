@@ -1,43 +1,14 @@
 namespace Greeter;
 
 /// <summary>
+/// Exercises nested-type accessibility against the runtime's verdicts.
+/// </summary>
+/// <remarks>
 /// Nested types of every visibility, and methods that take them, so accessibility from a cell and
 /// from a derived session type can be judged against what the runtime allows.
-/// </summary>
-public class Nesting
+/// </remarks>
+public partial class Nesting
 {
-    /// <summary>
-    /// A public nested type.
-    /// </summary>
-    public sealed class PublicNested
-    {
-    }
-
-    /// <summary>
-    /// A protected nested type, reachable from derived types.
-    /// </summary>
-    protected sealed class ProtectedNested
-    {
-    }
-
-    /// <summary>
-    /// A protected internal nested type, reachable from derived types.
-    /// </summary>
-    protected internal sealed class ProtectedInternalNested
-    {
-    }
-
-    internal sealed class InternalNested
-    {
-    }
-
-    private protected sealed class PrivateProtectedNested
-    {
-    }
-
-    private sealed class PrivateNested
-    {
-    }
 
     /// <summary>
     /// Returns its argument, so any nested type can be named as its argument.
@@ -69,5 +40,6 @@ public class Nesting
     /// Uses every private member so nothing here is unused.
     /// </summary>
     /// <returns>True.</returns>
-    public static bool Exercise() => TakePrivate(new PrivateNested()) && TakeInternal(new InternalNested()) && TakeProtected(new ProtectedNested()) && Echo(new PrivateProtectedNested()) is not null && Echo(new ProtectedInternalNested()) is not null;
+    public static bool Exercise() => TakePrivate(new PrivateNested()) && TakeInternal(new InternalNested()) && TakeProtected(
+        new ProtectedNested()) && Echo(new PrivateProtectedNested()) is not null && Echo(new ProtectedInternalNested()) is not null;
 }

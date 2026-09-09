@@ -77,7 +77,10 @@ public sealed class ReplCore : IDisposable
         get
         {
             var state = Session.State;
-            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count, Session.OpenType, Session.TypeCount, Session.Mark() with { EchoStack = Options.EchoStack, ShowTiming = Options.ShowTiming }, Session.OpenDepth, Session.CompletionRevision);
+            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count,
+                state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count,
+                Session.OpenType, Session.TypeCount, Session.Mark() with { EchoStack = Options.EchoStack, ShowTiming = Options.ShowTiming },
+                Session.OpenDepth, Session.CompletionRevision);
         }
     }
 
@@ -116,7 +119,8 @@ public sealed class ReplCore : IDisposable
 
         try
         {
-            var operation = ReplLineDispatcher.Classify(normalized, Session.OpenMethod is not null, Session.State.HasPendingLabels, Session.State.OpenBlockDepth > 0);
+            var operation = ReplLineDispatcher.Classify(normalized, Session.OpenMethod is not null, Session.State.HasPendingLabels,
+                Session.State.OpenBlockDepth > 0);
             switch (operation.Kind)
             {
                 case ReplLineKind.Comment:
@@ -538,23 +542,24 @@ public sealed class ReplCore : IDisposable
                 return new HandleResult(true, false);
 
             case ".load":
+            {
+                var assembly = Session.Resolver.Load(argument);
+                Session.AdvanceGeneration();
+                int count;
+                try
                 {
-                    var assembly = Session.Resolver.Load(argument);
-                    Session.AdvanceGeneration();
-                    int count;
-                    try
-                    {
-                        count = assembly.GetExportedTypes().Length;
-                    }
-                    catch (Exception ex) when (ex is System.Reflection.ReflectionTypeLoadException or FileNotFoundException or NotSupportedException)
-                    {
-                        count = -1;
-                    }
-
-                    Note($"loaded {assembly.GetName().Name} {assembly.GetName().Version}" + (count >= 0 ? $" ({count} public types)" : ""));
+                    count = assembly.GetExportedTypes().Length;
+                }
+                catch (Exception ex) when (ex is System.Reflection.ReflectionTypeLoadException or FileNotFoundException
+                    or NotSupportedException)
+                {
+                    count = -1;
                 }
 
-                return new HandleResult(true, false);
+                Note($"loaded {assembly.GetName().Name} {assembly.GetName().Version}" + (count >= 0 ? $" ({count} public types)" : ""));
+            }
+
+            return new HandleResult(true, false);
 
             case ".assemblies":
                 foreach (var assembly in Session.Resolver.LoadedAssemblies)

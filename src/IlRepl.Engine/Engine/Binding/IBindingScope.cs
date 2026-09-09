@@ -1,11 +1,14 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Provides type lookup, generic context, member discovery, and naming to the shared binder.
+/// </summary>
+/// <remarks>
 /// What a binder asks of its surroundings: how a written name finds a type, what is in generic
 /// scope, which members a type has, and how a type or member is spelled in a message. The
 /// runtime scope answers from the session's tables and reflection, and may load or declare
 /// ahead; a snapshot scope answers from captured metadata and declarations and never does.
-/// </summary>
+/// </remarks>
 public interface IBindingScope
 {
     /// <summary>
@@ -31,7 +34,7 @@ public interface IBindingScope
     /// <param name="name">The name as written, quoted segments decoded, with its arity suffix when written.</param>
     /// <param name="assemblyHint">The assembly named in square brackets, or null.</param>
     /// <param name="writtenArity">How many generic arguments follow the name; 0 when none.</param>
-    /// <param name="valueTypeKeyword">True when the reference was written with <c>valuetype</c>, which decides the kind of a placeholder.</param>
+    /// <param name="valueTypeKeyword">Whether <c>valuetype</c> was written, determining a placeholder's kind.</param>
     /// <returns>The definition and where it came from.</returns>
     /// <exception cref="ReplException">No type matched, or a short name was ambiguous.</exception>
     TypeLookupResult LookupType(string name, string? assemblyHint, int writtenArity, bool valueTypeKeyword);

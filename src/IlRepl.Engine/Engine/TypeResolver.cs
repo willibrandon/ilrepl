@@ -140,12 +140,15 @@ public sealed class TypeResolver
     }
 
     /// <summary>
+    /// Enumerates searchable assemblies in resolver order without retaining unrelated collectible contexts.
+    /// </summary>
+    /// <remarks>
     /// Enumerates the assemblies searched by <see cref="Resolve(string, string?)"/>, most specific
     /// first: the ones added with <see cref="Load"/>, then the process's assemblies in a context
     /// that cannot unload, from <see cref="ProcessAssemblies"/>. Assemblies a session owns are
     /// excluded by identity, and so is anything in a collectible context the session did not
     /// create, which a cell could never bind.
-    /// </summary>
+    /// </remarks>
     public IEnumerable<Assembly> Assemblies
     {
         get
@@ -208,10 +211,13 @@ public sealed class TypeResolver
     public Type Resolve(string ilName, string? assemblyHint) => Resolve(ilName, assemblyHint, null);
 
     /// <summary>
+    /// Resolves an IL type name and suggests a nearby accessible type when lookup fails.
+    /// </summary>
+    /// <remarks>
     /// Finds a type by its IL name, and when nothing matches names the nearest type the context
     /// could have meant: <c>type 'Cosnole' not found (did you mean 'Console'?)</c>. The suggestion
     /// is found in a snapshot of the context's assemblies, which loads nothing.
-    /// </summary>
+    /// </remarks>
     /// <param name="ilName">The name as written in IL.</param>
     /// <param name="assemblyHint">The assembly named in square brackets, or null.</param>
     /// <param name="context">The context the name is used in, or null for no suggestion.</param>

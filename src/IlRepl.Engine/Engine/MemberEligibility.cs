@@ -4,18 +4,24 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Applies contextual CLI accessibility rules to session and external symbols.
+/// </summary>
+/// <remarks>
 /// The accessibility rules over symbols, for every source alike. A session member is judged by the
 /// rules <see cref="MemberAccess"/> teaches, which this class now holds; a member of another
 /// assembly is judged by what a cell, which the runtime does check, can reach: public members,
 /// family members from a derived session type, and nothing internal to that assembly.
-/// </summary>
+/// </remarks>
 public static partial class MemberEligibility
 {
     /// <summary>
+    /// Checks type visibility, including element types and generic arguments, and returns any refusal reason.
+    /// </summary>
+    /// <remarks>
     /// Decides whether a session type is visible from a context: null when it is, otherwise the
     /// reason. Element types and generic arguments are judged too. Other types are not judged
     /// unless <paramref name="judgeAll"/> is set.
-    /// </summary>
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <param name="where">Where the mention happens.</param>
     /// <param name="facts">The base chain, the session's types, and the spelling.</param>
@@ -89,7 +95,8 @@ public static partial class MemberEligibility
             default:
                 return FamilyAccessor(where.Type, enclosing, facts) is not null
                     ? null
-                    : $"{name} is {MemberAccess.VisibilityWord(definition.Attributes)}; only {outerName} and types derived from it can use it, not {where.Description}";
+                    : $"{name} is {MemberAccess.VisibilityWord(definition.Attributes)}; "
+                        + $"only {outerName} and types derived from it can use it, not {where.Description}";
         }
     }
 
@@ -116,9 +123,11 @@ public static partial class MemberEligibility
             "private" => where.Type is not null && SymbolRelations.IsWithin(where.Type, declaring)
                 ? null
                 : $"{description} is private; only {owner} and the types nested in it can use it, not {where.Description}",
-            "privatescope" => where.Type is not null && SymbolIdentity.Equal(SymbolRelations.Outermost(where.Type), SymbolRelations.Outermost(declaring))
+            "privatescope" => where.Type is not null && SymbolIdentity.Equal(SymbolRelations.Outermost(where.Type),
+                SymbolRelations.Outermost(declaring))
                 ? null
-                : $"{description} is privatescope (no access word); only {owner}'s own module can use it, not {where.Description} (give it an access word such as public)",
+                : $"{description} is privatescope (no access word); only {owner}'s own module can use it, "
+                    + $"not {where.Description} (give it an access word such as public)",
             _ => FamilyAccessor(where.Type, declaring, facts) is not null
                 ? null
                 : $"{description} is {access}; only {owner} and types derived from it can use it, not {where.Description}",
@@ -126,9 +135,12 @@ public static partial class MemberEligibility
     }
 
     /// <summary>
+    /// Checks field accessibility and returns null when the access is allowed.
+    /// </summary>
+    /// <remarks>
     /// Decides a field access: null when allowed, otherwise the reason. Only session fields are
     /// judged unless <paramref name="judgeAll"/> is set.
-    /// </summary>
+    /// </remarks>
     /// <param name="field">The field.</param>
     /// <param name="where">Where the access happens.</param>
     /// <param name="facts">The base chain, the session's types, and the spelling.</param>
@@ -146,14 +158,18 @@ public static partial class MemberEligibility
         }
 
         var description = $"{facts.Pretty(field.FieldType)} {facts.Pretty(declaring)}::{field.Name}";
-        return TypeVerdict(declaring, where, facts, judgeAll) ?? MemberVerdict(MemberAccess.AccessWord(field.Attributes), declaring, description, where, facts);
+        return TypeVerdict(declaring, where, facts, judgeAll) ?? MemberVerdict(MemberAccess.AccessWord(field.Attributes), declaring,
+            description, where, facts);
     }
 
     /// <summary>
+    /// Checks method accessibility together with its declaring type and generic arguments.
+    /// </summary>
+    /// <remarks>
     /// Decides a method access: null when allowed, otherwise the reason. The declaring type and
     /// the instantiation's arguments are judged whatever assembly the method belongs to; the
     /// member's own access is a session member's, unless <paramref name="judgeAll"/> is set.
-    /// </summary>
+    /// </remarks>
     /// <param name="method">The member.</param>
     /// <param name="where">Where the access happens.</param>
     /// <param name="facts">The base chain, the session's types, and the spelling.</param>
@@ -217,10 +233,13 @@ public static partial class MemberEligibility
     }
 
     /// <summary>
+    /// Checks external type visibility recursively through nesting, element types, and generic arguments.
+    /// </summary>
+    /// <remarks>
     /// True when a type of another assembly is reachable from a context: its element type is, each
     /// generic argument is, and it is public, or nested public in a reachable type, or nested
     /// family in a type the context derives from. Session types answer through <see cref="TypeVerdict"/>.
-    /// </summary>
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <param name="where">Where the mention happens.</param>
     /// <param name="facts">The base chain, the session's types, and the spelling.</param>
@@ -247,7 +266,8 @@ public static partial class MemberEligibility
 
         if (type.Kind == TypeSymbolKind.FunctionPointer)
         {
-            return IsReachable(type.Signature!.ReturnType, where, facts) && type.Signature.Parameters.All(p => IsReachable(p, where, facts));
+            return IsReachable(type.Signature!.ReturnType, where, facts) && type.Signature.Parameters.All(p => IsReachable(p, where,
+                facts));
         }
 
         if (type.Kind == TypeSymbolKind.Constructed && !type.Arguments.All(a => IsReachable(a, where, facts)))
@@ -275,15 +295,19 @@ public static partial class MemberEligibility
         return visibility switch
         {
             TypeAttributes.NestedPublic => true,
-            TypeAttributes.NestedFamily or TypeAttributes.NestedFamORAssem => FamilyAccessor(where.Type, definition.Declaring, facts) is not null,
+            TypeAttributes.NestedFamily or TypeAttributes.NestedFamORAssem => FamilyAccessor(where.Type, definition.Declaring,
+                facts) is not null,
             _ => false,
         };
     }
 
     /// <summary>
+    /// Returns the contextual reason a member is inaccessible, or null when it is allowed.
+    /// </summary>
+    /// <remarks>
     /// The reason a member cannot be used from a context, or null when it can: a session member by
     /// the session's rules, a member of another assembly by what a cell can reach.
-    /// </summary>
+    /// </remarks>
     /// <param name="method">The member.</param>
     /// <param name="where">Where the access happens.</param>
     /// <param name="facts">The base chain, the session's types, and the spelling.</param>
@@ -310,8 +334,11 @@ public static partial class MemberEligibility
 
         var access = method.Attributes & MethodAttributes.MemberAccessMask;
         var reachable = access == MethodAttributes.Public
-            || (access is MethodAttributes.Family or MethodAttributes.FamORAssem && FamilyAccessor(where.Type, method.DeclaringType, facts) is not null);
-        return reachable ? null : $"{SymbolRenderer.Describe(method, facts.Pretty)} is {MemberAccess.AccessWord(method.Attributes)} to its own assembly, not {where.Description}";
+            || (access is MethodAttributes.Family or MethodAttributes.FamORAssem && FamilyAccessor(where.Type, method.DeclaringType,
+                facts) is not null);
+        return reachable ? null
+            : $"{SymbolRenderer.Describe(method, facts.Pretty)} is {MemberAccess.AccessWord(method.Attributes)} "
+                + $"to its own assembly, not {where.Description}";
     }
 
     /// <summary>
@@ -339,8 +366,10 @@ public static partial class MemberEligibility
 
         var access = field.Attributes & FieldAttributes.FieldAccessMask;
         var reachable = access == FieldAttributes.Public
-            || (access is FieldAttributes.Family or FieldAttributes.FamORAssem && FamilyAccessor(where.Type, field.DeclaringType, facts) is not null);
-        return reachable ? null : $"{description} is {MemberAccess.AccessWord(field.Attributes)} to its own assembly, not {where.Description}";
+            || (access is FieldAttributes.Family or FieldAttributes.FamORAssem && FamilyAccessor(where.Type, field.DeclaringType,
+                facts) is not null);
+        return reachable ? null
+            : $"{description} is {MemberAccess.AccessWord(field.Attributes)} to its own assembly, not {where.Description}";
     }
 
     /// <summary>

@@ -4,9 +4,12 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
+/// Checks accessible typo suggestions and the bounded distance used to select them.
+/// </summary>
+/// <remarks>
 /// Tests for <see cref="NameSuggestions"/> and <see cref="EditDistance"/>: the did-you-mean a
 /// mistyped name gets, and the bounded distance that finds it.
-/// </summary>
+/// </remarks>
 [TestClass]
 public sealed class NameSuggestionsTests
 {
@@ -30,7 +33,8 @@ public sealed class NameSuggestionsTests
     [TestMethod]
     public void WithinBound_AgreesWithLevenshtein()
     {
-        var words = new[] { "Concat", "Concta", "Console", "Xonsole", "Cosnole", "WriteLine", "Write", "Trim", "Trmi", "ToString", "tostring", "", "a", "ab" };
+        var words = new[] { "Concat", "Concta", "Console", "Xonsole", "Cosnole", "WriteLine", "Write", "Trim", "Trmi", "ToString",
+            "tostring", "", "a", "ab" };
         foreach (var a in words)
         {
             foreach (var b in words)
@@ -105,10 +109,13 @@ public sealed class NameSuggestionsTests
         using var snapshot = BindingSnapshot.Capture(context);
         var index = new TypeIndex(snapshot);
         var scope = new SnapshotBindingScope(snapshot);
-        Assert.AreEqual("Math", NameSuggestions.NearestType("Mth", null, index, AccessContext.Cell, scope)!.Spelling, "one edit within a short name's bound");
+        Assert.AreEqual("Math", NameSuggestions.NearestType("Mth", null, index, AccessContext.Cell, scope)!.Spelling,
+            "one edit within a short name's bound");
         Assert.AreEqual("Console", NameSuggestions.NearestType("Consle", null, index, AccessContext.Cell, scope)!.Spelling);
-        Assert.AreEqual("ConsoleKey", NameSuggestions.NearestType("Consoleeee", null, index, AccessContext.Cell, scope)!.Spelling, "two substitutions reach a neighbour");
-        Assert.IsNull(NameSuggestions.NearestType("Consolezzzz", null, index, AccessContext.Cell, scope), "three edits away is beyond the bound");
+        Assert.AreEqual("ConsoleKey", NameSuggestions.NearestType("Consoleeee", null, index, AccessContext.Cell, scope)!.Spelling,
+            "two substitutions reach a neighbour");
+        Assert.IsNull(NameSuggestions.NearestType("Consolezzzz", null, index, AccessContext.Cell, scope),
+            "three edits away is beyond the bound");
         Assert.IsNull(NameSuggestions.NearestType("Qz", null, index, AccessContext.Cell, scope));
     }
 

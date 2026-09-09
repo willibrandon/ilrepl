@@ -5,11 +5,14 @@ using System.Reflection.Metadata.Ecma335;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Binds previews from captured metadata and declarations without runtime resolution or builders.
+/// </summary>
+/// <remarks>
 /// The scope a preview binds in: a <see cref="BindingSnapshot"/> and nothing else. Names are found
 /// in the same order the resolver searches, members are listed as reflection would list them, and
 /// every answer comes from captured metadata and copied declarations. Nothing here loads,
 /// resolves through the runtime, or touches a builder.
-/// </summary>
+/// </remarks>
 public sealed class SnapshotBindingScope : IBindingScope
 {
     private readonly BindingSnapshot _snapshot;
@@ -80,7 +83,8 @@ public sealed class SnapshotBindingScope : IBindingScope
         if (assemblyHint is null or "ilrepl"
             && _snapshot.Types.TryResolve(name, writtenArity > 0, valueTypeKeyword, out var sessionType, !_confirming))
         {
-            if (sessionType.Definition.IsDeclaration && !_shared.Declarations.ContainsKey(sessionType.Definition) && _snapshot.Types.DeclarationOf(sessionType) is { } placeholder)
+            if (sessionType.Definition.IsDeclaration && !_shared.Declarations.ContainsKey(sessionType.Definition)
+                && _snapshot.Types.DeclarationOf(sessionType) is { } placeholder)
             {
                 _shared.Declarations[sessionType.Definition] = placeholder.Clone();
             }
@@ -156,7 +160,8 @@ public sealed class SnapshotBindingScope : IBindingScope
 
                 if (matches.Count > 1)
                 {
-                    throw new ReplException($"'{ilName}' is ambiguous: {string.Join(", ", matches.Select(SymbolRenderer.ReflectionFullName).Take(6))}");
+                    throw new ReplException(
+                        $"'{ilName}' is ambiguous: {string.Join(", ", matches.Select(SymbolRenderer.ReflectionFullName).Take(6))}");
                 }
             }
         }
@@ -164,7 +169,8 @@ public sealed class SnapshotBindingScope : IBindingScope
         var hint = assemblyHint is null ? "" : $" in [{assemblyHint}]";
         var suggestion = _confirming ? null
             : NameSuggestions.NearestType(ilName, assemblyHint, _shared.Index ??= new TypeIndex(_snapshot), Access, this);
-        throw new ReplException($"type '{ilName}' not found{hint}{(suggestion is null ? " (load its assembly with .load)" : NameSuggestions.Parenthetical(suggestion.Spelling))}");
+        var advice = suggestion is null ? " (load its assembly with .load)" : NameSuggestions.Parenthetical(suggestion.Spelling);
+        throw new ReplException($"type '{ilName}' not found{hint}{advice}");
     }
 
     private TypeSymbol? FindEverywhere(string ns, string typeName, string[] nested)
@@ -192,9 +198,11 @@ public sealed class SnapshotBindingScope : IBindingScope
     }
 
     /// <inheritdoc/>
-    public TypeSymbol LookupDecimal() => CoreLibType("Decimal") ?? throw new ReplException("type 'System.Decimal' not found (load its assembly with .load)");
+    public TypeSymbol LookupDecimal() => CoreLibType("Decimal") ?? throw new ReplException(
+        "type 'System.Decimal' not found (load its assembly with .load)");
 
-    private TypeSymbol? CoreLibType(string name) => _snapshot.CoreLib is { } coreLib ? _snapshot.Catalog.FindType(coreLib, "System", name) : null;
+    private TypeSymbol? CoreLibType(string name) => _snapshot.CoreLib is { } coreLib ? _snapshot.Catalog.FindType(coreLib, "System",
+        name) : null;
 
     /// <inheritdoc/>
     public IReadOnlyList<TypeSymbol> GenericArgumentsOf(TypeSymbol type)
@@ -204,7 +212,8 @@ public sealed class SnapshotBindingScope : IBindingScope
     }
 
     /// <inheritdoc/>
-    public bool TryGetDeclaration(TypeSymbol declaring, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IDeclarationMembers? members)
+    public bool TryGetDeclaration(TypeSymbol declaring, [System.Diagnostics.CodeAnalysis.NotNullWhen(
+        true)] out IDeclarationMembers? members)
     {
         ArgumentNullException.ThrowIfNull(declaring);
         if (_shared.Declarations.TryGetValue(declaring.DefinitionOrSelf.Definition, out var declaration))
@@ -260,7 +269,9 @@ public sealed class SnapshotBindingScope : IBindingScope
                 if (!first)
                 {
                     var access = method.Attributes & MethodAttributes.MemberAccessMask;
-                    if (method.IsStatic ? access is not (MethodAttributes.Public or MethodAttributes.Family or MethodAttributes.FamORAssem) : access is MethodAttributes.Private or MethodAttributes.PrivateScope)
+                    if (method.IsStatic ? access is not (
+                        MethodAttributes.Public or MethodAttributes.Family or MethodAttributes.FamORAssem)
+                            : access is MethodAttributes.Private or MethodAttributes.PrivateScope)
                     {
                         continue;
                     }
@@ -343,7 +354,9 @@ public sealed class SnapshotBindingScope : IBindingScope
                 if (!first)
                 {
                     var access = field.Attributes & FieldAttributes.FieldAccessMask;
-                    if (field.IsStatic ? access is not (FieldAttributes.Public or FieldAttributes.Family or FieldAttributes.FamORAssem) : access is FieldAttributes.Private or FieldAttributes.PrivateScope)
+                    if (field.IsStatic ? access is not (
+                        FieldAttributes.Public or FieldAttributes.Family or FieldAttributes.FamORAssem) : access is FieldAttributes.Private
+                            or FieldAttributes.PrivateScope)
                     {
                         continue;
                     }
@@ -600,7 +613,8 @@ public sealed class SnapshotBindingScope : IBindingScope
             return null;
         }
 
-        var declaring = methodSource.Definition(methodSource.Reader.GetMethodDefinition((MethodDefinitionHandle)methodHandle).GetDeclaringType());
+        var declaring = methodSource.Definition(methodSource.Reader.GetMethodDefinition((
+            MethodDefinitionHandle)methodHandle).GetDeclaringType());
         var owner = DefinitionMethods(declaring).FirstOrDefault(m => m.Definition == parameter.Owner);
         return owner is not null && parameter.Position < owner.GenericParameters.Count ? owner.GenericParameters[parameter.Position] : null;
     }
@@ -617,10 +631,12 @@ public sealed class SnapshotBindingScope : IBindingScope
 
         if (_shared.Declarations.TryGetValue(definition.Definition, out var declared))
         {
-            return declared.BaseType is { Namespace: "System", Name: "Enum" } ? declared.Fields.FirstOrDefault(f => !f.IsStatic)?.FieldType : null;
+            return declared.BaseType is { Namespace: "System", Name: "Enum" } ? declared.Fields.FirstOrDefault(f
+                => !f.IsStatic)?.FieldType : null;
         }
 
-        return _snapshot.Catalog.Locate(definition) is { } located ? located.Source.EnumUnderlyingType(located.Handle, _snapshot.Catalog) : null;
+        return _snapshot.Catalog.Locate(definition) is { } located ? located.Source.EnumUnderlyingType(located.Handle,
+            _snapshot.Catalog) : null;
     }
 
     /// <inheritdoc/>

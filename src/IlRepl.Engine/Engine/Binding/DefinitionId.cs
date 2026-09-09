@@ -1,12 +1,15 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Identifies a definition by its assembly instance, module, and token or declaration number.
+/// </summary>
+/// <remarks>
 /// The identity of a type, method, or field definition, independent of any runtime object. A
 /// loaded definition is its assembly instance, its module, and its metadata token: the same bytes
 /// loaded twice are two identities, and a token alone is not one. A definition the session is
 /// still writing, or a placeholder for one, is its assembly instance and a declaration number.
-/// </summary>
-/// <param name="Assembly">The loaded assembly instance the definition belongs to, from <see cref="RuntimeDefinitions.AssemblyInstance"/>.</param>
+/// </remarks>
+/// <param name="Assembly">The loaded instance identified by <see cref="RuntimeDefinitions.AssemblyInstance"/>.</param>
 /// <param name="Module">The module version id of a loaded definition; empty for a declaration.</param>
 /// <param name="Token">The metadata token of a loaded definition; 0 for a declaration.</param>
 /// <param name="Declaration">The declaration number of a definition being written; 0 for a loaded definition.</param>

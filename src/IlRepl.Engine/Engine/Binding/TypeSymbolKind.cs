@@ -66,8 +66,7 @@ public enum TypeSymbolKind
     Pinned,
 
     /// <summary>
-    /// A reference metadata makes to a type no loaded assembly defines: the spelling is kept, and
-    /// nothing binds to it.
+    /// Represents an unresolved metadata type reference while preserving its original spelling.
     /// </summary>
     Unresolved,
 }

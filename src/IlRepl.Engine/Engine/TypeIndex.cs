@@ -3,11 +3,14 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Indexes session and loaded metadata types for completion and typo suggestions.
+/// </summary>
+/// <remarks>
 /// Every type a snapshot can name: the session's own, then the definitions of each loaded
 /// assembly in the resolver's search order, from metadata alone. The palette and the did-you-mean
 /// read one index, so a name the palette offers is a name a suggestion can make and both spell it
 /// the same way.
-/// </summary>
+/// </remarks>
 public sealed class TypeIndex
 {
     private readonly BindingSnapshot _snapshot;
@@ -29,7 +32,8 @@ public sealed class TypeIndex
         foreach (var (fullName, _, symbol) in snapshot.Types.Entries)
         {
             var definition = symbol.DefinitionOrSelf;
-            var entry = new TypeIndexEntry(definition.Definition, definition.Name, definition.Namespace, fullName, definition.Attributes, definition.GenericParameterNames.Count, KindOf(definition), definition.Name.StartsWith('<'))
+            var entry = new TypeIndexEntry(definition.Definition, definition.Name, definition.Namespace, fullName, definition.Attributes,
+                definition.GenericParameterNames.Count, KindOf(definition), definition.Name.StartsWith('<'))
             {
                 IsVisible = true,
                 IsSession = true,
@@ -114,9 +118,12 @@ public sealed class TypeIndex
     }
 
     /// <summary>
+    /// Finds type entries matching an optional assembly hint, namespace, and nested path.
+    /// </summary>
+    /// <remarks>
     /// The entries whose path matches an assembly hint, a namespace, and a nesting path, each
     /// compared case-insensitively when given.
-    /// </summary>
+    /// </remarks>
     /// <param name="assemblyHint">The assembly, or null for any.</param>
     /// <param name="ns">The namespace, or null for any.</param>
     /// <param name="nesting">The nesting path with the type's own name last, or null for any.</param>
@@ -129,12 +136,16 @@ public sealed class TypeIndex
             && (nesting is null || string.Equals(NestingOf(e), nesting, StringComparison.OrdinalIgnoreCase)))];
     }
 
-    private static string NestingOf(TypeIndexEntry entry) => entry.Namespace.Length == 0 || !entry.IlPath.StartsWith(entry.Namespace + ".", StringComparison.Ordinal) ? entry.IlPath : entry.IlPath[(entry.Namespace.Length + 1)..];
+    private static string NestingOf(TypeIndexEntry entry) => entry.Namespace.Length == 0 || !entry.IlPath.StartsWith(entry.Namespace + ".",
+        StringComparison.Ordinal) ? entry.IlPath : entry.IlPath[(entry.Namespace.Length + 1)..];
 
     /// <summary>
+    /// Finds the type selected by a bare short name, or null for missing or ambiguous names.
+    /// </summary>
+    /// <remarks>
     /// The type a bare short name binds to under the resolver's rules, or null when it binds to
     /// nothing or is ambiguous.
-    /// </summary>
+    /// </remarks>
     /// <param name="name">The short name, arity suffix included.</param>
     /// <returns>The type, or null.</returns>
     public TypeSymbol? ShortNameTarget(string name)

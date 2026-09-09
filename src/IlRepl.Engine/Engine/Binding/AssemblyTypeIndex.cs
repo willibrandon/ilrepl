@@ -4,11 +4,14 @@ using System.Reflection.Metadata.Ecma335;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Indexes an assembly's type definitions and forwarded aliases without loading dependencies.
+/// </summary>
+/// <remarks>
 /// The type definitions of one loaded assembly and the types it exports from elsewhere, read from
 /// its metadata once: every definition by its qualified name, nested definitions by their parent,
 /// and the forwarders that make a reference through a facade land on the assembly that defines the
 /// type. Nothing is loaded to build it.
-/// </summary>
+/// </remarks>
 public sealed class AssemblyTypeIndex
 {
     private readonly Dictionary<(string Namespace, string Name), TypeDefinitionHandle> _topLevel = [];
@@ -207,7 +210,8 @@ public sealed class AssemblyTypeIndex
     /// </summary>
     /// <param name="parent">The enclosing definition.</param>
     /// <returns>The nested definitions.</returns>
-    public IReadOnlyList<TypeDefinitionHandle> NestedOf(TypeDefinitionHandle parent) => _nested.TryGetValue(parent, out var children) ? [.. children.Values] : [];
+    public IReadOnlyList<TypeDefinitionHandle> NestedOf(TypeDefinitionHandle parent) => _nested.TryGetValue(parent,
+        out var children) ? [.. children.Values] : [];
 
     /// <summary>
     /// Finds the assembly a top-level type is forwarded to.

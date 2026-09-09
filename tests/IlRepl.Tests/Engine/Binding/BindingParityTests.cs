@@ -4,9 +4,12 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Tests.Engine.Binding;
 
 /// <summary>
+/// Verifies runtime and metadata binding agree on the identities selected by the same source text.
+/// </summary>
+/// <remarks>
 /// The runtime scope and the snapshot scope bind the same text to the same symbol: whatever the
 /// resolver finds through reflection, a preview finds through metadata, with the same identity.
-/// </summary>
+/// </remarks>
 [TestClass]
 public sealed class BindingParityTests
 {
@@ -206,8 +209,10 @@ public sealed class BindingParityTests
         using (captured)
         {
             var syntax = CilSyntaxParser.ParseMethodReference(text);
-            var fromRuntime = Assert.ThrowsExactly<ReplException>(() => SymbolBinder.BindMethodReference(syntax, runtime, text.Contains(".ctor", StringComparison.Ordinal)));
-            var fromSnapshot = Assert.ThrowsExactly<ReplException>(() => SymbolBinder.BindMethodReference(syntax, snapshot, text.Contains(".ctor", StringComparison.Ordinal)));
+            var fromRuntime = Assert.ThrowsExactly<ReplException>(() => SymbolBinder.BindMethodReference(syntax, runtime, text.Contains(
+                ".ctor", StringComparison.Ordinal)));
+            var fromSnapshot = Assert.ThrowsExactly<ReplException>(() => SymbolBinder.BindMethodReference(syntax, snapshot, text.Contains(
+                ".ctor", StringComparison.Ordinal)));
             Assert.AreEqual(fromRuntime.Message.Split('\n')[0], fromSnapshot.Message.Split('\n')[0], text);
         }
     }
@@ -279,10 +284,13 @@ public sealed class BindingParityTests
     }
 
     /// <summary>
+    /// Checks declared, inherited, generic, and forward member binding without mutating the live block.
+    /// </summary>
+    /// <remarks>
     /// Inside a class being written, the declared members, the base's members, and the type's own
     /// parameters bind alike, and a member declared ahead of its line is recorded on both sides
     /// without the snapshot touching the real block.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Bind_OpenClass_Agrees()
     {
@@ -308,7 +316,8 @@ public sealed class BindingParityTests
         var (runtime, snapshot, captured) = Scopes(context);
         using (captured)
         {
-            var before = session.State.Types.TryGetMembers(session.State.Types.Types.Last(t => t.Name.StartsWith("Own", StringComparison.Ordinal)), out var own) ? own.Methods.Count : -1;
+            var before = session.State.Types.TryGetMembers(session.State.Types.Types.Last(t => t.Name.StartsWith("Own",
+                StringComparison.Ordinal)), out var own) ? own.Methods.Count : -1;
             var syntax = CilSyntaxParser.ParseMethodReference("void Own`1::Later(int32)");
             var fromSnapshot = SymbolBinder.BindMethodReference(syntax, snapshot, false);
             Assert.AreEqual(MethodSymbolSource.Forward, fromSnapshot.Method.Source);
@@ -331,11 +340,15 @@ public sealed class BindingParityTests
         {
             var names = new[]
             {
-                "Console", "StringBuilder", "List`1", "Dictionary`2", "Task", "Task`1", "Regex", "Stopwatch", "Path", "File", "Math", "Random",
-                "Guid", "DateTime", "TimeSpan", "Uri", "Encoding", "Stream", "MemoryStream", "Exception", "ArgumentException", "IDisposable",
+                "Console", "StringBuilder", "List`1", "Dictionary`2", "Task", "Task`1", "Regex", "Stopwatch", "Path", "File", "Math",
+                    "Random",
+                "Guid", "DateTime", "TimeSpan", "Uri", "Encoding", "Stream", "MemoryStream", "Exception", "ArgumentException",
+                    "IDisposable",
                 "IEnumerable`1", "IComparable`1", "Func`2", "Action`1", "Nullable`1", "ValueTuple`2", "BigInteger", "Complex", "Thread",
-                "CancellationToken", "Interlocked", "GC", "Type", "MethodInfo", "Attribute", "Enum", "ValueType", "Delegate", "Array", "Span`1",
-                "Memory`1", "ImmutableArray`1", "ImmutableList`1", "ConcurrentDictionary`2", "WebUtility", "JsonSerializer", "Process", "Environment",
+                "CancellationToken", "Interlocked", "GC", "Type", "MethodInfo", "Attribute", "Enum", "ValueType", "Delegate", "Array",
+                    "Span`1",
+                "Memory`1", "ImmutableArray`1", "ImmutableList`1", "ConcurrentDictionary`2", "WebUtility", "JsonSerializer", "Process",
+                    "Environment",
                 "RuntimeHelpers", "Marshal", "Vector`1", "Half", "Int128", "Index", "Range", "Lazy`1", "WeakReference`1", "KeyValuePair`2",
             };
             var agreed = 0;

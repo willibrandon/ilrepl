@@ -1,11 +1,14 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Captures session type paths and lookup rules with independently owned provisional nested types.
+/// </summary>
+/// <remarks>
 /// The session's type table as a snapshot holds it: every path the session can name, with the
 /// symbol it means, and the same lookup rules as <see cref="TypeTable"/>. A path into a family
 /// being written may name a nested type declared later; the placeholder it gets is the
 /// snapshot's own.
-/// </summary>
+/// </remarks>
 public sealed class SnapshotTypeTable
 {
     private readonly List<(string FullName, string ShortName, TypeSymbol Type)> _entries = [];
@@ -151,7 +154,8 @@ public sealed class SnapshotTypeTable
             return type is not null;
         }
 
-        var matches = _entries.Where(e => e.ShortName == name || (withArguments && StripArity(e.ShortName) == name)).Select(e => e.Type).Distinct().ToList();
+        var matches = _entries.Where(e => e.ShortName == name || (withArguments && StripArity(e.ShortName) == name)).Select(e
+            => e.Type).Distinct().ToList();
         if (matches.Count == 1)
         {
             type = matches[0];
@@ -160,7 +164,8 @@ public sealed class SnapshotTypeTable
 
         if (matches.Count > 1)
         {
-            throw new ReplException($"'{name}' is ambiguous: {string.Join(", ", _entries.Where(e => matches.Contains(e.Type)).Select(e => e.FullName))} (write the full name)");
+            var names = string.Join(", ", _entries.Where(e => matches.Contains(e.Type)).Select(e => e.FullName));
+            throw new ReplException($"'{name}' is ambiguous: {names} (write the full name)");
         }
 
         return false;
@@ -195,11 +200,14 @@ public sealed class SnapshotTypeTable
             enclosing?.Namespace ?? "",
             enclosing,
             "",
-            System.Reflection.TypeAttributes.NestedPublic | (valueType ? System.Reflection.TypeAttributes.Sealed : System.Reflection.TypeAttributes.Class),
+            System.Reflection.TypeAttributes.NestedPublic | (
+                valueType ? System.Reflection.TypeAttributes.Sealed : System.Reflection.TypeAttributes.Class),
             valueType,
             []);
         _placeholders[name] = placeholder;
-        _declarations[placeholder.Definition] = new DeclarationSymbol(placeholder, valueType ? TypeSymbol.Primitive("object") : TypeSymbol.Primitive("object"), [], [], [], [], false) { IsPlaceholder = true };
+        _declarations[placeholder.Definition] = new DeclarationSymbol(placeholder, valueType ? TypeSymbol.Primitive(
+            "object") : TypeSymbol.Primitive("object"), [], [], [], [], false)
+        { IsPlaceholder = true };
         return placeholder;
     }
 

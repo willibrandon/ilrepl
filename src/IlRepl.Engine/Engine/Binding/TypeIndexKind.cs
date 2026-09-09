@@ -1,9 +1,12 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Classifies types for presentation without replacing the full eligibility rules.
+/// </summary>
+/// <remarks>
 /// The kind of a type as a listing or a palette presents it. Eligibility decisions use the full
 /// symbol facts; the kind only orders and labels.
-/// </summary>
+/// </remarks>
 public enum TypeIndexKind
 {
     /// <summary>

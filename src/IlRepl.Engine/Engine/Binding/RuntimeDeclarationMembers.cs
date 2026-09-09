@@ -50,7 +50,8 @@ internal sealed class RuntimeDeclarationMembers : IDeclarationMembers
     /// <inheritdoc/>
     public MethodSymbol DefineForward(MethodSymbol signature)
     {
-        var declared = new MethodSignature(signature.Name, _scope.TypeOf(signature.ReturnType), [.. signature.Parameters.Select(p => new ArgumentDeclaration(_scope.TypeOf(p.Type), null, null, ""))])
+        var declared = new MethodSignature(signature.Name, _scope.TypeOf(signature.ReturnType), [.. signature.Parameters.Select(p
+            => new ArgumentDeclaration(_scope.TypeOf(p.Type), null, null, ""))])
         {
             Attributes = signature.Attributes,
             CallingConvention = signature.CallingConvention,
@@ -67,6 +68,7 @@ internal sealed class RuntimeDeclarationMembers : IDeclarationMembers
 
     private MethodSymbol Import((MethodSignature Signature, MethodBase Builder, bool Declared) method) =>
         _scope.Register(
-            RuntimeSymbolImporter.Import(method.Signature, Declaring, RuntimeDefinitions.Of(method.Builder), method.Declared ? MethodSymbolSource.Declared : MethodSymbolSource.Forward, method.Declared),
+            RuntimeSymbolImporter.Import(method.Signature, Declaring, RuntimeDefinitions.Of(method.Builder),
+                method.Declared ? MethodSymbolSource.Declared : MethodSymbolSource.Forward, method.Declared),
             new RuntimeDeclaredMember(method.Signature, method.Builder));
 }

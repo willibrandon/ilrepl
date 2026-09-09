@@ -128,8 +128,10 @@ public sealed class TypeParserTests
     {
         var ex = Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("StringBuilderr", Context));
         Assert.AreEqual("type 'StringBuilderr' not found (did you mean 'StringBuilder'?)", ex.Message);
-        Assert.AreEqual("type 'Cosnole' not found (did you mean 'Console'?)", Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("Cosnole", Context)).Message);
-        Assert.AreEqual("type 'Xonsole' not found (did you mean 'Console'?)", Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("Xonsole", Context)).Message);
+        Assert.AreEqual("type 'Cosnole' not found (did you mean 'Console'?)", Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse(
+            "Cosnole", Context)).Message);
+        Assert.AreEqual("type 'Xonsole' not found (did you mean 'Console'?)", Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse(
+            "Xonsole", Context)).Message);
     }
 
     /// <summary>
@@ -138,8 +140,10 @@ public sealed class TypeParserTests
     [TestMethod]
     public void Parse_NothingNear_KeepsTheLoadHint()
     {
-        Assert.AreEqual("type 'NoSuchTypeAnywhere' not found (load its assembly with .load)", Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("NoSuchTypeAnywhere", Context)).Message);
-        Assert.AreEqual("type 'Foo' not found in [Nope] (load its assembly with .load)", Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("[Nope]Foo", Context)).Message);
+        Assert.AreEqual("type 'NoSuchTypeAnywhere' not found (load its assembly with .load)", Assert.ThrowsExactly<ReplException>(()
+            => TypeParser.Parse("NoSuchTypeAnywhere", Context)).Message);
+        Assert.AreEqual("type 'Foo' not found in [Nope] (load its assembly with .load)", Assert.ThrowsExactly<ReplException>(()
+            => TypeParser.Parse("[Nope]Foo", Context)).Message);
     }
 
     /// <summary>

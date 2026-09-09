@@ -1,9 +1,12 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Identifies a line's meaning before execution in both live and speculative handling.
+/// </summary>
+/// <remarks>
 /// What one line means to the REPL before anything runs: the structural reading both the real
 /// handler and a preview of the buffer share.
-/// </summary>
+/// </remarks>
 public enum ReplLineKind
 {
     /// <summary>

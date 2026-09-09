@@ -3,17 +3,21 @@ using System.Reflection;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Captures the symbols and metadata leases needed to bind a preview independently of the live session.
+/// </summary>
+/// <remarks>
 /// Everything a preview binds against, captured from the session at one moment and never
 /// touched by the runtime again: the loaded assemblies as metadata under lease, the session's
 /// type table and declarations as symbols, its methods, and the generic parameters, locals, and
 /// arguments of the body being written. Binding against a snapshot loads nothing, resolves no
 /// name through the runtime, and declares nothing on a real block.
-/// </summary>
+/// </remarks>
 public sealed class BindingSnapshot : IDisposable
 {
     private readonly List<MetadataLease> _leases = [];
 
-    private BindingSnapshot(LoadedBindingCatalog catalog, IReadOnlyList<AssemblySymbolSource> searchOrder, AssemblySymbolSource? engine, AssemblySymbolSource? coreLib, HashSet<long> sessionAssemblies, SnapshotTypeTable types)
+    private BindingSnapshot(LoadedBindingCatalog catalog, IReadOnlyList<AssemblySymbolSource> searchOrder, AssemblySymbolSource? engine,
+        AssemblySymbolSource? coreLib, HashSet<long> sessionAssemblies, SnapshotTypeTable types)
     {
         Catalog = catalog;
         SearchOrder = searchOrder;
@@ -223,7 +227,8 @@ public sealed class BindingSnapshot : IDisposable
         var catalog = new LoadedBindingCatalog(ordered);
 
         var openPaths = new List<string>();
-        var dynamicEntries = context.Types.Entries.Where(e => RuntimeDefinitions.IsDynamic(e.Type) && context.Types.TryGetMembers(e.Type, out _)).ToList();
+        var dynamicEntries = context.Types.Entries.Where(e => RuntimeDefinitions.IsDynamic(e.Type) && context.Types.TryGetMembers(e.Type,
+            out _)).ToList();
         foreach (var (fullName, _) in dynamicEntries)
         {
             openPaths.Add(fullName);
@@ -239,21 +244,27 @@ public sealed class BindingSnapshot : IDisposable
             {
                 declaration = context.Types.TryGetMembers(type, out var members)
                     ? CopyDeclaration(symbol, type, members)
-                    : new DeclarationSymbol(symbol, symbol.IsValueType ? RuntimeSymbolImporter.Import(typeof(ValueType)) : TypeSymbol.Object, [], [], [], [], false) { IsPlaceholder = true };
+                    : new DeclarationSymbol(symbol, symbol.IsValueType ? RuntimeSymbolImporter.Import(typeof(
+                        ValueType)) : TypeSymbol.Object, [], [], [], [], false)
+                    { IsPlaceholder = true };
             }
 
             table.Add(fullName, symbol, declaration);
         }
 
-        var snapshot = new BindingSnapshot(catalog, searchOrder, AssemblySymbolSource.For(engineAssembly), AssemblySymbolSource.For(coreLibAssembly), sessionInstances, table)
+        var snapshot = new BindingSnapshot(catalog, searchOrder, AssemblySymbolSource.For(engineAssembly), AssemblySymbolSource.For(
+            coreLibAssembly), sessionInstances, table)
         {
-            SessionMethods = [.. context.Methods.Select(signature => RuntimeSymbolImporter.Import(signature, null, RuntimeDefinitions.OfDeclaration(signature, 0), MethodSymbolSource.Session, true))],
-            Generics = new SymbolGenericContext([.. context.Generics.TypeArguments.Select(RuntimeSymbolImporter.Import)], [.. context.Generics.MethodArguments.Select(RuntimeSymbolImporter.Import)]),
+            SessionMethods = [.. context.Methods.Select(signature => RuntimeSymbolImporter.Import(signature, null,
+                RuntimeDefinitions.OfDeclaration(signature, 0), MethodSymbolSource.Session, true))],
+            Generics = new SymbolGenericContext([.. context.Generics.TypeArguments.Select(RuntimeSymbolImporter.Import)],
+                [.. context.Generics.MethodArguments.Select(RuntimeSymbolImporter.Import)]),
             Locals = [.. context.Locals.Select(l => new VariableSymbol(RuntimeSymbolImporter.Import(l.Type), l.Name, l.IsPinned))],
             Arguments = [.. context.Arguments.Select(a => new VariableSymbol(RuntimeSymbolImporter.Import(a.Type), a.Name, false))],
             ThisIndex = context.ThisIndex,
             Inspecting = context.Inspecting,
-            Access = context.Scope is { } scope ? new AccessContext(scope.Type is null ? null : RuntimeSymbolImporter.Import(scope.Type), scope.Description) : AccessContext.Cell,
+            Access = context.Scope is { } scope ? new AccessContext(scope.Type is null ? null : RuntimeSymbolImporter.Import(scope.Type),
+                scope.Description) : AccessContext.Cell,
         };
         snapshot._leases.AddRange(leases);
         return snapshot;
@@ -273,7 +284,8 @@ public sealed class BindingSnapshot : IDisposable
             [.. members.Interfaces.Select(RuntimeSymbolImporter.Import)],
             parameters,
             members.Fields.Select(f => RuntimeSymbolImporter.Import(f.Declaration, symbol, RuntimeDefinitions.Of(f.Builder))),
-            members.Methods.Select(m => RuntimeSymbolImporter.Import(m.Signature, symbol, RuntimeDefinitions.Of(m.Builder), m.Declared ? MethodSymbolSource.Declared : MethodSymbolSource.Forward, m.Declared)),
+            members.Methods.Select(m => RuntimeSymbolImporter.Import(m.Signature, symbol, RuntimeDefinitions.Of(m.Builder),
+                m.Declared ? MethodSymbolSource.Declared : MethodSymbolSource.Forward, m.Declared)),
             members.DefineForward is not null);
     }
 

@@ -135,7 +135,8 @@ public sealed class SessionMethodTests
     public void AddLine_UnknownSessionMethod_ListsDefined()
     {
         var session = Load(Fib);
-        Assert.Contains("no method 'Fibb' in the session (did you mean 'Fib'?); defined: int32 Fib(int32)  (define one with .method)", Assert.ThrowsExactly<ReplException>(() => session.AddLine("call int32 Fibb(int32)")).Message);
+        Assert.Contains("no method 'Fibb' in the session (did you mean 'Fib'?); defined: int32 Fib(int32)  (define one with .method)",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine("call int32 Fibb(int32)")).Message);
     }
 
     /// <summary>

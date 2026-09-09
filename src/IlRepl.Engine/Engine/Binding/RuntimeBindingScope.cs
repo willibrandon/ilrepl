@@ -4,16 +4,20 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Binds accepted input using the live session and records exact runtime objects for emission.
+/// </summary>
+/// <remarks>
 /// The scope an actual line binds in: the session's type table, its resolver, its generic
 /// context, and reflection over what is loaded. This is the one scope that may load an
 /// assembly, resolve a name through the runtime, or declare a member ahead of its line, because
 /// the line it serves is being accepted. It remembers the runtime object behind every symbol it
 /// hands out, so <see cref="RuntimeBindingAdapter"/> can give a bound result back to the emitter
 /// as the object the resolver would have produced.
-/// </summary>
+/// </remarks>
 public sealed class RuntimeBindingScope : IBindingScope
 {
-    private const BindingFlags AllMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.FlattenHierarchy;
+    private const BindingFlags AllMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance
+        | BindingFlags.FlattenHierarchy;
 
     private readonly RuntimeBindingRegistry _registry;
     private readonly SymbolGenericContext _generics;
@@ -27,7 +31,8 @@ public sealed class RuntimeBindingScope : IBindingScope
         ArgumentNullException.ThrowIfNull(context);
         Context = context;
         _registry = new RuntimeBindingRegistry();
-        _generics = new SymbolGenericContext([.. context.Generics.TypeArguments.Select(ImportType)], [.. context.Generics.MethodArguments.Select(ImportType)]);
+        _generics = new SymbolGenericContext([.. context.Generics.TypeArguments.Select(ImportType)],
+            [.. context.Generics.MethodArguments.Select(ImportType)]);
     }
 
     private RuntimeBindingScope(ParseContext context, RuntimeBindingRegistry registry, SymbolGenericContext generics)
@@ -82,9 +87,12 @@ public sealed class RuntimeBindingScope : IBindingScope
     }
 
     /// <summary>
+    /// Returns the imported runtime type or reconstructs it from the symbol's components.
+    /// </summary>
+    /// <remarks>
     /// The runtime type a symbol stands for: the type it was imported from when it was, otherwise
     /// the type built from its parts the way the type parser built it.
-    /// </summary>
+    /// </remarks>
     /// <param name="symbol">The symbol.</param>
     /// <returns>The type.</returns>
     /// <exception cref="InvalidOperationException">The symbol names a definition no runtime object stands for.</exception>
@@ -101,7 +109,8 @@ public sealed class RuntimeBindingScope : IBindingScope
             case TypeSymbolKind.Primitive:
                 return CilPrimitives.TypeOf(symbol.Keyword!);
             case TypeSymbolKind.Named:
-                return RuntimeDefinitions.TypeOf(symbol.Definition) ?? throw new InvalidOperationException($"no runtime type stands for {SymbolRenderer.IlPath(symbol)}");
+                return RuntimeDefinitions.TypeOf(symbol.Definition) ?? throw new InvalidOperationException(
+                    $"no runtime type stands for {SymbolRenderer.IlPath(symbol)}");
             case TypeSymbolKind.Constructed:
                 return TypeOf(symbol.Element!).MakeGenericType([.. symbol.Arguments.Select(TypeOf)]);
             case TypeSymbolKind.TypeParameter:
@@ -139,12 +148,14 @@ public sealed class RuntimeBindingScope : IBindingScope
         if (isMethod)
         {
             var method = RuntimeDefinitions.MethodOf(symbol.Owner) as MethodInfo;
-            if (method is { IsGenericMethodDefinition: true } && method.GetGenericArguments() is { } parameters && symbol.Position < parameters.Length)
+            if (method is { IsGenericMethodDefinition: true } && method.GetGenericArguments() is { } parameters
+                && symbol.Position < parameters.Length)
             {
                 return parameters[symbol.Position];
             }
         }
-        else if (RuntimeDefinitions.TypeOf(symbol.Owner) is { IsGenericTypeDefinition: true } owner && owner.GetGenericArguments() is { } parameters && symbol.Position < parameters.Length)
+        else if (RuntimeDefinitions.TypeOf(symbol.Owner) is { IsGenericTypeDefinition: true } owner && owner.GetGenericArguments(
+            ) is { } parameters && symbol.Position < parameters.Length)
         {
             return parameters[symbol.Position];
         }
@@ -193,7 +204,8 @@ public sealed class RuntimeBindingScope : IBindingScope
     }
 
     /// <inheritdoc/>
-    public bool TryGetDeclaration(TypeSymbol declaring, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IDeclarationMembers? members)
+    public bool TryGetDeclaration(TypeSymbol declaring, [System.Diagnostics.CodeAnalysis.NotNullWhen(
+        true)] out IDeclarationMembers? members)
     {
         ArgumentNullException.ThrowIfNull(declaring);
         if (Context.Types.TryGetMembers(TypeOf(declaring), out var own))
@@ -425,7 +437,8 @@ public sealed class RuntimeBindingScope : IBindingScope
     {
         get
         {
-            _registry.SessionMethods ??= [.. Context.Methods.Select(signature => Register(RuntimeSymbolImporter.Import(signature, null, RuntimeDefinitions.OfDeclaration(signature, 0), MethodSymbolSource.Session, true), signature))];
+            _registry.SessionMethods ??= [.. Context.Methods.Select(signature => Register(RuntimeSymbolImporter.Import(signature, null,
+                RuntimeDefinitions.OfDeclaration(signature, 0), MethodSymbolSource.Session, true), signature))];
             return _registry.SessionMethods;
         }
     }
@@ -504,11 +517,14 @@ public sealed class RuntimeBindingScope : IBindingScope
         : null;
 
     /// <summary>
+    /// Records the runtime object represented by a declared or loaded member symbol.
+    /// </summary>
+    /// <remarks>
     /// Remembers the runtime object behind a member symbol. A declared member is keyed by its
     /// definition, because a reference sees it through whatever construction and instantiation
     /// it names; a loaded member is keyed by the whole symbol, because reflection hands out a
     /// different object for each construction.
-    /// </summary>
+    /// </remarks>
     internal MethodSymbol Register(MethodSymbol symbol, object payload)
     {
         if (payload is MethodBase method)

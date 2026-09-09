@@ -3,17 +3,23 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Finds nearby accessible names for typo diagnostics using bounded edit distance.
+/// </summary>
+/// <remarks>
 /// The did-you-mean a mistyped name gets: the nearest name by edit distance among the names the
 /// context could have meant. Completion never uses edit distance and a suggestion never uses
 /// completion's matching, so the two stay apart with their own thresholds.
-/// </summary>
+/// </remarks>
 public static class NameSuggestions
 {
     /// <summary>
+    /// Chooses the nearest name within the configured distance, preserving pool order for ties.
+    /// </summary>
+    /// <remarks>
     /// The nearest name in a pool, or null when nothing is near: a difference in case alone
     /// scores 0, anything else its Levenshtein distance, and only a distance under 3 counts. Ties
     /// keep the pool's order, so the answer is the same every time.
-    /// </summary>
+    /// </remarks>
     /// <param name="typo">The name as typed.</param>
     /// <param name="pool">The names that could have been meant, in a deterministic order.</param>
     /// <param name="accepts">An optional binding check performed before a name can become the nearest suggestion.</param>
@@ -31,7 +37,8 @@ public static class NameSuggestions
                 continue;
             }
 
-            var distance = string.Equals(name, typo, StringComparison.OrdinalIgnoreCase) ? 0 : EditDistance.WithinBound(typo, name, bestDistance - 1) ? EditDistance.Levenshtein(typo, name) : int.MaxValue;
+            var distance = string.Equals(name, typo, StringComparison.OrdinalIgnoreCase) ? 0 : EditDistance.WithinBound(typo, name,
+                bestDistance - 1) ? EditDistance.Levenshtein(typo, name) : int.MaxValue;
             if (distance < bestDistance && (accepts is null || accepts(name)))
             {
                 bestDistance = distance;
@@ -54,19 +61,23 @@ public static class NameSuggestions
     }
 
     /// <summary>
+    /// Finds the nearest accessible type and returns the shortest spelling that binds to it.
+    /// </summary>
+    /// <remarks>
     /// The nearest type to a mistyped name among the session's types and the loaded assemblies,
     /// spelled the shortest way that binds to it: a short name when it is unique, else its
     /// qualified path. Nothing prefilters by first letter, so a wrong first letter is still found.
     /// The pool is bounded by length, pruned by a banded distance, and filtered to the types the
     /// context can mention.
-    /// </summary>
+    /// </remarks>
     /// <param name="ilName">The name as written, arity suffix included.</param>
     /// <param name="assemblyHint">The assembly named in square brackets, or null.</param>
     /// <param name="index">The index of every type the snapshot can see.</param>
     /// <param name="where">The context the type would be used from.</param>
     /// <param name="scope">The scope that binds the spelling.</param>
     /// <returns>The suggestion, or null.</returns>
-    public static TypeSuggestion? NearestType(string ilName, string? assemblyHint, TypeIndex index, AccessContext where, IBindingScope scope)
+    public static TypeSuggestion? NearestType(string ilName, string? assemblyHint, TypeIndex index, AccessContext where,
+        IBindingScope scope)
     {
         ArgumentNullException.ThrowIfNull(ilName);
         ArgumentNullException.ThrowIfNull(index);
@@ -104,13 +115,15 @@ public static class NameSuggestions
                 continue;
             }
 
-            var distance = string.Equals(entry.Name, simple, StringComparison.OrdinalIgnoreCase) ? 0 : EditDistance.Levenshtein(simple, entry.Name);
+            var distance = string.Equals(entry.Name, simple, StringComparison.OrdinalIgnoreCase) ? 0 : EditDistance.Levenshtein(simple,
+                entry.Name);
             if (distance >= 3 || distance == 0 && entry.Name == simple)
             {
                 continue;
             }
 
-            var key = (Distance: distance, Common: TypeResolver.CommonNamespaces.Contains(entry.Namespace) ? 0 : 1, Session: entry.IsSession ? 0 : 1, Path: entry.IlPath);
+            var key = (Distance: distance, Common: TypeResolver.CommonNamespaces.Contains(entry.Namespace) ? 0 : 1,
+                Session: entry.IsSession ? 0 : 1, Path: entry.IlPath);
             if (best is null || Compare(key, bestKey) < 0)
             {
                 try
@@ -141,7 +154,8 @@ public static class NameSuggestions
         return new TypeSuggestion(best, bestSpelling!);
     }
 
-    private static int Compare((int Distance, int Common, int Session, string Path) a, (int Distance, int Common, int Session, string Path) b)
+    private static int Compare((int Distance, int Common, int Session, string Path) a, (int Distance, int Common, int Session,
+        string Path) b)
     {
         var byDistance = a.Distance.CompareTo(b.Distance);
         if (byDistance != 0)
@@ -160,9 +174,12 @@ public static class NameSuggestions
     }
 
     /// <summary>
+    /// Finds the shortest unambiguous spelling that binds to the requested type.
+    /// </summary>
+    /// <remarks>
     /// The shortest spelling of a type that binds to it in the scope: its short name, its
     /// qualified path, or its assembly-qualified path.
-    /// </summary>
+    /// </remarks>
     /// <param name="entry">The index entry.</param>
     /// <param name="target">The type.</param>
     /// <param name="index">The index.</param>

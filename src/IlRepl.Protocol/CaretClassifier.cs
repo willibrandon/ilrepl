@@ -53,6 +53,10 @@ public sealed class CaretClassifier
 
         var reader = new CilLineReader(_tokenizer, line, code, []);
         var site = new CaretWalk(_tokenizer, reader, line, caret).Line();
-        return site is null || site.Kind == CompletionSiteKind.None ? CompletionSite.None with { Caret = caret } : site with { Caret = caret };
+        return site is null || site.Kind == CompletionSiteKind.None ? CompletionSite.None with { Caret = caret } : site with
+        {
+            Caret
+            = caret
+        };
     }
 }

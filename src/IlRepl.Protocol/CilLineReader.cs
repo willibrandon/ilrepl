@@ -745,9 +745,12 @@ internal sealed class CilLineReader
     }
 
     /// <summary>
+    /// Recognizes a standalone member name followed by an optional generic argument list and parameter list.
+    /// </summary>
+    /// <remarks>
     /// Whether the name at an index is a member on its own: followed by its parameter list, by
     /// generic arguments and then the list, or by nothing.
-    /// </summary>
+    /// </remarks>
     /// <param name="i">The index.</param>
     /// <returns>True for a bare member name.</returns>
     internal bool IsBareMemberName(int i)

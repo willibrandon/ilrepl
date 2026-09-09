@@ -4,9 +4,12 @@ using IlRepl.Repl;
 namespace IlRepl.Tests.Protocol;
 
 /// <summary>
+/// Checks caret classification and complete replacement ranges across supported source forms.
+/// </summary>
+/// <remarks>
 /// Tests for <see cref="CaretClassifier"/>. A spelling carries the caret as <c>|</c>; the
 /// expected replacement is the text a row would replace, however far past the caret it runs.
-/// </summary>
+/// </remarks>
 [TestClass]
 public sealed class CaretClassifierTests
 {
@@ -17,7 +20,8 @@ public sealed class CaretClassifierTests
     /// <summary>
     /// The fixture files, one row each.
     /// </summary>
-    public static IEnumerable<object[]> Fixtures => Directory.GetFiles(FixtureDirectory, "*.il").Order(StringComparer.Ordinal).Select(f => new object[] { Path.GetFileName(f) });
+    public static IEnumerable<object[]> Fixtures => Directory.GetFiles(FixtureDirectory, "*.il").Order(StringComparer.Ordinal).Select(f
+        => new object[] { Path.GetFileName(f) });
 
     /// <summary>
     /// The method opcodes give a method site whose owner is the opcode.
@@ -271,9 +275,12 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
+    /// Replaces the entire member reference, including text beyond the caret, after <c>::</c>.
+    /// </summary>
+    /// <remarks>
     /// After <c>::</c> the range is the whole reference, so accepting a row replaces the reference
     /// once and leaves nothing of the old name behind the caret.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Classify_AfterDoubleColon_RangeIsTheWholeReference()
     {
@@ -313,9 +320,12 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
+    /// Replaces only the declaring type when an existing <c>::</c> follows it.
+    /// </summary>
+    /// <remarks>
     /// In the declaring type the range is the type alone and the <c>::</c> that follows is reported,
     /// so accepting a type inserts no second one.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Classify_InDeclaringType_RangeIsTheTypeAndNextIsDoubleColon()
     {
@@ -380,9 +390,12 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
+    /// Classifies the innermost generic argument with its owner and preceding argument count.
+    /// </summary>
+    /// <remarks>
     /// Inside <c>&lt;...&gt;</c> the site is a type argument that knows its owner, its position, and
     /// how many arguments come before it; the innermost list wins.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Classify_InsideGenericArguments_IsTypeArgument_CountingSupplied()
     {
@@ -428,9 +441,12 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
+    /// Offers signature completion after a generic method's closing angle bracket.
+    /// </summary>
+    /// <remarks>
     /// Right after a generic method's closed <c>&gt;</c>, with no parameter list yet, the site is
     /// the signature to come.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Classify_AfterClosingAngle_IsSignatureSite()
     {
@@ -448,8 +464,7 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
-    /// The items of <c>.locals</c>, <c>.args</c>, and <c>.typeargs</c> are type sites; names,
-    /// slots, and initializers are not.
+    /// Offers types in declaration lists while excluding variable names, slot numbers, and initializers.
     /// </summary>
     [TestMethod]
     public void Classify_LocalsAndArgs_TypesInsideParens()
@@ -487,9 +502,12 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
+    /// Offers method-header return, parameter, and constraint types while excluding names and modifiers.
+    /// </summary>
+    /// <remarks>
     /// A method header offers types for the return type, each parameter, and each constraint;
     /// the modifiers, the name, and the generic parameter names are not sites.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Classify_MethodHeader_ReturnParameterAndConstraintTypes()
     {
@@ -523,9 +541,12 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
+    /// Offers class-header base, interface, and constraint types while excluding the class name.
+    /// </summary>
+    /// <remarks>
     /// A class header offers types after <c>extends</c>, for each <c>implements</c> item, and for
     /// each constraint; the name is not a site.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Classify_ClassHeader_ExtendsImplementsAndConstraints()
     {
@@ -588,9 +609,12 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
+    /// Offers field and event types and complete accessor method signatures.
+    /// </summary>
+    /// <remarks>
     /// A field or event header offers its type; an accessor directive offers the open type's
     /// methods, with the whole declared signature as the range.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Classify_EventAndAccessors_AreSites()
     {
@@ -635,9 +659,12 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
+    /// Classifies both override members and the custom-attribute constructor before its initializer.
+    /// </summary>
+    /// <remarks>
     /// <c>.override</c> takes a member before and after <c>with</c>, each with its own owner;
     /// <c>.custom</c> takes a constructor and nothing after <c>=</c>.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Classify_OverrideAndCustom_AreMemberSites()
     {
@@ -674,7 +701,8 @@ public sealed class CaretClassifierTests
         Assert.AreEqual(".custom", customType.Owner);
         Assert.AreEqual("Obs", Replaced(line, customType));
 
-        Assert.AreEqual(CompletionSiteKind.None, Classify(".custom instance void ObsoleteAttribute::.ctor(string) = (01 0|0 00 00)", out _).Kind);
+        Assert.AreEqual(CompletionSiteKind.None, Classify(".custom instance void ObsoleteAttribute::.ctor(string) = (01 0|0 00 00)",
+            out _).Kind);
         Assert.AreEqual(CompletionSiteKind.None, Classify(".custom instance void ObsoleteAttribute::.ctor(string) = |", out _).Kind);
         Assert.AreEqual(CompletionSiteKind.None, Classify(".override Object::ToString wi|th method Point::Show", out _).Kind);
     }
@@ -706,9 +734,12 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
+    /// Classifies session and qualified method targets for disassembly commands.
+    /// </summary>
+    /// <remarks>
     /// <c>.dis</c> and <c>.disassemble</c> take a method: a session method as a member head, or a
     /// type's member after <c>::</c>.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Classify_Dis_IsMethodSite()
     {
@@ -802,8 +833,7 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
-    /// A comment after the operand, the other arguments of a list, and the suffixes of a type stay
-    /// outside the range.
+    /// Preserves trailing comments, neighboring arguments, and type suffixes outside replacement ranges.
     /// </summary>
     [TestMethod]
     public void Classify_TrailingCommentAndOtherArguments_StayOutsideTheRange()
@@ -842,9 +872,12 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
+    /// Distinguishes incomplete components from declarations ready for full confirmation.
+    /// </summary>
+    /// <remarks>
     /// A declaration missing what its parser needs reports itself incomplete, so a completed
     /// component is confirmed alone; a complete one reports complete.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Classify_UnfinishedDeclarations_ReportIncomplete()
     {
@@ -880,7 +913,8 @@ public sealed class CaretClassifierTests
     [TestMethod]
     public void Classify_IntegerStringAndFloatOperands_AreNoSites()
     {
-        foreach (var spelling in new[] { "ldc.i4 4|2", "ldc.i4.s |", "ldc.i8 1|", "ldc.r8 1.|5", "ldc.r4 |", "ldstr \"ab|c\"", "ldstr \"abc\"|", "ldstr |", "nop|", "nop |", "add |", "ret|", "ldloc.0 |", "ldarg.1|", "unaligned. |", "unaligned. 4|" })
+        foreach (var spelling in new[] { "ldc.i4 4|2", "ldc.i4.s |", "ldc.i8 1|", "ldc.r8 1.|5", "ldc.r4 |", "ldstr \"ab|c\"",
+            "ldstr \"abc\"|", "ldstr |", "nop|", "nop |", "add |", "ret|", "ldloc.0 |", "ldarg.1|", "unaligned. |", "unaligned. 4|" })
         {
             var site = Classify(spelling, out _);
             Assert.AreEqual(CompletionSiteKind.None, site.Kind, spelling);
@@ -894,16 +928,21 @@ public sealed class CaretClassifierTests
     [TestMethod]
     public void Classify_FirstWord_IsNoSite()
     {
-        foreach (var spelling in new[] { "|", "ca|ll", "call|", "|call Console::WriteLine()", "cal|l Console::WriteLine()", ".loc|als init (int32 a)", ".meth|od", "bo|x", "L1: ca|ll", "L1: |", "   |", "  bo|x String", "catch|", "cat|ch Exception", "}|", "{|", "|}" })
+        foreach (var spelling in new[] { "|", "ca|ll", "call|", "|call Console::WriteLine()", "cal|l Console::WriteLine()",
+            ".loc|als init (int32 a)", ".meth|od", "bo|x", "L1: ca|ll", "L1: |", "   |", "  bo|x String", "catch|", "cat|ch Exception",
+            "}|", "{|", "|}" })
         {
             Assert.AreEqual(CompletionSiteKind.None, Classify(spelling, out _).Kind, spelling);
         }
     }
 
     /// <summary>
+    /// Excludes strings and comments while preserving comment state inherited from preceding lines.
+    /// </summary>
+    /// <remarks>
     /// A caret inside a comment or a string is never a site, and a block comment open from an
     /// earlier line makes the whole line a comment until it closes.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Classify_CommentsAndStrings_AreSkipped()
     {
@@ -949,9 +988,12 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
+    /// Checks every fixture caret produces a valid bounded site without throwing.
+    /// </summary>
+    /// <remarks>
     /// Every caret position of every highlight fixture line classifies without throwing and
     /// answers a site inside the line.
-    /// </summary>
+    /// </remarks>
     /// <param name="file">The fixture file.</param>
     [TestMethod]
     [DynamicData(nameof(Fixtures))]
@@ -970,14 +1012,17 @@ public sealed class CaretClassifierTests
             {
                 var where = $"{file}: '{line}' at {caret}";
                 var site = Classifier.Classify(line, caret, before);
-                Assert.IsTrue(site.ReplaceStart >= 0 && site.ReplaceEnd <= line.Length, $"{where}: range {site.ReplaceStart}+{site.ReplaceLength}");
+                Assert.IsTrue(site.ReplaceStart >= 0 && site.ReplaceEnd <= line.Length,
+                    $"{where}: range {site.ReplaceStart}+{site.ReplaceLength}");
                 Assert.AreEqual(caret, site.Caret, where);
                 if (site.IsOperand)
                 {
                     sites++;
                     Assert.IsLessThanOrEqualTo(caret, site.ReplaceStart, $"{where}: the range starts after the caret");
-                    Assert.IsLessThanOrEqualTo(caret - site.ReplaceStart, site.Prefix.Length, $"{where}: prefix '{site.Prefix}' is longer than the range before the caret");
-                    Assert.IsTrue(line.AsSpan(0, caret).EndsWith(site.Prefix), $"{where}: prefix '{site.Prefix}' is not the text before the caret");
+                    Assert.IsLessThanOrEqualTo(caret - site.ReplaceStart, site.Prefix.Length,
+                        $"{where}: prefix '{site.Prefix}' is longer than the range before the caret");
+                    Assert.IsTrue(line.AsSpan(0, caret).EndsWith(site.Prefix),
+                        $"{where}: prefix '{site.Prefix}' is not the text before the caret");
                 }
                 else
                 {
@@ -986,7 +1031,8 @@ public sealed class CaretClassifierTests
             }
         }
 
-        Assert.IsTrue(sites > 0 || file is "comments.il" or "literals.il" or "malformed.il" or "commands.il" or "labels.il", $"{file}: no site in any line");
+        Assert.IsTrue(sites > 0 || file is "comments.il" or "literals.il" or "malformed.il" or "commands.il" or "labels.il",
+            $"{file}: no site in any line");
     }
 
     /// <summary>

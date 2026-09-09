@@ -1,11 +1,14 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Supplies type operations and markers to the shared stack-transfer rules.
+/// </summary>
+/// <remarks>
 /// The questions the stack transfer asks of a type representation, so the same per-opcode rules
 /// run over runtime types for an actual line and over symbols for a preview of one. Markers stand
 /// for what the model cannot type exactly: a null reference, an object reference it lost track of,
 /// and a boxed value that remembers what it holds.
-/// </summary>
+/// </remarks>
 /// <typeparam name="T">The type representation.</typeparam>
 public interface IStackTypeAlgebra<T> where T : class
 {

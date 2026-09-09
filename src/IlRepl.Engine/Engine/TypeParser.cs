@@ -3,12 +3,15 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Parses ILAsm type syntax and binds it to a runtime type through the shared grammar and binder.
+/// </summary>
+/// <remarks>
 /// Parses ILAsm type syntax into <see cref="Type"/> instances: primitives, <c>[assembly]Namespace.Type</c>,
 /// nested <c>Outer/Inner</c>, generic instantiations, <c>!N</c> and <c>!!N</c> parameters, arrays, byrefs,
 /// pointers, <c>pinned</c>, <c>modreq</c>/<c>modopt</c>, and <c>method</c> function pointer signatures.
 /// The grammar is <see cref="CilSyntaxParser"/>'s and the decisions are <see cref="SymbolBinder"/>'s;
 /// this entry point binds in the runtime scope and hands back the runtime type.
-/// </summary>
+/// </remarks>
 public static class TypeParser
 {
     /// <summary>
@@ -85,7 +88,8 @@ public static class TypeParser
         return Bind(syntax, context, out pinned, out requiredModifiers, out optionalModifiers);
     }
 
-    private static Type Bind(TypeSyntax syntax, ParseContext context, out bool pinned, out List<Type> requiredModifiers, out List<Type> optionalModifiers)
+    private static Type Bind(TypeSyntax syntax, ParseContext context, out bool pinned, out List<Type> requiredModifiers,
+        out List<Type> optionalModifiers)
     {
         var scope = new RuntimeBindingScope(context);
         var bound = SymbolBinder.BindType(syntax, scope);

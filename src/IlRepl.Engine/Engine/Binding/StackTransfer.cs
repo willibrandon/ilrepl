@@ -3,10 +3,13 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Computes instruction stack effects using shared rules for runtime types and preview symbols.
+/// </summary>
+/// <remarks>
 /// The stack effect of one instruction: how many values it pops, computed from the opcode and its
 /// operand, and what it pushes, computed from the opcode, the operand, and what was popped. One
 /// set of rules serves the runtime stack model and the completer's preview of a candidate.
-/// </summary>
+/// </remarks>
 /// <typeparam name="T">The type representation.</typeparam>
 public sealed class StackTransfer<T> where T : class
 {
@@ -163,9 +166,11 @@ public sealed class StackTransfer<T> where T : class
             case "not":
                 return [popped[0]];
             case "ldind.ref":
-                return [popped.Count > 0 && popped[0] is { } indirect && (_types.IsByRef(indirect) || _types.IsPointer(indirect)) ? _types.ElementOf(indirect) : _types.UnknownReference];
+                return [popped.Count > 0 && popped[0] is { } indirect && (_types.IsByRef(indirect) || _types.IsPointer(
+                    indirect)) ? _types.ElementOf(indirect) : _types.UnknownReference];
             case "ldelem.ref":
-                return [popped.Count > 1 && popped[0] is { } array && _types.IsArray(array) ? _types.ElementOf(array) : _types.UnknownReference];
+                return [popped.Count > 1 && popped[0] is { } array && _types.IsArray(array) ? _types.ElementOf(
+                    array) : _types.UnknownReference];
             default:
                 break;
         }
@@ -201,9 +206,12 @@ public sealed class StackTransfer<T> where T : class
     }
 
     /// <summary>
+    /// Computes the stack entry produced by boxing while preserving known value-type information.
+    /// </summary>
+    /// <remarks>
     /// The entry <c>box</c> pushes: boxing a reference type is the identity, a generic parameter
     /// could be either, and only a known value type becomes a boxed entry that remembers what it holds.
-    /// </summary>
+    /// </remarks>
     /// <param name="operand">The boxed type.</param>
     /// <returns>The stack entry.</returns>
     public T Box(T operand)

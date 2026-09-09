@@ -4,11 +4,14 @@ using IlRepl.Repl;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Classifies a REPL line without executing it, using the same rules for live input and previews.
+/// </summary>
+/// <remarks>
 /// Reads a line the way <see cref="ReplCore"/> reads it, without doing anything: comment, blank,
 /// command, one of the three meanings of <c>ret</c>, or a line for the session. The real handler
 /// and a preview of the unsent buffer classify through this one place, so a preview never takes a
 /// line for something the handler would not.
-/// </summary>
+/// </remarks>
 public static class ReplLineDispatcher
 {
     /// <summary>

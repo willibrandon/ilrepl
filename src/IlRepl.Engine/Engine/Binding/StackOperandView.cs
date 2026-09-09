@@ -3,11 +3,14 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Provides the opcode and operand facts required by stack-transfer rules.
+/// </summary>
+/// <remarks>
 /// What the stack transfer needs to know about one instruction, whatever its operand is made of:
 /// the opcode, the types the operand names, how many arguments a call pops, and which slot a
 /// load reads. The runtime stack model builds it from an <see cref="Instruction"/>; a preview
 /// builds it from a <see cref="BoundInstruction"/>.
-/// </summary>
+/// </remarks>
 /// <typeparam name="T">The type representation.</typeparam>
 public sealed record StackOperandView<T> where T : class
 {

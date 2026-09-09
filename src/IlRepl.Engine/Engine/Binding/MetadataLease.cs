@@ -3,11 +3,14 @@ using System.Reflection;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Keeps an assembly alive while a snapshot reads its raw metadata.
+/// </summary>
+/// <remarks>
 /// Keeps an assembly alive while its raw metadata is read. The reader over a loaded assembly's
 /// metadata section is valid only while the assembly stays loaded; a lease is the strong
 /// reference that guarantees it, and a snapshot holds one per assembly it reads for as long as
 /// the snapshot lives.
-/// </summary>
+/// </remarks>
 public sealed class MetadataLease : IDisposable
 {
     private Assembly? _assembly;

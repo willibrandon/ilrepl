@@ -4,11 +4,14 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Projects bound symbols onto their exact runtime objects for emission and stack simulation.
+/// </summary>
+/// <remarks>
 /// Projects what the binder bound in a <see cref="RuntimeBindingScope"/> onto the objects the
 /// emitter and the stack model take: a <see cref="Type"/>, a <see cref="ResolvedMethod"/>, a
 /// <see cref="FieldInfo"/>. The projection is by the exact identity the scope recorded, never by a
 /// fresh name lookup, so a bound reference means the same member when it is emitted.
-/// </summary>
+/// </remarks>
 public sealed class RuntimeBindingAdapter
 {
     private readonly RuntimeBindingScope _scope;
@@ -35,10 +38,13 @@ public sealed class RuntimeBindingAdapter
     }
 
     /// <summary>
+    /// Reconstructs a runtime type from registered definitions without a binding scope.
+    /// </summary>
+    /// <remarks>
     /// The runtime type a symbol stands for, built from the definitions the runtime registry
     /// remembers, with no scope: for symbols that were imported from runtime types and are
     /// projected back outside a binding.
-    /// </summary>
+    /// </remarks>
     /// <param name="symbol">The symbol.</param>
     /// <returns>The type.</returns>
     /// <exception cref="InvalidOperationException">The symbol names a definition no runtime object stands for.</exception>
@@ -50,13 +56,15 @@ public sealed class RuntimeBindingAdapter
             case TypeSymbolKind.Primitive:
                 return CilPrimitives.TypeOf(symbol.Keyword!);
             case TypeSymbolKind.Named:
-                return RuntimeDefinitions.TypeOf(symbol.Definition) ?? throw new InvalidOperationException($"no runtime type stands for {SymbolRenderer.IlPath(symbol)}");
+                return RuntimeDefinitions.TypeOf(symbol.Definition) ?? throw new InvalidOperationException(
+                    $"no runtime type stands for {SymbolRenderer.IlPath(symbol)}");
             case TypeSymbolKind.Constructed:
                 return Materialize(symbol.Element!).MakeGenericType([.. symbol.Arguments.Select(Materialize)]);
             case TypeSymbolKind.TypeParameter:
             case TypeSymbolKind.MethodParameter:
                 return RuntimeDefinitions.ParameterOf(symbol.Owner, symbol.Kind == TypeSymbolKind.MethodParameter, symbol.Position)
-                    ?? throw new InvalidOperationException($"no runtime type stands for the generic parameter {SymbolRenderer.Pretty(symbol)}");
+                    ?? throw new InvalidOperationException(
+                        $"no runtime type stands for the generic parameter {SymbolRenderer.Pretty(symbol)}");
             case TypeSymbolKind.SzArray:
                 return Materialize(symbol.Element!).MakeArrayType();
             case TypeSymbolKind.Array:
@@ -107,7 +115,8 @@ public sealed class RuntimeBindingAdapter
                 var effective = declared.Signature with
                 {
                     ReturnType = ToType(method.ReturnType),
-                    Parameters = [.. declared.Signature.Parameters.Select((p, i) => p with { Type = ToType(method.Parameters[i].Type) })],
+                    Parameters = [.. declared.Signature.Parameters.Select((p, i)
+                            => p with { Type = ToType(method.Parameters[i].Type) })],
                 };
                 return new ResolvedMethod(declared.Builder, effective, declaringType)
                 {
@@ -169,7 +178,8 @@ public sealed class RuntimeBindingAdapter
             OperandKind.Method => ToResolvedMethod(operand.Method!),
             OperandKind.Field => ToField(operand.Field!),
             OperandKind.Signature => ToCalliSignature(operand.Signature!),
-            OperandKind.Token => operand.Type is not null ? ToType(operand.Type) : operand.Field is not null ? ToField(operand.Field) : ToResolvedMethod(operand.Method!),
+            OperandKind.Token => operand.Type is not null ? ToType(operand.Type) : operand.Field is not null ? ToField(
+                operand.Field) : ToResolvedMethod(operand.Method!),
             _ => operand.Value,
         };
         return new Instruction
@@ -197,7 +207,8 @@ public sealed class RuntimeBindingAdapter
             case RuntimeDeclaredField declared:
             {
                 var declaringType = ToType(field.DeclaringType);
-                return declaringType.IsGenericType && !declaringType.IsGenericTypeDefinition && declared.Builder is FieldBuilder fieldBuilder
+                return declaringType.IsGenericType && !declaringType.IsGenericTypeDefinition
+                    && declared.Builder is FieldBuilder fieldBuilder
                     ? TypeBuilder.GetField(declaringType, fieldBuilder)
                     : declared.Builder;
             }

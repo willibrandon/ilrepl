@@ -95,5 +95,6 @@ public static class SessionTransitionRules
     /// <param name="methodOpen">True while a method block is open.</param>
     /// <param name="typeOpen">True while a class block is open.</param>
     /// <returns>The clear target.</returns>
-    public static ClearTarget ClearTargetOf(bool methodOpen, bool typeOpen) => methodOpen ? ClearTarget.Method : typeOpen ? ClearTarget.Type : ClearTarget.Cell;
+    public static ClearTarget ClearTargetOf(bool methodOpen, bool typeOpen)
+        => methodOpen ? ClearTarget.Method : typeOpen ? ClearTarget.Type : ClearTarget.Cell;
 }

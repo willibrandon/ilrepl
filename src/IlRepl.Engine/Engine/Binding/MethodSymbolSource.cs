@@ -1,9 +1,12 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Identifies the source used when emitting a method or field reference.
+/// </summary>
+/// <remarks>
 /// Where a <see cref="MethodSymbol"/> or <see cref="FieldSymbol"/> comes from, which decides how a
 /// reference to it is emitted.
-/// </summary>
+/// </remarks>
 public enum MethodSymbolSource
 {
     /// <summary>

@@ -10,13 +10,16 @@ using TA = Mono.Cecil.TypeAttributes;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
+/// Compares contextual external-member eligibility against independent runtime execution.
+/// </summary>
+/// <remarks>
 /// A cell and a session type reach members of other assemblies only as far as the runtime lets
 /// them, because their assemblies skip access checks for session assemblies alone. This harness
 /// builds an assembly with every access word on fields, methods, nested types, and a generic
 /// method instantiated over each nested type, references each from the cell and from a session
 /// type derived from the target, and requires the rule's verdict to equal the runtime's: the
 /// reference compiles and runs, or the JIT refuses it.
-/// </summary>
+/// </remarks>
 [TestClass]
 public sealed class FrameworkAccessTests
 {
@@ -43,7 +46,8 @@ public sealed class FrameworkAccessTests
         var session = new Session();
         var target = session.Resolver.LoadImage(BuildTarget(name));
         var t = target.GetType("T")!;
-        foreach (var line in IlLines.Expand(".class public Derived extends [" + name + "]T {", ".method public instance void .ctor() { ldarg.0; call instance void [" + name + "]T::.ctor(); ret }", "}"))
+        foreach (var line in IlLines.Expand(".class public Derived extends [" + name + "]T {",
+            ".method public instance void .ctor() { ldarg.0; call instance void [" + name + "]T::.ctor(); ret }", "}"))
         {
             session.AddLine(line);
         }
@@ -68,7 +72,8 @@ public sealed class FrameworkAccessTests
                     var rule = RuleVerdict(t, kind, word, fromDerived ? derived : cell, facts);
                     if ((runtime is null) != (rule is null))
                     {
-                        mismatches.Add($"{(fromDerived ? "derived" : "cell")} {kind} {word}: runtime {runtime ?? "ok"}, rule {rule ?? "ok"}");
+                        mismatches.Add(
+                            $"{(fromDerived ? "derived" : "cell")} {kind} {word}: runtime {runtime ?? "ok"}, rule {rule ?? "ok"}");
                     }
                 }
             }
@@ -80,7 +85,8 @@ public sealed class FrameworkAccessTests
 
     private static string? RuleVerdict(Type t, string kind, string word, AccessContext where, AccessFacts facts)
     {
-        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance
+            | BindingFlags.DeclaredOnly;
         switch (kind)
         {
             case "SF":
@@ -101,18 +107,23 @@ public sealed class FrameworkAccessTests
     }
 
     /// <summary>
+    /// Executes a reference from a cell or derived session type and returns any runtime refusal.
+    /// </summary>
+    /// <remarks>
     /// Compiles and runs the reference the way a user would send it: in the cell, or in a method of
     /// a class derived from the target. Null when it ran; the failure otherwise.
-    /// </summary>
+    /// </remarks>
     private static string? RuntimeVerdict(Session session, string assembly, string kind, string word, bool fromDerived, int index)
     {
         var target = $"[{assembly}]T";
         string[] body = kind switch
         {
             "SF" => [$"ldsfld int32 {target}::SF_{word}"],
-            "F" => fromDerived ? [$"ldarg.0", $"ldfld int32 {target}::F_{word}"] : [$"newobj instance void {target}::.ctor()", $"ldfld int32 {target}::F_{word}"],
+            "F" => fromDerived ? [$"ldarg.0", $"ldfld int32 {target}::F_{word}"] : [$"newobj instance void {target}::.ctor()",
+                $"ldfld int32 {target}::F_{word}"],
             "SM" => [$"call int32 {target}::SM_{word}()"],
-            "M" => fromDerived ? [$"ldarg.0", $"call instance int32 {target}::M_{word}()"] : [$"newobj instance void {target}::.ctor()", $"call instance int32 {target}::M_{word}()"],
+            "M" => fromDerived ? [$"ldarg.0", $"call instance int32 {target}::M_{word}()"] : [$"newobj instance void {target}::.ctor()",
+                $"call instance int32 {target}::M_{word}()"],
             "NT" => [$"call int32 {target}/NT_{word}::Hello()"],
             _ => [$"call int32 {target}::Echo<class {target}/NT_{word}>()"],
         };
@@ -121,7 +132,8 @@ public sealed class FrameworkAccessTests
             if (fromDerived)
             {
                 var className = $"Probe{index}";
-                foreach (var line in IlLines.Expand($".class public {className} extends {target} {{", $".method public instance void .ctor() {{ ldarg.0; call instance void {target}::.ctor(); ret }}"))
+                foreach (var line in IlLines.Expand($".class public {className} extends {target} {{",
+                    $".method public instance void .ctor() {{ ldarg.0; call instance void {target}::.ctor(); ret }}"))
                 {
                     session.AddLine(line);
                 }
@@ -150,7 +162,9 @@ public sealed class FrameworkAccessTests
             var result = session.Run();
             return result.Value is int ? null : "no value";
         }
-        catch (Exception ex) when (ex is ReplException or CellException or MemberAccessException or TypeLoadException or InvalidProgramException or TypeInitializationException)
+        catch (Exception ex) when (
+            ex is ReplException or CellException or MemberAccessException or TypeLoadException or InvalidProgramException
+                or TypeInitializationException)
         {
             session.ClearCell();
             if (session.OpenType is not null)
@@ -164,7 +178,8 @@ public sealed class FrameworkAccessTests
 
     private static byte[] BuildTarget(string name)
     {
-        var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0, 0, 0)), "target", ModuleKind.Dll);
+        var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0, 0, 0)), "target",
+            ModuleKind.Dll);
         var module = assembly.MainModule;
         var t = new TypeDefinition("", "T", TA.Public | TA.Class, module.ImportReference(typeof(object)));
         module.Types.Add(t);
@@ -190,7 +205,8 @@ public sealed class FrameworkAccessTests
             EmitReturnOne(m);
             t.Methods.Add(sm);
             t.Methods.Add(m);
-            var nt = new TypeDefinition("", "NT_" + word, nestedVisibility | TA.Class | TA.Abstract | TA.Sealed, module.ImportReference(typeof(object)));
+            var nt = new TypeDefinition("", "NT_" + word, nestedVisibility | TA.Class | TA.Abstract | TA.Sealed, module.ImportReference(
+                typeof(object)));
             var hello = new MethodDefinition("Hello", MA.Public | MA.Static, module.TypeSystem.Int32);
             EmitReturnOne(hello);
             nt.Methods.Add(hello);

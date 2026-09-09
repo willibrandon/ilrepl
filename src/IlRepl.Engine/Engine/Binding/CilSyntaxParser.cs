@@ -4,6 +4,9 @@ using System.Text;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Parses ILAsm type, member, and signature syntax while preserving source positions without resolving names.
+/// </summary>
+/// <remarks>
 /// Reads the type and member grammar of ILAsm into syntax trees that keep their positions, and
 /// looks nothing up. The type grammar: <c>[class|valuetype] ([asm])Name[&lt;Args&gt;]</c>, primitives,
 /// <c>!N</c> and <c>!!N</c>, <c>method RetType *(Params)</c>, and the suffixes <c>[]</c>, <c>[,]</c>,
@@ -11,7 +14,7 @@ namespace IlRepl.Engine.Binding;
 /// <c>[instance] [vararg] [RetType] Declaring::Name[&lt;Args&gt;][(Params)]</c>, and the session form
 /// <c>[RetType] Name(Params)</c>. The runtime parsers and the completer read through this one
 /// grammar, so a spelling means the same thing to both.
-/// </summary>
+/// </remarks>
 public static partial class CilSyntaxParser
 {
     /// <summary>
@@ -292,7 +295,16 @@ public static partial class CilSyntaxParser
                 var inner = s.Substring(pos + 1, close - pos - 1).Replace(" ", "", StringComparison.Ordinal);
                 var rank = inner.Length == 0 ? 1 : inner.Count(c => c == ',') + 1;
                 pos = close + 1;
-                syntax = new TypeSyntax { Kind = TypeSyntaxKind.Array, Start = start, End = pos, Element = syntax, Rank = rank, IsVector = inner.Length == 0, Shape = inner };
+                syntax = new TypeSyntax
+                {
+                    Kind = TypeSyntaxKind.Array,
+                    Start = start,
+                    End = pos,
+                    Element = syntax,
+                    Rank = rank,
+                    IsVector = inner.Length == 0,
+                    Shape = inner
+                };
                 continue;
             }
 
@@ -334,7 +346,15 @@ public static partial class CilSyntaxParser
                 }
 
                 pos++;
-                syntax = new TypeSyntax { Kind = TypeSyntaxKind.Modified, Start = start, End = pos, Element = syntax, Modifier = modifier, IsRequired = required };
+                syntax = new TypeSyntax
+                {
+                    Kind = TypeSyntaxKind.Modified,
+                    Start = start,
+                    End = pos,
+                    Element = syntax,
+                    Modifier = modifier,
+                    IsRequired = required
+                };
             }
             else
             {
@@ -456,9 +476,12 @@ public static partial class CilSyntaxParser
     }
 
     /// <summary>
+    /// Parses a qualified or session method reference.
+    /// </summary>
+    /// <remarks>
     /// Parses a method reference: <c>[instance] [vararg] [RetType] Declaring::Name[&lt;Args&gt;][(Params)]</c>,
     /// or the session form <c>[RetType] Name(Params)</c> when there is no <c>::</c>.
-    /// </summary>
+    /// </remarks>
     /// <param name="text">The reference text, comments removed.</param>
     /// <returns>The syntax.</returns>
     /// <exception cref="ReplException">The reference is malformed.</exception>
@@ -469,8 +492,7 @@ public static partial class CilSyntaxParser
     }
 
     /// <summary>
-    /// Parses the method reference between two positions of a longer text, so its parts keep
-    /// positions in that text.
+    /// Parses a method reference within a source range while retaining its original positions.
     /// </summary>
     /// <param name="s">The text.</param>
     /// <param name="start">The index the reference starts at.</param>
@@ -779,9 +801,12 @@ public static partial class CilSyntaxParser
     }
 
     /// <summary>
+    /// Reads the declaring type and optional return type preceding <c>::</c>.
+    /// </summary>
+    /// <remarks>
     /// Reads the one or two types before a <c>::</c>: the declaring type alone, or the return
     /// type and then the declaring type.
-    /// </summary>
+    /// </remarks>
     private static (TypeSyntax? ReturnType, TypeSyntax Declaring) ParseLeft(string s, int start, int end)
     {
         var pos = start;
@@ -804,9 +829,12 @@ public static partial class CilSyntaxParser
     }
 
     /// <summary>
+    /// Parses a managed or unmanaged <c>calli</c> signature.
+    /// </summary>
+    /// <remarks>
     /// Parses a <c>calli</c> signature: <c>[instance] [vararg] RetType(Params)</c> for managed
     /// pointers and <c>unmanaged [cdecl|stdcall|thiscall|fastcall] RetType(Params)</c> for native ones.
-    /// </summary>
+    /// </remarks>
     /// <param name="text">The signature text.</param>
     /// <returns>The syntax.</returns>
     /// <exception cref="ReplException">The signature is malformed.</exception>
@@ -890,9 +918,12 @@ public static partial class CilSyntaxParser
     }
 
     /// <summary>
+    /// Parses an opcode and its complete operand without labels or comments.
+    /// </summary>
+    /// <remarks>
     /// Parses an instruction, opcode plus operand, with no labels or comments: the opcode decides
     /// what shape the operand takes, and a type, member, or signature operand is read in full.
-    /// </summary>
+    /// </remarks>
     /// <param name="text">The instruction text.</param>
     /// <returns>The syntax.</returns>
     /// <exception cref="ReplException">The opcode is unknown or the operand is malformed.</exception>
@@ -971,7 +1002,11 @@ public static partial class CilSyntaxParser
 
             case System.Reflection.Emit.OperandType.ShortInlineVar:
             case System.Reflection.Emit.OperandType.InlineVar:
-                operand = Plain(OperandSyntaxKind.Variable) with { IsArgument = opName.StartsWith("ldarg", StringComparison.Ordinal) || opName.StartsWith("starg", StringComparison.Ordinal) };
+                operand = Plain(OperandSyntaxKind.Variable) with
+                {
+                    IsArgument = opName.StartsWith("ldarg", StringComparison.Ordinal)
+                    || opName.StartsWith("starg", StringComparison.Ordinal)
+                };
                 break;
             case System.Reflection.Emit.OperandType.InlineType:
                 if (operandText.Length == 0)
@@ -1000,11 +1035,21 @@ public static partial class CilSyntaxParser
             case System.Reflection.Emit.OperandType.InlineTok:
                 if (operandText.StartsWith("method ", StringComparison.Ordinal))
                 {
-                    operand = Plain(OperandSyntaxKind.Token) with { IsMethodToken = true, Member = ParseMethodReferenceIn(text, operandStart + 7, operandEnd) };
+                    operand = Plain(OperandSyntaxKind.Token) with
+                    {
+                        IsMethodToken = true,
+                        Member = ParseMethodReferenceIn(text,
+                        operandStart + 7, operandEnd)
+                    };
                 }
                 else if (operandText.StartsWith("field ", StringComparison.Ordinal))
                 {
-                    operand = Plain(OperandSyntaxKind.Token) with { IsFieldToken = true, Member = ParseFieldReferenceIn(text, operandStart + 6, operandEnd) };
+                    operand = Plain(OperandSyntaxKind.Token) with
+                    {
+                        IsFieldToken = true,
+                        Member = ParseFieldReferenceIn(text, operandStart
+                        + 6, operandEnd)
+                    };
                 }
                 else
                 {
@@ -1071,9 +1116,12 @@ public static partial class CilSyntaxParser
     }
 
     /// <summary>
+    /// Reads a quoted or unquoted member name at the requested position.
+    /// </summary>
+    /// <remarks>
     /// Reads the member name at a position: a quoted name up to its closing quote, otherwise
     /// everything before a generic argument list, a parameter list, or whitespace.
-    /// </summary>
+    /// </remarks>
     private static (string Name, bool Quoted, int End) ReadMemberName(string s, int start, int end)
     {
         if (start < end && s[start] == '\'')
@@ -1114,9 +1162,12 @@ public static partial class CilSyntaxParser
     }
 
     /// <summary>
+    /// Recognizes a generic arity token such as <c>[1]</c> separately from an assembly-qualified type.
+    /// </summary>
+    /// <remarks>
     /// The arity form of a generic argument list: a bracketed integer alone, <c>[1]</c>, which is
     /// not a type, unlike <c>[System.Runtime]System.String[]</c>.
-    /// </summary>
+    /// </remarks>
     [System.Text.RegularExpressions.GeneratedRegex(@"^\s*\[\s*([0-9]+)\s*\]\s*$")]
     private static partial System.Text.RegularExpressions.Regex ArityMarker();
 
@@ -1184,10 +1235,13 @@ public static partial class CilSyntaxParser
     }
 
     /// <summary>
+    /// Splits a source range into comma-separated items while respecting nested brackets and quotes.
+    /// </summary>
+    /// <remarks>
     /// Splits a comma-separated list between two positions into the ranges of its items, respecting
     /// nested brackets and quotes. An item's range keeps its surrounding whitespace; an empty
     /// trailing item is dropped, as <see cref="SplitTopLevel"/> drops it.
-    /// </summary>
+    /// </remarks>
     /// <param name="s">The text.</param>
     /// <param name="start">The index to start at.</param>
     /// <param name="end">The index to stop at.</param>

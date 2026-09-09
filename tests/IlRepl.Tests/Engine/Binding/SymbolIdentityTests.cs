@@ -5,12 +5,15 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Tests.Engine.Binding;
 
 /// <summary>
+/// Verifies definition, construction, parameter, and member identities across runtime imports.
+/// </summary>
+/// <remarks>
 /// Tests for <see cref="SymbolIdentity"/> and the identities <see cref="RuntimeSymbolImporter"/>
 /// gives runtime objects: a definition is one identity per load, a construction is its definition
 /// and its arguments, and a generic parameter is its owner and position.
-/// </summary>
+/// </remarks>
 [TestClass]
-public sealed class SymbolIdentityTests
+public sealed partial class SymbolIdentityTests
 {
     /// <summary>
     /// A primitive spelled by keyword and the CoreLib type behind it are the same symbol.
@@ -71,9 +74,12 @@ public sealed class SymbolIdentityTests
     }
 
     /// <summary>
+    /// Distinguishes generic parameters by owner, kind, and position.
+    /// </summary>
+    /// <remarks>
     /// A generic parameter is its owner and position: <c>!0</c> is never <c>!!0</c>, and the T of
     /// one type is never the T of another.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void GenericParameters_AreOwnerAndPosition()
     {
@@ -81,7 +87,8 @@ public sealed class SymbolIdentityTests
         var listTAgain = RuntimeSymbolImporter.Import(typeof(List<>).GetGenericArguments()[0]);
         var dictionaryK = RuntimeSymbolImporter.Import(typeof(Dictionary<,>).GetGenericArguments()[0]);
         var dictionaryV = RuntimeSymbolImporter.Import(typeof(Dictionary<,>).GetGenericArguments()[1]);
-        var selectT = RuntimeSymbolImporter.Import(typeof(Enumerable).GetMethod("Range")!.DeclaringType!.GetMethods().First(m => m.Name == "Select" && m.GetGenericArguments().Length == 2).GetGenericArguments()[0]);
+        var selectT = RuntimeSymbolImporter.Import(typeof(Enumerable).GetMethod("Range")!.DeclaringType!.GetMethods().First(m
+            => m.Name == "Select" && m.GetGenericArguments().Length == 2).GetGenericArguments()[0]);
         Assert.AreEqual(listT, listTAgain);
         Assert.AreNotEqual(listT, dictionaryK);
         Assert.AreNotEqual(dictionaryK, dictionaryV);
@@ -106,8 +113,7 @@ public sealed class SymbolIdentityTests
     }
 
     /// <summary>
-    /// Members on different constructions, and instantiations over different arguments, share a
-    /// token and stay distinct.
+    /// Distinguishes constructed owners and method arguments even when their metadata tokens match.
     /// </summary>
     [TestMethod]
     public void Members_OnDifferentConstructions_AreDistinct()
@@ -131,7 +137,8 @@ public sealed class SymbolIdentityTests
         Assert.IsFalse(emptyInt.IsGenericDefinition);
 
         var countInt = RuntimeSymbolImporter.Import(typeof(List<int>).GetField("_size", BindingFlags.NonPublic | BindingFlags.Instance)!);
-        var countString = RuntimeSymbolImporter.Import(typeof(List<string>).GetField("_size", BindingFlags.NonPublic | BindingFlags.Instance)!);
+        var countString = RuntimeSymbolImporter.Import(typeof(List<string>).GetField("_size", BindingFlags.NonPublic
+            | BindingFlags.Instance)!);
         Assert.AreEqual(countInt.Definition, countString.Definition);
         Assert.AreNotEqual(countInt, countString);
     }
@@ -183,7 +190,8 @@ public sealed class SymbolIdentityTests
     public void Pretty_MatchesTheTypeNameFormatter(Type type)
     {
         Assert.AreEqual(IlRepl.Engine.TypeNameFormatter.Pretty(type), SymbolRenderer.Pretty(RuntimeSymbolImporter.Import(type)));
-        Assert.AreEqual(IlRepl.Engine.TypeNameFormatter.Pretty(type.MakeByRefType()), SymbolRenderer.Pretty(RuntimeSymbolImporter.Import(type.MakeByRefType())));
+        Assert.AreEqual(IlRepl.Engine.TypeNameFormatter.Pretty(type.MakeByRefType()), SymbolRenderer.Pretty(RuntimeSymbolImporter.Import(
+            type.MakeByRefType())));
     }
 
     /// <summary>
@@ -204,9 +212,5 @@ public sealed class SymbolIdentityTests
         {
             Assert.AreEqual(IlRepl.Engine.MemberResolver.Describe(method), SymbolRenderer.Describe(RuntimeSymbolImporter.Import(method)));
         }
-    }
-
-    private sealed class Recursive<T> where T : IComparable<T>
-    {
     }
 }

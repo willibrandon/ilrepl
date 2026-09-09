@@ -4,6 +4,9 @@ using System.Runtime.Loader;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Caches searchable process assemblies without retaining collectible contexts during repeated name lookup.
+/// </summary>
+/// <remarks>
 /// The assemblies of the process a name search may look in: the ones that are not dynamic and
 /// sit in a load context that cannot unload. The runtime's own list is walked once, and again
 /// only after an assembly load, because each walk takes a passing reference on every collectible
@@ -12,7 +15,7 @@ namespace IlRepl.Engine;
 /// definition never collected while another thread resolved names. An assembly in a collectible
 /// context the session did not create is left out for the same reason a cell could never bind
 /// it: it can be gone at any moment.
-/// </summary>
+/// </remarks>
 internal static class ProcessAssemblies
 {
     private static readonly Lock Gate = new();
@@ -22,9 +25,12 @@ internal static class ProcessAssemblies
     private static int s_builtAt = -1;
 
     /// <summary>
+    /// Returns the cached runtime load order, refreshing it after an assembly load.
+    /// </summary>
+    /// <remarks>
     /// The current list, in the runtime's load order. The same array comes back until an
     /// assembly is loaded; callers never see an assembly that has been unloaded.
-    /// </summary>
+    /// </remarks>
     public static IReadOnlyList<Assembly> Current
     {
         get

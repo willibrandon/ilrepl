@@ -3,11 +3,14 @@ using System.Reflection;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
+/// Binds parsed syntax through shared resolution, substitution, overload, and diagnostic rules.
+/// </summary>
+/// <remarks>
 /// Binds syntax to symbols through a scope: the type a written name means, the member a reference
 /// names among its overloads, with the substitutions, the tie-breaks, and the messages the
 /// resolver has always used. The binder makes every decision; the scope only answers questions,
 /// so the same decisions hold for an actual line and for a preview of one.
-/// </summary>
+/// </remarks>
 public static class SymbolBinder
 {
     /// <summary>
@@ -20,10 +23,13 @@ public static class SymbolBinder
     public static BoundType BindType(TypeSyntax syntax, IBindingScope scope) => BindType(syntax, scope, lenientGenerics: false);
 
     /// <summary>
+    /// Binds a type with optional placeholders for generic parameters whose declaring type is not yet known.
+    /// </summary>
+    /// <remarks>
     /// Binds a type, with a <c>!N</c> beyond what is in scope standing for <c>object</c> when
     /// <paramref name="lenientGenerics"/> is set: the first pass over a member reference, before
     /// the declaring type's own parameters are known.
-    /// </summary>
+    /// </remarks>
     /// <param name="syntax">The type syntax.</param>
     /// <param name="scope">The scope.</param>
     /// <param name="lenientGenerics">True to tolerate out-of-scope generic parameter indices.</param>
@@ -154,9 +160,12 @@ public static class SymbolBinder
     }
 
     /// <summary>
+    /// Binds and validates an instruction operand according to its opcode and current scope.
+    /// </summary>
+    /// <remarks>
     /// Binds an instruction: the literal is checked against its opcode, a slot is found by name
     /// or index, and a type, member, field, or signature operand is bound in the scope.
-    /// </summary>
+    /// </remarks>
     /// <param name="syntax">The instruction syntax.</param>
     /// <param name="scope">The scope.</param>
     /// <returns>The bound instruction.</returns>
@@ -289,18 +298,38 @@ public static class SymbolBinder
                 }
 
             case OperandSyntaxKind.Type:
-                return new BoundInstruction(op, text, new BoundOperand { Kind = OperandKind.Type, Type = BindType(operand.Type!, scope).Type }, null, null);
+                return new BoundInstruction(op, text, new BoundOperand
+                {
+                    Kind = OperandKind.Type,
+                    Type = BindType(operand.Type!,
+                    scope).Type
+                }, null, null);
 
             case OperandSyntaxKind.Member:
-                return new BoundInstruction(op, text, new BoundOperand { Kind = OperandKind.Method, Method = BindMethodReference(operand.Member!, scope, op == System.Reflection.Emit.OpCodes.Newobj) }, null, null);
+                return new BoundInstruction(op, text, new BoundOperand
+                {
+                    Kind = OperandKind.Method,
+                    Method = BindMethodReference(
+                    operand.Member!, scope, op == System.Reflection.Emit.OpCodes.Newobj)
+                }, null, null);
 
             case OperandSyntaxKind.Field:
-                return new BoundInstruction(op, text, new BoundOperand { Kind = OperandKind.Field, Field = BindFieldReference(operand.Member!, scope) }, null, null);
+                return new BoundInstruction(op, text, new BoundOperand
+                {
+                    Kind = OperandKind.Field,
+                    Field = BindFieldReference(
+                    operand.Member!, scope)
+                }, null, null);
 
             case OperandSyntaxKind.Token:
             {
                 var token = operand.IsMethodToken
-                    ? new BoundOperand { Kind = OperandKind.Token, Method = BindMethodReference(operand.Member!, scope, wantConstructor: false) }
+                    ? new BoundOperand
+                    {
+                        Kind = OperandKind.Token,
+                        Method = BindMethodReference(operand.Member!, scope,
+                        wantConstructor: false)
+                    }
                     : operand.IsFieldToken
                         ? new BoundOperand { Kind = OperandKind.Token, Field = BindFieldReference(operand.Member!, scope) }
                         : new BoundOperand { Kind = OperandKind.Token, Type = BindType(operand.Type!, scope).Type };
@@ -308,13 +337,19 @@ public static class SymbolBinder
             }
 
             case OperandSyntaxKind.Signature:
-                return new BoundInstruction(op, text, new BoundOperand { Kind = OperandKind.Signature, Signature = BindSignature(operand.Signature!, scope) }, null, null);
+                return new BoundInstruction(op, text, new BoundOperand
+                {
+                    Kind = OperandKind.Signature,
+                    Signature = BindSignature(
+                    operand.Signature!, scope)
+                }, null, null);
 
             default:
                 throw new ReplException($"unsupported operand type {op.OperandType} for '{opName}'");
         }
 
-        BoundInstruction Literal(OperandKind kind, object value) => new(op, text, new BoundOperand { Kind = kind, Value = value }, null, null);
+        BoundInstruction Literal(OperandKind kind, object value) => new(op, text, new BoundOperand { Kind = kind, Value = value }, null,
+            null);
     }
 
     private static void RequireNoOperand(string opName, string operandText)
@@ -342,7 +377,8 @@ public static class SymbolBinder
             throw new ReplException("expected a local name or index");
         }
 
-        if (int.TryParse(operand, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var index))
+        if (int.TryParse(operand, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture,
+            out var index))
         {
             if (index < 0 || index >= locals.Count)
             {
@@ -383,7 +419,8 @@ public static class SymbolBinder
             throw new ReplException("expected an argument name or index");
         }
 
-        if (int.TryParse(operand, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var index))
+        if (int.TryParse(operand, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture,
+            out var index))
         {
             if (index < 0 || index >= arguments.Count)
             {
@@ -410,9 +447,10 @@ public static class SymbolBinder
     /// <summary>
     /// The calling convention the words of a signature spell.
     /// </summary>
-    /// <param name="words">The words, in order: <c>instance</c>, <c>explicit</c>, <c>vararg</c>, <c>unmanaged</c>, <c>cdecl</c>, and the rest.</param>
+    /// <param name="words">The ordered calling-convention words, such as <c>instance</c>, <c>vararg</c>, or <c>cdecl</c>.</param>
     /// <returns>The managed convention, whether the signature is unmanaged, and the unmanaged convention.</returns>
-    public static (CallingConventions Managed, bool IsUnmanaged, System.Runtime.InteropServices.CallingConvention Unmanaged) Conventions(IEnumerable<string> words)
+    public static (CallingConventions Managed, bool IsUnmanaged, System.Runtime.InteropServices.CallingConvention Unmanaged) Conventions(
+        IEnumerable<string> words)
     {
         ArgumentNullException.ThrowIfNull(words);
         var managed = CallingConventions.Standard;
@@ -498,13 +536,15 @@ public static class SymbolBinder
         if (syntax.Parameters is not null)
         {
             parameterTypes = [.. syntax.FixedParameters.Select(p => BindType(p, memberScope).Type)];
-            optionalTypes = syntax.OptionalParameters is null ? null : [.. syntax.OptionalParameters.Select(p => BindType(p, memberScope).Type)];
+            optionalTypes = syntax.OptionalParameters is null ? null : [.. syntax.OptionalParameters.Select(p => BindType(p,
+                memberScope).Type)];
         }
 
         var explicitMethodArguments = syntax.GenericArguments is null ? null : methodArguments;
         if (scope.TryGetDeclaration(declaring, out var own))
         {
-            return BindOwnMethod(own, declaring, scope, syntax, parameterTypes, returnType, syntax.ExplicitInstance, wantConstructor || name is ".ctor" or ".cctor", explicitMethodArguments, optionalTypes);
+            return BindOwnMethod(own, declaring, scope, syntax, parameterTypes, returnType, syntax.ExplicitInstance, wantConstructor
+                || name is ".ctor" or ".cctor", explicitMethodArguments, optionalTypes);
         }
 
         if (wantConstructor || name is ".ctor" or ".cctor")
@@ -512,7 +552,8 @@ public static class SymbolBinder
             return new BoundMethod(BindConstructor(declaring, name, parameterTypes, scope), null, optionalTypes);
         }
 
-        var method = BindLoadedMethod(declaring, syntax, parameterTypes, explicitMethodArguments, returnType, syntax.ExplicitInstance, syntax.IsVarArg, scope);
+        var method = BindLoadedMethod(declaring, syntax, parameterTypes, explicitMethodArguments, returnType, syntax.ExplicitInstance,
+            syntax.IsVarArg, scope);
         return new BoundMethod(method, null, optionalTypes ?? (syntax.IsVarArg && method.IsVarArg ? [] : null));
     }
 
@@ -572,9 +613,12 @@ public static class SymbolBinder
     }
 
     /// <summary>
+    /// Lists accessible method names in stable order for typo suggestions.
+    /// </summary>
+    /// <remarks>
     /// The names of the methods a context may call on a type, for a suggestion: every method the
     /// type offers whose access the context passes, in a stable order.
-    /// </summary>
+    /// </remarks>
     private static IEnumerable<string> EligibleMethodNames(IBindingScope scope, TypeSymbol declaring)
     {
         var facts = AccessFacts.From(scope);
@@ -594,9 +638,12 @@ public static class SymbolBinder
     }
 
     /// <summary>
+    /// Lists declared and inherited member names available to an open type's access context.
+    /// </summary>
+    /// <remarks>
     /// The names a member of a type being written could have meant: the declared members, then
     /// what the base chain offers to this context.
-    /// </summary>
+    /// </remarks>
     private static IEnumerable<string> OwnAndInheritedNames(IDeclarationMembers own, TypeSymbol declaring, IBindingScope scope)
     {
         var names = own.Methods.Where(m => m.IsDeclared && !m.IsConstructor).Select(m => m.Name).ToList();
@@ -622,10 +669,14 @@ public static class SymbolBinder
     }
 
     /// <summary>
+    /// Suggests a corrected method name only when its replacement reference binds without loading dependencies.
+    /// </summary>
+    /// <remarks>
     /// The did-you-mean for a mistyped method name, when the reference with the nearest name in its
     /// place binds in a scope that loads nothing; empty otherwise.
-    /// </summary>
-    private static string ConfirmedSuggestion(IBindingScope scope, MemberSyntax syntax, string name, IEnumerable<string> pool, bool wantConstructor)
+    /// </remarks>
+    private static string ConfirmedSuggestion(IBindingScope scope, MemberSyntax syntax, string name, IEnumerable<string> pool,
+        bool wantConstructor)
     {
         var pure = scope.ForSuggestions(out var lease);
         using (lease)
@@ -719,10 +770,12 @@ public static class SymbolBinder
         var signature = methods.FirstOrDefault(m => m.Name == name);
         if (signature is null)
         {
-            var suggestion = methods.Count == 0 ? "" : ConfirmedSuggestion(scope, syntax, name, methods.Select(m => m.Name), wantConstructor: false);
+            var suggestion = methods.Count == 0 ? "" : ConfirmedSuggestion(scope, syntax, name, methods.Select(m => m.Name),
+                wantConstructor: false);
+            var defined = string.Join(", ", methods.Select(m => SymbolRenderer.DescribeSignature(m, scope.Pretty)));
             throw new ReplException(methods.Count == 0
                 ? $"no method '{name}' in the session (define one with .method, or write Type::{name}(...) for a framework method)"
-                : $"no method '{name}' in the session{suggestion}; defined: {string.Join(", ", methods.Select(m => SymbolRenderer.DescribeSignature(m, scope.Pretty)))}  (define one with .method)");
+                : $"no method '{name}' in the session{suggestion}; defined: {defined}  (define one with .method)");
         }
 
         if (returnType is not null && !SymbolIdentity.Equal(returnType, signature.ReturnType))
@@ -736,14 +789,18 @@ public static class SymbolBinder
             var expected = signature.ParameterTypes;
             if (types.Count != expected.Count || !types.Zip(expected).All(pair => SymbolIdentity.Equal(pair.First, pair.Second)))
             {
-                throw new ReplException($"no method {name}({string.Join(", ", types.Select(scope.Pretty))}) in the session; defined: {SymbolRenderer.DescribeSignature(signature, scope.Pretty)}");
+                throw new ReplException(
+                    $"no method {name}({string.Join(", ", types.Select(scope.Pretty))}) in the session; "
+                    + $"defined: {SymbolRenderer.DescribeSignature(signature, scope.Pretty)}");
             }
         }
 
         return new BoundMethod(signature, null, null);
     }
 
-    private static BoundMethod BindOwnMethod(IDeclarationMembers own, TypeSymbol declaring, IBindingScope scope, MemberSyntax syntax, IReadOnlyList<TypeSymbol>? parameterTypes, TypeSymbol? returnType, bool explicitInstance, bool wantConstructor, IReadOnlyList<TypeSymbol>? methodArguments, IReadOnlyList<TypeSymbol>? optionalTypes)
+    private static BoundMethod BindOwnMethod(IDeclarationMembers own, TypeSymbol declaring, IBindingScope scope, MemberSyntax syntax,
+        IReadOnlyList<TypeSymbol>? parameterTypes, TypeSymbol? returnType, bool explicitInstance, bool wantConstructor,
+        IReadOnlyList<TypeSymbol>? methodArguments, IReadOnlyList<TypeSymbol>? optionalTypes)
     {
         var name = syntax.Name;
         var instantiated = declaring.Kind == TypeSymbolKind.Constructed;
@@ -769,7 +826,8 @@ public static class SymbolBinder
             var (signature, effective) = candidates[0];
             if (returnType is not null && !SymbolIdentity.Equal(effective.ReturnType, returnType))
             {
-                throw new ReplException($"{scope.Pretty(declaring)}::{name} returns {scope.Pretty(effective.ReturnType)}, not {scope.Pretty(returnType)}");
+                throw new ReplException(
+                    $"{scope.Pretty(declaring)}::{name} returns {scope.Pretty(effective.ReturnType)}, not {scope.Pretty(returnType)}");
             }
 
             if (wantConstructor && signature.Name != ".ctor")
@@ -780,12 +838,14 @@ public static class SymbolBinder
             return new BoundMethod(effective, signature, optionalTypes);
         }
 
-        if (candidates.Count == 0 && !wantConstructor && own.BaseType is { } baseType && BindInherited(baseType, scope, syntax, parameterTypes, returnType, explicitInstance, methodArguments, optionalTypes) is { } inherited)
+        if (candidates.Count == 0 && !wantConstructor && own.BaseType is { } baseType && BindInherited(baseType, scope, syntax,
+            parameterTypes, returnType, explicitInstance, methodArguments, optionalTypes) is { } inherited)
         {
             return inherited;
         }
 
-        if (candidates.Count == 0 && arity == 0 && returnType is not null && parameterTypes is not null && own.CanDefineForward && !instantiated && !scope.Inspecting)
+        if (candidates.Count == 0 && arity == 0 && returnType is not null && parameterTypes is not null && own.CanDefineForward
+            && !instantiated && !scope.Inspecting)
         {
             // A member referenced before its declaration: the signature is taken at its word and
             // checked when the type closes, which is what lets members call each other in any order.
@@ -795,7 +855,9 @@ public static class SymbolBinder
                 Source = MethodSymbolSource.Forward,
                 DeclaringType = declaring,
                 Name = name,
-                Attributes = wantConstructor ? MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName : explicitInstance ? MethodAttributes.Public : MethodAttributes.Public | MethodAttributes.Static,
+                Attributes = wantConstructor ? MethodAttributes.Public | MethodAttributes.SpecialName
+                    | MethodAttributes.RTSpecialName : explicitInstance ? MethodAttributes.Public : MethodAttributes.Public
+                    | MethodAttributes.Static,
                 CallingConvention = wantConstructor || explicitInstance ? CallingConventions.HasThis : CallingConventions.Standard,
                 ReturnType = returnType,
                 Parameters = [.. parameterTypes.Select(t => new ParameterSymbol(t, null))],
@@ -812,32 +874,45 @@ public static class SymbolBinder
 
         if (known.Count == 0)
         {
-            var names = string.Join(", ", own.Methods.Where(m => m.IsDeclared).Select(m => SymbolRenderer.DescribeSignature(m, scope.Pretty)).Take(12));
-            var suggestion = names.Length == 0 ? "" : ConfirmedSuggestion(scope, syntax, name, OwnAndInheritedNames(own, declaring, scope), wantConstructor);
+            var names = string.Join(", ", own.Methods.Where(m => m.IsDeclared).Select(m => SymbolRenderer.DescribeSignature(m,
+                scope.Pretty)).Take(12));
+            var suggestion = names.Length == 0 ? "" : ConfirmedSuggestion(scope, syntax, name, OwnAndInheritedNames(own, declaring, scope),
+                wantConstructor);
             throw new ReplException(names.Length == 0
-                ? $"no method '{name}' on {scope.Pretty(declaring)} yet (declare it, or reference it with its full signature to declare it later)"
+                ? $"no method '{name}' on {scope.Pretty(declaring)} yet "
+                    + "(declare it, or reference it with its full signature to declare it later)"
                 : $"no method '{name}' on {scope.Pretty(declaring)}{suggestion}; methods: {names}");
         }
 
         if (candidates.Count == 0)
         {
-            throw new ReplException($"no overload {scope.Pretty(declaring)}::{name}({Signature(parameterTypes, scope)}); candidates:\n{string.Join("\n", known.Select(k => "    " + SymbolRenderer.DescribeMember(k, scope.Pretty)))}");
+            throw new ReplException(
+                $"no overload {scope.Pretty(declaring)}::{name}({Signature(parameterTypes, scope)}); candidates:\n"
+                + string.Join("\n", known.Select(k => "    " + SymbolRenderer.DescribeMember(k, scope.Pretty))));
         }
 
-        throw new ReplException($"ambiguous: {scope.Pretty(declaring)}::{name}; give parameter types. candidates:\n{string.Join("\n", candidates.Select(c => "    " + SymbolRenderer.DescribeMember(c.Declared, scope.Pretty)))}");
+        throw new ReplException(
+            $"ambiguous: {scope.Pretty(declaring)}::{name}; give parameter types. candidates:\n"
+            + string.Join("\n", candidates.Select(c => "    " + SymbolRenderer.DescribeMember(c.Declared, scope.Pretty))));
     }
 
     private static string NoConstructor(TypeSymbol declaring, IBindingScope scope)
     {
         var valueType = declaring.IsValueTypeShape;
-        return $"{(valueType ? "struct" : "class")} {scope.Pretty(declaring)} declares no constructor (add a .method public instance void .ctor(...) to it{(valueType ? ", or use initobj" : "")})";
+        return $"{(valueType ? "struct" : "class")} {scope.Pretty(declaring)} declares no constructor "
+            + $"(add a .method public instance void .ctor(...) to it{(valueType ? ", or use initobj" : "")})";
     }
 
     /// <summary>
+    /// Finds members inherited from declared or loaded base types.
+    /// </summary>
+    /// <remarks>
     /// Finds a member a type being written inherits: from a base still being written through its
     /// declarations, from a loaded base through its members.
-    /// </summary>
-    private static BoundMethod? BindInherited(TypeSymbol baseType, IBindingScope scope, MemberSyntax syntax, IReadOnlyList<TypeSymbol>? parameterTypes, TypeSymbol? returnType, bool explicitInstance, IReadOnlyList<TypeSymbol>? methodArguments, IReadOnlyList<TypeSymbol>? optionalTypes)
+    /// </remarks>
+    private static BoundMethod? BindInherited(TypeSymbol baseType, IBindingScope scope, MemberSyntax syntax,
+        IReadOnlyList<TypeSymbol>? parameterTypes, TypeSymbol? returnType, bool explicitInstance,
+        IReadOnlyList<TypeSymbol>? methodArguments, IReadOnlyList<TypeSymbol>? optionalTypes)
     {
         var name = syntax.Name;
         var arity = methodArguments?.Count ?? 0;
@@ -868,7 +943,8 @@ public static class SymbolBinder
 
             try
             {
-                var method = BindLoadedMethod(current, syntax, parameterTypes, methodArguments, returnType, explicitInstance, optionalTypes is not null, scope);
+                var method = BindLoadedMethod(current, syntax, parameterTypes, methodArguments, returnType, explicitInstance,
+                    optionalTypes is not null, scope);
                 return new BoundMethod(method, null, optionalTypes);
             }
             catch (ReplException)
@@ -880,14 +956,16 @@ public static class SymbolBinder
         return null;
     }
 
-    private static BoundMethod BindGenericDefinition(MemberSyntax syntax, TypeSymbol declaring, IReadOnlyList<TypeSymbol> typeArguments, IBindingScope scope)
+    private static BoundMethod BindGenericDefinition(MemberSyntax syntax, TypeSymbol declaring, IReadOnlyList<TypeSymbol> typeArguments,
+        IBindingScope scope)
     {
         var name = syntax.Name;
         var arity = syntax.GenericArity!.Value;
         var matches = new List<MethodSymbol>();
         foreach (var candidate in scope.Methods(declaring, name).Where(m => m.IsGenericDefinition && m.Arity == arity))
         {
-            var candidateScope = scope.WithGenerics(new SymbolGenericContext(typeArguments, [.. candidate.GenericParameters.Select(p => p.AsType)]));
+            var candidateScope = scope.WithGenerics(new SymbolGenericContext(typeArguments,
+                [.. candidate.GenericParameters.Select(p => p.AsType)]));
             BindType(syntax.DeclaringType!, candidateScope);
             var returnType = syntax.ReturnType is null ? null : BindType(syntax.ReturnType, candidateScope).Type;
             if (returnType is not null && !SymbolIdentity.Equal(candidate.ReturnType, returnType))
@@ -912,15 +990,25 @@ public static class SymbolBinder
             matches.Add(candidate);
         }
 
+        if (matches.Count == 0)
+        {
+            var suggestion = scope.Methods(declaring, name).Count == 0
+                ? ConfirmedSuggestion(scope, syntax, name, EligibleMethodNames(scope, declaring)
+                    .Where(n => scope.Methods(declaring, n).Any(m => m.IsGenericDefinition && m.Arity == arity)), wantConstructor: false)
+                : "";
+            throw new ReplException($"no generic method '{name}' with {arity} type parameter(s) "
+                + $"and those parameters on {scope.Pretty(declaring)}{suggestion}");
+        }
+
         return matches.Count switch
         {
             1 => new BoundMethod(matches[0], null, null),
-            0 => throw new ReplException($"no generic method '{name}' with {arity} type parameter(s) and those parameters on {scope.Pretty(declaring)}{(scope.Methods(declaring, name).Count == 0 ? ConfirmedSuggestion(scope, syntax, name, EligibleMethodNames(scope, declaring).Where(n => scope.Methods(declaring, n).Any(m => m.IsGenericDefinition && m.Arity == arity)), wantConstructor: false) : "")}"),
             _ => throw new ReplException($"ambiguous: {scope.Pretty(declaring)}::{name}<[{arity}]>; give parameter types"),
         };
     }
 
-    private static MethodSymbol BindConstructor(TypeSymbol declaring, string name, IReadOnlyList<TypeSymbol>? parameterTypes, IBindingScope scope)
+    private static MethodSymbol BindConstructor(TypeSymbol declaring, string name, IReadOnlyList<TypeSymbol>? parameterTypes,
+        IBindingScope scope)
     {
         var isStatic = name == ".cctor";
         if (scope.RequiresDefinitionLookup(declaring))
@@ -952,7 +1040,9 @@ public static class SymbolBinder
 
         if (matched.Count == 0)
         {
-            throw new ReplException($"no constructor {scope.Pretty(declaring)}({Signature(parameterTypes, scope)}); candidates:\n{Candidates(constructors, scope)}");
+            throw new ReplException(
+                $"no constructor {scope.Pretty(declaring)}({Signature(parameterTypes, scope)}); candidates:\n"
+                + Candidates(constructors, scope));
         }
 
         throw new ReplException($"ambiguous constructor for {scope.Pretty(declaring)}; candidates:\n{Candidates(matched, scope)}");
@@ -980,15 +1070,20 @@ public static class SymbolBinder
                 return candidates[0];
             }
 
+            var suggestion = candidates.Count == 0 && scope.Methods(declaring, name).Count == 0
+                ? ConfirmedSuggestion(scope, syntax, name, EligibleMethodNames(scope, declaring), wantConstructor: false)
+                : "";
             throw new ReplException(candidates.Count == 0
-                ? $"no method '{name}' with those parameters on {scope.Pretty(declaring)}{(scope.Methods(declaring, name).Count == 0 ? ConfirmedSuggestion(scope, syntax, name, EligibleMethodNames(scope, declaring), wantConstructor: false) : "")}"
+                ? $"no method '{name}' with those parameters on {scope.Pretty(declaring)}{suggestion}"
                 : $"ambiguous: {scope.Pretty(declaring)}::{name}; give parameter types");
         }
 
         var methods = scope.Methods(declaring, name);
         if (methods.Count == 0)
         {
-            throw new ReplException($"no method '{name}' on {scope.Pretty(declaring)}{ConfirmedSuggestion(scope, syntax, name, EligibleMethodNames(scope, declaring), wantConstructor: false)}");
+            throw new ReplException(
+                $"no method '{name}' on {scope.Pretty(declaring)}"
+                + ConfirmedSuggestion(scope, syntax, name, EligibleMethodNames(scope, declaring), wantConstructor: false));
         }
 
         var closed = new List<MethodSymbol>();
@@ -1065,10 +1160,13 @@ public static class SymbolBinder
 
         if (candidateSet.Count == 0)
         {
-            throw new ReplException($"no overload {scope.Pretty(declaring)}::{name}({Signature(parameterTypes, scope)}); candidates:\n{Candidates(methods, scope)}");
+            throw new ReplException(
+                $"no overload {scope.Pretty(declaring)}::{name}({Signature(parameterTypes, scope)}); candidates:\n"
+                + Candidates(methods, scope));
         }
 
-        throw new ReplException($"ambiguous: {scope.Pretty(declaring)}::{name}; give parameter types. candidates:\n{Candidates(candidateSet, scope)}");
+        throw new ReplException(
+            $"ambiguous: {scope.Pretty(declaring)}::{name}; give parameter types. candidates:\n{Candidates(candidateSet, scope)}");
     }
 
     /// <summary>

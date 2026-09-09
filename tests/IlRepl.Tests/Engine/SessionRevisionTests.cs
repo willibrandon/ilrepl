@@ -4,9 +4,12 @@ using IlRepl.Repl;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
+/// Checks completion revisions change for every relevant session mutation.
+/// </summary>
+/// <remarks>
 /// Tests for <see cref="Session.CompletionRevision"/>: it moves on everything a completion could
 /// depend on, including changes equal statuses cannot show.
-/// </summary>
+/// </remarks>
 [TestClass]
 public sealed class SessionRevisionTests
 {
@@ -53,9 +56,12 @@ public sealed class SessionRevisionTests
     }
 
     /// <summary>
+    /// Restores comment state and invalidates previews when a normalized line is refused.
+    /// </summary>
+    /// <remarks>
     /// A refused line that opened a comment puts the comment state back and moves the revision, so
     /// a preview that saw the open comment does not survive.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void Revision_ChangesWhenARefusedLineRestoresTheCommentState()
     {

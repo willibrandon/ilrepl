@@ -116,8 +116,10 @@ public sealed class MemberResolverTests
     {
         var ex = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("String::Concta(string, string)", Context, false));
         Assert.AreEqual("no method 'Concta' on string (did you mean 'Concat'?)", ex.Message);
-        Assert.AreEqual("no method 'Trmi' on string (did you mean 'Trim'?)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance string String::Trmi()", Context, false)).Message);
-        Assert.AreEqual("no method 'tolowerinvariant' on string (did you mean 'ToLowerInvariant'?)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance string String::tolowerinvariant()", Context, false)).Message);
+        Assert.AreEqual("no method 'Trmi' on string (did you mean 'Trim'?)", Assert.ThrowsExactly<ReplException>(()
+            => MemberResolver.ResolveMethod("instance string String::Trmi()", Context, false)).Message);
+        Assert.AreEqual("no method 'tolowerinvariant' on string (did you mean 'ToLowerInvariant'?)", Assert.ThrowsExactly<ReplException>(()
+            => MemberResolver.ResolveMethod("instance string String::tolowerinvariant()", Context, false)).Message);
     }
 
     /// <summary>
@@ -148,9 +150,11 @@ public sealed class MemberResolverTests
     public void ResolveMethod_SuggestionIsEligibleFromTheScope()
     {
         var context = ContextWithGreeter();
-        var ex = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance int32 Greeter.Account::Audti()", context, false));
+        var ex = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance int32 Greeter.Account::Audti()", context,
+            false));
         Assert.AreEqual("no method 'Audti' on Account", ex.Message, "Audit is private to Account; the cell cannot call it");
-        var visible = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance void Greeter.Account::Depsit(int32)", context, false));
+        var visible = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance void Greeter.Account::Depsit(int32)",
+            context, false));
         Assert.AreEqual("no method 'Depsit' on Account (did you mean 'Deposit'?)", visible.Message);
     }
 
@@ -160,7 +164,8 @@ public sealed class MemberResolverTests
     [TestMethod]
     public void ResolveField_MistypedName_SuggestsAndListsFields()
     {
-        var ex = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveField("int32 Greeter.Counter::Cout", ContextWithGreeter()));
+        var ex = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveField("int32 Greeter.Counter::Cout", ContextWithGreeter(
+            )));
         Assert.StartsWith("no field 'Cout' on Counter (did you mean 'Count'?); fields: ", ex.Message);
         Assert.Contains("Count", ex.Message["no field 'Cout' on Counter (did you mean 'Count'?); fields: ".Length..]);
     }
@@ -174,15 +179,19 @@ public sealed class MemberResolverTests
         var ambiguous = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Console::WriteLine", Context, false));
         Assert.StartsWith("ambiguous: Console::WriteLine; give parameter types. candidates:", ambiguous.Message);
         Assert.DoesNotContain("did you mean", ambiguous.Message);
-        var constructor = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance void String::.ctor(int32)", Context, true));
+        var constructor = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance void String::.ctor(int32)",
+            Context, true));
         Assert.StartsWith("no constructor string(int32); candidates:", constructor.Message);
         Assert.DoesNotContain("did you mean", constructor.Message);
     }
 
     /// <summary>
+    /// Suggests declared and inherited members when lookup fails inside an open class.
+    /// </summary>
+    /// <remarks>
     /// Inside a class being written, a mistyped member is matched against the declared members
     /// and what the base offers, and the list of methods stays.
-    /// </summary>
+    /// </remarks>
     [TestMethod]
     public void ResolveMethod_OpenClassTypo_SuggestsDeclaredOrInherited()
     {
@@ -263,7 +272,8 @@ public sealed class MemberResolverTests
     public void ResolveMethod_UnknownSessionMethod_SuggestsDotMethod()
     {
         Assert.Contains("no method 'Fib' in the session (define one with .method, or write Type::Fib(...) for a framework method)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fib(int32)", Context, false)).Message);
-        Assert.Contains("no method 'Fibb' in the session (did you mean 'Fib'?); defined: int32 Fib(int32)  (define one with .method)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fibb(int32)", ContextWith(Fib()), false)).Message);
+        Assert.Contains("no method 'Fibb' in the session (did you mean 'Fib'?); defined: int32 Fib(int32)  (define one with .method)",
+            Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fibb(int32)", ContextWith(Fib()), false)).Message);
     }
 
     /// <summary>

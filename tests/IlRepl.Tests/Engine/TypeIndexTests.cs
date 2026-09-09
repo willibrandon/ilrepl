@@ -6,9 +6,12 @@ using Mono.Cecil;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
+/// Checks metadata type indexing agrees with the runtime resolver's short-name rules.
+/// </summary>
+/// <remarks>
 /// Tests for <see cref="TypeIndex"/>: one index over the session's types and every loaded
 /// assembly, built from metadata, that agrees with the resolver on what a short name means.
-/// </summary>
+/// </remarks>
 [TestClass]
 public sealed class TypeIndexTests
 {
@@ -21,7 +24,8 @@ public sealed class TypeIndexTests
     public void TypeIndex_ShortNameTarget_AgreesWithResolve()
     {
         using var snapshot = BindingSnapshot.Capture(Context);
-        Assert.Contains(s => s.Name == "System.Reflection.Metadata", snapshot.SearchOrder, "the reader's own assembly, loaded while the snapshot was taken, is searched too");
+        Assert.Contains(s => s.Name == "System.Reflection.Metadata", snapshot.SearchOrder,
+            "the reader's own assembly, loaded while the snapshot was taken, is searched too");
         var index = new TypeIndex(snapshot);
         var sampled = index.Entries
             .Where(e => e.IsVisible && !e.IsNested && !e.IsCompilerGenerated)
@@ -47,8 +51,11 @@ public sealed class TypeIndexTests
             var actual = index.ShortNameTarget(name);
             if (!SymbolIdentity.Equal(expected, actual) && !(expected is null && actual is null))
             {
-                var entries = string.Join(" | ", index.BySimpleName(name).Select(e => $"{e.IlPath} [{e.AssemblyName}] visible={e.IsVisible}"));
-                disagreements.Add($"{name}: resolver {(expected is null ? "none" : SymbolRenderer.IlPath(expected))}, index {(actual is null ? "none" : SymbolRenderer.IlPath(actual))}; entries {entries}");
+                var entries = string.Join(" | ", index.BySimpleName(name).Select(e
+                    => $"{e.IlPath} [{e.AssemblyName}] visible={e.IsVisible}"));
+                disagreements.Add(
+                    $"{name}: resolver {(expected is null ? "none" : SymbolRenderer.IlPath(expected))}, "
+                    + $"index {(actual is null ? "none" : SymbolRenderer.IlPath(actual))}; entries {entries}");
             }
         }
 
@@ -70,7 +77,8 @@ public sealed class TypeIndexTests
         }
 
         var (assembly, _, _) = CecilFixture.Build(
-            (module, _) => module.Types.Add(new TypeDefinition("Later", name, Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object)),
+            (module, _) => module.Types.Add(new TypeDefinition("Later", name, Mono.Cecil.TypeAttributes.Public
+                | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object)),
             resolver);
         using var after = BindingSnapshot.Capture(context);
         var index = new TypeIndex(after);
@@ -90,8 +98,7 @@ public sealed class TypeIndexTests
     }
 
     /// <summary>
-    /// An assembly whose dependency is absent is indexed whole; only the members that need the
-    /// dependency carry an unresolved part.
+    /// Indexes healthy definitions while marking only signatures requiring an absent dependency unresolved.
     /// </summary>
     [TestMethod]
     public void TypeIndex_SurvivesAMissingDependency()
@@ -104,9 +111,12 @@ public sealed class TypeIndexTests
                 module.AssemblyReferences.Add(missing);
                 var gone = new TypeReference("Missing", "Gone", module, missing);
                 type.Fields.Add(new FieldDefinition("Broken", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static, gone));
-                type.Fields.Add(new FieldDefinition("Healthy", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static, module.TypeSystem.Int32));
-                module.Types.Add(new TypeDefinition("N", "Sibling", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object));
-                module.Types.Add(new TypeDefinition("N", "Dependent", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, gone));
+                type.Fields.Add(new FieldDefinition("Healthy", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static,
+                    module.TypeSystem.Int32));
+                module.Types.Add(new TypeDefinition("N", "Sibling", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class,
+                    module.TypeSystem.Object));
+                module.Types.Add(new TypeDefinition("N", "Dependent", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class,
+                    gone));
             },
             resolver);
         var context = new ParseContext([], [], GenericContext.Empty, resolver, []);
@@ -150,7 +160,8 @@ public sealed class TypeIndexTests
     {
         var resolver = new TypeResolver();
         CecilFixture.Build(
-            (module, _) => module.Types.Add(new TypeDefinition("N", "Hidden", Mono.Cecil.TypeAttributes.NotPublic | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object)),
+            (module, _) => module.Types.Add(new TypeDefinition("N", "Hidden", Mono.Cecil.TypeAttributes.NotPublic
+                | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object)),
             resolver);
         var context = new ParseContext([], [], GenericContext.Empty, resolver, []);
         using var snapshot = BindingSnapshot.Capture(context);
@@ -251,7 +262,8 @@ public sealed class TypeIndexTests
                 var broken = new MethodDefinition("Broken", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, gone);
                 broken.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ret);
                 type.Methods.Add(broken);
-                var healthy = new MethodDefinition("Healthy", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Int32);
+                var healthy = new MethodDefinition("Healthy", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                    module.TypeSystem.Int32);
                 var il = healthy.Body.GetILProcessor();
                 il.Emit(Mono.Cecil.Cil.OpCodes.Ldc_I4_7);
                 il.Emit(Mono.Cecil.Cil.OpCodes.Ret);

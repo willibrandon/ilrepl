@@ -4,13 +4,16 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Resolves ILAsm member references through shared syntax and binding rules to exact runtime members.
+/// </summary>
+/// <remarks>
 /// Resolves ILAsm method and field references against loaded types. The return type and the
 /// <c>[assembly]</c> prefix are optional, short type names resolve through the common
 /// <c>System.*</c> namespaces, and <c>!N</c>/<c>!!N</c> inside the reference follow ILAsm rules.
 /// The grammar is <see cref="CilSyntaxParser"/>'s and the overload decisions are
 /// <see cref="SymbolBinder"/>'s; this entry point binds in the runtime scope and hands back the
 /// reflection objects the emitter takes.
-/// </summary>
+/// </remarks>
 public static class MemberResolver
 {
     /// <summary>
