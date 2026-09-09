@@ -68,12 +68,13 @@ public sealed partial record PromptWidget(
     public static EnterAction EnterActionFor(PromptState state, bool paletteVisible, int openDepth, bool commentOpen)
     {
         ArgumentNullException.ThrowIfNull(state);
-        if (paletteVisible && state.PaletteNavigated)
+        if (state.PaletteNavigated && (paletteVisible || state.Site.IsOperand && !state.PaletteDismissed))
         {
             return EnterAction.AcceptCompletion;
         }
 
-        return BlockBalance.IsComplete(state.Text, openDepth, commentOpen, commands: state.Commands) ? EnterAction.Submit : EnterAction.Continue;
+        return BlockBalance.IsComplete(state.Text, openDepth, commentOpen, commands: state.Commands)
+            ? EnterAction.Submit : EnterAction.Continue;
     }
 
     /// <summary>
@@ -188,7 +189,8 @@ public sealed partial record PromptWidget(
         var onLast = state.CaretLine >= state.LineCount;
 
         b.Remove(EditorWidget.InsertNewline);
-        b.Key(Hex1bKey.Enter).Action(_ => Enter(state, candidates, EnterActionFor(state, paletteVisible, OpenDepth, CommentOpen)), "Send or continue");
+        b.Key(Hex1bKey.Enter).Action(_ => Enter(state, candidates,
+            EnterActionFor(state, paletteVisible, OpenDepth, CommentOpen)), "Send or continue");
         b.Remove(EditorWidget.InsertTab);
         b.Key(Hex1bKey.Tab).Action(_ => Tab(state, candidates, paletteVisible), "Complete or indent");
         b.Remove(Hex1bKey.Escape);
@@ -443,7 +445,8 @@ public sealed partial record PromptWidget(
     {
         var document = editor.Document;
         var operation = new ReplaceOperation(range, replacement);
-        var inverse = new ReplaceOperation(new DocumentRange(range.Start, new DocumentOffset(range.Start.Value + replacement.Length)), document.GetText(range));
+        var inverse = new ReplaceOperation(new DocumentRange(range.Start, new DocumentOffset(range.Start.Value + replacement.Length)),
+            document.GetText(range));
         var versionBefore = document.Version;
         editor.History.BeginGroup(editor.Cursors, versionBefore);
         document.Apply(operation, "prompt");

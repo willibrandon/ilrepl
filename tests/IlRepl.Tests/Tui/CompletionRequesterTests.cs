@@ -278,12 +278,19 @@ public sealed class CompletionRequesterTests
         engine.Immediate = Reply(engine, "Old");
         requester.Refresh(state);
         var old = state.Completions!;
+        state.PaletteNavigated = true;
         Assert.IsNotNull(CompletionEdit.For(state, old.Reply.Items[0]));
         var invalidated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         state.Invalidate = () => invalidated.TrySetResult();
         engine.ChangeAssemblies();
         Assert.IsFalse(requester.Matches(state, old));
         Assert.IsNull(CompletionEdit.For(state, old.Reply.Items[0]));
+        Assert.AreEqual(EnterAction.AcceptCompletion,
+            PromptWidget.EnterActionFor(state, paletteVisible: false, openDepth: 0, commentOpen: false));
+        state.PaletteDismissed = true;
+        Assert.AreEqual(EnterAction.Submit,
+            PromptWidget.EnterActionFor(state, paletteVisible: false, openDepth: 0, commentOpen: false));
+        state.PaletteDismissed = false;
         await invalidated.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.CancellationToken);
         engine.Immediate = Reply(engine, "Qualified");
         requester.Refresh(state);

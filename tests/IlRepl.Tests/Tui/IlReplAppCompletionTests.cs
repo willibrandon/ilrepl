@@ -63,6 +63,8 @@ public sealed class IlReplAppCompletionTests
     /// <param name="acceptance">The acceptance input.</param>
     /// <param name="remote">Whether the real host process serves completion.</param>
     [TestMethod]
+    // Concurrent assembly loads intentionally withdraw rows; AssemblyCompletionTests exercises that separate transition.
+    [DoNotParallelize]
     [DataRow("tab", false)]
     [DataRow("enter", false)]
     [DataRow("right", false)]

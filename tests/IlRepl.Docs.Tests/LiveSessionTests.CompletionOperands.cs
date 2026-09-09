@@ -5,6 +5,98 @@ namespace IlRepl.Docs.Tests;
 public sealed partial class LiveSessionTests
 {
     /// <summary>
+    /// An event handler completion disappears for an array suffix and returns when the delegate type is restored.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_EventHandlerCompletion_RejectsArraySuffix(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        await PasteAsync(page, """
+            .class public EventHost {
+            .method public static specialname void add_Changed(Action value) {
+            ret
+            }
+            .method public static specialname void remove_Changed(Action value) {
+            ret
+            }
+            .event System.Act
+            """);
+        await CompletionAtCaretAsync(page, "  ...> .event System.Act", "❯ Action ");
+        await page.Keyboard.TypeAsync("[]");
+        await page.Keyboard.PressAsync("ArrowLeft");
+        await page.Keyboard.PressAsync("ArrowLeft");
+        await PromptContainsAsync(page, ".event System.Act[]");
+        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ Action ");
+        await page.Keyboard.PressAsync("Delete");
+        await page.Keyboard.PressAsync("Delete");
+        await CompletionAtCaretAsync(page, "  ...> .event System.Act", "❯ Action ");
+        await page.Keyboard.PressAsync("Tab");
+        await PasteAsync(page, """
+             Changed {
+            .addon void EventHost::add_Changed(Action)
+            .removeon void EventHost::remove_Changed(Action)
+            }
+            }
+            ldnull
+            call void EventHost::add_Changed(Action)
+            ldc.i4.7
+            ret
+            """);
+        await page.Keyboard.PressAsync("Enter");
+        await ExpectCompletionAsync(page, "= 7 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
+    /// A rejected typed-reference generic argument can be replaced by a completed string argument and executed.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    /// <param name="method">Whether the generic owner is a method.</param>
+    [TestMethod]
+    [DataRow("chromium", false)]
+    [DataRow("webkit", false)]
+    [DataRow("chromium", true)]
+    [DataRow("webkit", true)]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_GenericArgument_RejectsTypedReference(string browser, bool method)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var prefix = method ? "call Array::Empty<" : "ldtoken List<";
+        await page.Keyboard.TypeAsync(prefix + "typedre");
+        await PromptAtCaretAsync(page, "il[1]> " + prefix + "typedre");
+        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ typedref");
+        for (var i = 0; i < "typedre".Length; i++)
+        {
+            await page.Keyboard.PressAsync("Backspace");
+        }
+
+        await page.Keyboard.TypeAsync("str");
+        await CompletionAtCaretAsync(page, "il[1]> " + prefix + "str", "❯ string");
+        await page.Keyboard.PressAsync("Tab");
+        await page.Keyboard.TypeAsync(">");
+        if (method)
+        {
+            await CompletionAtCaretAsync(page, "il[1]> " + prefix + "string>", "signatures 1/1");
+            await page.Keyboard.PressAsync("Tab");
+        }
+
+        await page.Keyboard.PressAsync("Enter");
+        await TypeLineAsync(page, method ? "ldlen" : "pop");
+        await TypeLineAsync(page, method ? "conv.i4" : "ldc.i4.0");
+        await TypeLineAsync(page, "ret");
+        await ExpectCompletionAsync(page, "= 0 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// Removing a pointer suffix excludes void from sizeof while restoring it produces an executable operand.
     /// </summary>
     /// <param name="browser">The browser engine.</param>

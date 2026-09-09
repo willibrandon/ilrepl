@@ -45,6 +45,8 @@ public sealed class FieldTypeCompletionTests
     /// <param name="text">The partial field declaration and caret.</param>
     [TestMethod]
     [DataRow(".field public static vo|*")]
+    [DataRow(".field public static vo| /* retained */ *")]
+    [DataRow("/* before */ .field public static vo| /* retained */ *")]
     [DataRow(".field public static method vo| *()")]
     public async Task Complete_PointerField_BindsAndRuns(string text)
     {

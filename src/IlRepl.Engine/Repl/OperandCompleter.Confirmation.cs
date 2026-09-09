@@ -26,10 +26,12 @@ public sealed partial class OperandCompleter
             var original = query.Identity.Document.Lines[query.Identity.Document.Line];
             var line = original[..site.ReplaceStart] + insertion + original[site.ReplaceEnd..];
             if (candidate.Type is not null && site.Kind == CompletionSiteKind.Type
-                && site.Owner is ".locals" or ".args" or ".method" or ".field" or ".property")
+                && site.Owner is ".locals" or ".args" or ".method" or ".field" or ".property" or ".event")
             {
-                var position = site.ReplaceStart;
-                var declaredType = SymbolBinder.BindType(CilSyntaxParser.ParseTypeAt(line, ref position), scope);
+                var comment = false;
+                var declaration = CilLexer.StripComments(line[site.ReplaceStart..], ref comment);
+                var position = 0;
+                var declaredType = SymbolBinder.BindType(CilSyntaxParser.ParseTypeAt(declaration, ref position), scope);
                 if (site.Owner == ".field" && declaredType.Pinned
                     || !MemberEligibility.Admits(declaredType.Type, site, query.View))
                 {

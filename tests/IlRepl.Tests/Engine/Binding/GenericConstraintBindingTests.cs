@@ -136,6 +136,9 @@ public sealed class GenericConstraintBindingTests
     /// </summary>
     [TestMethod]
     [DataRow("List<void>")]
+    [DataRow("List<typedref>")]
+    [DataRow("List<System.TypedReference>")]
+    [DataRow("List<typedref modopt(int32)>")]
     [DataRow("List<int32&>")]
     [DataRow("List<System.Span<int32>>")]
     public void InvalidArgument_IsRefusedByTheSharedBinder(string text)
@@ -143,6 +146,29 @@ public sealed class GenericConstraintBindingTests
         using var snapshot = BindingSnapshot.Capture(new Session());
         var scope = new SnapshotBindingScope(snapshot);
         Assert.Throws<ReplException>(() => SymbolBinder.BindType(CilSyntaxParser.ParseType(text), scope));
+    }
+
+    /// <summary>
+    /// Typed references remain invalid generic arguments even for parameters that permit byref-like types.
+    /// </summary>
+    [TestMethod]
+    public void TypedReference_AgreesWithRuntimeRejection()
+    {
+        using var snapshot = BindingSnapshot.Capture(new Session());
+        var scope = new SnapshotBindingScope(snapshot);
+        foreach (var type in new[] { typeof(List<>), typeof(RefLikeConstraintArgument<>) })
+        {
+            Assert.IsTrue(RuntimeRejects(() => type.MakeGenericType(typeof(TypedReference))), type.Name);
+            var parameter = scope.GenericParameterDeclarations(RuntimeSymbolImporter.Import(type))[0];
+            Assert.IsFalse(GenericConstraints.Satisfies(parameter, RuntimeSymbolImporter.Import(typeof(TypedReference)),
+                argument => argument, scope));
+        }
+
+        var method = typeof(Array).GetMethod(nameof(Array.Empty))!;
+        Assert.IsTrue(RuntimeRejects(() => method.MakeGenericMethod(typeof(TypedReference))));
+        var definition = RuntimeSymbolImporter.Import(method);
+        Assert.IsFalse(GenericConstraints.SatisfiesMethod(definition, definition.DeclaringType,
+            [TypeSymbol.Primitive("typedref")], scope));
     }
 
     /// <summary>
@@ -158,4 +184,18 @@ public sealed class GenericConstraintBindingTests
         Assert.AreEqual(typeof(Span<int>).IsByRefLike, TypeSymbol.Construct(definition, [TypeSymbol.Primitive("int32")]).IsByRefLike);
         Assert.IsFalse(scope.LookupType("System.Memory`1", null, 0, false).Type.IsByRefLike);
     }
+
+    private static bool RuntimeRejects(Action construct)
+    {
+        try
+        {
+            construct();
+            return false;
+        }
+        catch (Exception exception) when (exception is ArgumentException or TypeLoadException or BadImageFormatException)
+        {
+            return true;
+        }
+    }
+
 }

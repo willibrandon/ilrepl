@@ -62,8 +62,9 @@ public static class GenericConstraints
         ArgumentNullException.ThrowIfNull(argument);
         ArgumentNullException.ThrowIfNull(substitute);
         ArgumentNullException.ThrowIfNull(scope);
+        argument = argument.Unwrapped;
         if (argument.Kind is TypeSymbolKind.ByRef or TypeSymbolKind.Pointer or TypeSymbolKind.FunctionPointer or TypeSymbolKind.Unresolved
-            || SymbolIdentity.Equal(argument, TypeSymbol.Void))
+            || argument.Keyword is "void" or "typedref")
         {
             return false;
         }
