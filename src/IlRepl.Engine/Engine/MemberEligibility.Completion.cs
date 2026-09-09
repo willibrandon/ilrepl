@@ -109,6 +109,11 @@ public static partial class MemberEligibility
             return false;
         }
 
+        if (site.Owner == "newarr" && !hasElementSuffix && !IsArrayElement(type))
+        {
+            return false;
+        }
+
         if (site.Owner == ".args" && ContainsParameter(type))
         {
             return false;
@@ -135,6 +140,22 @@ public static partial class MemberEligibility
         ArgumentNullException.ThrowIfNull(method);
         return method.IsDeclared && method.Source != MethodSymbolSource.Forward && method.HasIlBody;
     }
+
+    private static bool IsArrayElement(TypeSymbol type) => type.Kind switch
+    {
+        TypeSymbolKind.Array or TypeSymbolKind.SzArray or TypeSymbolKind.Modified => IsArrayElement(type.Element!),
+        TypeSymbolKind.ByRef or TypeSymbolKind.Pinned => false,
+        TypeSymbolKind.Pointer => IsPointerTarget(type.Element!),
+        _ => !type.IsByRefLike && type.Keyword is not ("void" or "typedref"),
+    };
+
+    private static bool IsPointerTarget(TypeSymbol type) => type.Kind switch
+    {
+        TypeSymbolKind.Array or TypeSymbolKind.SzArray => IsArrayElement(type),
+        TypeSymbolKind.Pointer or TypeSymbolKind.Modified => IsPointerTarget(type.Element!),
+        TypeSymbolKind.ByRef or TypeSymbolKind.Pinned => false,
+        _ => true,
+    };
 
     private static bool ContainsParameter(TypeSymbol type)
     {

@@ -43,6 +43,12 @@ public sealed partial class OperandCompleter
                     var normalized = CilLexer.StripComments(line, ref comment).Trim();
                     var (_, text) = InstructionParser.SplitLabels(normalized);
                     instruction = SymbolBinder.BindInstruction(CilSyntaxParser.ParseInstruction(text), scope);
+                    if (site.Owner == "newarr" && instruction.Operand.Type is { } element
+                        && !MemberEligibility.Admits(element, site, query.View))
+                    {
+                        return null;
+                    }
+
                     if (!Matches(instruction, candidate, site))
                     {
                         return null;

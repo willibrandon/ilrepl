@@ -63,6 +63,39 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
+    /// Void remains a usable pointer-array element and type token after array-element completion filtering.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_VoidPointerArrayCompletion_Binds(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        await TypeLineAsync(page, "ldc.i4.0");
+        await page.Keyboard.TypeAsync("newarr vo*");
+        await page.Keyboard.PressAsync("ArrowLeft");
+        await CompletionAtCaretAsync(page, "il[1]> newarr vo", "❯ void");
+        await page.Keyboard.PressAsync("Tab");
+        await page.Keyboard.PressAsync("Enter");
+        await TypeLineAsync(page, "ldlen");
+        await TypeLineAsync(page, "conv.i4");
+        await TypeLineAsync(page, "ret");
+        await ExpectCompletionAsync(page, "= 0 : int32");
+        await page.Keyboard.TypeAsync("ldtoken vo");
+        await CompletionAtCaretAsync(page, "il[2]> ldtoken vo", "❯ void");
+        await page.Keyboard.PressAsync("Tab");
+        await page.Keyboard.PressAsync("Enter");
+        await TypeLineAsync(page, "call Type::GetTypeFromHandle(RuntimeTypeHandle)");
+        await TypeLineAsync(page, "ret");
+        await ExpectCompletionAsync(page, "= typeof(void)");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// Array member completion and a label preceding its own branch bind in the browser engine.
     /// </summary>
     /// <param name="browser">The browser engine.</param>
