@@ -429,6 +429,11 @@ public sealed class CecilWriter
 
         NoteSessionMembers(declaring);
         NoteSessionMembers(field.FieldType);
+        if (CecilMetadataSignatures.IsRequired(field))
+        {
+            return CecilMetadataSignatures.Import(field, this);
+        }
+
         var imported = Module.ImportReference(field);
         if (CecilArrayShapes.ContainsArray(imported.FieldType))
         {
@@ -581,6 +586,11 @@ public sealed class CecilWriter
                     NoteSessionMembers(argument);
                 }
             }
+        }
+
+        if (CecilMetadataSignatures.IsRequired(method))
+        {
+            return CecilMetadataSignatures.Import(method, this);
         }
 
         var reference = Module.ImportReference(method);

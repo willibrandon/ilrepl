@@ -12,7 +12,7 @@ namespace IlRepl.Engine;
 internal static class CecilCellBody
 {
     /// <summary>
-    /// Detects generic member references whose array dimensions Reflection.Emit would discard.
+    /// Detects generic references whose array dimensions or function-pointer flags Reflection.Emit would discard.
     /// </summary>
     /// <param name="state">The cell body.</param>
     /// <returns>Whether its body requires metadata emission.</returns>
@@ -25,7 +25,7 @@ internal static class CecilCellBody
                 case ResolvedMethod { Method: { } method } resolved when method.IsGenericMethod
                     || method.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false }:
                 {
-                    if (ContainsArray(resolved.ReturnType) || resolved.ParameterTypes.Any(ContainsArray))
+                    if (NeedsMetadata(resolved.ReturnType) || resolved.ParameterTypes.Any(NeedsMetadata))
                     {
                         return true;
                     }
@@ -33,7 +33,7 @@ internal static class CecilCellBody
                     break;
                 }
                 case FieldInfo field when field.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false }:
-                    if (ContainsArray(field.FieldType))
+                    if (NeedsMetadata(field.FieldType))
                     {
                         return true;
                     }
@@ -45,11 +45,9 @@ internal static class CecilCellBody
         return false;
     }
 
-    private static bool ContainsArray(Type type) => type.IsArray && !type.IsSZArray
-        || type.HasElementType && ContainsArray(type.GetElementType()!)
-        || type.IsGenericType && !type.IsGenericTypeDefinition && type.GetGenericArguments().Any(ContainsArray)
-        || TypeNameFormatter.IsFunctionPointer(type)
-            && (ContainsArray(type.GetFunctionPointerReturnType()) || type.GetFunctionPointerParameterTypes().Any(ContainsArray));
+    private static bool NeedsMetadata(Type type) => TypeNameFormatter.IsFunctionPointer(type) || type.IsArray && !type.IsSZArray
+        || type.HasElementType && NeedsMetadata(type.GetElementType()!)
+        || type.IsGenericType && !type.IsGenericTypeDefinition && type.GetGenericArguments().Any(NeedsMetadata);
 
     /// <summary>
     /// Emits a callable cell body with exact metadata references and the cell's existing session bindings.

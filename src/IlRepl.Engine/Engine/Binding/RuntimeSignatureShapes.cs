@@ -5,19 +5,19 @@ using System.Reflection.Metadata.Ecma335;
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
-/// Restores array signature shapes that reflection's runtime types cannot retain.
+/// Restores signature details that reflection's runtime types cannot retain.
 /// </summary>
 internal static class RuntimeSignatureShapes
 {
     /// <summary>
-    /// Adds metadata array bounds to a method's already resolved signature without changing its type identities.
+    /// Adds metadata bounds and calling conventions to an already resolved method signature.
     /// </summary>
     /// <param name="method">The reflected method.</param>
     /// <param name="symbol">The imported signature.</param>
-    /// <returns>The signature with its original array shapes.</returns>
+    /// <returns>The signature with its original bounds and function-pointer flags.</returns>
     public static MethodSymbol Restore(MethodBase method, MethodSymbol symbol)
     {
-        if (!ContainsArray(symbol.ReturnType) && !symbol.Parameters.Any(parameter => ContainsArray(parameter.Type)))
+        if (!NeedsMetadata(symbol.ReturnType) && !symbol.Parameters.Any(parameter => NeedsMetadata(parameter.Type)))
         {
             return symbol;
         }
@@ -35,12 +35,12 @@ internal static class RuntimeSignatureShapes
     }
 
     /// <summary>
-    /// Adds metadata array bounds to a field's already resolved type.
+    /// Adds metadata bounds and calling conventions to a field's already resolved type.
     /// </summary>
     /// <param name="field">The reflected field.</param>
     /// <param name="symbol">The imported field.</param>
-    /// <returns>The field with its original array shapes.</returns>
-    public static FieldSymbol Restore(FieldInfo field, FieldSymbol symbol) => !ContainsArray(symbol.FieldType) ? symbol
+    /// <returns>The field with its original bounds and function-pointer flags.</returns>
+    public static FieldSymbol Restore(FieldInfo field, FieldSymbol symbol) => !NeedsMetadata(symbol.FieldType) ? symbol
         : Read(field, symbol, (source, provider) =>
         {
             var handle = (FieldDefinitionHandle)MetadataTokens.Handle(symbol.Definition.Token);
@@ -63,14 +63,13 @@ internal static class RuntimeSignatureShapes
         }
         catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
         {
-            // Dynamic members and unavailable metadata expose only the runtime array type.
+            // Dynamic members and unavailable metadata expose only the runtime type.
             return fallback;
         }
     }
 
-    private static bool ContainsArray(TypeSymbol type) => type.Kind == TypeSymbolKind.Array
-        || type.Element is { } element && ContainsArray(element) || type.Arguments.Any(ContainsArray)
-        || type.Signature is { } signature && (ContainsArray(signature.ReturnType) || signature.Parameters.Any(ContainsArray));
+    private static bool NeedsMetadata(TypeSymbol type) => type.Kind is TypeSymbolKind.Array or TypeSymbolKind.FunctionPointer
+        || type.Element is { } element && NeedsMetadata(element) || type.Arguments.Any(NeedsMetadata);
 
     private static TypeSymbol Restore(TypeSymbol actual, TypeSymbol metadata)
     {
@@ -92,6 +91,8 @@ internal static class RuntimeSignatureShapes
                 [.. actual.Arguments.Select((argument, index) => Restore(argument, metadata.Arguments[index]))]),
             TypeSymbolKind.FunctionPointer => TypeSymbol.FunctionPointer(actual.Signature! with
             {
+                ManagedConvention = metadata.Signature!.ManagedConvention,
+                SentinelIndex = metadata.Signature.SentinelIndex,
                 ReturnType = Restore(actual.Signature.ReturnType, metadata.Signature!.ReturnType),
                 Parameters = [.. actual.Signature.Parameters.Select((parameter, index)
                     => Restore(parameter, metadata.Signature.Parameters[index]))],

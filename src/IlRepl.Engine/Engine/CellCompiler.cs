@@ -124,7 +124,7 @@ public static class CellCompiler
                 return;
             }
 
-            // Reflection.Emit reconstructs signatures on generic owners from Type objects, losing array bounds.
+            // Reflection.Emit rebuilds generic member signatures from Type objects, losing bounds and pointer flags.
             var (bodyDefinition, bodyMethod) = CecilCellBody.Compile(state, names, methods);
             helpers.Add(bodyDefinition);
             var target = names.Count == 0 ? bodyMethod : bodyMethod.MakeGenericMethod(genericParameters);

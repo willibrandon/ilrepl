@@ -425,14 +425,17 @@ public static class IlAsmRenderer
         // parameters as !N, a generic method instance its own as !!N.
         var definitionMethod = DefinitionOf(method);
         var signature = RuntimeSymbolImporter.Import(definitionMethod);
-        var returnType = SignatureType(signature.ReturnType);
+        var metadata = CecilMetadataSignatures.IsRequired(definitionMethod) ? RuntimeMetadataSignatures.Read(definitionMethod) : null;
+        var returnType = metadata is null ? SignatureType(signature.ReturnType) : IlSignatureRenderer.IlAsm(metadata.ReturnType);
         var name = method is ConstructorInfo ? (method.IsStatic ? ".cctor" : ".ctor") : MemberName(method.Name);
         if (method is MethodInfo g && g.IsGenericMethod)
         {
             name += "<" + string.Join(", ", g.GetGenericArguments().Select(TypeNameFormatter.IlAsm)) + ">";
         }
 
-        var parameters = signature.Parameters.Select(parameter => SignatureType(parameter.Type)).ToList();
+        var parameters = metadata is null
+            ? signature.Parameters.Select(parameter => SignatureType(parameter.Type)).ToList()
+            : metadata.Parameters.Select(IlSignatureRenderer.IlAsm).ToList();
         if (resolved.OptionalParameterTypes is not null)
         {
             parameters.Add("...");
@@ -447,6 +450,12 @@ public static class IlAsmRenderer
     {
         var declaring = field.DeclaringType is null ? "?" : TypeNameFormatter.IlAsmDeclaring(field.DeclaringType);
         var definition = DefinitionOf(field);
+        if (CecilMetadataSignatures.IsRequired(definition))
+        {
+            var signature = IlSignatureRenderer.IlAsm(RuntimeMetadataSignatures.Read(definition));
+            return $"{signature} {declaring}::{MemberName(field.Name)}";
+        }
+
         var type = SignatureType(RuntimeSymbolImporter.Import(definition).FieldType);
         try
         {

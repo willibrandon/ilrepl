@@ -61,6 +61,12 @@ public sealed partial class LiveSessionTests
         await ExpectCompletionAsync(page, "= 7 : int32");
         Assert.DoesNotContain("error:", await BufferTextAsync(page));
         await TypeLineAsync(page, ".clear");
+        await PasteAsync(page, ".method int32 CheckPointer() {\nldc.i4.0\nconv.u\n"
+            + "call Greeter.Hello::AcceptCdecl\nldc.i4.4\nadd\nret\n}\ncall CheckPointer\nret");
+        await page.Keyboard.PressAsync("Enter");
+        await ExpectCompletionAsync(page, "= 11 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+        await TypeLineAsync(page, ".clear");
         await TypeLineAsync(page, "ldtoken Systm.Console");
         await ExpectCompletionAsync(page, "did you mean 'Console'");
         await EmptyPromptAsync(page);
