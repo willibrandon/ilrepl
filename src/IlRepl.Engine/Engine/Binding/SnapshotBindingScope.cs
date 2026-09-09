@@ -76,6 +76,44 @@ public sealed class SnapshotBindingScope : IBindingScope
     /// <returns>The read-only confirmation scope.</returns>
     public SnapshotBindingScope ForConfirmation() => new(_snapshot, _shared, _generics, confirming: true);
 
+    /// <summary>
+    /// Checks whether an assembly hint names the exact type through a definition or a forwarder.
+    /// </summary>
+    /// <param name="hint">The assembly name, <c>ilrepl</c> for session types, or null for any assembly.</param>
+    /// <param name="type">The candidate type.</param>
+    /// <returns>True when the hinted assembly resolves the candidate's path to its identity.</returns>
+    public bool AssemblyHintNamesType(string? hint, TypeSymbol type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        if (hint is null)
+        {
+            return true;
+        }
+
+        if (hint == "ilrepl")
+        {
+            return IsSessionType(type);
+        }
+
+        var source = _snapshot.Catalog.FindAssembly(hint);
+        if (source is null)
+        {
+            return false;
+        }
+
+        var definition = type.DefinitionOrSelf;
+        var chain = new Stack<string>();
+        var outer = definition;
+        while (outer.Declaring is not null)
+        {
+            chain.Push(outer.Name);
+            outer = outer.Declaring;
+        }
+
+        var found = _snapshot.Catalog.FindPath(source, outer.Namespace, outer.Name, chain.ToArray());
+        return SymbolIdentity.Equal(found, definition);
+    }
+
     /// <inheritdoc/>
     public TypeLookupResult LookupType(string name, string? assemblyHint, int writtenArity, bool valueTypeKeyword)
     {

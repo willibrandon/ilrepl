@@ -1,5 +1,6 @@
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
+using Mono.Cecil;
 
 namespace IlRepl.Tests.Engine;
 
@@ -136,6 +137,53 @@ public sealed class NameSuggestionsTests
         var scope = new SnapshotBindingScope(snapshot);
         Assert.IsNull(NameSuggestions.NearestType("Unrelated.Console", null, index, AccessContext.Cell, scope));
         Assert.IsNull(NameSuggestions.NearestType("System.Console", null, index, AccessContext.Cell, scope));
+    }
+
+    /// <summary>
+    /// An assembly hint admits forwarded definitions and nested targets alongside the facade's own definitions.
+    /// </summary>
+    /// <param name="nested">True to suggest a nested type reached through the forwarded outer type.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void NearestType_AssemblyHint_IncludesForwardedTargets(bool nested)
+    {
+        var session = new Session();
+        var resolver = session.State.Resolver;
+        var suffix = Guid.NewGuid().ToString("N");
+        var (targetAssembly, _, outer) = CecilFixture.Build((module, type) =>
+        {
+            type.NestedTypes.Add(new TypeDefinition("", "Inner", TypeAttributes.NestedPublic, module.TypeSystem.Object));
+        }, resolver, "ForwardedType" + suffix);
+        var (facade, _, own) = CecilFixture.Build((module, _) =>
+        {
+            var reference = AssemblyNameReference.Parse(targetAssembly.GetName().FullName!);
+            module.AssemblyReferences.Add(reference);
+            module.ExportedTypes.Add(new ExportedType("N", outer.Name, module, reference) { IsForwarder = true });
+        }, resolver, "FacadeDefined" + suffix);
+        var (_, _, unrelated) = CecilFixture.Build((_, _) => { }, resolver, "NotForwarded" + suffix);
+        var target = nested ? outer.GetNestedType("Inner")! : outer;
+        var path = outer.FullName + (nested ? "/Inner" : "");
+        var hint = facade.GetName().Name!;
+        Assert.AreSame(target, TypeParser.Parse($"[{hint}]{path}", session.State.Context));
+        using var snapshot = BindingSnapshot.Capture(session.State.Context);
+        var scope = new SnapshotBindingScope(snapshot);
+        var index = new TypeIndex(snapshot);
+        Assert.Contains(entry => entry.AssemblyName == hint, index.Entries);
+        var typo = path.Replace("ForwardedType", "ForwarddType", StringComparison.Ordinal);
+        var suggestion = NameSuggestions.NearestType(typo, hint, index, AccessContext.Cell, scope);
+        Assert.IsNotNull(suggestion);
+        Assert.AreNotEqual(hint, suggestion.Entry.AssemblyName);
+        Assert.AreSame(target, TypeParser.Parse(suggestion.Spelling, session.State.Context));
+        var error = Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse($"[{hint}]{typo}", session.State.Context));
+        Assert.Contains(NameSuggestions.Parenthetical(suggestion.Spelling), error.Message);
+
+        var ownTypo = own.FullName!.Replace("Defined", "Defind", StringComparison.Ordinal);
+        var ownSuggestion = NameSuggestions.NearestType(ownTypo, hint, index, AccessContext.Cell, scope);
+        Assert.IsNotNull(ownSuggestion);
+        Assert.AreSame(own, TypeParser.Parse(ownSuggestion.Spelling, session.State.Context));
+        var unrelatedTypo = unrelated.FullName!.Replace("Forwarded", "Forwardd", StringComparison.Ordinal);
+        Assert.IsNull(NameSuggestions.NearestType(unrelatedTypo, hint, index, AccessContext.Cell, scope));
     }
 
     /// <summary>

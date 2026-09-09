@@ -94,22 +94,14 @@ public static class NameSuggestions
         var hasNamespace = (nested < 0 ? ilName : ilName[..nested]).Contains('.');
         var confirmation = scope.ForSuggestions(out var lease);
         using var ownedLease = lease;
-        var speller = new TypeSpeller((SnapshotBindingScope)confirmation);
+        var snapshotScope = (SnapshotBindingScope)confirmation;
+        var speller = new TypeSpeller(snapshotScope);
         var facts = AccessFacts.From(confirmation);
-        IEnumerable<TypeIndexEntry> candidates = index.Entries;
-        if (assemblyHint is not null)
-        {
-            var hinted = index.Entries.Where(e => string.Equals(e.AssemblyName, assemblyHint, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (hinted.Count > 0)
-            {
-                candidates = hinted;
-            }
-        }
 
         TypeIndexEntry? best = null;
         string? bestSpelling = null;
         var bestKey = (Distance: int.MaxValue, Common: 1, Session: 1, Path: "");
-        foreach (var entry in candidates)
+        foreach (var entry in index.Entries)
         {
             var name = separator < 0 ? entry.Name : entry.IlPath;
             if (nested >= 0 && !hasNamespace && entry.Namespace.Length > 0)
@@ -136,7 +128,8 @@ public static class NameSuggestions
                 try
                 {
                     var symbol = index.SymbolOf(entry);
-                    if (symbol is null || MemberEligibility.AccessProblem(symbol, where, facts) is not null
+                    if (symbol is null || !snapshotScope.AssemblyHintNamesType(assemblyHint, symbol)
+                        || MemberEligibility.AccessProblem(symbol, where, facts) is not null
                         || speller.TrySpell(symbol) is not { } spelling)
                     {
                         continue;

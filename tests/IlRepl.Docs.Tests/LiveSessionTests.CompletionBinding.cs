@@ -32,6 +32,9 @@ public sealed partial class LiveSessionTests
         await TypeLineAsync(page, "ldtoken Systm.Console");
         await ExpectCompletionAsync(page, "did you mean 'Console'");
         await EmptyPromptAsync(page);
+        await TypeLineAsync(page, "ldtoken [System.Runtime]System.Text.StringBuildr");
+        await ExpectCompletionAsync(page, "'StringBuilder'?");
+        await EmptyPromptAsync(page);
         await TypeLineAsync(page, "ldtoken System.Environmnt/SpecialFolder");
         await ExpectCompletionAsync(page, "'SpecialFolder'?");
         await EmptyPromptAsync(page);

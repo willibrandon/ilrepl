@@ -424,40 +424,7 @@ internal sealed class CompletionCandidateSource
         _ => 0,
     };
 
-    private bool HintNames(string? hint, TypeSymbol type)
-    {
-        if (hint is null)
-        {
-            return true;
-        }
-
-        if (hint == "ilrepl")
-        {
-            return _scope.IsSessionType(type);
-        }
-
-        var source = _view.Snapshot.Catalog.FindAssembly(hint);
-        if (source is null)
-        {
-            return false;
-        }
-
-        var definition = type.DefinitionOrSelf;
-        var chain = new Stack<string>();
-        for (var current = definition; current.Declaring is not null; current = current.Declaring)
-        {
-            chain.Push(current.Name);
-        }
-
-        var outer = definition;
-        while (outer.Declaring is not null)
-        {
-            outer = outer.Declaring;
-        }
-
-        var found = _view.Snapshot.Catalog.FindPath(source, outer.Namespace, outer.Name, chain.ToArray());
-        return SymbolIdentity.Equal(found, definition);
-    }
+    private bool HintNames(string? hint, TypeSymbol type) => _scope.AssemblyHintNamesType(hint, type);
 
     /// <summary>
     /// Decodes quoted matching text without treating generic punctuation inside a quoted name as syntax.
