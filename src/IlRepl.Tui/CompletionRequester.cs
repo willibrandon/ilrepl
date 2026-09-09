@@ -15,6 +15,11 @@ public sealed class CompletionRequester
     private CompletionRequestKey? _site;
     private long _generation;
     private long _revision = -1;
+    private long _assemblyVersion = -1;
+    private readonly CancellationTokenSource _watchCancellation = new();
+    private Task? _watch;
+    private Task? _settlement;
+    private volatile bool _watchFailed;
     private bool _stopped;
 
     /// <summary>
@@ -61,8 +66,9 @@ public sealed class CompletionRequester
     /// <param name="state">The prompt.</param>
     /// <param name="snapshot">The retained rows.</param>
     /// <returns>Whether every local query component is still current.</returns>
-    public bool Matches(PromptState state, CompletionSnapshot snapshot) => !_stopped && !state.Busy
-        && snapshot.Key.SameQuery(CurrentKey(state)) && snapshot.Reply.Revision == _engine.Status.Revision;
+    public bool Matches(PromptState state, CompletionSnapshot snapshot) => !_stopped && !_watchFailed && !state.Busy
+        && snapshot.Key.SameQuery(CurrentKey(state)) && snapshot.Reply.Revision == _engine.Status.Revision
+        && snapshot.Reply.AssemblyVersion == _engine.AssemblyVersion;
 
     /// <summary>
     /// Starts only the work needed by this frame, preserving an identical pending query or page.
@@ -77,17 +83,26 @@ public sealed class CompletionRequester
             return;
         }
 
+        _watch ??= WatchAssembliesAsync(state);
+        if (_watchFailed)
+        {
+            Cancel(state);
+            state.Palette = PaletteMode.Faulted;
+            return;
+        }
+
         if (state.Busy)
         {
             Cancel(state);
             return;
         }
 
-        if (_revision != _engine.Status.Revision)
+        if (_revision != _engine.Status.Revision || _assemblyVersion != _engine.AssemblyVersion)
         {
             Cancel(state);
             state.Anchors.Clear();
             _revision = _engine.Status.Revision;
+            _assemblyVersion = _engine.AssemblyVersion;
             if (state.Palette is not (PaletteMode.Dismissed or PaletteMode.Faulted) || state.DismissedRevision != _revision)
             {
                 state.Palette = PaletteMode.Closed;
@@ -222,7 +237,8 @@ public sealed class CompletionRequester
         }
 
         var reply = result.Reply!;
-        var snapshot = reply.Total < 0 || reply.Revision != result.Key.Revision ? null
+        var snapshot = reply.Total < 0 || reply.Revision != result.Key.Revision
+            || reply.AssemblyVersion != _engine.AssemblyVersion ? null
             : result.Key.Cursor is null ? new CompletionSnapshot(result.Key, reply) : state.Completions?.Append(reply);
         if (snapshot is null)
         {
@@ -265,7 +281,9 @@ public sealed class CompletionRequester
     /// </summary>
     /// <param name="timeout">The maximum wait before closing a failed engine.</param>
     /// <returns>A task that completes only after every owned request has settled.</returns>
-    public async Task SettleAsync(TimeSpan timeout)
+    public Task SettleAsync(TimeSpan timeout) => _settlement ??= SettleCoreAsync(timeout);
+
+    private async Task SettleCoreAsync(TimeSpan timeout)
     {
         _stopped = true;
         Interlocked.Increment(ref _generation);
@@ -274,7 +292,8 @@ public sealed class CompletionRequester
             await pending.Cancellation.CancelAsync().ConfigureAwait(false);
         }
 
-        var joined = Task.WhenAll(_owned.Select(pending => pending.Task));
+        await _watchCancellation.CancelAsync().ConfigureAwait(false);
+        var joined = Task.WhenAll(_owned.Select(pending => pending.Task).Append(_watch ?? Task.CompletedTask));
         try
         {
             await joined.WaitAsync(timeout).ConfigureAwait(false);
@@ -290,6 +309,7 @@ public sealed class CompletionRequester
         _current = null;
         _site = null;
         LastAnswered = null;
+        _watchCancellation.Dispose();
     }
 
     private CompletionRequestKey CurrentKey(PromptState state)
@@ -299,6 +319,7 @@ public sealed class CompletionRequester
         var caret = state.CaretColumn;
         var selection = state.Editor.Cursor.HasSelection ? state.Editor.Cursor.SelectionRange : (Hex1b.Documents.DocumentRange?)null;
         if (_current is { } known && known.Version == document.Version && known.Revision == _engine.Status.Revision
+            && known.AssemblyVersion == _engine.AssemblyVersion
             && known.Document.Line == line && known.Document.Caret == caret && known.Selection == selection
             && known.Document.Explicit == state.ExplicitCompletion && known.AnchorVersion == state.Anchors.Version)
         {
@@ -316,8 +337,29 @@ public sealed class CompletionRequester
         }
         var request = new CompletionRequest(state.Text.Split('\n'), line, caret, null, state.Anchors.Snapshot(), state.ExplicitCompletion);
         _current = new CompletionRequestKey(new CompletionDocumentKey(request), document.Version, _engine.Status.Revision,
-            site, selection, state.Anchors.Version);
+            site, selection, state.Anchors.Version) { AssemblyVersion = _engine.AssemblyVersion };
         return _current;
+    }
+
+    private async Task WatchAssembliesAsync(PromptState state)
+    {
+        var version = _engine.AssemblyVersion;
+        try
+        {
+            while (true)
+            {
+                version = await _engine.WaitForAssembliesAsync(version, _watchCancellation.Token).ConfigureAwait(false);
+                state.Invalidate?.Invoke();
+            }
+        }
+        catch (OperationCanceledException) when (_watchCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
+        {
+            _watchFailed = true;
+            state.Invalidate?.Invoke();
+        }
     }
 
     private void Start(PromptState state, CompletionRequestKey key)

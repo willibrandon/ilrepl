@@ -18,6 +18,11 @@ public sealed record CompletionRequestKey(
     long AnchorVersion, string? Cursor = null)
 {
     /// <summary>
+    /// The searchable assembly-load version observed when this request started.
+    /// </summary>
+    public long AssemblyVersion { get; init; }
+
+    /// <summary>
     /// Compares all query components except the requested page cursor.
     /// </summary>
     /// <param name="other">The other request.</param>

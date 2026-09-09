@@ -6,4 +6,6 @@ namespace IlRepl.Protocol;
 /// <param name="Catalog">Every opcode and command the completer offers.</param>
 /// <param name="Vocabulary">The words the tokenizer colours with.</param>
 /// <param name="Status">The status of the fresh session.</param>
-public sealed record HostHello(IReadOnlyList<CompletionItem> Catalog, CilVocabulary Vocabulary, SessionStatus Status);
+/// <param name="AssemblyVersion">The initial searchable assembly-load version.</param>
+public sealed record HostHello(
+    IReadOnlyList<CompletionItem> Catalog, CilVocabulary Vocabulary, SessionStatus Status, long AssemblyVersion = 0);

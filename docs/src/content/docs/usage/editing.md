@@ -187,6 +187,8 @@ types that have not been submitted yet.
 
 While new matches are being checked, the previous rows stay dimmed under an `updating` title.
 They cannot be accepted until the new results arrive.
+If running code loads another assembly in the background, the prompt refreshes its suggestions
+without an edit. Types whose short names become ambiguous are offered with qualified names.
 
 ```ilrepl
 ┌────────────────────────────types─────────────────────────────┐

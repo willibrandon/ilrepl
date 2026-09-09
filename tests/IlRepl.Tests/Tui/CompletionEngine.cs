@@ -9,6 +9,7 @@ namespace IlRepl.Tests.Tui;
 internal sealed class CompletionEngine : IReplEngine
 {
     private readonly InProcessEngine _inner = new();
+    private TaskCompletionSource<long> _assembliesChanged = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
     /// Every completion call in arrival order.
@@ -28,6 +29,23 @@ internal sealed class CompletionEngine : IReplEngine
 
     /// <inheritdoc/>
     public SessionStatus Status => _inner.Status;
+
+    /// <inheritdoc/>
+    public long AssemblyVersion { get; private set; }
+
+    /// <inheritdoc/>
+    public Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken) =>
+        version == AssemblyVersion ? _assembliesChanged.Task.WaitAsync(cancellationToken) : Task.FromResult(AssemblyVersion);
+
+    /// <summary>
+    /// Reports an assembly load independently of the session revision and any pending replies.
+    /// </summary>
+    public void ChangeAssemblies()
+    {
+        var previous = _assembliesChanged;
+        _assembliesChanged = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        previous.TrySetResult(++AssemblyVersion);
+    }
 
     /// <inheritdoc/>
     public Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken)

@@ -266,6 +266,58 @@ public sealed class CompletionRequesterTests
         await replacement.Requester.SettleAsync(TimeSpan.FromSeconds(2));
     }
 
+    /// <summary>
+    /// Background assembly loads remove cached edits and wake an idle prompt without changing its document or session.
+    /// </summary>
+    [TestMethod]
+    public async Task Refresh_AssemblyLoad_InvalidatesCachedRowsAndRequeries()
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call Console::Wr");
+        var requester = state.Requester!;
+        engine.Immediate = Reply(engine, "Old");
+        requester.Refresh(state);
+        var old = state.Completions!;
+        Assert.IsNotNull(CompletionEdit.For(state, old.Reply.Items[0]));
+        var invalidated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        state.Invalidate = () => invalidated.TrySetResult();
+        engine.ChangeAssemblies();
+        Assert.IsFalse(requester.Matches(state, old));
+        Assert.IsNull(CompletionEdit.For(state, old.Reply.Items[0]));
+        await invalidated.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.CancellationToken);
+        engine.Immediate = Reply(engine, "Qualified");
+        requester.Refresh(state);
+        Assert.HasCount(2, engine.Calls);
+        Assert.AreEqual("Qualified", state.Completions!.Reply.Items.Single().Name);
+        Assert.AreEqual(old.Key.Document, state.Completions.Key.Document);
+        Assert.AreEqual(old.Key.Revision, state.Completions.Key.Revision);
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>
+    /// An assembly change while a page is pending makes its old reply ineligible for publication.
+    /// </summary>
+    [TestMethod]
+    public async Task Apply_AssemblyLoad_DropsThePendingReply()
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call Console::Wr");
+        var requester = state.Requester!;
+        requester.Refresh(state);
+        var old = Reply(engine, "Old");
+        engine.ChangeAssemblies();
+        engine.Calls[0].Answer.SetResult(old);
+        await DrainAsync(state);
+        Assert.IsNull(state.Completions);
+        Assert.IsNull(requester.LastAnswered);
+        engine.Immediate = Reply(engine, "Qualified");
+        requester.Refresh(state);
+        Assert.HasCount(2, engine.Calls);
+        Assert.AreEqual("Qualified", state.Completions!.Reply.Items.Single().Name);
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
+    }
+
     private static PromptState State(CompletionEngine engine, string text)
     {
         var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary))
@@ -279,7 +331,7 @@ public sealed class CompletionRequesterTests
     private static CompletionReply Reply(CompletionEngine engine, string name, int length = 11) =>
         new(CompletionKind.Members, 5, length,
             [new CompletionItem(name, "[] → void", "", false) { Kind = CompletionKind.Members, Insert = "Console::" + name + "()" }],
-            null, 1, false, engine.Status.Revision, "query", 1, []);
+            null, 1, false, engine.Status.Revision, "query", 1, []) { AssemblyVersion = engine.AssemblyVersion };
 
     private async Task DrainAsync(PromptState state)
     {

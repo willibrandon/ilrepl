@@ -1,3 +1,4 @@
+using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
 
@@ -45,6 +46,17 @@ public sealed class InProcessEngine : IReplEngine
     /// <inheritdoc />
     public SessionStatus Status { get; private set; }
 
+    /// <inheritdoc/>
+    public long AssemblyVersion => ProcessAssemblies.Version;
+
+    /// <inheritdoc/>
+    public async Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
+        return await ProcessAssemblies.WaitForChangeAsync(version, cancellation.Token).ConfigureAwait(false);
+    }
+
     /// <inheritdoc />
     public async Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
     {
@@ -90,7 +102,9 @@ public sealed class InProcessEngine : IReplEngine
         await _gate.WaitAsync(cancellation.Token).ConfigureAwait(false);
         try
         {
-            return await _core.CompleteAsync(request, cancellation.Token).ConfigureAwait(false);
+            var version = AssemblyVersion;
+            var reply = await _core.CompleteAsync(request, cancellation.Token).ConfigureAwait(false);
+            return reply with { AssemblyVersion = version };
         }
         finally
         {
@@ -109,7 +123,7 @@ public sealed class InProcessEngine : IReplEngine
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return new HostHello(Catalog, Vocabulary, _core.Status);
+            return new HostHello(Catalog, Vocabulary, _core.Status, AssemblyVersion);
         }
         finally
         {

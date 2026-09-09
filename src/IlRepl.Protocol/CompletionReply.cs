@@ -28,6 +28,11 @@ public sealed record CompletionReply(
     IReadOnlyList<string> Owners)
 {
     /// <summary>
+    /// The searchable assembly-load version captured before building this page.
+    /// </summary>
+    public long AssemblyVersion { get; init; }
+
+    /// <summary>
     /// The maximum number of confirmed rows per page.
     /// </summary>
     public const int PageSize = 64;

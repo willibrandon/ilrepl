@@ -29,17 +29,25 @@ public sealed class CaretClassifier
         ArgumentNullException.ThrowIfNull(line);
         caret = Math.Clamp(caret, 0, line.Length);
         var comment = inBlockComment;
+        foreach (var segment in CilLexer.Segments(line, ref comment))
+        {
+            var closedBlock = segment.Kind == CilSegmentKind.BlockComment
+                && (segment.Length >= 4 || segment.Start == 0 && inBlockComment)
+                && line.AsSpan(segment.Start, segment.Length).EndsWith("*/", StringComparison.Ordinal);
+            if (segment.Kind is CilSegmentKind.LineComment or CilSegmentKind.BlockComment
+                && (segment.Start < caret || caret == 0) && (caret < segment.End || caret == segment.End && !closedBlock))
+            {
+                return CompletionSite.None with { Caret = caret };
+            }
+        }
+
+        comment = inBlockComment;
         var lexemes = CilScanner.Scan(line, ref comment);
         var code = new List<CilLexeme>(lexemes.Count);
         foreach (var lexeme in lexemes)
         {
             if (lexeme.Kind == CilLexemeKind.Comment)
             {
-                if (lexeme.Start <= caret && caret <= lexeme.End && !(caret == lexeme.Start && lexeme.Start > 0))
-                {
-                    return CompletionSite.None with { Caret = caret };
-                }
-
                 continue;
             }
 

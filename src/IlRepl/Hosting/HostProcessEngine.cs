@@ -16,6 +16,7 @@ public sealed class HostProcessEngine : IReplEngine
     private readonly IReplHost _host;
     private readonly StringBuilder _stderr;
     private bool _disposed;
+    private long _assemblyVersion;
 
     private HostProcessEngine(Process process, JsonRpc rpc, IReplHost host, StringBuilder stderr, HostHello hello)
     {
@@ -26,6 +27,7 @@ public sealed class HostProcessEngine : IReplEngine
         Catalog = hello.Catalog;
         Vocabulary = hello.Vocabulary;
         Status = hello.Status;
+        _assemblyVersion = hello.AssemblyVersion;
     }
 
     /// <inheritdoc />
@@ -36,6 +38,18 @@ public sealed class HostProcessEngine : IReplEngine
 
     /// <inheritdoc />
     public SessionStatus Status { get; private set; }
+
+    /// <inheritdoc/>
+    public long AssemblyVersion => Interlocked.Read(ref _assemblyVersion);
+
+    /// <inheritdoc/>
+    public async Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var changed = await _host.WaitForAssembliesAsync(version, cancellationToken).ConfigureAwait(false);
+        ObserveAssemblies(changed);
+        return AssemblyVersion;
+    }
 
     /// <summary>
     /// The host process's id, so a test can end it mid-block.
@@ -148,7 +162,9 @@ public sealed class HostProcessEngine : IReplEngine
         ObjectDisposedException.ThrowIf(_disposed, this);
         try
         {
-            return await _host.CompleteAsync(request, cancellationToken).ConfigureAwait(false);
+            var reply = await _host.CompleteAsync(request, cancellationToken).ConfigureAwait(false);
+            ObserveAssemblies(reply.AssemblyVersion);
+            return reply;
         }
         catch (RemoteInvocationException exception)
         {
@@ -176,6 +192,21 @@ public sealed class HostProcessEngine : IReplEngine
         catch (ConnectionLostException ex)
         {
             throw new HostProtocolException("the host exited" + ExitDetail(), ex);
+        }
+    }
+
+    private void ObserveAssemblies(long version)
+    {
+        var current = AssemblyVersion;
+        while (version > current)
+        {
+            var previous = Interlocked.CompareExchange(ref _assemblyVersion, version, current);
+            if (previous == current)
+            {
+                return;
+            }
+
+            current = previous;
         }
     }
 

@@ -23,6 +23,19 @@ public interface IReplEngine : IAsyncDisposable
     SessionStatus Status { get; }
 
     /// <summary>
+    /// The latest observed version of the engine's searchable loaded assemblies.
+    /// </summary>
+    long AssemblyVersion { get; }
+
+    /// <summary>
+    /// Waits for searchable assemblies to change, including loads outside submitted input.
+    /// </summary>
+    /// <param name="version">The last observed version.</param>
+    /// <param name="cancellationToken">Cancels the wait.</param>
+    /// <returns>The changed version, also published through <see cref="AssemblyVersion"/>.</returns>
+    Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Completes an operand against the session and unsent document without submitting any lines.
     /// </summary>
     /// <param name="request">The document, caret and continuation state.</param>

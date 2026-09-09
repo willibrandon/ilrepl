@@ -18,7 +18,8 @@ public sealed record CompletionSnapshot(CompletionRequestKey Key, CompletionRepl
     {
         ArgumentNullException.ThrowIfNull(page);
         return page.Total < 0 || page.QueryId != Reply.QueryId || page.Revision != Reply.Revision
-            || page.BindingEpoch != Reply.BindingEpoch || page.ReplaceStart != Reply.ReplaceStart
+            || page.BindingEpoch != Reply.BindingEpoch || page.AssemblyVersion != Reply.AssemblyVersion
+            || page.ReplaceStart != Reply.ReplaceStart
             || page.ReplaceLength != Reply.ReplaceLength ? null
             : this with { Reply = page with { Items = Reply.Items.Concat(page.Items).ToArray() } };
     }

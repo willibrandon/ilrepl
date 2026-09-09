@@ -23,7 +23,7 @@ public static class RpcTransport
         ArgumentNullException.ThrowIfNull(receiving);
         var formatter = new SystemTextJsonFormatter
         {
-            JsonSerializerOptions = { TypeInfoResolver = ProtocolJsonContext.Default },
+            JsonSerializerOptions = { TypeInfoResolver = new ProtocolTypeInfoResolver() },
         };
         return new HeaderDelimitedMessageHandler(sending, receiving, formatter);
     }

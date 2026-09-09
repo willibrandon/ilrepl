@@ -70,7 +70,6 @@ public sealed partial class OperandCompleter : IDisposable
                 await Task.Yield();
                 token.ThrowIfCancellationRequested();
                 _editing = new EditingSession(_session);
-                _assemblies = AssemblySequence();
             }
 
             _activeEditing = _editing;

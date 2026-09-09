@@ -20,9 +20,48 @@ internal static class ProcessAssemblies
 {
     private static readonly Lock Gate = new();
     private static Assembly[] s_current = [];
-    private static int s_subscribed;
+    private static readonly Lock ChangeGate = new();
+    private static TaskCompletionSource<long> s_changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private static long s_version;
     private static int s_loads;
     private static int s_builtAt = -1;
+
+    static ProcessAssemblies()
+    {
+        AppDomain.CurrentDomain.AssemblyLoad += (_, args) =>
+        {
+            Interlocked.Increment(ref s_loads);
+            if (IsSearchable(args.LoadedAssembly))
+            {
+                lock (ChangeGate)
+                {
+                    var previous = s_changed;
+                    s_changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    previous.TrySetResult(Interlocked.Increment(ref s_version));
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// The searchable assembly-load version, readable without enumerating runtime assemblies.
+    /// </summary>
+    public static long Version => Interlocked.Read(ref s_version);
+
+    /// <summary>
+    /// Waits for a searchable assembly load without retaining an engine or polling the runtime.
+    /// </summary>
+    /// <param name="version">The last observed version.</param>
+    /// <param name="cancellationToken">Cancels the wait.</param>
+    /// <returns>The changed version.</returns>
+    public static Task<long> WaitForChangeAsync(long version, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (ChangeGate)
+        {
+            return version != Version ? Task.FromResult(Version) : s_changed.Task.WaitAsync(cancellationToken);
+        }
+    }
 
     /// <summary>
     /// Returns the cached runtime load order, refreshing it after an assembly load.
@@ -35,11 +74,6 @@ internal static class ProcessAssemblies
     {
         get
         {
-            if (Volatile.Read(ref s_subscribed) == 0 && Interlocked.Exchange(ref s_subscribed, 1) == 0)
-            {
-                AppDomain.CurrentDomain.AssemblyLoad += (_, _) => Interlocked.Increment(ref s_loads);
-            }
-
             var loads = Volatile.Read(ref s_loads);
             if (Volatile.Read(ref s_builtAt) == loads)
             {

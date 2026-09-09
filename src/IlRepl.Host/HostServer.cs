@@ -27,6 +27,10 @@ public sealed class HostServer : IReplHost, IAsyncDisposable
     public Task<HostHello> HelloAsync(CancellationToken cancellationToken) => _engine.HelloAsync(cancellationToken);
 
     /// <inheritdoc/>
+    public Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken) =>
+        _engine.WaitForAssembliesAsync(version, cancellationToken);
+
+    /// <inheritdoc/>
     public Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken) =>
         _engine.CompleteAsync(request, cancellationToken);
 

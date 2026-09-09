@@ -18,6 +18,14 @@ public partial interface IReplHost
     Task<HostHello> HelloAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// Waits for a searchable assembly load without blocking input or completion requests.
+    /// </summary>
+    /// <param name="version">The last observed version.</param>
+    /// <param name="cancellationToken">Cancels the wait.</param>
+    /// <returns>The changed version.</returns>
+    Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Completes an operand against a read-only snapshot of the session and unsent document.
     /// </summary>
     /// <param name="request">The document, caret and continuation state.</param>
