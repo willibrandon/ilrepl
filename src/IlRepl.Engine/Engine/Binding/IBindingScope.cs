@@ -121,6 +121,35 @@ public interface IBindingScope
     TypeSymbol? BaseOf(TypeSymbol type);
 
     /// <summary>
+    /// The interfaces the type declares, with its generic arguments substituted into them; for a
+    /// generic parameter, its interface constraints.
+    /// </summary>
+    /// <param name="type">The type.</param>
+    /// <returns>The declared interfaces.</returns>
+    IReadOnlyList<TypeSymbol> DeclaredInterfacesOf(TypeSymbol type);
+
+    /// <summary>
+    /// The generic parameters a definition declares, with their constraints.
+    /// </summary>
+    /// <param name="definition">A type definition, a construction of one, or a method.</param>
+    /// <returns>The parameters, or empty.</returns>
+    IReadOnlyList<GenericParameterSymbol> GenericParameterDeclarations(TypeSymbol definition);
+
+    /// <summary>
+    /// The declaration of a generic parameter, with its constraints, or null when its owner is unknown.
+    /// </summary>
+    /// <param name="parameter">A type or method generic parameter.</param>
+    /// <returns>The declaration, or null.</returns>
+    GenericParameterSymbol? ParameterDeclaration(TypeSymbol parameter);
+
+    /// <summary>
+    /// True when a loaded type is an enum, and its underlying type.
+    /// </summary>
+    /// <param name="type">The type.</param>
+    /// <returns>The underlying primitive of an enum, or null.</returns>
+    TypeSymbol? EnumUnderlyingType(TypeSymbol type);
+
+    /// <summary>
     /// The methods defined with <c>.method</c> at the top level, resolvable by bare name.
     /// </summary>
     IReadOnlyList<MethodSymbol> SessionMethods { get; }

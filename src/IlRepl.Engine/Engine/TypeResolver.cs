@@ -8,7 +8,7 @@ namespace IlRepl.Engine;
 /// </summary>
 public sealed class TypeResolver
 {
-    private static readonly string[] CommonNamespaces =
+    internal static readonly string[] CommonNamespaces =
     [
         "System", "System.Text", "System.Collections.Generic", "System.Collections", "System.IO", "System.Linq",
         "System.Threading", "System.Threading.Tasks", "System.Diagnostics", "System.Globalization", "System.Numerics",

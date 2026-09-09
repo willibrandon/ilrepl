@@ -131,7 +131,7 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
     /// <summary>
     /// True for a definition with generic parameters that is not instantiated.
     /// </summary>
-    public bool IsGenericDefinition => Kind == TypeSymbolKind.Named && GenericParameterNames.Count > 0;
+    public bool IsGenericDefinition => Kind is TypeSymbolKind.Named or TypeSymbolKind.Unresolved && GenericParameterNames.Count > 0;
 
     /// <summary>
     /// True for a construction of a generic definition.
@@ -255,7 +255,7 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(arguments);
-        if (definition.Kind != TypeSymbolKind.Named)
+        if (definition.Kind is not (TypeSymbolKind.Named or TypeSymbolKind.Unresolved))
         {
             throw new ArgumentException("only a named definition can be instantiated", nameof(definition));
         }
@@ -368,6 +368,45 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
         ArgumentNullException.ThrowIfNull(element);
         return new TypeSymbol(TypeSymbolKind.Pinned) { Element = element };
     }
+
+    /// <summary>
+    /// A reference to a type no loaded assembly defines, kept by its spelling.
+    /// </summary>
+    /// <param name="name">The metadata name, arity suffix included.</param>
+    /// <param name="ns">The namespace, or empty.</param>
+    /// <param name="assemblyName">The simple name of the assembly the reference names, or empty.</param>
+    /// <param name="isValueType">True when the reference was marked <c>valuetype</c>.</param>
+    /// <returns>The symbol.</returns>
+    public static TypeSymbol Unresolved(string name, string ns, string assemblyName, bool isValueType)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(ns);
+        ArgumentNullException.ThrowIfNull(assemblyName);
+        var tick = name.LastIndexOf('`');
+        var arity = tick > 0 && int.TryParse(name[(tick + 1)..], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var count) ? count : 0;
+        return new TypeSymbol(TypeSymbolKind.Unresolved)
+        {
+            Name = name,
+            Namespace = ns,
+            AssemblyName = assemblyName,
+            IsValueType = isValueType,
+            GenericParameterNames = [.. Enumerable.Range(0, arity).Select(i => "!" + SymbolRenderer.Number(i))],
+        };
+    }
+
+    /// <summary>
+    /// True when the symbol, or any part of it, is a reference nothing loaded defines. A member
+    /// whose signature has one cannot be confirmed as a candidate.
+    /// </summary>
+    public bool HasUnresolved => Kind switch
+    {
+        TypeSymbolKind.Unresolved => true,
+        TypeSymbolKind.Constructed => Element!.HasUnresolved || Arguments.Any(a => a.HasUnresolved),
+        TypeSymbolKind.FunctionPointer => Signature!.ReturnType.HasUnresolved || Signature.Parameters.Any(p => p.HasUnresolved),
+        TypeSymbolKind.Modified => Element!.HasUnresolved || Modifier!.HasUnresolved,
+        TypeSymbolKind.SzArray or TypeSymbolKind.Array or TypeSymbolKind.ByRef or TypeSymbolKind.Pointer or TypeSymbolKind.Pinned => Element!.HasUnresolved,
+        _ => false,
+    };
 
     /// <summary>
     /// The object primitive.

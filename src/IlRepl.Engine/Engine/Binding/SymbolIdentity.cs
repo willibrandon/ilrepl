@@ -176,6 +176,9 @@ public static class SymbolIdentity
                 hash.Add(Hash(type.Element!));
                 hash.Add(Hash(type.Modifier!));
                 break;
+            case TypeSymbolKind.Unresolved:
+                hash.Add(type.Name, StringComparer.Ordinal);
+                break;
             default:
                 hash.Add(Hash(type.Element!));
                 break;

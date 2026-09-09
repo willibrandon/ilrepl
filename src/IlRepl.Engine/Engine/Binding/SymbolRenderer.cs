@@ -54,6 +54,8 @@ public static class SymbolRenderer
                 }
 
                 return type.Declaring is not null ? Pretty(type.Declaring) + "/" + type.Name : type.Name;
+            case TypeSymbolKind.Unresolved:
+                return type.Name;
             default:
                 return "?";
         }

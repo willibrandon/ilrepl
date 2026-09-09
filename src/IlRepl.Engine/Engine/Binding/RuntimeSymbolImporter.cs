@@ -234,8 +234,9 @@ public static class RuntimeSymbolImporter
         {
             return [.. read().Select(Import)];
         }
-        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or NotImplementedException)
         {
+            // A builder, or a member seen through a builder's instantiation, cannot list its modifiers.
             return [];
         }
     }

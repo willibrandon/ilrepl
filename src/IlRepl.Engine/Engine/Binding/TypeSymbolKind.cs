@@ -64,4 +64,10 @@ public enum TypeSymbolKind
     /// A pinned local type.
     /// </summary>
     Pinned,
+
+    /// <summary>
+    /// A reference metadata makes to a type no loaded assembly defines: the spelling is kept, and
+    /// nothing binds to it.
+    /// </summary>
+    Unresolved,
 }

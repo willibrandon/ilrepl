@@ -304,6 +304,59 @@ public sealed class RuntimeBindingScope : IBindingScope
     }
 
     /// <inheritdoc/>
+    public IReadOnlyList<TypeSymbol> DeclaredInterfacesOf(TypeSymbol type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        return [.. TypeRelations.DeclaredInterfacesOf(TypeOf(type), Context.Types).Select(ImportType)];
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<GenericParameterSymbol> GenericParameterDeclarations(TypeSymbol definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        var runtime = TypeOf(definition.DefinitionOrSelf);
+        if (!runtime.IsGenericTypeDefinition)
+        {
+            return [];
+        }
+
+        var parameters = runtime.GetGenericArguments();
+        return parameters is null ? [] : [.. parameters.Select(RuntimeSymbolImporter.ImportParameter)];
+    }
+
+    /// <inheritdoc/>
+    public GenericParameterSymbol? ParameterDeclaration(TypeSymbol parameter)
+    {
+        ArgumentNullException.ThrowIfNull(parameter);
+        if (!parameter.IsGenericParameter)
+        {
+            return null;
+        }
+
+        try
+        {
+            return RuntimeSymbolImporter.ImportParameter(TypeOf(parameter));
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <inheritdoc/>
+    public TypeSymbol? EnumUnderlyingType(TypeSymbol type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        var runtime = TypeOf(type);
+        if (runtime.IsGenericParameter || runtime is System.Reflection.Emit.TypeBuilder || !runtime.IsEnum)
+        {
+            return null;
+        }
+
+        return ImportType(Enum.GetUnderlyingType(runtime));
+    }
+
+    /// <inheritdoc/>
     public IReadOnlyList<MethodSymbol> SessionMethods
     {
         get
