@@ -21,6 +21,11 @@ public sealed record MethodSignatureSymbol(
     int? SentinelIndex)
 {
     /// <summary>
+    /// True for the extensible unmanaged encoding, whose return modifiers can specify additional conventions.
+    /// </summary>
+    public bool IsExtensibleUnmanaged { get; init; }
+
+    /// <summary>
     /// The parameters before the sentinel, or all of them.
     /// </summary>
     public IReadOnlyList<TypeSymbol> FixedParameters => SentinelIndex is int s ? [.. Parameters.Take(s)] : Parameters;

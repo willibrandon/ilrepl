@@ -214,7 +214,10 @@ public static class SymbolRenderer
                 System.Runtime.InteropServices.CallingConvention.FastCall => "fastcall ",
                 _ => "",
             };
-            sb.Append(word);
+            if (!signature.IsExtensibleUnmanaged)
+            {
+                sb.Append(word);
+            }
         }
 
         sb.Append(pretty(signature.ReturnType));

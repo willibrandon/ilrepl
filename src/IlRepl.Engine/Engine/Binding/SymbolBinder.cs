@@ -128,9 +128,19 @@ public static class SymbolBinder
     private static MethodSignatureSymbol BindFunctionPointer(SignatureSyntax syntax, IBindingScope scope, bool lenient)
     {
         var (managed, unmanaged, convention) = Conventions(syntax.ConventionWords);
-        var returnType = BindType(syntax.ReturnType, scope, lenient).Type;
-        var parameters = syntax.Parameters.Select(p => BindType(p, scope, lenient).Type).ToList();
-        return new MethodSignatureSymbol(managed, unmanaged, convention, returnType, parameters, syntax.SentinelIndex);
+        var returnType = BindCore(syntax.ReturnType, scope, lenient);
+        var parameters = syntax.Parameters.Select(p => BindCore(p, scope, lenient)).ToList();
+        var extensible = unmanaged && convention == System.Runtime.InteropServices.CallingConvention.Winapi;
+        if (extensible)
+        {
+            SymbolSignatureProvider.StripModifiers(returnType, out _, out var modifiers);
+            convention = FunctionPointerConvention.FromMarkers(modifiers);
+        }
+
+        return new MethodSignatureSymbol(managed, unmanaged, convention, returnType, parameters, syntax.SentinelIndex)
+        {
+            IsExtensibleUnmanaged = extensible,
+        };
     }
 
     /// <summary>

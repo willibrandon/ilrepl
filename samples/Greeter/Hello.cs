@@ -23,6 +23,14 @@ public static class Hello
     public static unsafe int AcceptCdecl(delegate* unmanaged[Cdecl]<int, int> function) => function == null ? 7 : 8;
 
     /// <summary>
+    /// Accepts a pointer with suppressed GC transitions without invoking it.
+    /// </summary>
+    /// <param name="function">The function pointer, which may be null.</param>
+    /// <returns>Seven for a null pointer; eight otherwise.</returns>
+    public static unsafe int AcceptSuppressed(delegate* unmanaged[Cdecl, SuppressGCTransition]<int, int> function) =>
+        function == null ? 7 : 8;
+
+    /// <summary>
     /// Accepts a rectangular array so completion can preserve its metadata dimensions.
     /// </summary>
     /// <typeparam name="T">The array element type.</typeparam>

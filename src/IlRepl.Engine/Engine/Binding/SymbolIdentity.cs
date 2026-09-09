@@ -59,6 +59,7 @@ public static class SymbolIdentity
         ArgumentNullException.ThrowIfNull(b);
         return a.ManagedConvention == b.ManagedConvention
             && a.IsUnmanaged == b.IsUnmanaged
+            && a.IsExtensibleUnmanaged == b.IsExtensibleUnmanaged
             && (!a.IsUnmanaged || a.UnmanagedConvention == b.UnmanagedConvention)
             && a.SentinelIndex == b.SentinelIndex
             && Equal(a.ReturnType, b.ReturnType)
@@ -189,6 +190,7 @@ public static class SymbolIdentity
                 break;
             case TypeSymbolKind.FunctionPointer:
                 hash.Add(Hash(type.Signature!.ReturnType));
+                hash.Add(type.Signature.IsExtensibleUnmanaged);
                 hash.Add(type.Signature.Parameters.Count);
                 break;
             case TypeSymbolKind.Modified:

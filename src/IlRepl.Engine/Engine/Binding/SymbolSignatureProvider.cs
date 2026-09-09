@@ -150,7 +150,7 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
             managed |= CallingConventions.ExplicitThis;
         }
 
-        var returnType = StripModifiers(signature.ReturnType, out _, out var optionalModifiers);
+        StripModifiers(signature.ReturnType, out _, out var optionalModifiers);
         var unmanaged = header.CallingConvention switch
         {
             SignatureCallingConvention.CDecl => System.Runtime.InteropServices.CallingConvention.Cdecl,
@@ -163,8 +163,10 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
         var isUnmanaged = header.CallingConvention is SignatureCallingConvention.CDecl or SignatureCallingConvention.StdCall
             or SignatureCallingConvention.ThisCall or SignatureCallingConvention.FastCall or SignatureCallingConvention.Unmanaged;
         int? sentinel = signature.RequiredParameterCount < signature.ParameterTypes.Length ? signature.RequiredParameterCount : null;
-        return new MethodSignatureSymbol(managed, isUnmanaged, unmanaged, returnType,
-            [.. signature.ParameterTypes.Select(p => StripModifiers(p, out _, out _))], sentinel);
+        return new MethodSignatureSymbol(managed, isUnmanaged, unmanaged, signature.ReturnType, signature.ParameterTypes, sentinel)
+        {
+            IsExtensibleUnmanaged = header.CallingConvention == SignatureCallingConvention.Unmanaged,
+        };
     }
 
     /// <summary>

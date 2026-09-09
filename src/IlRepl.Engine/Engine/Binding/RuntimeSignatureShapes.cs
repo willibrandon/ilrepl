@@ -100,6 +100,9 @@ internal static class RuntimeSignatureShapes
             TypeSymbolKind.FunctionPointer => TypeSymbol.FunctionPointer(actual.Signature! with
             {
                 ManagedConvention = metadata.Signature!.ManagedConvention,
+                IsUnmanaged = metadata.Signature.IsUnmanaged,
+                UnmanagedConvention = metadata.Signature.UnmanagedConvention,
+                IsExtensibleUnmanaged = metadata.Signature.IsExtensibleUnmanaged,
                 SentinelIndex = metadata.Signature.SentinelIndex,
                 ReturnType = Restore(actual.Signature.ReturnType, metadata.Signature!.ReturnType),
                 Parameters = [.. actual.Signature.Parameters.Select((parameter, index)
