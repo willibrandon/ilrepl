@@ -73,6 +73,13 @@ public sealed partial class LiveSessionTests
         await CompletionAtCaretAsync(page, "il[1]> " + original, "members 1/1");
         await page.Keyboard.PressAsync("Escape");
         await Assertions.Expect(terminal).Not.ToContainTextAsync("members 1/1");
+        await page.WaitForFunctionAsync("""
+            prompt => {
+              const terminal = window.ilreplTerminal;
+              const row = terminal.buffer.active.getLine(terminal.rows - 2);
+              return row?.translateToString(true).trim() === prompt;
+            }
+            """, "il[1]> " + original, new PageWaitForFunctionOptions { PollingInterval = 16, Timeout = 30_000 });
         Assert.AreEqual("il[1]> " + original, (await BufferRowsAsync(page))[^2].Trim());
         await page.Keyboard.PressAsync("Tab");
         await CompletionAtCaretAsync(page, "il[1]> " + original, "members 1/1");

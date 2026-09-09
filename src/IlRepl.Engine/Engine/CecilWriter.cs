@@ -25,6 +25,11 @@ public sealed class CecilWriter
     private MethodDefinition? _ignoresAccessChecksConstructor;
 
     /// <summary>
+    /// Retains exact array signatures that Cecil cannot represent in its dimension model.
+    /// </summary>
+    internal CecilSignatureFixups SignatureFixups { get; } = new();
+
+    /// <summary>
     /// A prototype written by another writer of the same group, referenced here by the name its
     /// assembly will carry.
     /// </summary>
@@ -437,7 +442,8 @@ public sealed class CecilWriter
         var imported = Module.ImportReference(field);
         if (CecilArrayShapes.ContainsArray(imported.FieldType))
         {
-            imported.FieldType = CecilArrayShapes.Restore(imported.FieldType, RuntimeSymbolImporter.Import(field).FieldType);
+            imported.FieldType = CecilArrayShapes.Restore(
+                imported.FieldType, RuntimeSymbolImporter.Import(field).FieldType, SignatureFixups);
         }
         WithMetadataNames(imported.DeclaringType);
         WithMetadataNames(imported.FieldType);
@@ -599,11 +605,12 @@ public sealed class CecilWriter
             || definitionReference.Parameters.Any(parameter => CecilArrayShapes.ContainsArray(parameter.ParameterType)))
         {
             var signature = RuntimeSymbolImporter.Import(method);
-            definitionReference.ReturnType = CecilArrayShapes.Restore(definitionReference.ReturnType, signature.ReturnType);
+            definitionReference.ReturnType = CecilArrayShapes.Restore(
+                definitionReference.ReturnType, signature.ReturnType, SignatureFixups);
             for (var index = 0; index < definitionReference.Parameters.Count; index++)
             {
                 definitionReference.Parameters[index].ParameterType = CecilArrayShapes.Restore(
-                    definitionReference.Parameters[index].ParameterType, signature.Parameters[index].Type);
+                    definitionReference.Parameters[index].ParameterType, signature.Parameters[index].Type, SignatureFixups);
             }
         }
 
@@ -656,7 +663,9 @@ public sealed class CecilWriter
     {
         using var stream = new MemoryStream();
         Assembly.Write(stream);
-        return stream.ToArray();
+        var image = stream.ToArray();
+        SignatureFixups.Apply(image);
+        return image;
     }
 
     /// <summary>

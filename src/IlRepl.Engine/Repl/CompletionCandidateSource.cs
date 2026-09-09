@@ -11,24 +11,24 @@ internal sealed class CompletionCandidateSource
 {
     private readonly EditingView _view;
     private readonly SnapshotBindingScope _scope;
-    private readonly TypeIndex _index;
+    private TypeIndex? _index;
     private readonly CompletionSite _site;
     private readonly string? _assemblyHint;
     private readonly TypeSyntax? _typeSyntax;
     private readonly List<OperandCandidate> _candidates = [];
 
+    private TypeIndex Index => _index ??= new TypeIndex(_view.Snapshot);
+
     /// <summary>
     /// Initializes discovery for one syntax-defined operand site.
     /// </summary>
     /// <param name="view">The captured editing context.</param>
-    /// <param name="index">The types known to that context.</param>
     /// <param name="site">The current operand site.</param>
     /// <param name="line">The current line, including an explicit assembly qualifier on a type component.</param>
-    public CompletionCandidateSource(EditingView view, TypeIndex index, CompletionSite site, string line)
+    public CompletionCandidateSource(EditingView view, CompletionSite site, string line)
     {
         _view = view;
         _scope = ((SnapshotBindingScope)view.Scope).ForConfirmation();
-        _index = index;
         _site = site;
         if (site.Kind is CompletionSiteKind.Type or CompletionSiteKind.MemberHead or CompletionSiteKind.TypeArgument)
         {
@@ -225,19 +225,19 @@ internal sealed class CompletionCandidateSource
             return [];
         }
 
-        var matches = _index.Entries.Where(entry =>
+        var matches = Index.Entries.Where(entry =>
             string.Equals(entry.IlPath, syntax.Name, StringComparison.OrdinalIgnoreCase)
             || string.Equals(WithoutArity(entry.IlPath), syntax.Name, StringComparison.OrdinalIgnoreCase)).ToArray();
         if (matches.Length == 0)
         {
             var separator = Math.Max(syntax.Name!.LastIndexOf('.'), syntax.Name.LastIndexOf('/'));
             var name = syntax.Name[(separator + 1)..];
-            matches = _index.Entries.Where(entry => string.Equals(entry.Name, name, StringComparison.OrdinalIgnoreCase)
+            matches = Index.Entries.Where(entry => string.Equals(entry.Name, name, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(entry.BareName, name, StringComparison.OrdinalIgnoreCase)).ToArray();
             if (separator < 0 && hinted is null)
             {
-                matches = matches.Where(entry => _index.ShortNameTarget(entry.Name) is not { } preferred
-                    || SymbolIdentity.Equal(_index.SymbolOf(entry), preferred)).ToArray();
+                matches = matches.Where(entry => Index.ShortNameTarget(entry.Name) is not { } preferred
+                    || SymbolIdentity.Equal(Index.SymbolOf(entry), preferred)).ToArray();
             }
         }
 
@@ -246,7 +246,7 @@ internal sealed class CompletionCandidateSource
         {
             try
             {
-                if (_index.SymbolOf(entry) is not { } type || !HintNames(hinted, type))
+                if (Index.SymbolOf(entry) is not { } type || !HintNames(hinted, type))
                 {
                     continue;
                 }
@@ -274,7 +274,9 @@ internal sealed class CompletionCandidateSource
         var seen = new HashSet<TypeSymbol>();
         var count = 0;
         var query = DecodePrefix(_site.Prefix);
-        foreach (var entry in _index.Entries)
+        var qualified = query.Contains('.') || query.Contains('/');
+        var hasArity = query.LastIndexOf('`') > Math.Max(query.LastIndexOf('/'), query.LastIndexOf('.'));
+        foreach (var entry in Index.Entries)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (++count % 128 == 0)
@@ -282,7 +284,11 @@ internal sealed class CompletionCandidateSource
                 await Task.Yield();
             }
 
-            var matching = query.Contains('.') || query.Contains('/') ? WithoutArity(entry.IlPath) : entry.BareName;
+            var matching = qualified ? entry.IlPath : entry.Name;
+            if (!hasArity)
+            {
+                matching = WithoutArity(matching);
+            }
             if (CandidateRanker.Match(query, matching).Tier == MatchTier.None)
             {
                 continue;
@@ -290,7 +296,7 @@ internal sealed class CompletionCandidateSource
 
             try
             {
-                if (_index.SymbolOf(entry) is { } type && HintNames(_assemblyHint, type) && seen.Add(type))
+                if (Index.SymbolOf(entry) is { } type && HintNames(_assemblyHint, type) && seen.Add(type))
                 {
                     AddType(type, matching, entry.IsCompilerGenerated, arguments, suffix);
                 }

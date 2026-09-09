@@ -426,16 +426,24 @@ public static class IlAsmRenderer
         var definitionMethod = DefinitionOf(method);
         var signature = RuntimeSymbolImporter.Import(definitionMethod);
         var metadata = CecilMetadataSignatures.IsRequired(definitionMethod) ? RuntimeMetadataSignatures.Read(definitionMethod) : null;
-        var returnType = metadata is null ? SignatureType(signature.ReturnType) : IlSignatureRenderer.IlAsm(metadata.ReturnType);
+        var returnType = SignatureType(signature.ReturnType);
+        if (metadata is not null)
+        {
+            returnType = IlSignatureRenderer.IlAsm(metadata.ReturnType);
+        }
+
         var name = method is ConstructorInfo ? (method.IsStatic ? ".cctor" : ".ctor") : MemberName(method.Name);
         if (method is MethodInfo g && g.IsGenericMethod)
         {
             name += "<" + string.Join(", ", g.GetGenericArguments().Select(TypeNameFormatter.IlAsm)) + ">";
         }
 
-        var parameters = metadata is null
-            ? signature.Parameters.Select(parameter => SignatureType(parameter.Type)).ToList()
-            : metadata.Parameters.Select(IlSignatureRenderer.IlAsm).ToList();
+        var parameters = signature.Parameters.Select(parameter => SignatureType(parameter.Type)).ToList();
+        if (metadata is not null)
+        {
+            parameters = metadata.Parameters.Select(IlSignatureRenderer.IlAsm).ToList();
+        }
+
         if (resolved.OptionalParameterTypes is not null)
         {
             parameters.Add("...");
@@ -450,13 +458,13 @@ public static class IlAsmRenderer
     {
         var declaring = field.DeclaringType is null ? "?" : TypeNameFormatter.IlAsmDeclaring(field.DeclaringType);
         var definition = DefinitionOf(field);
+        var type = SignatureType(RuntimeSymbolImporter.Import(definition).FieldType);
         if (CecilMetadataSignatures.IsRequired(definition))
         {
             var signature = IlSignatureRenderer.IlAsm(RuntimeMetadataSignatures.Read(definition));
             return $"{signature} {declaring}::{MemberName(field.Name)}";
         }
 
-        var type = SignatureType(RuntimeSymbolImporter.Import(definition).FieldType);
         try
         {
             // A loaded field carries its modifiers; a builder cannot describe them yet.
@@ -523,7 +531,7 @@ public static class IlAsmRenderer
         switch (type.Kind)
         {
             case TypeSymbolKind.Array:
-                return SignatureType(type.Element!) + ArraySignatureShape.Render(type.Rank, type.Sizes, type.LowerBounds);
+                return SignatureType(type.Element!) + ArraySignatureShape.RenderNative(type.Rank, type.Sizes, type.LowerBounds);
             case TypeSymbolKind.SzArray:
                 return SignatureType(type.Element!) + "[]";
             case TypeSymbolKind.ByRef:

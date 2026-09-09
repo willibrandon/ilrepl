@@ -48,6 +48,26 @@ public sealed class ArraySignatureTests
     }
 
     /// <summary>
+    /// Size-only dimensions round-trip without adding a lower-bound entry to their signature.
+    /// </summary>
+    /// <param name="shape">The exact REPL array dimensions.</param>
+    [TestMethod]
+    [DataRow("...+3")]
+    [DataRow("...+3,")]
+    [DataRow("1...4,...+3")]
+    [DataRow("...+0")]
+    public void BindArray_OmittedBounds_RoundTripsExactly(string shape)
+    {
+        using var captured = BindingSnapshot.Capture(new Session().State.Context);
+        var scope = new SnapshotBindingScope(captured);
+        var expected = SymbolBinder.BindType(CilSyntaxParser.ParseType("int32[" + shape + "]"), scope).Type;
+        Assert.IsGreaterThan(expected.LowerBounds.Count, expected.Sizes.Count);
+        var spelling = new TypeSpeller(scope).Spell(expected);
+        Assert.AreEqual("int32[" + shape + "]", spelling);
+        Assert.AreEqual(expected, SymbolBinder.BindType(CilSyntaxParser.ParseType(spelling), scope).Type);
+    }
+
+    /// <summary>
     /// Bounds distinguish otherwise identical member signatures and entries keyed by their types.
     /// </summary>
     [TestMethod]

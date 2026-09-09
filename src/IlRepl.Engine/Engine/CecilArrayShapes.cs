@@ -24,54 +24,42 @@ internal static class CecilArrayShapes
     /// </summary>
     /// <param name="type">The imported signature type.</param>
     /// <param name="signature">The signature with its original metadata bounds.</param>
+    /// <param name="fixups">The destination writer's exact shape corrections.</param>
     /// <returns>The imported type with exact array dimensions.</returns>
-    public static TypeReference Restore(TypeReference type, TypeSymbol signature)
+    public static TypeReference Restore(TypeReference type, TypeSymbol signature, CecilSignatureFixups fixups)
     {
         if (type is RequiredModifierType required)
         {
-            return new RequiredModifierType(required.ModifierType, Restore(required.ElementType, signature));
+            return new RequiredModifierType(required.ModifierType, Restore(required.ElementType, signature, fixups));
         }
 
         if (type is OptionalModifierType optional)
         {
-            return new OptionalModifierType(optional.ModifierType, Restore(optional.ElementType, signature));
+            return new OptionalModifierType(optional.ModifierType, Restore(optional.ElementType, signature, fixups));
         }
 
         switch (type)
         {
             case ArrayType array when signature.IsArray:
             {
-                var element = Restore(array.ElementType, signature.Element!);
+                var element = Restore(array.ElementType, signature.Element!, fixups);
                 if (signature.Kind == TypeSymbolKind.SzArray)
                 {
                     return new ArrayType(element);
                 }
 
-                if (signature.Sizes.Count == 0 && signature.LowerBounds.Count == 0)
-                {
-                    return type;
-                }
-
-                var restored = new ArrayType(element, signature.Rank);
-                for (var index = 0; index < signature.Rank; index++)
-                {
-                    var lower = index < signature.LowerBounds.Count ? (int?)signature.LowerBounds[index] : null;
-                    var upper = index < signature.Sizes.Count ? (lower ?? 0) + signature.Sizes[index] - 1 : (int?)null;
-                    restored.Dimensions[index] = new ArrayDimension(lower, upper);
-                }
-
-                return restored;
+                return fixups.Array(element, signature.Rank, signature.Sizes, signature.LowerBounds);
             }
             case ByReferenceType byRef when signature.Kind == TypeSymbolKind.ByRef:
-                return new ByReferenceType(Restore(byRef.ElementType, signature.Element!));
+                return new ByReferenceType(Restore(byRef.ElementType, signature.Element!, fixups));
             case PointerType pointer when signature.Kind == TypeSymbolKind.Pointer:
-                return new PointerType(Restore(pointer.ElementType, signature.Element!));
+                return new PointerType(Restore(pointer.ElementType, signature.Element!, fixups));
             case GenericInstanceType generic when signature.Kind == TypeSymbolKind.Constructed:
             {
                 var restored = new GenericInstanceType(generic.ElementType);
                 for (var index = 0; index < generic.GenericArguments.Count; index++)
                 {
-                    restored.GenericArguments.Add(Restore(generic.GenericArguments[index], signature.Arguments[index]));
+                    restored.GenericArguments.Add(Restore(generic.GenericArguments[index], signature.Arguments[index], fixups));
                 }
 
                 return restored;
@@ -83,12 +71,12 @@ internal static class CecilArrayShapes
                     CallingConvention = pointer.CallingConvention,
                     HasThis = pointer.HasThis,
                     ExplicitThis = pointer.ExplicitThis,
-                    ReturnType = Restore(pointer.ReturnType, signature.Signature!.ReturnType),
+                    ReturnType = Restore(pointer.ReturnType, signature.Signature!.ReturnType, fixups),
                 };
                 for (var index = 0; index < pointer.Parameters.Count; index++)
                 {
                     restored.Parameters.Add(new ParameterDefinition(
-                        Restore(pointer.Parameters[index].ParameterType, signature.Signature.Parameters[index])));
+                        Restore(pointer.Parameters[index].ParameterType, signature.Signature.Parameters[index], fixups)));
                 }
 
                 return restored;

@@ -80,6 +80,19 @@ call vararg int32 Greeter.Hello::CountArgs(..., int32, string)
 The types after `...` are the call site's extra arguments. The runtime only supports the vararg
 calling convention on Windows; elsewhere the cell is refused with a message that says so.
 
+## Array signature bounds
+
+Completion preserves the sizes and lower bounds encoded in a member signature. For example,
+`int32[3]` declares size 3 with lower bound zero, and `int32[1...3]` declares size 3 with lower
+bound one. These can identify different overloads even though reflection reports the same
+array type for both.
+
+CLI metadata can also declare a size while omitting the lower bound entirely. ilrepl spells
+that shape `int32[...+3]`, keeping it distinct from `int32[3]`. This spelling works in member
+references, completion, and disassembly. `.save` preserves the exact metadata in the exported
+assembly. Native ILAsm has no equivalent spelling, so `.il` reports this limitation and points
+to `.save` instead of producing a reference that could call a different overload.
+
 ## Session methods
 
 A method defined with `.method` is called by name, with no type in front of it. The return type

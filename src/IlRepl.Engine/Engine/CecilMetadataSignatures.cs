@@ -102,17 +102,8 @@ internal static class CecilMetadataSignatures
             case IlSignatureKind.SzArray:
                 return new ArrayType(Import(signature.Element!, context, writer));
             case IlSignatureKind.Array:
-            {
-                var array = new ArrayType(Import(signature.Element!, context, writer), signature.Rank);
-                for (var index = 0; index < signature.Rank; index++)
-                {
-                    var lower = index < signature.LowerBounds.Count ? (int?)signature.LowerBounds[index] : null;
-                    var upper = index < signature.Sizes.Count ? (lower ?? 0) + signature.Sizes[index] - 1 : (int?)null;
-                    array.Dimensions[index] = new ArrayDimension(lower, upper);
-                }
-
-                return array;
-            }
+                return writer.SignatureFixups.Array(Import(signature.Element!, context, writer),
+                    signature.Rank, signature.Sizes, signature.LowerBounds);
             case IlSignatureKind.GenericInstance:
             {
                 var generic = new GenericInstanceType(Import(signature.Element!, context, writer));

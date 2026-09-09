@@ -147,7 +147,7 @@ public sealed partial class OperandCompleter : IDisposable
     {
         var document = identity.Document;
         var site = identity.Site;
-        var source = new CompletionCandidateSource(view, new TypeIndex(view.Snapshot), site, document.Lines[document.Line]);
+        var source = new CompletionCandidateSource(view, site, document.Lines[document.Line]);
         var generics = new GenericCompletionBinding(view, source);
         var selected = SelectedGeneric(document, site, view);
         var arguments = site.Kind == CompletionSiteKind.TypeArgument ? generics.Arguments(document, site, selected) : [];

@@ -28,6 +28,13 @@ internal static class ArraySignatureShape
             }
 
             var separator = dimension.IndexOf("...", StringComparison.Ordinal);
+            if (separator == 0 && dimension.StartsWith("...+", StringComparison.Ordinal))
+            {
+                sizes[index] = Number(dimension[4..], 0, 0x1fffffff);
+                sizeCount = index + 1;
+                continue;
+            }
+
             if (separator < 0)
             {
                 sizes[index] = Number(dimension, 0, 0x1fffffff);
@@ -76,12 +83,29 @@ internal static class ArraySignatureShape
                 (true, true) => lowerBounds[index].ToString(CultureInfo.InvariantCulture) + "..."
                     + ((long)lowerBounds[index] + sizes[index] - 1).ToString(CultureInfo.InvariantCulture),
                 (true, false) => lowerBounds[index].ToString(CultureInfo.InvariantCulture) + "...",
-                (false, true) => sizes[index].ToString(CultureInfo.InvariantCulture),
+                (false, true) => "...+" + sizes[index].ToString(CultureInfo.InvariantCulture),
                 _ => rank == 1 ? "..." : "",
             };
         }
 
         return "[" + string.Join(",", dimensions) + "]";
+    }
+
+    /// <summary>
+    /// Renders a native ILAsm suffix, refusing shapes that its grammar cannot preserve exactly.
+    /// </summary>
+    /// <param name="rank">The number of dimensions.</param>
+    /// <param name="sizes">The leading dimensions with declared sizes.</param>
+    /// <param name="lowerBounds">The leading dimensions with declared lower bounds.</param>
+    /// <returns>The bracketed native ILAsm array suffix.</returns>
+    public static string RenderNative(int rank, IReadOnlyList<int> sizes, IReadOnlyList<int> lowerBounds)
+    {
+        if (sizes.Count > lowerBounds.Count)
+        {
+            throw new ReplException("native ILAsm cannot preserve an array size with an omitted lower bound; use .save for exact metadata");
+        }
+
+        return Render(rank, sizes, lowerBounds);
     }
 
     private static int Number(string text, int minimum, int maximum)

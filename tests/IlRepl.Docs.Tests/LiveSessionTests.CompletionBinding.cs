@@ -38,6 +38,31 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
+    /// An explicitly typed generic arity still offers a constructed type that binds and executes.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_ExplicitGenericArity_Completes(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        await PasteAsync(page, ".locals init (class List`1");
+        await CompletionAtCaretAsync(page, "il[1]> .locals init (class List`1", "❯ List<!T>");
+        await page.Keyboard.PressAsync("Tab");
+        await TypeLineAsync(page, "int32> items)");
+        await TypeLineAsync(page, "ldloc.0");
+        await TypeLineAsync(page, "pop");
+        await TypeLineAsync(page, "ldc.i4 9");
+        await TypeLineAsync(page, "ret");
+        await ExpectCompletionAsync(page, "= 9 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// Array member completion and a label preceding its own branch bind in the browser engine.
     /// </summary>
     /// <param name="browser">The browser engine.</param>
