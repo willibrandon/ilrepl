@@ -936,7 +936,8 @@ public sealed class IlReplAppBlockTests
         var ct = TestContext.CancellationToken;
         await using var engine = new InProcessEngine();
         var transcript = new Transcript();
-        await using var terminal = AppTest.Build(engine, transcript);
+        PromptState prompt = null!;
+        await using var terminal = AppTest.Build(engine, transcript, onPrompt: value => prompt = value);
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
 
@@ -946,7 +947,8 @@ public sealed class IlReplAppBlockTests
         await auto.TypeAsync("c", ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldc", StringComparison.Ordinal) && AppTest.CaretAt(s, 10, 0), description: "the caret moves by one, as typed");
         await auto.RightAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).Length > "il[1]> ldc".Length && AppTest.Caret(s) is { } c && c.X == 7 + AppTest.PromptRow(s, 0).Length - 7, description: "Right accepts the suggestion and the caret is at its end");
+        await auto.WaitUntilAsync(s => prompt.Text == "ldc.i4 " && AppTest.CaretAt(s, 7 + prompt.Text.Length, 0),
+            description: "Right accepts the opcode and its operand space, with the caret at the end");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;

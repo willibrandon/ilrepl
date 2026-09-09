@@ -46,4 +46,9 @@ public enum SubmissionEventKind
     /// The history store finished loading; the entries replace what the prompt knew.
     /// </summary>
     HistoryLoaded,
+
+    /// <summary>
+    /// A completion request settled and its query identity must be checked before showing any rows.
+    /// </summary>
+    Completions,
 }

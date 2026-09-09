@@ -197,9 +197,16 @@ public sealed class PromptView : IEditorViewRenderer
         }
 
         var room = columns - x;
-        var shown = suffix.Length > room ? suffix[..room] : suffix;
-        var text = SpanPalette.Color(SpanStyle.Dim).ToForegroundAnsi() + SpanPalette.Color(SpanStyle.Prompt).ToBackgroundAnsi() + shown[0]
-            + Hex1bColor.Default.ToBackgroundAnsi() + shown[1..] + Hex1bColor.Default.ToForegroundAnsi();
+        var shown = PaletteText.Clip(suffix, room, ellipsis: false);
+        if (shown.Length == 0)
+        {
+            return;
+        }
+
+        var first = StringInfo.GetNextTextElementLength(shown);
+        var text = SpanPalette.Color(SpanStyle.Dim).ToForegroundAnsi()
+            + SpanPalette.Color(SpanStyle.Prompt).ToBackgroundAnsi() + shown[..first]
+            + Hex1bColor.Default.ToBackgroundAnsi() + shown[first..] + Hex1bColor.Default.ToForegroundAnsi();
         context.WriteClipped(viewport.X + gutter + x, viewport.Y + row, text);
     }
 

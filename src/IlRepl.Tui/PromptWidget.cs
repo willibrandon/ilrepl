@@ -23,11 +23,17 @@ namespace IlRepl.Tui;
 /// <param name="Fit">How many rows the editor and the palette get.</param>
 /// <param name="OpenDepth">How many closing braces the engine is already waiting for.</param>
 /// <param name="CommentOpen">Whether the engine has a <c>/*</c> open when the buffer starts.</param>
-public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Catalog, PromptState State, PromptFit Fit, int OpenDepth, bool CommentOpen) : Hex1bWidget
+public sealed partial record PromptWidget(
+    string Label, IReadOnlyList<CompletionItem> Catalog, PromptState State, PromptFit Fit, int OpenDepth, bool CommentOpen) : Hex1bWidget
 {
     internal Action<string>? SubmitHandler { get; init; }
 
     internal Action<string>? CopyHandler { get; init; }
+
+    /// <summary>
+    /// The terminal width used to fit completion columns and wrap complete signatures.
+    /// </summary>
+    public int Width { get; init; } = 80;
 
     /// <summary>
     /// Sets the handler that receives a complete buffer.
@@ -52,9 +58,7 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
     }
 
     /// <summary>
-    /// What Enter does now: accepts a completion the user moved to, continues an open buffer,
-    /// and submits a complete one. While lines are in flight a submission waits its turn, so
-    /// nothing typed is lost and nothing runs out of order.
+    /// Chooses completion acceptance, block continuation or submission for the current Enter key press.
     /// </summary>
     /// <param name="state">The prompt's state.</param>
     /// <param name="paletteVisible">Whether the palette is showing.</param>
@@ -73,8 +77,7 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
     }
 
     /// <summary>
-    /// The palette's candidates: the caret's line is one word, the caret is at its end, and the
-    /// palette was not dismissed for it. An exact single match hides the palette.
+    /// The current first-word or operand candidates whose query still matches the editor and session.
     /// </summary>
     /// <param name="state">The prompt's state.</param>
     /// <param name="catalog">The catalog.</param>
@@ -96,7 +99,8 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
         var start = line.Length - line.TrimStart().Length;
         if (word.Length == 0 || word != line.Trim() || state.CaretColumn != start + word.Length)
         {
-            return [];
+            return state.Palette == PaletteMode.Open && state.Completions is { } snapshot
+                && state.Requester?.Matches(state, snapshot) == true ? snapshot.Visible() : [];
         }
 
         var candidates = CatalogCompleter.Complete(catalog, word);
@@ -115,7 +119,7 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
         state.View.Label = Label;
         state.Highlighter.CommentOpenAtStart = CommentOpen;
         state.Highlighter.Caret = new DocumentPosition(state.CaretLine, state.CaretColumn + 1);
-        var candidates = Candidates(state, Catalog);
+        var candidates = DisplayCandidates(state, Catalog);
         var paletteVisible = candidates.Count > 0 && Fit.PaletteRows > 0;
         state.SelectedIndex = paletteVisible ? Math.Clamp(state.SelectedIndex, 0, candidates.Count - 1) : 0;
         var prediction = PredictionFor(state, Catalog);
@@ -143,7 +147,7 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
                 var text = await e.Paste.ReadToEndAsync(ct: e.Paste.CancellationToken).ConfigureAwait(false);
                 state.Post(SubmissionEvent.Paste(text));
             }).FixedHeight(Math.Max(1, Fit.EditorRows));
-            return paletteVisible ? [BuildPalette(v, candidates, state, Fit.PaletteRows), pastable] : [pastable];
+            return paletteVisible ? [BuildPalette(v, candidates, state, Fit, Width), pastable] : [pastable];
         });
     }
 
@@ -161,16 +165,9 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
             return null;
         }
 
-        var line = state.CurrentLine;
-        var typed = FirstWord(line);
-        if (typed.Length == 0 || typed != line.TrimStart() || state.CaretColumn < line.Length)
-        {
-            return null;
-        }
-
-        var matches = CatalogCompleter.Complete(catalog, typed);
-        var best = matches.Count > 0 ? matches[0] : null;
-        return best is null || best.Name == typed ? null : best.Name[typed.Length..];
+        var candidates = Candidates(state, catalog);
+        var best = candidates.Count == 0 ? null : candidates[Math.Clamp(state.SelectedIndex, 0, candidates.Count - 1)];
+        return best is null ? null : CompletionEdit.For(state, best)?.Prediction(state);
     }
 
     private void Bind(InputBindingsBuilder b, PromptState state)
@@ -189,6 +186,8 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
         b.Remove(Hex1bKey.Escape);
         b.Key(Hex1bKey.Escape).Action(_ =>
         {
+            state.Requester?.Cancel(state);
+            state.ExplicitCompletion = false;
             state.PaletteDismissed = true;
             state.PaletteNavigated = false;
         }, "Dismiss palette");
@@ -211,6 +210,7 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
                 {
                     state.SelectedIndex = Math.Max(0, state.SelectedIndex - 1);
                     state.PaletteNavigated = true;
+                    state.DetailScroll = 0;
                 }
                 else
                 {
@@ -228,6 +228,11 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
                 {
                     state.SelectedIndex = Math.Min(candidates.Count - 1, state.SelectedIndex + 1);
                     state.PaletteNavigated = true;
+                    state.DetailScroll = 0;
+                    if (state.SelectedIndex == candidates.Count - 1)
+                    {
+                        state.Requester?.RequestMore(state);
+                    }
                 }
                 else
                 {
@@ -239,7 +244,15 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
         if (predictionVisible)
         {
             b.Remove(EditorWidget.MoveRight);
-            b.Key(Hex1bKey.RightArrow).Action(_ => AcceptPrediction(state), "Accept prediction");
+            b.Key(Hex1bKey.RightArrow).Action(_ => Accept(state, candidates), "Accept prediction");
+        }
+
+        if (paletteVisible && Fit.DetailRows > 0)
+        {
+            b.Remove(Hex1bKey.PageUp);
+            b.Remove(Hex1bKey.PageDown);
+            b.Key(Hex1bKey.PageUp).Action(_ => state.DetailScroll = Math.Max(0, state.DetailScroll - 1), "Previous detail line");
+            b.Key(Hex1bKey.PageDown).Action(_ => state.DetailScroll++, "Next detail line");
         }
 
         b.Ctrl().Key(Hex1bKey.P).Action(_ => HistoryBack(state), "Previous entry");
@@ -278,6 +291,10 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
         {
             Accept(state, candidates);
         }
+        else if (state.Requester is { } requester && state.CurrentLine.Trim().Length > 0)
+        {
+            requester.Request(state);
+        }
         else if (state.LineCount > 1 && state.CurrentLine.Trim().Length == 0)
         {
             state.Editor.InsertText(AutoIndent.Unit);
@@ -293,25 +310,24 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
         }
 
         var item = candidates[Math.Clamp(state.SelectedIndex, 0, candidates.Count - 1)];
-        var completed = AutoIndent.LeadingWhitespace(state.CurrentLine) + item.Name + (item.TakesOperand ? " " : "");
-        ReplaceCurrentLine(state, completed);
-        state.PaletteDismissed = true;
-        state.PaletteNavigated = false;
-    }
-
-    private static void AcceptPrediction(PromptState state)
-    {
-        var suffix = state.Prediction.Suffix;
-        if (suffix is null)
+        if (CompletionEdit.For(state, item) is not { } edit)
         {
             return;
         }
 
-        state.Editor.SetCursorPosition(new DocumentOffset(LineEnd(state)));
-        state.Editor.InsertText(suffix);
-        state.LastLength = state.Editor.Document.Length;
+        edit.Apply(state);
+        if (item.Continuation is { } token)
+        {
+            state.Anchors.Add(edit.Range.Start.Value, edit.Range.Start.Value + (edit.CaretOffset ?? edit.Text.Length), token);
+        }
+
         state.PaletteDismissed = true;
+        state.PaletteNavigated = false;
         state.Prediction.Hide();
+        if (item.Continues)
+        {
+            state.Requester?.Request(state);
+        }
     }
 
     private void CtrlC(PromptState state, InputBindingActionContext context)
@@ -377,51 +393,16 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
 
     private static void HistoryBack(PromptState state)
     {
-        var text = state.History.Back(state.Text);
-        if (text is not null)
-        {
-            Recall(state, text);
-        }
+        state.NavigateHistory(back: true);
     }
 
     private static void HistoryForward(PromptState state)
     {
-        var text = state.History.Forward(state.Text);
-        if (text is not null)
-        {
-            Recall(state, text);
-        }
-    }
-
-    private static void Recall(PromptState state, string text)
-    {
-        state.SetText(text, text.Length);
-        state.PaletteDismissed = true;
-        state.PaletteNavigated = false;
-        state.Prediction.Hide();
-    }
-
-    private static void ReplaceCurrentLine(PromptState state, string text)
-    {
-        var document = state.Editor.Document;
-        var start = document.PositionToOffset(new DocumentPosition(state.CaretLine, 1));
-        state.Editor.SetCursorPosition(start);
-        state.Editor.SetCursorPosition(new DocumentOffset(LineEnd(state)), extend: true);
-        state.Editor.InsertText(text);
-        state.LastLength = document.Length;
-    }
-
-    private static int LineEnd(PromptState state)
-    {
-        var document = state.Editor.Document;
-        return document.PositionToOffset(new DocumentPosition(state.CaretLine, 1)).Value + state.CurrentLine.Length;
+        state.NavigateHistory(back: false);
     }
 
     private static void TextChanged(PromptState state)
     {
-        state.PaletteDismissed = false;
-        state.PaletteNavigated = false;
-        state.SelectedIndex = 0;
         var editor = state.Editor;
         var length = editor.Document.Length;
         if (length == state.LastLength + 1 && state.CaretColumn > 0)
@@ -463,36 +444,4 @@ public sealed record PromptWidget(string Label, IReadOnlyList<CompletionItem> Ca
         editor.History.CommitGroup(editor.Cursors, document.Version);
     }
 
-    private static BorderWidget BuildPalette(WidgetContext<VStackWidget> context, IReadOnlyList<CompletionItem> candidates, PromptState state, int paletteRows)
-    {
-        var rows = Math.Max(1, paletteRows);
-        var first = Math.Clamp(state.SelectedIndex - (rows / 2), 0, Math.Max(0, candidates.Count - rows));
-        var visible = candidates.Skip(first).Take(rows).ToList();
-        // Column widths come from every candidate, not just the visible ones, so the columns stay
-        // put while the selection scrolls through the list.
-        var nameWidth = Math.Max(12, candidates.Max(c => c.Name.Length) + 2);
-        var detailWidth = Math.Max(4, candidates.Max(c => c.Detail.Length) + 2);
-
-        var lines = visible.Select((item, offset) =>
-        {
-            var index = first + offset;
-            var selected = index == state.SelectedIndex;
-            var marker = selected ? " ❯ " : "   ";
-            var line = marker + item.Name.PadRight(nameWidth) + item.Detail.PadRight(detailWidth) + item.Description;
-            return (Hex1bWidget)context.Interactable(ic => ic.ThemePanel(SpanPalette.Mutator(selected ? SpanStyle.TopType : SpanStyle.Opcode), ic.Text(line)))
-                .OnHoverChanged(args =>
-                {
-                    if (args.IsHovered)
-                    {
-                        state.SelectedIndex = index;
-                        state.PaletteNavigated = true;
-                    }
-                })
-                .OnClick(_ => Accept(state, candidates));
-        }).ToArray();
-
-        var kind = candidates[0].Name.StartsWith('.') ? "commands" : "opcodes";
-        var title = candidates.Count > rows ? $"{kind} {state.SelectedIndex + 1}/{candidates.Count}" : kind;
-        return context.Border(b => lines).Title(title);
-    }
 }

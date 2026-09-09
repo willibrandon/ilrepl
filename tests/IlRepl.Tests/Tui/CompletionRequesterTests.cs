@@ -1,0 +1,301 @@
+using Hex1b.Documents;
+using IlRepl.Protocol;
+using IlRepl.Tui;
+
+namespace IlRepl.Tests.Tui;
+
+/// <summary>
+/// Exercises request lifetime and complete document identity with independently ordered host replies.
+/// </summary>
+[TestClass]
+public sealed class CompletionRequesterTests
+{
+    /// <summary>
+    /// Supplies cancellation for asynchronous test waits.
+    /// </summary>
+    public TestContext TestContext { get; set; } = null!;
+
+    /// <summary>
+    /// A superseded response cannot reopen the palette or provide a committable edit.
+    /// </summary>
+    [TestMethod]
+    public async Task Refresh_OutOfOrderReplies_DropsSupersededRows()
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call Console::Wr");
+        var requester = state.Requester!;
+        requester.Refresh(state);
+        var stale = Reply(engine, "Write");
+        state.Editor.InsertText("i");
+        requester.Refresh(state);
+        Assert.HasCount(2, engine.Calls);
+        Assert.IsTrue(engine.Calls[0].Cancellation.IsCancellationRequested);
+        engine.Calls[1].Answer.SetResult(Reply(engine, "WriteLine", length: 12));
+        await DrainAsync(state);
+        engine.Calls[0].Answer.SetResult(stale);
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
+        Assert.AreEqual("WriteLine", state.Completions!.Reply.Items.Single().Name);
+        Assert.IsNull(CompletionEdit.For(state, stale.Items[0]), "A stopped requester cannot provide an edit.");
+    }
+
+    /// <summary>
+    /// Previous rows preserve layout while pending but cannot supply an edit or survive dismissal.
+    /// </summary>
+    [TestMethod]
+    public async Task Refresh_ReplacementPending_KeepsOnlyDisabledDisplayRows()
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call Console::Wr");
+        var requester = state.Requester!;
+        requester.Refresh(state);
+        engine.Calls[0].Answer.SetResult(Reply(engine, "WriteLine"));
+        await DrainAsync(state);
+        state.Editor.InsertText("i");
+        requester.Refresh(state);
+        var display = PromptWidget.DisplayCandidates(state, engine.Catalog);
+        Assert.HasCount(1, display);
+        Assert.IsEmpty(PromptWidget.Candidates(state, engine.Catalog));
+        Assert.IsNull(CompletionEdit.For(state, display[0]));
+        Assert.AreEqual("call Console::Wri", state.Text);
+        requester.Cancel(state);
+        Assert.IsNull(state.PendingDisplay);
+        Assert.IsEmpty(PromptWidget.DisplayCandidates(state, engine.Catalog));
+        await engine.DisposeAsync();
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>
+    /// Identical redraws retain one request and an explicit retry lifts a pending dismissal.
+    /// </summary>
+    [TestMethod]
+    public async Task Refresh_PendingAndDismissed_OnlyRequestsWhenNeeded()
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call Console::Wr");
+        var requester = state.Requester!;
+        requester.Refresh(state);
+        for (var index = 0; index < 20; index++)
+        {
+            requester.Refresh(state);
+        }
+
+        Assert.HasCount(1, engine.Calls);
+        requester.Cancel(state);
+        state.PaletteDismissed = true;
+        requester.Refresh(state);
+        Assert.HasCount(1, engine.Calls);
+        requester.Request(state);
+        requester.Request(state);
+        Assert.HasCount(2, engine.Calls);
+        Assert.AreEqual(PaletteMode.Requested, state.Palette);
+        await engine.DisposeAsync();
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>
+    /// Faults stay quiet until an explicit retry, while cancellation leaves the query retryable.
+    /// </summary>
+    [TestMethod]
+    public async Task Refresh_FaultAndCancellation_ApplyDifferentRetryRules()
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call Console::Wr");
+        var requester = state.Requester!;
+        requester.Refresh(state);
+        engine.Calls[0].Answer.SetException(new IOException("closed pipe"));
+        await DrainAsync(state);
+        requester.Refresh(state);
+        Assert.AreEqual(PaletteMode.Faulted, state.Palette);
+        Assert.HasCount(1, engine.Calls);
+        requester.Request(state);
+        engine.Calls[1].Answer.SetCanceled(TestContext.CancellationToken);
+        await DrainAsync(state);
+        Assert.IsNull(requester.LastAnswered);
+        requester.Refresh(state);
+        Assert.HasCount(3, engine.Calls);
+        engine.Calls[2].Answer.SetResult(Reply(engine, "Write"));
+        await DrainAsync(state);
+        Assert.AreEqual(PaletteMode.Open, state.Palette);
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>
+    /// Empty pages are followed and a page in flight survives repeated navigation and redraws.
+    /// </summary>
+    [TestMethod]
+    public async Task Refresh_PagedResults_PreservesCursorAndQueryStamps()
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call Console::Wr");
+        var requester = state.Requester!;
+        requester.Refresh(state);
+        engine.Calls[0].Answer.SetResult(Reply(engine, "Write") with { Items = [], Cursor = "page-2", TotalIsProvisional = true });
+        await DrainAsync(state);
+        requester.Refresh(state);
+        Assert.AreEqual("page-2", engine.Calls[1].Request.Cursor);
+        requester.RequestMore(state);
+        requester.Refresh(state);
+        Assert.HasCount(2, engine.Calls);
+        engine.Calls[1].Answer.SetResult(Reply(engine, "Write") with { Cursor = "page-3", TotalIsProvisional = true });
+        await DrainAsync(state);
+        requester.RequestMore(state);
+        requester.Refresh(state);
+        Assert.AreEqual("page-3", engine.Calls[2].Request.Cursor);
+        engine.Calls[2].Answer.SetResult(Reply(engine, "WriteLine") with { Total = 2 });
+        await DrainAsync(state);
+        Assert.HasCount(2, PromptWidget.Candidates(state, engine.Catalog));
+        Assert.IsFalse(state.MoreCompletions);
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>
+    /// Revision changes invalidate accepted rows even when document text and session counts stay the same.
+    /// </summary>
+    [TestMethod]
+    public async Task Refresh_CommentMutation_RequeriesAndRefusesOldEdits()
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call Console::Wr");
+        engine.Immediate = Reply(engine, "Write");
+        state.Requester!.Refresh(state);
+        Assert.IsNotNull(CompletionEdit.For(state, engine.Immediate.Items[0]));
+        await engine.HandleAsync("/*", TestContext.CancellationToken);
+        Assert.IsNull(CompletionEdit.For(state, engine.Immediate.Items[0]));
+        await engine.HandleAsync("*/", TestContext.CancellationToken);
+        engine.Immediate = Reply(engine, "Write");
+        state.Requester.Refresh(state);
+        Assert.HasCount(2, engine.Calls);
+        Assert.IsNotNull(CompletionEdit.For(state, engine.Immediate.Items[0]));
+        await state.Requester.SettleAsync(TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>
+    /// Empty type sites wait for Tab and a synchronous answer is usable in the same frame.
+    /// </summary>
+    [TestMethod]
+    public async Task Refresh_EmptyBroadSite_WaitsForExplicitRequest()
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call ");
+        state.Requester!.Refresh(state);
+        Assert.IsEmpty(engine.Calls);
+        engine.Immediate = Reply(engine, "Console") with { Kind = CompletionKind.Types, ReplaceLength = 0 };
+        state.Requester.Request(state);
+        Assert.HasCount(1, engine.Calls);
+        Assert.AreEqual(PaletteMode.Open, state.Palette);
+        Assert.IsFalse(state.Requester.IsPending);
+        await state.Requester.SettleAsync(TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>
+    /// A cursor move invalidates rows before the next frame and resets the palette's navigation.
+    /// </summary>
+    [TestMethod]
+    public async Task Refresh_CaretMove_InvalidatesRowsImmediately()
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call Console::Wr");
+        engine.Immediate = Reply(engine, "Write");
+        state.Requester!.Refresh(state);
+        state.SelectedIndex = 7;
+        state.PaletteNavigated = true;
+        state.DetailScroll = 9;
+        state.Editor.SetCursorPosition(new DocumentOffset(14));
+        Assert.IsEmpty(PromptWidget.Candidates(state, engine.Catalog));
+        engine.Immediate = null;
+        state.Requester.Refresh(state);
+        Assert.AreEqual(0, state.SelectedIndex);
+        Assert.AreEqual(0, state.DetailScroll);
+        Assert.IsFalse(state.PaletteNavigated);
+        await engine.DisposeAsync();
+        await state.Requester.SettleAsync(TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>
+    /// Busy submission cancels preview work and the same document is queried again after settlement.
+    /// </summary>
+    [TestMethod]
+    public async Task Refresh_BusySubmission_RetriesWhenSettled()
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call Console::Wr");
+        state.Requester!.Refresh(state);
+        state.Submission = new Submission(engine, [], 0, false, _ => Task.CompletedTask, _ => { });
+        state.Requester.Refresh(state);
+        Assert.IsTrue(engine.Calls[0].Cancellation.IsCancellationRequested);
+        Assert.IsEmpty(PromptWidget.Candidates(state, engine.Catalog));
+        state.Requester.Refresh(state);
+        Assert.HasCount(1, engine.Calls);
+        await state.Submission.Completion;
+        state.Submission = null;
+        engine.Immediate = Reply(engine, "Write");
+        state.Requester.Refresh(state);
+        Assert.HasCount(2, engine.Calls);
+        Assert.AreEqual(PaletteMode.Open, state.Palette);
+        engine.Calls[0].Answer.SetResult(Reply(engine, "Old"));
+        await state.Requester.SettleAsync(TimeSpan.FromSeconds(2));
+        Assert.IsEmpty(state.Events);
+    }
+
+    /// <summary>
+    /// Shutdown settles superseded tasks before another requester starts on the same engine.
+    /// </summary>
+    [TestMethod]
+    public async Task Settle_SupersededTasks_CannotPublishIntoTheNextSession()
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call Console::Wr");
+        state.Requester!.Refresh(state);
+        state.Editor.InsertText("i");
+        state.Requester.Refresh(state);
+        var settling = state.Requester.SettleAsync(TimeSpan.FromSeconds(2));
+        Assert.IsFalse(settling.IsCompleted);
+        Assert.IsTrue(engine.Calls.All(call => call.Cancellation.IsCancellationRequested));
+        foreach (var call in engine.Calls)
+        {
+            call.Answer.SetResult(Reply(engine, "Old"));
+        }
+
+        await settling;
+        var replacement = State(engine, "call Console::Wr");
+        engine.Immediate = Reply(engine, "New");
+        replacement.Requester!.Refresh(replacement);
+        Assert.AreEqual("New", replacement.Completions!.Reply.Items.Single().Name);
+        Assert.IsEmpty(state.Events);
+        Assert.IsEmpty(replacement.Events);
+        await replacement.Requester.SettleAsync(TimeSpan.FromSeconds(2));
+    }
+
+    private static PromptState State(CompletionEngine engine, string text)
+    {
+        var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary))
+        {
+            Requester = new CompletionRequester(engine),
+        };
+        state.SetText(text, text.Length);
+        return state;
+    }
+
+    private static CompletionReply Reply(CompletionEngine engine, string name, int length = 11) =>
+        new(CompletionKind.Members, 5, length,
+            [new CompletionItem(name, "[] → void", "", false) { Kind = CompletionKind.Members, Insert = "Console::" + name + "()" }],
+            null, 1, false, engine.Status.Revision, "query", 1, []);
+
+    private async Task DrainAsync(PromptState state)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(3));
+        while (state.Events.IsEmpty)
+        {
+            await Task.Delay(1, deadline.Token);
+        }
+
+        while (state.Events.TryDequeue(out var message))
+        {
+            if (message.CompletionResult is { } result)
+            {
+                state.Requester!.Apply(state, result);
+            }
+        }
+    }
+}

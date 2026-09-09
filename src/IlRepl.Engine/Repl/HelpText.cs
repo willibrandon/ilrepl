@@ -87,7 +87,7 @@ public static class HelpText
         }
 
         Plain("");
-        Plain("Tab completes opcodes and commands, Up and Down walk history.");
+        Plain("Tab completes opcodes, commands, types, and members; Up and Down walk history.");
         Plain("Enter continues an open block and sends it, line by line, once its braces balance.");
         Plain("History is kept in ~/.config/ilrepl/history between runs.");
         Plain("Ctrl+L clears the screen, Ctrl+Q leaves.");

@@ -19,6 +19,9 @@ Three shortcuts make the prompt friendlier:
   `StringBuilder`, and `List<int32>` work as written.
 - The return type is optional. It is only used to break ties between overloads.
 
+Tab completes the type and, after `::`, the member in these short forms. Each overload has its
+own row; the detail pane shows its complete signature.
+
 ```cil
 call Console::WriteLine(string)
 call Math::Max(int32, int32)
@@ -33,6 +36,15 @@ il[1]> call Console::WriteLine
     void Console::WriteLine()
     void Console::WriteLine(bool)
     ...
+```
+
+If the name is mistyped, the error suggests a nearby name that binds the supplied reference:
+
+```ilrepl
+il[1]> call Math::Mxa(int32, int32)
+  error: no method 'Mxa' on Math (did you mean 'Max'?)
+il[1]> newobj StringBuilderr::.ctor()
+  error: type 'StringBuilderr' not found (did you mean 'StringBuilder'?)
 ```
 
 ## Generics
@@ -88,9 +100,16 @@ without the `[assembly]` prefix.
 
 ```ilrepl
 il[1]> .load samples/Greeter/bin/Debug/net10.0/Greeter.dll
-  loaded Greeter 1.0.0.0 (11 public types)
+  loaded Greeter 1.0.0.0 (20 public types)
 il[1]> ldstr "IL"
 il[1]> call string Greeter.Hello::Say(string)
 il[1]> ret
   = "Hello, IL!" : string
+```
+
+A suggestion is qualified when the short name would be ambiguous:
+
+```ilrepl
+il[2]> ldtoken Countr
+  error: type 'Countr' not found (did you mean 'Greeter.Counter'?)
 ```

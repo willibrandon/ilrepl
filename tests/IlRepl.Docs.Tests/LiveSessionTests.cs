@@ -7,10 +7,13 @@ namespace IlRepl.Docs.Tests;
 /// engine and the Hex1b UI on the .NET WebAssembly runtime.
 /// </summary>
 [TestClass]
-public sealed class LiveSessionTests
+public sealed partial class LiveSessionTests
 {
     private static StaticSite? s_site;
     private static IPlaywright? s_playwright;
+
+    [System.Text.RegularExpressions.GeneratedRegex("sending [1-9][0-9]*/3002")]
+    private static partial System.Text.RegularExpressions.Regex StartedLongSubmission();
 
     /// <summary>
     /// The test context, for cancellation.
@@ -1037,7 +1040,7 @@ public sealed class LiveSessionTests
         await PasteAsync(page, LongMethod(3002));
         await Assertions.Expect(terminal).ToContainTextAsync("Enter sends 3002 lines", options);
         await page.Keyboard.PressAsync("Enter");
-        await Assertions.Expect(terminal).ToContainTextAsync("sending", options);
+        await Assertions.Expect(terminal).ToContainTextAsync(StartedLongSubmission(), options);
         await page.Keyboard.PressAsync("Control+c");
         await Assertions.Expect(terminal).ToContainTextAsync("method Long abandoned; the block is back in the editor", options);
         await Assertions.Expect(terminal).ToContainTextAsync("editing 3002 lines", options);

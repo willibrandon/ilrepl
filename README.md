@@ -120,8 +120,9 @@ il[6]> ret
 
 Enter continues a block while its braces are open and sends it, line by line, once they balance;
 a pasted block waits for Enter, and a line the engine refuses brings the whole block back with
-that line selected. Tab completes opcodes and commands, with a palette that shows each
-candidate's stack transition. Up and Down walk history, which keeps a block as one entry in
+that line selected. Tab completes opcodes, commands, types, and members using the lines already
+written in the buffer. The palette shows stack effects and a pane with the complete signature.
+Up and Down walk history, which keeps a block as one entry in
 `~/.config/ilrepl/history` between runs. `.help` lists the commands and `.ops` lists the opcodes.
 
 ## Batch mode
@@ -135,8 +136,8 @@ printf 'ldstr "piped"\nret\n' | ilrepl --no-color
 ## How it works
 
 Reflection.Emit needs a JIT, and the Native AOT front-end has none, so ilrepl is two processes:
-the front-end owns the terminal UI, the transcript, and completion; the host owns the session and
-answers over JSON-RPC on its standard streams. The same engine runs in the browser on the docs
+the front-end owns the terminal UI, the transcript, and the opcode catalog; the host owns the
+session and completes operands from the unsent buffer over JSON-RPC. The same engine runs in the browser on the docs
 site, where the .NET runtime is compiled to WebAssembly.
 
 ## Building

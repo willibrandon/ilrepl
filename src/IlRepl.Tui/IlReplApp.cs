@@ -44,7 +44,11 @@ public static class IlReplApp
         // The terminal reports its size to this filter, and long lines are folded at that width.
         var size = new TerminalSizeFilter();
         var feedback = new YankFeedback();
-        var prompt = new PromptState(new PromptHistory(history), new CilTokenizer(engine.Vocabulary));
+        var prompt = new PromptState(new PromptHistory(history), new CilTokenizer(engine.Vocabulary))
+        {
+            Requester = new CompletionRequester(engine),
+            HistoryLoading = history is not null,
+        };
         onPrompt?.Invoke(prompt);
         return builder
             .AddPresentationFilter(size)
@@ -126,11 +130,19 @@ public static class IlReplApp
     {
         ArgumentNullException.ThrowIfNull(prompt);
         prompt.Pending.Clear();
+        prompt.Requester?.Cancel(prompt);
         if (prompt.Submission is { } sending)
         {
             sending.Cancel();
             await sending.Completion.ConfigureAwait(false);
         }
+
+        if (prompt.Requester is { } requester)
+        {
+            await requester.SettleAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        }
+
+        prompt.Anchors.Dispose();
     }
 
     /// <summary>
@@ -158,8 +170,11 @@ public static class IlReplApp
     /// <param name="enter">What Enter will do.</param>
     /// <param name="lineCount">How many lines the buffer has.</param>
     /// <param name="ownSelection">True when the app selects transcript text itself, so Shift+Up is offered.</param>
+    /// <param name="paletteVisible">Whether a completion can be accepted with Tab.</param>
     /// <returns>The hints that fit.</returns>
-    public static IReadOnlyList<string> StatusHints(IReadOnlyList<string> occupied, int width, bool copyMode, EnterAction enter, int lineCount, bool ownSelection = true)
+    public static IReadOnlyList<string> StatusHints(
+        IReadOnlyList<string> occupied, int width, bool copyMode, EnterAction enter, int lineCount,
+        bool ownSelection = true, bool paletteVisible = false)
     {
         ArgumentNullException.ThrowIfNull(occupied);
         var hints = copyMode
@@ -173,6 +188,11 @@ public static class IlReplApp
                 _ when ownSelection => new List<string> { "Tab complete", "Shift+↑ select", "Ctrl+Q quit" },
                 _ => new List<string> { "Tab complete", "Ctrl+Q quit" },
             };
+        if (paletteVisible && !copyMode && enter is EnterAction.Continue or EnterAction.Submit && !hints.Contains("Tab complete"))
+        {
+            hints.Insert(0, "Tab complete");
+        }
+
         if (width <= 0)
         {
             return hints;
@@ -287,6 +307,7 @@ public static class IlReplApp
 
     private static void StartSubmission(PromptState prompt, IReplEngine engine, string text)
     {
+        prompt.Requester?.Cancel(prompt);
         if (prompt.Busy)
         {
             // Sent after the one in flight; nothing typed is lost and nothing runs out of order.
@@ -321,6 +342,13 @@ public static class IlReplApp
 
             switch (e.Kind)
             {
+                case SubmissionEventKind.Completions:
+                    if (e.CompletionResult is { } completion)
+                    {
+                        prompt.Requester?.Apply(prompt, completion);
+                    }
+
+                    break;
                 case SubmissionEventKind.Paste:
                     prompt.Editor.InsertText(PastePayload.Prepare(e.Text ?? ""));
                     prompt.LastLength = prompt.Editor.Document.Length;
@@ -367,7 +395,7 @@ public static class IlReplApp
 
                     break;
                 case SubmissionEventKind.HistoryLoaded:
-                    prompt.History.Load(e.Snapshot ?? new HistorySnapshot([], 0));
+                    prompt.LoadHistory(e.Snapshot ?? new HistorySnapshot([], 0));
                     break;
                 default:
                     break;
@@ -448,6 +476,7 @@ public static class IlReplApp
         // Whatever the submission worker and the paste handler posted since the last frame is
         // applied here, on the render thread, before anything reads the transcript or the prompt.
         Drain(prompt, transcript, engine, app);
+        prompt.Requester?.Refresh(prompt);
 
         // The prompt is the only place input goes. A click on the scrollbar still focuses the
         // transcript panel, so focus is pulled back on the next render as a last resort; clicks
@@ -489,7 +518,9 @@ public static class IlReplApp
 
         var copyMode = panel?.IsInCopyMode == true;
         var candidates = PromptWidget.Candidates(prompt, engine.Catalog).Count;
-        var fit = PromptLayout.Fit(size.Height, prompt.LineCount, candidates);
+        var displayCandidates = PromptWidget.DisplayCandidates(prompt, engine.Catalog).Count;
+        var detailLines = PromptWidget.DetailLines(prompt, engine.Catalog, size.Width).Count;
+        var fit = PromptLayout.Fit(size.Height, prompt.LineCount, displayCandidates, detailLines);
         if (fit.EditorRows != prompt.LastEditorRows)
         {
             // The transcript keeps its newest rows in view while the editor takes or gives back
@@ -511,7 +542,7 @@ public static class IlReplApp
         {
             // Where the terminal selects and copies itself, as in the browser, the prompt does
             // not copy either: Ctrl+C on a selection clears the buffer.
-            var promptWidget = v.IlPrompt(status.Prompt, engine.Catalog, prompt, fit, openDepth, commentOpen)
+            var promptWidget = v.IlPrompt(status.Prompt, engine.Catalog, prompt, fit, openDepth, commentOpen, size.Width)
                 .OnSubmit(text => StartSubmission(prompt, engine, text));
             if (ownSelection)
             {
@@ -603,7 +634,8 @@ public static class IlReplApp
 
                     facts.InsertRange(0, leading.Select(l => l.Text));
                     var occupied = feedback.Notification is null ? facts : [.. facts, feedback.Notification];
-                    var hints = StatusHints(occupied, size.Width, copyMode, enter, prompt.LineCount, ownSelection);
+                    var hints = StatusHints(occupied, size.Width, copyMode, enter, prompt.LineCount, ownSelection,
+                        candidates > 0 && fit.PaletteRows > 0);
 
                     // When even the last hint does not fit beside the facts, the facts give way from
                     // the left: the open block names first, then the stack; what the bar is doing now stays.
@@ -691,6 +723,7 @@ public static class IlReplApp
         // already being drawn is still drained on the next one.
         var again = prompt.RowsChanged;
         prompt.RowsChanged = false;
-        return prompt.Busy || !prompt.Events.IsEmpty || again ? root.RedrawAfter(16) : root;
+        return prompt.Busy || prompt.Requester?.IsPending == true || prompt.MoreCompletions || !prompt.Events.IsEmpty || again
+            ? root.RedrawAfter(16) : root;
     }
 }

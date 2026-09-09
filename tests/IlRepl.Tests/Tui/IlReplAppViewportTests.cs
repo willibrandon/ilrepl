@@ -127,7 +127,10 @@ public sealed class IlReplAppViewportTests
         await auto.WaitUntilNoTextAsync("editing");
         var start = recorder.Count;
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.PromptRow(s, 7) == "  ...> }" && AppTest.CaretAt(s, 8, 7), description: "the recalled block shows its last line with the caret");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.PromptRow(s, 7) == "  ...> }"
+            && AppTest.CaretAt(s, 8, 7), description: "the recalled block shows its last line with the caret");
+        await auto.WaitUntilAsync(_ => recorder.Since(start).Any(frame => frame.Contains("editing 13 lines")),
+            description: "the recalled frame's presentation filter completed");
         AssertEveryFrameShowsCaret(recorder.Since(start));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);

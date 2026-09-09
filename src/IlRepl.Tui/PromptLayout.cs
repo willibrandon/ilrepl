@@ -27,8 +27,9 @@ public static class PromptLayout
     /// <param name="terminalHeight">The terminal's height, or zero when it is not known yet.</param>
     /// <param name="lineCount">How many lines the buffer has.</param>
     /// <param name="candidateCount">How many completion candidates there are to show.</param>
+    /// <param name="detailLines">The wrapped lines needed by the selected candidate's complete signature.</param>
     /// <returns>The rows each part gets.</returns>
-    public static PromptFit Fit(int terminalHeight, int lineCount, int candidateCount)
+    public static PromptFit Fit(int terminalHeight, int lineCount, int candidateCount, int detailLines = 0)
     {
         var height = terminalHeight <= 0 ? DefaultHeight : terminalHeight;
         var editorRows = height < 8 ? 1 : Math.Clamp(lineCount, 1, Math.Max(1, height / 3));
@@ -41,7 +42,15 @@ public static class PromptLayout
             paletteRows = available >= MinPaletteRows ? Math.Min(wanted, available) : 0;
         }
 
-        var transcriptRows = remaining - (paletteRows > 0 ? paletteRows + PaletteBorderRows : 0);
-        return new PromptFit(editorRows, paletteRows, Math.Max(0, transcriptRows));
+        var detailRows = 0;
+        if (paletteRows > 0 && detailLines > 0)
+        {
+            var available = remaining - PaletteBorderRows - Math.Min(MinPaletteRows, paletteRows) - 1;
+            detailRows = available >= 2 ? Math.Min(detailLines + 1, available) : 0;
+            paletteRows = Math.Min(paletteRows, remaining - PaletteBorderRows - detailRows - 1);
+        }
+
+        var transcriptRows = remaining - (paletteRows > 0 ? paletteRows + PaletteBorderRows + detailRows : 0);
+        return new PromptFit(editorRows, paletteRows, Math.Max(0, transcriptRows)) { DetailRows = detailRows };
     }
 }
