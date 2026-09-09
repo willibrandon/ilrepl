@@ -5,6 +5,36 @@ namespace IlRepl.Docs.Tests;
 public sealed partial class LiveSessionTests
 {
     /// <summary>
+    /// An unfinished field excludes void but accepts a void pointer that survives class creation and field access.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_VoidFieldCompletion_RequiresPointer(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        await PasteAsync(page, ".class public FieldHost {\n.field public static vo*");
+        await page.Keyboard.PressAsync("ArrowLeft");
+        await CompletionAtCaretAsync(page, "  ...> .field public static vo", "❯ void");
+        await page.Keyboard.PressAsync("Delete");
+        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ void");
+        await page.Keyboard.TypeAsync("*");
+        await page.Keyboard.PressAsync("ArrowLeft");
+        await CompletionAtCaretAsync(page, "  ...> .field public static vo", "❯ void");
+        await page.Keyboard.PressAsync("Tab");
+        await page.Keyboard.PressAsync("End");
+        await CompletionAtCaretAsync(page, "  ...> .field public static void*", ".field public static void*");
+        await PasteAsync(page, " Address\n}\nldsfld FieldHost::Address\npop\nldc.i4.7\nret");
+        await page.Keyboard.PressAsync("Enter");
+        await ExpectCompletionAsync(page, "= 7 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// Removing a pointer suffix excludes void from an unfinished parameter, and restoring it yields executable IL.
     /// </summary>
     /// <param name="browser">The browser engine.</param>

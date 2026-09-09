@@ -106,7 +106,8 @@ public static partial class MemberEligibility
             return false;
         }
 
-        var variableSite = site.Owner is ".locals" or ".args" || site.Owner == ".method" && site.ArgumentIndex >= 0;
+        var variableSite = site.Owner is ".locals" or ".args" or ".field" or ".property"
+            || site.Owner == ".method" && site.ArgumentIndex >= 0;
         if (variableSite && !site.IsFunctionPointerReturn && !hasElementSuffix && !IsVariableType(type))
         {
             return false;
