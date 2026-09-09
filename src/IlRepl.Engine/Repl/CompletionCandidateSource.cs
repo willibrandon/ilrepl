@@ -82,7 +82,7 @@ internal sealed class CompletionCandidateSource
             case CompletionSiteKind.TypeArgument:
                 await AddTypesAsync(genericArguments, hasElementSuffix, cancellationToken);
                 if (_site.Kind == CompletionSiteKind.MemberHead && !_site.NextIsDoubleColon
-                    && _site.Owner is "call" or "ldftn" or "ldtoken method" or ".dis" or ".disassemble")
+                    && _site.Owner is "call" or "jmp" or "ldftn" or "ldtoken method" or ".dis" or ".disassemble")
                 {
                     foreach (var method in _scope.SessionMethods)
                     {
@@ -467,6 +467,8 @@ internal sealed class CompletionCandidateSource
     private static string WithoutArity(string path)
     {
         var tick = path.LastIndexOf('`');
-        return tick < 0 ? path : path[..tick];
+        var separator = Math.Max(path.LastIndexOf('/'), path.LastIndexOf('.'));
+        return tick <= separator || tick == path.Length - 1 || path.AsSpan(tick + 1).IndexOfAnyExceptInRange('0', '9') >= 0
+            ? path : path[..tick];
     }
 }

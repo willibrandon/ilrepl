@@ -5,6 +5,39 @@ namespace IlRepl.Docs.Tests;
 public sealed partial class LiveSessionTests
 {
     /// <summary>
+    /// Jump targets and nested types beneath generic owners complete and execute in the browser.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_JumpAndNestedTypeCompletions_Bind(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        await PasteAsync(page, ".method int32 Bridge() {\njmp int32 Environment::get_TickC");
+        await ExpectCompletionAsync(page, "❯ get_TickCount()");
+        await page.Keyboard.PressAsync("Tab");
+        await PasteAsync(page, "\n}\ncall Bridge\npop\nldc.i4.7\nret");
+        await page.Keyboard.PressAsync("Enter");
+        await ExpectCompletionAsync(page, "= 7 : int32");
+        await TypeLineAsync(page, ".clear");
+        await PasteAsync(page, ".locals init (valuetype System.Collections.Generic.Dictionary`2/Enum");
+        await CompletionAtCaretAsync(page,
+            "il[3]> .locals init (valuetype System.Collections.Generic.Dictionary`2/Enum", "❯ Enumerator<!TKey, !TValue>");
+        await page.Keyboard.PressAsync("Tab");
+        await TypeLineAsync(page, "int32, string> value)");
+        await TypeLineAsync(page, "ldloc.0");
+        await TypeLineAsync(page, "pop");
+        await TypeLineAsync(page, "ldc.i4.8");
+        await TypeLineAsync(page, "ret");
+        await ExpectCompletionAsync(page, "= 8 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// Array member completion and a label preceding its own branch bind in the browser engine.
     /// </summary>
     /// <param name="browser">The browser engine.</param>

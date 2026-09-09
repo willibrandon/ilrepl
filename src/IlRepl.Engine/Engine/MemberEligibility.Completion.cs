@@ -41,7 +41,7 @@ public static partial class MemberEligibility
             "newobj" => method.Name == ".ctor" && method.DeclaringType is { IsAbstract: false },
             ".custom" => method.Name == ".ctor" && method.DeclaringType is { IsAbstract: false } owner
                 && HasBase(owner, "System.Attribute", scope),
-            "ldftn" => !method.IsAbstract,
+            "ldftn" or "jmp" => !method.IsAbstract,
             "ldvirtftn" => !method.IsStatic && method.IsVirtual && !method.IsConstructor,
             "ldtoken method" => true,
             ".override" => IsOverrideTarget(method, view),

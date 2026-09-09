@@ -22,6 +22,7 @@ public sealed class CompletionEligibilityTests
     [DataRow("call", true, true, false, true)]
     [DataRow("callvirt", false, true, true, true)]
     [DataRow("ldftn", true, true, false, true)]
+    [DataRow("jmp", true, true, false, true)]
     [DataRow("ldvirtftn", false, false, true, true)]
     [DataRow("newobj", false, false, false, false)]
     [DataRow("ldtoken method", true, true, true, true)]
