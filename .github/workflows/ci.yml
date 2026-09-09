@@ -78,3 +78,33 @@ jobs:
 
       - name: Publish the browser build
         run: dotnet run --file scripts/Publish-Wasm.cs
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: docs/package.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: docs/pnpm-lock.yaml
+
+      - name: Build the docs site
+        run: pnpm install --frozen-lockfile && pnpm build
+        working-directory: docs
+
+      - name: Build the browser tests
+        run: dotnet build tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj
+
+      - name: Install Chromium and WebKit
+        run: pwsh tests/IlRepl.Docs.Tests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium webkit
+
+      - name: Test the published runtime in both browsers
+        run: dotnet test tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj --no-build --report-trx --results-directory BrowserTestResults
+
+      - name: Upload browser test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-test-results
+          path: BrowserTestResults/

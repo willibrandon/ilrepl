@@ -97,4 +97,121 @@ public sealed class EngineCompletionTests
         Assert.IsTrue(pending.IsCompleted);
         await Assert.ThrowsAsync<OperationCanceledException>(() => pending);
     }
+
+    /// <summary>
+    /// Completion waits for an executing cell and observes its committed revision through both transports.
+    /// </summary>
+    /// <param name="useHost">Whether to use the real host process.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ConcurrentHandle_CompletesBeforeTheSnapshot(bool useHost)
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = useHost ? (IReplEngine)await HostPaths.StartEngineAsync(ct) : new InProcessEngine();
+        var marker = Path.Combine(Path.GetTempPath(), "ilrepl-completion-gate-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var escaped = marker.Replace("\\", "\\\\", StringComparison.Ordinal);
+            foreach (var line in new[] { $"ldstr \"{escaped}\"", "ldstr \"started\"",
+                "call File::WriteAllText(string, string)", "ldc.i4 500", "call Thread::Sleep(int32)" })
+            {
+                Assert.IsTrue((await engine.HandleAsync(line, ct)).Succeeded, line);
+            }
+
+            var running = Task.Run(() => engine.HandleAsync("ret", ct), ct);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(15));
+            while (!File.Exists(marker))
+            {
+                await Task.Delay(5, timeout.Token);
+            }
+
+            const string prefix = "call Environment::get_CurrentManagedTh";
+            var completing = engine.CompleteAsync(new CompletionRequest([prefix], 0, prefix.Length, null, []), ct);
+            Assert.IsFalse(running.IsCompleted, "The marker is written before the half-second runtime pause.");
+            var completed = await running;
+            var snapshot = await completing;
+            Assert.IsTrue(completed.Succeeded);
+            Assert.AreEqual(completed.Status.Revision, snapshot.Revision);
+            Assert.HasCount(1, snapshot.Items);
+            Assert.AreEqual("Environment::get_CurrentManagedThreadId()", snapshot.Items[0].InsertText);
+        }
+        finally
+        {
+            File.Delete(marker);
+        }
+    }
+
+    /// <summary>
+    /// A generic method's selected arity survives RPC while arguments and the final signature are completed.
+    /// </summary>
+    /// <param name="useHost">Whether to use the real host process.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Anchors_RetainTheirOwnerAcrossTransportRequests(bool useHost)
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = useHost ? (IReplEngine)await HostPaths.StartEngineAsync(ct) : new InProcessEngine();
+        const string prefix = "call Array::Empt";
+        var first = await engine.CompleteAsync(new CompletionRequest([prefix], 0, prefix.Length, null, []), ct);
+        var method = first.Items.Single();
+        Assert.IsNotNull(method.Continuation);
+        var open = "call " + method.InsertText;
+        var anchor = new ContinuationAnchor(0, 5, open.Length, method.Continuation);
+        var argumentLine = open + "str";
+        var arguments = await engine.CompleteAsync(
+            new CompletionRequest([argumentLine], 0, argumentLine.Length, null, [anchor]), ct);
+        var argument = arguments.Items.Single(item => item.InsertText == "string");
+        var closed = open + argument.InsertText + ">";
+        var final = await engine.CompleteAsync(new CompletionRequest([closed], 0, closed.Length, null, [anchor]), ct);
+        Assert.HasCount(1, final.Items);
+        var accepted = closed[..final.ReplaceStart] + final.Items[0].InsertText
+            + closed[(final.ReplaceStart + final.ReplaceLength)..];
+        Assert.IsTrue((await engine.HandleAsync(accepted, ct)).Succeeded);
+        Assert.IsTrue((await engine.HandleAsync("ldlen", ct)).Succeeded);
+        Assert.IsTrue((await engine.HandleAsync("conv.i4", ct)).Succeeded);
+        var run = await engine.HandleAsync("ret", ct);
+        Assert.IsTrue(run.Succeeded);
+        Assert.Contains(line => line.PlainText.Contains("= 0 : int32", StringComparison.Ordinal), run.Lines);
+    }
+
+    /// <summary>
+    /// Both transports complete known facades and refuse unknown references without runtime loads or resolution callbacks.
+    /// </summary>
+    /// <param name="useHost">Whether to use the real host process.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Snapshot_ResolvesFacadesWithoutRuntimeCallbacks(bool useHost)
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = useHost ? (IReplEngine)await HostPaths.StartEngineAsync(ct) : new InProcessEngine();
+        Assert.IsTrue((await engine.HandleAsync(".load " + SampleHost.Samples.GreeterDll, ct)).Succeeded);
+        foreach (var line in new[] { "call [Greeter]Greeter.CompletionProbe::Begin()", "ret" })
+        {
+            Assert.IsTrue((await engine.HandleAsync(line, ct)).Succeeded);
+        }
+
+        var status = engine.Status;
+        const string prefix = "ldtoken [System.Runtime]System.Strin";
+        var request = new CompletionRequest([prefix], 0, prefix.Length, null, []);
+        var known = await engine.CompleteAsync(request, ct);
+        Assert.Contains(item => item.InsertText == "string", known.Items);
+        const string missing = "call [NotLoaded]Missing::M";
+        var unknown = await engine.CompleteAsync(new CompletionRequest([missing], 0, missing.Length, null, []), ct);
+        Assert.IsEmpty(unknown.Items);
+        Assert.AreEqual(status, engine.Status);
+        foreach (var line in new[] { ".clear", "call [System.Runtime]System.Reflection.Assembly::GetExecutingAssembly()",
+            "call [Greeter]Greeter.CompletionProbe::Report([System.Runtime]System.Reflection.Assembly)" })
+        {
+            Assert.IsTrue((await engine.HandleAsync(line, ct)).Succeeded);
+        }
+
+        var report = await engine.HandleAsync("ret", ct);
+        Assert.IsTrue(report.Succeeded);
+        Assert.Contains(line => line.PlainText.Contains("preview loads=0; modules=0; callbacks=0;", StringComparison.Ordinal),
+            report.Lines, string.Join("\n", report.Lines.Select(line => line.PlainText)));
+    }
 }

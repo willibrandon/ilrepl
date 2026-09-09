@@ -164,7 +164,7 @@ through.
 
 ```ilrepl
 il[1]> .load samples/Greeter/bin/Debug/net10.0/Greeter.dll
-  loaded Greeter 1.0.0.0 (20 public types)
+  loaded Greeter 1.0.0.0 (21 public types)
 il[1]> .dis int32 Greeter.Hello::CallCountArgs()
   .method public hidebysig static int32 CallCountArgs() cil managed {
   .maxstack 8
