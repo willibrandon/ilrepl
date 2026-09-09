@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using IlRepl.Engine;
+using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
 
 namespace IlRepl.Repl;
@@ -98,37 +99,27 @@ public sealed class ReplCore
     {
         ArgumentNullException.ThrowIfNull(line);
         var normalized = Session.Normalize(line);
-        var text = normalized.Text;
         var commentOpen = normalized.InBlockCommentBefore;
         Transcript.Add(new TranscriptLine(LineKind.Input, [new TranscriptSpan(Prompt, SpanStyle.Prompt), .. Tokenizer.Spans(line, ref commentOpen, SpanStyle.Input)]));
 
         try
         {
-            if (normalized.Kind == SourceLineKind.Comment)
+            var operation = ReplLineDispatcher.Classify(normalized, Session.OpenMethod is not null, Session.State.HasPendingLabels, Session.State.OpenBlockDepth > 0);
+            switch (operation.Kind)
             {
-                return new HandleResult(true, false);
-            }
+                case ReplLineKind.Comment:
+                    return new HandleResult(true, false);
+                case ReplLineKind.Blank:
+                    RequireNoOpenBlock();
+                    if (!Session.State.IsEmpty)
+                    {
+                        Run();
+                    }
 
-            if (normalized.Kind == SourceLineKind.Blank)
-            {
-                RequireNoOpenBlock();
-                if (!Session.State.IsEmpty)
-                {
-                    Run();
-                }
-
-                return new HandleResult(true, false);
-            }
-
-            if (text.StartsWith('.') && !IsDirective(text))
-            {
-                return Command(text);
-            }
-
-            if (text == "ret" || text.StartsWith("ret ", StringComparison.Ordinal))
-            {
-                if (Session.OpenMethod is not null)
-                {
+                    return new HandleResult(true, false);
+                case ReplLineKind.Command:
+                    return Command(operation.Command!, operation.Argument);
+                case ReplLineKind.RetInMethod:
                     // ret returns from the method; only the closing brace ends the block.
                     Session.AddLine(normalized);
                     if (Options.EchoStack)
@@ -137,18 +128,15 @@ public sealed class ReplCore
                     }
 
                     return new HandleResult(true, false);
-                }
-
-                if (Session.State.HasPendingLabels || Session.State.OpenBlockDepth > 0)
-                {
-                    var inline = Session.AddLine(NormalizedLine.FromText("ret"));
+                case ReplLineKind.RetInline:
+                    Session.AddLine(NormalizedLine.FromText("ret"));
                     Note("ret inside the cell (a forward label or a block is still open)");
-                    _ = inline;
                     return new HandleResult(true, false);
-                }
-
-                Run();
-                return new HandleResult(true, false);
+                case ReplLineKind.RetRuns:
+                    Run();
+                    return new HandleResult(true, false);
+                default:
+                    break;
             }
 
             var result = Session.AddLine(normalized);
@@ -264,19 +252,6 @@ public sealed class ReplCore
         }
 
         return new HandleResult(true, false);
-    }
-
-    private static bool IsDirective(string text)
-    {
-        foreach (var d in Directives)
-        {
-            if (text.StartsWith(d, StringComparison.Ordinal) && (text.Length == d.Length || !char.IsLetter(text[d.Length])))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private void RequireNoOpenBlock()
@@ -413,11 +388,12 @@ public sealed class ReplCore
         }
     }
 
-    private HandleResult Command(string line)
+    private HandleResult Command(string command, string argument)
     {
-        var space = line.IndexOf(' ', StringComparison.Ordinal);
-        var command = space < 0 ? line : line[..space];
-        var argument = space < 0 ? "" : line[(space + 1)..].Trim();
+        if (SessionTransitionRules.Of(command) == SessionTransition.Unknown)
+        {
+            throw new ReplException($"unknown command '{command}' (.help lists them)");
+        }
 
         switch (command)
         {

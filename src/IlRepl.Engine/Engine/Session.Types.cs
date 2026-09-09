@@ -1230,55 +1230,20 @@ public sealed partial class Session
     /// </summary>
     private (List<SessionType> Types, List<SessionMethod> Methods) ReplacementClosure(SessionType replaced)
     {
-        var types = new List<SessionType>();
-        var methods = new List<SessionMethod>();
         // Bodies rebuilt with a family bind to its prototypes; those name the family too.
-        var mentionedTypes = new HashSet<Type>(replaced.Types.Values.Concat(replaced.Prototypes.Values.Select(p => (Type)p.Prototype)), ReferenceEqualityComparer.Instance);
-        var mentionedMethods = new HashSet<string>(StringComparer.Ordinal);
-        bool changed;
-        do
-        {
-            changed = false;
-            foreach (var family in _types)
-            {
-                if (ReferenceEquals(family, replaced) || types.Contains(family))
-                {
-                    continue;
-                }
-
-                if (FamilyMentions(family.Declaration, mentionedTypes, mentionedMethods))
-                {
-                    types.Add(family);
-                    foreach (var type in family.Types.Values.Concat(family.Prototypes.Values.Select(p => (Type)p.Prototype)))
-                    {
-                        mentionedTypes.Add(type);
-                    }
-
-                    changed = true;
-                }
-            }
-
-            foreach (var method in _methods)
-            {
-                if (methods.Contains(method))
-                {
-                    continue;
-                }
-
-                if (BodyMentions(method.State, mentionedTypes, mentionedMethods) || method.Signature.ParameterTypes.Append(method.Signature.ReturnType).Any(t => Mentions(t, mentionedTypes)))
-                {
-                    methods.Add(method);
-                    mentionedMethods.Add(method.Signature.Name);
-                    changed = true;
-                }
-            }
-        }
-        while (changed);
-
-        return (types, methods);
+        var closure = Binding.DefinitionReplacementPlanner.Plan<SessionType, SessionMethod, Type>(
+            replaced,
+            _types,
+            _methods,
+            family => family.Types.Values.Concat(family.Prototypes.Values.Select(p => (Type)p.Prototype)),
+            (family, types, methods) => FamilyMentions(family.Declaration, types, methods),
+            (method, types, methods) => BodyMentions(method.State, types, methods) || method.Signature.ParameterTypes.Append(method.Signature.ReturnType).Any(t => Mentions(t, types)),
+            method => method.Signature.Name,
+            ReferenceEqualityComparer.Instance);
+        return ([.. closure.Families], [.. closure.Methods]);
     }
 
-    private static bool FamilyMentions(TypeDeclaration family, HashSet<Type> types, HashSet<string> methods)
+    private static bool FamilyMentions(TypeDeclaration family, IReadOnlySet<Type> types, IReadOnlySet<string> methods)
     {
         foreach (var declaration in family.Family)
         {
@@ -1354,7 +1319,7 @@ public sealed partial class Session
         }
     }
 
-    private static bool BodyMentions(CellState body, HashSet<Type> types, HashSet<string> methods)
+    private static bool BodyMentions(CellState body, IReadOnlySet<Type> types, IReadOnlySet<string> methods)
     {
         if (SessionMentions.Types(body).Any(t => Mentions(t, types)))
         {
@@ -1364,7 +1329,7 @@ public sealed partial class Session
         return body.Entries.Any(e => e.Instruction?.Operand is ResolvedMethod { Definition: { } definition } && methods.Contains(definition.Name));
     }
 
-    private static bool Mentions(Type? type, HashSet<Type> types)
+    private static bool Mentions(Type? type, IReadOnlySet<Type> types)
     {
         while (type is not null)
         {
