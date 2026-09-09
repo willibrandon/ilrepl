@@ -48,6 +48,7 @@ public sealed class TypeLifetimeTests
     /// </remarks>
     [TestMethod]
     [DoNotParallelize]
+    [Timeout(30_000, CooperativeCancellation = true)]
     public void Reset_CollectsWhileOtherThreadsResolveNames()
     {
         var resolver = new TypeResolver();
@@ -65,16 +66,15 @@ public sealed class TypeLifetimeTests
         {
             // The first miss scans every exported type once; the searches after it are the fast
             // ones that never leave the runtime's list alone.
-            while (searches.Any(count => Volatile.Read(ref count) < 5))
-            {
-                Thread.Sleep(10);
-                ct.ThrowIfCancellationRequested();
-            }
+            WaitForSearches(searches, ct);
 
             for (var round = 0; round < 5; round++)
             {
                 var session = new Session();
                 var weak = DefineAndReset(session);
+                // Loading the definition invalidates the process cache. Let every worker finish
+                // refreshing it before checking that their continuing cached searches retain nothing.
+                WaitForSearches(searches, ct);
                 for (var i = 0; i < 10 && weak.IsAlive; i++)
                 {
                     GC.Collect();
@@ -88,6 +88,16 @@ public sealed class TypeLifetimeTests
         {
             stop.Cancel();
             Task.WaitAll(workers, ct);
+        }
+    }
+
+    private static void WaitForSearches(int[] searches, CancellationToken cancellationToken)
+    {
+        var starts = Enumerable.Range(0, searches.Length).Select(index => Volatile.Read(ref searches[index])).ToArray();
+        while (Enumerable.Range(0, searches.Length).Any(index => Volatile.Read(ref searches[index]) - starts[index] < 5))
+        {
+            Thread.Sleep(10);
+            cancellationToken.ThrowIfCancellationRequested();
         }
     }
 
