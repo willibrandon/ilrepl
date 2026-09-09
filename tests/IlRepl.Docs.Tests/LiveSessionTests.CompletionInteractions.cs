@@ -109,14 +109,14 @@ public sealed partial class LiveSessionTests
         await page.Keyboard.PressAsync("ArrowRight");
         await page.Keyboard.PressAsync("Escape");
         await Assertions.Expect(terminal).Not.ToContainTextAsync("members 1/1");
-        Assert.Contains(prefix + suffix, (await BufferRowsAsync(page))[^2]);
+        await PromptContainsAsync(page, prefix + suffix);
         await page.Keyboard.TypeAsync("x");
         await ExpectCompletionAsync(page, prefix + "x" + suffix);
         await page.Keyboard.PressAsync("Backspace");
         await ExpectCompletionAsync(page, "members 1/1");
         await page.Keyboard.PressAsync("Tab");
         await Assertions.Expect(terminal).Not.ToContainTextAsync("members 1/1");
-        Assert.Contains("call Environment::get_CurrentManagedThreadId()" + suffix, (await BufferRowsAsync(page))[^2]);
+        await PromptContainsAsync(page, "call Environment::get_CurrentManagedThreadId()" + suffix);
         await page.Keyboard.PressAsync("Enter");
         await TypeLineAsync(page, "ret");
         await ExpectCompletionAsync(page, ": int32");
@@ -137,20 +137,21 @@ public sealed partial class LiveSessionTests
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await page.Keyboard.TypeAsync("ldtoken Dictionary");
-        await ExpectCompletionAsync(page, "❯ Dictionary<");
+        await CompletionAtCaretAsync(page, "il[1]> ldtoken Dictionary", "❯ Dictionary<");
         await page.Keyboard.PressAsync("Tab");
         await ExpectCompletionAsync(page, "type argument 1 of 2 (TKey)");
         await page.Keyboard.TypeAsync("List");
-        await ExpectCompletionAsync(page, "❯ List<");
+        await CompletionAtCaretAsync(page, "il[1]> ldtoken Dictionary<List", "❯ List<");
         await page.Keyboard.PressAsync("Tab");
         await ExpectCompletionAsync(page, "type argument 1 of 1 (T)");
         await page.Keyboard.TypeAsync("str");
-        await ExpectCompletionAsync(page, "❯ string");
+        await CompletionAtCaretAsync(page, "il[1]> ldtoken Dictionary<List<str", "❯ string");
         await page.Keyboard.PressAsync("Tab");
+        await PromptAtCaretAsync(page, "il[1]> ldtoken Dictionary<List<string");
         await page.Keyboard.TypeAsync(">,");
         await ExpectCompletionAsync(page, "type argument 2 of 2 (TValue)");
         await page.Keyboard.TypeAsync("int32");
-        await ExpectCompletionAsync(page, "❯ int32");
+        await CompletionAtCaretAsync(page, "il[1]> ldtoken Dictionary<List<string>,int32", "❯ int32");
         await page.Keyboard.PressAsync("Tab");
         await page.Keyboard.TypeAsync(">");
         await page.Keyboard.PressAsync("Enter");
@@ -204,17 +205,17 @@ public sealed partial class LiveSessionTests
         await TypeLineAsync(page, "ldc.i4.7");
         await page.Keyboard.TypeAsync("call Math::Ma");
         await ExpectCompletionAsync(page, "❯ Max(Decimal, Decimal)");
-        Assert.Contains("call Math::Max(Decimal, Decimal)", (await BufferRowsAsync(page))[^2]);
+        await PromptContainsAsync(page, "call Math::Max(Decimal, Decimal)");
         for (var index = 0; index < 4; index++)
         {
             await page.Keyboard.PressAsync("ArrowDown");
         }
 
         await ExpectCompletionAsync(page, "❯ Max(int32, int32)");
-        Assert.Contains("call Math::Max(int32, int32)", (await BufferRowsAsync(page))[^2]);
+        await PromptContainsAsync(page, "call Math::Max(int32, int32)");
         await page.Keyboard.PressAsync("ArrowRight");
         await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("members");
-        Assert.Contains("call Math::Max(int32, int32)", (await BufferRowsAsync(page))[^2]);
+        await PromptContainsAsync(page, "call Math::Max(int32, int32)");
         await page.Keyboard.PressAsync("Enter");
         await TypeLineAsync(page, "ret");
         await ExpectCompletionAsync(page, "= 7 : int32");

@@ -345,7 +345,7 @@ public sealed partial class LiveSessionTests
         await ExpectCompletionAsync(page, "❯ add(int32, int32)");
         await page.Keyboard.PressAsync("Tab");
         await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ add(int32, int32)");
-        Assert.Contains("::'add'(int32, int32)", (await BufferRowsAsync(page))[^2]);
+        await PromptContainsAsync(page, "::'add'(int32, int32)");
         await page.Keyboard.PressAsync("Enter");
         await TypeLineAsync(page, "ret");
         await ExpectCompletionAsync(page, "= 7 : int32");
@@ -447,7 +447,7 @@ public sealed partial class LiveSessionTests
         await ExpectCompletionAsync(page, "members 1/1");
         await page.Keyboard.PressAsync("Tab");
         await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ Value()");
-        Assert.Contains("'<>c__DisplayClassProbe'::Value()", (await BufferRowsAsync(page))[^2]);
+        await PromptContainsAsync(page, "'<>c__DisplayClassProbe'::Value()");
         await page.Keyboard.PressAsync("Enter");
         await TypeLineAsync(page, "ret");
         await ExpectCompletionAsync(page, "= 7 : int32");
@@ -503,6 +503,13 @@ public sealed partial class LiveSessionTests
         await ExpectCompletionAsync(page, "= 0 : int32");
         Assert.DoesNotContain("error:", await BufferTextAsync(page));
     }
+
+    private static Task<IJSHandle> PromptContainsAsync(IPage page, string text) => page.WaitForFunctionAsync("""
+        text => {
+          const terminal = window.ilreplTerminal;
+          return terminal.buffer.active.getLine(terminal.rows - 2)?.translateToString(true).includes(text);
+        }
+        """, text, new() { PollingInterval = 16, Timeout = 30_000 });
 
     private static Task<IJSHandle> PromptAtCaretAsync(IPage page, string prompt) => page.WaitForFunctionAsync("""
         prompt => {
