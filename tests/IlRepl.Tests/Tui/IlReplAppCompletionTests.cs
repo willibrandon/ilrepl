@@ -19,7 +19,46 @@ public sealed class IlReplAppCompletionTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
-    /// Tab, navigated Enter, Right with a ghost and clicking insert the same complete operand and undo together.
+    /// Consecutive terminal Backspace bytes remove an invalid argument while preserving its selected generic owner.
+    /// </summary>
+    [TestMethod]
+    public async Task Operand_InvalidGenericArgument_CanBeDeleted()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        await engine.HandleAsync(".load " + SampleHost.Samples.GreeterDll, ct);
+        var transcript = new Transcript();
+        PromptState prompt = null!;
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = IlReplApp.Configure(Hex1b.Hex1bTerminal.CreateBuilder(), engine, transcript,
+            onPrompt: value => prompt = value).WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync("call Greeter.Generic::Constrained", ct: ct);
+        await auto.WaitUntilTextAsync("members 1/1");
+        await auto.TabAsync(ct: ct);
+        await auto.WaitUntilAsync(_ => prompt.Text == "call Generic::Constrained<", description: "the selected owner is inserted");
+        await auto.TypeAsync("string>", ct: ct);
+        await auto.WaitUntilAsync(_ => prompt.Text == "call Generic::Constrained<string>"
+            && PromptWidget.Candidates(prompt, engine.Catalog).Count == 0, description: "the invalid argument has no signature");
+        await adapter.SendAsync(System.Text.Encoding.UTF8.GetBytes(new string('\x7f', "string>".Length)));
+
+        await auto.WaitUntilAsync(_ => prompt.Text == "call Generic::Constrained<", description: "all seven characters were deleted");
+        await auto.TypeAsync("int32>", ct: ct);
+        await auto.WaitUntilTextAsync("signatures 1/1");
+        await auto.TabAsync(ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("stack [int32]");
+        await auto.TypeAsync("ret", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("= 0 : int32");
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// Every acceptance input inserts one undoable edit whose restored completion binds and executes through either transport.
     /// </summary>
     /// <param name="acceptance">The acceptance input.</param>
     /// <param name="remote">Whether the real host process serves completion.</param>
@@ -84,6 +123,17 @@ public sealed class IlReplAppCompletionTests
         Assert.IsEmpty(AppTest.Echoes(transcript));
         await auto.Ctrl().KeyAsync(Hex1bKey.Z, ct: ct);
         await auto.WaitUntilAsync(_ => prompt.Text == original, description: "one undo restores the typed prefix");
+        await auto.WaitUntilAsync(_ => PromptWidget.Candidates(prompt, engine.Catalog).Count == 1,
+            description: "undo restores completion at the original prefix");
+        await auto.TabAsync(ct: ct);
+        await auto.WaitUntilAsync(_ => prompt.Text == expected, description: "the restored operand is accepted again");
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Any(line => line.EndsWith(expected, StringComparison.Ordinal)),
+            description: "the accepted call binds");
+        await auto.TypeAsync("ret", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync(": int32");
+        Assert.DoesNotContain(LineKind.Error, transcript.Lines.Select(line => line.Kind));
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
         await IlReplApp.SettleAsync(prompt);

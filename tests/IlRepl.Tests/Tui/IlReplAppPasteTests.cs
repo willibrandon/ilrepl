@@ -20,6 +20,55 @@ public sealed class IlReplAppPasteTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
+    /// Enter arriving in the paste's input packet waits for the entire pasted document before submitting it.
+    /// </summary>
+    [TestMethod]
+    public async Task Paste_ImmediateEnter_SendsThePastedDocument()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
+            .WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        await auto.WaitUntilTextAsync("il[1]>");
+        await adapter.SendAsync(System.Text.Encoding.UTF8.GetBytes("\x1b[200~ldc.i4.s 42\nret\x1b[201~\r"));
+        await auto.WaitUntilTextAsync("= 42 : int32");
+        Assert.AreSequenceEqual(["il[1]> ldc.i4.s 42", "il[1]> ret"], AppTest.Echoes(transcript));
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
+    /// A rejected oversized paste reports its failure and releases queued input instead of leaving the prompt blocked.
+    /// </summary>
+    [TestMethod]
+    public async Task Paste_Oversized_LeavesThePromptUsable()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
+            .WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        await auto.WaitUntilTextAsync("il[1]>");
+        await adapter.PasteAsync(new string(' ', 4 * 1024 * 1024 + 1));
+        await auto.WaitUntilTextAsync("paste failed:");
+        await auto.TypeAsync("ldc.i4.s 42", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("stack [int32]");
+        await auto.TypeAsync("ret", ct: ct);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("= 42 : int32");
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
     /// A pasted block sits in the editor until Enter sends it.
     /// </summary>
     [TestMethod]

@@ -13,6 +13,11 @@ namespace IlRepl.Tui;
 public sealed partial class PromptState
 {
     /// <summary>
+    /// Coordinates streamed paste application with subsequent terminal input.
+    /// </summary>
+    internal PromptInputReader? PasteInput { get; set; }
+
+    /// <summary>
     /// Initializes the state.
     /// </summary>
     /// <param name="history">The history.</param>

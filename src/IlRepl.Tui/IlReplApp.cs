@@ -55,6 +55,14 @@ public static class IlReplApp
             .WithHex1bApp(
                 options =>
                 {
+                    var adapter = options.WorkloadAdapter!;
+                    if (adapter is Hex1bAppWorkloadAdapter workload)
+                    {
+                        workload.EnableMouse = options.EnableMouse;
+                    }
+
+                    prompt.PasteInput = new PromptInputReader(adapter.InputEvents);
+                    options.WorkloadAdapter = new PromptInputAdapter(adapter, prompt.PasteInput);
                     // The prompt paints its own caret cell, so no hardware caret follows the mouse,
                     // and Ctrl+C is the prompt's: it copies, clears, or quits.
                     options.EnableDefaultCtrlCExit = false;
@@ -129,6 +137,7 @@ public static class IlReplApp
     public static async Task SettleAsync(PromptState prompt)
     {
         ArgumentNullException.ThrowIfNull(prompt);
+        prompt.PasteInput?.Stop();
         prompt.Pending.Clear();
         prompt.Requester?.Cancel(prompt);
         if (prompt.Submission is { } sending)
@@ -350,10 +359,16 @@ public static class IlReplApp
 
                     break;
                 case SubmissionEventKind.Paste:
+                    if (e.Note is { } pasteError)
+                    {
+                        transcript.Add(LineKind.Error, "  " + pasteError, SpanStyle.Error);
+                    }
+
                     prompt.Editor.InsertText(PastePayload.Prepare(e.Text ?? ""));
                     prompt.LastLength = prompt.Editor.Document.Length;
                     prompt.PaletteDismissed = false;
                     prompt.PaletteNavigated = false;
+                    prompt.PasteInput?.Applied();
                     break;
                 case SubmissionEventKind.Refused:
                     Return(prompt, e.Text ?? "", e.CaretLine, select: e.Select);

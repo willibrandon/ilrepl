@@ -144,8 +144,16 @@ public sealed partial record PromptWidget(
             // The stack measures the paste wrapper, so the wrapper carries the height as well.
             var pastable = v.Pastable(editor).OnPaste(async e =>
             {
-                var text = await e.Paste.ReadToEndAsync(ct: e.Paste.CancellationToken).ConfigureAwait(false);
-                state.Post(SubmissionEvent.Paste(text));
+                try
+                {
+                    var text = await e.Paste.ReadToEndAsync(ct: e.Paste.CancellationToken).ConfigureAwait(false);
+                    state.Post(SubmissionEvent.Paste(text));
+                }
+                catch (Exception exception) when (exception is InvalidOperationException or IOException or OperationCanceledException)
+                {
+                    e.Paste.Cancel();
+                    state.Post(new SubmissionEvent(SubmissionEventKind.Paste, Note: "paste failed: " + exception.Message));
+                }
             }).FixedHeight(Math.Max(1, Fit.EditorRows));
             return paletteVisible ? [BuildPalette(v, candidates, state, Fit, Width), pastable] : [pastable];
         });
