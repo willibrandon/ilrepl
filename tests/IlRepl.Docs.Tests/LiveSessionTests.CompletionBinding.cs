@@ -5,6 +5,38 @@ namespace IlRepl.Docs.Tests;
 public sealed partial class LiveSessionTests
 {
     /// <summary>
+    /// Array member completion and a label preceding its own branch bind in the browser engine.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_ArrayAndCurrentLabelCompletions_Bind(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        await TypeLineAsync(page, ".load /samples/Greeter.dll");
+        await ExpectCompletionAsync(page, "loaded Greeter");
+        await TypeLineAsync(page, "ldnull");
+        await page.Keyboard.TypeAsync("call Greeter.Hello::AcceptMatrix<int32>");
+        await CompletionAtCaretAsync(page, "il[1]> call Greeter.Hello::AcceptMatrix<int32>", "signatures 1/1");
+        await page.Keyboard.PressAsync("Tab");
+        await page.Keyboard.PressAsync("Enter");
+        await TypeLineAsync(page, "ret");
+        await ExpectCompletionAsync(page, "= 9 : int32");
+        await TypeLineAsync(page, ".clear");
+        await PasteAsync(page, ".method void Spin() {\nLOOP: br LO");
+        await ExpectCompletionAsync(page, "❯ LOOP");
+        await page.Keyboard.PressAsync("Tab");
+        await PasteAsync(page, "\n}");
+        await page.Keyboard.PressAsync("Enter");
+        await ExpectCompletionAsync(page, "end of method Spin");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// A completed unmanaged function-pointer parameter binds in Mono and qualified typo suggestions recover correctly.
     /// </summary>
     /// <param name="browser">The browser engine.</param>

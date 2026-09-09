@@ -50,10 +50,12 @@ public sealed class InProcessEngine : IReplEngine
     {
         ArgumentNullException.ThrowIfNull(line);
         ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
         await _warmupCancellation.CancelAsync().ConfigureAwait(false);
-        await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return Reply(_core.Handle(line));
         }
         finally
@@ -67,9 +69,10 @@ public sealed class InProcessEngine : IReplEngine
     {
         ArgumentNullException.ThrowIfNull(mark);
         ObjectDisposedException.ThrowIf(_disposed, this);
-        await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return Reply(_core.Rollback(mark));
         }
         finally

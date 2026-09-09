@@ -105,7 +105,8 @@ public static class SymbolBinder
             case TypeSyntaxKind.Array:
             {
                 var element = BindCore(syntax.Element!, scope, lenient);
-                return syntax.IsVector ? TypeSymbol.SzArray(element) : TypeSymbol.Array(element, syntax.Rank, [], []);
+                var (sizes, bounds) = ArraySignatureShape.Parse(syntax.Shape!);
+                return syntax.IsVector ? TypeSymbol.SzArray(element) : TypeSymbol.Array(element, syntax.Rank, sizes, bounds);
             }
 
             case TypeSyntaxKind.ByRef:

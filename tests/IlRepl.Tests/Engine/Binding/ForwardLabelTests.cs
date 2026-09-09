@@ -19,6 +19,39 @@ public sealed class ForwardLabelTests
     public required TestContext TestContext { get; set; }
 
     /// <summary>
+    /// A self-branch can complete a leading label declared on the same line and compile without executing the loop.
+    /// </summary>
+    /// <param name="line">The current instruction, including its leading labels.</param>
+    [TestMethod]
+    [DataRow("LOOP: br LO")]
+    [DataRow("FIRST: LOOP: br LO")]
+    [DataRow("/* leading comment */ LOOP: br LO")]
+    public async Task CurrentLineLabel_CompletesAndCompiles(string line)
+    {
+        var session = new Session();
+        using var completer = new OperandCompleter(session);
+        string[] lines = [".method void Spin() {", line, "}"];
+        var reply = await completer.CompleteAsync(new CompletionRequest(lines, 1, line.Length, null, []), TestContext.CancellationToken);
+        var item = reply.Items.Single(candidate => candidate.InsertText == "LOOP");
+        var completed = line[..reply.ReplaceStart] + item.InsertText + line[(reply.ReplaceStart + reply.ReplaceLength)..];
+        session.AddLine(lines[0]);
+        session.AddLine(completed);
+        session.AddLine(lines[2]);
+        Assert.AreEqual("Spin", session.Methods.Single().Signature.Name);
+    }
+
+    /// <summary>
+    /// A label inside a comment on the current line cannot become a branch target.
+    /// </summary>
+    [TestMethod]
+    public void CurrentLineComment_DoesNotDeclareALabel()
+    {
+        const string line = "/* LOOP: */ br LO";
+        using var editing = new EditingSession(new Session());
+        Assert.IsEmpty(editing.ForwardLabels([line], 0, Classifier.Classify(line, line.Length, false), TestContext.CancellationToken));
+    }
+
+    /// <summary>
     /// A declaration suspends the cell's label space and contributes no labels from its own body.
     /// </summary>
     [TestMethod]

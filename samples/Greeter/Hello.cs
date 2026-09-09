@@ -23,6 +23,14 @@ public static class Hello
     public static unsafe int AcceptCdecl(delegate* unmanaged[Cdecl]<int, int> function) => function == null ? 7 : 8;
 
     /// <summary>
+    /// Accepts a rectangular array so completion can preserve its metadata dimensions.
+    /// </summary>
+    /// <typeparam name="T">The array element type.</typeparam>
+    /// <param name="values">The array, or null.</param>
+    /// <returns>The array length, or nine for null.</returns>
+    public static int AcceptMatrix<T>(T[,]? values) => values?.Length ?? 9;
+
+    /// <summary>
     /// Greets by name.
     /// </summary>
     /// <param name="name">The name.</param>

@@ -170,7 +170,8 @@ public static partial class SymbolRelations
             var fromElement = from.Element!;
             var toElement = to.Element!;
             return from.Kind == to.Kind && from.Rank == to.Rank
-                && !fromElement.IsValueTypeShape && !toElement.IsValueTypeShape && IsAssignable(fromElement, toElement, scope);
+                && (SymbolIdentity.Equal(fromElement, toElement)
+                    || !fromElement.IsValueTypeShape && !toElement.IsValueTypeShape && IsAssignable(fromElement, toElement, scope));
         }
 
         if (from.IsArray)

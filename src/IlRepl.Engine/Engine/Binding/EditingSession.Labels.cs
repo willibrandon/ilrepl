@@ -5,13 +5,13 @@ namespace IlRepl.Engine.Binding;
 public sealed partial class EditingSession
 {
     /// <summary>
-    /// Finds future labels in the caret's body by replaying each possible completed reference through shared transitions.
+    /// Finds current and future labels by replaying each possible completed reference through shared transitions.
     /// </summary>
     /// <param name="lines">The complete document.</param>
     /// <param name="caretLine">The line containing the reference being completed.</param>
     /// <param name="site">The classifier's replacement range for that reference.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>Future labels belonging to the caret's current body.</returns>
+    /// <returns>Current and future labels belonging to the caret's body.</returns>
     public IReadOnlySet<string> ForwardLabels(
         IReadOnlyList<string> lines, int caretLine, CompletionSite site, CancellationToken cancellationToken = default)
     {
@@ -23,7 +23,7 @@ public sealed partial class EditingSession
         }
 
         var candidates = new HashSet<string>(StringComparer.Ordinal);
-        for (var index = caretLine + 1; index < lines.Count; index++)
+        for (var index = caretLine; index < lines.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             // The tolerant replay decides which preceding lines change comment state.
@@ -52,6 +52,11 @@ public sealed partial class EditingSession
                 var completed = line[..site.ReplaceStart] + candidate + line[site.ReplaceEnd..];
                 ApplyLine(completed, caretLine);
                 SeedLabelReference(completed, candidate, view.InBlockComment);
+                if (_state.Body.LabelSpace == view.LabelSpace && _state.Body.Labels.Contains(candidate))
+                {
+                    result.Add(candidate);
+                    continue;
+                }
 
                 for (var index = caretLine + 1; index < lines.Count && !_state.Ended; index++)
                 {

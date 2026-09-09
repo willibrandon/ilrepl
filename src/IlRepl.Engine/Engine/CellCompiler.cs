@@ -114,7 +114,36 @@ public static class CellCompiler
             run.DefineParameter(i + 1, ParameterAttributes.None, state.Arguments[i].Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
 
-        EmitGuarded("the cell", () => EmitBody(run.GetILGenerator(), state, methods));
+        var helpers = new List<DefinitionAssembly>();
+        EmitGuarded("the cell", () =>
+        {
+            var il = run.GetILGenerator();
+            if (!CecilCellBody.IsRequired(state))
+            {
+                EmitBody(il, state, methods);
+                return;
+            }
+
+            // Reflection.Emit reconstructs signatures on generic owners from Type objects, losing array bounds.
+            var (bodyDefinition, bodyMethod) = CecilCellBody.Compile(state, names, methods);
+            helpers.Add(bodyDefinition);
+            var target = names.Count == 0 ? bodyMethod : bodyMethod.MakeGenericMethod(genericParameters);
+            for (var index = 0; index < parameterTypes.Length; index++)
+            {
+                il.Emit(OpCodes.Ldarg, index);
+            }
+
+            if (state.IsVarArg)
+            {
+                il.EmitCall(OpCodes.Call, target, Type.EmptyTypes);
+            }
+            else
+            {
+                il.Emit(OpCodes.Call, target);
+            }
+
+            il.Emit(OpCodes.Ret);
+        });
 
         var entry = run;
         if (state.IsVarArg)
@@ -125,9 +154,13 @@ public static class CellCompiler
         var created = CreateCellType(type, "the cell");
         var method = created.GetMethod(entry.Name, BindingFlags.Public | BindingFlags.Static)
             ?? throw new ReplException("the compiled cell has no entry point");
-        var dependencies = session.Methods.Select(m => m.Trampoline.Definition).Concat(typeDependencies).Distinct().ToArray();
+        var dependencies = session.Methods.Select(m => m.Trampoline.Definition)
+            .Concat(typeDependencies).Concat(helpers).Distinct().ToArray();
         var definition = SessionAssemblies.RegisterCell(assembly, created, dependencies, context);
-        return new CompiledCell(assembly, created, method, state.Arguments.Select(a => a.Value).ToArray(), definition);
+        return new CompiledCell(assembly, created, method, state.Arguments.Select(a => a.Value).ToArray(), definition)
+        {
+            Helpers = helpers,
+        };
     }
 
     private static TypeBuilder DefineCellType(ModuleBuilder module) =>

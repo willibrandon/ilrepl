@@ -44,7 +44,7 @@ public static class SymbolRenderer
             case TypeSymbolKind.SzArray:
                 return Pretty(type.Element) + "[]";
             case TypeSymbolKind.Array:
-                return Pretty(type.Element) + (type.Rank == 1 ? "[0...]" : "[" + new string(',', type.Rank - 1) + "]");
+                return Pretty(type.Element) + ArraySignatureShape.Render(type.Rank, type.Sizes, type.LowerBounds);
             case TypeSymbolKind.Modified:
             case TypeSymbolKind.Pinned:
                 return Pretty(type.Element);

@@ -1,4 +1,5 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 using Mono.Cecil;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
@@ -429,6 +430,10 @@ public sealed class CecilWriter
         NoteSessionMembers(declaring);
         NoteSessionMembers(field.FieldType);
         var imported = Module.ImportReference(field);
+        if (CecilArrayShapes.ContainsArray(imported.FieldType))
+        {
+            imported.FieldType = CecilArrayShapes.Restore(imported.FieldType, RuntimeSymbolImporter.Import(field).FieldType);
+        }
         WithMetadataNames(imported.DeclaringType);
         WithMetadataNames(imported.FieldType);
         return imported;
@@ -579,6 +584,19 @@ public sealed class CecilWriter
         }
 
         var reference = Module.ImportReference(method);
+        var definitionReference = reference is GenericInstanceMethod instance ? instance.ElementMethod : reference;
+        if (CecilArrayShapes.ContainsArray(definitionReference.ReturnType)
+            || definitionReference.Parameters.Any(parameter => CecilArrayShapes.ContainsArray(parameter.ParameterType)))
+        {
+            var signature = RuntimeSymbolImporter.Import(method);
+            definitionReference.ReturnType = CecilArrayShapes.Restore(definitionReference.ReturnType, signature.ReturnType);
+            for (var index = 0; index < definitionReference.Parameters.Count; index++)
+            {
+                definitionReference.Parameters[index].ParameterType = CecilArrayShapes.Restore(
+                    definitionReference.Parameters[index].ParameterType, signature.Parameters[index].Type);
+            }
+        }
+
         WithMetadataNames(reference.DeclaringType);
         WithMetadataNames(reference.ReturnType);
         foreach (var parameter in reference.Parameters)

@@ -150,7 +150,7 @@ public sealed class TypeSpeller
                 yield return Spell(type.Element!) + "[]";
                 break;
             case TypeSymbolKind.Array:
-                yield return Spell(type.Element!) + (type.Rank == 1 ? "[0...]" : "[" + new string(',', type.Rank - 1) + "]");
+                yield return Spell(type.Element!) + ArraySignatureShape.Render(type.Rank, type.Sizes, type.LowerBounds);
                 break;
             case TypeSymbolKind.ByRef:
                 yield return Spell(type.Element!) + "&";

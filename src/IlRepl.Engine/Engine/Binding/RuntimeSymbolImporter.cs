@@ -237,7 +237,7 @@ public static class RuntimeSymbolImporter
             impl = MethodImplAttributes.IL;
         }
 
-        return new MethodSymbol
+        return RuntimeSignatureShapes.Restore(method, new MethodSymbol
         {
             Definition = id,
             Source = MethodSymbolSource.Loaded,
@@ -253,7 +253,7 @@ public static class RuntimeSymbolImporter
             GenericArguments = genericArguments,
             ReturnRequiredModifiers = info is null ? [] : Modifiers(() => info.ReturnParameter.GetRequiredCustomModifiers()),
             ReturnOptionalModifiers = info is null ? [] : Modifiers(() => info.ReturnParameter.GetOptionalCustomModifiers()),
-        };
+        });
     }
 
     private static ParameterSymbol ImportParameter(ParameterInfo parameter) => new(
@@ -287,7 +287,7 @@ public static class RuntimeSymbolImporter
     {
         ArgumentNullException.ThrowIfNull(field);
         declaring ??= Import(field.DeclaringType!);
-        return new FieldSymbol
+        return RuntimeSignatureShapes.Restore(field, new FieldSymbol
         {
             Definition = RuntimeDefinitions.Of(field),
             Source = MethodSymbolSource.Loaded,
@@ -297,7 +297,7 @@ public static class RuntimeSymbolImporter
             Attributes = field.Attributes,
             RequiredModifiers = Modifiers(field.GetRequiredCustomModifiers),
             OptionalModifiers = Modifiers(field.GetOptionalCustomModifiers),
-        };
+        });
     }
 
     /// <summary>

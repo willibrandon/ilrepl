@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -423,14 +424,15 @@ public static class IlAsmRenderer
         // The signature is the definition's: a member of an instantiation names the type's
         // parameters as !N, a generic method instance its own as !!N.
         var definitionMethod = DefinitionOf(method);
-        var returnType = definitionMethod is MethodInfo mi ? SignatureType(mi.ReturnType) : "void";
+        var signature = RuntimeSymbolImporter.Import(definitionMethod);
+        var returnType = SignatureType(signature.ReturnType);
         var name = method is ConstructorInfo ? (method.IsStatic ? ".cctor" : ".ctor") : MemberName(method.Name);
         if (method is MethodInfo g && g.IsGenericMethod)
         {
             name += "<" + string.Join(", ", g.GetGenericArguments().Select(TypeNameFormatter.IlAsm)) + ">";
         }
 
-        var parameters = definitionMethod.GetParameters().Select(p => SignatureType(p.ParameterType)).ToList();
+        var parameters = signature.Parameters.Select(parameter => SignatureType(parameter.Type)).ToList();
         if (resolved.OptionalParameterTypes is not null)
         {
             parameters.Add("...");
@@ -445,7 +447,7 @@ public static class IlAsmRenderer
     {
         var declaring = field.DeclaringType is null ? "?" : TypeNameFormatter.IlAsmDeclaring(field.DeclaringType);
         var definition = DefinitionOf(field);
-        var type = SignatureType(definition.FieldType);
+        var type = SignatureType(RuntimeSymbolImporter.Import(definition).FieldType);
         try
         {
             // A loaded field carries its modifiers; a builder cannot describe them yet.
@@ -507,6 +509,35 @@ public static class IlAsmRenderer
     /// <summary>
     /// A type inside a member reference's signature: generic parameters by position.
     /// </summary>
+    private static string SignatureType(TypeSymbol type)
+    {
+        switch (type.Kind)
+        {
+            case TypeSymbolKind.Array:
+                return SignatureType(type.Element!) + ArraySignatureShape.Render(type.Rank, type.Sizes, type.LowerBounds);
+            case TypeSymbolKind.SzArray:
+                return SignatureType(type.Element!) + "[]";
+            case TypeSymbolKind.ByRef:
+                return SignatureType(type.Element!) + "&";
+            case TypeSymbolKind.Pointer:
+                return SignatureType(type.Element!) + "*";
+            case TypeSymbolKind.Constructed:
+                return (type.IsValueTypeShape ? "valuetype " : "class ")
+                    + TypeNameFormatter.IlAsmDeclaring(RuntimeBindingAdapter.Materialize(type.Element!))
+                    + "<" + string.Join(", ", type.Arguments.Select(SignatureType)) + ">";
+            case TypeSymbolKind.FunctionPointer:
+            {
+                var signature = type.Signature!;
+                var returnType = SignatureType(signature.ReturnType);
+                var text = SymbolRenderer.Signature(signature, candidate => SignatureType(candidate!));
+                var end = text.IndexOf(returnType, StringComparison.Ordinal) + returnType.Length;
+                return "method " + text[..end] + " *" + text[end..];
+            }
+            default:
+                return SignatureType(RuntimeBindingAdapter.Materialize(type));
+        }
+    }
+
     private static string SignatureType(Type type)
     {
         if (type.IsGenericParameter)

@@ -39,7 +39,8 @@ public static class SymbolIdentity
             TypeSymbolKind.TypeParameter or TypeSymbolKind.MethodParameter => a.Owner == b.Owner && a.Position == b.Position,
             TypeSymbolKind.SzArray or TypeSymbolKind.ByRef or TypeSymbolKind.Pointer or TypeSymbolKind.Pinned => Equal(a.Element,
                 b.Element),
-            TypeSymbolKind.Array => a.Rank == b.Rank && Equal(a.Element, b.Element),
+            TypeSymbolKind.Array => a.Rank == b.Rank && Equal(a.Element, b.Element)
+                && a.Sizes.SequenceEqual(b.Sizes) && a.LowerBounds.SequenceEqual(b.LowerBounds),
             TypeSymbolKind.FunctionPointer => Equal(a.Signature!, b.Signature!),
             TypeSymbolKind.Modified => a.IsRequired == b.IsRequired && Equal(a.Element, b.Element) && Equal(a.Modifier, b.Modifier),
             _ => false,
@@ -173,6 +174,18 @@ public static class SymbolIdentity
             case TypeSymbolKind.Array:
                 hash.Add(type.Rank);
                 hash.Add(Hash(type.Element!));
+                hash.Add(type.Sizes.Count);
+                foreach (var size in type.Sizes)
+                {
+                    hash.Add(size);
+                }
+
+                hash.Add(type.LowerBounds.Count);
+                foreach (var bound in type.LowerBounds)
+                {
+                    hash.Add(bound);
+                }
+
                 break;
             case TypeSymbolKind.FunctionPointer:
                 hash.Add(Hash(type.Signature!.ReturnType));

@@ -31,7 +31,12 @@ public sealed class BindingParityTests
             var fromSnapshot = SymbolBinder.BindType(syntax, snapshot).Type;
             Assert.AreEqual(fromRuntime, fromSnapshot, text);
             Assert.AreEqual(SymbolRenderer.Pretty(fromRuntime), SymbolRenderer.Pretty(fromSnapshot), text);
-            if (fromRuntime.Kind != TypeSymbolKind.FunctionPointer)
+            if (fromRuntime.Kind == TypeSymbolKind.Array)
+            {
+                // Reflection retains the rank and element, while the bound symbols also retain signature bounds.
+                Assert.AreEqual(TypeParser.Parse(text, context), RuntimeBindingAdapter.Materialize(fromSnapshot), text);
+            }
+            else if (fromRuntime.Kind != TypeSymbolKind.FunctionPointer)
             {
                 // A function pointer is native int to the runtime model; the symbol keeps its signature.
                 Assert.AreEqual(RuntimeSymbolImporter.Import(TypeParser.Parse(text, context)), fromSnapshot, text);

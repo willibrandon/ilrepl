@@ -376,7 +376,7 @@ public static partial class CilSyntaxParser
 
         for (var i = open + 1; i < close; i++)
         {
-            if (!(char.IsDigit(s[i]) || s[i] is ',' or '.' or ' '))
+            if (!(char.IsDigit(s[i]) || char.IsWhiteSpace(s[i]) || s[i] is ',' or '.' or '-' or '+'))
             {
                 return false;
             }

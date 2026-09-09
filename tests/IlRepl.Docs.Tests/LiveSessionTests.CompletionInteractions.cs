@@ -18,11 +18,12 @@ public sealed partial class LiveSessionTests
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
+        var cell = 1;
         foreach (var prefix in new[] { "environment::get_currentmanagedth", "Environment::gCMTI", "Environment::ManagedThreadI" })
         {
             await TypeLineAsync(page, ".clear");
             await page.Keyboard.TypeAsync("call " + prefix);
-            await ExpectCompletionAsync(page, "members 1/1");
+            await CompletionAtCaretAsync(page, $"il[{cell}]> call {prefix}", "members 1/1");
             await page.Keyboard.PressAsync("Tab");
             await Assertions.Expect(terminal).Not.ToContainTextAsync("members 1/1");
             var rows = await BufferRowsAsync(page);
@@ -30,6 +31,7 @@ public sealed partial class LiveSessionTests
             await page.Keyboard.PressAsync("Enter");
             await TypeLineAsync(page, "ret");
             await ExpectCompletionAsync(page, ": int32");
+            cell++;
         }
 
         Assert.DoesNotContain("error:", await BufferTextAsync(page));
@@ -54,7 +56,7 @@ public sealed partial class LiveSessionTests
         var terminal = page.Locator("#terminal");
         const string original = "call Environment::get_CurrentManagedTh";
         await page.Keyboard.TypeAsync(original);
-        await ExpectCompletionAsync(page, "members 1/1");
+        await CompletionAtCaretAsync(page, "il[1]> " + original, "members 1/1");
         if (acceptance == "click")
         {
             await ClickCompletionRowAsync(page);
@@ -68,12 +70,12 @@ public sealed partial class LiveSessionTests
         Assert.Contains("call Environment::get_CurrentManagedThreadId()", (await BufferRowsAsync(page))[^2]);
         Assert.AreEqual("TEXTAREA", await page.EvaluateAsync<string>("() => document.activeElement.tagName"));
         await page.Keyboard.PressAsync("Control+z");
-        await ExpectCompletionAsync(page, "members 1/1");
+        await CompletionAtCaretAsync(page, "il[1]> " + original, "members 1/1");
         await page.Keyboard.PressAsync("Escape");
         await Assertions.Expect(terminal).Not.ToContainTextAsync("members 1/1");
         Assert.AreEqual("il[1]> " + original, (await BufferRowsAsync(page))[^2].Trim());
         await page.Keyboard.PressAsync("Tab");
-        await ExpectCompletionAsync(page, "members 1/1");
+        await CompletionAtCaretAsync(page, "il[1]> " + original, "members 1/1");
         await page.Keyboard.PressAsync("Tab");
         await page.Keyboard.PressAsync("Enter");
         await TypeLineAsync(page, "ret");
