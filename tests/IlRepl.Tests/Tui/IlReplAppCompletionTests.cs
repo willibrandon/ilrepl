@@ -84,10 +84,18 @@ public sealed class IlReplAppCompletionTests
         await auto.WaitUntilTextAsync("il[1]>");
         const string original = "call Environment::get_CurrentManagedTh";
         await auto.TypeAsync(original, ct: ct);
-        await auto.WaitUntilAsync(_ => PromptWidget.Candidates(prompt, engine.Catalog).Count == 1,
-            description: "the bound property getter appears");
-        await auto.WaitUntilTextAsync("members");
-        var expected = "call " + PromptWidget.Candidates(prompt, engine.Catalog)[0].InsertText;
+        var expected = "";
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            var candidates = PromptWidget.Candidates(prompt, engine.Catalog);
+            if (candidates.Count != 1 || !snapshot.ContainsText("members"))
+            {
+                return false;
+            }
+
+            expected = "call " + candidates[0].InsertText;
+            return true;
+        }, description: "the bound property getter appears");
         switch (acceptance)
         {
             case "enter":

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 
@@ -47,12 +48,15 @@ public sealed class AssemblyTypeIndex
     {
         var index = new AssemblyTypeIndex();
         var processed = 0;
+        var slice = Stopwatch.GetTimestamp();
         foreach (var _ in index.BuildSteps(source, reader))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (++processed % 128 == 0)
+            if (++processed % 128 == 0 && Stopwatch.GetElapsedTime(slice) >= TimeSpan.FromMilliseconds(4))
             {
+                // Browser continuations incur a timer turn; yield for elapsed work, not every small batch of rows.
                 await Task.Yield();
+                slice = Stopwatch.GetTimestamp();
             }
         }
 

@@ -157,7 +157,7 @@ public sealed partial class LiveSessionTests
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(terminal).ToContainTextAsync("end of method CompletionLong", options);
         await page.Keyboard.TypeAsync("call CompletionLon");
-        await Assertions.Expect(terminal).ToContainTextAsync("PgUp/PgDn", options);
+        await CompletionAtCaretAsync(page, "il[2]> call CompletionLon", "PgUp/PgDn");
         var initialRows = await BufferRowsAsync(page);
         var title = initialRows.First(row => row.TrimStart().StartsWith("│detail", StringComparison.Ordinal));
         var pages = int.Parse(title.Split('/')[1].Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture);

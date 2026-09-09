@@ -157,8 +157,10 @@ public sealed partial class OperandCompleter : IDisposable
             labels.UnionWith(_activeEditing!.ForwardLabels(document.Lines, document.Line, site, cancellationToken));
         }
 
-        var suffix = document.Lines[document.Line].AsSpan(site.ReplaceEnd).TrimStart();
-        var hasElementSuffix = suffix.Length > 0 && suffix[0] is '[' or '*' or '&';
+        var comment = false;
+        var suffix = CilLexer.StripComments(document.Lines[document.Line][site.ReplaceEnd..], ref comment).AsSpan().TrimStart();
+        var hasElementSuffix = suffix.Length > 0 && (suffix[0] is '[' or '*' or '&'
+            || suffix.StartsWith("modopt(", StringComparison.Ordinal) || suffix.StartsWith("modreq(", StringComparison.Ordinal));
         var candidates = await source.GatherAsync(arguments, methods, labels, hasElementSuffix, cancellationToken).ConfigureAwait(false);
         var prefix = site.Kind == CompletionSiteKind.Signature ? "" : CompletionCandidateSource.DecodePrefix(site.Prefix);
         var ranked = CandidateRanker.Rank(candidates, prefix, candidate => candidate.Rank, cancellationToken);

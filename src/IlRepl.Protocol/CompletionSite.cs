@@ -60,6 +60,16 @@ public sealed record CompletionSite(
     public bool IsFunctionPointerReturn { get; init; }
 
     /// <summary>
+    /// The exclusive end of the candidate generic name, or -1 when no name is identified.
+    /// </summary>
+    public int GenericNameEnd { get; init; } = -1;
+
+    /// <summary>
+    /// The actual opening angle bracket offset, including any intervening whitespace or comments, or -1.
+    /// </summary>
+    public int GenericOpenOffset { get; init; } = -1;
+
+    /// <summary>
     /// The offset just past the range.
     /// </summary>
     public int ReplaceEnd => ReplaceStart + ReplaceLength;

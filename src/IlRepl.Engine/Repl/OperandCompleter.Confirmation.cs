@@ -55,8 +55,11 @@ public sealed partial class OperandCompleter
                     var normalized = CilLexer.StripComments(line, ref comment).Trim();
                     var (_, text) = InstructionParser.SplitLabels(normalized);
                     instruction = SymbolBinder.BindInstruction(CilSyntaxParser.ParseInstruction(text), scope);
-                    if (site.Owner == "newarr" && instruction.Operand.Type is { } element
-                        && !MemberEligibility.Admits(element, site, query.View))
+                    if (instruction.Operand.Type is { } operandType
+                        && !MemberEligibility.Admits(operandType, site with
+                        {
+                            Kind = CompletionSiteKind.Type, IsFunctionPointerReturn = false,
+                        }, query.View))
                     {
                         return null;
                     }
@@ -195,6 +198,18 @@ public sealed partial class OperandCompleter
             return null;
         }
 
+        var site = query.Identity.Site;
+        var insertion = text;
+        var caret = default(int?);
+        if (site.NextIsAngle && site.GenericOpenOffset >= site.GenericNameEnd && site.GenericNameEnd >= site.ReplaceStart)
+        {
+            var original = query.Identity.Document.Lines[query.Identity.Document.Line];
+            var stem = text[..^1];
+            text = stem + original[site.GenericNameEnd..(site.GenericOpenOffset + 1)];
+            insertion = stem + original[site.GenericNameEnd..site.ReplaceEnd];
+            caret = text.Length;
+        }
+
         var token = Guid.NewGuid().ToString("N");
         var paths = query.View.Snapshot.Types.Entries.Where(entry => entry.Type.Definition.Assembly < 0)
             .GroupBy(entry => entry.Type.Definition).ToDictionary(group => group.Key, group => group.First().FullName);
@@ -204,8 +219,8 @@ public sealed partial class OperandCompleter
         var full = target.Method is { } signature ? query.Members.FullSignature(signature) : query.Types.Spell(target.Type!);
         return new CompletionItem(target.Label, "type arguments", candidate.Rank.DeclaringPath, false)
         {
-            Insert = query.Identity.Site.NextIsAngle ? text[..^1] : text,
-            CaretOffset = query.Identity.Site.NextIsAngle ? text.Length : null,
+            Insert = insertion,
+            CaretOffset = caret,
             Kind = CompletionKind.TypeArguments, Continues = true, Continuation = token,
             FullDetail = full + (constraints.Length == 0 ? "" : "\n" + constraints), Owner = candidate.GenericOwner?.Label,
         };

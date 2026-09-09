@@ -795,6 +795,8 @@ internal sealed class CaretWalk
             return Site(CompletionSiteKind.Type, owner, _r.StartOf(nameStart), rangeStart, rangeEnd) with
             {
                 NextIsAngle = genericOpen >= 0 && genericClose < 0,
+                GenericNameEnd = _r.EndOf(nameEnd),
+                GenericOpenOffset = genericOpen >= 0 ? _r.StartOf(genericOpen) : -1,
                 NextIsDoubleColon = _r.KindAt(after) == CilLexemeKind.DoubleColon,
                 NextIsParen = _r.IsPunct(after, '('),
                 DeclarationComplete = complete,
@@ -982,6 +984,8 @@ internal sealed class CaretWalk
                 ReturnTypeText = returnTypeText,
                 ExplicitInstance = explicitInstance,
                 NextIsAngle = genericOpen >= 0,
+                GenericNameEnd = hasName ? _r.EndOf(n) : -1,
+                GenericOpenOffset = genericOpen >= 0 ? _r.StartOf(genericOpen) : -1,
                 NextIsParen = paren >= 0,
                 DeclarationComplete = complete,
             };
@@ -1075,6 +1079,8 @@ internal sealed class CaretWalk
                     ReturnTypeText = returnText,
                     ExplicitInstance = explicitInstance,
                     NextIsAngle = genericOpen >= 0,
+                    GenericNameEnd = _r.EndOf(bare),
+                    GenericOpenOffset = genericOpen >= 0 ? _r.StartOf(genericOpen) : -1,
                     NextIsParen = paren >= 0,
                     DeclarationComplete = complete,
                 };
@@ -1085,6 +1091,8 @@ internal sealed class CaretWalk
                 ReturnTypeText = returnText,
                 ExplicitInstance = explicitInstance,
                 NextIsAngle = genericOpen >= 0,
+                GenericNameEnd = _r.EndOf(bare),
+                GenericOpenOffset = genericOpen >= 0 ? _r.StartOf(genericOpen) : -1,
                 NextIsParen = paren >= 0,
                 DeclarationComplete = complete,
             };

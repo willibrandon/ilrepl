@@ -228,6 +228,13 @@ public static partial class CilSyntaxParser
             }
 
             var nameEnd = pos;
+            var argumentsStart = pos;
+            SkipWhitespace(s, ref argumentsStart);
+            if (argumentsStart < end && s[argumentsStart] == '<')
+            {
+                pos = argumentsStart;
+            }
+
             if (asm is null && CilPrimitives.TryCanonical(name, out var keyword) && !(pos < end && s[pos] == '<'))
             {
                 syntax = new TypeSyntax

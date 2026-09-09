@@ -118,7 +118,7 @@ internal sealed class GenericCompletionBinding
 
                 try
                 {
-                    arguments[i] = SymbolBinder.BindType(CilSyntaxParser.ParseType(span.Arguments[i]), _scope).Type;
+                    arguments[i] = BindArgument(span.Arguments[i]);
                 }
                 catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
                 {
@@ -165,7 +165,7 @@ internal sealed class GenericCompletionBinding
             return [];
         }
 
-        var arguments = span.Arguments.Select(text => SymbolBinder.BindType(CilSyntaxParser.ParseType(text), _scope).Type).ToArray();
+        var arguments = span.Arguments.Select(BindArgument).ToArray();
         var result = new List<MethodSymbol>();
         foreach (var target in Targets(site.GenericOwnerText, selected))
         {
@@ -183,6 +183,12 @@ internal sealed class GenericCompletionBinding
         }
 
         return result;
+    }
+
+    private TypeSymbol BindArgument(string text)
+    {
+        var comment = false;
+        return SymbolBinder.BindType(CilSyntaxParser.ParseType(CilLexer.StripComments(text, ref comment)), _scope).Type;
     }
 
     /// <summary>

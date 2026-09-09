@@ -113,7 +113,8 @@ public static partial class MemberEligibility
             return false;
         }
 
-        if (site.Owner == "newarr" && !hasElementSuffix && !IsArrayElement(type))
+        if (site.Kind is CompletionSiteKind.Type or CompletionSiteKind.GenericParameter
+            && !hasElementSuffix && !site.IsFunctionPointerReturn && !IsInstructionType(type, site.Owner))
         {
             return false;
         }
@@ -225,6 +226,36 @@ public static partial class MemberEligibility
         TypeSymbolKind.ByRef or TypeSymbolKind.Pinned => false,
         TypeSymbolKind.Pointer => IsPointerTarget(type.Element!),
         _ => !type.IsByRefLike && type.Keyword is not ("void" or "typedref"),
+    };
+
+    private static bool IsInstructionType(TypeSymbol type, string opcode)
+    {
+        while (type.Kind == TypeSymbolKind.Modified)
+        {
+            type = type.Element!;
+        }
+
+        return opcode switch
+        {
+            "newarr" or "ldelem" or "ldelema" or "stelem" => IsArrayElement(type),
+            "box" or "unbox.any" or "castclass" or "isinst" => IsBoxable(type),
+            "unbox" => IsBoxable(type) && (type.IsValueTypeShape || type.IsGenericParameter),
+            "constrained." => IsStorageType(type) && type.Kind is not (TypeSymbolKind.Pointer or TypeSymbolKind.FunctionPointer),
+            "ldobj" or "stobj" or "cpobj" or "initobj" or "sizeof" or "mkrefany" or "refanyval" => IsStorageType(type),
+            _ => true,
+        };
+    }
+
+    private static bool IsBoxable(TypeSymbol type) => IsStorageType(type) && !type.IsByRefLike
+        && type.Keyword != "typedref" && type.Kind is not (TypeSymbolKind.Pointer or TypeSymbolKind.FunctionPointer);
+
+    private static bool IsStorageType(TypeSymbol type) => type.Kind switch
+    {
+        TypeSymbolKind.Modified => IsStorageType(type.Element!),
+        TypeSymbolKind.ByRef or TypeSymbolKind.Pinned => false,
+        TypeSymbolKind.Array or TypeSymbolKind.SzArray => IsArrayElement(type.Element!),
+        TypeSymbolKind.Pointer => IsPointerTarget(type.Element!),
+        _ => !SymbolIdentity.Equal(type, TypeSymbol.Void),
     };
 
     private static bool IsVariableType(TypeSymbol type) => type.Kind switch
