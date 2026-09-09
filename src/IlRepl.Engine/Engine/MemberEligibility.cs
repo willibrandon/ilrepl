@@ -9,7 +9,7 @@ namespace IlRepl.Engine;
 /// assembly is judged by what a cell, which the runtime does check, can reach: public members,
 /// family members from a derived session type, and nothing internal to that assembly.
 /// </summary>
-public static class MemberEligibility
+public static partial class MemberEligibility
 {
     /// <summary>
     /// Decides whether a session type is visible from a context: null when it is, otherwise the

@@ -4,51 +4,6 @@ using System.Reflection;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// The syntax of a <c>.class</c> header, before any type is resolved: the attributes, the
-/// name, the generic parameters with the text of their constraints, and the text of the base
-/// type and the interfaces. Resolution needs the type's own generic parameters in scope, so it
-/// happens once the session has created them.
-/// </summary>
-/// <param name="Attributes">The type attributes as declared, with the layout and kind words folded in.</param>
-/// <param name="Kind">The kind decided by the header words alone; <see cref="TypeKind.Class"/> until the base type says otherwise.</param>
-/// <param name="KindFromWord">True when <c>interface</c>, <c>value</c>, or <c>enum</c> decided the kind.</param>
-/// <param name="Layout">The field layout.</param>
-/// <param name="Namespace">The namespace, or empty.</param>
-/// <param name="Name">The name with its arity suffix.</param>
-/// <param name="GenericParameters">The generic parameters, redeclared ones first.</param>
-/// <param name="BaseTypeText">The text after <c>extends</c>, or null.</param>
-/// <param name="InterfaceTexts">The texts after <c>implements</c>.</param>
-/// <param name="OpensBlock">True when the header ended with <c>{</c>.</param>
-/// <param name="ClosesBlock">True when the header ended with <c>{ }</c>, an empty type.</param>
-public sealed record TypeHeader(
-    TypeAttributes Attributes,
-    TypeKind Kind,
-    bool KindFromWord,
-    TypeLayoutKind Layout,
-    string Namespace,
-    string Name,
-    IReadOnlyList<GenericParameterSpec> GenericParameters,
-    string? BaseTypeText,
-    IReadOnlyList<string> InterfaceTexts,
-    bool OpensBlock,
-    bool ClosesBlock)
-{
-    /// <summary>
-    /// True when the arity suffix was written on the header rather than added from the parameter count.
-    /// </summary>
-    public bool ArityWritten { get; init; }
-}
-
-/// <summary>
-/// One generic parameter as written: its name, variance, special constraints, and the text of
-/// its type constraints.
-/// </summary>
-/// <param name="Name">The parameter name.</param>
-/// <param name="Attributes">Variance and the special constraints.</param>
-/// <param name="ConstraintTexts">The constraint types as written.</param>
-public sealed record GenericParameterSpec(string Name, GenericParameterAttributes Attributes, IReadOnlyList<string> ConstraintTexts);
-
-/// <summary>
 /// Parses <c>.class</c> headers.
 /// </summary>
 public static class TypeHeaderParser
@@ -316,26 +271,26 @@ public static class TypeHeaderParser
 
     private static string ReadName(string s, ref int pos)
     {
-        if (s[pos] == '\'')
+        var name = new System.Text.StringBuilder();
+        while (pos < s.Length)
         {
-            var end = s.IndexOf('\'', pos + 1);
-            if (end < 0)
+            if (s[pos] == '\'')
             {
-                throw new ReplException("unterminated quoted name");
+                var end = TypeParser.EndOfQuoted(s, pos);
+                name.Append(TypeParser.DecodeQuoted(s[(pos + 1)..end]));
+                pos = end + 1;
             }
-
-            var quoted = s[(pos + 1)..end];
-            pos = end + 1;
-            return quoted;
+            else if (TypeParser.IsNameChar(s[pos]) && s[pos] != '/')
+            {
+                name.Append(s[pos++]);
+            }
+            else
+            {
+                break;
+            }
         }
 
-        var start = pos;
-        while (pos < s.Length && TypeParser.IsNameChar(s[pos]) && s[pos] != '/')
-        {
-            pos++;
-        }
-
-        return s[start..pos];
+        return name.ToString();
     }
 
     private static int FindMatchingAngle(string s, int open)
@@ -389,95 +344,5 @@ public static class TypeHeaderParser
         }
 
         return -1;
-    }
-}
-
-/// <summary>
-/// Parses the generic parameter list of a <c>.class</c> or a generic <c>.method</c> as ECMA-335
-/// II.10.1.7 writes it: <c>[+|-] [class] [valuetype] [.ctor] [(type, ...)] Name, ...</c>, where the
-/// words are the special constraints and the parenthesized list holds the type constraints.
-/// </summary>
-public static class GenericParameterParser
-{
-    /// <summary>
-    /// Parses the text between the angle brackets.
-    /// </summary>
-    /// <param name="inner">The list without its brackets.</param>
-    /// <returns>The parameters in order.</returns>
-    /// <exception cref="ReplException">The list is malformed.</exception>
-    public static IReadOnlyList<GenericParameterSpec> Parse(string inner)
-    {
-        ArgumentNullException.ThrowIfNull(inner);
-        var result = new List<GenericParameterSpec>();
-        foreach (var raw in TypeParser.SplitTopLevel(inner))
-        {
-            var part = raw.Trim();
-            var attributes = GenericParameterAttributes.None;
-            if (part.StartsWith('+'))
-            {
-                attributes |= GenericParameterAttributes.Covariant;
-                part = part[1..].TrimStart();
-            }
-            else if (part.StartsWith('-'))
-            {
-                attributes |= GenericParameterAttributes.Contravariant;
-                part = part[1..].TrimStart();
-            }
-
-            var constraints = new List<string>();
-            while (true)
-            {
-                var pos = 0;
-                if (TypeParser.TryKeyword(part, ref pos, "class"))
-                {
-                    attributes |= GenericParameterAttributes.ReferenceTypeConstraint;
-                }
-                else if (TypeParser.TryKeyword(part, ref pos, "valuetype"))
-                {
-                    attributes |= GenericParameterAttributes.NotNullableValueTypeConstraint;
-                }
-                else if (TypeParser.TryKeyword(part, ref pos, ".ctor"))
-                {
-                    attributes |= GenericParameterAttributes.DefaultConstructorConstraint;
-                }
-                else if (TypeParser.TryKeyword(part, ref pos, "byreflike"))
-                {
-                    throw new ReplException("byreflike constraints are not supported on session types");
-                }
-                else
-                {
-                    break;
-                }
-
-                part = part[pos..].TrimStart();
-            }
-
-            if (part.StartsWith('('))
-            {
-                var close = TypeParser.FindMatchingParen(part, 0);
-                constraints.AddRange(TypeParser.SplitTopLevel(part[1..close]));
-                part = part[(close + 1)..].Trim();
-            }
-
-            var name = InstructionParser.Unquote(part);
-            if (!InstructionParser.IsIdentifier(name))
-            {
-                throw new ReplException($"bad generic parameter name '{part}'");
-            }
-
-            if (result.Any(r => r.Name == name))
-            {
-                throw new ReplException($"generic parameter '{name}' is declared twice");
-            }
-
-            if (attributes.HasFlag(GenericParameterAttributes.ReferenceTypeConstraint) && attributes.HasFlag(GenericParameterAttributes.NotNullableValueTypeConstraint))
-            {
-                throw new ReplException($"generic parameter '{name}' cannot be both class and valuetype");
-            }
-
-            result.Add(new GenericParameterSpec(name, attributes, constraints));
-        }
-
-        return result;
     }
 }

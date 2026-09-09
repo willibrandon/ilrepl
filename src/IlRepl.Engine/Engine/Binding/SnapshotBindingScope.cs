@@ -13,8 +13,9 @@ namespace IlRepl.Engine.Binding;
 public sealed class SnapshotBindingScope : IBindingScope
 {
     private readonly BindingSnapshot _snapshot;
-    private readonly Shared _shared;
+    private readonly SnapshotBindingState _shared;
     private readonly SymbolGenericContext _generics;
+    private readonly bool _confirming;
 
     /// <summary>
     /// Initializes a scope over a snapshot, with the snapshot's own generic context in scope.
@@ -24,21 +25,34 @@ public sealed class SnapshotBindingScope : IBindingScope
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         _snapshot = snapshot;
-        _shared = new Shared(snapshot.Types.Declarations.ToDictionary(p => p.Key, p => p.Value.Clone()));
+        _shared = new SnapshotBindingState(snapshot.Types.Declarations.ToDictionary(p => p.Key, p => p.Value.Clone()));
         _generics = snapshot.Generics;
     }
 
-    private SnapshotBindingScope(BindingSnapshot snapshot, Shared shared, SymbolGenericContext generics)
+    private SnapshotBindingScope(
+        BindingSnapshot snapshot, SnapshotBindingState shared, SymbolGenericContext generics, bool confirming = false)
     {
         _snapshot = snapshot;
         _shared = shared;
         _generics = generics;
+        _confirming = confirming;
     }
 
     /// <summary>
     /// The snapshot.
     /// </summary>
     public BindingSnapshot Snapshot => _snapshot;
+
+    /// <summary>
+    /// Retains symbolic forward references after an editing line has been accepted.
+    /// </summary>
+    internal void CommitDeclarations()
+    {
+        foreach (var declaration in _shared.Declarations.Values)
+        {
+            _snapshot.Types.Add(SymbolRenderer.IlPath(declaration.Type), declaration.Type, declaration.Clone());
+        }
+    }
 
     /// <inheritdoc/>
     public bool Inspecting => _snapshot.Inspecting;
@@ -50,14 +64,21 @@ public sealed class SnapshotBindingScope : IBindingScope
     public IBindingScope WithGenerics(SymbolGenericContext generics)
     {
         ArgumentNullException.ThrowIfNull(generics);
-        return new SnapshotBindingScope(_snapshot, _shared, generics);
+        return new SnapshotBindingScope(_snapshot, _shared, generics, _confirming);
     }
+
+    /// <summary>
+    /// Creates a scope that confirms existing candidates without declaring placeholders or generating typo suggestions.
+    /// </summary>
+    /// <returns>The read-only confirmation scope.</returns>
+    public SnapshotBindingScope ForConfirmation() => new(_snapshot, _shared, _generics, confirming: true);
 
     /// <inheritdoc/>
     public TypeLookupResult LookupType(string name, string? assemblyHint, int writtenArity, bool valueTypeKeyword)
     {
         ArgumentNullException.ThrowIfNull(name);
-        if (assemblyHint is null or "ilrepl" && _snapshot.Types.TryResolve(name, writtenArity > 0, valueTypeKeyword, out var sessionType))
+        if (assemblyHint is null or "ilrepl"
+            && _snapshot.Types.TryResolve(name, writtenArity > 0, valueTypeKeyword, out var sessionType, !_confirming))
         {
             if (sessionType.Definition.IsDeclaration && !_shared.Declarations.ContainsKey(sessionType.Definition) && _snapshot.Types.DeclarationOf(sessionType) is { } placeholder)
             {
@@ -77,9 +98,7 @@ public sealed class SnapshotBindingScope : IBindingScope
     }
 
     /// <summary>
-    /// Finds a type by its IL name the way <see cref="TypeResolver.Resolve(string, string?)"/> does, over the
-    /// snapshot's assemblies: the hinted assembly, the engine's and the core library, every
-    /// assembly in search order, the common namespaces, and last a scan of exported short names.
+    /// Finds a type in the snapshot using the runtime resolver's assembly and namespace search order.
     /// </summary>
     private TypeSymbol Resolve(string ilName, string? assemblyHint)
     {
@@ -143,7 +162,8 @@ public sealed class SnapshotBindingScope : IBindingScope
         }
 
         var hint = assemblyHint is null ? "" : $" in [{assemblyHint}]";
-        var suggestion = NameSuggestions.NearestType(ilName, assemblyHint, _shared.Index ??= new TypeIndex(_snapshot), Access, this);
+        var suggestion = _confirming ? null
+            : NameSuggestions.NearestType(ilName, assemblyHint, _shared.Index ??= new TypeIndex(_snapshot), Access, this);
         throw new ReplException($"type '{ilName}' not found{hint}{(suggestion is null ? " (load its assembly with .load)" : NameSuggestions.Parenthetical(suggestion.Spelling))}");
     }
 
@@ -189,7 +209,7 @@ public sealed class SnapshotBindingScope : IBindingScope
         ArgumentNullException.ThrowIfNull(declaring);
         if (_shared.Declarations.TryGetValue(declaring.DefinitionOrSelf.Definition, out var declaration))
         {
-            members = new SnapshotDeclarationMembers(declaration);
+            members = new SnapshotDeclarationMembers(declaration, !_confirming);
             return true;
         }
 
@@ -222,9 +242,7 @@ public sealed class SnapshotBindingScope : IBindingScope
     }
 
     /// <summary>
-    /// The methods a type offers as reflection lists them: its own, then each base's, with private
-    /// and non-family static members of a base left out and an overridden virtual listed once.
-    /// Constructors are not among them.
+    /// The methods offered by a type and its bases under reflection's visibility and override rules.
     /// </summary>
     private List<MethodSymbol> AllMethodsOf(TypeSymbol declaring)
     {
@@ -291,7 +309,7 @@ public sealed class SnapshotBindingScope : IBindingScope
         }
 
         var located = _snapshot.Catalog.Locate(definition);
-        IReadOnlyList<MethodSymbol> methods = located is { } l ? l.Source.Methods(l.Handle, _snapshot.Catalog) : [];
+        var methods = located is { } l ? l.Source.Methods(l.Handle, _snapshot.Catalog) : [];
         _shared.Methods[definition] = methods;
         return methods;
     }
@@ -309,7 +327,7 @@ public sealed class SnapshotBindingScope : IBindingScope
         }
 
         var located = _snapshot.Catalog.Locate(definition);
-        IReadOnlyList<FieldSymbol> fields = located is { } l ? l.Source.Fields(l.Handle, _snapshot.Catalog) : [];
+        var fields = located is { } l ? l.Source.Fields(l.Handle, _snapshot.Catalog) : [];
         _shared.Fields[definition] = fields;
         return fields;
     }
@@ -384,27 +402,45 @@ public sealed class SnapshotBindingScope : IBindingScope
     }
 
     /// <inheritdoc/>
+    public IReadOnlyList<PropertySymbol> Properties(TypeSymbol declaring)
+    {
+        var properties = new List<PropertySymbol>();
+        var visited = new HashSet<TypeSymbol>();
+        for (var type = declaring; type is not null && visited.Add(type); type = BaseOf(type))
+        {
+            IReadOnlyList<PropertySymbol> declared;
+            if (_shared.Declarations.TryGetValue(type.DefinitionOrSelf.Definition, out var declaration))
+            {
+                declared = declaration.Properties;
+            }
+            else
+            {
+                var located = _snapshot.Catalog.Locate(type.DefinitionOrSelf);
+                declared = located is { } metadata ? metadata.Source.Properties(metadata.Handle, _snapshot.Catalog) : [];
+            }
+
+            foreach (var property in declared)
+            {
+                properties.Add(property with
+                {
+                    DeclaringType = type,
+                    Type = SymbolRelations.SubstituteFor(type, property.Type),
+                    Parameters = [.. property.Parameters.Select(parameter => SymbolRelations.SubstituteFor(type, parameter))],
+                });
+            }
+        }
+
+        return properties;
+    }
+
+    /// <inheritdoc/>
     public MethodSymbol? Instantiate(MethodSymbol definition, IReadOnlyList<TypeSymbol> arguments)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(arguments);
-        if (!definition.IsGenericDefinition || definition.Arity != arguments.Count)
+        if (!GenericConstraints.SatisfiesMethod(definition, definition.DeclaringType, arguments, this))
         {
             return null;
-        }
-
-        TypeSymbol Substitute(TypeSymbol type)
-        {
-            var mapped = SymbolRelations.SubstituteMethodParameters(type, definition.Definition, arguments);
-            return definition.DeclaringType is { Kind: TypeSymbolKind.Constructed } declaring ? SymbolRelations.SubstituteFor(declaring, mapped) : mapped;
-        }
-
-        for (var i = 0; i < arguments.Count; i++)
-        {
-            if (!GenericConstraints.Satisfies(definition.GenericParameters[i], arguments[i], Substitute, this))
-            {
-                return null;
-            }
         }
 
         return SymbolRelations.Instantiate(definition, definition.DeclaringType, arguments);
@@ -509,7 +545,7 @@ public sealed class SnapshotBindingScope : IBindingScope
         }
 
         var located = _snapshot.Catalog.Locate(target);
-        IReadOnlyList<GenericParameterSymbol> parameters = located is { } l ? l.Source.GenericParameters(l.Handle, _snapshot.Catalog) : [];
+        var parameters = located is { } l ? l.Source.GenericParameters(l.Handle, _snapshot.Catalog) : [];
         _shared.Parameters[target.Definition] = parameters;
         return parameters;
     }
@@ -609,21 +645,4 @@ public sealed class SnapshotBindingScope : IBindingScope
         return SymbolRenderer.Describe(method, Pretty);
     }
 
-    private sealed class Shared
-    {
-        public Shared(Dictionary<DefinitionId, DeclarationSymbol> declarations)
-        {
-            Declarations = declarations;
-        }
-
-        public Dictionary<DefinitionId, DeclarationSymbol> Declarations { get; }
-
-        public Dictionary<TypeSymbol, IReadOnlyList<MethodSymbol>> Methods { get; } = [];
-
-        public Dictionary<TypeSymbol, IReadOnlyList<FieldSymbol>> Fields { get; } = [];
-
-        public Dictionary<DefinitionId, IReadOnlyList<GenericParameterSymbol>> Parameters { get; } = [];
-
-        public TypeIndex? Index { get; set; }
-    }
 }

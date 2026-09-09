@@ -53,11 +53,53 @@ public sealed class SnapshotTypeTable
         var slash = fullName.LastIndexOf('/');
         var dot = fullName.LastIndexOf('.');
         var shortName = fullName[(Math.Max(slash, dot) + 1)..];
+        foreach (var previous in _entries.Where(entry => entry.FullName == fullName && entry.Type.Definition != type.Definition))
+        {
+            _declarations.Remove(previous.Type.Definition);
+        }
+
         _entries.RemoveAll(e => e.FullName == fullName);
         _entries.Add((fullName, shortName, type));
         if (declaration is not null)
         {
             _declarations[type.Definition] = declaration;
+        }
+    }
+
+    /// <summary>
+    /// Copies this table and its declarations into an independent editing checkpoint.
+    /// </summary>
+    /// <param name="openPaths">The open family paths, or null to keep the current paths.</param>
+    /// <returns>An independently mutable table with identical symbol identities.</returns>
+    internal SnapshotTypeTable Clone(IReadOnlyList<string>? openPaths = null)
+    {
+        var clone = new SnapshotTypeTable(_sessionAssembly, openPaths ?? OpenFamilyPaths);
+        clone._entries.AddRange(_entries);
+        foreach (var (identity, declaration) in _declarations)
+        {
+            clone._declarations.Add(identity, declaration.Clone());
+        }
+
+        foreach (var (path, symbol) in _placeholders)
+        {
+            clone._placeholders.Add(path, symbol);
+        }
+
+        return clone;
+    }
+
+    /// <summary>
+    /// Removes a family and every nested path before a replacement is added.
+    /// </summary>
+    /// <param name="path">The outermost IL path.</param>
+    internal void RemoveFamily(string path)
+    {
+        var removed = _entries.Where(e => e.FullName == path || e.FullName.StartsWith(path + "/", StringComparison.Ordinal)).ToList();
+        foreach (var entry in removed)
+        {
+            _entries.Remove(entry);
+            _declarations.Remove(entry.Type.Definition);
+            _placeholders.Remove(entry.FullName);
         }
     }
 
@@ -79,9 +121,12 @@ public sealed class SnapshotTypeTable
     /// <param name="withArguments">True when type arguments follow.</param>
     /// <param name="valueType">True when the reference was written with <c>valuetype</c>.</param>
     /// <param name="type">The type found.</param>
+    /// <param name="allowForward">Whether an unresolved nested path may create a placeholder.</param>
     /// <returns>True when a session type matched.</returns>
     /// <exception cref="ReplException">A short name matched more than one type.</exception>
-    public bool TryResolve(string name, bool withArguments, bool valueType, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TypeSymbol? type)
+    public bool TryResolve(
+        string name, bool withArguments, bool valueType,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TypeSymbol? type, bool allowForward = true)
     {
         ArgumentNullException.ThrowIfNull(name);
         type = null;
@@ -102,7 +147,7 @@ public sealed class SnapshotTypeTable
         if (name.Contains('.') || name.Contains('/'))
         {
             // Only a path into the family being written may name a type declared later.
-            type = name.Contains('/') ? Forward(name, valueType) : null;
+            type = allowForward && name.Contains('/') ? Forward(name, valueType) : null;
             return type is not null;
         }
 

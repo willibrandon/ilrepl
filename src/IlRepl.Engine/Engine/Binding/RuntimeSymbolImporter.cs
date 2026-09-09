@@ -97,7 +97,8 @@ public static class RuntimeSymbolImporter
             assemblyName,
             type.Attributes,
             type.IsValueType,
-            parameterNames);
+            parameterNames,
+            type.IsByRefLike);
     }
 
     /// <summary>
@@ -125,7 +126,9 @@ public static class RuntimeSymbolImporter
             constraints = [];
         }
 
-        return new GenericParameterSymbol(owner, isMethod, position, parameter.Name, attributes, constraints);
+        var symbol = new GenericParameterSymbol(owner, isMethod, position, parameter.Name, attributes, constraints);
+        RuntimeBindingObservations.RecordConstraints(parameter, symbol);
+        return symbol;
     }
 
     private static (DefinitionId Owner, bool IsMethod, GenericParameterAttributes Attributes) ParameterFacts(Type parameter)
@@ -224,6 +227,7 @@ public static class RuntimeSymbolImporter
 
     private static ParameterSymbol ImportParameter(ParameterInfo parameter) => new(Import(parameter.ParameterType), parameter.Name)
     {
+        Attributes = parameter.Attributes,
         RequiredModifiers = Modifiers(parameter.GetRequiredCustomModifiers),
         OptionalModifiers = Modifiers(parameter.GetOptionalCustomModifiers),
     };
@@ -293,7 +297,12 @@ public static class RuntimeSymbolImporter
             ImplAttributes = signature.ImplAttributes,
             CallingConvention = signature.CallingConvention,
             ReturnType = Import(signature.ReturnType),
-            Parameters = [.. signature.Parameters.Select(p => new ParameterSymbol(Import(p.Type), p.Name) { RequiredModifiers = [.. p.RequiredModifiers.Select(Import)], OptionalModifiers = [.. p.OptionalModifiers.Select(Import)] })],
+            Parameters = [.. signature.Parameters.Select(parameter => new ParameterSymbol(Import(parameter.Type), parameter.Name)
+            {
+                Attributes = parameter.Attributes,
+                RequiredModifiers = [.. parameter.RequiredModifiers.Select(Import)],
+                OptionalModifiers = [.. parameter.OptionalModifiers.Select(Import)],
+            })],
             GenericParameters = genericParameters,
             ReturnRequiredModifiers = [.. signature.ReturnRequiredModifiers.Select(Import)],
             ReturnOptionalModifiers = [.. signature.ReturnOptionalModifiers.Select(Import)],

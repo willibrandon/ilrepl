@@ -34,6 +34,7 @@ public sealed class AssemblySymbolSource
         Instance = RuntimeDefinitions.AssemblyInstance(assembly);
         Name = assembly.GetName().Name ?? reader.GetString(reader.GetModuleDefinition().Name);
         Mvid = reader.GetGuid(reader.GetModuleDefinition().Mvid);
+        Identity = LoadedAssemblyIdentity.Of(reader.GetAssemblyDefinition().GetAssemblyName());
     }
 
     /// <summary>
@@ -67,8 +68,12 @@ public sealed class AssemblySymbolSource
     internal MetadataReader Reader => _reader;
 
     /// <summary>
-    /// The source for a loaded assembly, or null when its metadata cannot be read: a dynamic
-    /// assembly, or a runtime that offers no metadata section and no retained image.
+    /// The full identity used when matching captured assembly references.
+    /// </summary>
+    internal LoadedAssemblyIdentity Identity { get; }
+
+    /// <summary>
+    /// The metadata source of a loaded assembly, or null when neither raw metadata nor a retained image is readable.
     /// </summary>
     /// <param name="assembly">The assembly.</param>
     /// <param name="image">The PE image the assembly was loaded from, when the caller retained it.</param>
@@ -148,6 +153,31 @@ public sealed class AssemblySymbolSource
     }
 
     /// <summary>
+    /// Warms the metadata index without blocking browser input for a whole assembly scan.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels unpublished work between metadata batches.</param>
+    /// <returns>A task that completes once the shared index is available.</returns>
+    public async ValueTask WarmIndexAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            if (_index is not null)
+            {
+                return;
+            }
+        }
+
+        using var lease = Lease();
+        var index = await AssemblyTypeIndex.CreateAsync(this, _reader, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            _index ??= index;
+        }
+    }
+
+    /// <summary>
     /// The identity of a definition of this assembly.
     /// </summary>
     /// <param name="handle">A type, method, or field definition.</param>
@@ -175,8 +205,15 @@ public sealed class AssemblySymbolSource
     /// </summary>
     /// <param name="handle">The definition.</param>
     /// <returns>The symbol.</returns>
-    public TypeSymbol Definition(TypeDefinitionHandle handle)
+    public TypeSymbol Definition(TypeDefinitionHandle handle) => Definition(handle, []);
+
+    private TypeSymbol Definition(TypeDefinitionHandle handle, HashSet<TypeDefinitionHandle> parents)
     {
+        if (!parents.Add(handle))
+        {
+            throw new BadImageFormatException("cyclic nested type metadata");
+        }
+
         lock (_gate)
         {
             if (_definitions.TryGetValue(handle, out var known))
@@ -187,7 +224,7 @@ public sealed class AssemblySymbolSource
 
         var definition = _reader.GetTypeDefinition(handle);
         var declaringHandle = definition.GetDeclaringType();
-        var declaring = declaringHandle.IsNil ? null : Definition(declaringHandle);
+        var declaring = declaringHandle.IsNil ? null : Definition(declaringHandle, parents);
         var name = _reader.GetString(definition.Name);
         var ns = declaring is null ? _reader.GetString(definition.Namespace) : declaring.Namespace;
         TypeSymbol symbol;
@@ -199,7 +236,11 @@ public sealed class AssemblySymbolSource
         else
         {
             var parameterNames = definition.GetGenericParameters().Select(p => _reader.GetString(_reader.GetGenericParameter(p).Name)).ToList();
-            symbol = TypeSymbol.Named(IdOf(handle), name, ns, declaring, Name, definition.Attributes, IsValueType(definition), parameterNames);
+            var byRefLike = definition.GetCustomAttributes().Any(attribute =>
+                AttributeTypeName(_reader.GetCustomAttribute(attribute), qualified: true)
+                    == "System.Runtime.CompilerServices.IsByRefLikeAttribute");
+            symbol = TypeSymbol.Named(
+                IdOf(handle), name, ns, declaring, Name, definition.Attributes, IsValueType(definition), parameterNames, byRefLike);
         }
 
         lock (_gate)
@@ -340,7 +381,7 @@ public sealed class AssemblySymbolSource
         return false;
     }
 
-    private string? AttributeTypeName(CustomAttribute attribute)
+    private string? AttributeTypeName(CustomAttribute attribute, bool qualified = false)
     {
         EntityHandle type;
         switch (attribute.Constructor.Kind)
@@ -355,12 +396,21 @@ public sealed class AssemblySymbolSource
                 return null;
         }
 
-        return type.Kind switch
+        var name = type.Kind switch
         {
             HandleKind.TypeReference => _reader.GetString(_reader.GetTypeReference((TypeReferenceHandle)type).Name),
             HandleKind.TypeDefinition => _reader.GetString(_reader.GetTypeDefinition((TypeDefinitionHandle)type).Name),
             _ => null,
         };
+        if (!qualified || name is null)
+        {
+            return name;
+        }
+
+        var ns = type.Kind == HandleKind.TypeReference
+            ? _reader.GetTypeReference((TypeReferenceHandle)type).Namespace
+            : _reader.GetTypeDefinition((TypeDefinitionHandle)type).Namespace;
+        return _reader.GetString(ns) + "." + name;
     }
 
     /// <summary>
@@ -449,8 +499,7 @@ public sealed class AssemblySymbolSource
     }
 
     /// <summary>
-    /// The methods and constructors a definition declares, as the definition sees them: on the
-    /// definition itself, written in terms of its parameters.
+    /// The methods and constructors declared by a definition, expressed in terms of its generic parameters.
     /// </summary>
     /// <param name="handle">The definition.</param>
     /// <param name="catalog">The catalog references resolve through.</param>
@@ -465,54 +514,64 @@ public sealed class AssemblySymbolSource
         var methods = new List<MethodSymbol>();
         foreach (var methodHandle in definition.GetMethods())
         {
-            var method = _reader.GetMethodDefinition(methodHandle);
-            var id = IdOf(methodHandle);
-            var owner = typeOwner.WithMethod(id, [.. method.GetGenericParameters().Select(ParameterFacts)]);
-            var signature = method.DecodeSignature(provider, owner);
-            var names = new string?[signature.ParameterTypes.Length];
-            foreach (var parameterHandle in method.GetParameters())
+            try
             {
-                var parameter = _reader.GetParameter(parameterHandle);
-                if (parameter.SequenceNumber >= 1 && parameter.SequenceNumber <= names.Length)
+                var method = _reader.GetMethodDefinition(methodHandle);
+                var id = IdOf(methodHandle);
+                var owner = typeOwner.WithMethod(id, [.. method.GetGenericParameters().Select(ParameterFacts)]);
+                var signature = method.DecodeSignature(provider, owner);
+                var names = new string?[signature.ParameterTypes.Length];
+                foreach (var parameterHandle in method.GetParameters())
                 {
-                    names[parameter.SequenceNumber - 1] = _reader.GetString(parameter.Name);
+                    var parameter = _reader.GetParameter(parameterHandle);
+                    if (parameter.SequenceNumber >= 1 && parameter.SequenceNumber <= names.Length)
+                    {
+                        names[parameter.SequenceNumber - 1] = _reader.GetString(parameter.Name);
+                    }
                 }
-            }
 
-            var returnType = SymbolSignatureProvider.StripModifiers(signature.ReturnType, out var returnRequired, out var returnOptional);
-            var parameters = new List<ParameterSymbol>();
-            for (var i = 0; i < signature.ParameterTypes.Length; i++)
-            {
-                var type = SymbolSignatureProvider.StripModifiers(signature.ParameterTypes[i], out var required, out var optional);
-                parameters.Add(new ParameterSymbol(type, names[i]) { RequiredModifiers = required, OptionalModifiers = optional });
-            }
+                var returnType = SymbolSignatureProvider.StripModifiers(
+                    signature.ReturnType, out var returnRequired, out var returnOptional);
+                var parameters = new List<ParameterSymbol>();
+                for (var i = 0; i < signature.ParameterTypes.Length; i++)
+                {
+                    var type = SymbolSignatureProvider.StripModifiers(signature.ParameterTypes[i], out var required, out var optional);
+                    parameters.Add(new ParameterSymbol(type, names[i]) { RequiredModifiers = required, OptionalModifiers = optional });
+                }
 
-            var convention = signature.Header.CallingConvention == SignatureCallingConvention.VarArgs ? CallingConventions.VarArgs : CallingConventions.Standard;
-            if (signature.Header.IsInstance)
-            {
-                convention |= CallingConventions.HasThis;
-            }
+                var convention = signature.Header.CallingConvention == SignatureCallingConvention.VarArgs
+                    ? CallingConventions.VarArgs : CallingConventions.Standard;
+                if (signature.Header.IsInstance)
+                {
+                    convention |= CallingConventions.HasThis;
+                }
 
-            if (signature.Header.Attributes.HasFlag(SignatureAttributes.ExplicitThis))
-            {
-                convention |= CallingConventions.ExplicitThis;
-            }
+                if (signature.Header.Attributes.HasFlag(SignatureAttributes.ExplicitThis))
+                {
+                    convention |= CallingConventions.ExplicitThis;
+                }
 
-            methods.Add(new MethodSymbol
+                methods.Add(new MethodSymbol
+                {
+                    Definition = id,
+                    Source = MethodSymbolSource.Loaded,
+                    DeclaringType = declaring,
+                    Name = _reader.GetString(method.Name),
+                    Attributes = method.Attributes,
+                    ImplAttributes = method.ImplAttributes,
+                    BodyAvailable = method.RelativeVirtualAddress != 0,
+                    CallingConvention = convention,
+                    ReturnType = returnType,
+                    Parameters = parameters,
+                    GenericParameters = GenericParameters(method.GetGenericParameters(), id, true, owner, catalog),
+                    ReturnRequiredModifiers = returnRequired,
+                    ReturnOptionalModifiers = returnOptional,
+                });
+            }
+            catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
             {
-                Definition = id,
-                Source = MethodSymbolSource.Loaded,
-                DeclaringType = declaring,
-                Name = _reader.GetString(method.Name),
-                Attributes = method.Attributes,
-                ImplAttributes = method.ImplAttributes,
-                CallingConvention = convention,
-                ReturnType = returnType,
-                Parameters = parameters,
-                GenericParameters = GenericParameters(method.GetGenericParameters(), id, true, owner, catalog),
-                ReturnRequiredModifiers = returnRequired,
-                ReturnOptionalModifiers = returnOptional,
-            });
+                // A damaged row must not hide the healthy members beside it.
+            }
         }
 
         return methods;
@@ -534,22 +593,68 @@ public sealed class AssemblySymbolSource
         var fields = new List<FieldSymbol>();
         foreach (var fieldHandle in definition.GetFields())
         {
-            var field = _reader.GetFieldDefinition(fieldHandle);
-            var type = SymbolSignatureProvider.StripModifiers(field.DecodeSignature(provider, owner), out var required, out var optional);
-            fields.Add(new FieldSymbol
+            try
             {
-                Definition = IdOf(fieldHandle),
-                Source = MethodSymbolSource.Loaded,
-                DeclaringType = declaring,
-                Name = _reader.GetString(field.Name),
-                FieldType = type,
-                Attributes = field.Attributes,
-                RequiredModifiers = required,
-                OptionalModifiers = optional,
-            });
+                var field = _reader.GetFieldDefinition(fieldHandle);
+                var type = SymbolSignatureProvider.StripModifiers(
+                    field.DecodeSignature(provider, owner), out var required, out var optional);
+                fields.Add(new FieldSymbol
+                {
+                    Definition = IdOf(fieldHandle),
+                    Source = MethodSymbolSource.Loaded,
+                    DeclaringType = declaring,
+                    Name = _reader.GetString(field.Name),
+                    FieldType = type,
+                    Attributes = field.Attributes,
+                    RequiredModifiers = required,
+                    OptionalModifiers = optional,
+                });
+            }
+            catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+            {
+                // A damaged row must not hide the healthy members beside it.
+            }
         }
 
         return fields;
+    }
+
+    /// <summary>
+    /// Decodes property signatures and accessor flags without resolving their runtime members.
+    /// </summary>
+    /// <param name="handle">The declaring definition.</param>
+    /// <param name="catalog">The catalog used for signature references.</param>
+    /// <returns>The declared properties in metadata order.</returns>
+    public IReadOnlyList<PropertySymbol> Properties(TypeDefinitionHandle handle, LoadedBindingCatalog catalog)
+    {
+        var declaring = Definition(handle);
+        var provider = new SymbolSignatureProvider(this, catalog);
+        var owner = OwnerOf(handle);
+        var properties = new List<PropertySymbol>();
+        foreach (var propertyHandle in _reader.GetTypeDefinition(handle).GetProperties())
+        {
+            try
+            {
+                var property = _reader.GetPropertyDefinition(propertyHandle);
+                var signature = property.DecodeSignature(provider, owner);
+                var accessors = property.GetAccessors();
+                MethodDefinitionHandle[] methods = [accessors.Getter, accessors.Setter, .. accessors.Others];
+                MethodAttributes[] flags = [.. methods.Where(method => !method.IsNil)
+                    .Select(method => _reader.GetMethodDefinition(method).Attributes)];
+                properties.Add(new PropertySymbol(
+                    IdOf(propertyHandle), declaring, _reader.GetString(property.Name),
+                    SymbolSignatureProvider.StripModifiers(signature.ReturnType, out _, out _),
+                    [.. signature.ParameterTypes.Select(type => SymbolSignatureProvider.StripModifiers(type, out _, out _))],
+                    flags.Any(attributes => (attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public),
+                    flags.Any(attributes => attributes.HasFlag(MethodAttributes.Static))));
+            }
+            catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+            {
+                // Preserve the other properties when one metadata row cannot be read.
+            }
+        }
+
+        return properties;
     }
 
     /// <summary>
@@ -581,8 +686,7 @@ public sealed class AssemblySymbolSource
     }
 
     /// <summary>
-    /// The symbol a type token names: a definition of this module, a reference resolved through
-    /// the catalog, or a specification decoded against the owner.
+    /// Decodes a type token against its module, captured catalog and generic owner.
     /// </summary>
     /// <param name="handle">A TypeDef, TypeRef, or TypeSpec handle.</param>
     /// <param name="owner">The generic owner in scope.</param>

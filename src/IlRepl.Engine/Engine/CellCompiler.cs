@@ -116,7 +116,7 @@ public static class CellCompiler
 
         EmitGuarded("the cell", () => EmitBody(run.GetILGenerator(), state, methods));
 
-        MethodBuilder entry = run;
+        var entry = run;
         if (state.IsVarArg)
         {
             entry = EmitVarArgWrapper(type, run, names, parameterTypes);

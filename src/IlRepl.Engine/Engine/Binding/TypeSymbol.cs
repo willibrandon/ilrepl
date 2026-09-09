@@ -33,8 +33,7 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
     public DefinitionId Definition { get; private init; }
 
     /// <summary>
-    /// The metadata name of a named definition, arity suffix included; the CoreLib name of a
-    /// primitive; the declared name of a generic parameter.
+    /// The metadata name, primitive CoreLib name or declared generic parameter name.
     /// </summary>
     public string Name { get; private init; } = "";
 
@@ -62,6 +61,13 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
     /// True when a named definition is a value type, and for the value-type primitives.
     /// </summary>
     public bool IsValueType { get; private init; }
+
+    /// <summary>
+    /// Whether the definition is restricted to stack storage by the CLI byref-like marker.
+    /// </summary>
+    public bool IsByRefLike => Kind == TypeSymbolKind.Constructed ? Element!.IsByRefLike : HasByRefLikeAttribute;
+
+    private bool HasByRefLikeAttribute { get; init; }
 
     /// <summary>
     /// The names of a named definition's generic parameters, inherited ones included; empty for a non-generic type.
@@ -184,8 +190,7 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
     public TypeSymbol Unwrapped => Kind is TypeSymbolKind.Modified or TypeSymbolKind.Pinned ? Element!.Unwrapped : this;
 
     /// <summary>
-    /// True when a value of this type is a value type on the stack: a value-type definition or
-    /// construction, or a value-type primitive. A generic parameter is neither.
+    /// Whether the symbol is a concrete value type; generic parameters remain classified separately.
     /// </summary>
     public bool IsValueTypeShape => Kind switch
     {
@@ -225,8 +230,18 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
     /// <param name="attributes">The type attributes.</param>
     /// <param name="isValueType">True for a value type.</param>
     /// <param name="genericParameterNames">The generic parameter names, or empty.</param>
+    /// <param name="isByRefLike">Whether metadata marks the type as byref-like.</param>
     /// <returns>The symbol.</returns>
-    public static TypeSymbol Named(DefinitionId definition, string name, string ns, TypeSymbol? declaring, string assemblyName, TypeAttributes attributes, bool isValueType, IReadOnlyList<string> genericParameterNames)
+    public static TypeSymbol Named(
+        DefinitionId definition,
+        string name,
+        string ns,
+        TypeSymbol? declaring,
+        string assemblyName,
+        TypeAttributes attributes,
+        bool isValueType,
+        IReadOnlyList<string> genericParameterNames,
+        bool isByRefLike = false)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(ns);
@@ -242,6 +257,7 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
             Attributes = attributes,
             IsValueType = isValueType,
             GenericParameterNames = genericParameterNames,
+            HasByRefLikeAttribute = isByRefLike,
         };
     }
 
@@ -395,8 +411,7 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
     }
 
     /// <summary>
-    /// True when the symbol, or any part of it, is a reference nothing loaded defines. A member
-    /// whose signature has one cannot be confirmed as a candidate.
+    /// Whether any part of this type depends on a reference that the captured catalog cannot resolve.
     /// </summary>
     public bool HasUnresolved => Kind switch
     {

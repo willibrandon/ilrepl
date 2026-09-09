@@ -1,39 +1,53 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
-/// The members of a type being written, read from a snapshot's copy of its declaration. A
-/// member declared ahead of its line is recorded in the copy, with an identity of its own, and
-/// the real block never hears of it.
+/// Copies declaration members into a scope that can record independent symbolic forward references.
 /// </summary>
 internal sealed class SnapshotDeclarationMembers : IDeclarationMembers
 {
     private static long s_forwards;
     private readonly DeclarationSymbol _declaration;
+    private readonly bool _allowForward;
 
-    public SnapshotDeclarationMembers(DeclarationSymbol declaration)
+    /// <summary>
+    /// Initializes the member view.
+    /// </summary>
+    /// <param name="declaration">The independently owned declaration snapshot.</param>
+    /// <param name="allowForward">Whether a lookup may add a forward member.</param>
+    public SnapshotDeclarationMembers(DeclarationSymbol declaration, bool allowForward = true)
     {
         _declaration = declaration;
+        _allowForward = allowForward;
     }
 
+    /// <inheritdoc/>
     public TypeSymbol Declaring => _declaration.Type;
 
+    /// <inheritdoc/>
     public TypeSymbol? BaseType => _declaration.BaseType;
 
+    /// <inheritdoc/>
     public IReadOnlyList<TypeSymbol> Interfaces => _declaration.Interfaces;
 
+    /// <inheritdoc/>
     public IReadOnlyList<FieldSymbol> Fields => _declaration.Fields;
 
+    /// <inheritdoc/>
     public FieldSymbol? FindField(string name) => _declaration.Fields.FirstOrDefault(f => f.Name == name);
 
+    /// <inheritdoc/>
     public IReadOnlyList<MethodSymbol> Methods => _declaration.Methods;
 
+    /// <inheritdoc/>
     public IEnumerable<MethodSymbol> FindMethods(string name) => _declaration.Methods.Where(m => m.Name == name);
 
-    public bool CanDefineForward => _declaration.CanDefineForward;
+    /// <inheritdoc/>
+    public bool CanDefineForward => _allowForward && _declaration.CanDefineForward;
 
+    /// <inheritdoc/>
     public MethodSymbol DefineForward(MethodSymbol signature)
     {
-        if (!_declaration.CanDefineForward)
+        if (!CanDefineForward)
         {
             throw new InvalidOperationException("the type cannot take forward references");
         }

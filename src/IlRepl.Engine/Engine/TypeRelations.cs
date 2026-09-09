@@ -72,7 +72,7 @@ public static class TypeRelations
         ArgumentNullException.ThrowIfNull(inner);
         ArgumentNullException.ThrowIfNull(outer);
         var target = Definition(outer);
-        for (Type? current = Definition(inner); current is not null; current = current.DeclaringType is { } d ? Definition(d) : null)
+        for (var current = Definition(inner); current is not null; current = current.DeclaringType is { } d ? Definition(d) : null)
         {
             if (ReferenceEquals(current, target))
             {
@@ -100,7 +100,7 @@ public static class TypeRelations
         }
 
         var definition = Definition(type);
-        Type? baseType = types.TryGetMembers(definition, out var own) ? own.BaseType : definition.BaseType;
+        var baseType = types.TryGetMembers(definition, out var own) ? own.BaseType : definition.BaseType;
         return baseType is null ? null : SubstituteFor(type, baseType);
     }
 

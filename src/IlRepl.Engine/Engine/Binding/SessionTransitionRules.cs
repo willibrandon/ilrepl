@@ -1,8 +1,7 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
-/// The commands the REPL takes and what each does to the session's structure, in one table the
-/// handler and a preview of the buffer both read.
+/// Describes the command syntax and structural transitions shared by submission and preview.
 /// </summary>
 public static class SessionTransitionRules
 {
@@ -50,6 +49,37 @@ public static class SessionTransitionRules
     {
         ArgumentNullException.ThrowIfNull(command);
         return Commands.TryGetValue(command, out var transition) ? transition : SessionTransition.Unknown;
+    }
+
+    /// <summary>
+    /// Checks command recognition and required arguments before any structural effect or IO occurs.
+    /// </summary>
+    /// <param name="command">The command word.</param>
+    /// <param name="argument">Its normalized argument.</param>
+    public static void ValidateInput(string command, string? argument)
+    {
+        if (Of(command) == SessionTransition.Unknown)
+        {
+            throw new ReplException($"unknown command '{command}' (.help lists them)");
+        }
+
+        if (!string.IsNullOrEmpty(argument))
+        {
+            return;
+        }
+
+        var usage = command switch
+        {
+            ".load" => "usage: .load <assembly name | path.dll>",
+            ".save" => "usage: .save <path.dll>",
+            ".dis" or ".disassemble" => "usage: .dis <method reference>  "
+                + "e.g. .dis instance string [System.Runtime]System.String::Trim()  or  .dis Fib",
+            _ => null,
+        };
+        if (usage is not null)
+        {
+            throw new ReplException(usage);
+        }
     }
 
     /// <summary>

@@ -11,6 +11,20 @@ namespace IlRepl.Tests.Engine;
 public sealed class NameSuggestionsTests
 {
     /// <summary>
+    /// A nearer name that cannot bind the supplied parameters does not hide a valid correction.
+    /// </summary>
+    [TestMethod]
+    public void MethodSuggestion_NearerIncompatibleOverload_OffersBindableCorrection()
+    {
+        var session = new Session();
+        var error = Assert.ThrowsExactly<ReplException>(() =>
+            MemberResolver.ResolveMethod("Math::Mxa(int32, int32)", session.State.Context, false));
+        Assert.Contains("did you mean 'Max'", error.Message);
+        var resolved = MemberResolver.ResolveMethod("Math::Max(int32, int32)", session.State.Context, false);
+        Assert.AreEqual(typeof(Math).GetMethod(nameof(Math.Max), [typeof(int), typeof(int)]), resolved.Method);
+    }
+
+    /// <summary>
     /// The bounded distance agrees with the full one wherever the bound admits an answer.
     /// </summary>
     [TestMethod]
@@ -82,8 +96,7 @@ public sealed class NameSuggestionsTests
     }
 
     /// <summary>
-    /// The length bound prunes the pool without losing a match within it: a two-letter name allows
-    /// one edit, a longer name two, and a candidate beyond the bound is never offered.
+    /// The edit-distance length bound prunes only names that cannot meet the suggestion threshold.
     /// </summary>
     [TestMethod]
     public void NearestType_LengthBound_PrunesWithoutLosingMatches()

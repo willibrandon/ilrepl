@@ -26,7 +26,8 @@ public static partial class SymbolRelations
         {
             case TypeSymbolKind.Constructed:
             {
-                var changed = false;
+                var definition = Rewrite(type.Element!, replace);
+                var changed = !ReferenceEquals(definition, type.Element);
                 var arguments = new TypeSymbol[type.Arguments.Count];
                 for (var i = 0; i < arguments.Length; i++)
                 {
@@ -34,7 +35,7 @@ public static partial class SymbolRelations
                     changed |= !ReferenceEquals(arguments[i], type.Arguments[i]);
                 }
 
-                return changed ? TypeSymbol.Construct(type.Element!, arguments) : type;
+                return changed ? TypeSymbol.Construct(definition, arguments) : type;
             }
 
             case TypeSymbolKind.SzArray:

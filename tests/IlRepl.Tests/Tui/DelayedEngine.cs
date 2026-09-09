@@ -54,6 +54,10 @@ internal sealed class DelayedEngine : IReplEngine
     /// <inheritdoc />
     public SessionStatus Status => _inner.Status;
 
+    /// <inheritdoc/>
+    public Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken) =>
+        _inner.CompleteAsync(request, cancellationToken);
+
     /// <summary>
     /// Lets a number of lines through.
     /// </summary>

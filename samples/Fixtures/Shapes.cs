@@ -43,7 +43,7 @@ public static class Shapes
     [SkipLocalsInit]
     public static unsafe int NoInit()
     {
-        int* buffer = stackalloc int[4];
+        var buffer = stackalloc int[4];
         buffer[0] = 0;
         return buffer[0];
     }

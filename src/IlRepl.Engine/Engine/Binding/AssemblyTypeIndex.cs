@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 
@@ -22,80 +21,144 @@ public sealed class AssemblyTypeIndex
     private readonly Dictionary<TypeDefinitionHandle, TypeIndexEntry> _entryByHandle = [];
 
     internal AssemblyTypeIndex(AssemblySymbolSource source, MetadataReader reader)
+        : this()
+    {
+        foreach (var _ in BuildSteps(source, reader))
+        {
+        }
+    }
+
+    private AssemblyTypeIndex()
+    {
+    }
+
+    /// <summary>
+    /// Builds the same metadata index cooperatively before publishing it to other readers.
+    /// </summary>
+    /// <param name="source">The leased assembly source.</param>
+    /// <param name="reader">Its metadata reader.</param>
+    /// <param name="cancellationToken">Cancels construction between metadata rows.</param>
+    /// <returns>The complete immutable index.</returns>
+    internal static async ValueTask<AssemblyTypeIndex> CreateAsync(
+        AssemblySymbolSource source, MetadataReader reader, CancellationToken cancellationToken)
+    {
+        var index = new AssemblyTypeIndex();
+        var processed = 0;
+        foreach (var _ in index.BuildSteps(source, reader))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (++processed % 128 == 0)
+            {
+                await Task.Yield();
+            }
+        }
+
+        return index;
+    }
+
+    private IEnumerable<byte> BuildSteps(AssemblySymbolSource source, MetadataReader reader)
     {
         foreach (var handle in reader.TypeDefinitions)
         {
-            var definition = reader.GetTypeDefinition(handle);
-            var name = reader.GetString(definition.Name);
-            var declaring = definition.GetDeclaringType();
-            if (declaring.IsNil)
+            try
             {
-                if (name == "<Module>")
+                var definition = reader.GetTypeDefinition(handle);
+                var name = reader.GetString(definition.Name);
+                var declaring = definition.GetDeclaringType();
+                if (declaring.IsNil)
+                {
+                    if (name == "<Module>")
+                    {
+                        continue;
+                    }
+
+                    _topLevel[(reader.GetString(definition.Namespace), name)] = handle;
+                }
+                else
+                {
+                    if (!_nested.TryGetValue(declaring, out var children))
+                    {
+                        children = new Dictionary<string, TypeDefinitionHandle>(StringComparer.Ordinal);
+                        _nested[declaring] = children;
+                    }
+
+                    children[name] = handle;
+                }
+
+                if (!_bySimpleName.TryGetValue(name, out var same))
+                {
+                    same = [];
+                    _bySimpleName[name] = same;
+                }
+
+                same.Add(handle);
+            }
+            catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+            {
+                // An unreadable type cannot hide the healthy definitions beside it.
+            }
+
+            yield return 0;
+        }
+
+        foreach (var handle in reader.TypeDefinitions)
+        {
+            try
+            {
+                var definition = reader.GetTypeDefinition(handle);
+                if (definition.GetDeclaringType().IsNil && reader.GetString(definition.Name) == "<Module>")
                 {
                     continue;
                 }
 
-                _topLevel[(reader.GetString(definition.Namespace), name)] = handle;
+                var entry = source.Entry(handle);
+                _entries.Add(entry);
+                _entryByHandle[handle] = entry;
             }
-            else
+            catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
             {
-                if (!_nested.TryGetValue(declaring, out var children))
-                {
-                    children = new Dictionary<string, TypeDefinitionHandle>(StringComparer.Ordinal);
-                    _nested[declaring] = children;
-                }
-
-                children[name] = handle;
+                // An unreadable type cannot hide the healthy definitions beside it.
             }
 
-            if (!_bySimpleName.TryGetValue(name, out var same))
-            {
-                same = [];
-                _bySimpleName[name] = same;
-            }
-
-            same.Add(handle);
-        }
-
-        foreach (var handle in reader.TypeDefinitions)
-        {
-            var definition = reader.GetTypeDefinition(handle);
-            if (definition.GetDeclaringType().IsNil && reader.GetString(definition.Name) == "<Module>")
-            {
-                continue;
-            }
-
-            var entry = source.Entry(handle);
-            _entries.Add(entry);
-            _entryByHandle[handle] = entry;
+            yield return 0;
         }
 
         foreach (var handle in reader.ExportedTypes)
         {
-            var exported = reader.GetExportedType(handle);
-            var name = reader.GetString(exported.Name);
-            switch (exported.Implementation.Kind)
+            try
             {
-                case HandleKind.AssemblyReference:
-                    _forwarders[(reader.GetString(exported.Namespace), name)] = (AssemblyReferenceHandle)exported.Implementation;
-                    _exportedTopLevel[(reader.GetString(exported.Namespace), name)] = handle;
-                    break;
-                case HandleKind.ExportedType:
+                var exported = reader.GetExportedType(handle);
+                var name = reader.GetString(exported.Name);
+                switch (exported.Implementation.Kind)
                 {
-                    var parent = (ExportedTypeHandle)exported.Implementation;
-                    if (!_exportedNested.TryGetValue(parent, out var children))
+                    case HandleKind.AssemblyReference:
+                        _forwarders[(reader.GetString(exported.Namespace), name)] = (AssemblyReferenceHandle)exported.Implementation;
+                        _exportedTopLevel[(reader.GetString(exported.Namespace), name)] = handle;
+                        break;
+                    case HandleKind.ExportedType:
                     {
-                        children = new Dictionary<string, ExportedTypeHandle>(StringComparer.Ordinal);
-                        _exportedNested[parent] = children;
+                        var parent = (ExportedTypeHandle)exported.Implementation;
+                        if (!_exportedNested.TryGetValue(parent, out var children))
+                        {
+                            children = new Dictionary<string, ExportedTypeHandle>(StringComparer.Ordinal);
+                            _exportedNested[parent] = children;
+                        }
+
+                        children[name] = handle;
+                        break;
                     }
 
-                    children[name] = handle;
-                    break;
+                    default:
+                        break;
                 }
 
-                default:
-                    break;
             }
+            catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+            {
+                // An unreadable type cannot hide the healthy definitions beside it.
+            }
+
+            yield return 0;
         }
     }
 
@@ -200,8 +263,7 @@ public sealed class AssemblyTypeIndex
     }
 
     /// <summary>
-    /// The definitions the assembly exports with a metadata name: public types, and nested public
-    /// types whose every enclosing type is public, as <see cref="Assembly.GetExportedTypes"/> lists them.
+    /// The publicly visible definitions with this metadata name, including visible nested types.
     /// </summary>
     /// <param name="name">The metadata name.</param>
     /// <returns>The visible definitions.</returns>

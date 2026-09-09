@@ -192,7 +192,8 @@ public sealed partial class Session
                 : enclosing.Prototype.DefineNestedType(name, header.Attributes);
         }
 
-        Type[] generics = predeclared is not null ? (builder.IsGenericTypeDefinition ? builder.GetGenericArguments() : []) : names.Length > 0 ? builder.DefineGenericParameters(names) : [];
+        var generics = predeclared is not null ? (builder.IsGenericTypeDefinition ? builder.GetGenericArguments() : [])
+            : names.Length > 0 ? builder.DefineGenericParameters(names) : [];
         var table = _typeTable.Clone();
         if (enclosing is not null)
         {
@@ -1113,11 +1114,10 @@ public sealed partial class Session
             table.SetMembers(entry.Prototype, entry.Members);
         }
 
-        TypeDeclaration? Lookup(Type type) => DeclarationOf(type, declaration, block);
         TypeDeclaration Validated(TypeDeclaration member)
         {
             var prototype = block.FamilyTypes[member.FullName].Prototype;
-            var implied = TypeDeclarationValidator.Validate(member, prototype, table, Lookup);
+            var implied = TypeDeclarationValidator.Validate(member, prototype, table, TypeContext(block));
             foreach (var method in member.Methods)
             {
                 method.Body?.RecheckAccess(table);
@@ -1244,7 +1244,12 @@ public sealed partial class Session
         return ([.. closure.Families], [.. closure.Methods]);
     }
 
-    private static bool FamilyMentions(TypeDeclaration family, IReadOnlySet<Type> types, IReadOnlySet<string> methods)
+    private static bool FamilyMentions(TypeDeclaration family, IReadOnlySet<Type> types, IReadOnlySet<string> methods) =>
+        FamilyReferencedTypes(family).Any(type => Mentions(type, types))
+        || family.Family.SelectMany(type => type.Methods)
+            .Any(method => method.Body is { } body && BodyMentions(body, types, methods));
+
+    private static IEnumerable<Type> FamilyReferencedTypes(TypeDeclaration family)
     {
         foreach (var declaration in family.Family)
         {
@@ -1276,19 +1281,17 @@ public sealed partial class Session
                 declared.AddRange(AttributeMentions(method.Signature.CustomAttributes));
                 declared.AddRange(AttributeMentions(method.Signature.ReturnCustomAttributes));
                 declared.AddRange(method.Signature.Parameters.SelectMany(p => AttributeMentions(p.CustomAttributes)));
-                if (method.Body is { } body && BodyMentions(body, types, methods))
+                if (method.Body is { } body)
                 {
-                    return true;
+                    declared.AddRange(SessionMentions.Types(body));
                 }
             }
 
-            if (declared.Any(t => Mentions(t, types)))
+            foreach (var type in declared)
             {
-                return true;
+                yield return type;
             }
         }
-
-        return false;
     }
 
     /// <summary>

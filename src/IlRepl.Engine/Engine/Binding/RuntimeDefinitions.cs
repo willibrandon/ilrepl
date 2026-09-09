@@ -90,9 +90,10 @@ public static class RuntimeDefinitions
     {
         ArgumentNullException.ThrowIfNull(method);
         DefinitionId id;
-        if (method.Module.Assembly.IsDynamic)
+        var assembly = method.DeclaringType?.Assembly ?? method.Module.Assembly;
+        if (assembly.IsDynamic)
         {
-            id = DeclarationIds.GetValue(method, m => new StrongBox<DefinitionId>(DefinitionId.ForDeclaration(AssemblyInstance(((MethodBase)m).Module.Assembly), Interlocked.Increment(ref s_nextDeclaration)))).Value;
+            id = OfDeclaration(method, AssemblyInstance(assembly));
             Remember(Methods, id, method);
         }
         else
@@ -116,9 +117,11 @@ public static class RuntimeDefinitions
     {
         ArgumentNullException.ThrowIfNull(field);
         DefinitionId id;
-        if (field.Module.Assembly.IsDynamic)
+        // Mono's uncreated FieldBuilder does not implement Module; its owner still identifies the assembly.
+        var assembly = field.DeclaringType?.Assembly ?? field.Module.Assembly;
+        if (assembly.IsDynamic)
         {
-            id = DeclarationIds.GetValue(field, f => new StrongBox<DefinitionId>(DefinitionId.ForDeclaration(AssemblyInstance(((FieldInfo)f).Module.Assembly), Interlocked.Increment(ref s_nextDeclaration)))).Value;
+            id = OfDeclaration(field, AssemblyInstance(assembly));
             Remember(Fields, id, field);
         }
         else

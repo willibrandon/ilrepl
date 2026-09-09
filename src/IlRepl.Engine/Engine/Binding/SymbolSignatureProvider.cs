@@ -13,6 +13,7 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
 {
     private readonly AssemblySymbolSource _source;
     private readonly LoadedBindingCatalog _catalog;
+    private readonly Func<TypeReferenceHandle, byte, TypeSymbol>? _reference;
 
     /// <summary>
     /// Initializes a provider over a module and the catalog its references resolve through.
@@ -20,11 +21,18 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
     /// <param name="source">The module's symbol source.</param>
     /// <param name="catalog">The catalog.</param>
     public SymbolSignatureProvider(AssemblySymbolSource source, LoadedBindingCatalog catalog)
+        : this(source, catalog, null)
+    {
+    }
+
+    internal SymbolSignatureProvider(AssemblySymbolSource source, LoadedBindingCatalog catalog,
+        Func<TypeReferenceHandle, byte, TypeSymbol>? reference)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(catalog);
         _source = source;
         _catalog = catalog;
+        _reference = reference;
     }
 
     /// <inheritdoc/>
@@ -58,6 +66,11 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
     public TypeSymbol GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind)
     {
         ArgumentNullException.ThrowIfNull(reader);
+        if (_reference is not null)
+        {
+            return _reference(handle, rawTypeKind);
+        }
+
         return _catalog.ResolveTypeReference(_source, handle) ?? _source.UnresolvedReference(handle, rawTypeKind == (byte)SignatureTypeKind.ValueType);
     }
 

@@ -78,6 +78,21 @@ public static class SymbolBinder
                     throw new ReplException($"'{scope.Pretty(definition)}' is not a generic type definition");
                 }
 
+                if (!lenient)
+                {
+                    var parameters = scope.GenericParameterDeclarations(definition);
+                    for (var i = 0; i < arguments.Count; i++)
+                    {
+                        if (i < parameters.Count && !GenericConstraints.Satisfies(parameters[i], arguments[i],
+                            type => SymbolRelations.SubstituteTypeParameters(type, definition.Definition, arguments), scope))
+                        {
+                            throw new ReplException(
+                                $"'{scope.Pretty(arguments[i])}' does not satisfy the constraints of '{parameters[i].Name}' "
+                                + $"on '{scope.Pretty(definition)}'");
+                        }
+                    }
+                }
+
                 return TypeSymbol.Construct(definition, arguments);
             }
 
@@ -615,21 +630,19 @@ public static class SymbolBinder
         var pure = scope.ForSuggestions(out var lease);
         using (lease)
         {
-            var nearest = NameSuggestions.Nearest(name, pool.ToList());
-            if (nearest is null)
+            var nearest = NameSuggestions.Nearest(name, pool, candidate =>
             {
-                return "";
-            }
-
-            try
-            {
-                BindMethodReference(syntax with { Name = nearest, GenericArity = syntax.GenericArity }, pure, wantConstructor);
-                return NameSuggestions.Parenthetical(nearest);
-            }
-            catch (ReplException)
-            {
-                return "";
-            }
+                try
+                {
+                    BindMethodReference(syntax with { Name = candidate }, pure, wantConstructor);
+                    return true;
+                }
+                catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+                {
+                    return false;
+                }
+            });
+            return nearest is null ? "" : NameSuggestions.Parenthetical(nearest);
         }
     }
 
@@ -638,21 +651,19 @@ public static class SymbolBinder
         var pure = scope.ForSuggestions(out var lease);
         using (lease)
         {
-            var nearest = NameSuggestions.Nearest(name, pool.ToList());
-            if (nearest is null)
+            var nearest = NameSuggestions.Nearest(name, pool, candidate =>
             {
-                return "";
-            }
-
-            try
-            {
-                BindFieldReference(syntax with { Name = nearest }, pure);
-                return NameSuggestions.Parenthetical(nearest);
-            }
-            catch (ReplException)
-            {
-                return "";
-            }
+                try
+                {
+                    BindFieldReference(syntax with { Name = candidate }, pure);
+                    return true;
+                }
+                catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+                {
+                    return false;
+                }
+            });
+            return nearest is null ? "" : NameSuggestions.Parenthetical(nearest);
         }
     }
 
@@ -739,6 +750,7 @@ public static class SymbolBinder
         var arity = methodArguments?.Count ?? 0;
         var candidates = own.FindMethods(name)
             .Where(m => m.GenericParameters.Count == arity)
+            .Where(method => arity == 0 || GenericConstraints.SatisfiesMethod(method, declaring, methodArguments!, scope))
             .Select(m => (Declared: m, Effective: SymbolRelations.Instantiate(m, declaring, methodArguments ?? [])))
             .Where(m => parameterTypes is null || ParametersMatch(m.Effective, parameterTypes))
             .ToList();
@@ -872,11 +884,6 @@ public static class SymbolBinder
     {
         var name = syntax.Name;
         var arity = syntax.GenericArity!.Value;
-        if (scope.TryGetDeclaration(declaring, out _) || declaring.DefinitionOrSelf.Definition.IsDeclaration)
-        {
-            throw new ReplException($"{scope.Pretty(declaring)}::{name}<[{arity}]> names a member of a class being written; give its type arguments instead");
-        }
-
         var matches = new List<MethodSymbol>();
         foreach (var candidate in scope.Methods(declaring, name).Where(m => m.IsGenericDefinition && m.Arity == arity))
         {

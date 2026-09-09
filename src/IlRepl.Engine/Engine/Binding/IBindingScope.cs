@@ -65,17 +65,14 @@ public interface IBindingScope
     bool IsSessionType(TypeSymbol type);
 
     /// <summary>
-    /// True when the declaring construction cannot list its own members and its definition must
-    /// answer with substitution: a loaded generic type instantiated over a parameter of the cell
-    /// or of a method being written.
+    /// Whether a constructed owner needs member lookup on its definition followed by generic substitution.
     /// </summary>
     /// <param name="declaring">The declaring construction.</param>
     /// <returns>True when the definition must be consulted.</returns>
     bool RequiresDefinitionLookup(TypeSymbol declaring);
 
     /// <summary>
-    /// The loaded methods with a name that a declaring type offers, inherited ones included, as
-    /// reflection lists them: each on the type that declares it.
+    /// The named methods offered by a type, including inherited methods on their actual declaring types.
     /// </summary>
     /// <param name="declaring">The declaring type.</param>
     /// <param name="name">The method name.</param>
@@ -106,6 +103,13 @@ public interface IBindingScope
     IReadOnlyList<FieldSymbol> Fields(TypeSymbol declaring);
 
     /// <summary>
+    /// Lists property metadata without invoking accessors or reading property values.
+    /// </summary>
+    /// <param name="declaring">The declaring construction.</param>
+    /// <returns>The property signatures, including inherited properties.</returns>
+    IReadOnlyList<PropertySymbol> Properties(TypeSymbol declaring);
+
+    /// <summary>
     /// Instantiates a generic method definition, or refuses when the arguments violate its constraints.
     /// </summary>
     /// <param name="definition">The generic method definition.</param>
@@ -121,8 +125,7 @@ public interface IBindingScope
     TypeSymbol? BaseOf(TypeSymbol type);
 
     /// <summary>
-    /// The interfaces the type declares, with its generic arguments substituted into them; for a
-    /// generic parameter, its interface constraints.
+    /// The substituted declared interfaces, or the interface constraints of a generic parameter.
     /// </summary>
     /// <param name="type">The type.</param>
     /// <returns>The declared interfaces.</returns>
@@ -162,8 +165,7 @@ public interface IBindingScope
     AccessContext Access { get; }
 
     /// <summary>
-    /// A scope that answers from captured metadata alone, for the suggestions a failed lookup
-    /// makes: this scope when it already is one, else a snapshot of it, which the lease releases.
+    /// A metadata-only scope for suggestions, together with the lease that releases a newly captured snapshot.
     /// </summary>
     /// <param name="lease">What to dispose once the suggestion is made, or null.</param>
     /// <returns>The scope.</returns>

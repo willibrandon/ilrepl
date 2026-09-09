@@ -1,6 +1,6 @@
+using System.Text.RegularExpressions;
 using IlRepl.Protocol;
 using IlRepl.Repl;
-using System.Text.RegularExpressions;
 
 namespace IlRepl.Tests.Repl;
 

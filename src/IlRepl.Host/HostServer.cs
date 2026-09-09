@@ -9,9 +9,9 @@ namespace IlRepl.Host;
 /// Serves a <see cref="ReplCore"/> over JSON-RPC. The process console is detached from the
 /// protocol streams so cells can print without corrupting the channel.
 /// </summary>
-public sealed class HostServer : IReplHost
+public sealed class HostServer : IReplHost, IAsyncDisposable
 {
-    private readonly ReplCore _core;
+    private readonly InProcessEngine _engine;
 
     /// <summary>
     /// Initializes a server for the given REPL.
@@ -20,25 +20,28 @@ public sealed class HostServer : IReplHost
     public HostServer(ReplCore core)
     {
         ArgumentNullException.ThrowIfNull(core);
-        _core = core;
+        _engine = new InProcessEngine(core);
     }
 
     /// <inheritdoc />
-    public Task<HostHello> HelloAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(new HostHello(Completer.Catalog, CilVocabularyBuilder.Vocabulary, _core.Status));
+    public Task<HostHello> HelloAsync(CancellationToken cancellationToken) => _engine.HelloAsync(cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken) =>
+        _engine.CompleteAsync(request, cancellationToken);
 
     /// <inheritdoc />
     public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(line);
-        return Task.FromResult(Handle(line));
+        return _engine.HandleAsync(line, cancellationToken);
     }
 
     /// <inheritdoc />
     public Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(mark);
-        return Task.FromResult(Rollback(mark));
+        return _engine.RollbackAsync(mark, cancellationToken);
     }
 
     /// <summary>
@@ -49,7 +52,7 @@ public sealed class HostServer : IReplHost
     public HandleReply Handle(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        return Reply(_core.Handle(line));
+        return _engine.HandleAsync(line, CancellationToken.None).GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -60,15 +63,11 @@ public sealed class HostServer : IReplHost
     public HandleReply Rollback(SessionMark mark)
     {
         ArgumentNullException.ThrowIfNull(mark);
-        return Reply(_core.Rollback(mark));
+        return _engine.RollbackAsync(mark, CancellationToken.None).GetAwaiter().GetResult();
     }
 
-    private HandleReply Reply(HandleResult result)
-    {
-        var lines = _core.Transcript.Lines.ToArray();
-        _core.Transcript.Clear();
-        return new HandleReply(result.Succeeded, result.QuitRequested, lines, _core.Status);
-    }
+    /// <inheritdoc/>
+    public ValueTask DisposeAsync() => _engine.DisposeAsync();
 
     /// <summary>
     /// Serves the process's standard streams until the front-end disconnects.
@@ -84,7 +83,8 @@ public sealed class HostServer : IReplHost
         Console.OutputEncoding = new UTF8Encoding(false);
 
         using var rpc = new JsonRpc(RpcTransport.CreateHandler(output, input));
-        rpc.AddLocalRpcTarget(RpcTargetMetadata.FromShape<IReplHost>(), new HostServer(new ReplCore()), null);
+        await using var server = new HostServer(new ReplCore());
+        rpc.AddLocalRpcTarget(RpcTargetMetadata.FromShape<IReplHost>(), server, null);
         rpc.StartListening();
         using var registration = cancellationToken.Register(rpc.Dispose);
         try

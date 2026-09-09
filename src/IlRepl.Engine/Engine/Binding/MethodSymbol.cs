@@ -80,10 +80,14 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
     public bool IsDeclared { get; init; } = true;
 
     /// <summary>
-    /// True when the method has a body a listing can read: not abstract, not a P/Invoke, not
-    /// runtime-provided or an internal call.
+    /// Whether metadata or accepted source supplies a body location, independently of implementation flags.
     /// </summary>
-    public bool HasIlBody => !IsAbstract
+    public bool BodyAvailable { get; init; } = true;
+
+    /// <summary>
+    /// Whether the method has an IL body available for disassembly.
+    /// </summary>
+    public bool HasIlBody => BodyAvailable && !IsAbstract
         && !Attributes.HasFlag(MethodAttributes.PinvokeImpl)
         && (ImplAttributes & MethodImplAttributes.CodeTypeMask) == MethodImplAttributes.IL
         && !ImplAttributes.HasFlag(MethodImplAttributes.InternalCall);
@@ -134,6 +138,45 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
     public IReadOnlyList<TypeSymbol> ParameterTypes => [.. Parameters.Select(p => p.Type)];
 
     /// <summary>
+    /// Attaches a parsed declaration to its owner and retained definition identity.
+    /// </summary>
+    /// <param name="definition">The definition's identity.</param>
+    /// <param name="owner">The declaring type, or null for a session method.</param>
+    /// <returns>The declaration with its identity and owner.</returns>
+    internal MethodSymbol WithDefinition(DefinitionId definition, TypeSymbol? owner)
+    {
+        TypeSymbol Map(TypeSymbol type) => SymbolRelations.Rewrite(type, parameter =>
+            parameter.Kind == TypeSymbolKind.MethodParameter && GenericParameters.Any(generic => generic.Owner == parameter.Owner)
+                ? TypeSymbol.Parameter(definition, true, parameter.Position, parameter.Name, parameter.ParameterAttributes) : null);
+        return new MethodSymbol
+        {
+            Definition = definition,
+            Source = owner is null ? MethodSymbolSource.Session : MethodSymbolSource.Declared,
+            DeclaringType = owner,
+            Name = Name,
+            Attributes = Attributes,
+            ImplAttributes = ImplAttributes,
+            CallingConvention = CallingConvention,
+            ReturnType = Map(ReturnType),
+            Parameters = [.. Parameters.Select(parameter => parameter with
+            {
+                Type = Map(parameter.Type),
+                RequiredModifiers = [.. parameter.RequiredModifiers.Select(Map)],
+                OptionalModifiers = [.. parameter.OptionalModifiers.Select(Map)],
+            })],
+            GenericParameters = [.. GenericParameters.Select(parameter => parameter with
+            {
+                Owner = definition, Constraints = [.. parameter.Constraints.Select(Map)],
+            })],
+            GenericArguments = [.. GenericArguments.Select(Map)],
+            ReturnRequiredModifiers = [.. ReturnRequiredModifiers.Select(Map)],
+            ReturnOptionalModifiers = [.. ReturnOptionalModifiers.Select(Map)],
+            IsDeclared = IsDeclared,
+            BodyAvailable = BodyAvailable,
+        };
+    }
+
+    /// <summary>
     /// A copy with a different declaring construction and signature, for a member seen through an instantiation.
     /// </summary>
     /// <param name="declaringType">The declaring construction.</param>
@@ -162,6 +205,7 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
             ReturnRequiredModifiers = ReturnRequiredModifiers,
             ReturnOptionalModifiers = ReturnOptionalModifiers,
             IsDeclared = IsDeclared,
+            BodyAvailable = BodyAvailable,
         };
     }
 

@@ -30,24 +30,29 @@ public static partial class SymbolRelations
         ArgumentNullException.ThrowIfNull(type);
         ArgumentNullException.ThrowIfNull(scope);
         var found = new List<TypeSymbol>();
-        void Visit(TypeSymbol t)
+        var visited = new HashSet<TypeSymbol>();
+        var pending = new Queue<TypeSymbol>();
+        pending.Enqueue(type);
+        while (pending.TryDequeue(out var current))
         {
-            foreach (var i in scope.DeclaredInterfacesOf(t))
+            if (!visited.Add(current))
             {
-                if (!found.Any(f => SymbolIdentity.Equal(f, i)))
-                {
-                    found.Add(i);
-                    Visit(i);
-                }
+                continue;
             }
-        }
 
-        for (var current = type; current is not null; current = scope.BaseOf(current))
-        {
-            Visit(current);
-            if (current.IsGenericParameter)
+            foreach (var implemented in scope.DeclaredInterfacesOf(current))
             {
-                break;
+                if (!found.Contains(implemented))
+                {
+                    found.Add(implemented);
+                }
+
+                pending.Enqueue(implemented);
+            }
+
+            if (!current.IsGenericParameter && scope.BaseOf(current) is { } parent)
+            {
+                pending.Enqueue(parent);
             }
         }
 
@@ -66,7 +71,8 @@ public static partial class SymbolRelations
         ArgumentNullException.ThrowIfNull(derived);
         ArgumentNullException.ThrowIfNull(baseType);
         ArgumentNullException.ThrowIfNull(scope);
-        for (var current = scope.BaseOf(derived); current is not null; current = scope.BaseOf(current))
+        var visited = new HashSet<TypeSymbol>();
+        for (var current = scope.BaseOf(derived); current is not null && visited.Add(current); current = scope.BaseOf(current))
         {
             if (SymbolIdentity.Equal(current, baseType))
             {
@@ -105,7 +111,8 @@ public static partial class SymbolRelations
         ArgumentNullException.ThrowIfNull(baseType);
         ArgumentNullException.ThrowIfNull(baseOf);
         var target = baseType.DefinitionOrSelf;
-        for (var current = derived; current is not null; current = baseOf(current))
+        var visited = new HashSet<TypeSymbol>();
+        for (var current = derived; current is not null && visited.Add(current); current = baseOf(current))
         {
             if (SymbolIdentity.Equal(current.DefinitionOrSelf, target))
             {

@@ -9,6 +9,11 @@ namespace IlRepl.Engine.Binding;
 public sealed record ParameterSymbol(TypeSymbol Type, string? Name)
 {
     /// <summary>
+    /// The parameter's in, out and optional metadata attributes.
+    /// </summary>
+    public System.Reflection.ParameterAttributes Attributes { get; init; }
+
+    /// <summary>
     /// The <c>modreq</c> types, in order.
     /// </summary>
     public IReadOnlyList<TypeSymbol> RequiredModifiers { get; init; } = [];

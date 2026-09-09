@@ -89,6 +89,37 @@ public sealed class BindingSnapshot : IDisposable
     public AccessContext Access { get; private init; } = AccessContext.Cell;
 
     /// <summary>
+    /// Creates an editing context sharing this snapshot's metadata lease without owning runtime objects.
+    /// </summary>
+    /// <param name="types">The editing type table.</param>
+    /// <param name="methods">The editing session methods.</param>
+    /// <param name="generics">The body's generic parameters.</param>
+    /// <param name="locals">The body's locals.</param>
+    /// <param name="arguments">The body's arguments.</param>
+    /// <param name="access">The body's access scope.</param>
+    /// <param name="thisIndex">The receiver slot, or -1.</param>
+    /// <param name="inspecting">Whether the context is for inspection.</param>
+    /// <returns>A context that remains valid while the original snapshot is leased.</returns>
+    internal BindingSnapshot WithContext(
+        SnapshotTypeTable types,
+        IReadOnlyList<MethodSymbol> methods,
+        SymbolGenericContext generics,
+        IReadOnlyList<VariableSymbol> locals,
+        IReadOnlyList<VariableSymbol> arguments,
+        AccessContext access,
+        int thisIndex,
+        bool inspecting = false) => new(Catalog, SearchOrder, Engine, CoreLib, [.. SessionAssemblies], types)
+        {
+            SessionMethods = methods,
+            Generics = generics,
+            Locals = locals,
+            Arguments = arguments,
+            Access = access,
+            ThisIndex = thisIndex,
+            Inspecting = inspecting,
+        };
+
+    /// <summary>
     /// Captures the context of a session's current body.
     /// </summary>
     /// <param name="session">The session.</param>
@@ -111,12 +142,11 @@ public sealed class BindingSnapshot : IDisposable
             own.Add(method.Version.Definition.Assembly);
         }
 
-        return Capture(session.State.Context, own);
+        return Capture(session.CompletionContext, own);
     }
 
     /// <summary>
-    /// Captures a parse context: the assemblies its resolver searches, its type table, its
-    /// methods, and its generic, local, and argument scope.
+    /// Captures the resolver, declarations, generic parameters and variables of a parse context.
     /// </summary>
     /// <param name="context">The parse context.</param>
     /// <param name="sessionAssemblies">The session's own loaded assemblies, whose types the table names.</param>
@@ -179,6 +209,17 @@ public sealed class BindingSnapshot : IDisposable
         var coreLibAssembly = typeof(object).Assembly;
         Take(engineAssembly, searched: false);
         Take(coreLibAssembly, searched: false);
+        for (var index = 0; index < ordered.Count; index++)
+        {
+            foreach (var target in RuntimeBindingObservations.Capture(ordered[index].Assembly).Values)
+            {
+                if (RuntimeDefinitions.TypeOf(target.Definition) is { } observed)
+                {
+                    Take(observed.Assembly, searched: false);
+                }
+            }
+        }
+
         var catalog = new LoadedBindingCatalog(ordered);
 
         var openPaths = new List<string>();

@@ -141,6 +141,25 @@ public sealed class HostProcessEngine : IReplEngine
         return CallAsync(() => _host.RollbackAsync(mark, cancellationToken));
     }
 
+    /// <inheritdoc/>
+    public async Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        try
+        {
+            return await _host.CompleteAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RemoteInvocationException exception)
+        {
+            throw new HostProtocolException("the host failed: " + exception.Message, exception);
+        }
+        catch (ConnectionLostException exception)
+        {
+            throw new HostProtocolException("the host exited" + ExitDetail(), exception);
+        }
+    }
+
     private async Task<HandleReply> CallAsync(Func<Task<HandleReply>> call)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

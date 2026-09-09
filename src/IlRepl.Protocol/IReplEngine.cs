@@ -23,6 +23,14 @@ public interface IReplEngine : IAsyncDisposable
     SessionStatus Status { get; }
 
     /// <summary>
+    /// Completes an operand against the session and unsent document without submitting any lines.
+    /// </summary>
+    /// <param name="request">The document, caret and continuation state.</param>
+    /// <param name="cancellationToken">Cancels queued and active completion work.</param>
+    /// <returns>A page tied to the captured document and binding context.</returns>
+    Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Handles one line and returns the transcript lines it produced.
     /// </summary>
     /// <param name="line">The line.</param>
@@ -31,8 +39,7 @@ public interface IReplEngine : IAsyncDisposable
     Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Withdraws the lines accepted since a mark was taken, when nothing has run, committed, or
-    /// been discarded since. The reply says what was withdrawn, or why nothing could be.
+    /// Withdraws input since a mark when no run, commit or destructive command has crossed that boundary.
     /// </summary>
     /// <param name="mark">The mark to return to.</param>
     /// <param name="cancellationToken">Cancels the wait.</param>

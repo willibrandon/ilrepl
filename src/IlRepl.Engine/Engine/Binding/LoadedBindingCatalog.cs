@@ -15,7 +15,8 @@ public sealed class LoadedBindingCatalog
 {
     private readonly List<AssemblySymbolSource> _sources = [];
     private readonly Dictionary<long, AssemblySymbolSource> _byInstance = [];
-    private readonly Dictionary<long, AssemblyLoadContext?> _contexts = [];
+    private readonly Dictionary<long, LoadedContextIdentity> _contexts = [];
+    private readonly Dictionary<long, IReadOnlyDictionary<int, TypeSymbol>> _observedTypes = [];
     private readonly Dictionary<string, List<AssemblySymbolSource>> _byName = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -34,7 +35,8 @@ public sealed class LoadedBindingCatalog
 
             _sources.Add(source);
             _byInstance[source.Instance] = source;
-            _contexts[source.Instance] = AssemblyLoadContext.GetLoadContext(assembly);
+            _contexts[source.Instance] = LoadedContextIdentity.Of(AssemblyLoadContext.GetLoadContext(assembly));
+            _observedTypes[source.Instance] = RuntimeBindingObservations.Capture(assembly);
             if (!_byName.TryGetValue(source.Name, out var same))
             {
                 same = [];
@@ -134,22 +136,28 @@ public sealed class LoadedBindingCatalog
     public AssemblySymbolSource? ResolveReference(AssemblySymbolSource requester, AssemblyReferenceHandle reference)
     {
         ArgumentNullException.ThrowIfNull(requester);
-        var name = requester.ReferenceName(reference);
+        var requested = LoadedAssemblyIdentity.Of(requester.Reader.GetAssemblyReference(reference).GetAssemblyName());
+        var name = requested.Name;
         if (!_byName.TryGetValue(name, out var candidates))
         {
             return null;
         }
 
-        _contexts.TryGetValue(requester.Instance, out var requesterContext);
-        if (requesterContext is DefinitionLoadContext && SessionAssemblies.IsSessionName(name))
+        if (!_contexts.TryGetValue(requester.Instance, out var requesterContext))
+        {
+            return null;
+        }
+
+        var compatible = candidates.Where(candidate => candidate.Identity.Satisfies(requested)).ToArray();
+        if (requesterContext.IsSession && SessionAssemblies.IsSessionName(name))
         {
             // A session assembly's context resolves session names through the session registry,
             // whatever context the definition landed in; the names are unique, so one candidate is the one.
-            var session = candidates.Where(c => _contexts.TryGetValue(c.Instance, out var context) && context is DefinitionLoadContext).ToList();
+            var session = compatible.Where(candidate => _contexts[candidate.Instance].IsSession).ToList();
             return session.Count == 1 ? session[0] : null;
         }
 
-        var own = candidates.Where(c => _contexts.TryGetValue(c.Instance, out var context) && ReferenceEquals(context, requesterContext)).ToList();
+        var own = compatible.Where(candidate => _contexts[candidate.Instance].Id == requesterContext.Id).ToList();
         if (own.Count == 1)
         {
             return own[0];
@@ -160,7 +168,12 @@ public sealed class LoadedBindingCatalog
             return null;
         }
 
-        var fallback = candidates.Where(c => _contexts.TryGetValue(c.Instance, out var context) && ReferenceEquals(context, AssemblyLoadContext.Default)).ToList();
+        if (!requesterContext.UsesDefaultFallback)
+        {
+            return name == "System.Private.CoreLib" ? compatible.SingleOrDefault(candidate => candidate.IsCoreLib) : null;
+        }
+
+        var fallback = compatible.Where(candidate => _contexts[candidate.Instance].IsDefault).ToList();
         return fallback.Count == 1 ? fallback[0] : null;
     }
 
@@ -173,12 +186,30 @@ public sealed class LoadedBindingCatalog
     public TypeSymbol? ResolveTypeReference(AssemblySymbolSource requester, TypeReferenceHandle handle)
     {
         ArgumentNullException.ThrowIfNull(requester);
+        return ResolveTypeReference(requester, handle, []);
+    }
+
+    private TypeSymbol? ResolveTypeReference(
+        AssemblySymbolSource requester, TypeReferenceHandle handle, HashSet<TypeReferenceHandle> parents)
+    {
+        if (!parents.Add(handle))
+        {
+            return null;
+        }
+
+        if (_observedTypes.TryGetValue(requester.Instance, out var observed)
+            && observed.TryGetValue(System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(handle), out var actual)
+            && SourceOf(actual) is not null)
+        {
+            return actual;
+        }
+
         var (ns, name, scope) = requester.ReferenceFacts(handle);
         switch (scope.Kind)
         {
             case HandleKind.TypeReference:
             {
-                var outer = ResolveTypeReference(requester, (TypeReferenceHandle)scope);
+                var outer = ResolveTypeReference(requester, (TypeReferenceHandle)scope, parents);
                 return outer is null ? null : FindNestedType(outer, name);
             }
 

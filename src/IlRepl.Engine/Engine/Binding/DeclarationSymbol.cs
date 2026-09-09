@@ -67,6 +67,11 @@ public sealed class DeclarationSymbol
     public IReadOnlyList<MethodSymbol> Methods => _methods;
 
     /// <summary>
+    /// The properties whose accessor blocks have been accepted.
+    /// </summary>
+    public IReadOnlyList<PropertySymbol> Properties { get; internal set; } = [];
+
+    /// <summary>
     /// True when the type takes references to members declared later.
     /// </summary>
     public bool CanDefineForward { get; }
@@ -90,5 +95,8 @@ public sealed class DeclarationSymbol
     /// An independent copy, so an edit to one preview never shows in another.
     /// </summary>
     /// <returns>The copy.</returns>
-    public DeclarationSymbol Clone() => new(Type, BaseType, Interfaces, GenericParameters, _fields, _methods, CanDefineForward) { IsPlaceholder = IsPlaceholder };
+    public DeclarationSymbol Clone() => new(Type, BaseType, Interfaces, GenericParameters, _fields, _methods, CanDefineForward)
+    {
+        IsPlaceholder = IsPlaceholder, Properties = [.. Properties],
+    };
 }

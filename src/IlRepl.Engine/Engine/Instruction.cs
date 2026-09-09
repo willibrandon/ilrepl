@@ -59,5 +59,5 @@ public sealed class Instruction
     /// True when nothing after this instruction is reachable on the same path: a return, a throw,
     /// an unconditional branch, or a jump.
     /// </summary>
-    public bool EndsFlow => Op.FlowControl is FlowControl.Return or FlowControl.Throw || Op == OpCodes.Br || Op == OpCodes.Br_S || Op == OpCodes.Jmp;
+    public bool EndsFlow => Binding.InstructionFlow.EndsPath(Op);
 }

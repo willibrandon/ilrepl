@@ -16,8 +16,9 @@ public static class NameSuggestions
     /// </summary>
     /// <param name="typo">The name as typed.</param>
     /// <param name="pool">The names that could have been meant, in a deterministic order.</param>
+    /// <param name="accepts">An optional binding check performed before a name can become the nearest suggestion.</param>
     /// <returns>The suggestion, or null.</returns>
-    public static string? Nearest(string typo, IEnumerable<string> pool)
+    public static string? Nearest(string typo, IEnumerable<string> pool, Func<string, bool>? accepts = null)
     {
         ArgumentNullException.ThrowIfNull(typo);
         ArgumentNullException.ThrowIfNull(pool);
@@ -31,7 +32,7 @@ public static class NameSuggestions
             }
 
             var distance = string.Equals(name, typo, StringComparison.OrdinalIgnoreCase) ? 0 : EditDistance.WithinBound(typo, name, bestDistance - 1) ? EditDistance.Levenshtein(typo, name) : int.MaxValue;
-            if (distance < bestDistance)
+            if (distance < bestDistance && (accepts is null || accepts(name)))
             {
                 bestDistance = distance;
                 best = name;
@@ -79,7 +80,10 @@ public static class NameSuggestions
         }
 
         var bound = Math.Min(2, (simple.Length + 2) / 3);
-        var facts = AccessFacts.From(scope);
+        var confirmation = scope.ForSuggestions(out var lease);
+        using var ownedLease = lease;
+        var speller = new TypeSpeller((SnapshotBindingScope)confirmation);
+        var facts = AccessFacts.From(confirmation);
         IEnumerable<TypeIndexEntry> candidates = index.Entries;
         if (assemblyHint is not null)
         {
@@ -91,6 +95,7 @@ public static class NameSuggestions
         }
 
         TypeIndexEntry? best = null;
+        string? bestSpelling = null;
         var bestKey = (Distance: int.MaxValue, Common: 1, Session: 1, Path: "");
         foreach (var entry in candidates)
         {
@@ -108,14 +113,23 @@ public static class NameSuggestions
             var key = (Distance: distance, Common: TypeResolver.CommonNamespaces.Contains(entry.Namespace) ? 0 : 1, Session: entry.IsSession ? 0 : 1, Path: entry.IlPath);
             if (best is null || Compare(key, bestKey) < 0)
             {
-                var symbol = index.SymbolOf(entry);
-                if (symbol is null || MemberEligibility.AccessProblem(symbol, where, facts) is not null)
+                try
                 {
-                    continue;
-                }
+                    var symbol = index.SymbolOf(entry);
+                    if (symbol is null || MemberEligibility.AccessProblem(symbol, where, facts) is not null
+                        || speller.TrySpell(symbol) is not { } spelling)
+                    {
+                        continue;
+                    }
 
-                best = entry;
-                bestKey = key;
+                    best = entry;
+                    bestSpelling = spelling;
+                    bestKey = key;
+                }
+                catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+                {
+                    // A damaged candidate must not prevent another nearby name from being considered.
+                }
             }
         }
 
@@ -124,8 +138,7 @@ public static class NameSuggestions
             return null;
         }
 
-        var target = index.SymbolOf(best)!;
-        return new TypeSuggestion(best, Spell(best, target, index, scope));
+        return new TypeSuggestion(best, bestSpelling!);
     }
 
     private static int Compare((int Distance, int Common, int Session, string Path) a, (int Distance, int Common, int Session, string Path) b)
@@ -161,27 +174,8 @@ public static class NameSuggestions
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(index);
         ArgumentNullException.ThrowIfNull(scope);
-        foreach (var candidate in new[] { entry.Name, entry.IlPath, $"[{entry.AssemblyName}]{entry.IlPath}" })
-        {
-            if (Binds(candidate, target, scope))
-            {
-                return candidate;
-            }
-        }
-
-        return entry.IlPath;
-    }
-
-    private static bool Binds(string spelling, TypeSymbol target, IBindingScope scope)
-    {
-        try
-        {
-            var bound = SymbolBinder.BindType(CilSyntaxParser.ParseType(spelling), scope).Type;
-            return SymbolIdentity.Equal(bound, target);
-        }
-        catch (ReplException)
-        {
-            return false;
-        }
+        var confirmation = scope.ForSuggestions(out var lease);
+        using var ownedLease = lease;
+        return new TypeSpeller((SnapshotBindingScope)confirmation).Spell(target);
     }
 }

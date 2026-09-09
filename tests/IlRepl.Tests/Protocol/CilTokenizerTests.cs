@@ -1,7 +1,7 @@
+using System.Text.RegularExpressions;
 using IlRepl.Engine;
 using IlRepl.Protocol;
 using IlRepl.Repl;
-using System.Text.RegularExpressions;
 
 namespace IlRepl.Tests.Protocol;
 

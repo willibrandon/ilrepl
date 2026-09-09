@@ -101,7 +101,7 @@ public sealed class RuntimeBindingAdapter
         {
             case MethodSignature session:
                 return new ResolvedMethod(session);
-            case RuntimeBindingScope.DeclaredMember declared:
+            case RuntimeDeclaredMember declared:
             {
                 var declaringType = ToType(method.DeclaringType!);
                 var effective = declared.Signature with
@@ -117,7 +117,7 @@ public sealed class RuntimeBindingAdapter
                 };
             }
 
-            case RuntimeBindingScope.DefinitionMember definition:
+            case RuntimeDefinitionMember definition:
             {
                 var declaringType = ToType(method.DeclaringType!);
                 MethodBase mapped = definition.Method switch
@@ -162,7 +162,7 @@ public sealed class RuntimeBindingAdapter
     {
         ArgumentNullException.ThrowIfNull(bound);
         var operand = bound.Operand;
-        object? value = operand.Kind switch
+        var value = operand.Kind switch
         {
             OperandKind.None => null,
             OperandKind.Type => ToType(operand.Type!),
@@ -194,7 +194,7 @@ public sealed class RuntimeBindingAdapter
         ArgumentNullException.ThrowIfNull(field);
         switch (_scope.PayloadOf(field))
         {
-            case RuntimeBindingScope.DeclaredField declared:
+            case RuntimeDeclaredField declared:
             {
                 var declaringType = ToType(field.DeclaringType);
                 return declaringType.IsGenericType && !declaringType.IsGenericTypeDefinition && declared.Builder is FieldBuilder fieldBuilder
@@ -202,7 +202,7 @@ public sealed class RuntimeBindingAdapter
                     : declared.Builder;
             }
 
-            case RuntimeBindingScope.DefinitionField definition:
+            case RuntimeDefinitionField definition:
                 return TypeBuilder.GetField(ToType(field.DeclaringType), definition.Field);
             case FieldInfo runtime:
                 return runtime;

@@ -15,7 +15,7 @@ public sealed class RuntimeBindingScope : IBindingScope
 {
     private const BindingFlags AllMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.FlattenHierarchy;
 
-    private readonly Registry _registry;
+    private readonly RuntimeBindingRegistry _registry;
     private readonly SymbolGenericContext _generics;
 
     /// <summary>
@@ -26,11 +26,11 @@ public sealed class RuntimeBindingScope : IBindingScope
     {
         ArgumentNullException.ThrowIfNull(context);
         Context = context;
-        _registry = new Registry();
+        _registry = new RuntimeBindingRegistry();
         _generics = new SymbolGenericContext([.. context.Generics.TypeArguments.Select(ImportType)], [.. context.Generics.MethodArguments.Select(ImportType)]);
     }
 
-    private RuntimeBindingScope(ParseContext context, Registry registry, SymbolGenericContext generics)
+    private RuntimeBindingScope(ParseContext context, RuntimeBindingRegistry registry, SymbolGenericContext generics)
     {
         Context = context;
         _registry = registry;
@@ -41,6 +41,19 @@ public sealed class RuntimeBindingScope : IBindingScope
     /// The parse context the scope answers from.
     /// </summary>
     public ParseContext Context { get; }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<PropertySymbol> Properties(TypeSymbol declaring)
+    {
+        var type = TypeOf(declaring);
+        return [.. type.GetProperties(AllMembers).Select(property => new PropertySymbol(
+            DefinitionId.Loaded(RuntimeDefinitions.AssemblyInstance(property.Module.Assembly),
+                property.Module.ModuleVersionId, property.MetadataToken),
+            ImportType(property.DeclaringType!), property.Name, ImportType(property.PropertyType),
+            property.GetIndexParameters().Select(parameter => ImportType(parameter.ParameterType)).ToArray(),
+            property.GetAccessors(true).Any(accessor => accessor.IsPublic),
+            property.GetAccessors(true).Any(accessor => accessor.IsStatic)))];
+    }
 
     /// <inheritdoc/>
     public bool Inspecting => Context.Inspecting;
@@ -221,7 +234,8 @@ public sealed class RuntimeBindingScope : IBindingScope
             var definition = type.GetGenericTypeDefinition();
             return [.. definition.GetMethods(AllMembers)
                 .Where(m => m.Name == name && !m.IsGenericMethodDefinition)
-                .Select(m => Register(SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(m), declaring, []), new DefinitionMember(m)))];
+                .Select(m => Register(SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(m), declaring, []),
+                    new RuntimeDefinitionMember(m)))];
         }
 
         return [.. type.GetMethods(AllMembers).Where(m => m.Name == name).Select(m => Register(RuntimeSymbolImporter.Import(m), m))];
@@ -237,7 +251,8 @@ public sealed class RuntimeBindingScope : IBindingScope
             var definition = type.GetGenericTypeDefinition();
             return [.. definition.GetMethods(AllMembers)
                 .Where(m => !m.IsGenericMethodDefinition)
-                .Select(m => Register(SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(m), declaring, []), new DefinitionMember(m)))];
+                .Select(m => Register(SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(m), declaring, []),
+                    new RuntimeDefinitionMember(m)))];
         }
 
         return [.. type.GetMethods(AllMembers).Select(m => Register(RuntimeSymbolImporter.Import(m), m))];
@@ -270,7 +285,9 @@ public sealed class RuntimeBindingScope : IBindingScope
         if (RequiresDefinitionLookup(declaring))
         {
             var definition = type.GetGenericTypeDefinition();
-            return [.. definition.GetConstructors(flags).Select(c => Register(SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(c), declaring, []), new DefinitionMember(c)))];
+            return [.. definition.GetConstructors(flags)
+                .Select(c => Register(SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(c), declaring, []),
+                    new RuntimeDefinitionMember(c)))];
         }
 
         return [.. type.GetConstructors(flags).Select(c => Register(RuntimeSymbolImporter.Import(c), c))];
@@ -285,7 +302,9 @@ public sealed class RuntimeBindingScope : IBindingScope
         if (RequiresDefinitionLookup(declaring))
         {
             var definitionField = type.GetGenericTypeDefinition().GetField(name, AllMembers);
-            return definitionField is null ? null : Register(SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(definitionField), declaring), new DefinitionField(definitionField));
+            return definitionField is null ? null : Register(
+                SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(definitionField), declaring),
+                new RuntimeDefinitionField(definitionField));
         }
 
         var field = type.GetField(name, AllMembers);
@@ -333,15 +352,26 @@ public sealed class RuntimeBindingScope : IBindingScope
     public TypeSymbol? BaseOf(TypeSymbol type)
     {
         ArgumentNullException.ThrowIfNull(type);
-        var baseType = TypeRelations.BaseTypeOf(TypeOf(type), Context.Types);
-        return baseType is null ? null : ImportType(baseType);
+        var runtime = TypeOf(type);
+        var baseType = TypeRelations.BaseTypeOf(runtime, Context.Types);
+        if (baseType is null)
+        {
+            return null;
+        }
+
+        var symbol = ImportType(baseType);
+        RuntimeBindingObservations.RecordBase(runtime, symbol);
+        return symbol;
     }
 
     /// <inheritdoc/>
     public IReadOnlyList<TypeSymbol> DeclaredInterfacesOf(TypeSymbol type)
     {
         ArgumentNullException.ThrowIfNull(type);
-        return [.. TypeRelations.DeclaredInterfacesOf(TypeOf(type), Context.Types).Select(ImportType)];
+        var runtime = TypeOf(type);
+        var interfaces = TypeRelations.DeclaredInterfacesOf(runtime, Context.Types).Select(ImportType).ToArray();
+        RuntimeBindingObservations.RecordInterfaces(runtime, interfaces);
+        return interfaces;
     }
 
     /// <inheritdoc/>
@@ -448,7 +478,7 @@ public sealed class RuntimeBindingScope : IBindingScope
         return PayloadOf(method) switch
         {
             MethodBase runtime => MemberResolver.Describe(runtime),
-            DefinitionMember definition => MemberResolver.Describe(definition.Method),
+            RuntimeDefinitionMember definition => MemberResolver.Describe(definition.Method),
             _ => SymbolRenderer.Describe(method, Pretty),
         };
     }
@@ -481,7 +511,16 @@ public sealed class RuntimeBindingScope : IBindingScope
     /// </summary>
     internal MethodSymbol Register(MethodSymbol symbol, object payload)
     {
-        if (payload is DeclaredMember || symbol.Source == MethodSymbolSource.Session)
+        if (payload is MethodBase method)
+        {
+            RuntimeBindingObservations.Record(method, symbol);
+        }
+        else if (payload is RuntimeDefinitionMember definition)
+        {
+            RuntimeBindingObservations.Record(definition.Method, symbol);
+        }
+
+        if (payload is RuntimeDeclaredMember || symbol.Source == MethodSymbolSource.Session)
         {
             _registry.Declarations[symbol.Definition] = payload;
         }
@@ -495,7 +534,16 @@ public sealed class RuntimeBindingScope : IBindingScope
 
     internal FieldSymbol Register(FieldSymbol symbol, object payload)
     {
-        if (payload is DeclaredField)
+        if (payload is FieldInfo field)
+        {
+            RuntimeBindingObservations.Record(field, symbol);
+        }
+        else if (payload is RuntimeDefinitionField definition)
+        {
+            RuntimeBindingObservations.Record(definition.Field, symbol);
+        }
+
+        if (payload is RuntimeDeclaredField)
         {
             _registry.Declarations[symbol.Definition] = payload;
         }
@@ -507,47 +555,4 @@ public sealed class RuntimeBindingScope : IBindingScope
         return symbol;
     }
 
-    /// <summary>
-    /// A member of a loaded generic definition, reached through a construction reflection cannot
-    /// enumerate; the adapter maps it through <see cref="TypeBuilder.GetMethod(Type, MethodInfo)"/>.
-    /// </summary>
-    /// <param name="Method">The method or constructor on the definition.</param>
-    internal sealed record DefinitionMember(MethodBase Method);
-
-    /// <summary>
-    /// A field of a loaded generic definition reached the same way.
-    /// </summary>
-    /// <param name="Field">The field on the definition.</param>
-    internal sealed record DefinitionField(FieldInfo Field);
-
-    /// <summary>
-    /// A member of a type being written: its declaration and its prototype builder.
-    /// </summary>
-    /// <param name="Signature">The declared signature.</param>
-    /// <param name="Builder">The prototype builder.</param>
-    internal sealed record DeclaredMember(MethodSignature Signature, MethodBase Builder);
-
-    /// <summary>
-    /// A field of a type being written.
-    /// </summary>
-    /// <param name="Declaration">The declaration.</param>
-    /// <param name="Builder">The prototype builder.</param>
-    internal sealed record DeclaredField(FieldDeclaration Declaration, FieldInfo Builder);
-
-    private sealed class Registry
-    {
-        public Dictionary<TypeSymbol, Type> Types { get; } = [];
-
-        public Dictionary<MethodSymbol, object> Methods { get; } = [];
-
-        public Dictionary<FieldSymbol, object> Fields { get; } = [];
-
-        public Dictionary<DefinitionId, object> Declarations { get; } = [];
-
-        public IReadOnlyList<MethodSymbol>? SessionMethods { get; set; }
-
-        public IReadOnlyList<VariableSymbol>? Locals { get; set; }
-
-        public IReadOnlyList<VariableSymbol>? Arguments { get; set; }
-    }
 }
