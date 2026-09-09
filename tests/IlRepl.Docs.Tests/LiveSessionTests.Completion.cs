@@ -10,6 +10,7 @@ public sealed partial class LiveSessionTests
     /// </summary>
     /// <param name="browser">The browser engine.</param>
     [TestMethod]
+    [DoNotParallelize]
     [DataRow("chromium")]
     [DataRow("webkit")]
     [Timeout(240_000, CooperativeCancellation = true)]
@@ -21,7 +22,9 @@ public sealed partial class LiveSessionTests
         var terminal = page.Locator("#terminal");
         await page.Keyboard.TypeAsync("call Environment::get_CurrentManagedTh");
         var watch = Stopwatch.StartNew();
-        await Assertions.Expect(terminal).ToContainTextAsync("members 1/1", new() { Timeout = 30_000 });
+        // Assertion retries back off up to a second; sample actual rendering at frame cadence instead.
+        await page.WaitForFunctionAsync("() => document.querySelector('#terminal').textContent.includes('members 1/1')",
+            null, new() { PollingInterval = 16, Timeout = 30_000 });
         TestContext.WriteLine($"First framework member page in {browser}: {watch.Elapsed.TotalMilliseconds:F0} ms");
         Assert.IsLessThan(TimeSpan.FromSeconds(1), watch.Elapsed);
         await page.Keyboard.PressAsync("Tab");
