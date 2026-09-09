@@ -27,6 +27,7 @@ public static class RuntimeSymbolImporter
         ArgumentNullException.ThrowIfNull(type);
         if (type.IsGenericParameter)
         {
+            type = type.UnderlyingSystemType;
             // The parameter alone: its constraints may mention it, as T : IComparable<T> does, and
             // belong to the owner's declaration, not to every mention of the parameter.
             var (owner, isMethod, attributes) = ParameterFacts(type);
@@ -54,7 +55,9 @@ public static class RuntimeSymbolImporter
             return TypeSymbol.FunctionPointer(ImportFunctionPointer(type));
         }
 
-        if (CilPrimitives.KeywordOf(type) is { } keyword)
+        // Modified reflection types cannot supply definition identities; builders must keep their own identities.
+        var definitionType = RuntimeDefinitions.IsDynamic(type) ? type : type.UnderlyingSystemType;
+        if (CilPrimitives.KeywordOf(definitionType) is { } keyword)
         {
             return TypeSymbol.Primitive(keyword);
         }
@@ -64,6 +67,7 @@ public static class RuntimeSymbolImporter
             return TypeSymbol.Construct(Import(type.GetGenericTypeDefinition()), [.. type.GetGenericArguments().Select(Import)]);
         }
 
+        type = definitionType;
         if (!RuntimeDefinitions.IsDynamic(type))
         {
             return LoadedDefinitions.GetValue(type, ImportDefinition);
@@ -170,11 +174,33 @@ public static class RuntimeSymbolImporter
         return new MethodSignatureSymbol(
             conventions,
             unmanaged,
-            System.Runtime.InteropServices.CallingConvention.Winapi,
+            FunctionPointerConvention.FromMarkers(type.GetFunctionPointerCallingConventions().Select(Import)),
             Import(type.GetFunctionPointerReturnType()),
             [.. type.GetFunctionPointerParameterTypes().Select(Import)],
             null);
     }
+
+    private static TypeSymbol ImportSignatureType(Type type, Func<Type> modified)
+    {
+        if (ContainsFunctionPointer(type))
+        {
+            try
+            {
+                // Ordinary runtime types omit convention markers; modified types retain them at every signature depth.
+                type = modified();
+            }
+            catch (Exception exception) when (exception is NotSupportedException or NotImplementedException or InvalidOperationException)
+            {
+                // Uncreated builders do not expose modified reflection types.
+            }
+        }
+
+        return Import(type);
+    }
+
+    private static bool ContainsFunctionPointer(Type type) => TypeNameFormatter.IsFunctionPointer(type)
+        || type.HasElementType && ContainsFunctionPointer(type.GetElementType()!)
+        || type.IsGenericType && !type.IsGenericTypeDefinition && type.GetGenericArguments().Any(ContainsFunctionPointer);
 
     /// <summary>
     /// The symbol of a loaded method or constructor, on the type reflection declares it on.
@@ -220,7 +246,8 @@ public static class RuntimeSymbolImporter
             Attributes = method.Attributes,
             ImplAttributes = impl,
             CallingConvention = method.CallingConvention,
-            ReturnType = info is null ? TypeSymbol.Void : Import(info.ReturnType),
+            ReturnType = info is null ? TypeSymbol.Void
+                : ImportSignatureType(info.ReturnType, info.ReturnParameter.GetModifiedParameterType),
             Parameters = [.. parameters.Select(ImportParameter)],
             GenericParameters = genericParameters,
             GenericArguments = genericArguments,
@@ -229,7 +256,8 @@ public static class RuntimeSymbolImporter
         };
     }
 
-    private static ParameterSymbol ImportParameter(ParameterInfo parameter) => new(Import(parameter.ParameterType), parameter.Name)
+    private static ParameterSymbol ImportParameter(ParameterInfo parameter) => new(
+        ImportSignatureType(parameter.ParameterType, parameter.GetModifiedParameterType), parameter.Name)
     {
         Attributes = parameter.Attributes,
         RequiredModifiers = Modifiers(parameter.GetRequiredCustomModifiers),
@@ -265,7 +293,7 @@ public static class RuntimeSymbolImporter
             Source = MethodSymbolSource.Loaded,
             DeclaringType = declaring,
             Name = field.Name,
-            FieldType = Import(field.FieldType),
+            FieldType = ImportSignatureType(field.FieldType, field.GetModifiedFieldType),
             Attributes = field.Attributes,
             RequiredModifiers = Modifiers(field.GetRequiredCustomModifiers),
             OptionalModifiers = Modifiers(field.GetOptionalCustomModifiers),

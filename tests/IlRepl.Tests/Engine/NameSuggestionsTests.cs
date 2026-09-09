@@ -100,6 +100,45 @@ public sealed class NameSuggestionsTests
     }
 
     /// <summary>
+    /// A typo in a qualified path suggests a type whose correction binds to the intended identity.
+    /// </summary>
+    /// <param name="typo">The misspelled namespace or enclosing type.</param>
+    /// <param name="expected">The intended runtime type.</param>
+    [TestMethod]
+    [DataRow("Systm.Console", typeof(Console))]
+    [DataRow("sYSTEM.Console", typeof(Console))]
+    [DataRow("System.Environmnt/SpecialFolder", typeof(Environment.SpecialFolder))]
+    [DataRow("Environmnt/SpecialFolder", typeof(Environment.SpecialFolder))]
+    [DataRow("System.Environment/SpecialFoldr", typeof(Environment.SpecialFolder))]
+    public void NearestType_QualifiedTypo_CorrectsTheWholePath(string typo, Type expected)
+    {
+        var session = new Session();
+        using var snapshot = BindingSnapshot.Capture(session.State.Context);
+        var index = new TypeIndex(snapshot);
+        var scope = new SnapshotBindingScope(snapshot);
+        var suggestion = NameSuggestions.NearestType(typo, null, index, AccessContext.Cell, scope);
+        Assert.IsNotNull(suggestion);
+        Assert.AreEqual(expected, TypeParser.Parse(suggestion.Spelling, session.State.Context));
+        var error = Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse(typo, session.State.Context));
+        Assert.Contains(NameSuggestions.Parenthetical(suggestion.Spelling), error.Message);
+        Assert.DoesNotContain("load its assembly", error.Message);
+    }
+
+    /// <summary>
+    /// A matching simple name in an unrelated namespace cannot become a qualified correction.
+    /// </summary>
+    [TestMethod]
+    public void NearestType_UnrelatedQualifier_DoesNotSuggest()
+    {
+        var context = new Session().State.Context;
+        using var snapshot = BindingSnapshot.Capture(context);
+        var index = new TypeIndex(snapshot);
+        var scope = new SnapshotBindingScope(snapshot);
+        Assert.IsNull(NameSuggestions.NearestType("Unrelated.Console", null, index, AccessContext.Cell, scope));
+        Assert.IsNull(NameSuggestions.NearestType("System.Console", null, index, AccessContext.Cell, scope));
+    }
+
+    /// <summary>
     /// The edit-distance length bound prunes only names that cannot meet the suggestion threshold.
     /// </summary>
     [TestMethod]

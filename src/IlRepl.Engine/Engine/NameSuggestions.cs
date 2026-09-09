@@ -68,7 +68,7 @@ public static class NameSuggestions
     /// spelled the shortest way that binds to it: a short name when it is unique, else its
     /// qualified path. Nothing prefilters by first letter, so a wrong first letter is still found.
     /// The pool is bounded by length, pruned by a banded distance, and filtered to the types the
-    /// context can mention.
+    /// context can mention. Qualified inputs compare their namespace and enclosing-type path too.
     /// </remarks>
     /// <param name="ilName">The name as written, arity suffix included.</param>
     /// <param name="assemblyHint">The assembly named in square brackets, or null.</param>
@@ -84,13 +84,14 @@ public static class NameSuggestions
         ArgumentNullException.ThrowIfNull(where);
         ArgumentNullException.ThrowIfNull(scope);
         var separator = Math.Max(ilName.LastIndexOf('.'), ilName.LastIndexOf('/'));
-        var simple = separator < 0 ? ilName : ilName[(separator + 1)..];
-        if (simple.Length == 0)
+        if (separator == ilName.Length - 1)
         {
             return null;
         }
 
-        var bound = Math.Min(2, (simple.Length + 2) / 3);
+        var bound = Math.Min(2, (ilName.Length + 2) / 3);
+        var nested = ilName.IndexOf('/');
+        var hasNamespace = (nested < 0 ? ilName : ilName[..nested]).Contains('.');
         var confirmation = scope.ForSuggestions(out var lease);
         using var ownedLease = lease;
         var speller = new TypeSpeller((SnapshotBindingScope)confirmation);
@@ -110,18 +111,24 @@ public static class NameSuggestions
         var bestKey = (Distance: int.MaxValue, Common: 1, Session: 1, Path: "");
         foreach (var entry in candidates)
         {
-            if (Math.Abs(entry.Name.Length - simple.Length) > bound || !EditDistance.WithinBound(simple, entry.Name, bound))
+            var name = separator < 0 ? entry.Name : entry.IlPath;
+            if (nested >= 0 && !hasNamespace && entry.Namespace.Length > 0)
+            {
+                name = entry.IlPath[(entry.Namespace.Length + 1)..];
+            }
+
+            if (name == ilName)
             {
                 continue;
             }
 
-            var distance = string.Equals(entry.Name, simple, StringComparison.OrdinalIgnoreCase) ? 0 : EditDistance.Levenshtein(simple,
-                entry.Name);
-            if (distance >= 3 || distance == 0 && entry.Name == simple)
+            var caseOnly = string.Equals(name, ilName, StringComparison.OrdinalIgnoreCase);
+            if (!caseOnly && !EditDistance.WithinBound(ilName, name, bound))
             {
                 continue;
             }
 
+            var distance = caseOnly ? 0 : EditDistance.Levenshtein(ilName, name);
             var key = (Distance: distance, Common: TypeResolver.CommonNamespaces.Contains(entry.Namespace) ? 0 : 1,
                 Session: entry.IsSession ? 0 : 1, Path: entry.IlPath);
             if (best is null || Compare(key, bestKey) < 0)

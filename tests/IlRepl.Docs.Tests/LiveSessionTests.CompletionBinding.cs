@@ -5,6 +5,43 @@ namespace IlRepl.Docs.Tests;
 public sealed partial class LiveSessionTests
 {
     /// <summary>
+    /// A completed unmanaged function-pointer parameter binds in Mono and qualified typo suggestions recover correctly.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_FunctionPointerCompletion_AndQualifiedSuggestions_Bind(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        await TypeLineAsync(page, ".load /samples/Greeter.dll");
+        await ExpectCompletionAsync(page, "loaded Greeter");
+        await TypeLineAsync(page, "ldc.i4.0");
+        await TypeLineAsync(page, "conv.u");
+        await page.Keyboard.TypeAsync("call Greeter.Hello::AcceptCd");
+        await CompletionAtCaretAsync(page, "il[1]> call Greeter.Hello::AcceptCd", "❯ AcceptCdecl(");
+        await page.Keyboard.PressAsync("Tab");
+        await page.Keyboard.PressAsync("Enter");
+        await TypeLineAsync(page, "ret");
+        await ExpectCompletionAsync(page, "= 7 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+        await TypeLineAsync(page, ".clear");
+        await TypeLineAsync(page, "ldtoken Systm.Console");
+        await ExpectCompletionAsync(page, "did you mean 'Console'");
+        await EmptyPromptAsync(page);
+        await TypeLineAsync(page, "ldtoken System.Environmnt/SpecialFolder");
+        await ExpectCompletionAsync(page, "'SpecialFolder'?");
+        await EmptyPromptAsync(page);
+        await TypeLineAsync(page, "ldtoken SpecialFolder");
+        await TypeLineAsync(page, "call Type::GetTypeFromHandle(RuntimeTypeHandle)");
+        await TypeLineAsync(page, "ret");
+        await ExpectCompletionAsync(page, "SpecialFolder) : RuntimeType");
+    }
+
+    /// <summary>
     /// Refusing a replacement that removes a required nested type preserves its inspectable and executable definition.
     /// </summary>
     /// <param name="browser">The browser engine.</param>
@@ -249,7 +286,7 @@ public sealed partial class LiveSessionTests
         await TypeLineAsync(page, ".load /samples/Greeter.dll");
         await ExpectCompletionAsync(page, "loaded Greeter");
         await page.Keyboard.TypeAsync("call Greeter.Generic::Constrained");
-        await ExpectCompletionAsync(page, "members 1/1");
+        await CompletionAtCaretAsync(page, "il[1]> call Greeter.Generic::Constrained", "members 1/1");
         await page.Keyboard.PressAsync("Tab");
         await ExpectCompletionAsync(page, "type argument 1 of 1 (T)");
         await page.Keyboard.TypeAsync("string>");
@@ -281,4 +318,24 @@ public sealed partial class LiveSessionTests
         await ExpectCompletionAsync(page, "= 0 : int32");
         Assert.DoesNotContain("error:", await BufferTextAsync(page));
     }
+
+    private static Task<IJSHandle> CompletionAtCaretAsync(IPage page, string prompt, string choice) => page.WaitForFunctionAsync("""
+        ({ prompt, choice }) => {
+          const terminal = window.ilreplTerminal;
+          const row = terminal.buffer.active.getLine(terminal.rows - 2);
+          if (row?.getCell(prompt.length)?.getBgColor() !== 0x61afef) return false;
+          const rows = Array.from({ length: terminal.rows }, (_, index) =>
+            terminal.buffer.active.getLine(index)?.translateToString(true) ?? '');
+          return rows.some(line => line.includes(choice)) && !rows.some(line => line.includes('updating '));
+        }
+        """, new { prompt, choice }, new() { PollingInterval = 16, Timeout = 30_000 });
+
+    private static Task<IJSHandle> EmptyPromptAsync(IPage page) => page.WaitForFunctionAsync("""
+        () => {
+          const terminal = window.ilreplTerminal;
+          const row = terminal.buffer.active.getLine(terminal.rows - 2)?.translateToString(true).trim() ?? '';
+          const status = terminal.buffer.active.getLine(terminal.rows - 1)?.translateToString(true) ?? '';
+          return /^il\[\d+\]>$/.test(row) && !status.includes('sending ');
+        }
+        """);
 }

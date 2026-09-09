@@ -16,6 +16,13 @@ public static class Hello
     public static int Calls;
 
     /// <summary>
+    /// Accepts a Cdecl pointer without invoking it, so completion can be tested on every runtime.
+    /// </summary>
+    /// <param name="function">The function pointer, which may be null.</param>
+    /// <returns>Seven for a null pointer; eight otherwise.</returns>
+    public static unsafe int AcceptCdecl(delegate* unmanaged[Cdecl]<int, int> function) => function == null ? 7 : 8;
+
+    /// <summary>
     /// Greets by name.
     /// </summary>
     /// <param name="name">The name.</param>
