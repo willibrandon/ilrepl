@@ -140,8 +140,11 @@ public sealed class TypeResolver
     }
 
     /// <summary>
-    /// Enumerates the assemblies searched by <see cref="Resolve(string, string?)"/>, most specific first. Assemblies a
-    /// session owns are excluded by identity.
+    /// Enumerates the assemblies searched by <see cref="Resolve(string, string?)"/>, most specific
+    /// first: the ones added with <see cref="Load"/>, then the process's assemblies in a context
+    /// that cannot unload, from <see cref="ProcessAssemblies"/>. Assemblies a session owns are
+    /// excluded by identity, and so is anything in a collectible context the session did not
+    /// create, which a cell could never bind.
     /// </summary>
     public IEnumerable<Assembly> Assemblies
     {
@@ -152,12 +155,12 @@ public sealed class TypeResolver
                 yield return a;
             }
 
-            foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (var a in ProcessAssemblies.Current)
             {
                 // Session assemblies are reached only through the owning session's type table, so a
                 // type from another session, a superseded version, or a definition dropped by .reset
                 // never comes back through a name search.
-                if (!a.IsDynamic && !_extra.Contains(a) && !SessionAssemblies.IsSessionAssembly(a))
+                if (!_extra.Contains(a) && !SessionAssemblies.IsSessionAssembly(a))
                 {
                     yield return a;
                 }

@@ -372,8 +372,8 @@ public static class TypeNameFormatter
     {
         // System.Runtime first, the rest alphabetically, so the spelling is stable: the first loaded
         // facade whose exported types include the definition names it.
-        var facades = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic && a.GetName().Name is { } n && n.StartsWith("System.", StringComparison.Ordinal) && n != "System.Private.CoreLib")
+        var facades = ProcessAssemblies.Current
+            .Where(a => a.GetName().Name is { } n && n.StartsWith("System.", StringComparison.Ordinal) && n != "System.Private.CoreLib")
             .OrderBy(a => a.GetName().Name == "System.Runtime" ? 0 : 1)
             .ThenBy(a => a.GetName().Name, StringComparer.Ordinal);
         foreach (var facade in facades)

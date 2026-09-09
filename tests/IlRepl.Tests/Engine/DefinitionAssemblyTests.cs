@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using IlRepl.Engine;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
@@ -90,6 +91,48 @@ public sealed class DefinitionAssemblyTests
         Assert.Contains("not found", Assert.ThrowsExactly<ReplException>(() => resolver.Resolve(typeName, point.Name)).Message);
         Assert.DoesNotContain(point.Assembly, resolver.Assemblies);
         GC.KeepAlive(pointType);
+    }
+
+    /// <summary>
+    /// A resolver never finds a type in a collectible context it did not create, even by short
+    /// name: a cell could not bind it, and the context may be unloading. The same image loaded
+    /// through the resolver is found.
+    /// </summary>
+    [TestMethod]
+    public void TypeResolver_DoesNotSeeCollectibleContextsItDoesNotOwn()
+    {
+        var typeName = "Foreign" + Guid.NewGuid().ToString("N");
+        var image = Images.Standalone(typeName);
+        var context = new AssemblyLoadContext("foreign-" + typeName, isCollectible: true);
+        try
+        {
+            var foreign = context.LoadFromStream(new MemoryStream(image));
+            var resolver = new TypeResolver();
+            Assert.Contains("not found", Assert.ThrowsExactly<ReplException>(() => resolver.Resolve(typeName, null)).Message);
+            Assert.DoesNotContain(foreign, resolver.Assemblies);
+            var own = resolver.LoadImage(image);
+            Assert.AreNotSame(foreign, own);
+            Assert.AreSame(own.GetType(typeName), resolver.Resolve(typeName, null));
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
+    /// <summary>
+    /// An assembly loaded into the default context after a resolver's first search is found by
+    /// its next one.
+    /// </summary>
+    [TestMethod]
+    public void TypeResolver_SeesAnAssemblyLoadedAfterItsFirstSearch()
+    {
+        var typeName = "Later" + Guid.NewGuid().ToString("N");
+        var resolver = new TypeResolver();
+        Assert.Contains("not found", Assert.ThrowsExactly<ReplException>(() => resolver.Resolve(typeName, null)).Message);
+        var loaded = AssemblyLoadContext.Default.LoadFromStream(new MemoryStream(Images.Standalone(typeName)));
+        Assert.AreSame(loaded.GetType(typeName), resolver.Resolve(typeName, null));
+        Assert.Contains(loaded, resolver.Assemblies);
     }
 
     /// <summary>
@@ -246,6 +289,16 @@ public sealed class DefinitionAssemblyTests
             type.Methods.Add(sum);
             type.Methods.Add(Returning(module, "One", MethodAttributes.Public | MethodAttributes.Static, 1));
             return SessionAssemblies.Load(Write(assembly), name, SessionAssemblyKind.Types, earlier);
+        }
+
+        public static byte[] Standalone(string typeName)
+        {
+            var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("IlReplForeign." + typeName, new Version(1, 0, 0, 0)), "M", ModuleKind.Dll);
+            var module = assembly.MainModule;
+            var type = new TypeDefinition("", typeName, TypeAttributes.Public | TypeAttributes.Class, module.ImportReference(typeof(object)));
+            module.Types.Add(type);
+            type.Methods.Add(Constructor(module));
+            return Write(assembly);
         }
 
         private static AssemblyDefinition New(string name) =>
