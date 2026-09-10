@@ -295,9 +295,10 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
     // A transcript may end on the bare prompt that came next; it is not the engine's to say.
     var trailingPrompt = body.Count > 0 && Patterns.BarePrompt().IsMatch(body[^1]);
     var produced = await SubmitAsync(engine, inputs);
-    var normalized = produced.Select(line => (IReadOnlyList<TranscriptSpan>)line.Spans
-        .Select(span => span with { Text = span.Text.Replace(Directory.GetCurrentDirectory(), "/path/to", StringComparison.Ordinal) })
-        .ToArray()).ToList();
+    var directory = Directory.GetCurrentDirectory();
+    var normalized = produced.Select(line => line.Kind == LineKind.Info
+        ? line.Spans.Select(span => span with { Text = NormalizeSavePath(span.Text, directory, Path.DirectorySeparatorChar) }).ToArray()
+        : line.Spans).ToList();
     if (trailingPrompt)
     {
         normalized.Add([new TranscriptSpan(engine.Status.Prompt.TrimEnd(), SpanStyle.Prompt)]);
@@ -328,13 +329,32 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
     return normalized;
 }
 
+// Normalize only the path in a save note, including nested Windows directories.
+static string NormalizeSavePath(string text, string directory, char separator)
+{
+    var prefix = "  wrote " + directory + separator;
+    var suffix = text.LastIndexOf(" with ", StringComparison.Ordinal);
+    if (!text.StartsWith(prefix, StringComparison.Ordinal) || suffix < prefix.Length)
+    {
+        return text;
+    }
+
+    return "  wrote /path/to/" + text[prefix.Length..suffix].Replace(separator, '/') + text[suffix..];
+}
+
+// Match the terminal's note styles; an engine failure is different from an input refusal.
+static TranscriptLine SubmissionNote(SubmissionEventKind kind, string note) => kind == SubmissionEventKind.Failed
+    ? new TranscriptLine(LineKind.Error, [new TranscriptSpan("  engine error: ", SpanStyle.Error), new TranscriptSpan(note)])
+    : TranscriptLine.Of(LineKind.Info, "  " + note, SpanStyle.Dim);
+
 // Submit complete blocks through the same withdrawal and recovery path as the terminal.
-static async Task<List<TranscriptLine>> SubmitAsync(InProcessEngine engine, IReadOnlyList<string> inputs)
+static async Task<List<TranscriptLine>> SubmitAsync(IReplEngine engine, IReadOnlyList<string> inputs)
 {
     var produced = new List<TranscriptLine>();
     var units = SubmissionSplitter.Split(inputs, engine.Status.OpenDepth, engine.Status.Mark.InBlockComment, engine.Vocabulary.Commands);
     foreach (var unit in units)
     {
+        var failed = false;
         var submission = new Submission(engine, inputs.Skip(unit.Start).Take(unit.End - unit.Start).ToArray(),
             engine.Status.OpenDepth, engine.Status.Mark.InBlockComment, _ => Task.CompletedTask, message =>
             {
@@ -345,10 +365,15 @@ static async Task<List<TranscriptLine>> SubmitAsync(InProcessEngine engine, IRea
 
                 if (message.Note is { } note)
                 {
-                    produced.Add(TranscriptLine.Of(LineKind.Info, "  " + note, SpanStyle.Dim));
+                    produced.Add(SubmissionNote(message.Kind, note));
+                    failed |= message.Kind == SubmissionEventKind.Failed;
                 }
             });
         await submission.Completion;
+        if (failed)
+        {
+            throw new InvalidOperationException($"documentation replay failed: {produced[^1].PlainText.TrimStart()}");
+        }
     }
 
     return produced;
