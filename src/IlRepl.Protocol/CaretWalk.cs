@@ -671,14 +671,17 @@ internal sealed class CaretWalk
             return null;
         }
 
-        return Type(i, end, owner, complete) is { } site
-            ? site with { EnclosingTypeStart = _r.StartOf(i), EnclosingParameterIndex = -1 } : null;
+        return Type(i, end, owner, complete);
     }
 
     /// <summary>
     /// The name, argument or modifier site inside a type, excluding keywords and suffixes.
     /// </summary>
     private CompletionSite? Type(int i, int end, string owner, bool complete)
+        => TypeCore(i, end, owner, complete) is { } site
+            ? site with { EnclosingTypeStart = _r.StartOf(i), EnclosingParameterIndex = -1 } : null;
+
+    private CompletionSite? TypeCore(int i, int end, string owner, bool complete)
     {
         var j = i;
         while (_r.IsWord(j, "class") || _r.IsWord(j, "valuetype"))

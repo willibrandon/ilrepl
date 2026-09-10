@@ -5,6 +5,39 @@ namespace IlRepl.Docs.Tests;
 public sealed partial class LiveSessionTests
 {
     /// <summary>
+    /// A valid nested type argument remains completable inside a complete generic call and executes after acceptance.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_NestedGenericOperand_CompletesAndRuns(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        const string prefix = "call Array::Empty<List<Nullable<int3";
+        const string suffix = ">>>()";
+        await PasteAsync(page, prefix + suffix);
+        for (var i = 0; i < suffix.Length; i++)
+        {
+            await page.Keyboard.PressAsync("ArrowLeft");
+        }
+
+        await CompletionAtCaretAsync(page, "il[1]> " + prefix, "❯ int32");
+        await page.Keyboard.PressAsync("Tab");
+        await page.Keyboard.PressAsync("End");
+        await PromptAtCaretAsync(page, "il[1]> call Array::Empty<List<Nullable<int32>>>()");
+        await page.Keyboard.PressAsync("Enter");
+        await TypeLineAsync(page, "ldlen");
+        await TypeLineAsync(page, "conv.i4");
+        await TypeLineAsync(page, "ret");
+        await ExpectCompletionAsync(page, "= 0 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// An event handler completion disappears for an array suffix and returns when the delegate type is restored.
     /// </summary>
     /// <param name="browser">The browser engine.</param>

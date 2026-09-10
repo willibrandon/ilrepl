@@ -6,7 +6,7 @@ namespace IlRepl.Repl;
 
 public sealed partial class OperandCompleter
 {
-    private static bool ConfirmDeclarationType(string line, CompletionSite site, EditingView view,
+    private static bool ConfirmEnclosingType(string line, CompletionSite site, EditingView view,
         SnapshotBindingScope scope, out bool complete)
     {
         complete = false;

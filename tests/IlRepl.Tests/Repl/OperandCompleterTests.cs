@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Runtime.Serialization.Json;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
@@ -204,7 +206,11 @@ public sealed class OperandCompleterTests
     [TestMethod]
     public async Task GenericAnchor_ReplayedDeclarations_KeepTheChosenArity()
     {
-        using var completer = new OperandCompleter(new Session());
+        // Warm serialization dependencies before asserting that replay alone preserves the binding epoch.
+        new DataContractJsonSerializer(typeof(string)).WriteObject(Stream.Null, "");
+        Assembly.Load("System.Runtime.Serialization.Primitives");
+        var session = new Session();
+        using var completer = new OperandCompleter(session);
         string[] lines = ["nop", ".class public Host {",
             ".method public static int32 Make<T>() {", "ldc.i4.1", "ret", "}",
             ".method public static int32 Make<T, U>() {", "ldc.i4.2", "ret", "}", "}", "call Host::Mak"];
@@ -222,6 +228,7 @@ public sealed class OperandCompleterTests
         }
 
         var first = await Complete(completer, lines);
+        var assemblies = session.Resolver.Assemblies.ToArray();
         Assert.HasCount(2, first.Items);
         var starter = first.Items.Single(item => item.FullDetail!.Contains("<[2]>", StringComparison.Ordinal));
         Assert.IsNotNull(starter.Continuation);
@@ -233,7 +240,8 @@ public sealed class OperandCompleterTests
             lines[0] = "nop // " + edit;
             var reply = await completer.CompleteAsync(new CompletionRequest(lines, lines.Length - 1, lines[^1].Length, null, [anchor]),
                 TestContext.CancellationToken);
-            Assert.AreEqual(first.BindingEpoch, reply.BindingEpoch, $"binding changed during replay {edit}");
+            Assert.AreEqual(first.BindingEpoch, reply.BindingEpoch, $"binding changed during replay {edit}; new assemblies: "
+                + string.Join(", ", session.Resolver.Assemblies.Except(assemblies).Select(assembly => assembly.FullName)));
             Assert.AreEqual("string", reply.Items[0].InsertText, "Keyword aliases rank by the case they insert.");
             Assert.HasCount(1, reply.Owners, "Replay must retain the selected two-argument overload.");
             Assert.Contains("U", reply.Owners[0]);

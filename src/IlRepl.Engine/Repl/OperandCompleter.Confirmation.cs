@@ -27,10 +27,12 @@ public sealed partial class OperandCompleter
             var line = original[..site.ReplaceStart] + insertion + original[site.ReplaceEnd..];
             var declarationType = candidate.Type is not null
                 && site.Kind is CompletionSiteKind.Type or CompletionSiteKind.TypeArgument or CompletionSiteKind.GenericParameter
-                && site.Owner is ".locals" or ".args" or ".method" or ".field" or ".property" or ".event"
+                && site.Owner is ".locals" or ".args" or ".typeargs" or ".method" or ".field" or ".property" or ".event"
                     or "extends" or "implements" or "catch";
             var typeComplete = false;
-            if (declarationType && !ConfirmDeclarationType(line, site, query.View, scope, out typeComplete))
+            var enclosingType = declarationType
+                || candidate.Type is not null && site.Kind == CompletionSiteKind.TypeArgument && site.EnclosingTypeStart >= 0;
+            if (enclosingType && !ConfirmEnclosingType(line, site, query.View, scope, out typeComplete))
             {
                 return null;
             }
@@ -38,6 +40,13 @@ public sealed partial class OperandCompleter
             var continues = candidate.Type is not null && candidate.Slot < 0
                 && site.Kind == CompletionSiteKind.MemberHead && !site.NextIsDoubleColon;
             BoundInstruction? instruction = null;
+            if (site.Kind == CompletionSiteKind.TypeArgument
+                && (site.Owner is ".dis" or ".disassemble"
+                    || !site.Owner.StartsWith('.') && site.Owner is not ("extends" or "implements" or "catch")))
+            {
+                instruction = ConfirmGenericOperand(line, site, query.View, scope);
+            }
+
             if (!continues && (site.Kind != CompletionSiteKind.TypeArgument || declarationType && typeComplete))
             {
                 if (site.Owner.StartsWith('.') || site.Owner is "extends" or "implements" or "catch")
