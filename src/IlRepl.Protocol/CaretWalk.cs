@@ -418,13 +418,14 @@ internal sealed class CaretWalk
         var afterModifiers = _r.ReadModifiers(i, stopAtType: false);
         var nameIndex = _r.IsName(afterModifiers) ? afterModifiers : -1;
         var j = nameIndex >= 0 ? nameIndex + 1 : afterModifiers;
-        var complete = nameIndex >= 0 && (!_r.IsPunct(j, '<') || _r.Matching(j) >= 0);
+        var complete = nameIndex >= 0 && !HasOpenList(i, _r.Count);
+        CompletionSite? selected = null;
         if (_r.IsPunct(j, '<'))
         {
             var close = _r.Matching(j);
             if (Inside(j, close))
             {
-                return GenericParameters(j, close, owner, complete);
+                selected = GenericParameters(j, close, owner, complete);
             }
 
             j = close < 0 ? _r.Count : close + 1;
@@ -432,10 +433,12 @@ internal sealed class CaretWalk
 
         if (_r.IsWord(j, "extends"))
         {
-            var end = _r.ReadType(j + 1);
-            if (_caret > _r.EndOf(j) && (_caret <= _r.EndOf(end - 1) || end == j + 1 && !_r.IsWord(end, "implements")))
+            var start = j + 1;
+            var end = _r.IsWord(start, "implements") ? start : _r.ReadType(start);
+            complete &= InheritanceTypeComplete(start, end);
+            if (_caret > _r.EndOf(j) && (_caret <= _r.EndOf(end - 1) || end == start && !_r.IsWord(end, "implements")))
             {
-                return TypeAfter(j + 1, end, "extends", complete) ?? CompletionSite.None;
+                selected = TypeAfter(start, end, "extends", complete);
             }
 
             j = end;
@@ -443,48 +446,98 @@ internal sealed class CaretWalk
 
         if (_r.IsWord(j, "implements"))
         {
-            if (_caret <= _r.EndOf(j))
-            {
-                return CompletionSite.None;
-            }
-
-            var a = j + 1;
+            var clauseEnd = _r.EndOf(j);
+            var start = j + 1;
             var index = 0;
-            while (a < _r.Count)
+            while (true)
             {
-                var end = _r.ReadType(a);
-                if (end == a)
+                var end = _r.ReadType(start);
+                complete &= InheritanceTypeComplete(start, end);
+                if (_caret > clauseEnd && selected is null)
+                {
+                    if (_caret < _r.StartOf(start))
+                    {
+                        selected = Slot(CompletionSiteKind.Type, "implements", index, complete);
+                    }
+                    else if (TypeAfter(start, end, "implements", complete) is { } site)
+                    {
+                        selected = site with { ArgumentIndex = site.Kind == CompletionSiteKind.Type ? index : site.ArgumentIndex };
+                    }
+                }
+
+                j = end;
+                if (!_r.IsPunct(j, ','))
                 {
                     break;
                 }
 
-                if (_caret <= _r.EndOf(end - 1))
-                {
-                    var site = TypeAfter(a, end, "implements", complete) ?? CompletionSite.None;
-                    return site with { ArgumentIndex = site.Kind == CompletionSiteKind.Type ? index : site.ArgumentIndex };
-                }
-
-                a = end;
-                if (!_r.IsPunct(a, ','))
-                {
-                    break;
-                }
-
-                a++;
+                start = j + 1;
                 index++;
-                if (_caret < _r.StartOf(a))
-                {
-                    return Slot(CompletionSiteKind.Type, "implements", index, complete);
-                }
-            }
-
-            if (a >= _r.Count || _caret < _r.StartOf(a))
-            {
-                return Slot(CompletionSiteKind.Type, "implements", index, complete);
             }
         }
 
-        return CompletionSite.None;
+        // A later clause can still be unfinished when the caret returns to an earlier type.
+        complete &= j >= _r.Count || _r.IsPunct(j, '{')
+            && (j + 1 >= _r.Count || _r.IsPunct(j + 1, '}') && j + 2 >= _r.Count);
+        return selected is not null ? selected with { DeclarationComplete = complete } : CompletionSite.None;
+    }
+
+    private bool InheritanceTypeComplete(int start, int end)
+    {
+        if (_r.IsWord(start, "class") || _r.IsWord(start, "valuetype"))
+        {
+            start++;
+        }
+
+        if (_r.KindAt(start) == CilLexemeKind.AssemblyHint)
+        {
+            start++;
+        }
+
+        if (start >= end || !_r.IsName(start) && _r.KindAt(start) != CilLexemeKind.GenericParameter)
+        {
+            return false;
+        }
+
+        for (var i = start + 1; i < end; i++)
+        {
+            if (!_r.IsPunct(i, '<'))
+            {
+                continue;
+            }
+
+            var close = _r.Matching(i);
+            var argument = i + 1;
+            if (close < 0 || argument == close)
+            {
+                return false;
+            }
+
+            while (argument < close)
+            {
+                var next = _r.ReadType(argument);
+                if (next > close || !InheritanceTypeComplete(argument, next))
+                {
+                    return false;
+                }
+
+                if (next == close)
+                {
+                    break;
+                }
+
+                if (!_r.IsPunct(next, ',') || next + 1 == close)
+                {
+                    return false;
+                }
+
+                argument = next + 1;
+            }
+
+            i = close;
+        }
+
+        return true;
     }
 
     private CompletionSite? FieldLike(int i, string owner)
@@ -1140,7 +1193,7 @@ internal sealed class CaretWalk
     }
 
     /// <summary>
-    /// Whether the type between the supplied indices has an unclosed bracket containing the caret.
+    /// Whether the type between the supplied indices has an unclosed bracket.
     /// </summary>
     private bool HasOpenList(int from, int to)
     {

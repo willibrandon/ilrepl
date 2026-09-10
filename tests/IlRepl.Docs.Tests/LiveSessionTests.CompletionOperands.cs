@@ -5,6 +5,39 @@ namespace IlRepl.Docs.Tests;
 public sealed partial class LiveSessionTests
 {
     /// <summary>
+    /// An unfinished interface clause permits completing the earlier base type and then running the finished class.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_UnfinishedInheritance_CompletesEarlierArgument(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        const string prefix = ".class public Derived extends List<int3";
+        const string suffix = "> implements";
+        await PasteAsync(page, prefix + suffix);
+        for (var i = 0; i < suffix.Length; i++)
+        {
+            await page.Keyboard.PressAsync("ArrowLeft");
+        }
+
+        await CompletionAtCaretAsync(page, "il[1]> " + prefix, "❯ int32");
+        await page.Keyboard.PressAsync("Tab");
+        await page.Keyboard.PressAsync("End");
+        await PromptAtCaretAsync(page, "il[1]> .class public Derived extends List<int32> implements");
+        await PasteAsync(page, " IEnumerable<int32> {\n.method public instance void .ctor() {\nldarg.0\n"
+            + "call instance void List<int32>::.ctor()\nret\n}\n}\nnewobj Derived::.ctor()\n"
+            + "callvirt List<int32>::get_Count()\nret");
+        await page.Keyboard.PressAsync("Enter");
+        await ExpectCompletionAsync(page, "= 0 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// Completing a generic attribute argument preserves an attribute that the browser runtime can inspect.
     /// </summary>
     /// <param name="browser">The browser engine.</param>
