@@ -232,6 +232,70 @@ starlight-toc {
   display: none;
 }
 
+/* Image preview */
+.sl-markdown-content [data-lightbox] {
+  display: block;
+  cursor: zoom-in;
+  border-radius: 8px;
+}
+
+.sl-markdown-content [data-lightbox] img {
+  display: block;
+  border-radius: inherit;
+}
+
+.sl-markdown-content [data-lightbox]:focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 4px;
+}
+
+.image-lightbox-open {
+  overflow: hidden;
+}
+
+#image-lightbox {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 2.5vw;
+  border: 0;
+  background: transparent;
+  cursor: zoom-out;
+}
+
+#image-lightbox[open] {
+  display: grid;
+  place-items: center;
+}
+
+#image-lightbox::backdrop {
+  background: rgba(0, 0, 0, 0.9);
+}
+
+#image-lightbox img {
+  max-width: 95vw;
+  max-height: 90dvh;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+#image-lightbox button {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #aaa;
+  border-radius: 50%;
+  background: #181818;
+  color: #fff;
+  font-size: 2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
 /* Live session */
 #session {
   margin: 1.5rem 0;

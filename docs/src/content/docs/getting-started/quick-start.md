@@ -6,8 +6,6 @@ description: A first session, one instruction at a time.
 Start `ilrepl` and type an instruction. The line under it is the simulated evaluation stack,
 bottom to top.
 
-![Typing IL, watching the stack, and completing a string method in ilrepl](/quick-start.gif)
-
 ```ilrepl
 il[1]> ldc.i4 6
   ┊ [int32]
@@ -21,6 +19,8 @@ il[1]> ret
 
 `ret`, or an empty line, compiles everything you typed since the last run into a method, runs it,
 and prints whatever single value was left on the stack. An empty stack means the cell was void.
+
+[![Typing IL, watching the stack, and completing a string method in ilrepl](/quick-start.gif)](/quick-start.gif)
 
 ## Calls
 

@@ -12,6 +12,7 @@ export default defineConfig({
       logo: { src: './src/assets/icon.svg', alt: 'ilrepl' },
       favicon: '/favicon.svg',
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/willibrandon/ilrepl' }],
+      head: [{ tag: 'script', attrs: { src: '/lightbox.js', defer: true } }],
       customCss: ['./src/styles/custom.css', './src/generated/cil-palette.css'],
       sidebar: [
         {
