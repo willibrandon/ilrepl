@@ -18,6 +18,10 @@ il[1]> ldstr "il"
   ┊ [StringBuilder, string] ◂ top
 il[1]> callvirt instance StringBuilder StringBuilder::Append(string)
   ┊ [StringBuilder]
+il[1]> callvirt instance string Object::ToString()
+  ┊ [string]
+il[1]> ret
+  = "il" : string
 ```
 
 Types come from the operand where they are known: locals, fields, method returns, `newobj`,
@@ -34,14 +38,26 @@ waiting for its label, or inside a protected region. Inside a `.method` block it
 method. That is how early returns and `switch` tables work.
 
 ```ilrepl
+il[2]> .locals init (int32 x)
+  locals: 0:int32 x
+il[2]> ldc.i4.1
+  ┊ [int32]
+il[2]> stloc x
+  ┊ []
 il[2]> ldloc x
+  ┊ [int32]
 il[2]> switch (A, B)
+  ┊ []
 il[2]> ldstr "default"
+  ┊ [string]
 il[2]> ret
-  ┊ ret inside the cell (a forward label or a block is still open)
+  ret inside the cell (a forward label or a block is still open)
 il[2]> A: ldstr "a"
+  ┊ [string]
 il[2]> ret
+  ret inside the cell (a forward label or a block is still open)
 il[2]> B: ldstr "b"
+  ┊ [string]
 il[2]> ret
   = "b" : string
 ```
@@ -50,7 +66,7 @@ After a run the cell body is cleared and the next cell starts. Declarations (`.l
 `.typeparams`, `.vararg`) stay, and so do methods defined with `.method`, so the next cell can use
 the same locals and call the same methods. Closing a `.method` block also starts a new cell,
 without running anything. `.clear` drops the body without running it and `.reset` drops the
-declarations and methods as well.
+declarations, methods, and types as well. Types and their static state survive `.clear`.
 
 ## Output
 
@@ -64,7 +80,16 @@ is only found when the cell is compiled. The message names the JIT, and `.show` 
 the stack after each instruction:
 
 ```ilrepl
+il[3]> ldc.i4 0
+  ┊ [int32]
+il[3]> brfalse SKIP
+  ┊ []
+il[3]> ldc.i4 1
+  ┊ [int32]
+il[3]> SKIP: pop
+  ┊ []
 il[3]> .show
+  .locals init (int32 x)
   000  ldc.i4 0                                 [int32]
   001  brfalse SKIP                             []
   002  ldc.i4 1                                 [int32]

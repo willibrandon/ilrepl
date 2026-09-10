@@ -4,19 +4,13 @@
 #:project ../src/IlRepl.Tui/IlRepl.Tui.csproj
 #:property PublishAot=false
 
-// Colours the CIL in the docs with the terminal's own tokenizer and palette. A fenced block
-// tagged cil is tokenized line by line. A block tagged ilrepl is a transcript: its input lines
-// are replayed through the engine, one session per page since a page's transcripts continue
-// one another, and when the replay reads exactly as the block does, every line carries the
-// spans the terminal drew. Otherwise the input lines are tokenized and the output lines are
-// styled by the rules the engine styles its own by, and the block is named so the drift can be
-// seen. A block showing the editor's own rows is styled that way without a replay. The result
-// goes to docs/src/generated/cil-tokens.json, with the palette for a dark ground and the one for
-// a light ground, which the site reads at build. The splash page's hero transcript, kept in
-// docs/src/hero.ilrepl, is replayed the same way into a component of spans with one class per
-// style, beside a stylesheet that gives each class its colour on either ground. The engine
-// needs the JIT, which a file-based app's default of publishing native would take away.
+// Colours documentation with the terminal tokenizer and actual replayed transcript spans.
+// Run with --update to replace transcript output after reviewing changes to the examples.
+// --verify checks README and docs locally and fails on drift, including prompt numbers.
+// Normal generation retains the existing warning behaviour. A replay-setup comment makes the
+// following visible CIL block establish the context for the next transcript on that page.
 
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -30,12 +24,22 @@ var root = FindRoot();
 var docs = Path.Combine(root, "docs", "src", "content", "docs");
 var output = Path.Combine(root, "docs", "src", "generated", "cil-tokens.json");
 var tokenizer = new CilTokenizer(CilVocabularyBuilder.Vocabulary);
-var blocks = new SortedDictionary<string, (string Where, string Language, bool Editor, List<IReadOnlyList<TranscriptSpan>> Lines)>(StringComparer.Ordinal);
+var blocks = new SortedDictionary<string,
+    (string Where, string Language, bool Editor, List<IReadOnlyList<TranscriptSpan>> Lines)>(StringComparer.Ordinal);
 var warnings = new List<string>();
 var replayed = 0;
+var update = args.Contains("--update", StringComparer.Ordinal);
+var verify = args.Contains("--verify", StringComparer.Ordinal);
 var cwd = Directory.GetCurrentDirectory();
 
-foreach (var file in Directory.EnumerateFiles(docs, "*.md*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+var files = Directory.EnumerateFiles(docs, "*.md*", SearchOption.AllDirectories);
+if (verify || update)
+{
+    files = files.Append(Path.Combine(root, "README.md"));
+}
+
+files = files.Order(StringComparer.Ordinal);
+foreach (var file in files)
 {
     var lines = File.ReadAllLines(file);
     var relative = Path.GetRelativePath(docs, file).Replace('\\', '/');
@@ -70,11 +74,31 @@ foreach (var file in Directory.EnumerateFiles(docs, "*.md*", SearchOption.AllDir
             }
 
             var where = $"{relative}:{start + 1}";
+            if (language == "cil" && i > 0 && lines[i - 1] == "<!-- replay-setup -->")
+            {
+                var setup = await SubmitAsync(engine, body);
+                if ((verify || update) && setup.Any(line => line.Kind == LineKind.Error))
+                {
+                    var detail = string.Join('\n', setup.Select(line => line.PlainText));
+                    throw new InvalidOperationException($"{where}: setup failed: {detail}");
+                }
+            }
+
             var spans = language == "cil" ? Cil(body) : await TranscriptAsync(engine, body, where);
+            if (update && language == "ilrepl" && !IsEditorView(body) && body.Any(line => Patterns.InputLine().IsMatch(line)))
+            {
+                body = spans.Select(line => string.Concat(line.Select(span => span.Text)).TrimEnd()).ToList();
+                lines = [.. lines[..start], .. body, .. lines[end..]];
+                end = start + body.Count;
+            }
+
             // Source, or a view of the editor, is drawn as the editor draws it: an error is
             // underlined under its own colour. A transcript's echo has the error in red.
             var editor = language == "cil" || IsEditorView(body);
-            blocks[Key(body)] = (where, language, editor, spans);
+            if (file != Path.Combine(root, "README.md"))
+            {
+                blocks[Key(body)] = (where, language, editor, spans);
+            }
             i = end;
         }
     }
@@ -83,76 +107,87 @@ foreach (var file in Directory.EnumerateFiles(docs, "*.md*", SearchOption.AllDir
         Directory.SetCurrentDirectory(cwd);
         scratch.Delete(true);
     }
+
+    if (update)
+    {
+        File.WriteAllLines(file, lines);
+    }
 }
 
-Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-using (var stream = File.Create(output))
-using (var json = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+if (!verify)
 {
-    json.WriteStartObject();
-    json.WriteStartObject("palette");
-    foreach (var (ground, colour) in new (string, Func<SpanStyle, Hex1bColor>)[] { ("dark", SpanPalette.Color), ("light", SpanPalette.LightColor) })
+    Directory.CreateDirectory(Path.GetDirectoryName(output)!);
+    using (var stream = File.Create(output))
+    using (var json = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
     {
-        json.WriteStartObject(ground);
-        foreach (var style in Enum.GetValues<SpanStyle>())
+        json.WriteStartObject();
+        json.WriteStartObject("palette");
+        foreach (var (ground, colour) in new (string, Func<SpanStyle, Hex1bColor>)[]
+        { ("dark", SpanPalette.Color), ("light", SpanPalette.LightColor) })
         {
-            var color = colour(style);
-            if (!color.IsDefault)
+            json.WriteStartObject(ground);
+            foreach (var style in Enum.GetValues<SpanStyle>())
             {
-                json.WriteString(style.ToString(), $"#{color.R:x2}{color.G:x2}{color.B:x2}");
+                var color = colour(style);
+                if (!color.IsDefault)
+                {
+                    json.WriteString(style.ToString(), $"#{color.R:x2}{color.G:x2}{color.B:x2}");
+                }
             }
+
+            json.WriteEndObject();
         }
 
         json.WriteEndObject();
-    }
-
-    json.WriteEndObject();
-    json.WriteStartObject("blocks");
-    foreach (var (key, block) in blocks)
-    {
-        json.WriteStartObject(key);
-        json.WriteString("where", block.Where);
-        json.WriteString("language", block.Language);
-        json.WriteBoolean("editor", block.Editor);
-        json.WriteStartArray("lines");
-        foreach (var line in block.Lines)
+        json.WriteStartObject("blocks");
+        foreach (var (key, block) in blocks)
         {
-            json.WriteStartArray();
-            var offset = 0;
-            foreach (var span in line)
+            json.WriteStartObject(key);
+            json.WriteString("where", block.Where);
+            json.WriteString("language", block.Language);
+            json.WriteBoolean("editor", block.Editor);
+            json.WriteStartArray("lines");
+            foreach (var line in block.Lines)
             {
-                if (span.Style != SpanStyle.Default && span.Text.Length > 0)
+                json.WriteStartArray();
+                var offset = 0;
+                foreach (var span in line)
                 {
-                    json.WriteStartArray();
-                    json.WriteNumberValue(offset);
-                    json.WriteNumberValue(span.Text.Length);
-                    json.WriteStringValue(span.Style.ToString());
-                    json.WriteEndArray();
+                    if (span.Style != SpanStyle.Default && span.Text.Length > 0)
+                    {
+                        json.WriteStartArray();
+                        json.WriteNumberValue(offset);
+                        json.WriteNumberValue(span.Text.Length);
+                        json.WriteStringValue(span.Style.ToString());
+                        json.WriteEndArray();
+                    }
+
+                    offset += span.Text.Length;
                 }
 
-                offset += span.Text.Length;
+                json.WriteEndArray();
             }
 
             json.WriteEndArray();
+            json.WriteEndObject();
         }
 
-        json.WriteEndArray();
+        json.WriteEndObject();
         json.WriteEndObject();
     }
-
-    json.WriteEndObject();
-    json.WriteEndObject();
 }
 
 await WriteHeroAsync();
 
-Console.WriteLine($"{blocks.Count} blocks coloured ({replayed} transcripts replayed exactly) into {Path.GetRelativePath(root, output)}");
+Console.WriteLine(verify
+    ? $"{replayed} transcripts verified locally; {warnings.Count} differences"
+    : $"{blocks.Count} blocks coloured ({replayed} transcripts replayed exactly) into {Path.GetRelativePath(root, output)}");
 foreach (var warning in warnings)
 {
     Console.WriteLine("  " + warning);
 }
 
-return 0;
+return (verify || update) && warnings.Count > 0 ? 1 : 0;
 
 // The block's text as the site sees it: its lines, trailing blank lines dropped, joined by newlines.
 static string Key(IReadOnlyList<string> body) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', body))));
@@ -194,17 +229,21 @@ async Task WriteHeroAsync()
 
         foreach (var span in lines[i])
         {
-            var text = System.Net.WebUtility.HtmlEncode(span.Text);
+            var text = WebUtility.HtmlEncode(span.Text);
             component.Append(span.Style == SpanStyle.Default ? text : $"<span class=\"cil-{span.Style}\">{text}</span>");
         }
     }
 
     component.Append("</pre>\n");
-    File.WriteAllText(Path.Combine(root, "docs", "src", "generated", "HeroPrompt.astro"), component.ToString());
+    if (!verify)
+    {
+        File.WriteAllText(Path.Combine(root, "docs", "src", "generated", "HeroPrompt.astro"), component.ToString());
+    }
 
     var css = new StringBuilder();
     css.Append("/* Written by scripts/Highlight-Cil.cs from the terminal's palette; edit SpanPalette and run the script. */\n");
-    foreach (var (selector, colour) in new (string, Func<SpanStyle, Hex1bColor>)[] { ("", SpanPalette.Color), ("[data-theme='light'] ", SpanPalette.LightColor) })
+    foreach (var (selector, colour) in new (string, Func<SpanStyle, Hex1bColor>)[]
+        { ("", SpanPalette.Color), ("[data-theme='light'] ", SpanPalette.LightColor) })
     {
         foreach (var style in Enum.GetValues<SpanStyle>())
         {
@@ -217,9 +256,14 @@ async Task WriteHeroAsync()
     }
 
     // The editor's error: a curly underline in the error colour under the text's own colour.
-    css.Append($".cil-error-underline {{ text-decoration: underline wavy #{Hex(SpanPalette.Color(SpanStyle.Error))}; text-underline-offset: 0.15em; }}\n");
-    css.Append($"[data-theme='light'] .cil-error-underline {{ text-decoration-color: #{Hex(SpanPalette.LightColor(SpanStyle.Error))}; }}\n");
-    File.WriteAllText(Path.Combine(root, "docs", "src", "generated", "cil-palette.css"), css.ToString());
+    css.Append($".cil-error-underline {{ text-decoration: underline wavy #{Hex(SpanPalette.Color(SpanStyle.Error))}; "
+        + "text-underline-offset: 0.15em; }\n");
+    css.Append("[data-theme='light'] .cil-error-underline { text-decoration-color: "
+        + $"#{Hex(SpanPalette.LightColor(SpanStyle.Error))}; }}\n");
+    if (!verify)
+    {
+        File.WriteAllText(Path.Combine(root, "docs", "src", "generated", "cil-palette.css"), css.ToString());
+    }
 }
 
 List<IReadOnlyList<TranscriptSpan>> Cil(IReadOnlyList<string> body)
@@ -238,7 +282,8 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
 {
     // A prompt with nothing after it, other than the block's last line, is a blank line sent,
     // which runs the cell.
-    var inputs = body.Take(body.Count - 1).Where(l => Patterns.InputLine().IsMatch(l) || Patterns.BarePrompt().IsMatch(l)).Concat(body.TakeLast(1).Where(l => Patterns.InputLine().IsMatch(l)))
+    var inputs = body.Take(body.Count - 1).Where(l => Patterns.InputLine().IsMatch(l) || Patterns.BarePrompt().IsMatch(l))
+        .Concat(body.TakeLast(1).Where(l => Patterns.InputLine().IsMatch(l)))
         .Select(l => Patterns.InputLine().IsMatch(l) ? l[(l.IndexOf("> ", StringComparison.Ordinal) + 2)..] : "").ToList();
     if (inputs.Count == 0 || IsEditorView(body))
     {
@@ -249,73 +294,64 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
 
     // A transcript may end on the bare prompt that came next; it is not the engine's to say.
     var trailingPrompt = body.Count > 0 && Patterns.BarePrompt().IsMatch(body[^1]);
-    var compared = trailingPrompt ? body.Take(body.Count - 1).ToList() : body;
-    var produced = new List<TranscriptLine>();
-    try
+    var produced = await SubmitAsync(engine, inputs);
+    var normalized = produced.Select(line => (IReadOnlyList<TranscriptSpan>)line.Spans
+        .Select(span => span with { Text = span.Text.Replace(Directory.GetCurrentDirectory(), "/path/to", StringComparison.Ordinal) })
+        .ToArray()).ToList();
+    if (trailingPrompt)
     {
-        foreach (var input in inputs)
-        {
-            var reply = await engine.HandleAsync(input, CancellationToken.None);
-            produced.AddRange(reply.Lines);
-            if (reply.Quit)
-            {
-                break;
-            }
-        }
-    }
-    catch (Exception ex)
-    {
-        warnings.Add($"{where}: the replay failed: {ex.Message}");
-        produced = null;
+        normalized.Add([new TranscriptSpan(engine.Status.Prompt.TrimEnd(), SpanStyle.Prompt)]);
     }
 
-    if (produced is not null)
+    var actual = normalized.Select(line => string.Concat(line.Select(span => span.Text))).ToArray();
+    if (actual.Select(line => line.TrimEnd()).SequenceEqual(body.Select(line => line.TrimEnd())))
     {
-        // A page's prompt numbers may count cells the page does not show, so they are not
-        // compared; the page's own prompt is kept and the engine's spans follow it.
-        var mismatch = -1;
-        for (var i = 0; i < Math.Max(compared.Count, produced.Count); i++)
-        {
-            if (i >= compared.Count || i >= produced.Count || SamePrompt(produced[i].PlainText).TrimEnd() != SamePrompt(compared[i]).TrimEnd())
-            {
-                mismatch = i;
-                break;
-            }
-        }
-
-        if (mismatch < 0)
-        {
-            replayed++;
-            var exact = produced.Select((l, i) => WithPagePrompt(l.Spans, compared[i])).ToList();
-            if (trailingPrompt)
-            {
-                exact.Add([new TranscriptSpan(body[^1], SpanStyle.Prompt)]);
-            }
-
-            return exact;
-        }
-
-        var expected = mismatch < compared.Count ? compared[mismatch] : "(end)";
-        var got = mismatch < produced.Count ? produced[mismatch].PlainText : "(end)";
-        warnings.Add($"{where}: the replay reads differently at line {mismatch + 1}: the page has '{expected}', the engine says '{got}'");
+        replayed++;
+        return normalized;
     }
 
-    // An echoed line's plain text wears the input style, as the engine echoes it.
-    return StyledLines(body, SpanStyle.Input);
+    if (update)
+    {
+        if (produced.Any(line => line.Kind == LineKind.Error) && !body.Any(line => line.Contains("error:", StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException($"{where}: unexpected error: {string.Join('\n', actual)}");
+        }
+
+        return normalized;
+    }
+
+    var mismatch = Enumerable.Range(0, Math.Max(body.Count, actual.Length))
+        .First(index => index >= body.Count || index >= actual.Length || body[index] != actual[index]);
+    var expected = mismatch < body.Count ? body[mismatch] : "(end)";
+    var got = mismatch < actual.Length ? actual[mismatch] : "(end)";
+    warnings.Add($"{where}: line {mismatch + 1}: page '{expected}', REPL '{got}'");
+    return normalized;
 }
 
-static string SamePrompt(string line) => Patterns.PromptNumber().Replace(line, "il[#]>");
-
-// The engine's spans for a line, with the page's own prompt in place of the engine's.
-static IReadOnlyList<TranscriptSpan> WithPagePrompt(IReadOnlyList<TranscriptSpan> spans, string pageLine)
+// Submit complete blocks through the same withdrawal and recovery path as the terminal.
+static async Task<List<TranscriptLine>> SubmitAsync(InProcessEngine engine, IReadOnlyList<string> inputs)
 {
-    var prompt = Patterns.PagePrompt().Match(pageLine);
-    if (!prompt.Success || spans.Count == 0 || spans[0].Style != SpanStyle.Prompt)
+    var produced = new List<TranscriptLine>();
+    var units = SubmissionSplitter.Split(inputs, engine.Status.OpenDepth, engine.Status.Mark.InBlockComment, engine.Vocabulary.Commands);
+    foreach (var unit in units)
     {
-        return spans;
+        var submission = new Submission(engine, inputs.Skip(unit.Start).Take(unit.End - unit.Start).ToArray(),
+            engine.Status.OpenDepth, engine.Status.Mark.InBlockComment, _ => Task.CompletedTask, message =>
+            {
+                if (message.Lines is { } lines)
+                {
+                    produced.AddRange(lines);
+                }
+
+                if (message.Note is { } note)
+                {
+                    produced.Add(TranscriptLine.Of(LineKind.Info, "  " + note, SpanStyle.Dim));
+                }
+            });
+        await submission.Completion;
     }
 
-    return [new TranscriptSpan(prompt.Value, SpanStyle.Prompt), .. spans.Skip(1)];
+    return produced;
 }
 
 // A block that shows the editor's own rows is a view of typing, not of the engine.
@@ -362,7 +398,8 @@ IReadOnlyList<TranscriptSpan> Styled(string line, ref bool comment, SpanStyle pl
     var m = Patterns.Gutter().Match(line);
     if (m.Success)
     {
-        var gutter = new TranscriptSpan(m.Groups[1].Value, m.Groups[1].Value.StartsWith("il", StringComparison.Ordinal) ? SpanStyle.Prompt : SpanStyle.Dim);
+        var style = m.Groups[1].Value.StartsWith("il", StringComparison.Ordinal) ? SpanStyle.Prompt : SpanStyle.Dim;
+        var gutter = new TranscriptSpan(m.Groups[1].Value, style);
         return [gutter, .. tokenizer.Spans(m.Groups[2].Value, ref comment, plain)];
     }
 

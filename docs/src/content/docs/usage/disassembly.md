@@ -12,6 +12,29 @@ bytes the REPL compiled for what you typed.
 
 ## A method you wrote
 
+Define this method first:
+
+<!-- replay-setup -->
+```cil
+.method int32 Fib(int32 n) {
+  ldarg n
+  ldc.i4 2
+  blt BASE
+  ldarg n
+  ldc.i4 1
+  sub
+  call int32 Fib(int32)
+  ldarg n
+  ldc.i4 2
+  sub
+  call int32 Fib(int32)
+  add
+  ret
+BASE: ldarg n
+  ret
+}
+```
+
 ```ilrepl
 il[2]> .dis int32 Fib(int32)
   .method public hidebysig static int32 Fib(int32 n) cil managed {
@@ -45,6 +68,34 @@ prints it.
 
 ## What the emitter added
 
+Define a method with a filter:
+
+<!-- replay-setup -->
+```cil
+.method int32 Safe(int32 d) {
+  .locals init (int32 n)
+  .try {
+    ldc.i4 1
+    ldarg d
+    div
+    stloc n
+    leave END
+  } filter {
+    isinst DivideByZeroException
+    ldnull
+    cgt.un
+    endfilter
+  } handler {
+    pop
+    ldc.i4 42
+    stloc n
+    leave END
+  }
+END: ldloc n
+  ret
+}
+```
+
 ```ilrepl
 il[3]> .dis Safe
   .method public hidebysig static int32 Safe(int32 d) cil managed {
@@ -76,7 +127,7 @@ IL_0036:
   code size 59 (0x3b)
 ```
 
-This is the `Safe` method from [Exception blocks](/usage/exception-blocks/), and the listing shows
+This uses the filter pattern from [Exception blocks](/usage/exception-blocks/). The listing shows
 two things the typed lines did not. The locals are `init`, because the emitter always asks for
 zeroed locals. And each `leave END` is followed by a second `leave` to the same place: the emitter
 closes every try and handler with a `leave` of its own, whether or not one was typed, and the
@@ -84,6 +135,20 @@ column marks the copy `unreachable`. A filter's block opens at the filter code, 
 where the handler starts.
 
 ## A member of a class
+
+<!-- replay-setup -->
+```cil
+.class public Point {
+  .field public int32 X
+  .method public instance int32 Twice() {
+    ldarg.0
+    ldfld int32 Point::X
+    ldc.i4 2
+    mul
+    ret
+  }
+}
+```
 
 ```ilrepl
 il[4]> .dis instance int32 Point::Twice()
@@ -104,7 +169,7 @@ and the lookup declares nothing on your behalf.
 ## Framework methods
 
 ```ilrepl
-il[5]> .dis instance string String::Trim()
+il[4]> .dis instance string String::Trim()
   .method public hidebysig instance string Trim() cil managed {
   .maxstack 8
   0000 ldarg.0                                  [string]
@@ -143,13 +208,45 @@ browser, so expect the shape to match and the details to move.
 ## Generic definitions
 
 ```ilrepl
-il[5]> .dis instance void class List`1<int32>::Add(!0)
+il[4]> .dis instance void class List`1<int32>::Add(!0)
   .method public hidebysig newslot virtual final instance void Add(!T item) cil managed aggressiveinlining {
   .maxstack 3
   .locals (!T[] V_0, int32 V_1)
   0000 ldarg.0                                  [List<!T>]
   0001 ldarg.0                                  [List<!T>, List<!T>]
   0002 ldfld int32 class [System.Collections]System.Collections.Generic.List`1<!0>::_version [List<!T>, int32]
+  0007 ldc.i4.1                                 [List<!T>, int32, int32]
+  0008 add                                      [List<!T>, int32]
+  0009 stfld int32 class [System.Collections]System.Collections.Generic.List`1<!0>::_version []
+  000e ldarg.0                                  [List<!T>]
+  000f ldfld !0[] class [System.Collections]System.Collections.Generic.List`1<!0>::_items [!T[]]
+  0014 stloc.0                                  []
+  0015 ldarg.0                                  [List<!T>]
+  0016 ldfld int32 class [System.Collections]System.Collections.Generic.List`1<!0>::_size [int32]
+  001b stloc.1                                  []
+  001c ldloc.1                                  [int32]
+  001d ldloc.0                                  [int32, !T[]]
+  001e ldlen                                    [int32, native int]
+  001f conv.i4                                  [int32, int32]
+  0020 bge.un.s IL_0034                         []
+  0022 ldarg.0                                  [List<!T>]
+  0023 ldloc.1                                  [List<!T>, int32]
+  0024 ldc.i4.1                                 [List<!T>, int32, int32]
+  0025 add                                      [List<!T>, int32]
+  0026 stfld int32 class [System.Collections]System.Collections.Generic.List`1<!0>::_size []
+  002b ldloc.0                                  [!T[]]
+  002c ldloc.1                                  [!T[], int32]
+  002d ldarg.1                                  [!T[], int32, !T]
+  002e stelem !0                                []
+  0033 ret                                      []
+IL_0034:
+  0034 ldarg.0                                  [List<!T>]
+  0035 ldarg.1                                  [List<!T>, !T]
+  0036 call instance void class [System.Collections]System.Collections.Generic.List`1<!0>::AddWithResize(!0) []
+  003b ret                                      []
+  }
+  code size 60 (0x3c)
+  showing the definition instance void List<!T>::Add(!T); the instantiation shares its body
 ```
 
 An instantiation has no body of its own, so `.dis` lists the definition and says so in a note
@@ -163,9 +260,9 @@ through.
 ## Loaded assemblies
 
 ```ilrepl
-il[1]> .load samples/Greeter/bin/Debug/net10.0/Greeter.dll
-  loaded Greeter 1.0.0.0 (21 public types)
-il[1]> .dis int32 Greeter.Hello::CallCountArgs()
+il[4]> .load samples/Greeter/bin/Debug/net10.0/Greeter.dll
+  loaded Greeter 1.0.0.0 (22 public types)
+il[4]> .dis int32 Greeter.Hello::CallCountArgs()
   .method public hidebysig static int32 CallCountArgs() cil managed {
   .maxstack 8
   0000 ldc.i4.s 123                             [int32]
@@ -194,5 +291,6 @@ An abstract method, a method implemented by the runtime, and a dynamic method ha
 and the message says which it is. A member of the class still being written has no compiled body
 yet. Exception clauses laid out in a way braces cannot draw stay in ildasm's offset form, printed as
 notes after the listing, and their handlers still seed the column. A `no.` prefix prints with its
-mask, `no. 1`, and is the one line the REPL will not take back as input; everything else in a
-listing, from the `.locals` line to the last `ret`, pastes into a `.method` block and assembles.
+mask, `no. 1`, and is not accepted as REPL input. Instruction offsets and stack columns are annotations: copy
+the IL without them into a `.method` block. Offset-form exception clauses need structured blocks,
+and references to private loaded members remain subject to runtime access checks.

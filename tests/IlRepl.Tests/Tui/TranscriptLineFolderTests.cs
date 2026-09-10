@@ -16,7 +16,7 @@ public sealed class TranscriptLineFolderTests
     [TestMethod]
     public void ShortLine_IsOneRow()
     {
-        var line = HelpText.Lines().First(l => Text(l) == "  ldc.i4 6                       .locals init (int32 i)");
+        var line = HelpText.Lines().First(l => Text(l) == "  ldc.i4 6");
         var rows = TranscriptLineFolder.Fold(line.Spans, 80);
         Assert.HasCount(1, rows);
         Assert.AreEqual(Text(line), Join(rows[0]));
@@ -43,7 +43,11 @@ public sealed class TranscriptLineFolderTests
     [TestMethod]
     public void LabeledLine_FoldsWithHangingIndent()
     {
-        var line = HelpText.Lines().First(l => Text(l).StartsWith("  .args (T name = literal, ...)", StringComparison.Ordinal));
+        var line = new TranscriptLine(LineKind.Listing,
+        [
+            new TranscriptSpan("  .args (T name = literal, ...)  ", SpanStyle.Command),
+            new TranscriptSpan("cell arguments and the values passed each run"),
+        ]);
         var rows = TranscriptLineFolder.Fold(line.Spans, 59);
         Assert.HasCount(2, rows);
         Assert.AreEqual(SpanStyle.Command, rows[0][0].Style);

@@ -1,4 +1,5 @@
 using IlRepl.Protocol;
+
 namespace IlRepl.Repl;
 
 /// <summary>
@@ -13,10 +14,26 @@ public static class HelpText
     public static IReadOnlyList<TranscriptLine> Lines()
     {
         var lines = new List<TranscriptLine>();
+        var tokenizer = new CilTokenizer(CilVocabularyBuilder.Vocabulary);
         void Heading(string text) => lines.Add(TranscriptLine.Of(LineKind.Listing, text, SpanStyle.Heading));
         void Plain(string text) => lines.Add(TranscriptLine.Of(LineKind.Listing, text));
-        void Entry(string name, string description) => lines.Add(new TranscriptLine(LineKind.Listing,
-            [new TranscriptSpan("  " + name.PadRight(30), SpanStyle.Command), new TranscriptSpan(description)]));
+        void Code(string text) => lines.Add(new TranscriptLine(LineKind.Listing, tokenizer.Spans("  " + text, SpanStyle.Input)));
+
+        void Entry(string name, string description)
+        {
+            lines.Add(TranscriptLine.Of(LineKind.Listing, "  " + name, SpanStyle.Command));
+            Plain("    " + description);
+        }
+
+        void Example(string title, params string[] instructions)
+        {
+            Plain("");
+            lines.Add(TranscriptLine.Of(LineKind.Listing, "  " + title, SpanStyle.Dim));
+            foreach (var instruction in instructions)
+            {
+                Code(instruction);
+            }
+        }
 
         Heading("ilrepl");
         Plain("Type one IL instruction per line. The simulated stack is shown after each one.");
@@ -24,39 +41,62 @@ public static class HelpText
         Plain("the stack. Nothing on the stack means void. Two or more values is an error.");
         Plain("");
         Heading("examples");
-        Plain("  ldc.i4 6                       .locals init (int32 i)");
-        Plain("  ldc.i4 7                       ldc.i4.0");
-        Plain("  mul                            stloc i");
-        Plain("  ret                            LOOP: ldloc i");
-        Plain("                                 ldc.i4.1");
-        Plain("  ldstr \"hi\"                     add");
-        Plain("  call Console::WriteLine(string)  dup");
-        Plain("  ret                            stloc i");
-        Plain("                                 ldc.i4 10");
-        Plain("  .try {                         blt LOOP");
-        Plain("  ldstr \"boom\"                   ldloc i");
-        Plain("  newobj Exception::.ctor(string)  ret");
-        Plain("  throw");
-        Plain("  } catch Exception {");
-        Plain("  callvirt Exception::get_Message()");
-        Plain("  stloc s");
-        Plain("  leave DONE");
-        Plain("  }");
-        Plain("  DONE: ldloc s");
-        Plain("  ret");
+        Example("Multiply two numbers",
+            "ldc.i4 6",
+            "ldc.i4 7",
+            "mul",
+            "ret");
+        Example("Print a string",
+            "ldstr \"hi\"",
+            "call Console::WriteLine(string)",
+            "ret");
+        Example("Count to ten",
+            ".locals init (int32 i)",
+            "ldc.i4.0",
+            "stloc i",
+            "LOOP: ldloc i",
+            "ldc.i4.1",
+            "add",
+            "dup",
+            "stloc i",
+            "ldc.i4 10",
+            "blt LOOP",
+            "ldloc i",
+            "ret");
+        Example("Catch an exception",
+            ".locals init (string s)",
+            ".try {",
+            "  ldstr \"boom\"",
+            "  newobj Exception::.ctor(string)",
+            "  throw",
+            "} catch Exception {",
+            "  callvirt Exception::get_Message()",
+            "  stloc s",
+            "  leave DONE",
+            "}",
+            "DONE: ldloc s",
+            "ret");
         Plain("");
         Heading("member references");
         Plain("Return type and [assembly] prefix are optional; short names resolve in System.*.");
-        Plain("  call int32 [System.Runtime]System.Math::Max(int32, int32)");
-        Plain("  call Math::Max(int32, int32)");
-        Plain("  callvirt instance int32 List<int32>::get_Count()");
-        Plain("  call !!0 Enumerable::First<int32>(class IEnumerable`1<!!0>)");
-        Plain("  ldsfld string String::Empty        ldtoken int32");
-        Plain("  ldtoken method void Console::WriteLine()");
-        Plain("  calli int32(int32, int32)          call vararg int32 Hello::Count(..., int32)");
-        Plain("  call int32 Fib(int32)              ldftn int32 Fib(int32)");
-        Plain("  newobj instance void Point::.ctor(int32, int32)  ldfld int32 Point::X");
-        Plain("  call int32 Outer/Inner::Bump()     callvirt instance !0 class Box`1<int32>::Get()");
+        Code("call int32 [System.Runtime]System.Math::Max(int32, int32)");
+        Code("call Math::Max(int32, int32)");
+        Code("callvirt instance int32 List<int32>::get_Count()");
+        Code("call !!0 Enumerable::First<int32>(class IEnumerable`1<!!0>)");
+        Code("ldsfld string String::Empty");
+        Code("ldtoken int32");
+        Code("ldtoken method void Console::WriteLine()");
+        Code("calli int32(int32, int32)");
+        Plain("");
+        Plain("For methods and types you define or load:");
+        Code("call int32 Fib(int32)");
+        Code("ldftn int32 Fib(int32)");
+        Code("newobj instance void Point::.ctor(int32, int32)");
+        Code("ldfld int32 Point::X");
+        Code("call int32 Outer/Inner::Bump()");
+        Code("callvirt instance !0 class Box`1<int32>::Get()");
+        Plain("Vararg calls require Windows:");
+        Code("call vararg int32 Hello::Count(..., int32)");
         Plain("");
         Heading("declarations");
         Entry(".locals init (T name, ...)", "declare locals; kept across cells, values reset");
@@ -64,15 +104,23 @@ public static class HelpText
         Entry(".typeparams (T, U)", "make the cell generic; use !!T or !!0 in types");
         Entry(".typeargs (int32, string)", "bind the generic parameters before running");
         Entry(".vararg", "vararg calling convention, so arglist works");
-        Entry(".try {  } catch T {  }", "exception blocks, exit them with leave");
-        Entry("} finally {  } fault {", "more handlers; also } filter {  } handler {");
+        Entry(".try {", "open an exception block; exit with leave");
+        Entry("} catch T {", "catch an exception of type T");
+        Entry("} filter {", "start an exception filter; finish with endfilter");
+        Entry("} handler {", "handle an exception accepted by the filter");
+        Entry("} finally {", "run when leaving the protected region");
+        Entry("} fault {", "run when an exception leaves the protected region");
         Entry(".method T Name(T a, ...) {", "define a method kept across cells; } ends it");
         Entry(".class public Name extends T {", "define a type kept across cells; } ends it");
         Entry(".field public [static] T Name", "a field of the open class; [N] before T sets its offset");
         Entry(".method public instance T Name() {", "a member of the open class; ldarg.0 is this");
-        Entry(".property T Name() {  .get ...  }", "a property; .event T Name { .addon ... } an event");
+        Entry(".property T Name() {", "a property; .get and .set name its accessors");
+        Entry(".event T Name {", "an event; .addon and .removeon name its accessors");
         Entry(".override T::Method", "inside a member: take that interface or base slot");
-        Entry(".pack N  .size N", "layout of the open class; .custom attaches an attribute");
+        Entry(".param [N] = value", "give a parameter of the open method a default");
+        Entry(".custom instance void Attr::.ctor() = { }", "attach a custom attribute");
+        Entry(".pack N", "set the field alignment of the open class");
+        Entry(".size N", "set the minimum size of the open class");
         Plain("");
         Heading("commands");
         foreach (var c in Completer.Commands)
@@ -87,9 +135,10 @@ public static class HelpText
         }
 
         Plain("");
-        Plain("Tab completes opcodes, commands, types, and members; Up and Down walk history.");
+        Plain("Tab accepts a completion; Up and Down choose a match or browse history.");
+        Plain("Right accepts a grey suffix. Escape closes the palette.");
         Plain("Enter continues an open block and sends it, line by line, once its braces balance.");
-        Plain("History is kept in ~/.config/ilrepl/history between runs.");
+        Plain("History keeps complete submissions between runs.");
         Plain("Ctrl+L clears the screen, Ctrl+Q leaves.");
         return lines;
     }

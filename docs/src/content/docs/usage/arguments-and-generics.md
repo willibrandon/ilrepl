@@ -12,8 +12,11 @@ then work by name or by index.
 il[1]> .args (int32 x = 5, string s = "ab")
   args: 0:int32 x = 5, 1:string s = "ab"
 il[1]> ldarg x
+  ┊ [int32]
 il[1]> ldarg.0
+  ┊ [int32, int32] ◂ top
 il[1]> mul
+  ┊ [int32]
 il[1]> ret
   = 25 : int32
 ```
@@ -33,9 +36,13 @@ il[2]> .typeparams (T)
 il[2]> .typeargs (int32)
   type arguments: int32
 il[2]> ldc.i4 7
+  ┊ [int32]
 il[2]> box int32
+  ┊ [object]
 il[2]> unbox.any !!T
+  ┊ [!!T]
 il[2]> box !!T
+  ┊ [object]
 il[2]> ret
   = 7 : int32
 ```
@@ -44,7 +51,7 @@ il[2]> ret
 cell without bound type arguments is refused with a reminder.
 
 Members on types instantiated over a cell parameter resolve through the generic definition, so
-`List`1<!!T>` behaves as you would expect:
+``List`1<!!T>`` behaves as you would expect:
 
 ```cil
 newobj instance void class List`1<!!T>::.ctor()

@@ -71,7 +71,7 @@ A paste lands in the editor and waits for Enter, so the block below, from
 stack [] │ no locals │ 0 instructions │ editing 17 lines    Enter sends 17 lines
 ```
 
-The editor shows the last rows that fit, up to a third of the screen, and scrolls to keep the
+The excerpt above shows the last rows of the pasted Fibonacci method. The editor shows the rows that fit, up to a third of the screen, and scrolls to keep the
 caret in view. Only the newline the clipboard adds at the end is dropped; every other blank line
 is yours. Inside a block a blank line is skipped, at the top level it runs the cell, as it does
 when typed, and a line that is only a comment is echoed and ignored. Pasted text keeps its own
@@ -85,17 +85,17 @@ its own is not put back: the error is in the transcript and Up recalls the line.
 separate lines, the ones after the refused line never went, and they come back.
 
 ```ilrepl
-il[5]> .method int32 Half(int32 n) {
+il[3]> .method int32 Half(int32 n) {
   method int32 Half(int32 n)
-il[5]>   ldarg n
+il[3]>   ldarg n
   ┊ [int32]
-il[5]>   lcd.i4 2
+il[3]>   lcd.i4 2
   error: unknown opcode 'lcd.i4' (did you mean 'ldc.i4'?)
   method Half abandoned; the block is back in the editor
 ```
 
 ```ilrepl
-il[5]> .method int32 Half(int32 n) {
+il[3]> .method int32 Half(int32 n) {
   ...>   ldarg n
   ...>   lcd.i4 2
   ...>   div
@@ -111,17 +111,17 @@ come back, and a `.undo`, `.clear`, or `.reset` inside a block moves the point a
 returns to, which the transcript notes.
 
 ```ilrepl
-il[5]> .method int32 Half(int32 n) {
+il[3]> .method int32 Half(int32 n) {
   method int32 Half(int32 n)
-il[5]>   ldarg n
+il[3]>   ldarg n
   ┊ [int32]
-il[5]>   ldc.i4 2
+il[3]>   ldc.i4 2
   ┊ [int32, int32] ◂ top
-il[5]>   div
+il[3]>   div
   ┊ [int32]
-il[5]>   ret
+il[3]>   ret
   ┊ []
-il[5]> }
+il[3]> }
   end of method Half
 ```
 
@@ -135,26 +135,26 @@ is text. A line that is only a comment is echoed and ignored, and a blank line a
 runs the cell.
 
 ```ilrepl
-il[6]> ldc.i4 7
+il[4]> ldc.i4 7
   ┊ [int32]
-il[6]> // kept on the stack
-il[6]>
+il[4]> // kept on the stack
+il[4]>
   = 7 : int32
 ```
 
 An unterminated `/*` keeps the buffer open, and the comment ends where `*/` does, lines later.
 
 ```ilrepl
-il[7]> /* a note
+il[5]> /* a note
   ...>
 stack [] │ no locals │ 0 instructions │ editing 2 lines          Enter continues
 ```
 
 ```ilrepl
-il[7]> /* a note
-il[7]> that goes on */ ldc.i4 3
+il[5]> /* a note
+il[5]> that goes on */ ldc.i4 3
   ┊ [int32]
-il[7]> ret
+il[5]> ret
   = 3 : int32
 ```
 
@@ -164,7 +164,7 @@ Every submission is one history entry, a refused block and its corrected version
 own, and Up brings a block back whole with the caret at its end.
 
 ```ilrepl
-il[8]> .method int32 Half(int32 n) {
+il[6]> .method int32 Half(int32 n) {
   ...>   ldarg n
   ...>   lcd.i4 2
   ...>   div
@@ -190,65 +190,39 @@ They cannot be accepted until the new results arrive.
 If running code loads another assembly in the background, the prompt refreshes its suggestions
 without an edit. Types whose short names become ambiguous are offered with qualified names.
 
-```ilrepl
-┌────────────────────────────types─────────────────────────────┐
-│ ❯ Math             class              System.Private.CoreLib │
-│   Match            class              System.Text.RegularEx… │
-│   MathF            class              System.Private.CoreLib │
-│detail                                                       │
-│Math                                                         │
-│System.Private.CoreLib                                       │
-└─────────────────────────────────────────────────────────────┘
-il[8]> .method int32 Larger(int32 a, int32 b) {
-  ...>   ldarg a
-  ...>   ldarg b
-  ...>   call Ma
-stack [] │ no locals │ 0 instructions │ editing 4 lines
-```
+The palette shows each overload with its stack effect and full signature:
 
-Tab takes `Math` and adds `::`. Type `Ma`, then move to the overload taking two `int32` values:
+![Math.Max overloads in the running terminal, with the int32 overload selected](../../../../../assets/ilrepl.png)
+
+Inside a method, type `call Ma`, complete `Math`, then type `Ma` after the inserted `::`.
+Use Down to select the overload taking two `int32` values. The [Quick start recording](/getting-started/quick-start/)
+shows Tab completion in a running session.
+
+Tab inserts the selected signature. Here is the finished block and a call to it, starting with
+`.reset` to clear the earlier examples:
 
 ```ilrepl
-┌────────────────────────────members───────────────────────────┐
-│   Max(int16, int16)    [int16, int16] → int16    System.Math   │
-│ ❯ Max(int32, int32)    [int32, int32] → int32    System.Math   │
-│   Max(int64, int64)    [int64, int64] → int64    System.Math   │
-│detail                                                       │
-│static int32 Math::Max(int32, int32)                           │
-│System.Math                                                  │
-└─────────────────────────────────────────────────────────────┘
-il[8]> .method int32 Larger(int32 a, int32 b) {
-  ...>   ldarg a
-  ...>   ldarg b
-  ...>   call Math::Ma
-stack [] │ no locals │ 0 instructions │ editing 4 lines
-```
-
-Tab inserts the signature. Here is the finished block and a call to it, starting with `.reset`
-to clear the earlier examples:
-
-```ilrepl
-il[8]> .reset
+il[6]> .reset
   cell, declarations, methods, and types cleared
-il[8]> .method int32 Larger(int32 a, int32 b) {
+il[6]> .method int32 Larger(int32 a, int32 b) {
   method int32 Larger(int32 a, int32 b)
-il[8]>   ldarg a
+il[6]>   ldarg a
   ┊ [int32]
-il[8]>   ldarg b
+il[6]>   ldarg b
   ┊ [int32, int32] ◂ top
-il[8]>   call Math::Max(int32, int32)
+il[6]>   call Math::Max(int32, int32)
   ┊ [int32]
-il[8]>   ret
+il[6]>   ret
   ┊ []
-il[8]> }
+il[6]> }
   end of method Larger
-il[9]> ldc.i4 6
+il[7]> ldc.i4 6
   ┊ [int32]
-il[9]> ldc.i4 7
+il[7]> ldc.i4 7
   ┊ [int32, int32] ◂ top
-il[9]> call Larger
+il[7]> call Larger
   ┊ [int32]
-il[9]> ret
+il[7]> ret
   = 7 : int32
 ```
 

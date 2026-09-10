@@ -38,7 +38,7 @@ reflection cannot invoke a vararg method directly.
 
 ## Definitions
 
-Methods defined with `.method` and types defined with `.class` are not replayed. Each is kept as
+Methods defined with `.method` and types defined with `.class` are not recreated on each cell run. Each is kept as
 a replayable model while its block is open and, when the block closes, written once with
 Mono.Cecil into a small assembly of its own and loaded into a collectible load context. A type is
 therefore one runtime type for the whole session, with its statics and its instances, and a
@@ -47,8 +47,8 @@ saved assembly is produced by the same writer, so the file carries the metadata 
 A session method's callers bind to a stable trampoline; redefining the method with the same
 signature compiles a new body and points the trampoline at it, so existing callers, delegates
 included, see the new body. Redefining a type, or a method with a new signature, creates new
-identities and rebuilds everything that mentions the old ones by replaying its lines, in the
-order they were accepted; one refusal restores the session. Instances and delegates a cell still
+identities and rebuilds the affected dependency group against the new definitions, including
+cycles; one refusal restores the session. Instances and delegates a cell still
 holds keep the previous definitions alive until they are released.
 
 Cells and definitions skip the runtime's access checks for session assemblies, so the REPL
