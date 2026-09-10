@@ -947,18 +947,30 @@ internal sealed class CaretWalk
             return Session(i, j, refEnd, owner, complete, explicitInstance);
         }
 
+        var n = separator + 1;
+        var hasName = _r.IsName(n);
+        var genericOpen = hasName && _r.IsPunct(n + 1, '<') ? n + 1 : -1;
+        var genericClose = genericOpen >= 0 ? _r.Matching(genericOpen) : -1;
+        var afterGeneric = genericOpen < 0 ? (hasName ? n + 1 : n) : genericClose < 0 ? _r.Count : genericClose + 1;
+        var paren = _r.IsPunct(afterGeneric, '(') ? afterGeneric : -1;
+        var parenClose = paren >= 0 ? _r.Matching(paren) : -1;
+        var referenceEnd = _r.EndOf(refEnd - 1);
+
+        var typeComplete = complete && hasName && !HasOpenList(i, refEnd)
+            && (parenClose >= 0 || owner == ".override" && paren < 0);
+
         var typeOne = _r.ReadType(j);
         var declaringStart = typeOne < separator && typeOne > j ? typeOne : j;
         var returnTypeText = declaringStart > j ? _line[_r.StartOf(j).._r.EndOf(declaringStart - 1)] : null;
         var declaringText = TypeText(declaringStart, separator);
         if (declaringStart > j && _caret <= _r.EndOf(declaringStart - 1))
         {
-            return (Type(j, declaringStart, owner, complete) ?? CompletionSite.None) with { ExplicitInstance = explicitInstance };
+            return (Type(j, declaringStart, owner, typeComplete) ?? CompletionSite.None) with { ExplicitInstance = explicitInstance };
         }
 
         if (_caret <= _r.EndOf(separator - 1))
         {
-            var site = Type(declaringStart, separator, owner, complete);
+            var site = Type(declaringStart, separator, owner, typeComplete);
             return site is { Kind: CompletionSiteKind.Type }
                 ? site with
                 {
@@ -974,15 +986,6 @@ internal sealed class CaretWalk
         {
             return CompletionSite.None;
         }
-
-        var n = separator + 1;
-        var hasName = _r.IsName(n);
-        var genericOpen = hasName && _r.IsPunct(n + 1, '<') ? n + 1 : -1;
-        var genericClose = genericOpen >= 0 ? _r.Matching(genericOpen) : -1;
-        var afterGeneric = genericOpen < 0 ? (hasName ? n + 1 : n) : genericClose < 0 ? _r.Count : genericClose + 1;
-        var paren = _r.IsPunct(afterGeneric, '(') ? afterGeneric : -1;
-        var parenClose = paren >= 0 ? _r.Matching(paren) : -1;
-        var referenceEnd = _r.EndOf(refEnd - 1);
 
         if (hasName && On(n))
         {
@@ -1012,7 +1015,7 @@ internal sealed class CaretWalk
 
         if (genericOpen >= 0 && Inside(genericOpen, genericClose))
         {
-            return Arguments(genericOpen, genericClose, declaringText + "::" + _line[_r.StartOf(n).._r.EndOf(n)], owner, complete);
+            return Arguments(genericOpen, genericClose, declaringText + "::" + _line[_r.StartOf(n).._r.EndOf(n)], owner, typeComplete);
         }
 
         if (genericOpen >= 0 && genericClose >= 0 && paren < 0 && _caret >= _r.EndOf(genericClose)
@@ -1029,7 +1032,7 @@ internal sealed class CaretWalk
 
         if (paren >= 0 && Inside(paren, parenClose))
         {
-            return (Parameters(paren, parenClose, owner, complete) ?? CompletionSite.None) with
+            return (Parameters(paren, parenClose, owner, typeComplete) ?? CompletionSite.None) with
             { DeclaringTypeText = declaringText, ReturnTypeText = returnTypeText, ExplicitInstance = explicitInstance };
         }
 
@@ -1044,10 +1047,15 @@ internal sealed class CaretWalk
         var returnEnd = _r.IsName(j) && !_r.IsPrimitive(j) && _r.IsBareMemberName(j) ? j : _r.ReadType(j);
         var bare = returnEnd < refEnd && _r.IsName(returnEnd) && _r.IsBareMemberName(returnEnd) ? returnEnd : -1;
         var returnText = returnEnd > j ? _line[_r.StartOf(j).._r.EndOf(returnEnd - 1)] : null;
+        var genericOpen = bare >= 0 && _r.IsPunct(bare + 1, '<') ? bare + 1 : -1;
+        var genericClose = genericOpen >= 0 ? _r.Matching(genericOpen) : -1;
+        var afterGeneric = genericOpen < 0 ? bare + 1 : genericClose < 0 ? _r.Count : genericClose + 1;
+        var paren = _r.IsPunct(afterGeneric, '(') ? afterGeneric : -1;
+        var typeComplete = complete && bare >= 0 && paren >= 0 && _r.Matching(paren) >= 0 && !HasOpenList(i, refEnd);
         if (returnEnd > j && _caret > _r.EndOf(j - 1) && (_caret <= _r.EndOf(returnEnd - 1) || HasOpenList(j, returnEnd)))
         {
             // In the return type, or in the first type of a reference with no `::` yet.
-            var site = Type(j, returnEnd, owner, complete);
+            var site = Type(j, returnEnd, owner, typeComplete);
             if (bare < 0 && site is { Kind: CompletionSiteKind.Type })
             {
                 return site with { Kind = CompletionSiteKind.MemberHead, ExplicitInstance = explicitInstance };
@@ -1062,7 +1070,7 @@ internal sealed class CaretWalk
             var head = _r.ReadType(returnEnd);
             if (head > returnEnd && _caret >= _r.StartOf(returnEnd) && (_caret <= _r.EndOf(head - 1) || HasOpenList(returnEnd, head)))
             {
-                var site = Type(returnEnd, head, owner, complete);
+                var site = Type(returnEnd, head, owner, typeComplete);
                 return site is { Kind: CompletionSiteKind.Type }
                     ? site with { Kind = CompletionSiteKind.MemberHead, ExplicitInstance = explicitInstance, ReturnTypeText = returnText }
                     : (site ?? CompletionSite.None) with { ExplicitInstance = explicitInstance };
@@ -1074,10 +1082,6 @@ internal sealed class CaretWalk
                 : CompletionSite.None;
         }
 
-        var genericOpen = _r.IsPunct(bare + 1, '<') ? bare + 1 : -1;
-        var genericClose = genericOpen >= 0 ? _r.Matching(genericOpen) : -1;
-        var afterGeneric = genericOpen < 0 ? bare + 1 : genericClose < 0 ? _r.Count : genericClose + 1;
-        var paren = _r.IsPunct(afterGeneric, '(') ? afterGeneric : -1;
         if (On(bare))
         {
             if (IsAccessor(owner))
@@ -1108,12 +1112,12 @@ internal sealed class CaretWalk
 
         if (genericOpen >= 0 && Inside(genericOpen, genericClose))
         {
-            return Arguments(genericOpen, genericClose, _line[_r.StartOf(bare).._r.EndOf(bare)], owner, complete);
+            return Arguments(genericOpen, genericClose, _line[_r.StartOf(bare).._r.EndOf(bare)], owner, typeComplete);
         }
 
         if (paren >= 0 && Inside(paren, _r.Matching(paren)))
         {
-            return (Parameters(paren, _r.Matching(paren), owner, complete) ?? CompletionSite.None) with
+            return (Parameters(paren, _r.Matching(paren), owner, typeComplete) ?? CompletionSite.None) with
             { ReturnTypeText = returnText, ExplicitInstance = explicitInstance };
         }
 

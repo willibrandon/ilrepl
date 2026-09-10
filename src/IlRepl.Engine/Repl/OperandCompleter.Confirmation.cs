@@ -27,8 +27,8 @@ public sealed partial class OperandCompleter
             var line = original[..site.ReplaceStart] + insertion + original[site.ReplaceEnd..];
             var declarationType = candidate.Type is not null
                 && site.Kind is CompletionSiteKind.Type or CompletionSiteKind.TypeArgument or CompletionSiteKind.GenericParameter
-                && site.Owner is ".locals" or ".args" or ".typeargs" or ".method" or ".field" or ".property" or ".event"
-                    or "extends" or "implements" or "catch";
+                && (site.Owner.StartsWith('.') && site.Owner is not (".dis" or ".disassemble")
+                    || site.Owner is "extends" or "implements" or "catch");
             var typeComplete = false;
             var enclosingType = declarationType
                 || candidate.Type is not null && site.Kind == CompletionSiteKind.TypeArgument && site.EnclosingTypeStart >= 0;

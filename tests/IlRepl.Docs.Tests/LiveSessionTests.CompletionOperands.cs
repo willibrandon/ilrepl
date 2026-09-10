@@ -5,6 +5,49 @@ namespace IlRepl.Docs.Tests;
 public sealed partial class LiveSessionTests
 {
     /// <summary>
+    /// Completing a generic attribute argument preserves an attribute that the browser runtime can inspect.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_GenericAttribute_CompletesAndBinds(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        const string prefix = ".custom instance void Mark<int3";
+        const string suffix = ">::.ctor()";
+        await PasteAsync(page, $$"""
+            .class public Mark<T> extends System.Attribute {
+            .method public instance void .ctor() {
+            ldarg.0
+            call instance void System.Attribute::.ctor()
+            ret
+            }
+            }
+            .class public Host {
+            {{prefix}}{{suffix}}
+            """);
+        for (var i = 0; i < suffix.Length; i++)
+        {
+            await page.Keyboard.PressAsync("ArrowLeft");
+        }
+
+        await CompletionAtCaretAsync(page, "  ...> " + prefix, "❯ int32");
+        await page.Keyboard.PressAsync("Tab");
+        await page.Keyboard.PressAsync("End");
+        await PromptContainsAsync(page, ".custom instance void Mark<int32>::.ctor()");
+        await PasteAsync(page, "\n}\nldtoken Host\ncall Type::GetTypeFromHandle(RuntimeTypeHandle)\n"
+            + "ldtoken Mark<int32>\ncall Type::GetTypeFromHandle(RuntimeTypeHandle)\n"
+            + "call bool Attribute::IsDefined(System.Reflection.MemberInfo, Type)\nret");
+        await page.Keyboard.PressAsync("Enter");
+        await ExpectCompletionAsync(page, "= true : bool");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// A valid nested type argument remains completable inside a complete generic call and executes after acceptance.
     /// </summary>
     /// <param name="browser">The browser engine.</param>
