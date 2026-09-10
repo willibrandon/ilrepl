@@ -155,9 +155,27 @@ jobs:
             name="$(basename "$dir")"
             case "$name" in
               *win-*) (cd "$dir" && zip -qr "../../release/$name.zip" .) ;;
-              *) tar -C "$dir" -czf "./release/$name.tar.gz" . ;;
+              *)
+                # Artifact transfers do not retain executable permissions.
+                chmod 755 "$dir/ilrepl"
+                tar -C "$dir" -czf "./release/$name.tar.gz" .
+                ;;
             esac
           done
+
+      - name: Verify the archived binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          for archive in ./release/*.tar.gz; do
+            name="$(basename "$archive" .tar.gz)"
+            directory="./release-smoke/$name"
+            mkdir -p "$directory"
+            tar -C "$directory" -xzf "$archive"
+            test -x "$directory/ilrepl"
+          done
+          ./release-smoke/ilrepl-linux-x64/ilrepl --version
+          ./release-smoke/ilrepl-linux-x64/ilrepl --no-color -e 'ldc.i4 6; ldc.i4 7; mul; ret' | grep -q '= 42 : int32'
 
       - name: Create the GitHub release
         uses: softprops/action-gh-release@v2
