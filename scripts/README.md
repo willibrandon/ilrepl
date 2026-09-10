@@ -27,6 +27,8 @@ executes that source to establish the context for the following transcript. Only
 scratch directory used by `.save` is normalized to the documented `/path/to` placeholder.
 Editor views show unsent text; complete transcripts run through the terminal's submission
 and recovery path. Build `samples/Greeter` before regenerating. The default command generates
-colours and reports replay differences as warnings. Verification is an explicit local command.
+colours for the documented text and reports replay differences or failures as warnings. Updates
+stop if an input produces an error that its documented response does not contain. Verification
+is an explicit local command.
 
 Terminal capture instructions are in [vhs/README.md](../vhs/README.md).

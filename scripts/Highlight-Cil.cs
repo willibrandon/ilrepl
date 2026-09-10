@@ -76,11 +76,16 @@ foreach (var file in files)
             var where = $"{relative}:{start + 1}";
             if (language == "cil" && i > 0 && lines[i - 1] == "<!-- replay-setup -->")
             {
-                var setup = await SubmitAsync(engine, body);
-                if ((verify || update) && setup.Any(line => line.Kind == LineKind.Error))
+                var setup = await ReplayAsync(engine, body, where);
+                if (setup is not null && setup.Any(line => line.Kind == LineKind.Error))
                 {
                     var detail = string.Join('\n', setup.Select(line => line.PlainText));
-                    throw new InvalidOperationException($"{where}: setup failed: {detail}");
+                    if (verify || update)
+                    {
+                        throw new InvalidOperationException($"{where}: setup failed: {detail}");
+                    }
+
+                    warnings.Add($"{where}: setup failed: {detail}");
                 }
             }
 
@@ -294,7 +299,11 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
 
     // A transcript may end on the bare prompt that came next; it is not the engine's to say.
     var trailingPrompt = body.Count > 0 && Patterns.BarePrompt().IsMatch(body[^1]);
-    var produced = await SubmitAsync(engine, inputs);
+    var produced = await ReplayAsync(engine, inputs, where);
+    if (produced is null)
+    {
+        return StyledLines(body, SpanStyle.Input);
+    }
     var directory = Directory.GetCurrentDirectory();
     var normalized = produced.Select(line => line.Kind == LineKind.Info
         ? line.Spans.Select(span => span with { Text = NormalizeSavePath(span.Text, directory, Path.DirectorySeparatorChar) }).ToArray()
@@ -313,11 +322,7 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
 
     if (update)
     {
-        if (produced.Any(line => line.Kind == LineKind.Error) && !body.Any(line => line.Contains("error:", StringComparison.Ordinal)))
-        {
-            throw new InvalidOperationException($"{where}: unexpected error: {string.Join('\n', actual)}");
-        }
-
+        ValidateUpdateErrors(produced, body, where);
         return normalized;
     }
 
@@ -326,7 +331,62 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
     var expected = mismatch < body.Count ? body[mismatch] : "(end)";
     var got = mismatch < actual.Length ? actual[mismatch] : "(end)";
     warnings.Add($"{where}: line {mismatch + 1}: page '{expected}', REPL '{got}'");
-    return normalized;
+    return StyledLines(body, SpanStyle.Input);
+}
+
+// Each error must already belong to the same input occurrence, including its continuation lines.
+static void ValidateUpdateErrors(IReadOnlyList<TranscriptLine> produced, IReadOnlyList<string> body, string where)
+{
+    var prompts = Enumerable.Range(0, body.Count).Where(index => Patterns.PromptNumber().IsMatch(body[index])).ToArray();
+    var input = -1;
+    var next = 0;
+    var end = 0;
+    var continuation = false;
+    foreach (var line in produced)
+    {
+        if (line.Kind == LineKind.Input)
+        {
+            input++;
+            next = input < prompts.Length ? prompts[input] + 1 : body.Count;
+            end = input + 1 < prompts.Length ? prompts[input + 1] : body.Count;
+            if (input >= prompts.Length || Patterns.PagePrompt().Replace(body[prompts[input]], "") !=
+                Patterns.PagePrompt().Replace(line.PlainText, ""))
+            {
+                next = end;
+            }
+        }
+        else if (line.Kind == LineKind.Error)
+        {
+            var text = line.PlainText.TrimEnd();
+            while (!continuation && next < end && body[next].TrimEnd() != text)
+            {
+                next++;
+            }
+
+            if (next >= end || body[next].TrimEnd() != text)
+            {
+                throw new InvalidOperationException($"{where}: unexpected error after input {input + 1}: {text.TrimStart()}");
+            }
+
+            next++;
+        }
+
+        continuation = line.Kind == LineKind.Error;
+    }
+}
+
+// Normal colour generation can use the source when replay fails; verification and updates cannot.
+async Task<List<TranscriptLine>?> ReplayAsync(IReplEngine engine, IReadOnlyList<string> inputs, string where)
+{
+    try
+    {
+        return await SubmitAsync(engine, inputs);
+    }
+    catch (Exception ex) when (!verify && !update)
+    {
+        warnings.Add($"{where}: replay failed: {ex.Message}");
+        return null;
+    }
 }
 
 // Normalize only the path in a save note, including nested Windows directories.
