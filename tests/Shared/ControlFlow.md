@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 58 method examples and the paired constructor example
+not justify refusing a correct body. The 61 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -20,7 +20,7 @@ using the analyzer to build its expected results. Incorrect bodies are never exe
 | Return shape and parameter assignment | III.3.57, I.8.7.3 | Diamond, NativeAddition | WrongReturn, WrongCall |
 | Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
 | Reduced pointer elements | I.8.7, III.1.8.1.2.3 | ReducedPointerJoin, EnumPointerJoin | ByrefJoin |
-| Managed pointers and readonly provenance | III.1.8.1.2.2, III.2.3, III.3.62 | ManagedPointer, ReadOnlyLoad | WrongPrefix |
+| Managed pointers and readonly provenance | III.1.8.1.2.2, III.2.3, III.3.62 | ManagedPointer, ReadOnlyLoad, ReadOnlyFieldWrite | WrongPrefix |
 | Correct operations outside verification | III.1.8, III.3.47 | StackAllocation, ReadOnlyWrite, PointerDifference | WrongArithmetic |
 | Numeric operand categories | III.1.5 tables III.2–III.8 | NativeAddition, MixedFloats, 288 raw pairs | BadOverflowFloat, BadNotFloat, BadShift |
 | Comparisons | III.1.5 table III.4 | ObjectComparison | BadComparison |
@@ -30,7 +30,7 @@ using the analyzer to build its expected results. Incorrect bodies are never exe
 | Protected-region entry | III.3.15 | Catch, Finally | BranchIntoTry |
 | Prefix boundaries and applicability | III.2 | TailCall, UnalignedLoad, ReadOnlyLoad | WrongPrefix, BranchIntoPrefix |
 | Generic identity and boxing | III.1.8.1.1–III.1.8.1.3 | GenericBox, GenericReference | GenericNeedsBox, GenericDistinct |
-| Generic object references | I.8.7.1, III.1.8.1.1 | GenericReferenceThrow | GenericNeedsBoxThrow |
+| Generic object references | I.8.7.1, III.1.8.1.1 | GenericReferenceThrow, GenericReferenceBranch | GenericNeedsBoxThrow, GenericNeedsBoxBranch |
 | Runtime extensions to constrained calls | .NET ECMA-335 Augments | StaticAbstract_ImplementedAndCalled | Existing member eligibility tests |
 | Constrained receiver type | III.2.1 | ConstrainedReceiver | WrongConstrainedReceiver |
 | Readonly store receiver across paths | II.16.1.2 | FlowReceiver with this on both paths | FlowReceiver with another receiver |
@@ -64,7 +64,8 @@ A `class T` constraint lets CoreCLR pass an unboxed generic reference to an obje
 ILVerification reports `StackUnexpected`. `GenericReference` stays executable and carries an
 unverifiable diagnostic; `GenericBox` explicitly boxes the parameter and verifies successfully.
 `GenericReferenceThrow` likewise runs with its reference constraint while the library reports
-`StackObjRef`. An unconstrained parameter cannot be treated as an object without boxing.
+`StackObjRef`, and `GenericReferenceBranch` reports `StackUnexpected`. An unconstrained parameter
+cannot be treated as an object reference without boxing.
 
 ECMA-335 III.3.15 forbids an ordinary branch across a protected-region boundary. The library's
 `IsValidBranchTarget` instead accepts a branch to the first instruction of a directly nested try.

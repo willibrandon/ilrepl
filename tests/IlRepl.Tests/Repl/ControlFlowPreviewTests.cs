@@ -127,4 +127,27 @@ public sealed class ControlFlowPreviewTests
         Assert.Contains(finding => finding.Kind == AnalysisDiagnosticKind.Error
             && finding.Message.Contains("needs an object reference", StringComparison.Ordinal), bad.Diagnostics);
     }
+
+    /// <summary>
+    /// Conditional branches accept reference-constrained parameters and reject unconstrained parameters.
+    /// </summary>
+    /// <param name="instruction">The conditional branch instruction.</param>
+    [TestMethod]
+    [DataRow("brtrue")]
+    [DataRow("brfalse")]
+    public async Task Analyze_ConditionalBranchRequiresReferenceGenericConstraint(string instruction)
+    {
+        var accepted = $".class public Good {{\n.method public static void F<class T>(!!T value) {{\n"
+            + $"ldarg value\n{instruction} DONE\nDONE: ret\n}}\n}}";
+        var rejected = $".class public Bad {{\n.method public static void F<T>(!!T value) {{\n"
+            + $"ldarg value\n{instruction} DONE\nDONE: ret\n}}\n}}";
+        using var goodEditing = new EditingSession(new Session());
+        var good = await goodEditing.AnalyzeAsync(new AnalysisRequest(accepted.Split('\n'), 2, 0, 1), TestContext.CancellationToken);
+        Assert.DoesNotContain(finding => finding.Kind == AnalysisDiagnosticKind.Error, good.Diagnostics,
+            string.Join("; ", good.Diagnostics.Select(finding => finding.Message)));
+        using var badEditing = new EditingSession(new Session());
+        var bad = await badEditing.AnalyzeAsync(new AnalysisRequest(rejected.Split('\n'), 2, 0, 2), TestContext.CancellationToken);
+        Assert.Contains(finding => finding.Kind == AnalysisDiagnosticKind.Error
+            && finding.Message.Contains("needs an integer, pointer, or reference", StringComparison.Ordinal), bad.Diagnostics);
+    }
 }

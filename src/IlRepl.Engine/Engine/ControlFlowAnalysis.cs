@@ -269,7 +269,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         }
 
         if (op.Name is "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s"
-            && kind is StackCategory.Float or StackCategory.ValueType)
+            && kind is not (null or StackCategory.Int32 or StackCategory.Int64 or StackCategory.NativeInt or StackCategory.ByRef)
+            && !_types.CanAssign(top, _types.Algebra.Primitive("object")))
         {
             return $"{op.Name} needs an integer, pointer, or reference but found {_types.Name(top)}";
         }
@@ -503,7 +504,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
             var name = view.Op.Name!;
             var permitted = name is "dup" or "pop" || argument == 0
-                && (name.StartsWith("ldind", StringComparison.Ordinal) || name is "ldobj" or "ldfld" or "ldflda" or "stfld"
+                && (name.StartsWith("ldind", StringComparison.Ordinal) || name is "ldobj" or "ldfld" or "ldflda"
                     || view.IsInstance && name is "call" or "callvirt") || name == "cpobj" && argument == 1;
             if (!permitted)
             {

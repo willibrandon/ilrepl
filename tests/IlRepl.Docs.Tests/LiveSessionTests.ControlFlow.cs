@@ -37,6 +37,7 @@ public sealed partial class LiveSessionTests
     /// </summary>
     /// <param name="browser">The browser engine.</param>
     [TestMethod]
+    [DoNotParallelize]
     [DataRow("chromium")]
     [DataRow("webkit")]
     [Timeout(300_000, CooperativeCancellation = true)]
