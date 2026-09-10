@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 92 method examples and the paired constructor example
+not justify refusing a correct body. The 98 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -35,11 +35,12 @@ using the analyzer to build its expected results. Incorrect bodies are never exe
 | Runtime extensions to constrained calls | .NET ECMA-335 Augments | StaticAbstract_ImplementedAndCalled | Existing member eligibility tests |
 | Constrained receiver type | III.2.1 | ConstrainedReceiver | WrongConstrainedReceiver |
 | Readonly store receiver across paths | II.16.1.2 | FlowReceiver with this on both paths | FlowReceiver with another receiver |
-| Indirect calls | III.3.20 | IndirectCall | WrongIndirectCall |
+| Indirect calls | III.3.20 | IndirectCall | WrongIndirectCall, WrongIndirectTarget |
 | Block memory operands | III.3.30, III.3.36 | CopyBlock, InitializeBlock | WrongCopyBlock, WrongInitializeBlock |
 | Array element, index and pointer operands | I.8.7.1, III.4.7–III.4.9, III.4.26–III.4.27 | ArrayElement, ArrayIndex, ManagedPointer | WrongArrayElement, WrongArrayIndex, WrongArrayValue, WrongIndirectLoad |
-| Object copy operands | III.4.4 | CopyObject | WrongCopyObjectSource |
+| Object copy operands | III.4.4 | CopyObject, CopyReferenceObject | WrongCopyObjectSource, WrongCopyObjectSourceType, WrongCopyObjectDestinationType |
 | Typed references | III.4.19, III.4.22–III.4.23 | TypedReference | WrongMakeTypedReference, WrongTypedReferenceType, WrongTypedReferenceValue |
+| Unboxing | III.4.32 | UnboxValue | WrongUnboxType |
 | Stack allocation depth | III.3.47 | StackAllocation | WrongAllocationStack |
 | Transitive generic constraints | III.1.8.1.2.3 | TransitiveBox | GenericNeedsBox |
 | Header stack limit | III.1.7.4, II.25.4.3 | DeepStack, DeadCode through live and both exports | Raw underflow fixture |
@@ -99,6 +100,10 @@ incorrect as well as unverifiable, so `JumpFromTry` pins the analyzer's stricter
 The library reports only `Unverifiable` when `cpblk` or `initblk` receives an object reference
 where the instruction requires an address. ECMA III.3.30 and III.3.36 make those operand shapes
 incorrect. The bad size and initialization-value cases also report `ExpectedIntegerType`.
+
+The library checks that both `cpobj` operands are managed pointers but leaves their element-type
+assignment checks as a TODO. ECMA III.4.4 requires the source element to assign to the operand type
+and the operand type to assign to the destination element. The analyzer rejects both wrong directions.
 
 The library cannot inspect a fixture containing typed-reference instructions and reports
 `TypedReference not supported in .NET Core`. ECMA III.4.19 and III.4.22–III.4.23 define the

@@ -357,6 +357,12 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return $"{op.Name} needs an object reference but found {_types.Name(top)}";
         }
 
+        if (op == OpCodes.Unbox && view.Type is { } unboxed && !_types.Algebra.IsValueType(unboxed)
+            && !_types.Algebra.IsGenericParameter(unboxed))
+        {
+            return $"unbox needs a value type or generic parameter but found {_types.Name(unboxed)}";
+        }
+
         if (op == OpCodes.Jmp && count != 0)
         {
             return "jmp requires an empty evaluation stack";
@@ -413,7 +419,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             var first = count - view.ArgumentPops;
             if (op == OpCodes.Calli)
             {
-                if (!Address(top))
+                if (kind is not (null or StackCategory.NativeInt))
                 {
                     return $"calli needs a function pointer but found {_types.Name(top)}";
                 }
@@ -502,8 +508,16 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
             var address = values[count - pops].Type;
             var storage = StorageType(view);
+            if (memory == "cpobj" && top is { } source && _types.Algebra.IsByRef(source) && storage is not null
+                && _types.Algebra.ElementOf(source) is { } sourceType && !_types.CanAssign(sourceType, storage))
+            {
+                return $"cpobj cannot copy {_types.Name(sourceType)} as {_types.Name(storage)}";
+            }
+
             if (address is not null && _types.Algebra.IsByRef(address) && storage is not null
-                && _types.Algebra.ElementOf(address) is { } element && !_types.CanAssign(element, storage))
+                && _types.Algebra.ElementOf(address) is { } element
+                && !(memory.StartsWith("stind", StringComparison.Ordinal) || memory is "stobj" or "initobj" or "cpobj"
+                    ? _types.CanAssign(storage, element) : _types.CanAssign(element, storage)))
             {
                 return $"{memory} cannot access {_types.Name(element)} through {_types.Name(address)}";
             }
