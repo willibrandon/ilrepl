@@ -272,8 +272,7 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// Long transcript lines wrap instead of being cut off, so the help is readable in a narrow
-    /// terminal. A description after a label folds under itself, at the label's width.
+    /// Help entries and their descriptions remain separate and readable in a narrow terminal.
     /// </summary>
     [TestMethod]
     public async Task Help_WrapsInNarrowTerminal()
@@ -283,7 +282,7 @@ public sealed class IlReplAppTests
         var transcript = new Transcript();
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
             .WithHeadless()
-            .WithDimensions(60, 124)
+            .WithDimensions(60, 260)
             .Build();
 
         var run = terminal.RunAsync(ct);
@@ -309,9 +308,10 @@ public sealed class IlReplAppTests
         // Rows fill the width beside the scrollbar; they are not folded early.
         Assert.Contains("Type one IL instruction per line. The simulated stack is", rows.Select(r => r.TrimEnd()), "the first row of the paragraph should use the full width");
         Assert.Contains("shown after each one.", rows.Select(r => r.TrimEnd()));
-        Assert.Contains(r => r.StartsWith("  ldc.i4 6 ", StringComparison.Ordinal), rows, "an indented example should keep its indentation");
+        Assert.Contains(r => r == "  ldc.i4 6", rows, "an indented example should keep its indentation");
         Assert.Contains(r => r.StartsWith("  .args (T name = literal, ...)", StringComparison.Ordinal), rows, "an entry should keep its indentation and label");
-        Assert.Contains(r => r.StartsWith(new string(' ', 32), StringComparison.Ordinal) && r.Trim().Length > 0, rows, "a folded description should continue at the label's width");
+        var argsRow = Array.FindIndex(rows, r => r.StartsWith("  .args (", StringComparison.Ordinal));
+        Assert.AreEqual("    cell arguments and the values passed each run", rows[argsRow + 1]);
         var separator = Array.FindIndex(rows, r => r.StartsWith("──", StringComparison.Ordinal));
         Assert.IsGreaterThan(0, separator, "the separator above the prompt should be on screen");
         Assert.DoesNotContain(r => r.TrimEnd().Length > 59, rows.Take(separator), "no transcript row should run into the scrollbar column");
@@ -556,8 +556,7 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// Wheel reports scroll the transcript even when the app has not asked the terminal for mouse
-    /// tracking.
+    /// Wheel reports scroll the transcript even when the app has not requested mouse tracking.
     /// </summary>
     [TestMethod]
     public async Task Wheel_ScrollsTranscriptWithoutMouseTracking()
@@ -579,12 +578,13 @@ public sealed class IlReplAppTests
         await auto.WaitUntilTextAsync("Ctrl+Q leaves.");
         await auto.WaitUntilNoTextAsync("Type one IL instruction");
 
+        var scrollTicks = transcript.Lines.Sum(line => TranscriptLineFolder.Fold(line.Spans, 99).Count);
         await auto.MouseMoveToAsync(20, 5, ct: ct);
-        await auto.ScrollUpAsync(20, ct: ct);
+        await auto.ScrollUpAsync(scrollTicks, ct: ct);
         await auto.WaitUntilTextAsync("Type one IL instruction");
         await auto.WaitUntilNoTextAsync("Ctrl+Q leaves.");
 
-        await auto.ScrollDownAsync(20, ct: ct);
+        await auto.ScrollDownAsync(scrollTicks, ct: ct);
         await auto.WaitUntilTextAsync("Ctrl+Q leaves.");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);

@@ -11,16 +11,26 @@ The cell is kept, so you can still run it.
 
 ```ilrepl
 il[1]> .args (int32 n = 0)
+  args: 0:int32 n = 0
 il[1]> ldarg n
+  ┊ [int32]
 il[1]> ldc.i4 2
+  ┊ [int32, int32] ◂ top
 il[1]> mul
+  ┊ [int32]
 il[1]> .save doubler.dll
-  wrote /home/you/doubler.dll with IlRepl.Cell.Run
+  wrote /path/to/doubler.dll with IlRepl.Cell.Run
 ```
 
-The file loads like any other assembly:
+The path in the output is absolute; `/path/to` above stands for your current directory.
+Save this as `inspect.cs` beside `doubler.dll` and run `dotnet run --file inspect.cs`.
+The file-based app uses the JIT so it can load the generated assembly:
 
 ```csharp
+#:property PublishAot=false
+
+using System.Reflection;
+
 var assembly = Assembly.LoadFrom("doubler.dll");
 var run = assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!;
 Console.WriteLine(run.Invoke(null, [21])); // 42
@@ -42,7 +52,7 @@ qualified and each class is written out with its fields, members, and nested typ
 assembles with `ilasm` after adding the assembly references it lists.
 
 ```ilrepl
-il[2]> .il
+il[1]> .il
 .assembly extern System.Runtime {}
 .assembly ilrepl_cell {}
 .module ilrepl_cell.dll

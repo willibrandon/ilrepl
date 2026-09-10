@@ -3,9 +3,8 @@ title: Methods
 description: Define a method in one cell and call it from the next.
 ---
 
-`.method` opens a block the way `.try` does, and `}` closes it. The method is emitted onto the
-cell's type and stays for the rest of the session, so later cells and other methods call it by
-name. This is the source of a method; copy it, paste it into a session, and press Enter.
+`.method` opens a block the way `.try` does, and `}` closes it. The method is compiled once
+and kept in the session, so later cells and other methods call it by name. This is the source of a method; copy it, paste it into a session, and press Enter.
 
 ```cil
 .method int32 Fib(int32 n) {
@@ -41,23 +40,33 @@ il[1]> ldc.i4 2
 il[1]> blt BASE
   ┊ []
 il[1]> ldarg n
+  ┊ [int32]
 il[1]> ldc.i4 1
+  ┊ [int32, int32] ◂ top
 il[1]> sub
+  ┊ [int32]
 il[1]> call int32 Fib(int32)
   ┊ [int32]
 il[1]> ldarg n
+  ┊ [int32, int32] ◂ top
 il[1]> ldc.i4 2
+  ┊ [int32, int32, int32] ◂ top
 il[1]> sub
+  ┊ [int32, int32] ◂ top
 il[1]> call int32 Fib(int32)
   ┊ [int32, int32] ◂ top
 il[1]> add
+  ┊ [int32]
 il[1]> ret
   ┊ []
 il[1]> BASE: ldarg n
+  ┊ [int32]
 il[1]> ret
+  ┊ []
 il[1]> }
   end of method Fib
 il[2]> ldc.i4 10
+  ┊ [int32]
 il[2]> call int32 Fib(int32)
   ┊ [int32]
 il[2]> ret
@@ -85,15 +94,21 @@ delegates over it work too.
 il[3]> .method void Greet(string name) {
   method void Greet(string name)
 il[3]> ldstr "hello, "
+  ┊ [string]
 il[3]> ldarg name
+  ┊ [string, string] ◂ top
 il[3]> call string String::Concat(string, string)
+  ┊ [string]
 il[3]> call void Console::WriteLine(string)
   ┊ []
 il[3]> ret
+  ┊ []
 il[3]> }
   end of method Greet
 il[4]> ldstr "methods"
+  ┊ [string]
 il[4]> call void Greet(string)
+  ┊ []
 il[4]> ret
 hello, methods
   = (void)
@@ -115,8 +130,8 @@ il[5]> .methods
 ## Closing the block
 
 `}` closes the method. When the stack holds what the return type needs, one value for `int32` or
-nothing for `void`, the `ret` is implied. A `ret` that does not match the declared type is refused
-where you typed it, so the block stays open and you can fix the stack:
+nothing for `void`, the final `ret` is implied. A mismatched return is refused at the offending
+line. In the terminal editor the submission is withdrawn and the block comes back for correction:
 
 ```ilrepl
 il[5]> .method int32 Answer() {
@@ -125,22 +140,57 @@ il[5]> ldstr "42"
   ┊ [string]
 il[5]> ret
   error: ret needs int32 on the stack but found string
-il[5]> pop
-  ┊ []
+  method Answer abandoned; the block is back in the editor
+```
+
+Replace the string load with `ldc.i4 42` and submit the corrected block:
+
+```ilrepl
+il[5]> .method int32 Answer() {
+  method int32 Answer()
 il[5]> ldc.i4 42
   ┊ [int32]
 il[5]> }
   end of method Answer
-il[6]>
+il[6]> call Answer
+  ┊ [int32]
+il[6]> ret
+  = 42 : int32
 ```
 
-A close the JIT refuses works the same way: the error names the method, the block stays open, and
-`.undo` takes back the lines that need to change.
+A branch can leave different stack depths on two paths even when each typed line passes the
+linear stack check. Submit this block to see close-time validation:
+
+```cil
+.method void Bad() {
+  ldc.i4 0
+  brfalse SKIP
+  ldc.i4 1
+SKIP: pop
+  ret
+}
+```
 
 ```ilrepl
-il[6]> }
+il[7]> .method void Bad() {
+  method void Bad()
+il[7]> ldc.i4 0
+  ┊ [int32]
+il[7]> brfalse SKIP
+  ┊ []
+il[7]> ldc.i4 1
+  ┊ [int32]
+il[7]> SKIP: pop
+  ┊ []
+il[7]> ret
+  ┊ []
+il[7]> }
   error: the JIT rejected method Bad: Common Language Runtime detected an invalid program. (check .show for a stack mismatch between branches; the block is still open)
+  method Bad abandoned; the block is back in the editor
 ```
+
+The desktop JIT rejects it at `}` and the terminal returns the block to the editor. In the
+browser this runtime validation happens on the first call instead.
 
 `.undo` takes back the last line of the block, and taking back the header abandons it. `.clear`
 inside a block abandons the method and leaves the cell alone. Neither advances the cell number.

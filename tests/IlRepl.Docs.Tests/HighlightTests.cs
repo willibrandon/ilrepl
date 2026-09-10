@@ -29,10 +29,10 @@ public sealed class HighlightTests
             .Any(line => line.EnumerateArray().Any(token => token[2].GetString() == "Error")), suggestions);
         var editor = blocks.Where(block => block.GetProperty("where").GetString()!
             .StartsWith("usage/editing.md:", StringComparison.Ordinal) && block.GetProperty("editor").GetBoolean());
-        Assert.Contains(block => block.GetProperty("lines")[0].GetArrayLength() == 0, editor,
-            "The palette border is editor UI rather than an instruction.");
+        Assert.IsNotEmpty(editor, "Unsubmitted editor examples keep their own rendering mode.");
         var page = File.ReadAllText(Path.Combine(SitePaths.Dist, "usage", "editing", "index.html"));
         Assert.Contains("Math::Max", page);
+        Assert.Contains("Math.Max overloads in the running terminal", page, "The palette uses an actual terminal capture.");
         var keyboard = File.ReadAllText(Path.Combine(SitePaths.Dist, "reference", "keyboard", "index.html"));
         Assert.Contains("PageUp", keyboard);
         Assert.Contains("PageDown", keyboard);

@@ -24,9 +24,13 @@ il[1]> ldarg x
 il[1]> stfld int32 Point::X
   ┊ []
 il[1]> ldarg.0
+  ┊ [Point&]
 il[1]> ldarg y
+  ┊ [Point&, int32] ◂ top
 il[1]> stfld int32 Point::Y
+  ┊ []
 il[1]> ret
+  ┊ []
 il[1]> }
   end of method .ctor
 il[1]> .method public instance int32 Sum() {
@@ -36,19 +40,25 @@ il[1]> ldarg.0
 il[1]> ldfld int32 Point::X
   ┊ [int32]
 il[1]> ldarg.0
+  ┊ [int32, Point&] ◂ top
 il[1]> ldfld int32 Point::Y
   ┊ [int32, int32] ◂ top
 il[1]> add
+  ┊ [int32]
 il[1]> ret
+  ┊ []
 il[1]> }
   end of method Sum
 il[1]> }
   end of struct Point
 il[2]> ldc.i4 3
+  ┊ [int32]
 il[2]> ldc.i4 4
+  ┊ [int32, int32] ◂ top
 il[2]> newobj instance void Point::.ctor(int32, int32)
   ┊ [Point]
 il[2]> box Point
+  ┊ [object]
 il[2]> ret
   = Point { X = 3, Y = 4 } : Point
 ```
@@ -61,8 +71,10 @@ the object, and the stack echo names it. Members follow ILAsm too: a method is a
 method unless it says `static`, and a member with no access word is `privatescope`, which only
 its own class can reach, so write `public` when a cell needs it.
 
-Nothing runs when the class closes. The family is written, loaded, and every body is prepared
-on the JIT, so a body the runtime would refuse is reported at `}` and the block stays open.
+The class closes without running constructors or type initializers. The family is written and
+loaded, and desktop runtime preparation checks the bodies it can prepare. A refused terminal
+submission returns the block to the editor for correction. Generic method definitions and browser
+bodies still need runtime validation when called.
 The note says `end of struct Point` and the cell number advances: a class completes the cell
 the way a method does.
 
@@ -70,15 +82,22 @@ the way a method does.
 
 The type is one runtime type for the whole session. A static keeps its value from cell to cell,
 an instance made in one cell is the same object in the next, and a type initializer runs once,
-when the type is first touched.
+when the runtime initializes the type. `beforefieldinit` permits earlier initialization; omit
+it when the initializer must wait for the first triggering access.
 
 ```ilrepl
 il[3]> .locals init (valuetype Point p)
+  locals: 0:Point p
 il[3]> ldloca p
+  ┊ [Point&]
 il[3]> ldc.i4 5
+  ┊ [Point&, int32] ◂ top
 il[3]> ldc.i4 6
+  ┊ [Point&, int32, int32] ◂ top
 il[3]> call instance void Point::.ctor(int32, int32)
+  ┊ []
 il[3]> ldloca p
+  ┊ [Point&]
 il[3]> call instance int32 Point::Sum()
   ┊ [int32]
 il[3]> ret
@@ -104,35 +123,49 @@ il[4]> .method public abstract virtual instance int32 Area() { }
   method instance int32 Area(); end of method Area
 il[4]> }
   end of interface IArea
-il[4]> .class public Square implements IArea {
+il[5]> .class public Square implements IArea {
   class Square
-il[4]> .field public int32 Side
+il[5]> .field public int32 Side
   field public int32 Side
-il[4]> .method public instance void .ctor(int32 side) {
+il[5]> .method public instance void .ctor(int32 side) {
   method instance void .ctor(int32)
-il[4]> ldarg.0
-il[4]> call instance void Object::.ctor()
-il[4]> ldarg.0
-il[4]> ldarg side
-il[4]> stfld int32 Square::Side
-il[4]> ret
-il[4]> }
-  end of method .ctor
-il[4]> .method public virtual instance int32 Area() {
-  method instance int32 Area()
-il[4]> ldarg.0
-il[4]> ldfld int32 Square::Side
-il[4]> dup
-il[4]> mul
-il[4]> ret
-il[4]> }
-  end of method Area
-il[4]> }
-  end of class Square
-il[5]> ldc.i4 7
-il[5]> newobj instance void Square::.ctor(int32)
-il[5]> callvirt instance int32 IArea::Area()
+il[5]> ldarg.0
+  ┊ [Square]
+il[5]> call instance void Object::.ctor()
+  ┊ []
+il[5]> ldarg.0
+  ┊ [Square]
+il[5]> ldarg side
+  ┊ [Square, int32] ◂ top
+il[5]> stfld int32 Square::Side
+  ┊ []
 il[5]> ret
+  ┊ []
+il[5]> }
+  end of method .ctor
+il[5]> .method public virtual instance int32 Area() {
+  method instance int32 Area()
+il[5]> ldarg.0
+  ┊ [Square]
+il[5]> ldfld int32 Square::Side
+  ┊ [int32]
+il[5]> dup
+  ┊ [int32, int32] ◂ top
+il[5]> mul
+  ┊ [int32]
+il[5]> ret
+  ┊ []
+il[5]> }
+  end of method Area
+il[5]> }
+  end of class Square
+il[6]> ldc.i4 7
+  ┊ [int32]
+il[6]> newobj instance void Square::.ctor(int32)
+  ┊ [Square]
+il[6]> callvirt instance int32 IArea::Area()
+  ┊ [int32]
+il[6]> ret
   = 49 : int32
 ```
 
@@ -150,28 +183,35 @@ and named by its path, `Outer/Inner`, and a nested generic type redeclares the e
 parameters first, as ECMA-335 has it.
 
 ```ilrepl
-il[6]> .class public Box`1<T> {
+il[7]> .class public Box`1<T> {
   class Box`1<T>
-il[6]> .field public !0 Value
+il[7]> .field public !0 Value
   field public !T Value
-il[6]> .method public instance void .ctor(!0 v) {
+il[7]> .method public instance void .ctor(!0 v) {
   method instance void .ctor(!T)
-il[6]> ldarg.0
+il[7]> ldarg.0
   ┊ [Box<!T>]
-il[6]> call instance void Object::.ctor()
-il[6]> ldarg.0
-il[6]> ldarg v
-il[6]> stfld !0 class Box`1<!0>::Value
-il[6]> ret
-il[6]> }
-  end of method .ctor
-il[6]> }
-  end of class Box`1
-il[7]> ldstr "boxed"
-il[7]> newobj instance void class Box`1<string>::.ctor(!0)
-  ┊ [Box<string>]
-il[7]> ldfld !0 class Box`1<string>::Value
+il[7]> call instance void Object::.ctor()
+  ┊ []
+il[7]> ldarg.0
+  ┊ [Box<!T>]
+il[7]> ldarg v
+  ┊ [Box<!T>, !T] ◂ top
+il[7]> stfld !0 class Box`1<!0>::Value
+  ┊ []
 il[7]> ret
+  ┊ []
+il[7]> }
+  end of method .ctor
+il[7]> }
+  end of class Box`1
+il[8]> ldstr "boxed"
+  ┊ [string]
+il[8]> newobj instance void class Box`1<string>::.ctor(!0)
+  ┊ [Box<string>]
+il[8]> ldfld !0 class Box`1<string>::Value
+  ┊ [string]
+il[8]> ret
   = "boxed" : string
 ```
 
@@ -193,13 +233,13 @@ difference that the runtime itself makes: a derived class may use a `family` mem
 any receiver, not only through its own type.
 
 ```ilrepl
-il[8]> .class public Base {
+il[9]> .class public Base {
   class Base
-il[8]> .field private int32 Secret
+il[9]> .field private int32 Secret
   field private int32 Secret
-il[8]> }
+il[9]> }
   end of class Base
-il[9]> ldsfld int32 Base::Secret
+il[10]> ldsfld int32 Base::Secret
   error: int32 Base::Secret is private; only Base and the types nested in it can use it, not the cell
 ```
 
@@ -210,7 +250,7 @@ and the open method. `.il` renders each class before the cell type, and `.save` 
 the assembly, so the file carries exactly the metadata you declared.
 
 ```ilrepl
-il[9]> .types
+il[10]> .types
   struct Point
       public int32 X
       public int32 Y
@@ -218,10 +258,15 @@ il[9]> .types
       instance int32 Sum()
   interface IArea
       instance int32 Area()
-  class Square
+  class Square implements IArea
       public int32 Side
       instance void .ctor(int32)
       instance int32 Area()
+  class Box`1<T>
+      public !T Value
+      instance void .ctor(!T)
+  class Base
+      private int32 Secret
 ```
 
 ## Closing, undoing, and redefining
@@ -240,7 +285,38 @@ class may refer back to one that refers to it: define `A`, define `B` using `A`,
 longer compiles, the redefinition is refused with that name and nothing changes: redefine the
 dependent first, or `.reset`.
 
+Here is a separate example. Define a factory and a class that both mention `Item`, then replace
+`Item` with a definition that adds a field:
+
 ```ilrepl
+il[10]> .reset
+  cell, declarations, methods, and types cleared
+il[10]> .class public Item {
+  class Item
+il[10]> .field public int32 X
+  field public int32 X
 il[10]> }
-  replaced class Point; rebuilt method Make and class Line (existing instances and delegates keep the previous definitions)
+  end of class Item
+il[11]> .method class Item Make() {
+  method Item Make()
+il[11]> ldnull
+  ┊ [null]
+il[11]> ret
+  ┊ []
+il[11]> }
+  end of method Make
+il[12]> .class public Line {
+  class Line
+il[12]> .field public class Item Value
+  field public Item Value
+il[12]> }
+  end of class Line
+il[13]> .class public Item {
+  class Item
+il[13]> .field public int32 X
+  field public int32 X
+il[13]> .field public int32 Y
+  field public int32 Y
+il[13]> }
+  replaced class Item; rebuilt method Make and class Line (existing instances and delegates keep the previous definitions)
 ```

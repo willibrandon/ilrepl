@@ -38,9 +38,18 @@ Overloads are matched by exact parameter types. When several remain the error li
 ```ilrepl
 il[1]> call Console::WriteLine
   error: ambiguous: Console::WriteLine; give parameter types. candidates:
-    void Console::WriteLine()
-    void Console::WriteLine(bool)
-    ...
+      void Console::WriteLine()
+      void Console::WriteLine(bool)
+      void Console::WriteLine(char)
+      void Console::WriteLine(char[])
+      void Console::WriteLine(char[], int32, int32)
+      void Console::WriteLine(Decimal)
+      void Console::WriteLine(float64)
+      void Console::WriteLine(float32)
+      void Console::WriteLine(int32)
+      void Console::WriteLine(uint32)
+      void Console::WriteLine(int64)
+      void Console::WriteLine(uint64)
 ```
 
 If the name is mistyped, the error suggests a nearby name that binds the supplied reference:
@@ -121,9 +130,11 @@ without the `[assembly]` prefix.
 
 ```ilrepl
 il[1]> .load samples/Greeter/bin/Debug/net10.0/Greeter.dll
-  loaded Greeter 1.0.0.0 (21 public types)
+  loaded Greeter 1.0.0.0 (22 public types)
 il[1]> ldstr "IL"
+  ┊ [string]
 il[1]> call string Greeter.Hello::Say(string)
+  ┊ [string]
 il[1]> ret
   = "Hello, IL!" : string
 ```
