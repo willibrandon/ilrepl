@@ -26,13 +26,25 @@ internal sealed class IlVerificationOracle : IResolver, IDisposable
         _readers.Add(name, reader);
         var verifier = new Verifier(this);
         verifier.SetSystemModuleName(new AssemblyNameInfo(typeof(object).Assembly.GetName().Name!));
-        var results = verifier.Verify(reader).ToArray();
+        var results = Run(verifier, reader);
         if (results.FirstOrDefault(result => result.Code == VerifierError.None) is { } failure)
         {
             throw new InvalidOperationException("ILVerification could not finish the fixture: " + failure.Message);
         }
 
         return results.Select(result => result.Code).ToArray();
+    }
+
+    private static VerificationResult[] Run(Verifier verifier, PEReader reader)
+    {
+        try
+        {
+            return verifier.Verify(reader).ToArray();
+        }
+        catch (NullReferenceException exception)
+        {
+            throw new InvalidOperationException("ILVerification could not finish the fixture: " + exception.Message, exception);
+        }
     }
 
     /// <inheritdoc/>

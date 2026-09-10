@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 104 method examples and the paired constructor example
+not justify refusing a correct body. The 114 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -11,21 +11,25 @@ execution, `.il` reassembly, and `.save` execution. `LiveSessionTests.ControlFlo
 source in Chromium and WebKit, checks acceptance or recovery, then executes accepted methods.
 `ControlFlowOperandTableTests` adds all 288 operand pairs in eight published numeric tables without
 using the analyzer to build its expected results. Incorrect bodies are never executed.
+Native ILAsm changes a static `callvirt` reference to an instance signature, so that one verifier
+fixture assembles a static `call` and changes only its opcode in metadata before verification.
 
 | Rule | ECMA-335 reference | Accepted reproduction | Rejected reproduction |
 | --- | --- | --- | --- |
 | Entry, conditional edges and joins | III.1.8.1.1, III.1.8.1.3 | Diamond, MixedFloats | WrongDepth, WrongType |
-| Worklist convergence and backward edges | III.1.7.5, III.1.8.1.1 | Loop | BackwardStack |
+| Worklist convergence and backward edges | III.1.7.5, III.1.8.1.1 | Loop | BackwardStack, UnreachableForwardBackwardStack |
 | Switch and unreachable instructions | III.3.66, III.1.8.1.1 | Switch, DeadCode | Underflow on a reachable path |
 | Return shape and parameter assignment | III.3.57, I.8.7.3 | Diamond, NativeAddition | WrongReturn, WrongCall |
+| Virtual calls and function pointers | III.3.19, III.4.18 | ConstrainedReceiver, VirtualFunctionPointer | WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer |
 | Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
 | Reduced pointer elements | I.8.7, III.1.8.1.2.3 | ReducedPointerJoin, EnumPointerJoin | ByrefJoin |
 | Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.10, III.4.11, III.4.28 | ManagedPointer, PointerFields, IndirectReferenceStore | WrongPointerField, WrongIndirectReferenceStore |
+| Field storage form | III.4.10–III.4.12, III.4.24–III.4.31 | PointerFields, StaticField, StaticFieldToken | WrongStaticFieldOpcode, WrongInstanceFieldOpcode |
 | Readonly provenance | III.2.3, III.3.62 | ReadOnlyLoad, ReadOnlyFieldWrite | WrongPrefix |
-| Correct operations outside verification | III.1.8, III.3.47 | StackAllocation, ReadOnlyWrite, PointerDifference | WrongArithmetic |
+| Correct operations outside verification | III.1.8, III.3.47 | StackAllocation, ReadOnlyWrite, PointerDifference | WrongArithmetic, WrongAllocationHandler |
 | Numeric operand categories | III.1.5 tables III.2–III.8 | NativeAddition, MixedFloats, 288 raw pairs | BadOverflowFloat, BadNotFloat, BadShift |
 | Comparisons | III.1.5 table III.4 | ObjectComparison | BadComparison |
-| Reference and float operands | III.3.22, III.4.31 | Catch, MixedFloats | BadThrow, BadFinite |
+| Reference and float operands | III.3.22, III.3.27, III.4.31 | Catch, MixedFloats | BadThrow, BadFinite, WrongReferenceConversion |
 | Exception entry and handler stacks | III.1.7.6, III.1.8.1.1 | Catch, Finally, CatchFinally, EndfinallyClearsStack, Fault, Filter, RethrowPreservesStack | NonemptyTry, WrongFilterStack |
 | Protected returns and transfers | III.3.37, III.3.46, III.3.57 | Catch, Finally, Fault, Jump, LeaveWithinTry | JumpFromTry, JumpFromSynchronizedMethod, ReturnInTry, WrongJumpSignature |
 | Protected-region entry | III.3.15 | Catch, Finally | BranchIntoTry |
@@ -96,6 +100,14 @@ rule, and the accepted body runs through desktop, both exports, and browser Mono
 
 The library reports only `Unverifiable` for `jmp` inside a try. ECMA III.3.37 makes that transfer
 incorrect as well as unverifiable, so `JumpFromTry` pins the analyzer's stricter rejection.
+
+The library counts an unreachable forward branch as the lower-offset predecessor required by
+ECMA III.1.7.5, so it accepts a later backward branch carrying a stack into that target.
+`UnreachableForwardBackwardStack` keeps the unreachable edge from hiding the correctness error.
+
+The library records `CallVirtOnStatic` for a static target and then dereferences its absent
+instance type, ending verification with `NullReferenceException`. `WrongStaticVirtualCall`
+pins that exact unsupported failure while both analyzers reject the source directly.
 
 The library reports only `Unverifiable` when `cpblk` or `initblk` receives an object reference
 where the instruction requires an address. ECMA III.3.30 and III.3.36 make those operand shapes

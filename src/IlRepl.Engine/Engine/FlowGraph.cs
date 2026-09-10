@@ -174,6 +174,13 @@ internal sealed class FlowGraph<T> where T : class
                 Report(index, "FLOW022", AnalysisDiagnosticKind.Error, "jmp is not allowed inside a protected region");
             }
 
+            if (op == OpCodes.Localloc
+                && kinds.Any(kind => kind is BlockKind.Catch or BlockKind.Filter or BlockKind.FilterHandler
+                    or BlockKind.Finally or BlockKind.Fault))
+            {
+                Report(index, "FLOW023", AnalysisDiagnosticKind.Error, "localloc is not allowed inside an exception handler");
+            }
+
             if (op == OpCodes.Rethrow && !kinds.Any(kind => kind is BlockKind.Catch or BlockKind.FilterHandler))
             {
                 Report(index, "FLOW011", AnalysisDiagnosticKind.Error, "rethrow is only valid inside a catch handler");
@@ -249,7 +256,7 @@ internal sealed class FlowGraph<T> where T : class
         var backward = new HashSet<int>();
         for (var index = 0; index < Nodes.Count; index++)
         {
-            if (Nodes[index].Instruction is null)
+            if (Nodes[index].Instruction is null || before[index] is null)
             {
                 continue;
             }

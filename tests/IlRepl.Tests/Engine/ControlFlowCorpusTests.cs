@@ -5,6 +5,8 @@ using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
 using IlRepl.Tests.Shared;
 using ILVerify;
+using Mono.Cecil;
+using Mono.Cecil.Cil;
 
 namespace IlRepl.Tests.Engine;
 
@@ -65,7 +67,7 @@ public sealed class ControlFlowCorpusTests
                 }
             }
             """;
-        var original = IlasmLocator.Assemble(source);
+        var original = AssembleOriginal(name, source);
         using var oracle = new IlVerificationOracle();
         var verification = Array.Empty<VerifierError>();
         if (example.VerificationFailure.Length > 0)
@@ -170,5 +172,23 @@ public sealed class ControlFlowCorpusTests
         {
             context.Unload();
         }
+    }
+
+    private static byte[] AssembleOriginal(string name, string source)
+    {
+        if (name != "WrongStaticVirtualCall")
+        {
+            return IlasmLocator.Assemble(source);
+        }
+
+        var validSource = source.Replace("callvirt int32 WrongStaticVirtualCall(int32)",
+            "call int32 Fixture::WrongStaticVirtualCall(int32)", StringComparison.Ordinal);
+        using var input = new MemoryStream(IlasmLocator.Assemble(validSource), writable: false);
+        using var module = ModuleDefinition.ReadModule(input);
+        var method = module.Types.Single(type => type.Name == "Fixture").Methods.Single(candidate => candidate.Name == name);
+        method.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Call).OpCode = OpCodes.Callvirt;
+        using var output = new MemoryStream();
+        module.Write(output);
+        return output.ToArray();
     }
 }

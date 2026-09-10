@@ -50,6 +50,11 @@ public sealed record StackOperandView<T> where T : class
     public bool IsInstance { get; init; }
 
     /// <summary>
+    /// Whether a method operand names a static method; null when the instruction has no method operand.
+    /// </summary>
+    public bool? MethodIsStatic { get; init; }
+
+    /// <summary>
     /// The type <c>newobj</c> constructs.
     /// </summary>
     public T? DeclaringType { get; init; }
@@ -58,6 +63,11 @@ public sealed record StackOperandView<T> where T : class
     /// The type of the field a field opcode reads or writes.
     /// </summary>
     public T? FieldType { get; init; }
+
+    /// <summary>
+    /// Whether a field operand names static storage; null when the instruction has no field operand.
+    /// </summary>
+    public bool? FieldIsStatic { get; init; }
 
     /// <summary>
     /// Explains why this field store is forbidden in the enclosing method.

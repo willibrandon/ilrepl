@@ -121,7 +121,13 @@ internal sealed class EditingStack
 
         if (operand.Field is { } field)
         {
-            return view with { FieldType = field.FieldType, DeclaringType = field.DeclaringType, Token = StackTokenKind.Field };
+            return view with
+            {
+                FieldType = field.FieldType,
+                FieldIsStatic = field.IsStatic,
+                DeclaringType = field.DeclaringType,
+                Token = StackTokenKind.Field,
+            };
         }
 
         if (operand.Method is { } bound)
@@ -135,6 +141,7 @@ internal sealed class EditingStack
                     + (!method.IsStatic && op != OpCodes.Newobj ? 1 : 0),
                 ParameterTypes = [.. method.Parameters.Select(parameter => parameter.Type), .. bound.OptionalParameterTypes ?? []],
                 IsInstance = !method.IsStatic && op != OpCodes.Newobj,
+                MethodIsStatic = method.IsStatic,
                 Token = StackTokenKind.Method,
             };
         }

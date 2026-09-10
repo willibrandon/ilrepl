@@ -353,6 +353,7 @@ public sealed class StackSimulator
                 return view with
                 {
                     FieldType = TypeRelations.SubstituteFor(field.DeclaringType!, field.FieldType),
+                    FieldIsStatic = field.IsStatic,
                     DeclaringType = field.DeclaringType,
                     Token = StackTokenKind.Field,
                 };
@@ -364,6 +365,7 @@ public sealed class StackSimulator
                     ArgumentPops = method.ArgumentPopCount(op == OpCodes.Newobj),
                     ParameterTypes = [.. method.ParameterTypes, .. method.OptionalParameterTypes ?? []],
                     IsInstance = !method.IsStatic && op != OpCodes.Newobj,
+                    MethodIsStatic = method.IsStatic,
                     Token = StackTokenKind.Method,
                 };
             case CalliSignature signature:

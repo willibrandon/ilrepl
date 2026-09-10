@@ -289,6 +289,19 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return $"{name} needs {_types.Name(slot)} but found {_types.Name(top)}";
         }
 
+        var usesStaticField = op.Name is "ldsfld" or "ldsflda" or "stsfld";
+        var usesInstanceField = op.Name is "ldfld" or "ldflda" or "stfld";
+        if (view.FieldIsStatic is { } fieldIsStatic && (usesStaticField || usesInstanceField)
+            && usesStaticField != fieldIsStatic)
+        {
+            return $"{op.Name} cannot access {(fieldIsStatic ? "a static" : "an instance")} field";
+        }
+
+        if (view.MethodIsStatic == true && (op == OpCodes.Callvirt || op == OpCodes.Ldvirtftn))
+        {
+            return $"{op.Name} needs an instance method";
+        }
+
         var pops = StackTransfer<T>.PopCount(view);
         if (pops > count)
         {
@@ -338,7 +351,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         if (op.Name is { } unary && (unary.StartsWith("conv.", StringComparison.Ordinal) || unary is "neg" or "not"))
         {
-            var addressConversion = unary is "conv.i" or "conv.u" or "conv.i8" or "conv.u8"
+            var addressConversion = unary is "conv.i" or "conv.u"
                 && kind is StackCategory.ByRef or StackCategory.ObjectReference;
             if (!Numeric(top) && !addressConversion || unary == "not" && kind == StackCategory.Float)
             {

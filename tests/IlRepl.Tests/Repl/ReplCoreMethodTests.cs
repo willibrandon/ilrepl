@@ -373,14 +373,14 @@ public sealed class ReplCoreMethodTests
     }
 
     /// <summary>
-    /// A close the runtime refuses is an error line, never an exception out of Handle.
+    /// A static target named by callvirt is an error line and the method stays editable.
     /// </summary>
     [TestMethod]
-    public void Handle_RuntimeRejectedClose_ReportsError()
+    public void Handle_StaticCallvirt_ReportsError()
     {
-        var core = Load(".method void Bad() {", "callvirt void Console::WriteLine()");
-        Assert.IsFalse(core.Handle("}").Succeeded);
-        Assert.Contains("error: the runtime rejected method Bad", Plain(core));
+        var core = Load(".method void Bad() {");
+        Assert.IsFalse(core.Handle("callvirt void Console::WriteLine()").Succeeded);
+        Assert.Contains("error: callvirt needs an instance method", Plain(core));
         Assert.AreEqual("Bad", core.Status.OpenMethod);
         Assert.AreEqual(1, core.CellNumber);
     }
