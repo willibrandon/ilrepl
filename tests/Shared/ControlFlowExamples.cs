@@ -96,6 +96,8 @@ public static class ControlFlowExamples
         new("ObjectComparison", ["ldnull", "ldnull", "cgt.un", "pop", "ldc.i4.s 42", "ret"], true),
         new("TailCall", ["ldc.i4.s 42", "tail.", "call int32 [System.Runtime]System.Math::Abs(int32)", "ret"], true),
         new("UnalignedLoad", ["ldarga.s n", "unaligned. 1", "ldind.i4", "pop", "ldc.i4.s 42", "ret"], true),
+        new("VolatileObjectLoad", ["ldarga.s n", "volatile.", "ldobj int32", "pop", "ldc.i4.s 42", "ret"], true),
+        new("VolatileObjectStore", ["ldarga.s n", "ldc.i4.s 42", "volatile.", "stobj int32", "ldarg.0", "ret"], true),
         new("BadOverflowFloat", ["ldc.r8 1.0", "ldc.r8 2.0", "add.ovf", "pop", "ldc.i4.s 42", "ret"], false,
             "cannot combine", Verification: "ExpectedIntegerType"),
         new("BadNotFloat", ["ldc.r8 1.0", "not", "pop", "ldc.i4.s 42", "ret"], false,
@@ -198,6 +200,10 @@ public static class ControlFlowExamples
             "refanyval needs a typedref", VerificationFailure: "TypedReference not supported in .NET Core"),
         new("WrongIndirectLoad", ["ldarga.s n", "ldind.ref", "pop", "ldc.i4.s 42", "ret"], false,
             "cannot access int32", Verification: "StackUnexpected"),
+        new("CopyObject", [".locals init (int32 source, int32 destination)", "ldc.i4.s 42", "stloc source",
+            "ldloca destination", "ldloca source", "cpobj int32", "ldloc destination", "ret"], true),
+        new("WrongCopyObjectSource", [".locals init (int32 destination)", "ldloca destination", "ldnull", "cpobj int32",
+            "ldc.i4.s 42", "ret"], false, "source pointer", Verification: "StackByRef"),
         new("DeepStack", [.. Enumerable.Repeat("ldc.i4.0", 32), .. Enumerable.Repeat("pop", 32), "ldc.i4.s 42", "ret"], true),
     ];
 }

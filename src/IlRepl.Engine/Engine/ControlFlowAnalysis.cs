@@ -495,6 +495,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 return $"{op.Name} needs a managed or unmanaged pointer but found {_types.Name(values[count - pops].Type)}";
             }
 
+            if (memory == "cpobj" && !Address(top))
+            {
+                return $"cpobj needs a source pointer but found {_types.Name(top)}";
+            }
+
             var address = values[count - pops].Type;
             var storage = StorageType(view);
             if (address is not null && _types.Algebra.IsByRef(address) && storage is not null
