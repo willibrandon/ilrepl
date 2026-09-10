@@ -113,6 +113,44 @@ public sealed class ControlFlowCorpusTests
         }
     }
 
+    /// <summary>
+    /// Closing a structured finally emits the endfinally that clears its remaining stack.
+    /// </summary>
+    [TestMethod]
+    public void StructuredFinally_ImplicitEndfinallyClearsStack()
+    {
+        var session = new Session();
+        foreach (var line in new[]
+        {
+            ".method int32 ImplicitEndfinally(int32 n) {", ".try {", "leave DONE", "} finally {", "ldc.i4.1", "}",
+            "DONE: ldc.i4.s 42", "ret", "}",
+        })
+        {
+            session.AddLine(line);
+        }
+
+        var il = session.ToIlAsm();
+        Assert.Contains("endfinally", il);
+        session.AddLine("ldc.i4.1");
+        session.AddLine("call int32 ImplicitEndfinally(int32)");
+        session.AddLine("ret");
+        Assert.AreEqual(42, session.Run().Value);
+        session.AddLine("ldc.i4.1");
+        session.AddLine("call int32 ImplicitEndfinally(int32)");
+        session.AddLine("ret");
+        Execute(IlasmLocator.Assemble(session.ToIlAsm()), "IlRepl.Cell", "Run", null);
+        var path = Path.Combine(Path.GetTempPath(), "ilrepl-flow-" + Guid.NewGuid().ToString("N") + ".dll");
+        try
+        {
+            session.Save(path);
+            Execute(File.ReadAllBytes(path), "IlRepl.Cell", "Run", null);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static void Execute(byte[] image, string type, string method, object[]? arguments, Type[]? typeArguments = null)
     {
         var context = new AssemblyLoadContext("flow corpus", isCollectible: true);

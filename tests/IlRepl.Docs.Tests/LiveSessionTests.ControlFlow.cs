@@ -52,8 +52,10 @@ public sealed partial class LiveSessionTests
         foreach (var example in ControlFlowExamples.All)
         {
             TestContext.CancellationToken.ThrowIfCancellationRequested();
+            TestContext.WriteLine(example.Name);
             await PasteAsync(page, example.Source);
             await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("Enter sends", options);
+            await ArmSubmissionOutputAsync(page);
             await page.Keyboard.PressAsync("Enter");
             if (example.Accepted)
             {
@@ -66,7 +68,7 @@ public sealed partial class LiveSessionTests
             }
             else
             {
-                await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("error:", options);
+                await ReturnedBodyAsync(page);
                 await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync(example.Finding, options);
                 await page.Keyboard.PressAsync("Control+c");
                 await TypeLineAsync(page, "ldc.i4.s 42");
@@ -108,6 +110,32 @@ public sealed partial class LiveSessionTests
         await Assertions.Expect(terminal).ToContainTextAsync("protected-region boundary", options);
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(terminal).ToContainTextAsync("error: a protected-region boundary", options);
+    }
+
+    /// <summary>
+    /// Closing a structured finally clears its remaining stack in browser Mono.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(120_000, CooperativeCancellation = true)]
+    public async Task ControlFlow_ImplicitEndfinallyClearsStack(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+        await PasteAsync(page, ".method int32 ImplicitEndfinally(int32 n) {\n.try {\nleave DONE\n"
+            + "} finally {\nldc.i4.1\n}\nDONE: ldc.i4.s 42\nret\n}");
+        await Assertions.Expect(terminal).ToContainTextAsync("Enter sends 9 lines", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method ImplicitEndfinally", options);
+        await TypeLineAsync(page, "ldc.i4.1");
+        await TypeLineAsync(page, "call int32 ImplicitEndfinally(int32)");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(terminal).ToContainTextAsync("= 42 : int32", options);
     }
 
     /// <summary>
@@ -171,4 +199,33 @@ public sealed partial class LiveSessionTests
         await TypeLineAsync(page, "ret");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 42 : int32", options);
     }
+
+    private static async Task ArmSubmissionOutputAsync(IPage page)
+    {
+        await page.EvaluateAsync("""
+            () => {
+              const terminal = window.ilreplTerminal;
+              window.ilreplControlFlowWriteCount = 0;
+              window.ilreplControlFlowLastWrite = 0;
+              if (!window.ilreplControlFlowWriteWrapped) {
+                const write = terminal.write.bind(terminal);
+                terminal.write = (data, callback) => write(data, () => {
+                  window.ilreplControlFlowWriteCount++;
+                  window.ilreplControlFlowLastWrite = performance.now();
+                  if (callback) callback();
+                });
+                window.ilreplControlFlowWriteWrapped = true;
+              }
+            }
+            """);
+    }
+
+    private static Task<IJSHandle> ReturnedBodyAsync(IPage page) => page.WaitForFunctionAsync("""
+        () => {
+          const terminal = window.ilreplTerminal;
+          const status = terminal.buffer.active.getLine(terminal.rows - 1)?.translateToString(true) ?? '';
+          return window.ilreplControlFlowWriteCount > 0 && performance.now() - window.ilreplControlFlowLastWrite >= 100
+            && status.includes('editing ') && !status.includes('updating') && !status.includes('sending');
+        }
+        """, null, new() { PollingInterval = 16, Timeout = 30_000 });
 }

@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 61 method examples and the paired constructor example
+not justify refusing a correct body. The 64 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -25,8 +25,8 @@ using the analyzer to build its expected results. Incorrect bodies are never exe
 | Numeric operand categories | III.1.5 tables III.2–III.8 | NativeAddition, MixedFloats, 288 raw pairs | BadOverflowFloat, BadNotFloat, BadShift |
 | Comparisons | III.1.5 table III.4 | ObjectComparison | BadComparison |
 | Reference and float operands | III.3.22, III.4.31 | Catch, MixedFloats | BadThrow, BadFinite |
-| Exception entry and handler stacks | III.1.7.6, III.1.8.1.1 | Catch, Finally, CatchFinally, Fault, Filter | NonemptyTry, WrongFilterStack |
-| Protected returns and transfers | III.3.46, III.3.57 | Catch, Finally, Fault | ReturnInTry |
+| Exception entry and handler stacks | III.1.7.6, III.1.8.1.1 | Catch, Finally, CatchFinally, EndfinallyClearsStack, Fault, Filter, RethrowPreservesStack | NonemptyTry, WrongFilterStack |
+| Protected returns and transfers | III.3.46, III.3.57 | Catch, Finally, Fault, LeaveWithinTry | ReturnInTry |
 | Protected-region entry | III.3.15 | Catch, Finally | BranchIntoTry |
 | Prefix boundaries and applicability | III.2 | TailCall, UnalignedLoad, ReadOnlyLoad | WrongPrefix, BranchIntoPrefix |
 | Generic identity and boxing | III.1.8.1.1–III.1.8.1.3 | GenericBox, GenericReference | GenericNeedsBox, GenericDistinct |
@@ -70,6 +70,11 @@ cannot be treated as an object reference without boxing.
 ECMA-335 III.3.15 forbids an ordinary branch across a protected-region boundary. The library's
 `IsValidBranchTarget` instead accepts a branch to the first instruction of a directly nested try.
 `BranchIntoTry` pins that false negative while the analyzer refuses the transfer.
+
+ECMA-335 specifies `rethrow` with an unchanged stack transition and says `endfinally` and `leave`
+empty the stack as side effects. It does not require `leave` to cross a region boundary. The
+library and CoreCLR agree; RethrowPreservesStack, EndfinallyClearsStack, and LeaveWithinTry keep
+those correct bodies accepted.
 
 The library reports `PathStackUnexpected` when merging int32 and uint32 managed pointers, or an
 enum pointer and its underlying integer pointer. ECMA I.8.7 gives these the same verification
