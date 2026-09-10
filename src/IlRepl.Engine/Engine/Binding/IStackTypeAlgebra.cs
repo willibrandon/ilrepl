@@ -58,6 +58,13 @@ public interface IStackTypeAlgebra<T> where T : class
     T MakeByRef(T type);
 
     /// <summary>
+    /// An unmanaged pointer to the type.
+    /// </summary>
+    /// <param name="type">The pointee.</param>
+    /// <returns>The pointer.</returns>
+    T MakePointer(T type);
+
+    /// <summary>
     /// A vector of the type.
     /// </summary>
     /// <param name="type">The element.</param>

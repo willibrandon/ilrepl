@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 64 method examples and the paired constructor example
+not justify refusing a correct body. The 67 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -20,13 +20,14 @@ using the analyzer to build its expected results. Incorrect bodies are never exe
 | Return shape and parameter assignment | III.3.57, I.8.7.3 | Diamond, NativeAddition | WrongReturn, WrongCall |
 | Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
 | Reduced pointer elements | I.8.7, III.1.8.1.2.3 | ReducedPointerJoin, EnumPointerJoin | ByrefJoin |
-| Managed pointers and readonly provenance | III.1.8.1.2.2, III.2.3, III.3.62 | ManagedPointer, ReadOnlyLoad, ReadOnlyFieldWrite | WrongPrefix |
+| Managed and unmanaged pointers | III.1.8.1.2.2, III.4.10, III.4.11, III.4.28 | ManagedPointer, PointerFields | WrongPointerField |
+| Readonly provenance | III.2.3, III.3.62 | ReadOnlyLoad, ReadOnlyFieldWrite | WrongPrefix |
 | Correct operations outside verification | III.1.8, III.3.47 | StackAllocation, ReadOnlyWrite, PointerDifference | WrongArithmetic |
 | Numeric operand categories | III.1.5 tables III.2–III.8 | NativeAddition, MixedFloats, 288 raw pairs | BadOverflowFloat, BadNotFloat, BadShift |
 | Comparisons | III.1.5 table III.4 | ObjectComparison | BadComparison |
 | Reference and float operands | III.3.22, III.4.31 | Catch, MixedFloats | BadThrow, BadFinite |
 | Exception entry and handler stacks | III.1.7.6, III.1.8.1.1 | Catch, Finally, CatchFinally, EndfinallyClearsStack, Fault, Filter, RethrowPreservesStack | NonemptyTry, WrongFilterStack |
-| Protected returns and transfers | III.3.46, III.3.57 | Catch, Finally, Fault, LeaveWithinTry | ReturnInTry |
+| Protected returns and transfers | III.3.37, III.3.46, III.3.57 | Catch, Finally, Fault, LeaveWithinTry | JumpFromTry, ReturnInTry |
 | Protected-region entry | III.3.15 | Catch, Finally | BranchIntoTry |
 | Prefix boundaries and applicability | III.2 | TailCall, UnalignedLoad, ReadOnlyLoad | WrongPrefix, BranchIntoPrefix |
 | Generic identity and boxing | III.1.8.1.1–III.1.8.1.3 | GenericBox, GenericReference | GenericNeedsBox, GenericDistinct |
@@ -84,6 +85,13 @@ The library reports `ImportCalli not implemented` for both indirect-call fixture
 assert that exact unsupported-operation failure separately; it is not treated as verification
 success or as evidence that the invalid argument is rejected. ECMA III.3.20 supplies the argument
 rule, and the accepted body runs through desktop, both exports, and browser Mono.
+
+The library reports only `Unverifiable` for `jmp` inside a try. ECMA III.3.37 makes that transfer
+incorrect as well as unverifiable, so `JumpFromTry` pins the analyzer's stricter rejection.
+
+The library reports `ExpectedNumericType` when `conv.u` turns a managed address into the unmanaged
+pointer used by the field fixtures. ECMA III.3.27 permits that correct but unverifiable conversion;
+CoreCLR and browser Mono execute `PointerFields` through all three instance-field instructions.
 
 The current runtime augments ECMA's `constrained.` prefix with static interface `call` and `ldftn`.
 The parser and analyzer accept those forms; the published callvirt-only rule is insufficient here.

@@ -318,6 +318,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return _types.CanAssign(type, owner);
         }
 
+        bool FieldReceiver(T? type, T? owner) => type is not null && owner is not null && _types.Algebra.IsPointer(type)
+            ? _types.CanAssign(_types.Algebra.ElementOf(type), owner) : Receiver(type, owner);
+
         if (op.Name is "add" or "add.ovf" or "add.ovf.un" or "sub" or "sub.ovf" or "sub.ovf.un"
             or "mul" or "mul.ovf" or "mul.ovf.un" or "div" or "div.un" or "rem" or "rem.un"
             or "and" or "or" or "xor" or "shl" or "shr" or "shr.un" || FlowNumericRules.Comparison(op.Name!))
@@ -410,7 +413,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return receiverRestriction;
         }
 
-        if (op.Name is "ldfld" or "ldflda" or "stfld" && !Receiver(values[count - pops].Type, view.DeclaringType))
+        if (op.Name is "ldfld" or "ldflda" or "stfld" && !FieldReceiver(values[count - pops].Type, view.DeclaringType))
         {
             return $"{op.Name} needs a {_types.Name(view.DeclaringType)} receiver but found {_types.Name(values[count - pops].Type)}";
         }

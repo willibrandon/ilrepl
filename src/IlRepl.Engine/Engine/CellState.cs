@@ -51,10 +51,12 @@ public sealed class CellState
     /// <summary>
     /// Requires valid flow with every referenced target and prefix resolved.
     /// </summary>
-    internal void RequireCompleteFlow()
+    /// <param name="hasImplicitReturn">Whether method emission adds a return after the accepted source.</param>
+    internal void RequireCompleteFlow(bool hasImplicitReturn = false)
     {
         RequireValidFlow();
-        if (Analysis.Diagnostics.FirstOrDefault(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Incomplete) is { } pending)
+        if (Analysis.Diagnostics.FirstOrDefault(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Incomplete
+            && (!hasImplicitReturn || diagnostic.Code != "FLOW021")) is { } pending)
         {
             throw new ReplException(pending.Message) { Diagnostics = [pending] };
         }
@@ -266,12 +268,14 @@ public sealed class CellState
         var pending = ReferencedLabels().Where(l => !_definedLabels.Contains(l)).Distinct().ToList();
         if (pending.Count > 0)
         {
-            throw new ReplException($"label{(pending.Count > 1 ? "s" : "")} referenced but never defined: {string.Join(", ", pending)} (define with 'NAME:')");
+            var suffix = pending.Count > 1 ? "s" : "";
+            throw new ReplException(
+                $"label{suffix} referenced but never defined: {string.Join(", ", pending)} (define with 'NAME:')");
         }
 
-        RequireCompleteFlow();
         if (LastInstructionEndsFlow || Member is { IsAbstract: true })
         {
+            RequireCompleteFlow();
             return;
         }
 
@@ -281,9 +285,11 @@ public sealed class CellState
         {
             if (Stack.Count > 0)
             {
-                throw new ReplException($"method {name} needs a ret before }}: the stack holds {Stack.Render()} but {name} returns void (pop it)");
+                throw new ReplException(
+                    $"method {name} needs a ret before }}: the stack holds {Stack.Render()} but {name} returns void (pop it)");
             }
 
+            RequireCompleteFlow(hasImplicitReturn: true);
             return;
         }
 
@@ -297,6 +303,8 @@ public sealed class CellState
         {
             throw new ReplException($"method {name} needs a ret before }}: the stack holds {Stack.Render()} but {name} returns {pretty}");
         }
+
+        RequireCompleteFlow(hasImplicitReturn: true);
     }
 
     /// <summary>

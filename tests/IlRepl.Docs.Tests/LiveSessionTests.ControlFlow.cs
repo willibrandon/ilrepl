@@ -139,6 +139,32 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
+    /// The return synthesized when a method closes completes its trailing tail call in browser Mono.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(120_000, CooperativeCancellation = true)]
+    public async Task ControlFlow_ImplicitReturnCompletesTailCall(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+        await PasteAsync(page, ".method int32 Tail(int32 value) {\nldarg value\ntail.\n"
+            + "call int32 [System.Runtime]System.Math::Abs(int32)\n}");
+        await Assertions.Expect(terminal).ToContainTextAsync("Enter sends 5 lines", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("end of method Tail", options);
+        await TypeLineAsync(page, "ldc.i4.s -42");
+        await TypeLineAsync(page, "call int32 Tail(int32)");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(terminal).ToContainTextAsync("= 42 : int32", options);
+    }
+
+    /// <summary>
     /// A later branch updates an earlier caret stack, and a correction removes the diagnostic before submission.
     /// </summary>
     /// <param name="browser">The browser engine.</param>

@@ -55,6 +55,9 @@ public sealed class RuntimeStackAlgebra : IStackTypeAlgebra<Type>
     public Type MakeByRef(Type type) => type.MakeByRefType();
 
     /// <inheritdoc/>
+    public Type MakePointer(Type type) => type.MakePointerType();
+
+    /// <inheritdoc/>
     public Type MakeArray(Type type) => type.MakeArrayType();
 
     /// <inheritdoc/>

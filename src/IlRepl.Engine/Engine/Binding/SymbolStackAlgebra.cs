@@ -66,6 +66,9 @@ public sealed class SymbolStackAlgebra : IStackTypeAlgebra<TypeSymbol>
     public TypeSymbol MakeByRef(TypeSymbol type) => TypeSymbol.ByRef(type);
 
     /// <inheritdoc/>
+    public TypeSymbol MakePointer(TypeSymbol type) => TypeSymbol.Pointer(type);
+
+    /// <inheritdoc/>
     public TypeSymbol MakeArray(TypeSymbol type) => TypeSymbol.SzArray(type);
 
     /// <inheritdoc/>

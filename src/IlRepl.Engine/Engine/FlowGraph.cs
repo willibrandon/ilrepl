@@ -169,6 +169,11 @@ internal sealed class FlowGraph<T> where T : class
                 Report(index, "FLOW010", AnalysisDiagnosticKind.Error, "ret is not allowed inside a protected region; use leave");
             }
 
+            if (op == OpCodes.Jmp && source.Length > 0)
+            {
+                Report(index, "FLOW022", AnalysisDiagnosticKind.Error, "jmp is not allowed inside a protected region");
+            }
+
             if (op == OpCodes.Rethrow && !kinds.Any(kind => kind is BlockKind.Catch or BlockKind.FilterHandler))
             {
                 Report(index, "FLOW011", AnalysisDiagnosticKind.Error, "rethrow is only valid inside a catch handler");

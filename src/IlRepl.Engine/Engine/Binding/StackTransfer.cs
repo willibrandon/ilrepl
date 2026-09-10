@@ -118,9 +118,11 @@ public sealed class StackTransfer<T> where T : class
             case "ldfld":
             case "ldsfld":
                 return [view.FieldType];
-            case "ldflda":
             case "ldsflda":
                 return [_types.MakeByRef(view.FieldType!)];
+            case "ldflda":
+                return [popped.Count > 0 && popped[0] is { } receiver && _types.IsPointer(receiver)
+                    ? _types.MakePointer(view.FieldType!) : _types.MakeByRef(view.FieldType!)];
             case "ldloc":
             case "ldloc.s":
             case "ldloc.0":
