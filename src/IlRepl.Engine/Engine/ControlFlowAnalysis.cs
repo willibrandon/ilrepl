@@ -346,7 +346,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         }
 
         if (op.Name is "throw" or "castclass" or "isinst" or "unbox" or "unbox.any"
-            && kind is not (null or StackCategory.ObjectReference))
+            && !_types.CanAssign(top, _types.Algebra.Primitive("object")))
         {
             return $"{op.Name} needs an object reference but found {_types.Name(top)}";
         }

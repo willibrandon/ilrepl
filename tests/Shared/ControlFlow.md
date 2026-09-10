@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 55 method examples and the paired constructor example
+not justify refusing a correct body. The 58 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -27,8 +27,10 @@ using the analyzer to build its expected results. Incorrect bodies are never exe
 | Reference and float operands | III.3.22, III.4.31 | Catch, MixedFloats | BadThrow, BadFinite |
 | Exception entry and handler stacks | III.1.7.6, III.1.8.1.1 | Catch, Finally, CatchFinally, Fault, Filter | NonemptyTry, WrongFilterStack |
 | Protected returns and transfers | III.3.46, III.3.57 | Catch, Finally, Fault | ReturnInTry |
+| Protected-region entry | III.3.15 | Catch, Finally | BranchIntoTry |
 | Prefix boundaries and applicability | III.2 | TailCall, UnalignedLoad, ReadOnlyLoad | WrongPrefix, BranchIntoPrefix |
 | Generic identity and boxing | III.1.8.1.1–III.1.8.1.3 | GenericBox, GenericReference | GenericNeedsBox, GenericDistinct |
+| Generic object references | I.8.7.1, III.1.8.1.1 | GenericReferenceThrow | GenericNeedsBoxThrow |
 | Runtime extensions to constrained calls | .NET ECMA-335 Augments | StaticAbstract_ImplementedAndCalled | Existing member eligibility tests |
 | Constrained receiver type | III.2.1 | ConstrainedReceiver | WrongConstrainedReceiver |
 | Readonly store receiver across paths | II.16.1.2 | FlowReceiver with this on both paths | FlowReceiver with another receiver |
@@ -61,7 +63,12 @@ without a warning although table III.4 marks that combination unverifiable.
 A `class T` constraint lets CoreCLR pass an unboxed generic reference to an object parameter, but
 ILVerification reports `StackUnexpected`. `GenericReference` stays executable and carries an
 unverifiable diagnostic; `GenericBox` explicitly boxes the parameter and verifies successfully.
-An unconstrained parameter cannot be treated as an object without boxing.
+`GenericReferenceThrow` likewise runs with its reference constraint while the library reports
+`StackObjRef`. An unconstrained parameter cannot be treated as an object without boxing.
+
+ECMA-335 III.3.15 forbids an ordinary branch across a protected-region boundary. The library's
+`IsValidBranchTarget` instead accepts a branch to the first instruction of a directly nested try.
+`BranchIntoTry` pins that false negative while the analyzer refuses the transfer.
 
 The library reports `PathStackUnexpected` when merging int32 and uint32 managed pointers, or an
 enum pointer and its underlying integer pointer. ECMA I.8.7 gives these the same verification

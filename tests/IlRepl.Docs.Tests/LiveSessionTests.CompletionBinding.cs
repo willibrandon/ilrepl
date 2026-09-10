@@ -371,7 +371,7 @@ public sealed partial class LiveSessionTests
         await page.Keyboard.PressAsync("Control+c");
         await TypeLineAsync(page, ".class public Outer {");
         await TypeLineAsync(page, "}");
-        await ExpectCompletionAsync(page, "cannot redefine");
+        await ExpectCompletionAsync(page, "error: cannot redefine");
         await page.Keyboard.PressAsync("Control+c");
         await TypeLineAsync(page, ".clear");
         await page.Keyboard.TypeAsync("ldtoken Outer/Inn");

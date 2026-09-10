@@ -18,6 +18,7 @@ public sealed class CellState
     private readonly List<BlockKind> _frames = [];
     private bool _braceSeen;
     private FlowResult<Type>? _analysis;
+    private FlowResult<Type>? _analysisBeforeLine;
     private AnalysisLocation? _currentLocation;
 
     /// <summary>
@@ -348,6 +349,7 @@ public sealed class CellState
 
         var line = normalized.Text;
         _currentLocation = Location(normalized);
+        _analysisBeforeLine = _analysis;
         _analysis = null;
         var text = line;
         if (text.StartsWith('.'))
@@ -437,7 +439,10 @@ public sealed class CellState
     private void AcceptEntry(CellEntry entry)
     {
         entry.Location ??= _currentLocation;
-        var candidate = RuntimeFlowAnalysis.Run(this, [.. _entries, entry]);
+        var candidate = _analysisBeforeLine is { } previous
+            && RuntimeFlowAnalysis.TryAppend(this, previous, entry, out var appended)
+            ? appended : RuntimeFlowAnalysis.Run(this, [.. _entries, entry]);
+        _analysisBeforeLine = null;
         if (candidate.Diagnostics.FirstOrDefault(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error) is { } error)
         {
             throw new ReplException(error.Message) { Diagnostics = [error] };

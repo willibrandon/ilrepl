@@ -100,4 +100,31 @@ public sealed class ControlFlowPreviewTests
         var corrected = await editing.AnalyzeAsync(new AnalysisRequest(["ldc.i4 1"], 0, 8, 2), TestContext.CancellationToken);
         Assert.IsEmpty(corrected.Diagnostics);
     }
+
+    /// <summary>
+    /// Object-only instructions accept reference-constrained parameters and reject unconstrained parameters.
+    /// </summary>
+    /// <param name="instruction">The object-only instruction.</param>
+    [TestMethod]
+    [DataRow("throw")]
+    [DataRow("castclass object")]
+    [DataRow("isinst object")]
+    [DataRow("unbox int32")]
+    [DataRow("unbox.any int32")]
+    public async Task Analyze_ObjectOnlyInstructionRequiresReferenceGenericConstraint(string instruction)
+    {
+        var tail = instruction == "throw" ? "" : "\npop\nret";
+        var accepted = $".class public Good {{\n.method public static void F<class T>(!!T value) {{\n"
+            + $"ldarg value\n{instruction}{tail}\n}}\n}}";
+        var rejected = $".class public Bad {{\n.method public static void F<T>(!!T value) {{\n"
+            + $"ldarg value\n{instruction}{tail}\n}}\n}}";
+        using var goodEditing = new EditingSession(new Session());
+        var good = await goodEditing.AnalyzeAsync(new AnalysisRequest(accepted.Split('\n'), 2, 0, 1), TestContext.CancellationToken);
+        Assert.DoesNotContain(finding => finding.Kind == AnalysisDiagnosticKind.Error, good.Diagnostics,
+            string.Join("; ", good.Diagnostics.Select(finding => finding.Message)));
+        using var badEditing = new EditingSession(new Session());
+        var bad = await badEditing.AnalyzeAsync(new AnalysisRequest(rejected.Split('\n'), 2, 0, 2), TestContext.CancellationToken);
+        Assert.Contains(finding => finding.Kind == AnalysisDiagnosticKind.Error
+            && finding.Message.Contains("needs an object reference", StringComparison.Ordinal), bad.Diagnostics);
+    }
 }

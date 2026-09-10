@@ -113,7 +113,7 @@ internal sealed class FlowGraph<T> where T : class
             {
                 if (labels.TryGetValue(target, out var position))
                 {
-                    Edges[i].Add(new FlowEdge(position, op == OpCodes.Leave || op == OpCodes.Leave_S));
+                    Edges[i].Add(new FlowEdge(position, op == OpCodes.Leave || op == OpCodes.Leave_S, IsExplicit: true));
                 }
                 else
                 {
@@ -209,7 +209,7 @@ internal sealed class FlowGraph<T> where T : class
                     continue;
                 }
 
-                var entersTry = target.Length == source.Length + 1 && target.Take(source.Length).SequenceEqual(source)
+                var entersTry = !edge.IsExplicit && target.Length == source.Length + 1 && target.Take(source.Length).SequenceEqual(source)
                     && Sections[target[^1]].Kind == BlockKind.Try && IsFirstInstruction(edge.Target, Sections[target[^1]].Start);
                 if (!entersTry)
                 {

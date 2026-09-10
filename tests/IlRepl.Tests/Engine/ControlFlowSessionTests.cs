@@ -93,6 +93,22 @@ public sealed class ControlFlowSessionTests
         Assert.AreEqual(42, session.Run().Value);
     }
 
+    /// <summary>
+    /// Appended straight-line instructions retain the same stack when a later label rebuilds the full graph.
+    /// </summary>
+    [TestMethod]
+    public void StraightLineAppend_FullRebuildRetainsTheStack()
+    {
+        var session = new Session();
+        Add(session, ".locals init (int32 value)", "ldc.i4.s 40", "stloc value", "ldloc value", "conv.i8",
+            "ldc.i8 2", "add", "conv.i4");
+        var incremental = session.State.StackText;
+        Add(session, "VALUE:");
+        Assert.AreEqual(incremental, session.State.StackText);
+        Add(session, "ret");
+        Assert.AreEqual(42, session.Run().Value);
+    }
+
     private static void Add(Session session, params string[] lines)
     {
         foreach (var line in lines)

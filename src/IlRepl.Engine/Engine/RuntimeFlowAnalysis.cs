@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Reflection.Emit;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
 
@@ -59,6 +60,102 @@ internal static class RuntimeFlowAnalysis
         var returnType = state.Signature?.ReturnType;
         return new ControlFlowAnalysis<Type>(Rules(state.Types)).Run(new FlowGraph<Type>(nodes, typeof(object)) { BodyName = body },
             returnType == typeof(void) ? null : returnType, !state.IsMethod, cancellationToken);
+    }
+
+    /// <summary>
+    /// Extends a converged body when the new instruction cannot change any earlier edge or region.
+    /// </summary>
+    /// <param name="state">The live body receiving the instruction.</param>
+    /// <param name="previous">The converged result before the instruction.</param>
+    /// <param name="entry">The candidate source entry.</param>
+    /// <param name="result">The extended result when an incremental step is safe.</param>
+    /// <returns>Whether <paramref name="result"/> contains the complete analysis.</returns>
+    public static bool TryAppend(CellState state, FlowResult<Type> previous, CellEntry entry, out FlowResult<Type> result)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(previous);
+        ArgumentNullException.ThrowIfNull(entry);
+        result = null!;
+        if (entry.Instruction is not { } instruction || entry.Labels.Count != 0
+            || instruction.Kind is OperandKind.Label or OperandKind.Labels
+            || instruction.Op.OpCodeType == OpCodeType.Prefix
+            || instruction.Op.FlowControl is not (FlowControl.Next or FlowControl.Call)
+            || previous.Diagnostics.Any(diagnostic => diagnostic.Code is "FLOW020" or "FLOW021"))
+        {
+            return false;
+        }
+
+        var position = previous.Before.Length - 1;
+        var body = state.Signature?.Name ?? "cell";
+        var location = entry.Location ?? new AnalysisLocation(body, position, 0, entry.Source.Length);
+        var node = new FlowNode<Type>(location, entry.Source)
+        {
+            Instruction = View(state, instruction, state.Context),
+        };
+        var graph = new FlowGraph<Type>([node], typeof(object)) { BodyName = body };
+        var original = previous.End;
+        if (original is null)
+        {
+            result = Append(previous, null, null, null, previous.Diagnostics, previous.MaxStack);
+            return true;
+        }
+
+        var values = original.Values;
+        var copies = values?.Select(value => value with { Origins = [] }).ToArray();
+        graph.Seeds[0] = original with { Values = copies };
+        var returnType = state.Signature?.ReturnType;
+        var step = new ControlFlowAnalysis<Type>(Rules(state.Types)).Run(graph,
+            returnType == typeof(void) ? null : returnType, !state.IsMethod);
+        if (step.Diagnostics.Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error))
+        {
+            return false;
+        }
+
+        FlowState<Type>? Restore(FlowState<Type>? current)
+        {
+            if (current?.Values is not { } currentValues || values is null || copies is null)
+            {
+                return current;
+            }
+
+            FlowValue<Type> RestoreValue(FlowValue<Type> value)
+            {
+                for (var index = 0; index < copies.Length; index++)
+                {
+                    if (ReferenceEquals(copies[index], value))
+                    {
+                        return values[index];
+                    }
+                }
+
+                return value with { Origins = [position] };
+            }
+
+            return current with
+            {
+                Values = [.. currentValues.Select(RestoreValue)],
+            };
+        }
+
+        var diagnostics = previous.Diagnostics.Concat(step.Diagnostics).ToArray();
+        result = Append(previous, Restore(step.Before[0]), Restore(step.After[0]), Restore(step.End), diagnostics,
+            Math.Max(previous.MaxStack, step.MaxStack));
+        return true;
+    }
+
+    private static FlowResult<Type> Append(FlowResult<Type> previous, FlowState<Type>? beforeCurrent,
+        FlowState<Type>? afterCurrent, FlowState<Type>? end, IReadOnlyList<AnalysisDiagnostic> diagnostics, int maxStack)
+    {
+        var position = previous.Before.Length - 1;
+        var before = new FlowState<Type>?[previous.Before.Length + 1];
+        var after = new FlowState<Type>?[previous.After.Length + 1];
+        Array.Copy(previous.Before, before, position);
+        Array.Copy(previous.After, after, position);
+        before[position] = beforeCurrent;
+        after[position] = afterCurrent;
+        before[^1] = end;
+        after[^1] = end;
+        return new FlowResult<Type>(before, after, diagnostics, maxStack);
     }
 
     private static StackOperandView<Type> View(CellState state, Instruction instruction, ParseContext context)
