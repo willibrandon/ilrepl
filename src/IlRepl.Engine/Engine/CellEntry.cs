@@ -1,3 +1,5 @@
+using IlRepl.Protocol;
+
 namespace IlRepl.Engine;
 
 /// <summary>
@@ -15,6 +17,11 @@ public sealed class CellEntry
     /// The source line, as accepted.
     /// </summary>
     public required string Source { get; init; }
+
+    /// <summary>
+    /// The source coordinates retained before comments and indentation are removed.
+    /// </summary>
+    public AnalysisLocation? Location { get; internal set; }
 
     /// <summary>
     /// Labels defined on this line, in order.

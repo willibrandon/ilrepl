@@ -45,6 +45,7 @@ public static class DefinitionCompiler
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(trampoline);
         ArgumentNullException.ThrowIfNull(trampolines);
+        state.ValidateMethodEnd();
         var name = signature.Name;
         var writer = new CecilWriter(SessionAssemblyKind.Methods);
         foreach (var (prototype, external) in externals ?? new Dictionary<Type, CecilWriter.ExternalPrototype>())

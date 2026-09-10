@@ -1,4 +1,5 @@
 using IlRepl.Engine;
+using IlRepl.Protocol;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using MethodDefinition = Mono.Cecil.MethodDefinition;
@@ -121,10 +122,10 @@ public sealed class StackAnalysisTests
     }
 
     /// <summary>
-    /// A stack that underflows is unknown from there, stays unknown after a known predecessor joins, and a handler seed brings it back.
+    /// A proven underflow remains invalid while independent handler entry stacks can still be inspected.
     /// </summary>
     [TestMethod]
-    public void Run_Underflow_IsUnknownUntilASeed()
+    public void Run_Underflow_IsInvalidWhileHandlersRemainAnalyzable()
     {
         var method = Body((module, _, il, m) =>
         {
@@ -141,21 +142,21 @@ public sealed class StackAnalysisTests
         });
         var lines = DisassemblyText.LinesWithStack(method);
         var text = string.Join("\n", lines);
-        Assert.Contains("0000 pop\t?", text);
-        Assert.Contains("nop\t?", text);
+        Assert.Contains("0000 pop\tinvalid", text);
+        Assert.Contains("nop\tinvalid", text);
         Assert.Contains("leave IL_", text);
         var handler = method.Clauses[0].HandlerStart;
         Assert.AreEqual("[]", DisassemblyText.StackAt(method, handler));
 
-        // The exit is reached by an unknown leave and a known leave; leave carries an empty stack, so it is known.
-        Assert.EndsWith("ret\t[]", lines[^1]);
+        // Clearing the stack does not erase a proven error on the path that reaches the exit.
+        Assert.EndsWith("ret\tinvalid", lines[^1]);
     }
 
     /// <summary>
-    /// A known predecessor never erases an unknown incoming path.
+    /// A known predecessor never erases a proven error on another incoming path.
     /// </summary>
     [TestMethod]
-    public void Run_UnknownPath_IsAbsorbing()
+    public void Run_InvalidPath_IsNotErasedAtAJoin()
     {
         var method = Body((module, _, il, m) =>
         {
@@ -171,14 +172,14 @@ public sealed class StackAnalysisTests
             il.Emit(OpCodes.Ret);
         });
         var join = method.Entries.First(e => e.Instruction?.Op.Name == "nop");
-        Assert.AreEqual("?", DisassemblyText.StackAt(method, join.Offset));
+        Assert.AreEqual("invalid", DisassemblyText.StackAt(method, join.Offset));
     }
 
     /// <summary>
-    /// Depths that disagree at a join are unknown, not a guess.
+    /// Depths that disagree at a join produce a correctness diagnostic.
     /// </summary>
     [TestMethod]
-    public void Run_DepthMismatch_IsUnknown()
+    public void Run_DepthMismatch_IsInvalid()
     {
         var method = Body((module, _, il, m) =>
         {
@@ -194,7 +195,7 @@ public sealed class StackAnalysisTests
             il.Emit(OpCodes.Ret);
         });
         var join = method.Entries.First(e => e.Instruction?.Op.Name == "nop");
-        Assert.AreEqual("?", DisassemblyText.StackAt(method, join.Offset));
+        Assert.AreEqual("invalid", DisassemblyText.StackAt(method, join.Offset));
     }
 
     /// <summary>
@@ -232,5 +233,40 @@ public sealed class StackAnalysisTests
         var dups = method.Entries.Where(e => e.Instruction?.Op.Name == "dup").ToList();
         Assert.AreEqual("[string, string]", DisassemblyText.StackAt(method, dups[0].Offset));
         Assert.AreEqual("[object, object]", DisassemblyText.StackAt(method, dups[1].Offset));
+    }
+
+    /// <summary>
+    /// A decoded method is complete, so a missing destination is invalid rather than a pending source edit.
+    /// </summary>
+    [TestMethod]
+    public void MissingDecodedTarget_IsAnError()
+    {
+        var method = Body((_, _, il, _) =>
+        {
+            var target = il.Create(OpCodes.Ret);
+            il.Emit(OpCodes.Br, target);
+            il.Append(target);
+        });
+        method = method with
+        {
+            Entries = method.Entries.Select(entry => entry.Raw?.BranchTarget is not null
+                ? entry with { Raw = entry.Raw with { BranchTarget = 12345 } } : entry).ToArray(),
+        };
+        var column = StackAnalysis.Run(method, out var diagnostics);
+        Assert.IsNotEmpty(column);
+        Assert.Contains(diagnostic => diagnostic.Code == "FLOW002" && diagnostic.Kind == AnalysisDiagnosticKind.Error, diagnostics);
+        Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Incomplete, diagnostics);
+    }
+
+    /// <summary>
+    /// Falling off a decoded body is reported while its readable stack column remains available.
+    /// </summary>
+    [TestMethod]
+    public void MissingDecodedReturn_IsAnError()
+    {
+        var method = Body((_, _, il, _) => il.Emit(OpCodes.Nop));
+        var column = StackAnalysis.Run(method, out var diagnostics);
+        Assert.Contains("[]", column);
+        Assert.Contains(diagnostic => diagnostic.Code == "FLOW020" && diagnostic.Kind == AnalysisDiagnosticKind.Error, diagnostics);
     }
 }

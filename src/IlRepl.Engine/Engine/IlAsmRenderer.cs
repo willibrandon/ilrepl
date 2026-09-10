@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using IlRepl.Engine.Binding;
@@ -142,7 +143,8 @@ public static class IlAsmRenderer
 
     private static void RenderBody(StringBuilder sb, CellState state, int level)
     {
-        sb.Append(Pad(level)).AppendLine(".maxstack 16");
+        sb.Append(Pad(level)).Append(".maxstack ")
+            .AppendLine(Math.Max(1, state.Analysis.MaxStack).ToString(CultureInfo.InvariantCulture));
         if (state.Locals.Count > 0)
         {
             var locals = state.Locals.Select((l, i) =>
@@ -330,6 +332,12 @@ public static class IlAsmRenderer
 
         if (state.LastInstructionEndsFlow)
         {
+            if (state.Entries.Count > 0 && state.Entries[^1].Kind is EntryKind.Block or EntryKind.Labels)
+            {
+                sb.Append(Pad(indent)).AppendLine("ldnull");
+                sb.Append(Pad(indent)).AppendLine("throw");
+            }
+
             return;
         }
 

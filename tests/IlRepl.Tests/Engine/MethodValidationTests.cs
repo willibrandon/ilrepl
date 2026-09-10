@@ -11,7 +11,7 @@ namespace IlRepl.Tests.Engine;
 public sealed class MethodValidationTests
 {
     /// <summary>
-    /// A body whose branches leave the stack uneven: the linear model accepts it, the JIT does not.
+    /// A body whose branches bring incompatible heights to the same label.
     /// </summary>
     private static readonly string[] BadBranch = ["ldc.i4 0", "brfalse SKIP", "ldc.i4 1", "ldc.i4 2", "pop", "SKIP: pop"];
 
@@ -36,15 +36,14 @@ public sealed class MethodValidationTests
     }
 
     /// <summary>
-    /// Invalid IL is reported at the brace, the block stays open, and nothing is counted.
+    /// Invalid IL is reported at the join, the block stays open, and nothing is counted.
     /// </summary>
     [TestMethod]
-    public void AddLine_CloseWithBranchStackMismatch_IsRejectedAtClose()
+    public void AddLine_BranchStackMismatch_IsRejectedAtJoin()
     {
-        var session = Load([".method void Bad() {", .. BadBranch]);
-        var ex = Assert.ThrowsExactly<ReplException>(() => session.AddLine("}"));
-        Assert.Contains("the JIT rejected method Bad", ex.Message);
-        Assert.Contains("the block is still open", ex.Message);
+        var session = Load([".method void Bad() {", .. BadBranch[..^1]]);
+        var ex = Assert.ThrowsExactly<ReplException>(() => session.AddLine(BadBranch[^1]));
+        Assert.Contains("SKIP receives incompatible stacks", ex.Message);
         Assert.AreEqual("Bad", session.OpenMethod!.Name);
         Assert.IsEmpty(session.Methods);
         Assert.AreEqual(0, session.Submissions);
@@ -56,9 +55,9 @@ public sealed class MethodValidationTests
     [TestMethod]
     public void AddLine_CorrectedMethodAfterRejection_Commits()
     {
-        var session = Load([".method void Bad() {", .. BadBranch]);
-        Assert.ThrowsExactly<ReplException>(() => session.AddLine("}"));
-        for (var i = 0; i < BadBranch.Length; i++)
+        var session = Load([".method void Bad() {", .. BadBranch[..^1]]);
+        Assert.ThrowsExactly<ReplException>(() => session.AddLine(BadBranch[^1]));
+        for (var i = 0; i < BadBranch.Length - 1; i++)
         {
             Assert.IsTrue(session.Undo());
         }
@@ -79,13 +78,14 @@ public sealed class MethodValidationTests
     public void AddLine_FailedReplacement_PreservesPreviousMethod()
     {
         var session = Load(".method int32 Two() {", "ldc.i4 2", "ret", "}");
-        string[] replacement = [".method int32 Two() {", .. BadBranch, "ldc.i4 3", "ret"];
+        var replacement = BadBranch[..^1].Prepend(".method int32 Two() {");
         foreach (var line in replacement)
         {
             session.AddLine(line);
         }
 
-        Assert.Contains("the JIT rejected method Two", Assert.ThrowsExactly<ReplException>(() => session.AddLine("}")).Message);
+        Assert.Contains("SKIP receives incompatible stacks",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine(BadBranch[^1])).Message);
         Assert.AreEqual("Two", session.OpenMethod!.Name);
         Assert.AreEqual(1, session.Submissions);
         Assert.IsTrue(session.AbandonMethod());
@@ -124,26 +124,24 @@ public sealed class MethodValidationTests
     }
 
     /// <summary>
-    /// Without preparation, the emission check alone accepts the uneven branch. This is the
-    /// browser's behavior, where Mono's PrepareMethod does nothing and the JIT speaks at the first call.
+    /// The static check refuses branch conflicts even when runtime preparation is unavailable.
     /// </summary>
     [TestMethod]
-    public void CompileMethod_WithoutPreparation_AcceptsBranchMismatch()
+    public void CompileMethod_WithoutPreparation_RefusesBranchMismatch()
     {
         var signature = new MethodSignature("Bad", typeof(void), []);
         var state = new CellState(new TypeResolver(), GenericContext.Empty, [signature], signature, braceOpen: true);
-        foreach (var line in BadBranch)
+        foreach (var line in BadBranch[..^1])
         {
             state.Apply(line);
         }
 
-        state.ValidateMethodEnd();
+        Assert.Contains("SKIP receives incompatible stacks",
+            Assert.ThrowsExactly<ReplException>(() => state.Apply(BadBranch[^1])).Message);
         var trampoline = MethodTrampoline.Create(signature);
         var trampolines = new Dictionary<string, MethodTrampoline>(StringComparer.Ordinal) { ["Bad"] = trampoline };
-
-        var version = DefinitionCompiler.CompileMethod(signature, state, trampoline, trampolines, prepare: false);
-        Assert.IsNotNull(version.Implementation);
-        Assert.Contains("the JIT rejected method Bad", Assert.ThrowsExactly<ReplException>(() => DefinitionCompiler.CompileMethod(signature, state, trampoline, trampolines, prepare: true)).Message);
+        Assert.Contains("never defined", Assert.ThrowsExactly<ReplException>(
+            () => DefinitionCompiler.CompileMethod(signature, state, trampoline, trampolines, prepare: false)).Message);
     }
 
     /// <summary>

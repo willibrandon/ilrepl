@@ -26,9 +26,14 @@ public static class StackCompatibility
             return StackCategory.ObjectReference;
         }
 
-        if (type.IsPointer || type == typeof(nint) || type == typeof(nuint))
+        if (type.IsPointer || TypeNameFormatter.IsFunctionPointer(type) || type == typeof(nint) || type == typeof(nuint))
         {
             return StackCategory.NativeInt;
+        }
+
+        if (type.IsGenericType && !type.IsGenericTypeDefinition)
+        {
+            return type.GetGenericTypeDefinition().IsValueType ? StackCategory.ValueType : StackCategory.ObjectReference;
         }
 
         if (type.IsEnum)

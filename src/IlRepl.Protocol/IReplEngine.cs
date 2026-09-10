@@ -44,12 +44,30 @@ public interface IReplEngine : IAsyncDisposable
     Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Analyzes the unsent document without executing commands or creating runtime definitions.
+    /// </summary>
+    /// <param name="request">The document and caret.</param>
+    /// <param name="cancellationToken">Cancels queued and active analysis.</param>
+    /// <returns>The source diagnostics and caret stack.</returns>
+    Task<AnalysisReply> AnalyzeAsync(AnalysisRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Handles one line and returns the transcript lines it produced.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <param name="cancellationToken">Cancels the wait.</param>
     /// <returns>The host's reply.</returns>
     Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Handles a submitted line while retaining its identity in the editor document.
+    /// </summary>
+    /// <param name="line">The submitted text.</param>
+    /// <param name="location">Its location in the submitting document.</param>
+    /// <param name="cancellationToken">Cancels the wait.</param>
+    /// <returns>The reply, including diagnostics on earlier source lines.</returns>
+    Task<HandleReply> HandleSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken) =>
+        HandleAsync(line, cancellationToken);
 
     /// <summary>
     /// Withdraws input since a mark when no run, commit or destructive command has crossed that boundary.

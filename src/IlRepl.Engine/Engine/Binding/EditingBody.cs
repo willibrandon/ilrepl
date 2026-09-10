@@ -86,6 +86,16 @@ internal sealed class EditingBody
     public List<BoundInstruction> Instructions { get; private set; } = [];
 
     /// <summary>
+    /// Bound source entries retained for control-flow analysis.
+    /// </summary>
+    public List<FlowNode<TypeSymbol>> FlowNodes { get; private set; } = [];
+
+    /// <summary>
+    /// The latest analysis of this body's source entries.
+    /// </summary>
+    public FlowResult<TypeSymbol>? Analysis { get; set; }
+
+    /// <summary>
     /// The explicit slot mappings declared on this method.
     /// </summary>
     public List<OverrideSymbol> Overrides { get; private set; } = [];
@@ -131,6 +141,7 @@ internal sealed class EditingBody
         clone.Arguments = [.. Arguments];
         clone.Lines = [.. Lines];
         clone.Instructions = [.. Instructions];
+        clone.FlowNodes = [.. FlowNodes];
         clone.Overrides = [.. Overrides];
         clone.MetadataTypes = [.. MetadataTypes];
         clone.Labels = new HashSet<string>(Labels, StringComparer.Ordinal);

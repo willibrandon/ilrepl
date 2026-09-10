@@ -11,6 +11,7 @@ description: Keys in the terminal UI.
 | Ctrl+P, Ctrl+N | Walk history from any line of the buffer. |
 | Right | Accept the grey suffix when it would append exactly as shown; otherwise move the caret. |
 | PageUp, PageDown | Scroll the palette's detail pane. |
+| F8, Shift+F8 | Move to the next or previous diagnostic in the buffer. |
 | Escape | Dismiss the palette. |
 | Home, End, Left, Right | Move within the line; with Ctrl, by word. |
 | Shift+arrows | Select in the buffer. Typing replaces the selection and Ctrl+C copies it. |
@@ -37,6 +38,7 @@ The grey suffix appears only when that edit appends to the text already there. T
 the rows shows the selected signature in full; PageUp and PageDown reveal the rest when it wraps.
 
 A block goes to the engine line by line once Enter sends it. A paste lands in the editor and
-waits for Enter. A line the engine refuses brings its whole block back with that line selected;
+waits for Enter. A refused block comes back with the offending line selected, which may be
+earlier than the branch that exposed the error;
 a line on its own is not put back, and Up recalls it.
 Every submission is one history entry; see [Editing blocks](/usage/editing/).

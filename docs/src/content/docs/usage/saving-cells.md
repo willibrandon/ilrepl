@@ -61,7 +61,7 @@ il[1]> .il
 {
     .method public static object Run(int32 n) cil managed
     {
-        .maxstack 16
+        .maxstack 2
         ldarg n
         ldc.i4 2
         mul

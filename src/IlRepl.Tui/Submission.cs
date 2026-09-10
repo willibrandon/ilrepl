@@ -14,6 +14,7 @@ namespace IlRepl.Tui;
 public sealed class Submission
 {
     private readonly IReplEngine _engine;
+    private readonly string _sourceIdentity = Guid.NewGuid().ToString("N");
     private readonly IReadOnlyList<string> _lines;
     private readonly List<SubmissionUnit> _units;
     private readonly IReadOnlyList<string> _commands;
@@ -143,7 +144,9 @@ public sealed class Submission
                     HandleReply reply;
                     try
                     {
-                        reply = await _engine.HandleAsync(_lines[index], CancellationToken.None).ConfigureAwait(false);
+                        var start = _lines[index].Length - _lines[index].TrimStart().Length;
+                        var location = new AnalysisLocation(_sourceIdentity, index, start, _lines[index].Length - start);
+                        reply = await _engine.HandleSourceAsync(_lines[index], location, CancellationToken.None).ConfigureAwait(false);
                     }
                     catch (ReplEngineException ex)
                     {
@@ -200,7 +203,11 @@ public sealed class Submission
                             if (unit.Kind == SubmissionUnitKind.Block)
                             {
                                 // A block comes back whole with the refused line selected.
-                                _post(SubmissionEvent.Refused([.. reply.Lines, .. withdrawn], TextFrom(restart), Math.Max(0, index - restart), note));
+                                var location = reply.Diagnostics.FirstOrDefault(diagnostic =>
+                                    diagnostic.Kind == AnalysisDiagnosticKind.Error && diagnostic.Location.Body == _sourceIdentity
+                                    && diagnostic.Location.Line >= restart && diagnostic.Location.Line <= index)?.Location;
+                                var selected = (location?.Line ?? index) - restart;
+                                _post(SubmissionEvent.Refused([.. reply.Lines, .. withdrawn], TextFrom(restart), selected, note));
                             }
                             else
                             {

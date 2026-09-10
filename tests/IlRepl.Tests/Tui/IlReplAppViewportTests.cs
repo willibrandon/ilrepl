@@ -306,7 +306,9 @@ public sealed class IlReplAppViewportTests
         var start = recorder.Count;
         await AppTest.TypeLinesAsync(auto, [".method int32 Twice(int32 n) {", "ldarg n", "ldc.i4 2", "mul", "ret"], ct);
         await auto.TypeAsync("}", ct: ct);
-        await auto.WaitUntilAsync(s => s.GetLine(9).Contains("editing 6 lines", StringComparison.Ordinal) && AppTest.PromptTop(s) == 6 && s.GetLine(5).StartsWith("───", StringComparison.Ordinal) && AppTest.CaretAt(s, 8, 2), description: "three editor rows above the status bar, the separator above them");
+        await auto.WaitUntilAsync(s => s.GetLine(9).Contains("stack unreachable", StringComparison.Ordinal)
+            && AppTest.PromptTop(s) == 6 && s.GetLine(5).StartsWith("───", StringComparison.Ordinal) && AppTest.CaretAt(s, 8, 2),
+            description: "three editor rows above the status bar, the separator above them");
         using var snapshot = terminal.CreateSnapshot();
         Assert.IsTrue(snapshot.GetLine(1).StartsWith("il[1]> nop", StringComparison.Ordinal) || snapshot.GetLine(0).Contains("il[1]> nop", StringComparison.Ordinal) || snapshot.GetLine(2).StartsWith("il[1]> nop", StringComparison.Ordinal), "the transcript keeps the rows above the separator:\n" + snapshot.GetText());
         Assert.IsFalse(snapshot.ContainsText("opcodes"), "no palette on a small screen");

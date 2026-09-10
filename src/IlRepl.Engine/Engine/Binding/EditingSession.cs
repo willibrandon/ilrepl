@@ -16,15 +16,22 @@ public sealed partial class EditingSession : IDisposable
     private string[] _prefix = [];
     private long _nextDefinition;
     private bool _disposed;
+    private bool _analyzingDocument;
+    private int _documentLine = -1;
+    private string _documentRaw = "";
+    private readonly Dictionary<long, EditingBody> _analysisBodies = [];
 
     /// <summary>
     /// Captures a live session without compiling definitions or evaluating argument values.
     /// </summary>
     /// <param name="session">The session, under the caller's session gate.</param>
-    public EditingSession(Session session)
+    public EditingSession(Session session) : this((session ?? throw new ArgumentNullException(nameof(session))).CaptureEditingSeed())
     {
-        ArgumentNullException.ThrowIfNull(session);
-        _seed = session.CaptureEditingSeed();
+    }
+
+    internal EditingSession(EditingSeed seed)
+    {
+        _seed = seed;
         _state = EmptyState();
         try
         {
@@ -179,6 +186,7 @@ public sealed partial class EditingSession : IDisposable
 
     private SnapshotBindingScope Scope(EditingBody? body = null, bool inspecting = false, bool isolated = false)
     {
+        var activeBody = body is null;
         body ??= _state.Body;
         var types = inspecting ? _state.CommittedTypes : _state.Types;
         if (isolated)
@@ -187,7 +195,7 @@ public sealed partial class EditingSession : IDisposable
         }
         var generics = body.Generics;
         var access = body.Access;
-        if (_state.Method is null && _state.OpenTypes.LastOrDefault() is { } owner)
+        if (activeBody && _state.Method is null && _state.OpenTypes.LastOrDefault() is { } owner)
         {
             generics = new SymbolGenericContext(
                 types.DeclarationOf(owner.Type)?.GenericParameters.Select(parameter => parameter.AsType).ToArray() ?? [], []);
@@ -234,6 +242,8 @@ public sealed partial class EditingSession : IDisposable
 
     private void ApplyLine(string raw, int lineNumber)
     {
+        _documentLine = lineNumber;
+        _documentRaw = raw;
         var checkpoint = _state.Clone();
         var commentBefore = _state.InBlockComment;
         var commentAfter = commentBefore;
@@ -249,6 +259,11 @@ public sealed partial class EditingSession : IDisposable
                 case ReplLineKind.Comment:
                     return;
                 case ReplLineKind.Blank:
+                    if (_analyzingDocument && (_state.Method is not null || _state.OpenTypes.Count > 0 || _state.Body.Frames.Count > 0))
+                    {
+                        return;
+                    }
+
                     RunBoundary();
                     return;
                 case ReplLineKind.RetRuns:
@@ -265,7 +280,17 @@ public sealed partial class EditingSession : IDisposable
         catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
         {
             _state = checkpoint;
+            if (_analyzingDocument)
+            {
+                _analysisBodies[_state.Body.LabelSpace] = _state.Body;
+            }
+
             _skipped.Add(new SkippedEditingLine(lineNumber, raw, exception.Message));
+            if (_analyzingDocument && operation.Kind is ReplLineKind.Line or ReplLineKind.RetInMethod or ReplLineKind.RetInline)
+            {
+                var body = _state.Body;
+                AddFlowNode(body, new FlowNode<TypeSymbol>(FlowLocation(body, raw), raw) { EffectUnknown = true }, Scope());
+            }
         }
     }
 }

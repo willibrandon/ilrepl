@@ -94,8 +94,7 @@ public sealed partial class EditingSession
                 }
 
                 body.Frames.Add(BlockKind.Try);
-                body.Stack.Clear();
-                body.EndsFlow = false;
+                AddFlowNode(body, new FlowNode<TypeSymbol>(FlowLocation(body, text), text) { Block = BlockKind.Try }, scope);
                 body.RegionBracePending = true;
                 break;
             case ".maxstack":

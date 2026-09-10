@@ -323,7 +323,9 @@ public sealed partial class Session
                 }
             }
 
-            parameters.Add(new GenericParameterDeclaration(parameterSpec.Name, parameterSpec.Attributes, constraints));
+            var declared = new GenericParameterDeclaration(parameterSpec.Name, parameterSpec.Attributes, constraints);
+            RuntimeGenericConstraints.Register(gp, declared);
+            parameters.Add(declared);
         }
 
         var block = new OpenTypeBlock
@@ -769,11 +771,11 @@ public sealed partial class Session
             methodGenerics = generic.DefineGenericParameters([.. signature.TypeParameters.Select(p => p.Name)]);
             signature = MethodHeaderParser.ParseMember(rest, context, owner, out _, out _, out _, _ => methodGenerics);
             generic.SetSignature(signature.ReturnType, [.. signature.ReturnRequiredModifiers], [.. signature.ReturnOptionalModifiers], signature.ParameterTypes, [.. signature.Parameters.Select(p => p.RequiredModifiers.ToArray())], [.. signature.Parameters.Select(p => p.OptionalModifiers.ToArray())]);
-            generic.SetImplementationFlags(signature.ImplAttributes);
             for (var i = 0; i < methodGenerics.Length; i++)
             {
                 var gp = (GenericTypeParameterBuilder)methodGenerics[i];
                 var declared = signature.TypeParameters[i];
+                RuntimeGenericConstraints.Register(gp, declared);
                 gp.SetGenericParameterAttributes(declared.Attributes);
                 var baseConstraint = declared.Constraints.FirstOrDefault(c => !c.IsInterface && !c.IsGenericParameter);
                 if (baseConstraint is not null)
@@ -788,6 +790,7 @@ public sealed partial class Session
                 }
             }
 
+            generic.SetImplementationFlags(signature.ImplAttributes);
             builder = generic;
         }
         else

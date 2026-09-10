@@ -40,6 +40,16 @@ public sealed record StackOperandView<T> where T : class
     public int ArgumentPops { get; init; }
 
     /// <summary>
+    /// The fixed and optional parameters of a call, excluding the receiver and function pointer.
+    /// </summary>
+    public IReadOnlyList<T> ParameterTypes { get; init; } = [];
+
+    /// <summary>
+    /// Whether a method operand consumes an instance receiver.
+    /// </summary>
+    public bool IsInstance { get; init; }
+
+    /// <summary>
     /// The type <c>newobj</c> constructs.
     /// </summary>
     public T? DeclaringType { get; init; }
@@ -48,6 +58,16 @@ public sealed record StackOperandView<T> where T : class
     /// The type of the field a field opcode reads or writes.
     /// </summary>
     public T? FieldType { get; init; }
+
+    /// <summary>
+    /// Explains why this field store is forbidden in the enclosing method.
+    /// </summary>
+    public string? StoreRestriction { get; init; }
+
+    /// <summary>
+    /// Explains why this field store requires the original instance receiver on every incoming path.
+    /// </summary>
+    public string? ReceiverRestriction { get; init; }
 
     /// <summary>
     /// What an <c>ldtoken</c> names.

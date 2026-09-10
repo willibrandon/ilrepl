@@ -92,6 +92,8 @@ public sealed partial class OperandCompleter : IDisposable
                     cancellationToken: token).ConfigureAwait(false);
             }
 
+            view = await _editing.WithFlowAsync(view, document.Lines, document.Line, document.Caret, token).ConfigureAwait(false);
+
             var identity = new CompletionQueryIdentity(_identity, _editing.Revision, _bindingEpoch, document, site);
             if (_query is { } previous && previous.Identity == identity)
             {

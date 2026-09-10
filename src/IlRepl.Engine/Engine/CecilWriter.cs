@@ -655,6 +655,13 @@ public sealed class CecilWriter
         return type;
     }
 
+    private readonly Dictionary<MethodDefinition, int> _stackLimits = [];
+
+    /// <summary>
+    /// Records the control-flow stack bound for the serialized method header.
+    /// </summary>
+    internal void SetStackLimit(MethodDefinition method, int limit) => _stackLimits[method] = limit;
+
     /// <summary>
     /// Writes the assembly to an image.
     /// </summary>
@@ -665,6 +672,7 @@ public sealed class CecilWriter
         Assembly.Write(stream);
         var image = stream.ToArray();
         SignatureFixups.Apply(image);
+        CecilStackHeaders.Apply(image, _stackLimits);
         return image;
     }
 

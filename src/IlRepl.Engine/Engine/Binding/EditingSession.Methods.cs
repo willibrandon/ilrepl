@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Reflection.Emit;
 
 namespace IlRepl.Engine.Binding;
 
@@ -80,10 +81,21 @@ public sealed partial class EditingSession
     private void CloseMethod()
     {
         var body = _state.Method!;
-        RequireResolvedLabels(body);
-        if (!body.EndsFlow && body.Signature is not { IsAbstract: true })
+        if (_analyzingDocument && body.Signature is not { IsAbstract: true })
         {
-            ValidateReturn(body, Scope());
+            AddFlowNode(body, new FlowNode<TypeSymbol>(FlowLocation(body, "}"), "}")
+            {
+                Instruction = new StackOperandView<TypeSymbol> { Op = OpCodes.Ret },
+                Synthetic = true,
+            }, Scope());
+        }
+        else if (!_analyzingDocument)
+        {
+            RequireResolvedLabels(body);
+            if (!body.EndsFlow && body.Signature is not { IsAbstract: true })
+            {
+                ValidateReturn(body, Scope());
+            }
         }
 
         if (_state.OpenTypes.LastOrDefault() is { } owner)

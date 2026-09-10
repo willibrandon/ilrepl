@@ -106,7 +106,7 @@ public sealed class EmitMap
             return Rebuild(type, type.IsSZArray ? element.MakeArrayType() : element.MakeArrayType(type.GetArrayRank()));
         }
 
-        if (type.IsConstructedGenericType)
+        if (type.IsGenericType && !type.IsGenericTypeDefinition)
         {
             var arguments = type.GetGenericArguments().Select(Map).ToArray();
             return Rebuild(type, Map(type.GetGenericTypeDefinition()).MakeGenericType(arguments));

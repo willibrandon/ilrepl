@@ -77,7 +77,8 @@ public sealed class ReplCore : IDisposable
         get
         {
             var state = Session.State;
-            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count,
+            return new SessionStatus(Prompt, CellNumber, state.StackText,
+                state.StackText is "?" or "invalid" or "unreachable" ? null : state.Stack.Count, state.Locals.Count,
                 state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count,
                 Session.OpenType, Session.TypeCount, Session.Mark() with { EchoStack = Options.EchoStack, ShowTiming = Options.ShowTiming },
                 Session.OpenDepth, Session.CompletionRevision);
@@ -109,11 +110,12 @@ public sealed class ReplCore : IDisposable
     /// Handles one input line using the session's declaration, execution and comment-state rules.
     /// </summary>
     /// <param name="line">The line.</param>
+    /// <param name="location">The optional editor source identity.</param>
     /// <returns>Whether it succeeded and whether the user asked to leave.</returns>
-    public HandleResult Handle(string line)
+    public HandleResult Handle(string line, AnalysisLocation? location = null)
     {
         ArgumentNullException.ThrowIfNull(line);
-        var normalized = Session.Normalize(line);
+        var normalized = Session.Normalize(line) with { Location = location };
         var commentOpen = normalized.InBlockCommentBefore;
         Transcript.Add(new TranscriptLine(LineKind.Input, [new TranscriptSpan(Prompt, SpanStyle.Prompt), .. Tokenizer.Spans(line, ref commentOpen, SpanStyle.Input)]));
 
@@ -145,7 +147,7 @@ public sealed class ReplCore : IDisposable
 
                     return new HandleResult(true, false);
                 case ReplLineKind.RetInline:
-                    Session.AddLine(NormalizedLine.FromText("ret"));
+                    Session.AddLine(normalized);
                     Note("ret inside the cell (a forward label or a block is still open)");
                     return new HandleResult(true, false);
                 case ReplLineKind.RetRuns:
@@ -204,7 +206,7 @@ public sealed class ReplCore : IDisposable
         {
             Session.Forget(normalized);
             Error(ex.Message);
-            return new HandleResult(false, false);
+            return new HandleResult(false, false) { Diagnostics = ex.Diagnostics };
         }
         catch (Exception ex) when (ReplRecovery.IsRecoverable(ex))
         {
@@ -331,6 +333,12 @@ public sealed class ReplCore : IDisposable
 
     private void EchoStack()
     {
+        if (Session.State.StackText is "unreachable" or "?" or "invalid")
+        {
+            Transcript.Add(LineKind.Stack, "  ┊ " + Session.State.StackText, SpanStyle.Dim);
+            return;
+        }
+
         var items = Session.State.Stack.Items;
         var spans = new List<TranscriptSpan> { new("  ┊ ", SpanStyle.Dim) };
         if (items.Count == 0)
@@ -669,7 +677,7 @@ public sealed class ReplCore : IDisposable
         }
 
         var listing = MethodDisassembler.Disassemble(method, Session);
-        var column = StackAnalysis.Run(listing);
+        var column = StackAnalysis.Run(listing, out var diagnostics);
         Listing("  " + listing.Header + " {");
         Listing("  .maxstack " + listing.MaxStack.ToString(CultureInfo.InvariantCulture));
         if (listing.Locals.Count > 0)
@@ -725,6 +733,7 @@ public sealed class ReplCore : IDisposable
             Note(note);
         }
 
+        DescribeDiagnostics(diagnostics);
         foreach (var problem in listing.Problems)
         {
             Note("problem: " + problem);
@@ -815,9 +824,10 @@ public sealed class ReplCore : IDisposable
             return;
         }
 
-        var simulator = new StackSimulator();
-        var context = state.Context;
+        var analysis = state.Analysis;
+        var rules = RuntimeFlowAnalysis.Rules(state.Types);
         var index = 0;
+        var position = 0;
         var indent = 0;
         foreach (var entry in state.Entries)
         {
@@ -829,12 +839,11 @@ public sealed class ReplCore : IDisposable
             switch (entry.Kind)
             {
                 case EntryKind.Instruction:
-                    simulator.Apply(entry.Instruction!, context);
-                    InstructionRow("  " + index.ToString("D3", CultureInfo.InvariantCulture) + "  ", indent, entry.Instruction!.Text, simulator.Render());
+                    InstructionRow("  " + index.ToString("D3", CultureInfo.InvariantCulture) + "  ", indent,
+                        entry.Instruction!.Text, rules.Render(analysis.After[position]));
                     index++;
                     break;
                 case EntryKind.Block:
-                    simulator.ApplyBlock(entry.Block!.Value, entry.CatchType);
                     var text = entry.Block switch
                     {
                         BlockKind.Try => ".try {",
@@ -860,6 +869,24 @@ public sealed class ReplCore : IDisposable
                 default:
                     break;
             }
+
+            position++;
+        }
+
+        DescribeDiagnostics(analysis.Diagnostics);
+    }
+
+    private void DescribeDiagnostics(IReadOnlyList<AnalysisDiagnostic> diagnostics)
+    {
+        foreach (var diagnostic in diagnostics)
+        {
+            Note(diagnostic.Kind.ToString().ToLowerInvariant() + ": " + diagnostic.Message);
+            foreach (var related in diagnostic.Related)
+            {
+                var location = related.Location.Offset is { } offset ? $"IL_{offset:x4}" : $"line {related.Location.Line + 1}";
+                Note($"  {location}: {related.Message}");
+            }
         }
     }
+
 }

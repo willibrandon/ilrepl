@@ -89,9 +89,10 @@ il[4]> lcd.i4 1
   error: unknown opcode 'lcd.i4' (did you mean 'ldc.i4'?)
 ```
 
-Anything the model cannot catch, such as a stack that differs between two branches into the same
-label, is reported when the JIT rejects the cell. `.show` lists the cell with the stack after each
-instruction, which is usually enough to find it.
+The model follows branches and checks the stack where paths meet. While editing, the status bar
+shows the stack before the instruction at the caret; F8 moves to the next diagnostic. `.show`
+lists the accepted body with the stack after each instruction. The runtime still checks the
+emitted IL when it compiles or runs.
 
 ## Getting around
 

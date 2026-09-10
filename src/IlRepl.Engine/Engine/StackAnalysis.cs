@@ -1,14 +1,11 @@
-using System.Reflection.Emit;
+using System.Reflection;
+using IlRepl.Engine.Binding;
+using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Fills the stack column of a disassembly: a worklist over basic blocks, each instruction's
-/// effect from the same <see cref="StackSimulator"/> that <c>.show</c> uses, states merged at
-/// joins the way the CLI merges them (ECMA-335 III.1.8.1.3), handlers seeded from the clauses.
-/// Three answers are kept apart: a known stack, an unknown one (<c>?</c>), and a line no path
-/// reaches (<c>unreachable</c>). Unknown is absorbing: only a handler seed or the empty stack a
-/// <c>leave</c> carries brings a known state back.
+/// Adapts decoded IL and metadata clauses to the same analysis used for source bodies.
 /// </summary>
 public static class StackAnalysis
 {
@@ -18,268 +15,169 @@ public static class StackAnalysis
     public const string Unknown = "?";
 
     /// <summary>
-    /// The column text for a line no path reaches.
+    /// The column text for an unreachable instruction.
     /// </summary>
     public const string Unreachable = "unreachable";
 
     /// <summary>
-    /// Computes the column: one text per entry, null for labels and block lines.
+    /// The column text after a proven correctness failure.
+    /// </summary>
+    public const string Invalid = "invalid";
+
+    /// <summary>
+    /// Computes one stack column entry per listing entry, leaving source boundaries blank.
     /// </summary>
     /// <param name="method">The disassembled method.</param>
-    /// <returns>The column.</returns>
+    /// <returns>The stack after each instruction.</returns>
     public static IReadOnlyList<string?> Run(DisassembledMethod method)
+        => Run(method, out _);
+
+    /// <summary>
+    /// Computes the stack column and diagnostics with one traversal of the decoded body.
+    /// </summary>
+    /// <param name="method">The disassembled method.</param>
+    /// <param name="diagnostics">The control-flow findings from the same analysis.</param>
+    /// <returns>The stack after each instruction.</returns>
+    public static IReadOnlyList<string?> Run(DisassembledMethod method, out IReadOnlyList<AnalysisDiagnostic> diagnostics)
     {
         ArgumentNullException.ThrowIfNull(method);
-        var column = new string?[method.Entries.Count];
-        var positions = new List<int>();
-        for (var i = 0; i < method.Entries.Count; i++)
+        var analysis = Analyze(method);
+        diagnostics = analysis.Diagnostics;
+        var rules = RuntimeFlowAnalysis.Rules(method.Context.Types);
+        var position = 0;
+        return method.Entries.Select(entry => entry.Kind is DisassembledEntryKind.Instruction or DisassembledEntryKind.Raw
+            ? rules.Render(analysis.After[position++]) : null).ToArray();
+    }
+
+    /// <summary>
+    /// Returns findings without interrupting a listing whose metadata or operands are damaged.
+    /// </summary>
+    /// <param name="method">The disassembled method.</param>
+    /// <returns>The control-flow findings.</returns>
+    public static IReadOnlyList<AnalysisDiagnostic> Diagnostics(DisassembledMethod method)
+    {
+        ArgumentNullException.ThrowIfNull(method);
+        return Analyze(method).Diagnostics;
+    }
+
+    /// <summary>
+    /// Connects decoded instructions and metadata handlers for shared flow analysis.
+    /// </summary>
+    internal static FlowResult<Type> Analyze(DisassembledMethod method)
+    {
+        var entries = method.Entries.Where(entry => entry.Kind is DisassembledEntryKind.Instruction or DisassembledEntryKind.Raw).ToArray();
+        var nodes = entries.Select((entry, index) => new FlowNode<Type>(
+            new AnalysisLocation(method.Method.Name, index, 0, entry.DisplayText.Length, entry.Offset), entry.DisplayText)
         {
-            if (method.Entries[i].Kind is DisassembledEntryKind.Instruction or DisassembledEntryKind.Raw)
+            Instruction = entry.Instruction is { } instruction ? View(instruction, method)
+                : entry.Raw?.Op.Emit is { } op ? new StackOperandView<Type> { Op = op } : null,
+            Labels = [IlReader.LabelFor(entry.Offset)],
+            Targets = entry.Raw is { } raw ? raw.BranchTarget is { } target
+                ? [IlReader.LabelFor(target)] : raw.Operand.SwitchTargets.Select(IlReader.LabelFor).ToArray() : [],
+            EffectUnknown = entry.EffectUnknown,
+        }).ToArray();
+        var graph = new FlowGraph<Type>(nodes, typeof(object), complete: true) { BodyName = method.Method.Name };
+        var offsets = entries.Select((entry, index) => (entry.Offset, index)).ToDictionary(pair => pair.Offset, pair => pair.index);
+
+        void Seed(int offset, Type? type)
+        {
+            if (offsets.TryGetValue(offset, out var index))
             {
-                positions.Add(i);
+                graph.Seeds[index] = type is null ? FlowState<Type>.Empty
+                    : new FlowState<Type>([new FlowValue<Type>(type, [index])]);
             }
         }
 
-        if (positions.Count == 0)
-        {
-            return column;
-        }
-
-        var offsetToPosition = new Dictionary<int, int>();
-        for (var p = 0; p < positions.Count; p++)
-        {
-            offsetToPosition[method.Entries[positions[p]].Offset] = p;
-        }
-
-        // Leaders: the entry, every target, the line after a branch or an exit, and every clause boundary.
-        var leaderPositions = new HashSet<int> { 0 };
-        void Lead(int offset)
-        {
-            if (offsetToPosition.TryGetValue(offset, out var lp))
-            {
-                leaderPositions.Add(lp);
-            }
-        }
-
-        for (var p = 0; p < positions.Count; p++)
-        {
-            var entry = method.Entries[positions[p]];
-            var raw = entry.Raw;
-            if (raw is null)
-            {
-                continue;
-            }
-
-            if (raw.BranchTarget is int target)
-            {
-                Lead(target);
-                leaderPositions.Add(p + 1);
-            }
-
-            if (raw.Operand.SwitchTargets.Length > 0)
-            {
-                foreach (var t in raw.Operand.SwitchTargets)
-                {
-                    Lead(t);
-                }
-
-                leaderPositions.Add(p + 1);
-            }
-
-            if (entry.Instruction?.EndsFlow == true || IsExit(entry))
-            {
-                leaderPositions.Add(p + 1);
-            }
-        }
-
-        foreach (var clause in method.Clauses)
-        {
-            Lead(clause.TryStart);
-            Lead(clause.HandlerStart);
-            if (clause.FilterStart is int filter)
-            {
-                Lead(filter);
-            }
-        }
-
-        var starts = leaderPositions.Where(l => l >= 0 && l < positions.Count).OrderBy(l => l).ToList();
-        var blockOf = new int[positions.Count];
-        var blockStart = new List<int>();
-        var blockEnd = new List<int>();
-        for (var b = 0; b < starts.Count; b++)
-        {
-            var end = b + 1 < starts.Count ? starts[b + 1] : positions.Count;
-            blockStart.Add(starts[b]);
-            blockEnd.Add(end);
-            for (var p = starts[b]; p < end; p++)
-            {
-                blockOf[p] = b;
-            }
-        }
-
-        var entryState = new StackSimulator?[blockStart.Count];
-        var entryUnknown = new bool[blockStart.Count];
-        var visited = new bool[blockStart.Count];
-        var seeded = new bool[blockStart.Count];
-        var queue = new Queue<int>();
-
-        void Seed(int offset, StackSimulator state)
-        {
-            if (!offsetToPosition.TryGetValue(offset, out var p))
-            {
-                return;
-            }
-
-            var b = blockOf[p];
-            entryState[b] = state;
-            entryUnknown[b] = false;
-            visited[b] = true;
-            seeded[b] = true;
-            queue.Enqueue(b);
-        }
-
-        Seed(method.Entries[positions[0]].Offset, new StackSimulator());
         foreach (var clause in method.Clauses)
         {
             switch (clause.Kind)
             {
                 case IlClauseKind.Catch:
-                    Seed(clause.HandlerStart, StackSimulator.WithEntries(clause.CatchType));
+                    Seed(clause.HandlerStart, clause.CatchType ?? typeof(object));
                     break;
                 case IlClauseKind.Filter:
-                    Seed(clause.FilterStart ?? clause.HandlerStart, StackSimulator.WithEntries(typeof(object)));
-                    Seed(clause.HandlerStart, StackSimulator.WithEntries(typeof(object)));
+                    Seed(clause.FilterStart ?? clause.HandlerStart, typeof(object));
+                    Seed(clause.HandlerStart, typeof(object));
                     break;
                 default:
-                    Seed(clause.HandlerStart, new StackSimulator());
+                    Seed(clause.HandlerStart, null);
                     break;
             }
         }
 
-        void Propagate(int offset, StackSimulator? state)
+        var groups = new Dictionary<(int, int), int>();
+        var sections = new Dictionary<(BlockKind, int, int, int), int>();
+        int Position(int offset) => offsets.TryGetValue(offset, out var index) ? index : entries.Length;
+        void Section(BlockKind kind, int start, int end, int group)
         {
-            if (!offsetToPosition.TryGetValue(offset, out var p))
+            var key = (kind, start, end, group);
+            if (sections.TryAdd(key, sections.Count))
             {
-                return;
-            }
-
-            var b = blockOf[p];
-            if (seeded[b])
-            {
-                return;
-            }
-
-            if (state is null)
-            {
-                if (!visited[b] || !entryUnknown[b])
-                {
-                    visited[b] = true;
-                    entryUnknown[b] = true;
-                    entryState[b] = null;
-                    queue.Enqueue(b);
-                }
-
-                return;
-            }
-
-            if (!visited[b])
-            {
-                visited[b] = true;
-                entryState[b] = state.Clone();
-                queue.Enqueue(b);
-                return;
-            }
-
-            if (entryUnknown[b])
-            {
-                return;
-            }
-
-            if (entryState[b]!.Count != state.Count)
-            {
-                entryUnknown[b] = true;
-                entryState[b] = null;
-                queue.Enqueue(b);
-                return;
-            }
-
-            if (entryState[b]!.Merge(state, method.Context.Types))
-            {
-                queue.Enqueue(b);
+                graph.Sections[sections[key]] = new FlowRegion(kind, Position(start), Position(end), group);
             }
         }
 
-        var guard = 0;
-        while (queue.Count > 0 && guard++ < 100_000)
+        foreach (var clause in method.Clauses)
         {
-            var b = queue.Dequeue();
-            var state = entryUnknown[b] ? null : entryState[b]!.Clone();
-            for (var p = blockStart[b]; p < blockEnd[b]; p++)
+            var key = (clause.TryStart, clause.TryEnd);
+            if (!groups.TryGetValue(key, out var group))
             {
-                var index = positions[p];
-                var entry = method.Entries[index];
-                if (state is not null && !entry.EffectUnknown && entry.Instruction is { } instruction)
-                {
-                    try
-                    {
-                        state.Apply(instruction, method.Context);
-                    }
-                    catch (ReplException)
-                    {
-                        state = null;
-                    }
-                }
-                else if (entry.Kind == DisassembledEntryKind.Raw && !entry.EffectUnknown)
-                {
-                    // A no. prefix: no effect.
-                }
-                else
-                {
-                    state = null;
-                }
-
-                column[index] = state?.Render() ?? Unknown;
+                group = groups.Count;
+                groups[key] = group;
             }
 
-            var last = method.Entries[positions[blockEnd[b] - 1]];
-            var raw = last.Raw;
-            var op = last.Instruction?.Op;
-            if (raw?.BranchTarget is int target)
+            Section(BlockKind.Try, clause.TryStart, clause.TryEnd, group);
+            var kind = clause.Kind switch
             {
-                // A leave empties the stack whatever was on it, so its target starts from a known
-                // state even when the block before it was unknown.
-                Propagate(target, op == OpCodes.Leave || op == OpCodes.Leave_S ? new StackSimulator() : state);
-            }
-
-            if (raw is not null)
+                IlClauseKind.Catch => BlockKind.Catch,
+                IlClauseKind.Filter => BlockKind.FilterHandler,
+                IlClauseKind.Finally => BlockKind.Finally,
+                _ => BlockKind.Fault,
+            };
+            Section(kind, clause.HandlerStart, clause.HandlerEnd, group);
+            if (clause.FilterStart is { } filter)
             {
-                foreach (var t in raw.Operand.SwitchTargets)
-                {
-                    Propagate(t, state);
-                }
-            }
-
-            var endsFlow = last.Instruction?.EndsFlow == true || IsExit(last) || op == OpCodes.Leave || op == OpCodes.Leave_S;
-            if (!endsFlow && blockEnd[b] < positions.Count)
-            {
-                Propagate(method.Entries[positions[blockEnd[b]]].Offset, state);
+                Section(BlockKind.Filter, filter, clause.HandlerStart, group);
             }
         }
 
-        for (var p = 0; p < positions.Count; p++)
+        for (var index = 0; index < entries.Length; index++)
         {
-            if (!visited[blockOf[p]])
-            {
-                column[positions[p]] = Unreachable;
-            }
+            graph.Regions[index] = graph.Sections.Where(pair => index >= pair.Value.Start && index < pair.Value.End)
+                .OrderBy(pair => pair.Value.Start).ThenByDescending(pair => pair.Value.End).Select(pair => pair.Key).ToArray();
         }
 
-        return column;
+        var returnType = (method.Method as MethodInfo)?.ReturnType;
+        var result = new ControlFlowAnalysis<Type>(RuntimeFlowAnalysis.Rules(method.Context.Types)).Run(graph,
+            returnType == typeof(void) ? null : returnType, false);
+        if (result.End is { Invalid: false, HasUnknownPath: false } && nodes.Length > 0)
+        {
+            return result with
+            {
+                Diagnostics = [.. result.Diagnostics, new AnalysisDiagnostic("FLOW020", AnalysisDiagnosticKind.Error,
+                    "control falls through the end of the method without a return", nodes[^1].Location, [])],
+            };
+        }
+
+        return result;
     }
 
-    private static bool IsExit(DisassembledEntry entry)
+    private static StackOperandView<Type> View(Instruction instruction, DisassembledMethod method)
     {
-        var op = entry.Instruction?.Op;
-        return op == OpCodes.Endfinally || op == OpCodes.Endfilter || op == OpCodes.Rethrow || op == OpCodes.Throw;
+        var view = StackSimulator.View(instruction, method.Context);
+        if (instruction.Operand is not FieldInfo { IsInitOnly: true } field || instruction.Op.Name is not ("stfld" or "stsfld"))
+        {
+            return view;
+        }
+
+        var symbol = RuntimeSymbolImporter.Import(field);
+        var signature = RuntimeSymbolImporter.Import(method.Method);
+        return view with
+        {
+            StoreRestriction = InstructionMemberRules.InitOnlyStoreProblem(symbol, instruction.Op.Name,
+                signature, signature.DeclaringType, true, SymbolRenderer.Pretty),
+            ReceiverRestriction = InstructionMemberRules.InitOnlyStoreProblem(symbol, instruction.Op.Name,
+                signature, signature.DeclaringType, false, SymbolRenderer.Pretty),
+        };
     }
 }

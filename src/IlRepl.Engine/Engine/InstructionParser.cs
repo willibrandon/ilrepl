@@ -149,7 +149,15 @@ public static class InstructionParser
     /// </summary>
     /// <param name="typo">The mnemonic as typed.</param>
     /// <returns>The suggestion, or null.</returns>
-    internal static string? SuggestOpcode(string typo) => Suggest(typo);
+    internal static string? SuggestOpcode(string typo) => IsOpcodePrefix(typo) ? null : Suggest(typo);
+
+    /// <summary>
+    /// Recognizes unfinished opcode names without treating reserved encodings as completions.
+    /// </summary>
+    /// <param name="text">The mnemonic being typed.</param>
+    /// <returns>Whether appending characters can produce an opcode.</returns>
+    internal static bool IsOpcodePrefix(string text) => text.Length > 0 && OpcodeTable.Names.Any(name =>
+        name.Length > text.Length && !OpcodeTable.IsReserved(name) && name.StartsWith(text, StringComparison.OrdinalIgnoreCase));
 
     private static string? Suggest(string typo)
     {

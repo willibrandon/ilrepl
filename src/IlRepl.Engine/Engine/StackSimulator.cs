@@ -201,6 +201,21 @@ public sealed class StackSimulator
     }
 
     /// <summary>
+    /// Copies the established stack and receiver provenance from a flow state.
+    /// </summary>
+    internal void CopyFrom(FlowState<Type>? state)
+    {
+        Clear();
+        if (state is { Invalid: false, Values: { } values })
+        {
+            foreach (var value in values)
+            {
+                Push(value.Type, value.IsThis);
+            }
+        }
+    }
+
+    /// <summary>
     /// True when the entry at <paramref name="index"/> (from the bottom) is the <c>this</c> of an
     /// instance member, loaded with <c>ldarg.0</c> and not copied through a local since.
     /// </summary>
@@ -335,13 +350,20 @@ public sealed class StackSimulator
             case Type type:
                 return view with { Type = type, Token = StackTokenKind.Type };
             case FieldInfo field:
-                return view with { FieldType = field.FieldType, Token = StackTokenKind.Field };
+                return view with
+                {
+                    FieldType = TypeRelations.SubstituteFor(field.DeclaringType!, field.FieldType),
+                    DeclaringType = field.DeclaringType,
+                    Token = StackTokenKind.Field,
+                };
             case ResolvedMethod method:
                 return view with
                 {
                     ReturnType = method.ReturnType == typeof(void) ? null : method.ReturnType,
                     DeclaringType = method.DeclaringType,
                     ArgumentPops = method.ArgumentPopCount(op == OpCodes.Newobj),
+                    ParameterTypes = [.. method.ParameterTypes, .. method.OptionalParameterTypes ?? []],
+                    IsInstance = !method.IsStatic && op != OpCodes.Newobj,
                     Token = StackTokenKind.Method,
                 };
             case CalliSignature signature:
@@ -349,6 +371,7 @@ public sealed class StackSimulator
                 {
                     ReturnType = signature.ReturnType == typeof(void) ? null : signature.ReturnType,
                     ArgumentPops = signature.ArgumentPopCount + 1,
+                    ParameterTypes = [.. signature.ParameterTypes, .. signature.OptionalParameterTypes ?? []],
                 };
             default:
                 return view;

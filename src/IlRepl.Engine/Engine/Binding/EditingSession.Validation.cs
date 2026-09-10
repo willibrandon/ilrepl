@@ -1,10 +1,15 @@
+using IlRepl.Protocol;
+
 namespace IlRepl.Engine.Binding;
 
 public sealed partial class EditingSession
 {
+    private AnalysisLocation? _replayLocation;
+
     private void RecheckBody(EditingBody original)
     {
         var previous = _state.Method;
+        var previousLocation = _replayLocation;
         var body = new EditingBody
         {
             Signature = original.Signature,
@@ -20,9 +25,27 @@ public sealed partial class EditingSession
         _state.Method = body;
         try
         {
+            var position = 0;
             foreach (var line in original.Lines)
             {
+                var node = position < original.FlowNodes.Count ? original.FlowNodes[position] : null;
+                _replayLocation = node?.Source == line ? node.Location : null;
+                if (_replayLocation is not null)
+                {
+                    position++;
+                }
+
                 AddBodyLine(line);
+            }
+
+            if (_analyzingDocument)
+            {
+                foreach (var node in original.FlowNodes.Where(node => node.Synthetic))
+                {
+                    AddFlowNode(body, node, Scope());
+                }
+
+                return;
             }
 
             RequireResolvedLabels(body);
@@ -34,6 +57,7 @@ public sealed partial class EditingSession
         finally
         {
             _state.Method = previous;
+            _replayLocation = previousLocation;
         }
     }
 }

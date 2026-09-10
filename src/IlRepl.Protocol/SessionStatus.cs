@@ -9,7 +9,7 @@ namespace IlRepl.Protocol;
 /// <param name="Prompt">The prompt for the next line, for example <c>il[3]&gt; </c>.</param>
 /// <param name="CellNumber">The number of the cell being written. A run and a committed method block each complete one.</param>
 /// <param name="Stack">The rendered stack, for example <c>[int32, string]</c>.</param>
-/// <param name="StackDepth">The number of values on the stack.</param>
+/// <param name="StackDepth">The number of values, or null when no exact reachable stack is available.</param>
 /// <param name="Locals">The number of declared locals.</param>
 /// <param name="Instructions">The number of instructions in the body.</param>
 /// <param name="OpenBlocks">The number of open protected regions.</param>
@@ -25,7 +25,7 @@ public sealed record SessionStatus(
     string Prompt,
     int CellNumber,
     string Stack,
-    int StackDepth,
+    int? StackDepth,
     int Locals,
     int Instructions,
     int OpenBlocks,

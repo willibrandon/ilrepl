@@ -61,12 +61,14 @@ public static class CellCompiler
         }
 
         var cell = session.Cell;
+        cell.RequireValidFlow();
         var pending = cell.ReferencedLabels().Where(l => !cell.DefinedLabels.Contains(l)).Distinct().ToList();
         if (pending.Count > 0)
         {
             throw new ReplException($"label{(pending.Count > 1 ? "s" : "")} referenced but never defined: {string.Join(", ", pending)} (define with 'NAME:')");
         }
 
+        cell.RequireCompleteFlow();
         if (cell.OpenBlockDepth > 0)
         {
             throw new ReplException("a protected region is still open; close it with }");
@@ -219,6 +221,12 @@ public static class CellCompiler
 
         if (state.LastInstructionEndsFlow)
         {
+            if (state.Entries.Count > 0 && state.Entries[^1].Kind is EntryKind.Block or EntryKind.Labels)
+            {
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Throw);
+            }
+
             return;
         }
 

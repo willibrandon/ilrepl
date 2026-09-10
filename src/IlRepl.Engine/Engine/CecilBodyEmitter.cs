@@ -27,7 +27,9 @@ public static class CecilBodyEmitter
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(map);
+        state.RequireValidFlow();
         new Emitter(method, state, writer, map).Run();
+        writer.SetStackLimit(method, Math.Max(1, state.Analysis.MaxStack));
     }
 
     private sealed class Emitter(MethodDefinition method, CellState state, CecilWriter writer, EmitMap map)
@@ -49,6 +51,7 @@ public static class CecilBodyEmitter
         public void Run()
         {
             method.Body.InitLocals = true;
+            method.Body.MaxStackSize = Math.Max(1, state.Analysis.MaxStack);
             foreach (var local in state.Locals)
             {
                 var type = writer.Import(map.Map(local.Type));
@@ -90,6 +93,12 @@ public static class CecilBodyEmitter
         {
             if (state.LastInstructionEndsFlow)
             {
+                if (_pending.Count > 0)
+                {
+                    Append(_il.Create(OpCodes.Ldnull));
+                    Append(_il.Create(OpCodes.Throw));
+                }
+
                 return;
             }
 

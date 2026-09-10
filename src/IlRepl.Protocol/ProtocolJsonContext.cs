@@ -18,6 +18,8 @@ namespace IlRepl.Protocol;
 [JsonSerializable(typeof(CompletionItem))]
 [JsonSerializable(typeof(CompletionRequest))]
 [JsonSerializable(typeof(CompletionReply))]
+[JsonSerializable(typeof(AnalysisRequest))]
+[JsonSerializable(typeof(AnalysisReply))]
 [JsonSerializable(typeof(ContinuationAnchor))]
 [JsonSerializable(typeof(SessionStatus))]
 [JsonSerializable(typeof(SessionMark))]

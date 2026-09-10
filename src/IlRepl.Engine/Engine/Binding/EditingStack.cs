@@ -121,7 +121,7 @@ internal sealed class EditingStack
 
         if (operand.Field is { } field)
         {
-            return view with { FieldType = field.FieldType, Token = StackTokenKind.Field };
+            return view with { FieldType = field.FieldType, DeclaringType = field.DeclaringType, Token = StackTokenKind.Field };
         }
 
         if (operand.Method is { } bound)
@@ -133,6 +133,8 @@ internal sealed class EditingStack
                 DeclaringType = method.DeclaringType,
                 ArgumentPops = method.Parameters.Count + (bound.OptionalParameterTypes?.Count ?? 0)
                     + (!method.IsStatic && op != OpCodes.Newobj ? 1 : 0),
+                ParameterTypes = [.. method.Parameters.Select(parameter => parameter.Type), .. bound.OptionalParameterTypes ?? []],
+                IsInstance = !method.IsStatic && op != OpCodes.Newobj,
                 Token = StackTokenKind.Method,
             };
         }
@@ -141,6 +143,7 @@ internal sealed class EditingStack
         {
             ReturnType = SymbolIdentity.Equal(signature.ReturnType, TypeSymbol.Void) ? null : signature.ReturnType,
             ArgumentPops = signature.ArgumentPopCount + 1,
+            ParameterTypes = signature.Parameters,
         } : view;
     }
 
@@ -150,7 +153,26 @@ internal sealed class EditingStack
     /// <returns>The bracketed stack.</returns>
     public string Render() => "[" + string.Join(", ", _items.Select(Name)) + "]";
 
-    private static string Name(TypeSymbol? type) => SymbolIdentity.Equal(type, SymbolStackAlgebra.Instance.NullReference)
+    /// <summary>
+    /// Copies the established stack and receiver provenance from a flow state.
+    /// </summary>
+    internal void CopyFrom(FlowState<TypeSymbol>? state)
+    {
+        Clear();
+        if (state is { Invalid: false, Values: { } values })
+        {
+            foreach (var value in values)
+            {
+                _items.Add(value.Type);
+                _receivers.Add(value.IsThis);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Formats a stack value while keeping boxed markers out of user-facing type names.
+    /// </summary>
+    internal static string Name(TypeSymbol? type) => SymbolIdentity.Equal(type, SymbolStackAlgebra.Instance.NullReference)
         ? "null"
         : SymbolIdentity.Equal(type, SymbolStackAlgebra.Instance.UnknownReference) || SymbolStackAlgebra.BoxedType(type) is not null
             ? "object" : SymbolRenderer.Pretty(type);

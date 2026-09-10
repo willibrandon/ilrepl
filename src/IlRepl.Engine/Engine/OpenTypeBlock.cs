@@ -151,7 +151,14 @@ internal sealed class OpenTypeBlock
     /// <summary>
     /// The type of <c>this</c> for an instance member: a reference for a struct.
     /// </summary>
-    public Type ThisType => Kind is TypeKind.Struct or TypeKind.Enum ? Prototype.MakeByRefType() : Prototype;
+    public Type ThisType
+    {
+        get
+        {
+            var owner = Prototype.IsGenericTypeDefinition ? Prototype.MakeGenericType(Prototype.GetGenericArguments()) : Prototype;
+            return Kind is TypeKind.Struct or TypeKind.Enum ? owner.MakeByRefType() : owner;
+        }
+    }
 
     /// <summary>
     /// On the outermost block, every type of the family that has closed, by path, with its

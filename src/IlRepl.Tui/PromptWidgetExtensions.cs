@@ -38,7 +38,7 @@ public static class PromptWidgetExtensions
             ? fit.PaletteRows + fit.DetailRows + 2 : 0;
         return new PromptWidget(label, catalog, state, fit, openDepth, commentOpen)
         {
-            HeightHint = SizeHint.Fixed(Math.Max(1, fit.EditorRows) + palette),
+            HeightHint = SizeHint.Fixed(Math.Max(1, fit.EditorRows) + palette + fit.DiagnosticRows),
             Width = width <= 0 ? 80 : width,
         };
     }

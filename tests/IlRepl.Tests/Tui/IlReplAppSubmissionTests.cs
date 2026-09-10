@@ -325,7 +325,7 @@ public sealed class IlReplAppSubmissionTests
         await auto.WaitUntilTextAsync("cancelling 1/3");
         engine.Allow(1);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 3" && !s.ContainsText("cancelling"), description: "the line that had not started is back");
-        await auto.WaitUntilTextAsync("stack [int32, int32]");
+        await auto.WaitUntilTextAsync("stack before [int32, int32]");
         Assert.HasCount(2, engine.Handled);
         Assert.DoesNotContain(l => l.PlainText.Contains("withdrawn", StringComparison.Ordinal), transcript.Lines, "nothing was withdrawn");
 

@@ -47,6 +47,7 @@ public static class IlReplApp
         var prompt = new PromptState(new PromptHistory(history), new CilTokenizer(engine.Vocabulary))
         {
             Requester = new CompletionRequester(engine),
+            Analyzer = new AnalysisRequester(engine),
             HistoryLoading = history is not null,
         };
         onPrompt?.Invoke(prompt);
@@ -140,6 +141,7 @@ public static class IlReplApp
         prompt.PasteInput?.Stop();
         prompt.Pending.Clear();
         prompt.Requester?.Cancel(prompt);
+        prompt.Analyzer?.Cancel();
         if (prompt.Submission is { } sending)
         {
             sending.Cancel();
@@ -152,6 +154,10 @@ public static class IlReplApp
         }
 
         prompt.Anchors.Dispose();
+        if (prompt.Analyzer is { } analyzer)
+        {
+            await analyzer.SettleAsync().ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -316,6 +322,7 @@ public static class IlReplApp
 
     private static void StartSubmission(PromptState prompt, IReplEngine engine, string text)
     {
+        prompt.Analyzer?.Cancel();
         prompt.Requester?.Cancel(prompt);
         if (prompt.Busy)
         {
@@ -492,6 +499,7 @@ public static class IlReplApp
         // applied here, on the render thread, before anything reads the transcript or the prompt.
         Drain(prompt, transcript, engine, app);
         prompt.Requester?.Refresh(prompt);
+        prompt.Analyzer?.Refresh(prompt);
 
         // The prompt is the only place input goes. A click on the scrollbar still focuses the
         // transcript panel, so focus is pulled back on the next render as a last resort; clicks
@@ -535,7 +543,8 @@ public static class IlReplApp
         var candidates = PromptWidget.Candidates(prompt, engine.Catalog).Count;
         var displayCandidates = PromptWidget.DisplayCandidates(prompt, engine.Catalog).Count;
         var detailLines = PromptWidget.DetailLines(prompt, engine.Catalog, size.Width).Count;
-        var fit = PromptLayout.Fit(size.Height, prompt.LineCount, displayCandidates, detailLines);
+        var diagnosticLines = PromptDiagnostics.Lines(prompt, size.Width).Count;
+        var fit = PromptLayout.Fit(size.Height, prompt.LineCount, displayCandidates, detailLines, diagnosticLines);
         if (fit.EditorRows != prompt.LastEditorRows)
         {
             // The transcript keeps its newest rows in view while the editor takes or gives back
@@ -621,10 +630,17 @@ public static class IlReplApp
                 {
                     var facts = new List<string>
                     {
-                        "stack " + status.Stack,
+                        prompt.Analysis?.Stack is { } stack
+                            ? (prompt.Analysis.BeforeInstruction ? "stack before " : "stack ") + stack.Render()
+                            : prompt.Analyzer?.IsPending == true ? "stack updating" : "stack " + status.Stack,
                         status.Locals == 0 ? "no locals" : $"{status.Locals} local{(status.Locals == 1 ? "" : "s")}",
                         status.OpenBlocks > 0 ? $"{status.OpenBlocks} open block{(status.OpenBlocks == 1 ? "" : "s")}" : $"{status.Instructions} instruction{(status.Instructions == 1 ? "" : "s")}",
                     };
+                    if (prompt.Analysis is { Stack: null })
+                    {
+                        facts.RemoveAt(0);
+                    }
+
                     if (prompt.Submission is { IsRunning: true } sending)
                     {
                         facts.Add(sending.CancelRequested ? $"cancelling {sending.Sent}/{sending.Total}" : $"sending {sending.Sent}/{sending.Total}");
@@ -652,8 +668,21 @@ public static class IlReplApp
                     var hints = StatusHints(occupied, size.Width, copyMode, enter, prompt.LineCount, ownSelection,
                         candidates > 0 && fit.PaletteRows > 0);
 
-                    // When even the last hint does not fit beside the facts, the facts give way from
-                    // the left: the open block names first, then the stack; what the bar is doing now stays.
+                    // While editing, the caret's incoming stack is the useful fact at narrow widths.
+                    if (prompt.Analysis?.Stack is not null)
+                    {
+                        while (size.Width > 0 && facts.Count > 1 && Width(facts) + 2 + Width(hints) > size.Width)
+                        {
+                            var remove = facts.Count > leading.Count + 2 ? leading.Count + 1
+                                : leading.Count > 0 ? 0 : facts.Count - 1;
+                            facts.RemoveAt(remove);
+                            if (remove < leading.Count)
+                            {
+                                leading.RemoveAt(remove);
+                            }
+                        }
+                    }
+
                     var drop = 0;
                     while (size.Width > 0 && facts.Count - drop > 1 && Width(facts.Skip(drop).ToList()) + 2 + Width(hints) > size.Width)
                     {
@@ -738,7 +767,8 @@ public static class IlReplApp
         // already being drawn is still drained on the next one.
         var again = prompt.RowsChanged;
         prompt.RowsChanged = false;
-        return prompt.Busy || prompt.Requester?.IsPending == true || prompt.MoreCompletions || !prompt.Events.IsEmpty || again
+        return prompt.Busy || prompt.Requester?.IsPending == true || prompt.Analyzer?.IsPending == true
+            || prompt.MoreCompletions || !prompt.Events.IsEmpty || again
             ? root.RedrawAfter(16) : root;
     }
 }

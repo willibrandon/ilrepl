@@ -421,6 +421,7 @@ public sealed partial class Session
             var gp = (GenericTypeParameterBuilder)generics[i];
             gp.SetGenericParameterAttributes(parameter.Attributes);
             var constraints = parameter.Constraints.Select(map.Map).ToList();
+            RuntimeGenericConstraints.Register(gp, parameter with { Constraints = constraints });
             var baseConstraint = constraints.FirstOrDefault(c => !c.IsInterface && !c.IsGenericParameter);
             if (baseConstraint is not null)
             {

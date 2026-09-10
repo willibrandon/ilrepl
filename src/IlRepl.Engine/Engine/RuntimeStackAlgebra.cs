@@ -30,6 +30,7 @@ public sealed class RuntimeStackAlgebra : IStackTypeAlgebra<Type>
         ArgumentNullException.ThrowIfNull(fullName);
         return fullName switch
         {
+            "System.ValueType" => typeof(ValueType),
             "System.RuntimeTypeHandle" => typeof(RuntimeTypeHandle),
             "System.RuntimeFieldHandle" => typeof(RuntimeFieldHandle),
             "System.RuntimeMethodHandle" => typeof(RuntimeMethodHandle),
@@ -63,7 +64,7 @@ public sealed class RuntimeStackAlgebra : IStackTypeAlgebra<Type>
     public bool IsByRef(Type type) => type.IsByRef;
 
     /// <inheritdoc/>
-    public bool IsPointer(Type type) => type.IsPointer;
+    public bool IsPointer(Type type) => type.IsPointer || TypeNameFormatter.IsFunctionPointer(type);
 
     /// <inheritdoc/>
     public bool IsArray(Type type) => type.IsArray;
@@ -75,5 +76,5 @@ public sealed class RuntimeStackAlgebra : IStackTypeAlgebra<Type>
     public bool IsGenericParameter(Type type) => type.IsGenericParameter;
 
     /// <inheritdoc/>
-    public bool Same(Type? a, Type? b) => a == b;
+    public bool Same(Type? a, Type? b) => ReferenceEquals(a, b) || a is not null && b is not null && TypeIdentity.Equal(a, b);
 }

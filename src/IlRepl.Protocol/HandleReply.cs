@@ -7,4 +7,10 @@ namespace IlRepl.Protocol;
 /// <param name="Quit">True when the line asked to leave.</param>
 /// <param name="Lines">The transcript lines the line produced, in order.</param>
 /// <param name="Status">The session status after the line.</param>
-public sealed record HandleReply(bool Succeeded, bool Quit, IReadOnlyList<TranscriptLine> Lines, SessionStatus Status);
+public sealed record HandleReply(bool Succeeded, bool Quit, IReadOnlyList<TranscriptLine> Lines, SessionStatus Status)
+{
+    /// <summary>
+    /// Source findings that explain a refused line, including earlier instructions affected by it.
+    /// </summary>
+    public IReadOnlyList<AnalysisDiagnostic> Diagnostics { get; init; } = [];
+}

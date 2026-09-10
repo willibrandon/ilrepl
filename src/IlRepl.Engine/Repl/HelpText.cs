@@ -138,6 +138,8 @@ public static class HelpText
         Plain("Tab accepts a completion; Up and Down choose a match or browse history.");
         Plain("Right accepts a grey suffix. Escape closes the palette.");
         Plain("Enter continues an open block and sends it, line by line, once its braces balance.");
+        Plain("The status bar shows the stack before the instruction at the caret.");
+        Plain("F8 visits the next diagnostic; Shift+F8 visits the previous one.");
         Plain("History keeps complete submissions between runs.");
         Plain("Ctrl+L clears the screen, Ctrl+Q leaves.");
         return lines;

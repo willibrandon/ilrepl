@@ -17,6 +17,23 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
     private bool _commentOpen;
     private DocumentPosition? _caret;
     private IReadOnlyList<TextDecorationSpan> _cached = [];
+    private IReadOnlyList<AnalysisDiagnostic> _diagnostics = [];
+
+    /// <summary>
+    /// Source diagnostics matching the current document revision.
+    /// </summary>
+    public IReadOnlyList<AnalysisDiagnostic> Diagnostics
+    {
+        get => _diagnostics;
+        set
+        {
+            if (!ReferenceEquals(_diagnostics, value))
+            {
+                _diagnostics = value;
+                _version = -1;
+            }
+        }
+    }
 
     /// <summary>
     /// Initializes a provider over a tokenizer.
@@ -72,6 +89,25 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
                 {
                     spans.Add(new TextDecorationSpan(new DocumentPosition(line, token.Start + 1), new DocumentPosition(line, token.End + 1), decoration));
                 }
+            }
+        }
+
+        foreach (var diagnostic in Diagnostics.Where(d => d.Kind == AnalysisDiagnosticKind.Error))
+        {
+            var location = diagnostic.Location;
+            var line = location.Line + 1;
+            if (line < Math.Max(1, startLine) || line > last)
+            {
+                continue;
+            }
+
+            var length = document.GetLineText(line).Length;
+            var start = Math.Clamp(location.Start, 0, length);
+            var end = Math.Clamp(location.Start + location.Length, start, length);
+            if (end > start)
+            {
+                spans.Add(new TextDecorationSpan(new DocumentPosition(line, start + 1), new DocumentPosition(line, end + 1),
+                    SpanPalette.Decoration(SpanStyle.Error)!));
             }
         }
 

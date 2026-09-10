@@ -34,6 +34,14 @@ public sealed class HostServer : IReplHost, IAsyncDisposable
     public Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken) =>
         _engine.CompleteAsync(request, cancellationToken);
 
+    /// <inheritdoc/>
+    public Task<AnalysisReply> AnalyzeAsync(AnalysisRequest request, CancellationToken cancellationToken) =>
+        _engine.AnalyzeAsync(request, cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<HandleReply> HandleSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken) =>
+        _engine.HandleSourceAsync(line, location, cancellationToken);
+
     /// <inheritdoc />
     public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
     {

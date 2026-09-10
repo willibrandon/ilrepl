@@ -21,8 +21,8 @@ from a cell is captured inside the host, so the channel is never mixed with what
 
 The same engine runs in the browser on the [live session](/try/) page, where the .NET
 runtime is compiled to WebAssembly and the Hex1b UI renders into xterm.js. Nothing there talks
-to a server. Mono's `PrepareMethod` does nothing on that runtime, so the JIT check that closes a
-`.method` block on the desktop is skipped there and a rejection waits for the first call.
+to a server. Shared control-flow checks run before a definition closes on both runtimes. Mono
+cannot perform the desktop's additional JIT preparation, so remaining runtime checks wait for a call.
 
 ## The cell
 
@@ -35,6 +35,12 @@ to the method that is emitted and the same cell can compile more than once. Comp
 collectible `AssemblyBuilder` types with one static `Run` method returning `object`; the epilogue
 boxes a value type left on the stack, and vararg cells get a standard-convention wrapper, because
 reflection cannot invoke a vararg method directly.
+
+The editor analyzes the whole unsent document through a separate request. A fixed-point worklist
+merges incoming stacks and retains producer locations; runtime and symbolic operands share the
+transfer rules. Requests yield during large analyses and release their metadata leases when
+cancelled. Cached presentation facts let caret movement reuse the graph without retaining types.
+Replies carry document and session identities, so stale diagnostics cannot replace current ones.
 
 ## Definitions
 

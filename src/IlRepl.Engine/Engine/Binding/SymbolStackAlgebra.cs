@@ -13,6 +13,7 @@ public sealed class SymbolStackAlgebra : IStackTypeAlgebra<TypeSymbol>
     private static readonly TypeSymbol NullableDefinition = RuntimeSymbolImporter.Import(typeof(Nullable<>));
     private static readonly Dictionary<string, TypeSymbol> CoreLibTypes = new(StringComparer.Ordinal)
     {
+        ["System.ValueType"] = RuntimeSymbolImporter.Import(typeof(ValueType)),
         ["System.RuntimeTypeHandle"] = RuntimeSymbolImporter.Import(typeof(RuntimeTypeHandle)),
         ["System.RuntimeFieldHandle"] = RuntimeSymbolImporter.Import(typeof(RuntimeFieldHandle)),
         ["System.RuntimeMethodHandle"] = RuntimeSymbolImporter.Import(typeof(RuntimeMethodHandle)),

@@ -12,4 +12,9 @@ public readonly record struct PromptFit(int EditorRows, int PaletteRows, int Tra
     /// Rows for the complete signature, including its scroll position heading.
     /// </summary>
     public int DetailRows { get; init; }
+
+    /// <summary>
+    /// Rows reserved for the current source diagnostic.
+    /// </summary>
+    public int DiagnosticRows { get; init; }
 }

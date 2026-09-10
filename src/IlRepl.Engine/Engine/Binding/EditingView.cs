@@ -1,3 +1,5 @@
+using IlRepl.Protocol;
+
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
@@ -27,6 +29,11 @@ public sealed record EditingView(
     bool InBlockComment,
     IReadOnlyList<SkippedEditingLine> SkippedLines)
 {
+    /// <summary>
+    /// Whether the complete incoming stack is known at the caret.
+    /// </summary>
+    public AnalyzedStackKind StackKind { get; init; } = AnalyzedStackKind.Known;
+
     /// <summary>
     /// The complete declaration context used to validate selected definitions across symbolic replay.
     /// </summary>

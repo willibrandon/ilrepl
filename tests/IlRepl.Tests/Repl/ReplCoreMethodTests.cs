@@ -281,15 +281,15 @@ public sealed class ReplCoreMethodTests
     }
 
     /// <summary>
-    /// A close the JIT refuses names the method and keeps the block open.
+    /// An invalid join names both incoming paths and keeps the method open.
     /// </summary>
     [TestMethod]
-    public void Handle_JitRejectedClose_ReportsMethodAndKeepsBlockOpen()
+    public void Handle_InvalidJoin_ReportsPathsAndKeepsBlockOpen()
     {
         var core = Load(".method void Bad() {", "ldc.i4 0", "brfalse SKIP", "ldc.i4 1", "ldc.i4 2", "pop", "SKIP: pop");
         Assert.IsFalse(core.Handle("}").Succeeded);
-        Assert.Contains("error: the JIT rejected method Bad", Plain(core));
-        Assert.Contains("the block is still open", Plain(core));
+        Assert.Contains("error: SKIP receives incompatible stacks", Plain(core));
+        Assert.Contains("[int32]", Plain(core));
         Assert.AreEqual("Bad", core.Status.OpenMethod);
         Assert.AreEqual(1, core.CellNumber);
     }

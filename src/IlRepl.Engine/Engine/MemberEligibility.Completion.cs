@@ -79,7 +79,8 @@ public static partial class MemberEligibility
             _ => false,
         };
         return storage && InstructionMemberRules.InitOnlyStoreProblem(field, site.Owner, view.OpenMethod,
-            view.Scope.Access.Type, view.IsThisAt(view.Stack.Count - 2), view.Scope.Pretty) is null;
+            view.Scope.Access.Type, view.StackKind != AnalyzedStackKind.Known || view.IsThisAt(view.Stack.Count - 2),
+            view.Scope.Pretty) is null;
     }
 
     /// <summary>

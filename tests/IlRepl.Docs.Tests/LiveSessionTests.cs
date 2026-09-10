@@ -618,8 +618,7 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
-    /// The browser runtime cannot prepare a method ahead of a call, so a body the JIT would refuse
-    /// closes without complaint there and is rejected at the first call instead.
+    /// The browser refuses incompatible branch stacks before the method is created and returns the block for correction.
     /// </summary>
     /// <param name="browser">The browser engine to drive.</param>
     /// <returns>A task that completes when the assertions have run.</returns>
@@ -627,7 +626,7 @@ public sealed partial class LiveSessionTests
     [DataRow("chromium")]
     [DataRow("webkit")]
     [Timeout(240_000, CooperativeCancellation = true)]
-    public async Task LiveSession_BadBranchInMethod_IsRejectedAtFirstCall(string browser)
+    public async Task LiveSession_BadBranchInMethod_IsRejectedBeforeCreation(string browser)
     {
         await using var launched = await LaunchAsync(browser);
         await using var context = await NewContextAsync(launched);
@@ -639,14 +638,18 @@ public sealed partial class LiveSessionTests
             await TypeLineAsync(page, line);
         }
 
-        await Assertions.Expect(terminal).ToContainTextAsync("end of method Bad", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
-        await Assertions.Expect(terminal).ToContainTextAsync("il[2]>", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await Assertions.Expect(terminal).ToContainTextAsync("incompatible stacks",
+            new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await Assertions.Expect(terminal).ToContainTextAsync("editing 8 lines",
+            new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
         var text = await BufferTextAsync(page);
-        Assert.DoesNotContain("rejected method Bad", text, "the browser skips preparation at the close");
+        Assert.DoesNotContain("end of method Bad", text, "the invalid definition was never committed");
 
-        await TypeLineAsync(page, "call void Bad()");
+        await page.Keyboard.PressAsync("Control+c");
+        await TypeLineAsync(page, "ldc.i4.s 42");
         await TypeLineAsync(page, "ret");
-        await Assertions.Expect(terminal).ToContainTextAsync("error: the JIT rejected the cell", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
+        await Assertions.Expect(terminal).ToContainTextAsync("= 42 : int32",
+            new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
     }
 
     /// <summary>

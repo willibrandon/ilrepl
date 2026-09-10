@@ -104,6 +104,7 @@ public sealed class StackTransfer<T> where T : class
                 return [_types.MakeArray(view.Type!)];
             case "castclass":
             case "isinst":
+                return [Box(view.Type!)];
             case "unbox.any":
             case "ldobj":
             case "ldelem":
@@ -158,7 +159,8 @@ public sealed class StackTransfer<T> where T : class
             case "sub.ovf.un":
             case "mul.ovf":
             case "mul.ovf.un":
-                return [Binary(popped[0], popped[1])];
+                return [name is "sub" or "sub.ovf.un" && popped[0] is { } left && popped[1] is { } right
+                    && _types.IsByRef(left) && _types.IsByRef(right) ? _types.Primitive("native int") : Binary(popped[0], popped[1])];
             case "shl":
             case "shr":
             case "shr.un":
@@ -219,7 +221,7 @@ public sealed class StackTransfer<T> where T : class
         ArgumentNullException.ThrowIfNull(operand);
         if (_types.IsGenericParameter(operand))
         {
-            return _types.UnknownReference;
+            return _types.Boxed(operand);
         }
 
         if (!_types.IsValueType(operand))
