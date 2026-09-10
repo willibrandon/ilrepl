@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 67 method examples and the paired constructor example
+not justify refusing a correct body. The 89 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -27,7 +27,7 @@ using the analyzer to build its expected results. Incorrect bodies are never exe
 | Comparisons | III.1.5 table III.4 | ObjectComparison | BadComparison |
 | Reference and float operands | III.3.22, III.4.31 | Catch, MixedFloats | BadThrow, BadFinite |
 | Exception entry and handler stacks | III.1.7.6, III.1.8.1.1 | Catch, Finally, CatchFinally, EndfinallyClearsStack, Fault, Filter, RethrowPreservesStack | NonemptyTry, WrongFilterStack |
-| Protected returns and transfers | III.3.37, III.3.46, III.3.57 | Catch, Finally, Fault, LeaveWithinTry | JumpFromTry, ReturnInTry |
+| Protected returns and transfers | III.3.37, III.3.46, III.3.57 | Catch, Finally, Fault, Jump, LeaveWithinTry | JumpFromTry, JumpFromSynchronizedMethod, ReturnInTry, WrongJumpSignature |
 | Protected-region entry | III.3.15 | Catch, Finally | BranchIntoTry |
 | Prefix boundaries and applicability | III.2 | TailCall, UnalignedLoad, ReadOnlyLoad | WrongPrefix, BranchIntoPrefix |
 | Generic identity and boxing | III.1.8.1.1–III.1.8.1.3 | GenericBox, GenericReference | GenericNeedsBox, GenericDistinct |
@@ -36,7 +36,9 @@ using the analyzer to build its expected results. Incorrect bodies are never exe
 | Constrained receiver type | III.2.1 | ConstrainedReceiver | WrongConstrainedReceiver |
 | Readonly store receiver across paths | II.16.1.2 | FlowReceiver with this on both paths | FlowReceiver with another receiver |
 | Indirect calls | III.3.20 | IndirectCall | WrongIndirectCall |
-| Array index and pointer operands | III.3.42, III.4.7 | ArrayIndex, ManagedPointer | WrongArrayIndex, WrongIndirectLoad |
+| Block memory operands | III.3.30, III.3.36 | CopyBlock, InitializeBlock | WrongCopyBlock, WrongInitializeBlock |
+| Array element, index and pointer operands | I.8.7.1, III.4.7–III.4.9, III.4.26–III.4.27 | ArrayElement, ArrayIndex, ManagedPointer | WrongArrayElement, WrongArrayIndex, WrongArrayValue, WrongIndirectLoad |
+| Typed references | III.4.19, III.4.22–III.4.23 | TypedReference | WrongMakeTypedReference, WrongTypedReferenceType, WrongTypedReferenceValue |
 | Stack allocation depth | III.3.47 | StackAllocation | WrongAllocationStack |
 | Transitive generic constraints | III.1.8.1.2.3 | TransitiveBox | GenericNeedsBox |
 | Header stack limit | III.1.7.4, II.25.4.3 | DeepStack, DeadCode through live and both exports | Raw underflow fixture |
@@ -81,6 +83,10 @@ The library reports `PathStackUnexpected` when merging int32 and uint32 managed 
 enum pointer and its underlying integer pointer. ECMA I.8.7 gives these the same verification
 type. `ReducedPointerJoin` and `EnumPointerJoin` check that they remain accepted and executable.
 
+The library accepts `ldelem.i1` over a `bool[]`, using their common verification type. Array
+instructions use the narrower array-element compatibility relation in ECMA I.8.7.1, whose reduced
+types keep `bool` distinct from `int8`, so `WrongBooleanArrayLoad` remains a correctness error.
+
 The library reports `ImportCalli not implemented` for both indirect-call fixtures. The tests
 assert that exact unsupported-operation failure separately; it is not treated as verification
 success or as evidence that the invalid argument is rejected. ECMA III.3.20 supplies the argument
@@ -88,6 +94,14 @@ rule, and the accepted body runs through desktop, both exports, and browser Mono
 
 The library reports only `Unverifiable` for `jmp` inside a try. ECMA III.3.37 makes that transfer
 incorrect as well as unverifiable, so `JumpFromTry` pins the analyzer's stricter rejection.
+
+The library reports only `Unverifiable` when `cpblk` or `initblk` receives an object reference
+where the instruction requires an address. ECMA III.3.30 and III.3.36 make those operand shapes
+incorrect. The bad size and initialization-value cases also report `ExpectedIntegerType`.
+
+The library cannot inspect a fixture containing typed-reference instructions and reports
+`TypedReference not supported in .NET Core`. ECMA III.4.19 and III.4.22–III.4.23 define the
+accepted and rejected operand shapes, which CoreCLR and browser Mono exercise independently.
 
 The library reports `ExpectedNumericType` when `conv.u` turns a managed address into the unmanaged
 pointer used by the field fixtures. ECMA III.3.27 permits that correct but unverifiable conversion;

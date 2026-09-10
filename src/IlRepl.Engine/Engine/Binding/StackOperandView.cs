@@ -88,4 +88,9 @@ public sealed record StackOperandView<T> where T : class
     /// True when the instruction loads the address of <c>this</c>.
     /// </summary>
     public bool AddressOfThis { get; init; }
+
+    /// <summary>
+    /// Explains why a <c>jmp</c> target is incompatible with the enclosing method.
+    /// </summary>
+    public string? JumpRestriction { get; init; }
 }

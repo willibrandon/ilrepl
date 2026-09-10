@@ -199,6 +199,30 @@ internal sealed class FlowTypeRules<T>(
         };
     }
 
+    /// <summary>
+    /// True when a type is a zero-based, one-dimensional array.
+    /// </summary>
+    public bool IsVector(T type) => Algebra.IsArray(type) && _arrayShape(type) == (1, true);
+
+    /// <summary>
+    /// Applies the CLI's array-element compatibility relation, including enum and signedness reductions.
+    /// </summary>
+    public bool ArrayElementCompatible(T actual, T expected)
+    {
+        actual = _underlyingType(actual);
+        expected = _underlyingType(expected);
+        return Algebra.Same(actual, expected) || Assignable(actual, expected) || SameReducedType(actual, expected);
+    }
+
+    private bool SameReducedType(T left, T right)
+    {
+        bool Pair(string signed, string unsigned) => Algebra.Same(left, Algebra.Primitive(signed))
+            && Algebra.Same(right, Algebra.Primitive(unsigned))
+            || Algebra.Same(left, Algebra.Primitive(unsigned)) && Algebra.Same(right, Algebra.Primitive(signed));
+        return Pair("int8", "uint8") || Pair("int16", "uint16") || Pair("int32", "uint32")
+            || Pair("int64", "uint64") || Pair("native int", "native uint");
+    }
+
     private bool SameLocation(T left, T right)
     {
         left = _underlyingType(left);

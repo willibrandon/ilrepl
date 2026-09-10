@@ -162,12 +162,30 @@ internal static class RuntimeFlowAnalysis
     private static StackOperandView<Type> View(CellState state, Instruction instruction, ParseContext context)
     {
         var view = StackSimulator.View(instruction, context);
+        RuntimeBindingScope? bindingScope = null;
+        RuntimeBindingScope Scope() => bindingScope ??= new RuntimeBindingScope(context);
+        if (instruction.Op == OpCodes.Jmp && instruction.Operand is ResolvedMethod jump)
+        {
+            var jumpScope = Scope();
+            var sourceOwner = state.Member is null ? null : jumpScope.ImportType(state.Member.Owner);
+            var source = state.Signature is null ? null : RuntimeSymbolImporter.Import(state.Signature, sourceOwner,
+                RuntimeDefinitions.OfDeclaration(state.Signature, 0), MethodSymbolSource.Declared, true);
+            var arguments = context.Arguments.Select(argument =>
+                new VariableSymbol(jumpScope.ImportType(argument.Type), argument.Name, false))
+                .ToArray();
+            view = view with
+            {
+                JumpRestriction = JumpCompatibility.Problem(JumpTarget(jump, jumpScope), source, arguments,
+                    jumpScope.Generics.MethodArguments, state.IsVarArg, jumpScope),
+            };
+        }
+
         if (instruction.Operand is not FieldInfo { IsInitOnly: true } field || instruction.Op.Name is not ("stfld" or "stsfld"))
         {
             return view;
         }
 
-        var scope = new RuntimeBindingScope(context);
+        var scope = Scope();
         var owner = state.Member is null ? null : scope.ImportType(state.Member.Owner);
         var signature = state.Signature is null ? null
             : RuntimeSymbolImporter.Import(state.Signature, owner, default, MethodSymbolSource.Declared, true);
@@ -179,5 +197,29 @@ internal static class RuntimeFlowAnalysis
             ReceiverRestriction = InstructionMemberRules.InitOnlyStoreProblem(symbol, instruction.Op.Name,
                 signature, owner, false, scope.Pretty),
         };
+    }
+
+    /// <summary>
+    /// Restores the symbol retained by a runtime method operand.
+    /// </summary>
+    internal static MethodSymbol JumpTarget(ResolvedMethod method, RuntimeBindingScope scope)
+    {
+        if (method.Definition is { } session)
+        {
+            return RuntimeSymbolImporter.Import(session, null, RuntimeDefinitions.OfDeclaration(session, 0),
+                MethodSymbolSource.Session, true);
+        }
+
+        if (method.Declared is { } declared)
+        {
+            var declaring = scope.ImportType(method.DeclaringType!);
+            var identity = method.Method is null ? RuntimeDefinitions.OfDeclaration(declared, 0)
+                : RuntimeDefinitions.Of(method.Method);
+            var symbol = RuntimeSymbolImporter.Import(declared, declaring, identity, MethodSymbolSource.Declared, true);
+            return method.InstantiationArguments.Count == 0 ? symbol : symbol.With(declaring, symbol.ReturnType,
+                symbol.Parameters, [.. method.InstantiationArguments.Select(scope.ImportType)]);
+        }
+
+        return RuntimeSymbolImporter.Import(method.Method!, scope.ImportType(method.DeclaringType!));
     }
 }

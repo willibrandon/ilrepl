@@ -185,7 +185,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     }
                 }
 
-                if (view.Op.Name is "localloc" or "cpblk" or "initblk" or "calli"
+                if (view.Op.Name is "localloc" or "cpblk" or "initblk" or "calli" or "jmp"
+                    || view.Op == OpCodes.Mkrefany && values.LastOrDefault()?.Type is { } typedReference
+                        && _types.Category(typedReference) == StackCategory.NativeInt
                     || values.Any(value => value.Type is { } type && _types.Algebra.IsPointer(type))
                     || view.Op.Name is "add" or "sub" or "add.ovf.un" or "sub.ovf.un"
                         && values.TakeLast(2).Any(value => value.Type is { } type && _types.Algebra.IsByRef(type))
@@ -360,9 +362,45 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return "jmp requires an empty evaluation stack";
         }
 
+        if (op == OpCodes.Jmp && view.JumpRestriction is { } jumpRestriction)
+        {
+            return jumpRestriction;
+        }
+
         if (op == OpCodes.Localloc && (count != 1 || kind is not (null or StackCategory.Int32 or StackCategory.NativeInt)))
         {
             return "localloc needs exactly one integer size on the evaluation stack";
+        }
+
+        if (op == OpCodes.Cpblk)
+        {
+            if (!Address(values[^3].Type) || !Address(values[^2].Type))
+            {
+                return "cpblk needs destination and source pointers";
+            }
+
+            if (values[^1].Type is { } size && _types.Category(size) != StackCategory.Int32)
+            {
+                return $"cpblk needs an int32 size but found {_types.Name(size)}";
+            }
+        }
+
+        if (op == OpCodes.Initblk)
+        {
+            if (!Address(values[^3].Type))
+            {
+                return $"initblk needs a destination pointer but found {_types.Name(values[^3].Type)}";
+            }
+
+            if (values[^2].Type is { } value && _types.Category(value) != StackCategory.Int32)
+            {
+                return $"initblk needs an int32 value but found {_types.Name(value)}";
+            }
+
+            if (values[^1].Type is { } size && _types.Category(size) != StackCategory.Int32)
+            {
+                return $"initblk needs an int32 size but found {_types.Name(size)}";
+            }
         }
 
         if (graph.Prefixes(index).Any(prefix => prefix.Op == OpCodes.Tailcall) && count != view.ArgumentPops)
@@ -428,6 +466,27 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return $"box needs {_types.Name(boxed)} but found {_types.Name(top)}";
         }
 
+        if (op == OpCodes.Mkrefany && view.Type is { } referenced && top is { } pointer)
+        {
+            if (_types.Algebra.IsByRef(pointer) || _types.Algebra.IsPointer(pointer))
+            {
+                if (!_types.Algebra.Same(_types.Algebra.ElementOf(pointer), referenced))
+                {
+                    return $"mkrefany needs a pointer to {_types.Name(referenced)} but found {_types.Name(pointer)}";
+                }
+            }
+            else if (_types.Category(pointer) != StackCategory.NativeInt)
+            {
+                return $"mkrefany needs a pointer to {_types.Name(referenced)} but found {_types.Name(pointer)}";
+            }
+        }
+
+        if (op.Name is "refanytype" or "refanyval" && top is { } typedReference
+            && !_types.Algebra.Same(typedReference, _types.Algebra.Primitive("typedref")))
+        {
+            return $"{op.Name} needs a typedref but found {_types.Name(typedReference)}";
+        }
+
         if (op.Name is { } memory && (memory.StartsWith("ldind", StringComparison.Ordinal)
             || memory.StartsWith("stind", StringComparison.Ordinal) || memory is "ldobj" or "stobj" or "initobj" or "cpobj"))
         {
@@ -466,10 +525,27 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 return $"{arrayOp} needs an array but found {_types.Name(array)}";
             }
 
+            if (array is not null && _types.Algebra.IsArray(array) && !_types.IsVector(array))
+            {
+                return $"{arrayOp} needs a zero-based one-dimensional array but found {_types.Name(array)}";
+            }
+
             if (pops > 1 && values[count - pops + 1].Type is { } offset
                 && _types.Category(offset) is not (StackCategory.Int32 or StackCategory.NativeInt))
             {
                 return $"{arrayOp} needs an integer index but found {_types.Name(offset)}";
+            }
+            if (array is not null && _types.Algebra.IsArray(array) && arrayOp != "ldlen"
+                && _types.Algebra.ElementOf(array) is { } actualElement && ArrayInstructionType(view) is { } instructionElement
+                && !_types.ArrayElementCompatible(actualElement, instructionElement))
+            {
+                return $"{arrayOp} cannot access {_types.Name(actualElement)} elements as {_types.Name(instructionElement)}";
+            }
+
+            if (arrayOp.StartsWith("stelem", StringComparison.Ordinal) && ArrayInstructionType(view) is { } storedAs
+                && !_types.CanAssign(top, storedAs))
+            {
+                return $"{arrayOp} needs {_types.Name(storedAs)} but found {_types.Name(top)}";
             }
         }
 
@@ -489,6 +565,31 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             "i8" => "int64",
             "i" => "native int",
             "r4" or "r8" => "float64",
+            "ref" => "object",
+            _ => null,
+        };
+        return keyword is null ? null : _types.Algebra.Primitive(keyword);
+    }
+
+    private T? ArrayInstructionType(StackOperandView<T> view)
+    {
+        if (view.Type is { } type)
+        {
+            return type;
+        }
+
+        var keyword = view.Op.Name?.Split('.').Last() switch
+        {
+            "i1" => "int8",
+            "u1" => "uint8",
+            "i2" => "int16",
+            "u2" => "uint16",
+            "i4" => "int32",
+            "u4" => "uint32",
+            "i8" => "int64",
+            "i" => "native int",
+            "r4" => "float32",
+            "r8" => "float64",
             "ref" => "object",
             _ => null,
         };

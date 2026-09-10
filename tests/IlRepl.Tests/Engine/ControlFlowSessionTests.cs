@@ -201,6 +201,33 @@ public sealed class ControlFlowSessionTests
         Assert.Contains("jmp is not allowed inside a protected region", error.Message);
     }
 
+    /// <summary>
+    /// A manually entered jump cannot reinterpret the enclosing method's parameters.
+    /// </summary>
+    [TestMethod]
+    public void JumpTarget_MustMatchTheCurrentParameters()
+    {
+        var session = new Session();
+        Add(session, ".method void Jump() {");
+        var error = Assert.ThrowsExactly<ReplException>(() =>
+            session.AddLine("jmp int32 [System.Runtime]System.Math::Abs(int32)"));
+        Assert.Contains("jmp target must match", error.Message);
+    }
+
+    /// <summary>
+    /// A jump cannot leave the implicit protected region of a synchronized method.
+    /// </summary>
+    [TestMethod]
+    public void JumpFromSynchronizedMethod_IsRejected()
+    {
+        var session = new Session();
+        Add(session, ".class public JumpHost {",
+            ".method public static int32 Jump(int32 value) cil managed synchronized {", "ldarg value", "pop");
+        var error = Assert.ThrowsExactly<ReplException>(() =>
+            session.AddLine("jmp int32 [System.Runtime]System.Math::Abs(int32)"));
+        Assert.Contains("jmp is not allowed in a synchronized method", error.Message);
+    }
+
     private static void Add(Session session, params string[] lines)
     {
         foreach (var line in lines)

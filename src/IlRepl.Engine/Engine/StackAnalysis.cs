@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Reflection.Emit;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
 
@@ -165,11 +166,27 @@ public static class StackAnalysis
     private static StackOperandView<Type> View(Instruction instruction, DisassembledMethod method)
     {
         var view = StackSimulator.View(instruction, method.Context);
+        RuntimeBindingScope? bindingScope = null;
+        RuntimeBindingScope Scope() => bindingScope ??= new RuntimeBindingScope(method.Context);
+        if (instruction.Op == OpCodes.Jmp && instruction.Operand is ResolvedMethod jump)
+        {
+            var jumpScope = Scope();
+            var source = RuntimeSymbolImporter.Import(method.Method);
+            var arguments = method.Context.Arguments.Select(argument =>
+                new VariableSymbol(jumpScope.ImportType(argument.Type), argument.Name, false)).ToArray();
+            view = view with
+            {
+                JumpRestriction = JumpCompatibility.Problem(RuntimeFlowAnalysis.JumpTarget(jump, jumpScope), source,
+                    arguments, jumpScope.Generics.MethodArguments, source.IsVarArg, jumpScope),
+            };
+        }
+
         if (instruction.Operand is not FieldInfo { IsInitOnly: true } field || instruction.Op.Name is not ("stfld" or "stsfld"))
         {
             return view;
         }
 
+        var scope = Scope();
         var symbol = RuntimeSymbolImporter.Import(field);
         var signature = RuntimeSymbolImporter.Import(method.Method);
         return view with

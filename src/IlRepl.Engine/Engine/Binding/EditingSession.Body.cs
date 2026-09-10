@@ -182,6 +182,15 @@ public sealed partial class EditingSession
     private static StackOperandView<TypeSymbol> FlowView(BoundInstruction instruction, EditingBody body, IBindingScope scope)
     {
         var view = EditingStack.View(instruction, scope);
+        if (instruction.Op == OpCodes.Jmp && instruction.Operand.Method is { } jump)
+        {
+            view = view with
+            {
+                JumpRestriction = JumpCompatibility.Problem(jump.Method, body.Signature, body.Arguments,
+                    body.Generics.MethodArguments, body.IsVarArg, scope),
+            };
+        }
+
         if (instruction.Operand.Field is not { IsInitOnly: true } field || instruction.Op.Name is not ("stfld" or "stsfld"))
         {
             return view;
