@@ -222,6 +222,11 @@ async Task WriteHeroAsync()
         scratch.Delete(true);
     }
 
+    if (update)
+    {
+        File.WriteAllLines(source, lines.Select(line => string.Concat(line.Select(span => span.Text)).TrimEnd()));
+    }
+
     var component = new StringBuilder();
     component.Append("---\n// Written by scripts/Highlight-Cil.cs from src/hero.ilrepl; edit that and run the script.\n---\n");
     component.Append("<pre class=\"hero-prompt\">");
@@ -305,9 +310,9 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
         return StyledLines(body, SpanStyle.Input);
     }
     var directory = Directory.GetCurrentDirectory();
-    var normalized = produced.Select(line => line.Kind == LineKind.Info
+    var normalized = produced.Select(line => TrimEndSpans(line.Kind == LineKind.Info
         ? line.Spans.Select(span => span with { Text = NormalizeSavePath(span.Text, directory, Path.DirectorySeparatorChar) }).ToArray()
-        : line.Spans).ToList();
+        : line.Spans)).ToList();
     if (trailingPrompt)
     {
         normalized.Add([new TranscriptSpan(engine.Status.Prompt.TrimEnd(), SpanStyle.Prompt)]);
@@ -332,6 +337,26 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
     var got = mismatch < actual.Length ? actual[mismatch] : "(end)";
     warnings.Add($"{where}: line {mismatch + 1}: page '{expected}', REPL '{got}'");
     return StyledLines(body, SpanStyle.Input);
+}
+
+// Trim the spans as well as the displayed text so annotations stay within their source line.
+static IReadOnlyList<TranscriptSpan> TrimEndSpans(IReadOnlyList<TranscriptSpan> spans)
+{
+    var result = spans.ToList();
+    for (var i = result.Count - 1; i >= 0; i--)
+    {
+        var text = result[i].Text.TrimEnd();
+        if (text.Length == 0)
+        {
+            result.RemoveAt(i);
+            continue;
+        }
+
+        result[i] = result[i] with { Text = text };
+        break;
+    }
+
+    return result;
 }
 
 // Each error must already belong to the same input occurrence, including its continuation lines.
