@@ -23,7 +23,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>ilrepl</ToolCommandName>
     <PackageId>ilrepl</PackageId>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Description>Interactive CIL REPL with a live evaluation stack. Type IL, watch the stack, run it on the real JIT.</Description>
     <PackageTags>il;cil;msil;repl;reflection-emit;dotnet-tool;hex1b</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
