@@ -9,7 +9,7 @@ var ridOption = new Option<string>("--rid") { Description = "The runtime identif
 var versionOption = new Option<string>("--package-version")
 {
     Description = "The package version, with or without a leading v.",
-    DefaultValueFactory = _ => "0.4.0",
+    DefaultValueFactory = _ => "0.4.1",
 };
 var outputOption = new Option<string>("--output") { Description = "The artifacts directory, relative to the repository.", DefaultValueFactory = _ => "artifacts/native-aot" };
 var root = new RootCommand("Publishes the Native AOT front-end for one runtime identifier, smoke-tests it, and packs the runtime-specific tool package.")
