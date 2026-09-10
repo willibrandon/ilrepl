@@ -5,17 +5,6 @@ under your fingers, and run the cell on the real JIT.
 
 ![ilrepl showing stack changes, a result, and Math.Max completion](https://raw.githubusercontent.com/willibrandon/ilrepl/main/assets/ilrepl.png)
 
-```ilrepl
-il[1]> ldc.i4 6
-  ┊ [int32]
-il[1]> ldc.i4 7
-  ┊ [int32, int32] ◂ top
-il[1]> mul
-  ┊ [int32]
-il[1]> ret
-  = 42 : int32
-```
-
 Documentation and a live session in your browser: https://ilrepl.dev/
 
 ## Install
@@ -49,118 +38,118 @@ reads any method back, the framework's or your own, with the same stack column b
 instruction.
 
 ```ilrepl
-il[2]> .locals init (string m)
+il[1]> .locals init (string m)
   locals: 0:string m
-il[2]> .try {
+il[1]> .try {
   try
   ┊ []
-il[2]> ldstr "boom"
+il[1]> ldstr "boom"
   ┊ [string]
-il[2]> newobj instance void InvalidOperationException::.ctor(string)
+il[1]> newobj instance void InvalidOperationException::.ctor(string)
   ┊ [InvalidOperationException]
-il[2]> throw
+il[1]> throw
   ┊ []
-il[2]> } catch InvalidOperationException {
+il[1]> } catch InvalidOperationException {
   catch InvalidOperationException
   ┊ [InvalidOperationException]
-il[2]> callvirt instance string Exception::get_Message()
+il[1]> callvirt instance string Exception::get_Message()
   ┊ [string]
-il[2]> stloc m
+il[1]> stloc m
   ┊ []
-il[2]> leave DONE
+il[1]> leave DONE
   ┊ []
-il[2]> }
+il[1]> }
   end of protected region
   ┊ []
-il[2]> DONE: ldloc m
+il[1]> DONE: ldloc m
   ┊ [string]
-il[2]> ret
+il[1]> ret
   = "boom" : string
 ```
 
 A method stays for the rest of the session:
 
 ```ilrepl
-il[3]> .method int32 Fib(int32 n) {
+il[2]> .method int32 Fib(int32 n) {
   method int32 Fib(int32 n)
-il[3]> ldarg n
+il[2]> ldarg n
   ┊ [int32]
-il[3]> ldc.i4 2
+il[2]> ldc.i4 2
   ┊ [int32, int32] ◂ top
-il[3]> blt BASE
+il[2]> blt BASE
   ┊ []
-il[3]> ldarg n
+il[2]> ldarg n
   ┊ [int32]
-il[3]> ldc.i4 1
+il[2]> ldc.i4 1
   ┊ [int32, int32] ◂ top
-il[3]> sub
+il[2]> sub
   ┊ [int32]
-il[3]> call int32 Fib(int32)
+il[2]> call int32 Fib(int32)
   ┊ [int32]
-il[3]> ldarg n
+il[2]> ldarg n
   ┊ [int32, int32] ◂ top
-il[3]> ldc.i4 2
+il[2]> ldc.i4 2
   ┊ [int32, int32, int32] ◂ top
-il[3]> sub
+il[2]> sub
   ┊ [int32, int32] ◂ top
-il[3]> call int32 Fib(int32)
+il[2]> call int32 Fib(int32)
   ┊ [int32, int32] ◂ top
-il[3]> add
+il[2]> add
   ┊ [int32]
-il[3]> ret
+il[2]> ret
   ┊ []
-il[3]> BASE: ldarg n
+il[2]> BASE: ldarg n
   ┊ [int32]
-il[3]> ret
+il[2]> ret
   ┊ []
-il[3]> }
+il[2]> }
   end of method Fib
-il[4]> ldc.i4 10
+il[3]> ldc.i4 10
   ┊ [int32]
-il[4]> call int32 Fib(int32)
+il[3]> call int32 Fib(int32)
   ┊ [int32]
-il[4]> ret
+il[3]> ret
   = 55 : int32
 ```
 
 A type stays too, and a value of it is shown by its fields:
 
 ```ilrepl
-il[5]> .class public sequential ansi sealed Point extends [System.Runtime]System.ValueType {
+il[4]> .class public sequential ansi sealed Point extends [System.Runtime]System.ValueType {
   struct Point
-il[5]> .field public int32 X
+il[4]> .field public int32 X
   field public int32 X
-il[5]> .field public int32 Y
+il[4]> .field public int32 Y
   field public int32 Y
-il[5]> .method public instance void .ctor(int32 x, int32 y) {
+il[4]> .method public instance void .ctor(int32 x, int32 y) {
   method instance void .ctor(int32, int32)
-il[5]> ldarg.0
+il[4]> ldarg.0
   ┊ [Point&]
-il[5]> ldarg x
+il[4]> ldarg x
   ┊ [Point&, int32] ◂ top
-il[5]> stfld int32 Point::X
+il[4]> stfld int32 Point::X
   ┊ []
-il[5]> ldarg.0
+il[4]> ldarg.0
   ┊ [Point&]
-il[5]> ldarg y
+il[4]> ldarg y
   ┊ [Point&, int32] ◂ top
-il[5]> stfld int32 Point::Y
+il[4]> stfld int32 Point::Y
   ┊ []
-il[5]> ret
+il[4]> ret
   ┊ []
-il[5]> }
+il[4]> }
   end of method .ctor
-il[5]> }
+il[4]> }
   end of struct Point
-il[6]> ldc.i4 3
+il[5]> ldc.i4 3
   ┊ [int32]
-il[6]> ldc.i4 4
+il[5]> ldc.i4 4
   ┊ [int32, int32] ◂ top
-il[6]> newobj instance void Point::.ctor(int32, int32)
+il[5]> newobj instance void Point::.ctor(int32, int32)
   ┊ [Point]
-il[6]> box Point
+il[5]> box Point
   ┊ [object]
-il[6]> ret
+il[5]> ret
   = Point { X = 3, Y = 4 } : Point
 ```
 
