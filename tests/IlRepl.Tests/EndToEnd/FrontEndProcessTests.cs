@@ -316,9 +316,12 @@ public sealed class FrontEndProcessTests
     /// A pasted method of two hundred lines goes through the real host in well under five seconds.
     /// </summary>
     [TestMethod]
+    // Measure the wall-clock budget without other tests launching and driving competing child processes.
+    [DoNotParallelize]
     public async Task Pty_Pastes200LineMethod_CompletesWithinFiveSeconds()
     {
-        TestSkip.Unless(!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("ILREPL_PTY_TESTS") == "1", "PTY test runs on Unix by default");
+        TestSkip.Unless(!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("ILREPL_PTY_TESTS") == "1",
+            "PTY test runs on Unix by default");
         var ct = TestContext.CancellationToken;
         await using var terminal = Hex1bTerminal.CreateBuilder()
             .WithPtyProcess(options =>
@@ -342,7 +345,7 @@ public sealed class FrontEndProcessTests
         Assert.HasCount(200, lines);
         await terminal.SendInputAsync(Encoding.UTF8.GetBytes("\x1b[200~" + string.Join('\n', lines) + "\n\x1b[201~"), ct);
         await auto.WaitUntilTextAsync("Enter sends 200 lines");
-        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var watch = Stopwatch.StartNew();
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("end of method Big");
         watch.Stop();
