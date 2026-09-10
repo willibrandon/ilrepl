@@ -128,7 +128,7 @@ IL_002a:
 IL_002c:
   002c ldarg.0                                  [string]
   002d ldc.i4.3                                 [string, int32]
-  002e call instance string string::TrimWhiteSpaceHelper(valuetype [System.Runtime]System.Text.TrimType) [string]
+  002e call instance string string::TrimWhiteSpaceHelper(valuetype [System.Private.CoreLib]System.Text.TrimType) [string]
   0033 ret                                      []
   }
   code size 52 (0x34)
@@ -164,7 +164,7 @@ through.
 
 ```ilrepl
 il[1]> .load samples/Greeter/bin/Debug/net10.0/Greeter.dll
-  loaded Greeter 1.0.0.0 (12 public types)
+  loaded Greeter 1.0.0.0 (21 public types)
 il[1]> .dis int32 Greeter.Hello::CallCountArgs()
   .method public hidebysig static int32 CallCountArgs() cil managed {
   .maxstack 8

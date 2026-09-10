@@ -1,32 +1,19 @@
-using System.Globalization;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Parses ILAsm type syntax and binds it to a runtime type through the shared grammar and binder.
+/// </summary>
+/// <remarks>
 /// Parses ILAsm type syntax into <see cref="Type"/> instances: primitives, <c>[assembly]Namespace.Type</c>,
 /// nested <c>Outer/Inner</c>, generic instantiations, <c>!N</c> and <c>!!N</c> parameters, arrays, byrefs,
 /// pointers, <c>pinned</c>, <c>modreq</c>/<c>modopt</c>, and <c>method</c> function pointer signatures.
-/// </summary>
+/// The grammar is <see cref="CilSyntaxParser"/>'s and the decisions are <see cref="SymbolBinder"/>'s;
+/// this entry point binds in the runtime scope and hands back the runtime type.
+/// </remarks>
 public static class TypeParser
 {
-    private static readonly Dictionary<string, Type> Primitives = new(StringComparer.Ordinal)
-    {
-        ["void"] = typeof(void), ["bool"] = typeof(bool), ["char"] = typeof(char),
-        ["int8"] = typeof(sbyte), ["uint8"] = typeof(byte),
-        ["int16"] = typeof(short), ["uint16"] = typeof(ushort),
-        ["int32"] = typeof(int), ["uint32"] = typeof(uint),
-        ["int64"] = typeof(long), ["uint64"] = typeof(ulong),
-        ["float32"] = typeof(float), ["float64"] = typeof(double),
-        ["string"] = typeof(string), ["object"] = typeof(object),
-        ["nativeint"] = typeof(nint), ["nativeuint"] = typeof(nuint),
-        ["typedref"] = typeof(TypedReference),
-        // C# spellings are accepted too; they are handy at a prompt.
-        ["int"] = typeof(int), ["long"] = typeof(long), ["short"] = typeof(short), ["byte"] = typeof(byte),
-        ["sbyte"] = typeof(sbyte), ["uint"] = typeof(uint), ["ulong"] = typeof(ulong), ["ushort"] = typeof(ushort),
-        ["float"] = typeof(float), ["double"] = typeof(double), ["decimal"] = typeof(decimal), ["nint"] = typeof(nint),
-        ["nuint"] = typeof(nuint),
-    };
-
     /// <summary>
     /// Rewrites multi-word IL keywords into single tokens so the rest of the parser can treat them as names.
     /// </summary>
@@ -58,14 +45,15 @@ public static class TypeParser
         ArgumentNullException.ThrowIfNull(context);
         var s = Normalize(text);
         var pos = 0;
-        var t = ParseAt(s, ref pos, context, out _);
+        var syntax = CilSyntaxParser.ParseTypeAt(s, ref pos);
+        var type = Bind(syntax, context, out _, out _, out _);
         SkipWhitespace(s, ref pos);
         if (pos != s.Length)
         {
             throw new ReplException($"unexpected '{s[pos..]}' after type");
         }
 
-        return t;
+        return type;
     }
 
     /// <summary>
@@ -96,265 +84,20 @@ public static class TypeParser
     {
         ArgumentNullException.ThrowIfNull(s);
         ArgumentNullException.ThrowIfNull(context);
-        pinned = false;
-        requiredModifiers = [];
-        optionalModifiers = [];
-        SkipWhitespace(s, ref pos);
-        var sawValueType = false;
-        while (true)
-        {
-            if (TryKeyword(s, ref pos, "valuetype"))
-            {
-                sawValueType = true;
-            }
-            else if (!TryKeyword(s, ref pos, "class"))
-            {
-                break;
-            }
-
-            SkipWhitespace(s, ref pos);
-        }
-
-        Type t;
-        if (TryKeyword(s, ref pos, "method"))
-        {
-            t = ParseFunctionPointer(s, ref pos, context);
-        }
-        else if (pos < s.Length && s[pos] == '!')
-        {
-            pos++;
-            var isMethod = pos < s.Length && s[pos] == '!';
-            if (isMethod)
-            {
-                pos++;
-            }
-
-            var start = pos;
-            while (pos < s.Length && (char.IsLetterOrDigit(s[pos]) || s[pos] == '_'))
-            {
-                pos++;
-            }
-
-            if (start == pos)
-            {
-                throw new ReplException("expected an index or name after '!'");
-            }
-
-            t = context.Generics.Resolve(isMethod, s[start..pos]);
-        }
-        else
-        {
-            string? asm = null;
-            if (pos < s.Length && s[pos] == '[')
-            {
-                var close = s.IndexOf(']', pos);
-                if (close < 0)
-                {
-                    throw new ReplException("unterminated '[' in type");
-                }
-
-                asm = s.Substring(pos + 1, close - pos - 1).Trim();
-                pos = close + 1;
-            }
-
-            // A name is a run of name characters, in which a quoted segment stands for a name ILAsm
-            // could not read bare: Outer/'<>c' is the nested type <>c of Outer.
-            var start = pos;
-            var nameBuilder = new System.Text.StringBuilder();
-            while (pos < s.Length)
-            {
-                if (s[pos] == '\'')
-                {
-                    var closeQuote = EndOfQuoted(s, pos);
-                    nameBuilder.Append(DecodeQuoted(s[(pos + 1)..closeQuote]));
-                    pos = closeQuote + 1;
-                }
-                else if (IsNameChar(s[pos]))
-                {
-                    nameBuilder.Append(s[pos]);
-                    pos++;
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            if (start == pos)
-            {
-                throw new ReplException(pos < s.Length ? $"expected a type at '{s[pos..]}'" : "expected a type");
-            }
-
-            var name = nameBuilder.ToString();
-            if (asm is null && Primitives.TryGetValue(name, out var primitiveType) && !(pos < s.Length && s[pos] == '<'))
-            {
-                t = primitiveType;
-            }
-            else if (asm is null or "ilrepl" && context.Types.TryResolve(name, pos < s.Length && s[pos] == '<', sawValueType, out var sessionType))
-            {
-                t = sessionType;
-                if (pos < s.Length && s[pos] == '<')
-                {
-                    pos++;
-                    var sessionArgs = new List<Type>();
-                    while (true)
-                    {
-                        sessionArgs.Add(ParseAt(s, ref pos, context, out _));
-                        SkipWhitespace(s, ref pos);
-                        if (pos < s.Length && s[pos] == ',')
-                        {
-                            pos++;
-                            continue;
-                        }
-
-                        if (pos < s.Length && s[pos] == '>')
-                        {
-                            pos++;
-                            break;
-                        }
-
-                        throw new ReplException("expected ',' or '>' in generic type arguments");
-                    }
-
-                    var arity = t.GetGenericArguments().Length;
-                    if (arity != sessionArgs.Count)
-                    {
-                        throw new ReplException($"'{TypeNameFormatter.Pretty(t)}' takes {arity} type argument(s), not {sessionArgs.Count}");
-                    }
-
-                    t = t.MakeGenericType([.. sessionArgs]);
-                }
-            }
-            else if (asm == "ilrepl")
-            {
-                throw new ReplException($"no type '{name}' in the session (define one with .class)");
-            }
-            else if (pos < s.Length && s[pos] == '<')
-            {
-                pos++;
-                var args = new List<Type>();
-                while (true)
-                {
-                    args.Add(ParseAt(s, ref pos, context, out _));
-                    SkipWhitespace(s, ref pos);
-                    if (pos < s.Length && s[pos] == ',')
-                    {
-                        pos++;
-                        continue;
-                    }
-
-                    if (pos < s.Length && s[pos] == '>')
-                    {
-                        pos++;
-                        break;
-                    }
-
-                    throw new ReplException("expected ',' or '>' in generic type arguments");
-                }
-
-                if (!name.Contains('`'))
-                {
-                    name += "`" + args.Count.ToString(CultureInfo.InvariantCulture);
-                }
-
-                var definition = context.Resolver.Resolve(name, asm);
-                if (!definition.IsGenericTypeDefinition)
-                {
-                    throw new ReplException($"'{TypeNameFormatter.Pretty(definition)}' is not a generic type definition");
-                }
-
-                if (definition.GetGenericArguments().Length != args.Count)
-                {
-                    throw new ReplException($"'{TypeNameFormatter.Pretty(definition)}' takes {definition.GetGenericArguments().Length} type argument(s), not {args.Count}");
-                }
-
-                t = definition.MakeGenericType([.. args]);
-            }
-            else
-            {
-                t = asm is null && Primitives.TryGetValue(name, out var primitive) ? primitive : context.Resolver.Resolve(name, asm);
-            }
-        }
-
-        // Suffixes: [] [,] [0...] & * pinned modreq(T) modopt(T)
-        while (pos < s.Length)
-        {
-            if (s[pos] == '[' && IsArraySuffix(s, pos, out var close))
-            {
-                var inner = s.Substring(pos + 1, close - pos - 1).Replace(" ", "", StringComparison.Ordinal);
-                var rank = inner.Length == 0 ? 1 : inner.Count(c => c == ',') + 1;
-                t = inner.Length == 0 ? t.MakeArrayType() : t.MakeArrayType(rank);
-                pos = close + 1;
-                continue;
-            }
-
-            if (s[pos] == '&')
-            {
-                t = t.MakeByRefType();
-                pos++;
-                continue;
-            }
-
-            if (s[pos] == '*')
-            {
-                t = t.MakePointerType();
-                pos++;
-                continue;
-            }
-
-            var before = pos;
-            SkipWhitespace(s, ref pos);
-            if (TryKeyword(s, ref pos, "pinned"))
-            {
-                pinned = true;
-            }
-            else if (TryKeyword(s, ref pos, "modreq") || TryKeyword(s, ref pos, "modopt"))
-            {
-                var required = s[(pos - 6)..pos] == "modreq";
-                SkipWhitespace(s, ref pos);
-                if (pos >= s.Length || s[pos] != '(')
-                {
-                    throw new ReplException("expected '(' after modreq/modopt");
-                }
-
-                pos++;
-                var modifier = ParseAt(s, ref pos, context, out _);
-                SkipWhitespace(s, ref pos);
-                if (pos >= s.Length || s[pos] != ')')
-                {
-                    throw new ReplException("expected ')' after modreq/modopt type");
-                }
-
-                pos++;
-                (required ? requiredModifiers : optionalModifiers).Add(modifier);
-            }
-            else
-            {
-                pos = before;
-                break;
-            }
-        }
-
-        return t;
+        var syntax = CilSyntaxParser.ParseTypeAt(s, ref pos);
+        return Bind(syntax, context, out pinned, out requiredModifiers, out optionalModifiers);
     }
 
-    private static bool IsArraySuffix(string s, int open, out int close)
+    private static Type Bind(TypeSyntax syntax, ParseContext context, out bool pinned, out List<Type> requiredModifiers,
+        out List<Type> optionalModifiers)
     {
-        close = s.IndexOf(']', open);
-        if (close < 0)
-        {
-            return false;
-        }
-
-        for (var i = open + 1; i < close; i++)
-        {
-            if (!(char.IsDigit(s[i]) || s[i] is ',' or '.' or ' '))
-            {
-                return false;
-            }
-        }
-
-        return true;
+        var scope = new RuntimeBindingScope(context);
+        var bound = SymbolBinder.BindType(syntax, scope);
+        var adapter = new RuntimeBindingAdapter(scope);
+        pinned = bound.Pinned;
+        requiredModifiers = [.. bound.RequiredModifiers.Select(adapter.ToType)];
+        optionalModifiers = [.. bound.OptionalModifiers.Select(adapter.ToType)];
+        return adapter.ToType(bound.Type);
     }
 
     /// <summary>
@@ -364,112 +107,28 @@ public static class TypeParser
     /// <param name="open">The index of the opening quote.</param>
     /// <returns>The index of the closing quote.</returns>
     /// <exception cref="ReplException">The quote is never closed.</exception>
-    public static int EndOfQuoted(string s, int open)
-    {
-        ArgumentNullException.ThrowIfNull(s);
-        for (var i = open + 1; i < s.Length; i++)
-        {
-            if (s[i] == '\\')
-            {
-                i++;
-            }
-            else if (s[i] == '\'')
-            {
-                return i;
-            }
-        }
-
-        throw new ReplException("unterminated quote in name");
-    }
+    public static int EndOfQuoted(string s, int open) => CilSyntaxParser.EndOfQuoted(s, open);
 
     /// <summary>
     /// Decodes the inside of a quoted name: <c>\\\\</c> is a backslash and <c>\\'</c> a quote, as ILAsm reads them.
     /// </summary>
     /// <param name="inner">The text between the quotes.</param>
     /// <returns>The name.</returns>
-    public static string DecodeQuoted(string inner)
-    {
-        ArgumentNullException.ThrowIfNull(inner);
-        if (!inner.Contains('\\'))
-        {
-            return inner;
-        }
-
-        var sb = new System.Text.StringBuilder(inner.Length);
-        for (var i = 0; i < inner.Length; i++)
-        {
-            if (inner[i] == '\\' && i + 1 < inner.Length)
-            {
-                i++;
-            }
-
-            sb.Append(inner[i]);
-        }
-
-        return sb.ToString();
-    }
+    public static string DecodeQuoted(string inner) => CilSyntaxParser.DecodeQuoted(inner);
 
     /// <summary>
     /// Splits a comma-separated list while respecting nested brackets.
     /// </summary>
     /// <param name="s">The list text.</param>
     /// <returns>The trimmed items.</returns>
-    public static List<string> SplitTopLevel(string s)
-    {
-        ArgumentNullException.ThrowIfNull(s);
-        var parts = new List<string>();
-        int depth = 0, start = 0;
-        for (var i = 0; i < s.Length; i++)
-        {
-            if (s[i] == '\'')
-            {
-                i = EndOfQuoted(s, i);
-                continue;
-            }
-
-            switch (s[i])
-            {
-                case '<':
-                case '[':
-                case '(':
-                    depth++;
-                    break;
-                case '>':
-                case ']':
-                case ')':
-                    depth--;
-                    break;
-                case ',' when depth == 0:
-                    parts.Add(s[start..i].Trim());
-                    start = i + 1;
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        var last = s[start..].Trim();
-        if (last.Length > 0)
-        {
-            parts.Add(last);
-        }
-
-        return parts;
-    }
+    public static List<string> SplitTopLevel(string s) => CilSyntaxParser.SplitTopLevel(s);
 
     /// <summary>
     /// Skips whitespace starting at <paramref name="pos"/>.
     /// </summary>
     /// <param name="s">The text.</param>
     /// <param name="pos">The position to advance.</param>
-    public static void SkipWhitespace(string s, ref int pos)
-    {
-        ArgumentNullException.ThrowIfNull(s);
-        while (pos < s.Length && char.IsWhiteSpace(s[pos]))
-        {
-            pos++;
-        }
-    }
+    public static void SkipWhitespace(string s, ref int pos) => CilSyntaxParser.SkipWhitespace(s, ref pos);
 
     /// <summary>
     /// Consumes <paramref name="keyword"/> at <paramref name="pos"/> when it is present as a whole word.
@@ -478,73 +137,7 @@ public static class TypeParser
     /// <param name="pos">The position; advanced past the keyword on success.</param>
     /// <param name="keyword">The keyword to match.</param>
     /// <returns>True when the keyword was consumed.</returns>
-    public static bool TryKeyword(string s, ref int pos, string keyword)
-    {
-        ArgumentNullException.ThrowIfNull(s);
-        ArgumentNullException.ThrowIfNull(keyword);
-        if (string.CompareOrdinal(s, pos, keyword, 0, keyword.Length) == 0
-            && (pos + keyword.Length == s.Length || !IsNameChar(s[pos + keyword.Length])))
-        {
-            pos += keyword.Length;
-            return true;
-        }
-
-        return false;
-    }
-
-    private static Type ParseFunctionPointer(string s, ref int pos, ParseContext context)
-    {
-        // method [callconv] RetType *(Params)
-        // Reflection has no public API to construct a function pointer type, so the parsed
-        // signature is validated and the type is represented as native int, which is how the
-        // evaluation stack treats a method pointer anyway.
-        SkipWhitespace(s, ref pos);
-        while (TryKeyword(s, ref pos, "instance") || TryKeyword(s, ref pos, "explicit") || TryKeyword(s, ref pos, "unmanaged")
-            || TryKeyword(s, ref pos, "cdecl") || TryKeyword(s, ref pos, "stdcall") || TryKeyword(s, ref pos, "thiscall")
-            || TryKeyword(s, ref pos, "fastcall") || TryKeyword(s, ref pos, "vararg") || TryKeyword(s, ref pos, "default"))
-        {
-            SkipWhitespace(s, ref pos);
-        }
-
-        // The return type ends at the '*' that is followed by the parameter list.
-        var star = -1;
-        for (var i = pos; i < s.Length; i++)
-        {
-            if (s[i] != '*')
-            {
-                continue;
-            }
-
-            var j = i + 1;
-            SkipWhitespace(s, ref j);
-            if (j < s.Length && s[j] == '(')
-            {
-                star = i;
-                break;
-            }
-        }
-
-        if (star < 0)
-        {
-            throw new ReplException("expected '*(' in function pointer type (method RetType *(Params))");
-        }
-
-        Parse(s[pos..star], context);
-        pos = star + 1;
-        SkipWhitespace(s, ref pos);
-        var close = FindMatchingParen(s, pos);
-        var inner = s.Substring(pos + 1, close - pos - 1);
-        foreach (var part in SplitTopLevel(inner))
-        {
-            if (part != "...")
-            {
-                Parse(part, context);
-            }
-        }
-
-        pos = close + 1;
-        return typeof(nint);
-    }
+    public static bool TryKeyword(string s, ref int pos, string keyword) => CilSyntaxParser.TryKeyword(s, ref pos, keyword);
 
     /// <summary>
     /// Finds the index of the parenthesis that closes the one at <paramref name="open"/>.
@@ -553,44 +146,19 @@ public static class TypeParser
     /// <param name="open">The index of the opening parenthesis.</param>
     /// <returns>The index of the matching closing parenthesis.</returns>
     /// <exception cref="ReplException">The parentheses are unbalanced.</exception>
-    public static int FindMatchingParen(string s, int open)
-    {
-        ArgumentNullException.ThrowIfNull(s);
-        var depth = 0;
-        for (var i = open; i < s.Length; i++)
-        {
-            if (s[i] == '\'')
-            {
-                i = EndOfQuoted(s, i);
-            }
-            else if (s[i] == '(')
-            {
-                depth++;
-            }
-            else if (s[i] == ')')
-            {
-                depth--;
-                if (depth == 0)
-                {
-                    return i;
-                }
-            }
-        }
-
-        throw new ReplException("unbalanced parentheses");
-    }
+    public static int FindMatchingParen(string s, int open) => CilSyntaxParser.FindMatchingParen(s, open);
 
     /// <summary>
-    /// The primitive type keywords: <c>int32</c>, <c>string</c>, <c>void</c>, and the rest.
+    /// The primitive type keywords: <c>int32</c>, <c>string</c>, <c>void</c>, the C# spellings, and <c>decimal</c>.
     /// </summary>
-    public static IReadOnlyCollection<string> PrimitiveKeywords => Primitives.Keys;
+    public static IReadOnlyCollection<string> PrimitiveKeywords => [.. CilPrimitives.Spellings];
 
     /// <summary>
     /// True when <paramref name="c"/> can appear inside an IL type or member name.
     /// </summary>
     /// <param name="c">The character.</param>
     /// <returns>True for letters, digits, and the punctuation IL names allow.</returns>
-    public static bool IsNameChar(char c) => char.IsLetterOrDigit(c) || c is '.' or '_' or '`' or '/' or '$' or '@' or '+';
+    public static bool IsNameChar(char c) => CilSyntaxParser.IsNameChar(c);
 
     /// <summary>
     /// Returns the primitive type an IL keyword names, or null when the word is not a primitive keyword.
@@ -600,7 +168,12 @@ public static class TypeParser
     public static Type? PrimitiveKeywordType(string keyword)
     {
         ArgumentNullException.ThrowIfNull(keyword);
-        return Primitives.TryGetValue(keyword.Trim(), out var type) ? type : null;
+        if (!CilPrimitives.TryCanonical(keyword.Trim(), out var canonical))
+        {
+            return null;
+        }
+
+        return canonical == CilPrimitives.DecimalAlias ? typeof(decimal) : CilPrimitives.TypeOf(canonical);
     }
 
     /// <summary>
@@ -611,24 +184,6 @@ public static class TypeParser
     public static string? PrimitiveKeyword(Type type)
     {
         ArgumentNullException.ThrowIfNull(type);
-        if (type == typeof(void)) { return "void"; }
-        if (type == typeof(bool)) { return "bool"; }
-        if (type == typeof(char)) { return "char"; }
-        if (type == typeof(sbyte)) { return "int8"; }
-        if (type == typeof(byte)) { return "uint8"; }
-        if (type == typeof(short)) { return "int16"; }
-        if (type == typeof(ushort)) { return "uint16"; }
-        if (type == typeof(int)) { return "int32"; }
-        if (type == typeof(uint)) { return "uint32"; }
-        if (type == typeof(long)) { return "int64"; }
-        if (type == typeof(ulong)) { return "uint64"; }
-        if (type == typeof(float)) { return "float32"; }
-        if (type == typeof(double)) { return "float64"; }
-        if (type == typeof(string)) { return "string"; }
-        if (type == typeof(object)) { return "object"; }
-        if (type == typeof(nint)) { return "native int"; }
-        if (type == typeof(nuint)) { return "native uint"; }
-        if (type == typeof(TypedReference)) { return "typedref"; }
-        return null;
+        return CilPrimitives.KeywordOf(type);
     }
 }

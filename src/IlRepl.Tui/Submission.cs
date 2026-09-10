@@ -134,7 +134,7 @@ public sealed class Submission
                     {
                         // A unit that has not started is neither withdrawn nor lost: it comes back
                         // whole, ahead of everything after it.
-                        IReadOnlyList<TranscriptLine> withdrawn = i == 0 ? [] : await WithdrawAsync(mark, provisional).ConfigureAwait(false);
+                        var withdrawn = i == 0 ? [] : await WithdrawAsync(mark, provisional).ConfigureAwait(false);
                         var from = i == 0 ? unit.Start : provisional ? restart : unit.End;
                         _post(SubmissionEvent.Cancel(withdrawn, TextFrom(from)));
                         return;

@@ -54,6 +54,18 @@ internal sealed class DelayedEngine : IReplEngine
     /// <inheritdoc />
     public SessionStatus Status => _inner.Status;
 
+    /// <inheritdoc/>
+    public long AssemblyVersion => _inner.AssemblyVersion;
+
+    /// <inheritdoc/>
+    public Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken) =>
+        _inner.WaitForAssembliesAsync(version, cancellationToken);
+
+
+    /// <inheritdoc/>
+    public Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken) =>
+        _inner.CompleteAsync(request, cancellationToken);
+
     /// <summary>
     /// Lets a number of lines through.
     /// </summary>

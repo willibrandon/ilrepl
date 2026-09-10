@@ -1,6 +1,6 @@
+using System.Text.RegularExpressions;
 using IlRepl.Protocol;
 using IlRepl.Repl;
-using System.Text.RegularExpressions;
 
 namespace IlRepl.Tests.Repl;
 
@@ -56,6 +56,18 @@ public sealed partial class ReplCoreDisassembleTests
         var result = core.Handle(command);
         Assert.IsFalse(result.Succeeded, command);
         return string.Join("\n", core.Transcript.Lines.Skip(before).Where(l => l.Kind == LineKind.Error).Select(l => l.PlainText));
+    }
+
+    /// <summary>
+    /// A mistyped method under .dis gets the same suggestion a call would.
+    /// </summary>
+    [TestMethod]
+    public void Handle_Dis_MistypedMethod_ShowsDidYouMean()
+    {
+        var core = new ReplCore();
+        var errors = Errors(core, ".dis instance string String::Trmi()");
+        Assert.Contains("no method 'Trmi' on string (did you mean 'Trim'?)", errors);
+        Assert.IsTrue(core.Handle(".dis instance string String::Trim()").Succeeded);
     }
 
     /// <summary>

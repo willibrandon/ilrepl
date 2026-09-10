@@ -20,6 +20,11 @@ public sealed class TypeLifetimeTests
         "}",
     ];
 
+    /// <summary>
+    /// The test context, for its cancellation token.
+    /// </summary>
+    public TestContext TestContext { get; set; } = null!;
+
     private static Session Load(params string[] lines) => IlLines.Load(lines);
 
     private static object? Run(Session session, params string[] lines)
@@ -30,6 +35,100 @@ public sealed class TypeLifetimeTests
         }
 
         return session.Run().Value;
+    }
+
+    /// <summary>
+    /// Checks reset releases definitions while concurrent threads continue resolving names.
+    /// </summary>
+    /// <remarks>
+    /// A definition dropped by .reset collects while other threads keep resolving names, with
+    /// and without a did-you-mean: a name search never walks the runtime's assembly list, whose
+    /// walk keeps every collectible assembly alive for its duration.
+    /// Other tests capture process-wide assembly snapshots, so only this test's resolver workers may run alongside its collection checks.
+    /// </remarks>
+    [TestMethod]
+    [DoNotParallelize]
+    [Timeout(30_000, CooperativeCancellation = true)]
+    public void Reset_CollectsWhileOtherThreadsResolveNames()
+    {
+        var resolver = new TypeResolver();
+        var context = new ParseContext([], [], GenericContext.Empty, resolver, []);
+        var ct = TestContext.CancellationToken;
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var searches = new int[3];
+        Task[] workers =
+        [
+            Task.Run(() => Repeat(() => resolver.Resolve("NoSuchTypeAnywhere", null), searches, 0, stop.Token), ct),
+            Task.Run(() => Repeat(() => resolver.Resolve("NoSuchTypeAnywhere", null), searches, 1, stop.Token), ct),
+            Task.Run(() => Repeat(() => TypeParser.Parse("Cosnole", context), searches, 2, stop.Token), ct),
+        ];
+        try
+        {
+            // The first miss scans every exported type once; the searches after it are the fast
+            // ones that never leave the runtime's list alone.
+            WaitForSearches(searches, ct);
+
+            for (var round = 0; round < 5; round++)
+            {
+                var session = new Session();
+                var weak = DefineAndReset(session);
+                // Loading the definition invalidates the process cache. Let every worker finish
+                // refreshing it before checking that their continuing cached searches retain nothing.
+                WaitForSearches(searches, ct);
+                for (var i = 0; i < 10 && weak.IsAlive; i++)
+                {
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                }
+
+                Assert.IsFalse(weak.IsAlive, $"round {round}: the dropped definition should collect while other threads resolve names");
+            }
+        }
+        finally
+        {
+            stop.Cancel();
+            Task.WaitAll(workers, ct);
+        }
+    }
+
+    private static void WaitForSearches(int[] searches, CancellationToken cancellationToken)
+    {
+        var starts = Enumerable.Range(0, searches.Length).Select(index => Volatile.Read(ref searches[index])).ToArray();
+        while (Enumerable.Range(0, searches.Length).Any(index => Volatile.Read(ref searches[index]) - starts[index] < 5))
+        {
+            Thread.Sleep(10);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+    }
+
+    private static void Repeat(Action miss, int[] searches, int index, CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                miss();
+            }
+            catch (ReplException)
+            {
+                // The name is meant to miss; the search is what matters.
+            }
+
+            Interlocked.Increment(ref searches[index]);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference DefineAndReset(Session session)
+    {
+        foreach (var line in new[] { ".method int32 Two() {", "ldc.i4 2", "ret", "}" })
+        {
+            session.AddLine(line);
+        }
+
+        var weak = new WeakReference(session.Methods[0].Version.Body.Module.Assembly);
+        session.Reset();
+        return weak;
     }
 
     /// <summary>

@@ -283,7 +283,7 @@ public static class TypeNameFormatter
     /// Reflection escapes the characters its own type-name grammar reserves, writing a comma in a
     /// name as <c>\,</c>; the metadata name has no backslash, and neither does ILAsm's quoted form.
     /// </summary>
-    private static string Unescape(string name)
+    internal static string Unescape(string name)
     {
         // Reflection escapes the characters its own grammar reserves, a comma as \, and a
         // backslash as \\; each pair decodes to the character it escapes, so a literal backslash
@@ -372,8 +372,8 @@ public static class TypeNameFormatter
     {
         // System.Runtime first, the rest alphabetically, so the spelling is stable: the first loaded
         // facade whose exported types include the definition names it.
-        var facades = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic && a.GetName().Name is { } n && n.StartsWith("System.", StringComparison.Ordinal) && n != "System.Private.CoreLib")
+        var facades = ProcessAssemblies.Current
+            .Where(a => a.GetName().Name is { } n && n.StartsWith("System.", StringComparison.Ordinal) && n != "System.Private.CoreLib")
             .OrderBy(a => a.GetName().Name == "System.Runtime" ? 0 : 1)
             .ThenBy(a => a.GetName().Name, StringComparer.Ordinal);
         foreach (var facade in facades)

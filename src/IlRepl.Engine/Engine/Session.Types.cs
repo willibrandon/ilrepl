@@ -192,7 +192,8 @@ public sealed partial class Session
                 : enclosing.Prototype.DefineNestedType(name, header.Attributes);
         }
 
-        Type[] generics = predeclared is not null ? (builder.IsGenericTypeDefinition ? builder.GetGenericArguments() : []) : names.Length > 0 ? builder.DefineGenericParameters(names) : [];
+        var generics = predeclared is not null ? (builder.IsGenericTypeDefinition ? builder.GetGenericArguments() : [])
+            : names.Length > 0 ? builder.DefineGenericParameters(names) : [];
         var table = _typeTable.Clone();
         if (enclosing is not null)
         {
@@ -211,7 +212,11 @@ public sealed partial class Session
 
         var path = enclosing is null ? (header.Namespace.Length == 0 ? name : header.Namespace + "." + name) : enclosing.Path + "/" + name;
         table.Add(path, builder);
-        var context = new ParseContext([], [], new GenericContext(generics, []), Resolver, Signatures(), table);
+        var context = new ParseContext([], [], new GenericContext(generics, []), Resolver, Signatures(), table)
+        {
+            Scope
+            = enclosing?.Scope
+        };
 
         Type? baseType = null;
         var kind = header.Kind;
@@ -429,7 +434,11 @@ public sealed partial class Session
         }
 
         table.Forward = (name, valueType) => ForwardType(block, name, valueType);
-        return new ParseContext([], [], new GenericContext(block.GenericParameters, []), Resolver, Signatures(), table);
+        return new ParseContext([], [], new GenericContext(block.GenericParameters, []), Resolver, Signatures(), table)
+        {
+            Scope
+            = block.Scope
+        };
     }
 
     private static TypeBuilder? ForwardType(OpenTypeBlock block, string name, bool valueType)
@@ -534,24 +543,24 @@ public sealed partial class Session
         switch (directive)
         {
             case ".class":
+            {
+                // A nested builder cannot be taken back from its enclosing builder, so a
+                // header the checks refuse is undone by replaying the family without it.
+                var outermost = block.Outermost;
+                var accepted = outermost.Lines.ToList();
+                try
                 {
-                    // A nested builder cannot be taken back from its enclosing builder, so a
-                    // header the checks refuse is undone by replaying the family without it.
-                    var outermost = block.Outermost;
-                    var accepted = outermost.Lines.ToList();
-                    try
-                    {
-                        return OpenTypeBlock(rest, line);
-                    }
-                    catch (ReplException)
-                    {
-                        _openType = null;
-                        _openMember = null;
-                        _openAccessor = null;
-                        ReplayFamily(outermost.HeaderLine, accepted);
-                        throw;
-                    }
+                    return OpenTypeBlock(rest, line);
                 }
+                catch (ReplException)
+                {
+                    _openType = null;
+                    _openMember = null;
+                    _openAccessor = null;
+                    ReplayFamily(outermost.HeaderLine, accepted);
+                    throw;
+                }
+            }
 
             case ".field":
                 result = AddField(block, rest, line);
@@ -571,23 +580,23 @@ public sealed partial class Session
                 result = AddLayout(block, directive, rest);
                 break;
             case ".custom":
+            {
+                var custom = CustomAttributeParser.Parse(rest, TypeContext(block), line);
+                if (block.AttributeField >= 0)
                 {
-                    var custom = CustomAttributeParser.Parse(rest, TypeContext(block), line);
-                    if (block.AttributeField >= 0)
-                    {
-                        // ILAsm attaches an attribute written after a field to that field.
-                        var field = block.Fields[block.AttributeField];
-                        block.Fields[block.AttributeField] = field with { CustomAttributes = [.. field.CustomAttributes, custom] };
-                        result = new LineResult(LineOutcome.Custom, null, $"custom {custom.Describe()} on field {field.Name}");
-                    }
-                    else
-                    {
-                        block.CustomAttributes.Add(custom);
-                        result = new LineResult(LineOutcome.Custom, null, "custom " + custom.Describe());
-                    }
-
-                    break;
+                    // ILAsm attaches an attribute written after a field to that field.
+                    var field = block.Fields[block.AttributeField];
+                    block.Fields[block.AttributeField] = field with { CustomAttributes = [.. field.CustomAttributes, custom] };
+                    result = new LineResult(LineOutcome.Custom, null, $"custom {custom.Describe()} on field {field.Name}");
                 }
+                else
+                {
+                    block.CustomAttributes.Add(custom);
+                    result = new LineResult(LineOutcome.Custom, null, "custom " + custom.Describe());
+                }
+
+                break;
+            }
             case ".locals":
             case ".try":
             case ".args":
@@ -1113,11 +1122,10 @@ public sealed partial class Session
             table.SetMembers(entry.Prototype, entry.Members);
         }
 
-        TypeDeclaration? Lookup(Type type) => DeclarationOf(type, declaration, block);
         TypeDeclaration Validated(TypeDeclaration member)
         {
             var prototype = block.FamilyTypes[member.FullName].Prototype;
-            var implied = TypeDeclarationValidator.Validate(member, prototype, table, Lookup);
+            var implied = TypeDeclarationValidator.Validate(member, prototype, table, TypeContext(block));
             foreach (var method in member.Methods)
             {
                 method.Body?.RecheckAccess(table);
@@ -1202,6 +1210,7 @@ public sealed partial class Session
     {
         Submissions++;
         Generation++;
+        CompletionRevision++;
         var accepted = new SessionType(declaration, compiled.Family.Types, compiled.Family.Types[declaration.FullName], compiled.Family.Definition, compiled.Prototypes) { Order = Submissions };
         var index = previous is null ? -1 : _types.IndexOf(previous);
         if (index < 0)
@@ -1230,55 +1239,26 @@ public sealed partial class Session
     /// </summary>
     private (List<SessionType> Types, List<SessionMethod> Methods) ReplacementClosure(SessionType replaced)
     {
-        var types = new List<SessionType>();
-        var methods = new List<SessionMethod>();
         // Bodies rebuilt with a family bind to its prototypes; those name the family too.
-        var mentionedTypes = new HashSet<Type>(replaced.Types.Values.Concat(replaced.Prototypes.Values.Select(p => (Type)p.Prototype)), ReferenceEqualityComparer.Instance);
-        var mentionedMethods = new HashSet<string>(StringComparer.Ordinal);
-        bool changed;
-        do
-        {
-            changed = false;
-            foreach (var family in _types)
-            {
-                if (ReferenceEquals(family, replaced) || types.Contains(family))
-                {
-                    continue;
-                }
-
-                if (FamilyMentions(family.Declaration, mentionedTypes, mentionedMethods))
-                {
-                    types.Add(family);
-                    foreach (var type in family.Types.Values.Concat(family.Prototypes.Values.Select(p => (Type)p.Prototype)))
-                    {
-                        mentionedTypes.Add(type);
-                    }
-
-                    changed = true;
-                }
-            }
-
-            foreach (var method in _methods)
-            {
-                if (methods.Contains(method))
-                {
-                    continue;
-                }
-
-                if (BodyMentions(method.State, mentionedTypes, mentionedMethods) || method.Signature.ParameterTypes.Append(method.Signature.ReturnType).Any(t => Mentions(t, mentionedTypes)))
-                {
-                    methods.Add(method);
-                    mentionedMethods.Add(method.Signature.Name);
-                    changed = true;
-                }
-            }
-        }
-        while (changed);
-
-        return (types, methods);
+        var closure = Binding.DefinitionReplacementPlanner.Plan<SessionType, SessionMethod, Type>(
+            replaced,
+            _types,
+            _methods,
+            family => family.Types.Values.Concat(family.Prototypes.Values.Select(p => (Type)p.Prototype)),
+            (family, types, methods) => FamilyMentions(family.Declaration, types, methods),
+            (method, types, methods) => BodyMentions(method.State, types, methods) || method.Signature.ParameterTypes.Append(
+                method.Signature.ReturnType).Any(t => Mentions(t, types)),
+            method => method.Signature.Name,
+            ReferenceEqualityComparer.Instance);
+        return ([.. closure.Families], [.. closure.Methods]);
     }
 
-    private static bool FamilyMentions(TypeDeclaration family, HashSet<Type> types, HashSet<string> methods)
+    private static bool FamilyMentions(TypeDeclaration family, IReadOnlySet<Type> types, IReadOnlySet<string> methods) =>
+        FamilyReferencedTypes(family).Any(type => Mentions(type, types))
+        || family.Family.SelectMany(type => type.Methods)
+            .Any(method => method.Body is { } body && BodyMentions(body, types, methods));
+
+    private static IEnumerable<Type> FamilyReferencedTypes(TypeDeclaration family)
     {
         foreach (var declaration in family.Family)
         {
@@ -1310,19 +1290,17 @@ public sealed partial class Session
                 declared.AddRange(AttributeMentions(method.Signature.CustomAttributes));
                 declared.AddRange(AttributeMentions(method.Signature.ReturnCustomAttributes));
                 declared.AddRange(method.Signature.Parameters.SelectMany(p => AttributeMentions(p.CustomAttributes)));
-                if (method.Body is { } body && BodyMentions(body, types, methods))
+                if (method.Body is { } body)
                 {
-                    return true;
+                    declared.AddRange(SessionMentions.Types(body));
                 }
             }
 
-            if (declared.Any(t => Mentions(t, types)))
+            foreach (var type in declared)
             {
-                return true;
+                yield return type;
             }
         }
-
-        return false;
     }
 
     /// <summary>
@@ -1354,7 +1332,7 @@ public sealed partial class Session
         }
     }
 
-    private static bool BodyMentions(CellState body, HashSet<Type> types, HashSet<string> methods)
+    private static bool BodyMentions(CellState body, IReadOnlySet<Type> types, IReadOnlySet<string> methods)
     {
         if (SessionMentions.Types(body).Any(t => Mentions(t, types)))
         {
@@ -1364,7 +1342,7 @@ public sealed partial class Session
         return body.Entries.Any(e => e.Instruction?.Operand is ResolvedMethod { Definition: { } definition } && methods.Contains(definition.Name));
     }
 
-    private static bool Mentions(Type? type, HashSet<Type> types)
+    private static bool Mentions(Type? type, IReadOnlySet<Type> types)
     {
         while (type is not null)
         {

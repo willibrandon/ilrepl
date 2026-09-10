@@ -8,7 +8,7 @@ namespace IlRepl.Engine;
 /// </summary>
 public sealed class TypeResolver
 {
-    private static readonly string[] CommonNamespaces =
+    internal static readonly string[] CommonNamespaces =
     [
         "System", "System.Text", "System.Collections.Generic", "System.Collections", "System.IO", "System.Linq",
         "System.Threading", "System.Threading.Tasks", "System.Diagnostics", "System.Globalization", "System.Numerics",
@@ -140,9 +140,15 @@ public sealed class TypeResolver
     }
 
     /// <summary>
-    /// Enumerates the assemblies searched by <see cref="Resolve"/>, most specific first. Assemblies a
-    /// session owns are excluded by identity.
+    /// Enumerates searchable assemblies in resolver order without retaining unrelated collectible contexts.
     /// </summary>
+    /// <remarks>
+    /// Enumerates the assemblies searched by <see cref="Resolve(string, string?)"/>, most specific
+    /// first: the ones added with <see cref="Load"/>, then the process's assemblies in a context
+    /// that cannot unload, from <see cref="ProcessAssemblies"/>. Assemblies a session owns are
+    /// excluded by identity, and so is anything in a collectible context the session did not
+    /// create, which a cell could never bind.
+    /// </remarks>
     public IEnumerable<Assembly> Assemblies
     {
         get
@@ -152,12 +158,12 @@ public sealed class TypeResolver
                 yield return a;
             }
 
-            foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (var a in ProcessAssemblies.Current)
             {
                 // Session assemblies are reached only through the owning session's type table, so a
                 // type from another session, a superseded version, or a definition dropped by .reset
                 // never comes back through a name search.
-                if (!a.IsDynamic && !_extra.Contains(a) && !SessionAssemblies.IsSessionAssembly(a))
+                if (!_extra.Contains(a) && !SessionAssemblies.IsSessionAssembly(a))
                 {
                     yield return a;
                 }
@@ -202,7 +208,22 @@ public sealed class TypeResolver
     /// <param name="assemblyHint">The assembly named in square brackets, or null.</param>
     /// <returns>The resolved type.</returns>
     /// <exception cref="ReplException">No type matched, or a bare short name was ambiguous.</exception>
-    public Type Resolve(string ilName, string? assemblyHint)
+    public Type Resolve(string ilName, string? assemblyHint) => Resolve(ilName, assemblyHint, null);
+
+    /// <summary>
+    /// Resolves an IL type name and suggests a nearby accessible type when lookup fails.
+    /// </summary>
+    /// <remarks>
+    /// Finds a type by its IL name, and when nothing matches names the nearest type the context
+    /// could have meant: <c>type 'Cosnole' not found (did you mean 'Console'?)</c>. The suggestion
+    /// is found in a snapshot of the context's assemblies, which loads nothing.
+    /// </remarks>
+    /// <param name="ilName">The name as written in IL.</param>
+    /// <param name="assemblyHint">The assembly named in square brackets, or null.</param>
+    /// <param name="context">The context the name is used in, or null for no suggestion.</param>
+    /// <returns>The resolved type.</returns>
+    /// <exception cref="ReplException">No type matched, or a bare short name was ambiguous.</exception>
+    public Type Resolve(string ilName, string? assemblyHint, ParseContext? context)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ilName);
         var clrName = ReflectionName(ilName);
@@ -292,7 +313,30 @@ public sealed class TypeResolver
         }
 
         var hint = assemblyHint is null ? "" : $" in [{assemblyHint}]";
-        throw new ReplException($"type '{ilName}' not found{hint} (load its assembly with .load)");
+        throw new ReplException($"type '{ilName}' not found{hint}{Suggestion(ilName, assemblyHint, context)}");
+    }
+
+    /// <summary>
+    /// The tail of a not-found message: the nearest type when one is near, else the hint to load.
+    /// </summary>
+    /// <param name="ilName">The name as written.</param>
+    /// <param name="assemblyHint">The assembly hint, or null.</param>
+    /// <param name="context">The context, or null for no suggestion.</param>
+    /// <returns>The tail, with its leading space.</returns>
+    internal static string Suggestion(string ilName, string? assemblyHint, ParseContext? context)
+    {
+        if (context is not null)
+        {
+            using var snapshot = Binding.BindingSnapshot.Capture(context);
+            var index = new TypeIndex(snapshot);
+            var scope = new Binding.SnapshotBindingScope(snapshot);
+            if (NameSuggestions.NearestType(ilName, assemblyHint, index, snapshot.Access, scope) is { } nearest)
+            {
+                return NameSuggestions.Parenthetical(nearest.Spelling);
+            }
+        }
+
+        return " (load its assembly with .load)";
     }
 
     private Assembly? FindAssembly(string name)

@@ -180,6 +180,83 @@ under a lock file beside it, so two sessions never write over each other; the ne
 entries are loaded. `--no-history` runs without it. In the browser the live session keeps its
 history in the browser's own database, which every tab shares.
 
+## Completion
+
+Completion reads what you have written earlier in the buffer, including method parameters and
+types that have not been submitted yet.
+
+While new matches are being checked, the previous rows stay dimmed under an `updating` title.
+They cannot be accepted until the new results arrive.
+If running code loads another assembly in the background, the prompt refreshes its suggestions
+without an edit. Types whose short names become ambiguous are offered with qualified names.
+
+```ilrepl
+┌────────────────────────────types─────────────────────────────┐
+│ ❯ Math             class              System.Private.CoreLib │
+│   Match            class              System.Text.RegularEx… │
+│   MathF            class              System.Private.CoreLib │
+│detail                                                       │
+│Math                                                         │
+│System.Private.CoreLib                                       │
+└─────────────────────────────────────────────────────────────┘
+il[8]> .method int32 Larger(int32 a, int32 b) {
+  ...>   ldarg a
+  ...>   ldarg b
+  ...>   call Ma
+stack [] │ no locals │ 0 instructions │ editing 4 lines
+```
+
+Tab takes `Math` and adds `::`. Type `Ma`, then move to the overload taking two `int32` values:
+
+```ilrepl
+┌────────────────────────────members───────────────────────────┐
+│   Max(int16, int16)    [int16, int16] → int16    System.Math   │
+│ ❯ Max(int32, int32)    [int32, int32] → int32    System.Math   │
+│   Max(int64, int64)    [int64, int64] → int64    System.Math   │
+│detail                                                       │
+│static int32 Math::Max(int32, int32)                           │
+│System.Math                                                  │
+└─────────────────────────────────────────────────────────────┘
+il[8]> .method int32 Larger(int32 a, int32 b) {
+  ...>   ldarg a
+  ...>   ldarg b
+  ...>   call Math::Ma
+stack [] │ no locals │ 0 instructions │ editing 4 lines
+```
+
+Tab inserts the signature. Here is the finished block and a call to it, starting with `.reset`
+to clear the earlier examples:
+
+```ilrepl
+il[8]> .reset
+  cell, declarations, methods, and types cleared
+il[8]> .method int32 Larger(int32 a, int32 b) {
+  method int32 Larger(int32 a, int32 b)
+il[8]>   ldarg a
+  ┊ [int32]
+il[8]>   ldarg b
+  ┊ [int32, int32] ◂ top
+il[8]>   call Math::Max(int32, int32)
+  ┊ [int32]
+il[8]>   ret
+  ┊ []
+il[8]> }
+  end of method Larger
+il[9]> ldc.i4 6
+  ┊ [int32]
+il[9]> ldc.i4 7
+  ┊ [int32, int32] ◂ top
+il[9]> call Larger
+  ┊ [int32]
+il[9]> ret
+  = 7 : int32
+```
+
+Generic definitions continue argument by argument. Complete `call Array::Empt` to
+`call Array::Empty<`; the palette names argument 1 of 1, `T`. Complete `str` to `string`,
+type `>`, then Tab inserts `()`. The resulting `call Array::Empty<string>()` binds the
+definition you selected. Nested generic arguments retain their outer selection while you edit.
+
 ## Colours
 
 One tokenizer lights the buffer, the echo, and the listings from `.show`, `.dis`, and `.il`, so

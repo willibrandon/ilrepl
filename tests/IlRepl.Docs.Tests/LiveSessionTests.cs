@@ -7,10 +7,13 @@ namespace IlRepl.Docs.Tests;
 /// engine and the Hex1b UI on the .NET WebAssembly runtime.
 /// </summary>
 [TestClass]
-public sealed class LiveSessionTests
+public sealed partial class LiveSessionTests
 {
     private static StaticSite? s_site;
     private static IPlaywright? s_playwright;
+
+    [System.Text.RegularExpressions.GeneratedRegex("sending [1-9][0-9]*/3002")]
+    private static partial System.Text.RegularExpressions.Regex StartedLongSubmission();
 
     /// <summary>
     /// The test context, for cancellation.
@@ -985,8 +988,7 @@ public sealed class LiveSessionTests
     }
 
     /// <summary>
-    /// A long block shows its progress while it goes by, and a viewport change during it lays
-    /// the status bar out again at the new width.
+    /// A long block shows progress and repaints the status bar at the new width after a viewport change.
     /// </summary>
     /// <param name="browser">The browser engine to drive.</param>
     /// <returns>A task that completes when the assertions have run.</returns>
@@ -1009,10 +1011,13 @@ public sealed class LiveSessionTests
         await Assertions.Expect(terminal).ToContainTextAsync("Ctrl+C cancels", options);
         var before = await page.EvaluateAsync<int>("() => window.ilreplTerminal.cols");
         await page.SetViewportSizeAsync(900, 1000);
-        await page.WaitForFunctionAsync($"() => window.ilreplTerminal.cols < {before}", null, new PageWaitForFunctionOptions { Timeout = 30_000 });
-        await Assertions.Expect(terminal).ToContainTextAsync("sending", options);
-        var rows = await BufferRowsAsync(page);
-        Assert.Contains("sending", rows[^1], "the status bar is on the last row at the new width");
+        await page.WaitForFunctionAsync("""
+            before => {
+              const terminal = window.ilreplTerminal;
+              return terminal.cols < before
+                && terminal.buffer.active.getLine(terminal.rows - 1)?.translateToString(true).includes('sending');
+            }
+            """, before, new() { PollingInterval = 16, Timeout = 30_000 });
         await Assertions.Expect(terminal).ToContainTextAsync("end of method Long", new LocatorAssertionsToContainTextOptions { Timeout = 180_000 });
         await Assertions.Expect(terminal).Not.ToContainTextAsync("sending", options);
     }
@@ -1037,7 +1042,7 @@ public sealed class LiveSessionTests
         await PasteAsync(page, LongMethod(3002));
         await Assertions.Expect(terminal).ToContainTextAsync("Enter sends 3002 lines", options);
         await page.Keyboard.PressAsync("Enter");
-        await Assertions.Expect(terminal).ToContainTextAsync("sending", options);
+        await Assertions.Expect(terminal).ToContainTextAsync(StartedLongSubmission(), options);
         await page.Keyboard.PressAsync("Control+c");
         await Assertions.Expect(terminal).ToContainTextAsync("method Long abandoned; the block is back in the editor", options);
         await Assertions.Expect(terminal).ToContainTextAsync("editing 3002 lines", options);

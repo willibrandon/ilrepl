@@ -6,4 +6,10 @@ namespace IlRepl.Tui;
 /// <param name="EditorRows">Rows for the editor, at least one.</param>
 /// <param name="PaletteRows">Rows for the palette's candidates, its border not counted; zero hides it.</param>
 /// <param name="TranscriptRows">Rows left for the transcript.</param>
-public readonly record struct PromptFit(int EditorRows, int PaletteRows, int TranscriptRows);
+public readonly record struct PromptFit(int EditorRows, int PaletteRows, int TranscriptRows)
+{
+    /// <summary>
+    /// Rows for the complete signature, including its scroll position heading.
+    /// </summary>
+    public int DetailRows { get; init; }
+}

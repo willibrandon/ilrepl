@@ -22,6 +22,11 @@ public sealed class TypeTable
     public IReadOnlyList<Type> Types => [.. _entries.Select(e => e.Type)];
 
     /// <summary>
+    /// The entries in the table with their ILAsm paths, in the order they were added.
+    /// </summary>
+    public IReadOnlyList<(string FullName, Type Type)> Entries => [.. _entries.Select(e => (e.FullName, e.Type))];
+
+    /// <summary>
     /// Adds a type under its ILAsm path.
     /// </summary>
     /// <param name="fullName">The path: <c>Geometry.Point</c>, <c>Outer/Inner</c>, <c>Box`1</c>.</param>

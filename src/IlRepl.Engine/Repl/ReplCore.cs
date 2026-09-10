@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using IlRepl.Engine;
+using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
 
 namespace IlRepl.Repl;
@@ -11,9 +12,10 @@ namespace IlRepl.Repl;
 /// on top of it. While a <c>.method</c> block is open, lines go to the method, and the cell
 /// number advances when the block commits, as it does after a run.
 /// </summary>
-public sealed class ReplCore
+public sealed class ReplCore : IDisposable
 {
     private static readonly CilTokenizer Tokenizer = new(CilVocabularyBuilder.Vocabulary);
+    private readonly OperandCompleter _operands;
 
     /// <summary>
     /// The dot-words the prompt takes as directives rather than commands.
@@ -39,6 +41,7 @@ public sealed class ReplCore
         Session = session;
         Options = options;
         Transcript = new Transcript { MaxLines = options.MaxTranscriptLines };
+        _operands = new OperandCompleter(session);
     }
 
     /// <summary>
@@ -57,8 +60,7 @@ public sealed class ReplCore
     public Transcript Transcript { get; }
 
     /// <summary>
-    /// The number of the cell being written, starting at 1. A run and a committed <c>.method</c>
-    /// block each complete a cell.
+    /// The next submission number, starting at one and advancing after runs or committed declarations.
     /// </summary>
     public int CellNumber => Session.Submissions + 1;
 
@@ -75,7 +77,10 @@ public sealed class ReplCore
         get
         {
             var state = Session.State;
-            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count, state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count, Session.OpenType, Session.TypeCount, Session.Mark() with { EchoStack = Options.EchoStack, ShowTiming = Options.ShowTiming }, Session.OpenDepth);
+            return new SessionStatus(Prompt, CellNumber, state.Stack.Render(), state.Stack.Count, state.Locals.Count,
+                state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count,
+                Session.OpenType, Session.TypeCount, Session.Mark() with { EchoStack = Options.EchoStack, ShowTiming = Options.ShowTiming },
+                Session.OpenDepth, Session.CompletionRevision);
         }
     }
 
@@ -87,10 +92,21 @@ public sealed class ReplCore
     public static IReadOnlyList<CompletionItem> Complete(string word) => Completer.Complete(word);
 
     /// <summary>
-    /// Handles one line: an instruction, a directive, a command, or an empty line that runs the
-    /// cell. Inside a <c>.method</c> block every line, <c>ret</c> included, goes to the method.
-    /// Comments come off first, so a line that is only a comment is ignored wherever it appears,
-    /// and a <c>/*</c> left open comments out the lines that follow until one closes it.
+    /// Completes an operand without changing the transcript or session status.
+    /// </summary>
+    /// <param name="request">The unsent document and caret.</param>
+    /// <param name="cancellationToken">Cancels completion.</param>
+    /// <returns>The confirmed candidate page.</returns>
+    public Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken = default) =>
+        _operands.CompleteAsync(request, cancellationToken);
+
+    /// <summary>
+    /// Releases cached editing snapshots and cancels any outstanding completion request.
+    /// </summary>
+    public void Dispose() => _operands.Dispose();
+
+    /// <summary>
+    /// Handles one input line using the session's declaration, execution and comment-state rules.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <returns>Whether it succeeded and whether the user asked to leave.</returns>
@@ -98,37 +114,28 @@ public sealed class ReplCore
     {
         ArgumentNullException.ThrowIfNull(line);
         var normalized = Session.Normalize(line);
-        var text = normalized.Text;
         var commentOpen = normalized.InBlockCommentBefore;
         Transcript.Add(new TranscriptLine(LineKind.Input, [new TranscriptSpan(Prompt, SpanStyle.Prompt), .. Tokenizer.Spans(line, ref commentOpen, SpanStyle.Input)]));
 
         try
         {
-            if (normalized.Kind == SourceLineKind.Comment)
+            var operation = ReplLineDispatcher.Classify(normalized, Session.OpenMethod is not null, Session.State.HasPendingLabels,
+                Session.State.OpenBlockDepth > 0);
+            switch (operation.Kind)
             {
-                return new HandleResult(true, false);
-            }
+                case ReplLineKind.Comment:
+                    return new HandleResult(true, false);
+                case ReplLineKind.Blank:
+                    RequireNoOpenBlock();
+                    if (!Session.State.IsEmpty)
+                    {
+                        Run();
+                    }
 
-            if (normalized.Kind == SourceLineKind.Blank)
-            {
-                RequireNoOpenBlock();
-                if (!Session.State.IsEmpty)
-                {
-                    Run();
-                }
-
-                return new HandleResult(true, false);
-            }
-
-            if (text.StartsWith('.') && !IsDirective(text))
-            {
-                return Command(text);
-            }
-
-            if (text == "ret" || text.StartsWith("ret ", StringComparison.Ordinal))
-            {
-                if (Session.OpenMethod is not null)
-                {
+                    return new HandleResult(true, false);
+                case ReplLineKind.Command:
+                    return Command(operation.Command!, operation.Argument);
+                case ReplLineKind.RetInMethod:
                     // ret returns from the method; only the closing brace ends the block.
                     Session.AddLine(normalized);
                     if (Options.EchoStack)
@@ -137,18 +144,15 @@ public sealed class ReplCore
                     }
 
                     return new HandleResult(true, false);
-                }
-
-                if (Session.State.HasPendingLabels || Session.State.OpenBlockDepth > 0)
-                {
-                    var inline = Session.AddLine(NormalizedLine.FromText("ret"));
+                case ReplLineKind.RetInline:
+                    Session.AddLine(NormalizedLine.FromText("ret"));
                     Note("ret inside the cell (a forward label or a block is still open)");
-                    _ = inline;
                     return new HandleResult(true, false);
-                }
-
-                Run();
-                return new HandleResult(true, false);
+                case ReplLineKind.RetRuns:
+                    Run();
+                    return new HandleResult(true, false);
+                default:
+                    break;
             }
 
             var result = Session.AddLine(normalized);
@@ -202,7 +206,7 @@ public sealed class ReplCore
             Error(ex.Message);
             return new HandleResult(false, false);
         }
-        catch (Exception ex) when (ex is not (CellException or OperationCanceledException))
+        catch (Exception ex) when (ReplRecovery.IsRecoverable(ex))
         {
             // A line must never take the session down with it; the host keeps serving.
             Session.Forget(normalized);
@@ -228,10 +232,7 @@ public sealed class ReplCore
     }
 
     /// <summary>
-    /// Withdraws the lines accepted since a mark was taken, so a block a line of which was refused
-    /// can come back to the editor whole and be sent again from where the session stood before it.
-    /// Nothing that ran, committed, or was discarded since the mark is undone; when any of that
-    /// happened, nothing is withdrawn and the result says so.
+    /// Withdraws input accepted since a mark when no intervening irreversible change prevents recovery.
     /// </summary>
     /// <param name="mark">The mark to return to.</param>
     /// <returns>Whether the session is back at the mark.</returns>
@@ -264,19 +265,6 @@ public sealed class ReplCore
         }
 
         return new HandleResult(true, false);
-    }
-
-    private static bool IsDirective(string text)
-    {
-        foreach (var d in Directives)
-        {
-            if (text.StartsWith(d, StringComparison.Ordinal) && (text.Length == d.Length || !char.IsLetter(text[d.Length])))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private void RequireNoOpenBlock()
@@ -386,8 +374,7 @@ public sealed class ReplCore
         Transcript.Add(new TranscriptLine(LineKind.Listing, [new TranscriptSpan("       ", SpanStyle.Dim), .. Tokenizer.Spans(new string(' ', indent * 2) + text)]));
 
     /// <summary>
-    /// Adds an instruction row of a listing: the offset column, the instruction coloured by the
-    /// tokenizer and padded to a fixed width, then the stack column.
+    /// Adds a disassembly row with its offset, syntax colors and stack transition.
     /// </summary>
     private void InstructionRow(string offset, int indent, string text, string stack)
     {
@@ -413,11 +400,9 @@ public sealed class ReplCore
         }
     }
 
-    private HandleResult Command(string line)
+    private HandleResult Command(string command, string argument)
     {
-        var space = line.IndexOf(' ', StringComparison.Ordinal);
-        var command = space < 0 ? line : line[..space];
-        var argument = space < 0 ? "" : line[(space + 1)..].Trim();
+        SessionTransitionRules.ValidateInput(command, argument);
 
         switch (command)
         {
@@ -464,11 +449,6 @@ public sealed class ReplCore
 
             case ".dis":
             case ".disassemble":
-                if (argument.Length == 0)
-                {
-                    throw new ReplException("usage: .dis <method reference>  e.g. .dis instance string [System.Runtime]System.String::Trim()  or  .dis Fib");
-                }
-
                 Disassemble(argument);
                 return new HandleResult(true, false);
 
@@ -562,28 +542,24 @@ public sealed class ReplCore
                 return new HandleResult(true, false);
 
             case ".load":
-                if (argument.Length == 0)
+            {
+                var assembly = Session.Resolver.Load(argument);
+                Session.AdvanceGeneration();
+                int count;
+                try
                 {
-                    throw new ReplException("usage: .load <assembly name | path.dll>");
+                    count = assembly.GetExportedTypes().Length;
+                }
+                catch (Exception ex) when (ex is System.Reflection.ReflectionTypeLoadException or FileNotFoundException
+                    or NotSupportedException)
+                {
+                    count = -1;
                 }
 
-                {
-                    var assembly = Session.Resolver.Load(argument);
-                    Session.AdvanceGeneration();
-                    int count;
-                    try
-                    {
-                        count = assembly.GetExportedTypes().Length;
-                    }
-                    catch (Exception ex) when (ex is System.Reflection.ReflectionTypeLoadException or FileNotFoundException or NotSupportedException)
-                    {
-                        count = -1;
-                    }
+                Note($"loaded {assembly.GetName().Name} {assembly.GetName().Version}" + (count >= 0 ? $" ({count} public types)" : ""));
+            }
 
-                    Note($"loaded {assembly.GetName().Name} {assembly.GetName().Version}" + (count >= 0 ? $" ({count} public types)" : ""));
-                }
-
-                return new HandleResult(true, false);
+            return new HandleResult(true, false);
 
             case ".assemblies":
                 foreach (var assembly in Session.Resolver.LoadedAssemblies)
@@ -599,11 +575,6 @@ public sealed class ReplCore
                 return new HandleResult(true, false);
 
             case ".save":
-                if (argument.Length == 0)
-                {
-                    throw new ReplException("usage: .save <path.dll>");
-                }
-
                 RequireNoOpenBlock();
                 Session.Save(argument);
                 {

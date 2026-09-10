@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
@@ -212,7 +213,12 @@ public sealed class CellState
     /// <summary>
     /// The parse context for the next line.
     /// </summary>
-    public ParseContext Context => new(_locals, _arguments, Generics, Resolver, Methods, Types) { ThisIndex = Member?.ThisType is null ? -1 : 0 };
+    public ParseContext Context => new(_locals, _arguments, Generics, Resolver, Methods, Types)
+    {
+        ThisIndex
+        = Member?.ThisType is null ? -1 : 0,
+        Scope = Scope
+    };
 
     /// <summary>
     /// Checks that a <c>.method</c> body can close: every label is defined, and either the last
@@ -694,161 +700,42 @@ public sealed class CellState
             return;
         }
 
-        var name = instruction.Op.Name;
-        if (name == "stsfld")
+        var scope = new RuntimeBindingScope(Context);
+        var signature = Signature is null ? null : RuntimeSymbolImporter.Import(
+            Signature, Member is null ? null : scope.ImportType(Member.Owner), default, MethodSymbolSource.Declared, true);
+        var problem = InstructionMemberRules.InitOnlyStoreProblem(RuntimeSymbolImporter.Import(field), instruction.Op.Name,
+            signature, Member is null ? null : scope.ImportType(Member.Owner), Stack.IsThisAt(Stack.Count - 2), scope.Pretty);
+        if (problem is not null)
         {
-            if (Signature?.Name == ".cctor" && SameDeclaringType(field.DeclaringType))
-            {
-                return;
-            }
-
-            throw new ReplException($"{field.Name} is a static initonly field; it can only be stored in {TypeNameFormatter.Pretty(field.DeclaringType)}'s .cctor (ECMA II.16.1.2)");
+            throw new ReplException(problem);
         }
-
-        if (name != "stfld")
-        {
-            return;
-        }
-
-        var allowed = Signature is not null && SameDeclaringType(field.DeclaringType)
-            && (Signature.Name == ".ctor" || Signature.ReturnRequiredModifiers.Any(m => m.FullName == "System.Runtime.CompilerServices.IsExternalInit"))
-            && Stack.IsThisAt(Stack.Count - 2);
-        if (!allowed)
-        {
-            throw new ReplException($"{field.Name} is initonly; it can only be stored through this in {TypeNameFormatter.Pretty(field.DeclaringType)}'s constructors or init accessors (ECMA II.16.1.2)");
-        }
-    }
-
-    private bool SameDeclaringType(Type? declaring)
-    {
-        if (declaring is null || Member is null)
-        {
-            return false;
-        }
-
-        var definition = declaring.IsGenericType && !declaring.IsGenericTypeDefinition ? declaring.GetGenericTypeDefinition() : declaring;
-        return ReferenceEquals(definition, Member.Owner);
     }
 
     private LineResult ApplyBlock(string text, string source)
     {
-        var rest = text.StartsWith('}') ? text[1..].Trim() : text;
-        if (rest.Length == 0)
+        if (text == "}" && _frames.Count == 0 && IsMethod)
         {
-            if (_frames.Count == 0)
-            {
-                if (IsMethod)
-                {
-                    // The innermost open construct is the method itself. Nothing is recorded:
-                    // the session commits the body once the close is validated.
-                    ValidateMethodEnd();
-                    return new LineResult(LineOutcome.MethodEnd, null, null);
-                }
+            ValidateMethodEnd();
+            return new LineResult(LineOutcome.MethodEnd, null, null);
+        }
 
-                throw new ReplException("unexpected '}': no protected region is open");
-            }
-
-            var top = _frames[^1];
-            if (top == BlockKind.Try)
-            {
-                throw new ReplException("a .try needs a handler before it closes: } catch T {, } finally {, } fault {, or } filter {");
-            }
-
-            if (top == BlockKind.Filter)
-            {
-                throw new ReplException("a filter needs a handler block before the region closes: } handler {");
-            }
-
+        var previous = _entries.Count == 0 ? null : _entries[^1].Instruction?.Op;
+        var transition = BlockTransitionParser.Parse(text, _frames, previous);
+        var catchType = transition.CatchType is { } catchText
+            ? catchText.Length == 0 ? typeof(object) : TypeParser.Parse(catchText, Context)
+            : null;
+        if (transition.Kind == BlockKind.End)
+        {
             _frames.RemoveAt(_frames.Count - 1);
-            _entries.Add(new CellEntry { Kind = EntryKind.Block, Source = source, Block = BlockKind.End });
-            Stack.ApplyBlock(BlockKind.End, null);
-            return new LineResult(LineOutcome.Block, null, "end of protected region");
-        }
-
-        if (rest.EndsWith('{'))
-        {
-            rest = rest[..^1].Trim();
-        }
-
-        if (_frames.Count == 0)
-        {
-            throw new ReplException($"'{rest}' needs an open .try region");
-        }
-
-        var current = _frames[^1];
-        BlockKind kind;
-        Type? catchType = null;
-        string message;
-        if (rest.StartsWith("catch", StringComparison.Ordinal))
-        {
-            if (current == BlockKind.Filter)
-            {
-                throw new ReplException("a filter needs a handler block (} handler {) before the next handler");
-            }
-
-            var typeText = rest[5..].Trim();
-            catchType = typeText.Length == 0 ? typeof(object) : TypeParser.Parse(typeText, Context);
-            kind = BlockKind.Catch;
-            message = "catch " + TypeNameFormatter.Pretty(catchType);
-        }
-        else if (rest == "filter")
-        {
-            if (current == BlockKind.Filter)
-            {
-                throw new ReplException("a filter needs a handler block (} handler {) before the next handler");
-            }
-
-            kind = BlockKind.Filter;
-            message = "filter (end it with endfilter, then } handler {)";
-        }
-        else if (rest == "handler")
-        {
-            if (current != BlockKind.Filter)
-            {
-                throw new ReplException("'} handler {' is only valid after a filter block");
-            }
-
-            if (_entries.Count == 0 || _entries[^1].Instruction?.Op != OpCodes.Endfilter)
-            {
-                throw new ReplException("a filter must end with endfilter, leaving one int32 on the stack");
-            }
-
-            kind = BlockKind.FilterHandler;
-            message = "filter handler";
-        }
-        else if (rest == "finally")
-        {
-            if (current == BlockKind.Filter)
-            {
-                throw new ReplException("a filter needs a handler block (} handler {) before the next handler");
-            }
-
-            kind = BlockKind.Finally;
-            message = "finally";
-        }
-        else if (rest == "fault")
-        {
-            if (current == BlockKind.Filter)
-            {
-                throw new ReplException("a filter needs a handler block (} handler {) before the next handler");
-            }
-
-            kind = BlockKind.Fault;
-            message = "fault";
         }
         else
         {
-            throw new ReplException($"unknown handler '{rest}'; expected catch T, filter, handler, finally, or fault");
+            _frames[^1] = transition.Kind;
         }
 
-        if (kind != BlockKind.FilterHandler && current is BlockKind.Finally or BlockKind.Fault)
-        {
-            throw new ReplException("finally and fault must be the last handler of a region");
-        }
-
-        _frames[^1] = kind;
-        _entries.Add(new CellEntry { Kind = EntryKind.Block, Source = source, Block = kind, CatchType = catchType });
-        Stack.ApplyBlock(kind, catchType);
+        _entries.Add(new CellEntry { Kind = EntryKind.Block, Source = source, Block = transition.Kind, CatchType = catchType });
+        Stack.ApplyBlock(transition.Kind, catchType);
+        var message = transition.Kind == BlockKind.Catch ? "catch " + TypeNameFormatter.Pretty(catchType) : transition.Message;
         return new LineResult(LineOutcome.Block, null, message);
     }
 
@@ -923,182 +810,18 @@ public sealed class CellState
 
     private List<LocalDeclaration> ParseLocals(string spec)
     {
-        var s = TypeParser.Normalize(spec).Trim();
-        if (s.StartsWith("init", StringComparison.Ordinal) && (s.Length == 4 || !char.IsLetterOrDigit(s[4])))
-        {
-            s = s[4..].Trim();
-        }
-
-        if (s.StartsWith('(') && s.EndsWith(')'))
-        {
-            s = s[1..^1];
-        }
-
-        if (s.Trim().Length == 0)
-        {
-            throw new ReplException("usage: .locals init (int32 x, string s)");
-        }
-
-        var context = Context;
-        var declared = new List<LocalDeclaration>();
-        foreach (var raw in TypeParser.SplitTopLevel(s))
-        {
-            var part = raw;
-            if (part.StartsWith('['))
-            {
-                var close = part.IndexOf(']', StringComparison.Ordinal);
-                if (close < 0)
-                {
-                    throw new ReplException($"bad local declaration '{raw}'");
-                }
-
-                part = part[(close + 1)..].Trim();
-            }
-
-            var pos = 0;
-            var type = TypeParser.ParseAt(part, ref pos, context, out var pinned);
-            MemberAccess.CheckType(type, Scope, Types);
-            var name = part[pos..].Trim();
-            if (name.StartsWith('\'') && name.EndsWith('\'') && name.Length > 2)
-            {
-                name = name[1..^1];
-            }
-
-            if (name.Length > 0 && !InstructionParser.IsIdentifier(name))
-            {
-                throw new ReplException($"bad local name '{name}'");
-            }
-
-            if (name.Length > 0 && (_locals.Any(l => l.Name == name) || declared.Any(l => l.Name == name)))
-            {
-                throw new ReplException($"local '{name}' is already declared");
-            }
-
-            if (type == typeof(void))
-            {
-                throw new ReplException("a local cannot be void");
-            }
-
-            declared.Add(new LocalDeclaration(type, name.Length == 0 ? null : name, pinned));
-        }
-
-        return declared;
+        var scope = new RuntimeBindingScope(Context);
+        var adapter = new RuntimeBindingAdapter(scope);
+        return [.. VariableDeclarationParser.ParseLocals(spec, scope)
+            .Select(local => new LocalDeclaration(adapter.ToType(local.Type), local.Name, local.IsPinned))];
     }
 
     private List<ArgumentDeclaration> ParseArguments(string spec)
     {
-        var s = TypeParser.Normalize(spec).Trim();
-        if (s.StartsWith('(') && s.EndsWith(')'))
-        {
-            s = s[1..^1];
-        }
-
-        if (s.Trim().Length == 0)
-        {
-            throw new ReplException("usage: .args (int32 x = 5, string s = \"hi\")");
-        }
-
-        var context = Context;
-        var declared = new List<ArgumentDeclaration>();
-        foreach (var part in TypeParser.SplitTopLevel(s))
-        {
-            var equals = IndexOfTopLevelEquals(part);
-            var declaration = equals < 0 ? part : part[..equals].Trim();
-            var literal = equals < 0 ? null : part[(equals + 1)..].Trim();
-
-            var pos = 0;
-            var type = TypeParser.ParseAt(declaration, ref pos, context, out _);
-            var name = declaration[pos..].Trim();
-            if (name.StartsWith('\'') && name.EndsWith('\'') && name.Length > 2)
-            {
-                name = name[1..^1];
-            }
-
-            if (name.Length > 0 && !InstructionParser.IsIdentifier(name))
-            {
-                throw new ReplException($"bad argument name '{name}'");
-            }
-
-            if (name.Length > 0 && (_arguments.Any(a => a.Name == name) || declared.Any(a => a.Name == name)))
-            {
-                throw new ReplException($"argument '{name}' is already declared");
-            }
-
-            if (type == typeof(void))
-            {
-                throw new ReplException("an argument cannot be void");
-            }
-
-            if (type.ContainsGenericParameters)
-            {
-                throw new ReplException("arguments cannot use the cell's generic parameters; pass a concrete type");
-            }
-
-            object? value;
-            if (literal is not null)
-            {
-                value = ValueLiteralParser.Parse(literal, type);
-            }
-            else if (type.IsValueType)
-            {
-                // A zeroed element, so no constructor or type initializer of the type runs.
-                value = Array.CreateInstance(type, 1).GetValue(0);
-            }
-            else
-            {
-                value = null;
-            }
-
-            declared.Add(new ArgumentDeclaration(type, name.Length == 0 ? null : name, value, literal ?? (type.IsValueType ? "default" : "null")));
-        }
-
-        return declared;
-    }
-
-    private static int IndexOfTopLevelEquals(string s)
-    {
-        var depth = 0;
-        var inString = false;
-        for (var i = 0; i < s.Length; i++)
-        {
-            var c = s[i];
-            if (inString)
-            {
-                if (c == '\\')
-                {
-                    i++;
-                }
-                else if (c == '"')
-                {
-                    inString = false;
-                }
-
-                continue;
-            }
-
-            switch (c)
-            {
-                case '"':
-                    inString = true;
-                    break;
-                case '<':
-                case '[':
-                case '(':
-                    depth++;
-                    break;
-                case '>':
-                case ']':
-                case ')':
-                    depth--;
-                    break;
-                case '=' when depth == 0:
-                    return i;
-                default:
-                    break;
-            }
-        }
-
-        return -1;
+        var scope = new RuntimeBindingScope(Context);
+        var adapter = new RuntimeBindingAdapter(scope);
+        return [.. VariableDeclarationParser.ParseArguments(spec, scope)
+            .Select(argument => RuntimeArgumentMaterializer.Materialize(argument, adapter))];
     }
 
     private string DescribeLocals() =>

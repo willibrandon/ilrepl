@@ -59,6 +59,22 @@ public sealed class ReplCoreTests
     }
 
     /// <summary>
+    /// A mistyped method name gets the nearest member of the type, and the cell keeps its lines.
+    /// </summary>
+    [TestMethod]
+    public void Handle_MistypedMethod_ShowsDidYouMean()
+    {
+        var core = new ReplCore();
+        core.Handle("ldstr \"a\"");
+        core.Handle("ldstr \"b\"");
+        var result = core.Handle("call string String::Concta(string, string)");
+        Assert.IsFalse(result.Succeeded);
+        Assert.Contains("no method 'Concta' on string (did you mean 'Concat'?)", Plain(core));
+        Assert.AreEqual("[string, string]", core.Status.Stack);
+        Assert.IsTrue(core.Handle("call string String::Concat(string, string)").Succeeded);
+    }
+
+    /// <summary>
     /// ret inside a cell is emitted while a forward label is pending.
     /// </summary>
     [TestMethod]

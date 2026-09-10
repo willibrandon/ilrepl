@@ -22,6 +22,19 @@ public sealed record SubmissionEvent(
     bool Select = false)
 {
     /// <summary>
+    /// A settled read-only completion request, applied only on the render thread.
+    /// </summary>
+    public CompletionResult? CompletionResult { get; init; }
+
+    /// <summary>
+    /// Posts a settled operand request without adding any transcript lines.
+    /// </summary>
+    /// <param name="result">The request's result and query identity.</param>
+    /// <returns>The render-thread event.</returns>
+    public static SubmissionEvent Completion(CompletionResult result) =>
+        new(SubmissionEventKind.Completions) { CompletionResult = result };
+
+    /// <summary>
     /// A paste with its payload.
     /// </summary>
     /// <param name="text">The payload.</param>

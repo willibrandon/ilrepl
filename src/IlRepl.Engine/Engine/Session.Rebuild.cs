@@ -3,16 +3,6 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A family replayed during a rebuild, waiting to be written with the rest of the group.
-/// </summary>
-internal sealed record PendingFamily(TypeDeclaration Declaration, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> Prototypes, SessionType? Previous);
-
-/// <summary>
-/// A session method replayed during a rebuild, waiting to be compiled with the rest of the group.
-/// </summary>
-internal sealed record PendingMethod(MethodSignature Signature, string HeaderLine, IReadOnlyList<string> BodyLines, CellState State, SessionMethod? Previous);
-
-/// <summary>
 /// Replacing a family other definitions depend on. Every member of the closure, the new family
 /// included, is declared ahead of its lines as a fresh prototype, so the replays bind to the new
 /// identities whatever order they run in and however the members refer to each other. The
@@ -323,6 +313,7 @@ public sealed partial class Session
             // Only now has anything changed that a rollback could not undo: a redefinition the
             // cell refuses leaves the session, its generation included, as it was.
             Generation++;
+            CompletionRevision++;
             foreach (var definition in released.Distinct())
             {
                 SessionAssemblies.Release(definition);

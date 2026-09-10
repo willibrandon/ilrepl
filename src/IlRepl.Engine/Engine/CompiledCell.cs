@@ -14,9 +14,22 @@ namespace IlRepl.Engine;
 public sealed record CompiledCell(AssemblyBuilder Assembly, Type CellType, MethodInfo EntryPoint, object?[] ArgumentValues, DefinitionAssembly Definition)
 {
     /// <summary>
+    /// Owns any metadata-emitted body assemblies retained by the dynamic entry point.
+    /// </summary>
+    internal IReadOnlyList<DefinitionAssembly> Helpers { get; init; } = [];
+
+    /// <summary>
     /// Lets the runtime unload the cell once nothing references it any more.
     /// </summary>
-    public void Release() => SessionAssemblies.Release(Definition);
+    public void Release()
+    {
+        foreach (var helper in Helpers)
+        {
+            SessionAssemblies.Release(helper);
+        }
+
+        SessionAssemblies.Release(Definition);
+    }
 
     /// <summary>
     /// Invokes the cell, binding generic parameters first when the cell declares any.

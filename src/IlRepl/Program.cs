@@ -57,7 +57,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
 
     await using (engine.ConfigureAwait(false))
     {
-        string[] prelude = quiet ? QuietPrelude : [];
+        var prelude = quiet ? QuietPrelude : [];
         if (!batch)
         {
             foreach (var line in prelude)

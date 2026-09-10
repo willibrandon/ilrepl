@@ -1,4 +1,5 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 using Mono.Cecil;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
@@ -22,6 +23,11 @@ public sealed class CecilWriter
     private readonly Dictionary<Type, ExternalPrototype> _externals = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<string, AssemblyNameReference> _externalAssemblies = new(StringComparer.Ordinal);
     private MethodDefinition? _ignoresAccessChecksConstructor;
+
+    /// <summary>
+    /// Retains exact array signatures that Cecil cannot represent in its dimension model.
+    /// </summary>
+    internal CecilSignatureFixups SignatureFixups { get; } = new();
 
     /// <summary>
     /// A prototype written by another writer of the same group, referenced here by the name its
@@ -428,7 +434,17 @@ public sealed class CecilWriter
 
         NoteSessionMembers(declaring);
         NoteSessionMembers(field.FieldType);
+        if (CecilMetadataSignatures.IsRequired(field))
+        {
+            return CecilMetadataSignatures.Import(field, this);
+        }
+
         var imported = Module.ImportReference(field);
+        if (CecilArrayShapes.ContainsArray(imported.FieldType))
+        {
+            imported.FieldType = CecilArrayShapes.Restore(
+                imported.FieldType, RuntimeSymbolImporter.Import(field).FieldType, SignatureFixups);
+        }
         WithMetadataNames(imported.DeclaringType);
         WithMetadataNames(imported.FieldType);
         return imported;
@@ -578,7 +594,26 @@ public sealed class CecilWriter
             }
         }
 
+        if (CecilMetadataSignatures.IsRequired(method))
+        {
+            return CecilMetadataSignatures.Import(method, this);
+        }
+
         var reference = Module.ImportReference(method);
+        var definitionReference = reference is GenericInstanceMethod instance ? instance.ElementMethod : reference;
+        if (CecilArrayShapes.ContainsArray(definitionReference.ReturnType)
+            || definitionReference.Parameters.Any(parameter => CecilArrayShapes.ContainsArray(parameter.ParameterType)))
+        {
+            var signature = RuntimeSymbolImporter.Import(method);
+            definitionReference.ReturnType = CecilArrayShapes.Restore(
+                definitionReference.ReturnType, signature.ReturnType, SignatureFixups);
+            for (var index = 0; index < definitionReference.Parameters.Count; index++)
+            {
+                definitionReference.Parameters[index].ParameterType = CecilArrayShapes.Restore(
+                    definitionReference.Parameters[index].ParameterType, signature.Parameters[index].Type, SignatureFixups);
+            }
+        }
+
         WithMetadataNames(reference.DeclaringType);
         WithMetadataNames(reference.ReturnType);
         foreach (var parameter in reference.Parameters)
@@ -628,7 +663,9 @@ public sealed class CecilWriter
     {
         using var stream = new MemoryStream();
         Assembly.Write(stream);
-        return stream.ToArray();
+        var image = stream.ToArray();
+        SignatureFixups.Apply(image);
+        return image;
     }
 
     /// <summary>

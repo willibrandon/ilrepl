@@ -18,6 +18,22 @@ public partial interface IReplHost
     Task<HostHello> HelloAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// Waits for a searchable assembly load without blocking input or completion requests.
+    /// </summary>
+    /// <param name="version">The last observed version.</param>
+    /// <param name="cancellationToken">Cancels the wait.</param>
+    /// <returns>The changed version.</returns>
+    Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Completes an operand against a read-only snapshot of the session and unsent document.
+    /// </summary>
+    /// <param name="request">The document, caret and continuation state.</param>
+    /// <param name="cancellationToken">Cancels queued and active completion work.</param>
+    /// <returns>The confirmed candidate page.</returns>
+    Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Handles one line: an instruction, a directive, a command, or an empty line that runs the cell.
     /// </summary>
     /// <param name="line">The line.</param>
@@ -26,8 +42,7 @@ public partial interface IReplHost
     Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Withdraws the lines accepted since a mark was taken, when nothing has run, committed, or
-    /// been discarded since.
+    /// Withdraws input since a mark when no run, commit or destructive command has crossed that boundary.
     /// </summary>
     /// <param name="mark">The mark to return to.</param>
     /// <param name="cancellationToken">Cancels the call.</param>

@@ -16,6 +16,30 @@ public sealed class HighlightTests
     private static readonly string s_map = Path.Combine(SitePaths.Root, "docs", "src", "generated", "cil-tokens.json");
 
     /// <summary>
+    /// Completion examples keep terminal errors colored and palette illustrations separate from submitted IL.
+    /// </summary>
+    [TestMethod]
+    public void CompletionExamples_PreserveErrorAndEditorRendering()
+    {
+        using var map = JsonDocument.Parse(File.ReadAllText(s_map));
+        var blocks = map.RootElement.GetProperty("blocks").EnumerateObject().Select(property => property.Value).ToArray();
+        var suggestions = blocks.Where(block => block.GetProperty("where").GetString()!
+            .StartsWith("usage/member-references.md:", StringComparison.Ordinal));
+        Assert.Contains(block => block.GetProperty("lines").EnumerateArray()
+            .Any(line => line.EnumerateArray().Any(token => token[2].GetString() == "Error")), suggestions);
+        var editor = blocks.Where(block => block.GetProperty("where").GetString()!
+            .StartsWith("usage/editing.md:", StringComparison.Ordinal) && block.GetProperty("editor").GetBoolean());
+        Assert.Contains(block => block.GetProperty("lines")[0].GetArrayLength() == 0, editor,
+            "The palette border is editor UI rather than an instruction.");
+        var page = File.ReadAllText(Path.Combine(SitePaths.Dist, "usage", "editing", "index.html"));
+        Assert.Contains("Math::Max", page);
+        var keyboard = File.ReadAllText(Path.Combine(SitePaths.Dist, "reference", "keyboard", "index.html"));
+        Assert.Contains("PageUp", keyboard);
+        Assert.Contains("PageDown", keyboard);
+        Assert.Contains("did you mean", File.ReadAllText(Path.Combine(SitePaths.Dist, "usage", "member-references", "index.html")));
+    }
+
+    /// <summary>
     /// Every block tagged cil or ilrepl in the docs has its tokens in the map, line for line,
     /// and the map holds nothing else, so an edited block fails here until the generator runs.
     /// </summary>

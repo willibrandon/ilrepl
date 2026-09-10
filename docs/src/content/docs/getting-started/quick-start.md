@@ -83,6 +83,6 @@ instruction, which is usually enough to find it.
 
 ## Getting around
 
-Tab completes opcodes and commands, with a palette that shows each candidate's stack transition.
+Tab completes opcodes, commands, types, and members, with a palette that shows each candidate's stack effect.
 Up and Down walk history, which keeps a block as one entry and lasts between runs. `.help` prints
 the full command list, `.ops` lists opcodes, and Ctrl+Q leaves.

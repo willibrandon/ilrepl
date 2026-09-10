@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
@@ -20,6 +21,7 @@ public sealed partial class Session
     private readonly List<SessionMethod> _methods = [];
     private CellState _cell;
     private OpenMethodBlock? _open;
+    private long _completionRevision;
 
     /// <summary>
     /// Initializes a session with a fresh resolver.
@@ -45,8 +47,7 @@ public sealed partial class Session
     public TypeResolver Resolver { get; }
 
     /// <summary>
-    /// The validated state of the body being written: the open method while a <c>.method</c>
-    /// block is open, otherwise the cell. The stack echo, listings, and the status bar read this.
+    /// The validated body currently being written, used by the stack echo, listings and status bar.
     /// </summary>
     public CellState State => _openMember?.State ?? _open?.State ?? _cell;
 
@@ -56,10 +57,7 @@ public sealed partial class Session
     public CellState Cell => _cell;
 
     /// <summary>
-    /// A context for looking a member up without changing anything: the committed type table
-    /// alone, with no prototype of a class being written laid over it and no callback that could
-    /// declare a member or a nested type ahead of its declaration. A family being redefined
-    /// resolves to its accepted generation; a class with no accepted generation is not there at all.
+    /// An inspection context over committed types that cannot declare members or mutate an open family.
     /// </summary>
     public ParseContext InspectionContext
     {
@@ -107,17 +105,32 @@ public sealed partial class Session
     public int CellsRun { get; private set; }
 
     /// <summary>
-    /// How many submissions have completed: a run, or a <c>.method</c> block that closed and
-    /// committed. The prompt numbers the next one. A rejected close or an abandoned block does not count.
+    /// The number of completed runs and committed declaration blocks, excluding rejected or abandoned blocks.
     /// </summary>
     public int Submissions { get; private set; }
 
     /// <summary>
-    /// Changes whenever something happens that forgetting lines cannot undo: a run, a commit, an
-    /// undo, an abandon, a clear, a reset, a loaded assembly, or bound type parameters. A
-    /// <see cref="SessionMark"/> from an earlier generation cannot be rolled back to.
+    /// The generation of irreversible session transitions, used to reject obsolete rollback marks.
     /// </summary>
     public long Generation { get; private set; }
+
+    /// <summary>
+    /// The revision of every change that can affect completion, including lexical state and rollback.
+    /// </summary>
+    public long CompletionRevision
+    {
+        get => _completionRevision;
+        private set
+        {
+            _completionRevision = value;
+            CompletionChanged?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Invalidates cached completion state immediately after any semantic mutation under the session gate.
+    /// </summary>
+    internal event Action? CompletionChanged;
 
     /// <summary>
     /// Whether a <c>/*</c> comment is open at the end of the last line normalized.
@@ -125,9 +138,7 @@ public sealed partial class Session
     public bool InBlockComment { get; private set; }
 
     /// <summary>
-    /// How many opening braces the session has seen and not yet closed: open protected regions,
-    /// the open method, the open member and accessor, and every open type block, together. A
-    /// header still waiting for its brace on the next line has not opened one yet.
+    /// The combined number of currently open declaration, accessor and exception-region braces.
     /// </summary>
     public int OpenDepth
     {
@@ -162,9 +173,7 @@ public sealed partial class Session
     }
 
     /// <summary>
-    /// Removes the comments from a line, carrying an open <c>/* */</c> from line to line, and says
-    /// what is left: something to parse, a blank line, or a comment and nothing else. This is the
-    /// only place a comment is removed; everything after it sees the text.
+    /// Strips comments, carries multiline comment state and classifies the remaining input.
     /// </summary>
     /// <param name="raw">The line as typed.</param>
     /// <returns>The line without its comments.</returns>
@@ -175,17 +184,26 @@ public sealed partial class Session
         var state = before;
         var kind = CilLexer.Classify(raw, ref state, out var text);
         InBlockComment = state;
+        if (state != before)
+        {
+            CompletionRevision++;
+        }
+
         return new NormalizedLine(raw, text, kind, before);
     }
 
     /// <summary>
-    /// Puts the comment state back to where a line found it, for a line the session refused: a
-    /// refused line changes nothing, the <c>/*</c> it may have opened included.
+    /// Restores the lexical state from before a refused line, including any block comment it opened.
     /// </summary>
     /// <param name="line">The refused line.</param>
     public void Forget(NormalizedLine line)
     {
         ArgumentNullException.ThrowIfNull(line);
+        if (InBlockComment != line.InBlockCommentBefore)
+        {
+            CompletionRevision++;
+        }
+
         InBlockComment = line.InBlockCommentBefore;
     }
 
@@ -211,9 +229,7 @@ public sealed partial class Session
     }
 
     /// <summary>
-    /// Adds a line. Declarations are kept across runs; a <c>.method</c> header opens a block that
-    /// takes the following lines until <c>}</c>; everything else belongs to the current cell. A
-    /// comment or a blank line changes nothing.
+    /// Adds a declaration or instruction to the current body, ignoring blank and comment-only lines.
     /// </summary>
     /// <param name="line">The line, its comments already removed.</param>
     /// <returns>What the line was.</returns>
@@ -226,6 +242,17 @@ public sealed partial class Session
             return new LineResult(LineOutcome.Empty, null, null);
         }
 
+        var accepted = AddTextLine(line);
+        if (accepted.Outcome != LineOutcome.Empty)
+        {
+            CompletionRevision++;
+        }
+
+        return accepted;
+    }
+
+    private LineResult AddTextLine(NormalizedLine line)
+    {
         var text = line.Text;
         if (_openType is not null)
         {
@@ -279,18 +306,13 @@ public sealed partial class Session
     }
 
     /// <summary>
-    /// Where the session stands, taken before a block is sent so the block can be withdrawn with
-    /// <see cref="Rollback"/> if a line of it is refused.
+    /// Captures the session boundary from which an uncommitted submission can be withdrawn.
     /// </summary>
     /// <returns>The mark.</returns>
     public SessionMark Mark() => new(Generation, _bodyLines.Count, _declarationLines.Count, _open?.BodyLines.Count, _openType?.Outermost.Lines.Count, InBlockComment, BraceSeen: _open?.State.BraceSeen ?? true);
 
     /// <summary>
-    /// Withdraws every line accepted since the mark: a method or class opened since is abandoned,
-    /// one that was already open is cut back to the lines it had, and the cell is rebuilt from the
-    /// lines it had, so every earlier instruction, region, and declaration stays. Nothing is
-    /// re-run. Refused when something ran, committed, or was discarded since the mark, because
-    /// forgetting lines cannot undo that.
+    /// Withdraws uncommitted input since a mark, refusing if intervening irreversible changes prevent recovery.
     /// </summary>
     /// <param name="mark">The mark to return to.</param>
     /// <returns>True when the session is back at the mark.</returns>
@@ -356,17 +378,21 @@ public sealed partial class Session
         }
 
         InBlockComment = mark.InBlockComment;
+        CompletionRevision++;
         return true;
     }
 
     /// <summary>
     /// Records a change forgetting lines cannot undo, such as a loaded assembly.
     /// </summary>
-    internal void AdvanceGeneration() => Generation++;
+    internal void AdvanceGeneration()
+    {
+        Generation++;
+        CompletionRevision++;
+    }
 
     /// <summary>
-    /// Removes the last line: of the open method block, or of the cell body. Removing a method
-    /// header abandons the block. Committed methods and declarations are not undone.
+    /// Removes the last uncommitted line, abandoning an open declaration when its header is removed.
     /// </summary>
     /// <returns>True when a line was removed.</returns>
     public bool Undo()
@@ -377,6 +403,7 @@ public sealed partial class Session
             if (undone)
             {
                 Generation++;
+                CompletionRevision++;
             }
 
             return undone;
@@ -388,12 +415,14 @@ public sealed partial class Session
             {
                 _open = null;
                 Generation++;
+                CompletionRevision++;
                 return true;
             }
 
             _open.BodyLines.RemoveAt(_open.BodyLines.Count - 1);
             _open.State = ReplayOpenBody(_open);
             Generation++;
+            CompletionRevision++;
             return true;
         }
 
@@ -405,6 +434,7 @@ public sealed partial class Session
         _bodyLines.RemoveAt(_bodyLines.Count - 1);
         Rebuild();
         Generation++;
+        CompletionRevision++;
         return true;
     }
 
@@ -426,6 +456,7 @@ public sealed partial class Session
             _openType = null;
             ReplayFamily(header, kept);
             Generation++;
+            CompletionRevision++;
             return true;
         }
 
@@ -436,12 +467,12 @@ public sealed partial class Session
 
         _open = null;
         Generation++;
+        CompletionRevision++;
         return true;
     }
 
     /// <summary>
-    /// Drops the whole open type family without committing it. The cell, the methods, and the
-    /// accepted types are untouched.
+    /// Abandons the open type family while preserving accepted definitions and the cell.
     /// </summary>
     /// <returns>True when a family was open.</returns>
     public bool AbandonType()
@@ -453,6 +484,7 @@ public sealed partial class Session
 
         AbandonTypeFamily();
         Generation++;
+        CompletionRevision++;
         return true;
     }
 
@@ -464,6 +496,7 @@ public sealed partial class Session
         _bodyLines.Clear();
         Rebuild();
         Generation++;
+        CompletionRevision++;
     }
 
     /// <summary>
@@ -498,6 +531,7 @@ public sealed partial class Session
         InBlockComment = false;
         Rebuild();
         Generation++;
+        CompletionRevision++;
     }
 
     /// <summary>
@@ -536,8 +570,7 @@ public sealed partial class Session
     }
 
     /// <summary>
-    /// Writes the current cell and the session methods to disk as an assembly with a static
-    /// <c>IlRepl.Cell.Run</c> method. The cell is kept.
+    /// Writes the session definitions and current cell to an assembly containing IlRepl.Cell.Run.
     /// </summary>
     /// <param name="path">The output path.</param>
     /// <exception cref="ReplException">The cell is incomplete, a method block is open, or the runtime rejected it.</exception>
@@ -706,6 +739,7 @@ public sealed partial class Session
         _open = null;
         Submissions++;
         Generation++;
+        CompletionRevision++;
 
         if (replacing is not null && !_rebuilding)
         {
@@ -721,64 +755,25 @@ public sealed partial class Session
 
     private void DeclareTypeParameters(string spec)
     {
-        if (!_cell.IsEmpty)
-        {
-            throw new ReplException("declare .typeparams before the first instruction of the cell (or .clear first)");
-        }
-
-        var s = spec.Trim();
-        if (s.StartsWith('(') && s.EndsWith(')'))
-        {
-            s = s[1..^1];
-        }
-
-        var names = s.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (names.Length == 0)
-        {
-            throw new ReplException("usage: .typeparams (T, U)");
-        }
-
-        foreach (var name in names)
-        {
-            if (!InstructionParser.IsIdentifier(name))
-            {
-                throw new ReplException($"bad type parameter name '{name}'");
-            }
-
-            if (_typeParameterNames.Contains(name) || names.Count(n => n == name) > 1)
-            {
-                throw new ReplException($"type parameter '{name}' is already declared");
-            }
-        }
+        var names = CellGenericBinding.Parameters(spec, _typeParameterNames, _cell.IsEmpty);
 
         _typeParameterNames.AddRange(names);
         TypeArguments = null;
         Rebuild();
         Generation++;
+        CompletionRevision++;
     }
 
     private void BindTypeArguments(string spec)
     {
-        if (_typeParameterNames.Count == 0)
-        {
-            throw new ReplException("the cell has no type parameters; declare them with .typeparams first");
-        }
-
-        var s = spec.Trim();
-        if (s.StartsWith('(') && s.EndsWith(')'))
-        {
-            s = s[1..^1];
-        }
-
         var context = new ParseContext([], [], GenericContext.Empty, Resolver, Signatures(), _typeTable);
-        var types = TypeParser.SplitTopLevel(s).Select(t => TypeParser.Parse(t, context)).ToArray();
-        if (types.Length != _typeParameterNames.Count)
-        {
-            throw new ReplException($"expected {_typeParameterNames.Count} type argument(s) for ({string.Join(", ", _typeParameterNames)}), got {types.Length}");
-        }
+        var scope = new RuntimeBindingScope(context);
+        var symbols = CellGenericBinding.Arguments(spec, _typeParameterNames, scope);
+        var types = new RuntimeBindingAdapter(scope).ToTypes(symbols);
 
         TypeArguments = types;
         Generation++;
+        CompletionRevision++;
     }
 
     private void RequireCompatibleTypeReferences(MethodSignature replacement)

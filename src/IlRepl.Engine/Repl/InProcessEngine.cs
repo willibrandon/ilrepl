@@ -1,3 +1,5 @@
+using IlRepl.Engine;
+using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
 
 namespace IlRepl.Repl;
@@ -9,6 +11,11 @@ namespace IlRepl.Repl;
 public sealed class InProcessEngine : IReplEngine
 {
     private readonly ReplCore _core;
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly CancellationTokenSource _shutdown = new();
+    private readonly CancellationTokenSource _warmupCancellation = new();
+    private readonly Task _warmup;
+    private bool _disposed;
 
     /// <summary>
     /// Initializes an engine over a new session.
@@ -26,6 +33,8 @@ public sealed class InProcessEngine : IReplEngine
         ArgumentNullException.ThrowIfNull(core);
         _core = core;
         Status = core.Status;
+        _core.Session.CompletionChanged += CancelWarmup;
+        _warmup = WarmAsync();
     }
 
     /// <inheritdoc />
@@ -37,18 +46,89 @@ public sealed class InProcessEngine : IReplEngine
     /// <inheritdoc />
     public SessionStatus Status { get; private set; }
 
-    /// <inheritdoc />
-    public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
+    /// <inheritdoc/>
+    public long AssemblyVersion => ProcessAssemblies.Version;
+
+    /// <inheritdoc/>
+    public async Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(line);
-        return Task.FromResult(Reply(_core.Handle(line)));
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
+        return await ProcessAssemblies.WaitForChangeAsync(version, cancellation.Token).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken)
+    public async Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+        await _warmupCancellation.CancelAsync().ConfigureAwait(false);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Reply(_core.Handle(line));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(mark);
-        return Task.FromResult(Reply(_core.Rollback(mark)));
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Reply(_core.Rollback(mark));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
+        await _warmup.WaitAsync(cancellation.Token).ConfigureAwait(false);
+        await _gate.WaitAsync(cancellation.Token).ConfigureAwait(false);
+        try
+        {
+            var version = AssemblyVersion;
+            var reply = await _core.CompleteAsync(request, cancellation.Token).ConfigureAwait(false);
+            return reply with { AssemblyVersion = version };
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Captures the initial catalog and status under the same gate as input and completion.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels waiting for the engine.</param>
+    /// <returns>The coherent initial snapshot.</returns>
+    public async Task<HostHello> HelloAsync(CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return new HostHello(Catalog, Vocabulary, _core.Status, AssemblyVersion);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     private HandleReply Reply(HandleResult result)
@@ -59,6 +139,61 @@ public sealed class InProcessEngine : IReplEngine
         return new HandleReply(result.Succeeded, result.QuitRequested, lines, Status);
     }
 
+    private async Task WarmAsync()
+    {
+        await Task.Yield();
+        try
+        {
+            BindingSnapshot snapshot;
+            await _gate.WaitAsync(_warmupCancellation.Token).ConfigureAwait(false);
+            try
+            {
+                _warmupCancellation.Token.ThrowIfCancellationRequested();
+                snapshot = BindingSnapshot.Capture(_core.Session);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+
+            await CompletionWarmup.RunAsync(snapshot, _warmupCancellation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_warmupCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+        {
+            // Optional eager work does not turn an infrastructure failure into a cached empty query.
+            // The foreground request still performs its normal guarded capture and reports any failure.
+        }
+    }
+
+    private void CancelWarmup() => _warmupCancellation.Cancel();
+
     /// <inheritdoc />
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _core.Session.CompletionChanged -= CancelWarmup;
+        await _shutdown.CancelAsync().ConfigureAwait(false);
+        await _warmupCancellation.CancelAsync().ConfigureAwait(false);
+        await _warmup.ConfigureAwait(false);
+        await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            _core.Dispose();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        _shutdown.Dispose();
+        _warmupCancellation.Dispose();
+    }
 }

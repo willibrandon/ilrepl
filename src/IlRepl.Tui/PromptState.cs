@@ -10,8 +10,13 @@ namespace IlRepl.Tui;
 /// selection, the submission in flight, and the queue other threads post to. It lives above the
 /// widget so the status bar, the frame's drain, and the key bindings all see the same thing.
 /// </summary>
-public sealed class PromptState
+public sealed partial class PromptState
 {
+    /// <summary>
+    /// Coordinates streamed paste application with subsequent terminal input.
+    /// </summary>
+    internal PromptInputReader? PasteInput { get; set; }
+
     /// <summary>
     /// Initializes the state.
     /// </summary>
@@ -28,6 +33,8 @@ public sealed class PromptState
         Prediction = new PredictionHint();
         View = new PromptView();
         View.Prediction = Prediction;
+        Anchors = new ContinuationAnchors(Editor.Document);
+        Editor.Document.Changed += (_, _) => CompletionTextChanged();
     }
 
     /// <summary>
@@ -78,7 +85,24 @@ public sealed class PromptState
     /// <summary>
     /// Whether Escape closed the palette for the word being typed.
     /// </summary>
-    public bool PaletteDismissed { get; set; }
+    public bool PaletteDismissed
+    {
+        get => Palette == PaletteMode.Dismissed;
+        set
+        {
+            if (value)
+            {
+                Palette = PaletteMode.Dismissed;
+                DismissedVersion = Editor.Document.Version;
+                DismissedRevision = Requester?.Revision ?? -1;
+                DismissedCaret = (CaretLine - 1, CaretColumn);
+            }
+            else if (Palette == PaletteMode.Dismissed)
+            {
+                Palette = PaletteMode.Closed;
+            }
+        }
+    }
 
     /// <summary>
     /// Whether the user moved the palette's highlight since the word changed; only then does Enter accept.
@@ -183,10 +207,13 @@ public sealed class PromptState
     public void SetText(string text, int caret)
     {
         ArgumentNullException.ThrowIfNull(text);
+        _pendingHistoryBacks = 0;
         var document = Editor.Document;
         Editor.Cursor.ClearSelection();
         ReturnedSelection = null;
+        Anchors.Clear();
         document.Apply(new ReplaceOperation(new DocumentRange(DocumentOffset.Zero, new DocumentOffset(document.Length)), text));
+        PendingDisplay = null;
         Editor.History.Clear();
         Editor.SetCursorPosition(new DocumentOffset(Math.Clamp(caret, 0, document.Length)));
         LastLength = document.Length;

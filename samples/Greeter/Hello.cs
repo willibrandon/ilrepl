@@ -16,6 +16,29 @@ public static class Hello
     public static int Calls;
 
     /// <summary>
+    /// Accepts a Cdecl pointer without invoking it, so completion can be tested on every runtime.
+    /// </summary>
+    /// <param name="function">The function pointer, which may be null.</param>
+    /// <returns>Seven for a null pointer; eight otherwise.</returns>
+    public static unsafe int AcceptCdecl(delegate* unmanaged[Cdecl]<int, int> function) => function == null ? 7 : 8;
+
+    /// <summary>
+    /// Accepts a pointer with suppressed GC transitions without invoking it.
+    /// </summary>
+    /// <param name="function">The function pointer, which may be null.</param>
+    /// <returns>Seven for a null pointer; eight otherwise.</returns>
+    public static unsafe int AcceptSuppressed(delegate* unmanaged[Cdecl, SuppressGCTransition]<int, int> function) =>
+        function == null ? 7 : 8;
+
+    /// <summary>
+    /// Accepts a rectangular array so completion can preserve its metadata dimensions.
+    /// </summary>
+    /// <typeparam name="T">The array element type.</typeparam>
+    /// <param name="values">The array, or null.</param>
+    /// <returns>The array length, or nine for null.</returns>
+    public static int AcceptMatrix<T>(T[,]? values) => values?.Length ?? 9;
+
+    /// <summary>
     /// Greets by name.
     /// </summary>
     /// <param name="name">The name.</param>
@@ -33,6 +56,16 @@ public static class Hello
     /// <param name="b">The second number.</param>
     /// <returns>The sum.</returns>
     public static int Add(int a, int b) => a + b;
+
+    /// <summary>
+    /// A second method whose name differs from <see cref="Add(int, int)"/> only in case, as IL allows.
+    /// </summary>
+    /// <param name="a">The first number.</param>
+    /// <param name="b">The second number.</param>
+    /// <returns>The sum.</returns>
+#pragma warning disable CA1707, IDE1006 // The lowercase name is the point: a member that differs from Add only in case.
+    public static int add(int a, int b) => a + b;
+#pragma warning restore CA1707, IDE1006
 
     /// <summary>
     /// Adds two numbers of a different type, to exercise overload resolution by parameter types.

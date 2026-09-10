@@ -85,6 +85,21 @@ public sealed class ProtocolJsonTests
     }
 
     /// <summary>
+    /// The revision travels with the status and tells two otherwise equal statuses apart.
+    /// </summary>
+    [TestMethod]
+    public void SessionStatus_RoundTripsRevision()
+    {
+        var status = SessionStatus.Initial with { Revision = 42 };
+        var json = JsonSerializer.Serialize(status, ProtocolJsonContext.Default.SessionStatus);
+        Assert.Contains("\"revision\":42", json);
+        var back = JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.SessionStatus);
+        Assert.AreEqual(status, back);
+        Assert.AreNotEqual(SessionStatus.Initial, back);
+        Assert.AreEqual(0, SessionStatus.Initial.Revision);
+    }
+
+    /// <summary>
     /// A mark round-trips, and a null count is left out of the JSON.
     /// </summary>
     [TestMethod]

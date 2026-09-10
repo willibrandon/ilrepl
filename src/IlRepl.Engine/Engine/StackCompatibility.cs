@@ -79,31 +79,15 @@ public static class StackCompatibility
     {
         ArgumentNullException.ThrowIfNull(declared);
         ArgumentNullException.ThrowIfNull(types);
-        if (actual is null)
-        {
-            return true;
-        }
-
-        var expected = Category(declared);
-        if (actual == typeof(NullReferenceMarker) || actual == typeof(UnknownReferenceMarker))
-        {
-            return expected == StackCategory.ObjectReference;
-        }
-
-        if (StackSimulator.BoxedType(actual) is { } boxed)
-        {
-            return expected == StackCategory.ObjectReference && Assignable(declared, boxed, types);
-        }
-
-        var found = Category(actual);
-        return expected switch
-        {
-            StackCategory.Int32 or StackCategory.Int64 or StackCategory.Float => found == expected,
-            StackCategory.NativeInt => found is StackCategory.NativeInt or StackCategory.Int32,
-            StackCategory.ByRef => found == StackCategory.ByRef && TypeIdentity.Equal(actual.GetElementType()!, declared.GetElementType()!),
-            StackCategory.ValueType => found == StackCategory.ValueType && TypeIdentity.Equal(actual, declared),
-            _ => found == StackCategory.ObjectReference && Assignable(declared, actual, types),
-        };
+        return Binding.StackReturnRules.Accepts(
+            actual,
+            declared,
+            Category,
+            type => type == typeof(NullReferenceMarker) || type == typeof(UnknownReferenceMarker),
+            StackSimulator.BoxedType,
+            (from, to) => Assignable(to, from, types),
+            type => type.GetElementType()!,
+            (left, right) => TypeIdentity.Equal(left, right));
     }
 
     private static bool Assignable(Type declared, Type actual, TypeTable types)

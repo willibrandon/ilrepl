@@ -11,10 +11,13 @@ processes.
 
 <ProcessDiagram />
 
-The front-end owns the transcript, completion, and rendering. The host owns the session and
-returns the transcript lines each input produced. They talk JSON-RPC with StreamJsonRpc over the
-host's standard streams. Console output from a cell is captured inside the host, so the channel
-is never mixed with what the cell prints.
+The front-end owns the transcript and rendering. It completes the first word from a catalog
+the host sends once and asks the host for operand candidates as the caret moves. Each request
+carries the buffer and caret. Shared parsers and binding rules replay the earlier lines into
+independent symbols, reading loaded metadata without compiling definitions or running user code.
+Replies carry document and session identities so an outdated edit cannot be accepted.
+The processes talk JSON-RPC with StreamJsonRpc over the host's standard streams. Console output
+from a cell is captured inside the host, so the channel is never mixed with what the cell prints.
 
 The same engine runs in the browser on the [live session](/try/) page, where the .NET
 runtime is compiled to WebAssembly and the Hex1b UI renders into xterm.js. Nothing there talks
@@ -57,7 +60,7 @@ load context never binds the wrong one, and `.reset` unloads what the session he
 
 | Project | Purpose |
 | --- | --- |
-| `IlRepl.Protocol` | The transcript model, the completion catalog, and the JSON-RPC contract. |
+| `IlRepl.Protocol` | The transcript model, completion requests and pages, the caret classifier, and the JSON-RPC contract. |
 | `IlRepl.Engine` | Parsing, resolution, simulation, compilation, the session, and the REPL core. |
 | `IlRepl.Host` | Serves the engine over standard streams. |
 | `IlRepl.Tui` | The Hex1b widgets: transcript, prompt with completion palette, status bar. |
