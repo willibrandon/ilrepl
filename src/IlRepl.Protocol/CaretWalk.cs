@@ -7,6 +7,14 @@ internal sealed class CaretWalk
 {
     private static readonly string[] Conventions =
         ["instance", "explicit", "vararg", "unmanaged", "cdecl", "stdcall", "thiscall", "fastcall", "default", "winapi", "platformapi"];
+    private static readonly string[] FieldModifiers =
+        ["public", "private", "family", "assembly", "famandassem", "famorassem", "privatescope", "static", "initonly", "literal",
+            "specialname", "rtspecialname", "notserialized"];
+    private static readonly string[] PropertyModifiers = ["specialname", "rtspecialname", "instance", "default"];
+    private static readonly string[] MethodModifiers =
+        ["public", "private", "family", "assembly", "famandassem", "famorassem", "privatescope", "static", "instance", "virtual",
+            "newslot", "final", "abstract", "hidebysig", "specialname", "rtspecialname", "strict", "vararg", "default", "explicit",
+            "pinvokeimpl", "unmanagedexp", "reqsecobj", "flags"];
 
     private readonly CilTokenizer _tokenizer;
     private readonly CilLineReader _r;
@@ -372,7 +380,22 @@ internal sealed class CaretWalk
 
     private CompletionSite? MethodHeader(int i, string owner)
     {
-        var afterModifiers = _r.ReadModifiers(i);
+        var afterModifiers = i;
+        while (_r.KindAt(afterModifiers) == CilLexemeKind.Word && IsOneOf(afterModifiers, MethodModifiers))
+        {
+            afterModifiers++;
+            if (_r.IsPunct(afterModifiers, '('))
+            {
+                var close = _r.Matching(afterModifiers);
+                if (close < 0)
+                {
+                    return CompletionSite.None;
+                }
+
+                afterModifiers = close + 1;
+            }
+        }
+
         var typeEnd = _r.ReadType(afterModifiers);
         var hasType = typeEnd > afterModifiers;
         var nameIndex = hasType && _r.IsName(typeEnd) ? typeEnd : -1;
@@ -382,7 +405,8 @@ internal sealed class CaretWalk
         var afterGeneric = genericOpen < 0 ? afterName : genericClose < 0 ? _r.Count : genericClose + 1;
         var paren = _r.IsPunct(afterGeneric, '(') ? afterGeneric : -1;
         var parenClose = paren >= 0 ? _r.Matching(paren) : -1;
-        var complete = hasType && nameIndex >= 0 && paren >= 0 && parenClose >= 0 && (genericOpen < 0 || genericClose >= 0);
+        var complete = hasType && nameIndex >= 0 && paren >= 0 && parenClose >= 0 && !HasOpenList(i, _r.Count)
+            && HeaderEnd(_r.ReadModifiers(parenClose + 1, stopAtType: false));
 
         if (_caret <= _r.EndOf(afterModifiers - 1) && afterModifiers > i)
         {
@@ -477,8 +501,7 @@ internal sealed class CaretWalk
         }
 
         // A later clause can still be unfinished when the caret returns to an earlier type.
-        complete &= j >= _r.Count || _r.IsPunct(j, '{')
-            && (j + 1 >= _r.Count || _r.IsPunct(j + 1, '}') && j + 2 >= _r.Count);
+        complete &= HeaderEnd(j);
         return selected is not null ? selected with { DeclarationComplete = complete } : CompletionSite.None;
     }
 
@@ -542,7 +565,18 @@ internal sealed class CaretWalk
 
     private CompletionSite? FieldLike(int i, string owner)
     {
-        var afterModifiers = _r.ReadModifiers(i);
+        var afterModifiers = i;
+        if (owner == ".field" && _r.IsPunct(i, '[') && _r.KindAt(i + 1) == CilLexemeKind.Number && _r.IsPunct(i + 2, ']'))
+        {
+            afterModifiers += 3;
+        }
+
+        while (_r.KindAt(afterModifiers) == CilLexemeKind.Word
+            && IsOneOf(afterModifiers, owner == ".field" ? FieldModifiers : PropertyModifiers))
+        {
+            afterModifiers++;
+        }
+
         if (_caret <= _r.EndOf(afterModifiers - 1) && afterModifiers > i)
         {
             return CompletionSite.None;
@@ -553,7 +587,8 @@ internal sealed class CaretWalk
         var nameIndex = hasType && _r.IsName(typeEnd) ? typeEnd : -1;
         var paren = nameIndex >= 0 && _r.IsPunct(nameIndex + 1, '(') ? nameIndex + 1 : -1;
         var parenClose = paren >= 0 ? _r.Matching(paren) : -1;
-        var complete = hasType && nameIndex >= 0 && (paren < 0 || parenClose >= 0);
+        var complete = hasType && nameIndex >= 0 && !HasOpenList(i, _r.Count) && (paren < 0 || parenClose >= 0)
+            && (owner == ".field" ? FieldInitializerComplete(nameIndex + 1) : HeaderEnd(paren < 0 ? nameIndex + 1 : parenClose + 1));
         if (!hasType)
         {
             return _caret >= _r.EndOf(afterModifiers - 1) && (afterModifiers >= _r.Count || _caret <= _r.StartOf(afterModifiers))
@@ -571,6 +606,52 @@ internal sealed class CaretWalk
         }
 
         return CompletionSite.None;
+    }
+
+    private bool HeaderEnd(int i) => i >= _r.Count || _r.IsPunct(i, '{')
+        && (i + 1 >= _r.Count || _r.IsPunct(i + 1, '}') && i + 2 >= _r.Count);
+
+    private bool FieldInitializerComplete(int i)
+    {
+        if (!_r.IsPunct(i, '='))
+        {
+            return i >= _r.Count;
+        }
+
+        i++;
+        if (_r.IsPunct(i + 1, '('))
+        {
+            var close = _r.Matching(i + 1);
+            return close >= 0 && close + 1 == _r.Count && (close > i + 2 || _r.IsWord(i, "bytearray"));
+        }
+
+        if (_r.IsPrimitive(i) || _r.IsWord(i, "bytearray"))
+        {
+            return false;
+        }
+
+        if (_r.KindAt(i) is CilLexemeKind.String or CilLexemeKind.Quoted)
+        {
+            var text = _r.TextAt(i);
+            var last = text.Length - 1;
+            if (last < 1 || text[last] != text[0])
+            {
+                return false;
+            }
+
+            var before = last - 1;
+            while (before > 0 && text[before] == '\\')
+            {
+                before--;
+            }
+
+            if ((last - before) % 2 == 0)
+            {
+                return false;
+            }
+        }
+
+        return _r.ReadLiteral(i) == _r.Count && i < _r.Count;
     }
 
     private CompletionSite GenericParameters(int open, int close, string owner, bool complete)

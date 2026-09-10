@@ -5,6 +5,43 @@ namespace IlRepl.Docs.Tests;
 public sealed partial class LiveSessionTests
 {
     /// <summary>
+    /// Earlier declaration types remain completable while a method trailer or field initializer is unfinished.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    /// <param name="field">Whether the unfinished suffix is a field initializer.</param>
+    [TestMethod]
+    [DataRow("chromium", false)]
+    [DataRow("webkit", false)]
+    [DataRow("chromium", true)]
+    [DataRow("webkit", true)]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_UnfinishedDeclarationSuffix_CompletesEarlierType(string browser, bool field)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var prefix = field ? ".field public static literal int3" : ".method int32 M(List<int3";
+        var suffix = field ? " Value = int32(" : "> value) cil man";
+        await PasteAsync(page, (field ? ".class public Host {\n" : "") + prefix + suffix);
+        for (var i = 0; i < suffix.Length; i++)
+        {
+            await page.Keyboard.PressAsync("ArrowLeft");
+        }
+
+        await CompletionAtCaretAsync(page, (field ? "  ...> " : "il[1]> ") + prefix, "❯ int32");
+        await page.Keyboard.PressAsync("Tab");
+        await page.Keyboard.PressAsync("End");
+        await PromptContainsAsync(page, prefix + "2" + suffix);
+        await PasteAsync(page, field
+            ? "7)\n}\nldtoken field Host::Value\ncall System.Reflection.FieldInfo::GetFieldFromHandle(RuntimeFieldHandle)\n"
+                + "callvirt object System.Reflection.FieldInfo::GetRawConstantValue()\nret"
+            : "aged {\nldc.i4.7\nret\n}\nldnull\ncall int32 M(List<int32>)\nret");
+        await page.Keyboard.PressAsync("Enter");
+        await ExpectCompletionAsync(page, "= 7 : int32");
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// An unfinished interface clause permits completing the earlier base type and then running the finished class.
     /// </summary>
     /// <param name="browser">The browser engine.</param>
