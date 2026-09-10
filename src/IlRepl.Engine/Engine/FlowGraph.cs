@@ -196,11 +196,8 @@ internal sealed class FlowGraph<T> where T : class
                 {
                     var exitsFinalizer = source.Any(id => Sections[id].Kind is BlockKind.Finally or BlockKind.Fault or BlockKind.Filter
                         && !target.Contains(id));
-                    var entersHandler = target.Any(id => !source.Contains(id)
-                        && !(Sections[id].Kind == BlockKind.Try && (IsFirstInstruction(edge.Target, Sections[id].Start)
-                            || source.Any(other => Sections[other].Group == Sections[id].Group
-                                && Sections[other].Kind is BlockKind.Catch or BlockKind.FilterHandler))));
-                    if (exitsFinalizer || entersHandler)
+                    var entersProtectedRegion = target.Any(id => !source.Contains(id));
+                    if (exitsFinalizer || entersProtectedRegion)
                     {
                         Report(index, "FLOW014", AnalysisDiagnosticKind.Error,
                             "leave cannot transfer control across these handler boundaries");
@@ -306,6 +303,13 @@ internal sealed class FlowGraph<T> where T : class
         {
             if (Nodes[index].Instruction is not { } instruction)
             {
+                if (Nodes[index].Block is not null && prefixes.Count != 0)
+                {
+                    Report(index, "FLOW019", AnalysisDiagnosticKind.Error,
+                        "a protected-region boundary cannot separate a prefix from its instruction");
+                    prefixes.Clear();
+                }
+
                 continue;
             }
 

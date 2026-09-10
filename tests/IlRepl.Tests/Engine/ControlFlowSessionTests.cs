@@ -109,6 +109,42 @@ public sealed class ControlFlowSessionTests
         Assert.AreEqual(42, session.Run().Value);
     }
 
+    /// <summary>
+    /// Leave cannot enter a try region even when it targets the region's first instruction.
+    /// </summary>
+    [TestMethod]
+    public void LeaveIntoTry_IsRejected()
+    {
+        var session = new Session();
+        Add(session, "leave INSIDE", ".try {");
+        var error = Assert.Throws<ReplException>(() => session.AddLine("INSIDE: leave DONE"));
+        Assert.Contains("leave cannot transfer control", error.Message);
+    }
+
+    /// <summary>
+    /// A protected-region boundary cannot appear between a prefix and its instruction.
+    /// </summary>
+    /// <param name="handler">Whether the boundary begins a handler instead of a try.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void PrefixBeforeProtectedRegionBoundary_IsRejected(bool handler)
+    {
+        var session = new Session();
+        if (handler)
+        {
+            Add(session, ".try {", "leave DONE", "volatile.");
+        }
+        else
+        {
+            Add(session, "volatile.");
+        }
+
+        var boundary = handler ? "} catch [System.Runtime]System.Exception {" : ".try {";
+        var error = Assert.Throws<ReplException>(() => session.AddLine(boundary));
+        Assert.Contains("protected-region boundary", error.Message);
+    }
+
     private static void Add(Session session, params string[] lines)
     {
         foreach (var line in lines)

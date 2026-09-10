@@ -80,6 +80,36 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
+    /// Browser Mono refuses transfers and prefixes that cross protected-region boundaries.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(120_000, CooperativeCancellation = true)]
+    public async Task ControlFlow_ProtectedRegionBoundariesMatchDesktop(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+        await PasteAsync(page, ".method int32 LeaveIntoTry() {\nleave INSIDE\n.try {\nINSIDE: leave DONE\n"
+            + "} finally {\nendfinally\n}\nDONE: ldc.i4.s 42\nret\n}");
+        await Assertions.Expect(terminal).ToContainTextAsync("leave cannot transfer control", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("error: leave cannot transfer control", options);
+        await page.Keyboard.PressAsync("Control+q");
+        await WaitForSessionAsync(page, 2, 30_000);
+        await ClickIntoTerminalAsync(page);
+        await PasteAsync(page, ".method int32 PrefixAcrossTry() {\nvolatile.\n.try {\nleave DONE\n"
+            + "} finally {\nendfinally\n}\nDONE: ldc.i4.s 42\nret\n}");
+        await Assertions.Expect(terminal).ToContainTextAsync("protected-region boundary", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("error: a protected-region boundary", options);
+    }
+
+    /// <summary>
     /// A later branch updates an earlier caret stack, and a correction removes the diagnostic before submission.
     /// </summary>
     /// <param name="browser">The browser engine.</param>
