@@ -516,14 +516,22 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
             if (address is not null && _types.Algebra.IsByRef(address) && storage is not null
                 && _types.Algebra.ElementOf(address) is { } element
-                && !(memory.StartsWith("stind", StringComparison.Ordinal) || memory is "stobj" or "initobj" or "cpobj"
-                    ? _types.CanAssign(storage, element) : _types.CanAssign(element, storage)))
+                && !(memory is "ldind.ref" or "stind.ref"
+                    ? !_types.Algebra.IsGenericParameter(element) && _types.Category(element) == StackCategory.ObjectReference
+                    : memory.StartsWith("stind", StringComparison.Ordinal) || memory is "stobj" or "initobj" or "cpobj"
+                        ? _types.CanAssign(storage, element) : _types.CanAssign(element, storage)))
             {
                 return $"{memory} cannot access {_types.Name(element)} through {_types.Name(address)}";
             }
 
+            if (memory == "stind.ref" && address is not null && _types.Algebra.IsByRef(address)
+                && _types.Algebra.ElementOf(address) is { } reference && !_types.CanAssign(top, reference))
+            {
+                return $"stind.ref needs {_types.Name(reference)} but found {_types.Name(top)}";
+            }
+
             if (storage is not null && (memory.StartsWith("stind", StringComparison.Ordinal) || memory == "stobj")
-                && !_types.CanAssign(top, storage))
+                && memory != "stind.ref" && !_types.CanAssign(top, storage))
             {
                 return $"{memory} needs {_types.Name(storage)} but found {_types.Name(top)}";
             }
@@ -554,14 +562,19 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             {
                 return $"{arrayOp} needs an integer index but found {_types.Name(offset)}";
             }
-            if (array is not null && _types.Algebra.IsArray(array) && arrayOp != "ldlen"
-                && _types.Algebra.ElementOf(array) is { } actualElement && ArrayInstructionType(view) is { } instructionElement
-                && !_types.ArrayElementCompatible(actualElement, instructionElement))
+            var actualElement = array is not null && _types.Algebra.IsArray(array) ? _types.Algebra.ElementOf(array) : null;
+            var instructionElement = ArrayInstructionType(view);
+            if (actualElement is not null && instructionElement is not null && arrayOp != "ldlen"
+                && arrayOp is not ("ldelem.ref" or "stelem.ref")
+                && !(arrayOp.StartsWith("stelem", StringComparison.Ordinal)
+                    ? _types.ArrayElementCompatible(instructionElement, actualElement)
+                    : _types.ArrayElementCompatible(actualElement, instructionElement)))
             {
                 return $"{arrayOp} cannot access {_types.Name(actualElement)} elements as {_types.Name(instructionElement)}";
             }
 
-            if (arrayOp.StartsWith("stelem", StringComparison.Ordinal) && ArrayInstructionType(view) is { } storedAs
+            var storedAs = arrayOp == "stelem.ref" ? actualElement : instructionElement;
+            if (arrayOp.StartsWith("stelem", StringComparison.Ordinal) && storedAs is not null
                 && !_types.CanAssign(top, storedAs))
             {
                 return $"{arrayOp} needs {_types.Name(storedAs)} but found {_types.Name(top)}";

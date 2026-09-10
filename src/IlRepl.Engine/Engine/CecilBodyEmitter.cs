@@ -435,8 +435,21 @@ public static class CecilBodyEmitter
             }
         }
 
-        private static CecilOpCode Translate(System.Reflection.Emit.OpCode op) =>
-            OpCodesByName.TryGetValue(op.Name!, out var cecil) ? cecil : throw new ReplException($"opcode '{op.Name}' cannot be written by the exporter");
+        private static CecilOpCode Translate(System.Reflection.Emit.OpCode op)
+        {
+            if (op == System.Reflection.Emit.OpCodes.Ldelem)
+            {
+                return OpCodes.Ldelem_Any;
+            }
+
+            if (op == System.Reflection.Emit.OpCodes.Stelem)
+            {
+                return OpCodes.Stelem_Any;
+            }
+
+            return OpCodesByName.TryGetValue(op.Name!, out var cecil) ? cecil
+                : throw new ReplException($"opcode '{op.Name}' cannot be written by the exporter");
+        }
 
         private sealed class Marker
         {
