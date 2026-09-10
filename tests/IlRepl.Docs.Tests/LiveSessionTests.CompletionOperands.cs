@@ -8,43 +8,69 @@ public sealed partial class LiveSessionTests
     /// An event handler completion disappears for an array suffix and returns when the delegate type is restored.
     /// </summary>
     /// <param name="browser">The browser engine.</param>
+    /// <param name="generic">Whether the edited component is the delegate's generic argument.</param>
     [TestMethod]
-    [DataRow("chromium")]
-    [DataRow("webkit")]
+    [DataRow("chromium", false)]
+    [DataRow("webkit", false)]
+    [DataRow("chromium", true)]
+    [DataRow("webkit", true)]
     [Timeout(240_000, CooperativeCancellation = true)]
-    public async Task LiveSession_EventHandlerCompletion_RejectsArraySuffix(string browser)
+    public async Task LiveSession_EventHandlerCompletion_RejectsArraySuffix(string browser, bool generic)
     {
         await using var launched = await LaunchAsync(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
-        await PasteAsync(page, """
+        var handler = generic ? "Action<int32>" : "Action";
+        var prefix = generic ? ".event System.Action<int3" : ".event System.Act";
+        var choice = generic ? "❯ int32" : "❯ Action ";
+        await PasteAsync(page, $$"""
             .class public EventHost {
-            .method public static specialname void add_Changed(Action value) {
+            .method public static specialname void add_Changed({{handler}} value) {
             ret
             }
-            .method public static specialname void remove_Changed(Action value) {
+            .method public static specialname void remove_Changed({{handler}} value) {
             ret
             }
-            .event System.Act
+            {{prefix}}
             """);
-        await CompletionAtCaretAsync(page, "  ...> .event System.Act", "❯ Action ");
-        await page.Keyboard.TypeAsync("[]");
+        await CompletionAtCaretAsync(page, "  ...> " + prefix, choice);
+        await page.Keyboard.TypeAsync(generic ? ">[]" : "[]");
+        if (generic)
+        {
+            await page.Keyboard.PressAsync("ArrowLeft");
+        }
+
         await page.Keyboard.PressAsync("ArrowLeft");
         await page.Keyboard.PressAsync("ArrowLeft");
-        await PromptContainsAsync(page, ".event System.Act[]");
-        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ Action ");
+        await PromptContainsAsync(page, prefix + (generic ? ">[]" : "[]"));
+        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync(choice);
+        if (generic)
+        {
+            await page.Keyboard.PressAsync("ArrowRight");
+        }
+
         await page.Keyboard.PressAsync("Delete");
         await page.Keyboard.PressAsync("Delete");
-        await CompletionAtCaretAsync(page, "  ...> .event System.Act", "❯ Action ");
+        if (generic)
+        {
+            await page.Keyboard.PressAsync("ArrowLeft");
+        }
+
+        await CompletionAtCaretAsync(page, "  ...> " + prefix, choice);
         await page.Keyboard.PressAsync("Tab");
-        await PasteAsync(page, """
+        if (generic)
+        {
+            await page.Keyboard.PressAsync("ArrowRight");
+        }
+
+        await PasteAsync(page, $$"""
              Changed {
-            .addon void EventHost::add_Changed(Action)
-            .removeon void EventHost::remove_Changed(Action)
+            .addon void EventHost::add_Changed({{handler}})
+            .removeon void EventHost::remove_Changed({{handler}})
             }
             }
             ldnull
-            call void EventHost::add_Changed(Action)
+            call void EventHost::add_Changed({{handler}})
             ldc.i4.7
             ret
             """);

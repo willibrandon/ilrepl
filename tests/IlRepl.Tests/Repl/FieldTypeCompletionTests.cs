@@ -29,6 +29,9 @@ public sealed class FieldTypeCompletionTests
     [DataRow(".field public int3| pinned", "int32")]
     [DataRow(".property vo|", "void")]
     [DataRow(".property int32 Item(vo|", "void")]
+    [DataRow(".field public List<in|> pinned", "int32")]
+    [DataRow(".field public List<in|> pinned Values", "int32")]
+    [DataRow(".field public Action<List<in|>> pinned", "int32")]
     public async Task Complete_UnfinishedValue_ExcludesInvalidType(string text, string excluded)
     {
         using var completer = new OperandCompleter(new Session());

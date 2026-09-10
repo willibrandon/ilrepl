@@ -106,6 +106,12 @@ public static partial class MemberEligibility
             return false;
         }
 
+        if (site.Kind == CompletionSiteKind.TypeArgument)
+        {
+            // Generic constraints judge the argument; declaration rules judge the completed enclosing type.
+            return true;
+        }
+
         var variableSite = site.Owner is ".locals" or ".args" or ".field" or ".property"
             || site.Owner == ".method" && site.ArgumentIndex >= 0;
         if (variableSite && !site.IsFunctionPointerReturn && !hasElementSuffix && !IsVariableType(type))
@@ -128,7 +134,8 @@ public static partial class MemberEligibility
         {
             "extends" => view.OwnerKind == TypeKind.Struct ? IsCoreType(type, "System.ValueType", scope)
                 : view.OwnerKind == TypeKind.Enum ? IsCoreType(type, "System.Enum", scope)
-                : view.OwnerKind != TypeKind.Interface && !type.IsInterface && !type.IsValueTypeShape && !type.IsSealed,
+                : view.OwnerKind != TypeKind.Interface && !type.IsInterface && !type.IsValueTypeShape && !type.IsSealed
+                    && type.Unwrapped.Kind is TypeSymbolKind.Named or TypeSymbolKind.Constructed or TypeSymbolKind.Primitive,
             "implements" => view.OwnerKind != TypeKind.Enum && type.IsInterface,
             ".event" => HasBase(type, "System.MulticastDelegate", scope),
             _ => true,

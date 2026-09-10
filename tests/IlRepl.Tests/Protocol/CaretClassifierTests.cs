@@ -908,6 +908,27 @@ public sealed class CaretClassifierTests
     }
 
     /// <summary>
+    /// Nested argument sites retain the enclosing type and declaration parameter independently of their generic position.
+    /// </summary>
+    /// <param name="text">The declaration and marked caret.</param>
+    /// <param name="typePrefix">The start of the enclosing type.</param>
+    /// <param name="parameter">The enclosing declaration parameter index.</param>
+    [TestMethod]
+    [DataRow(".event System.Action<List<in|>>[] Changed {", "System.Action", -1)]
+    [DataRow(".method List<in|> M()", "List", -1)]
+    [DataRow(".method void M(string first, List<in|> value)", "List", 1)]
+    [DataRow(".field method List<in|> *(int32)", "method", -1)]
+    [DataRow(".locals init (int32 first, class List<in|>[] values)", "class List", 1)]
+    public void Classify_GenericArgument_RetainsDeclarationType(string text, string typePrefix, int parameter)
+    {
+        var site = Classify(text, out var line);
+        Assert.AreEqual(CompletionSiteKind.TypeArgument, site.Kind);
+        Assert.AreEqual(line.IndexOf(typePrefix, StringComparison.Ordinal), site.EnclosingTypeStart);
+        Assert.AreEqual(parameter, site.EnclosingParameterIndex);
+        Assert.AreEqual(0, site.ArgumentIndex);
+    }
+
+    /// <summary>
     /// Numbers, strings, and floats are not sites, and neither is an opcode with no operand.
     /// </summary>
     [TestMethod]

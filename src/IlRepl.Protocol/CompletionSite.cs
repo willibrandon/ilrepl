@@ -60,6 +60,16 @@ public sealed record CompletionSite(
     public bool IsFunctionPointerReturn { get; init; }
 
     /// <summary>
+    /// The start of the enclosing declaration type, including its keywords, or -1 when no type surrounds the site.
+    /// </summary>
+    public int EnclosingTypeStart { get; init; } = -1;
+
+    /// <summary>
+    /// The enclosing declaration's parameter index, independent of a nested generic argument's index, or -1 for a return type.
+    /// </summary>
+    public int EnclosingParameterIndex { get; init; } = -1;
+
+    /// <summary>
     /// The exclusive end of the candidate generic name, or -1 when no name is identified.
     /// </summary>
     public int GenericNameEnd { get; init; } = -1;

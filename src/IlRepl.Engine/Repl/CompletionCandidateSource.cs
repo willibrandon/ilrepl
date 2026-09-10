@@ -238,8 +238,9 @@ internal sealed class CompletionCandidateSource
     /// Resolves a typed qualifier or corrects its case while retaining any explicit assembly and generic arguments.
     /// </summary>
     /// <param name="text">The qualifier as typed.</param>
+    /// <param name="genericDefinitionsOnly">Whether an open type-argument list requires all matching generic definitions.</param>
     /// <returns>The exact matching declaring constructions.</returns>
-    public IReadOnlyList<TypeSymbol> ResolveOwners(string? text)
+    public IReadOnlyList<TypeSymbol> ResolveOwners(string? text, bool genericDefinitionsOnly = false)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -263,7 +264,7 @@ internal sealed class CompletionCandidateSource
             return [];
         }
 
-        if (ExactOwner(syntax) is { } exact)
+        if (!genericDefinitionsOnly && ExactOwner(syntax) is { } exact)
         {
             return [exact];
         }
@@ -294,7 +295,8 @@ internal sealed class CompletionCandidateSource
         {
             try
             {
-                if (Index.SymbolOf(entry) is not { } type || !HintNames(hinted, type))
+                if (Index.SymbolOf(entry) is not { } type || !HintNames(hinted, type)
+                    || genericDefinitionsOnly && !type.IsGenericDefinition)
                 {
                     continue;
                 }

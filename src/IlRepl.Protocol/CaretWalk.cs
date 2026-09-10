@@ -460,8 +460,8 @@ internal sealed class CaretWalk
 
                 if (_caret <= _r.EndOf(end - 1))
                 {
-                    return (TypeAfter(a, end, "implements", complete) ?? CompletionSite.None) with
-                    { ArgumentIndex = index };
+                    var site = TypeAfter(a, end, "implements", complete) ?? CompletionSite.None;
+                    return site with { ArgumentIndex = site.Kind == CompletionSiteKind.Type ? index : site.ArgumentIndex };
                 }
 
                 a = end;
@@ -605,7 +605,11 @@ internal sealed class CaretWalk
 
             if (TypeAfter(start, typeEnd, owner, complete) is { } site)
             {
-                return site with { ArgumentIndex = site.Kind == CompletionSiteKind.Type ? index : site.ArgumentIndex };
+                return site with
+                {
+                    ArgumentIndex = site.Kind == CompletionSiteKind.Type ? index : site.ArgumentIndex,
+                    EnclosingParameterIndex = index,
+                };
             }
 
             a = typeEnd;
@@ -667,7 +671,8 @@ internal sealed class CaretWalk
             return null;
         }
 
-        return Type(i, end, owner, complete);
+        return Type(i, end, owner, complete) is { } site
+            ? site with { EnclosingTypeStart = _r.StartOf(i), EnclosingParameterIndex = -1 } : null;
     }
 
     /// <summary>

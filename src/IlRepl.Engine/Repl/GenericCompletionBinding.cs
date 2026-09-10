@@ -66,7 +66,7 @@ internal sealed class GenericCompletionBinding
         }
         else
         {
-            foreach (var type in _source.ResolveOwners(ownerText).Where(type => type.IsGenericDefinition))
+            foreach (var type in _source.ResolveOwners(ownerText, genericDefinitionsOnly: true))
             {
                 targets.Add(ForType(type));
             }
@@ -102,7 +102,8 @@ internal sealed class GenericCompletionBinding
         foreach (var target in Targets(site.GenericOwnerText, selected))
         {
             var count = target.Parameters.Count;
-            if (site.ArgumentIndex < 0 || site.ArgumentIndex >= count || span.Arguments.Count > count)
+            if (site.ArgumentIndex < 0 || site.ArgumentIndex >= count || span.Arguments.Count > count
+                || span.Close >= 0 && span.Arguments.Count != count)
             {
                 continue;
             }

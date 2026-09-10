@@ -25,24 +25,20 @@ public sealed partial class OperandCompleter
 
             var original = query.Identity.Document.Lines[query.Identity.Document.Line];
             var line = original[..site.ReplaceStart] + insertion + original[site.ReplaceEnd..];
-            if (candidate.Type is not null && site.Kind == CompletionSiteKind.Type
-                && site.Owner is ".locals" or ".args" or ".method" or ".field" or ".property" or ".event")
+            var declarationType = candidate.Type is not null
+                && site.Kind is CompletionSiteKind.Type or CompletionSiteKind.TypeArgument or CompletionSiteKind.GenericParameter
+                && site.Owner is ".locals" or ".args" or ".method" or ".field" or ".property" or ".event"
+                    or "extends" or "implements" or "catch";
+            var typeComplete = false;
+            if (declarationType && !ConfirmDeclarationType(line, site, query.View, scope, out typeComplete))
             {
-                var comment = false;
-                var declaration = CilLexer.StripComments(line[site.ReplaceStart..], ref comment);
-                var position = 0;
-                var declaredType = SymbolBinder.BindType(CilSyntaxParser.ParseTypeAt(declaration, ref position), scope);
-                if (site.Owner == ".field" && declaredType.Pinned
-                    || !MemberEligibility.Admits(declaredType.Type, site, query.View))
-                {
-                    return null;
-                }
+                return null;
             }
 
             var continues = candidate.Type is not null && candidate.Slot < 0
                 && site.Kind == CompletionSiteKind.MemberHead && !site.NextIsDoubleColon;
             BoundInstruction? instruction = null;
-            if (!continues && site.Kind != CompletionSiteKind.TypeArgument)
+            if (!continues && (site.Kind != CompletionSiteKind.TypeArgument || declarationType && typeComplete))
             {
                 if (site.Owner.StartsWith('.') || site.Owner is "extends" or "implements" or "catch")
                 {
