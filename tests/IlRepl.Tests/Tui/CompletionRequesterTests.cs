@@ -65,6 +65,74 @@ public sealed class CompletionRequesterTests
     }
 
     /// <summary>
+    /// Empty intermediate pages keep previous rows disabled until the replacement query has finished.
+    /// </summary>
+    /// <param name="hasMatch">Whether the last page supplies a replacement row.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Refresh_EmptyReplacementPages_PreserveDisabledRows(bool hasMatch)
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call Console::Wr");
+        var requester = state.Requester!;
+        requester.Refresh(state);
+        var original = Reply(engine, "WriteLine");
+        engine.Calls[0].Answer.SetResult(original);
+        await DrainAsync(state);
+        state.Editor.InsertText("i");
+        requester.Refresh(state);
+        for (var page = 1; page <= 2; page++)
+        {
+            engine.Calls[page].Answer.SetResult(Reply(engine, "WriteLine", length: 12) with
+            {
+                Items = [], Cursor = "page-" + (page + 1), TotalIsProvisional = true,
+            });
+            await DrainAsync(state);
+            Assert.HasCount(1, PromptWidget.DisplayCandidates(state, engine.Catalog));
+            Assert.IsEmpty(PromptWidget.Candidates(state, engine.Catalog));
+            Assert.IsNull(CompletionEdit.For(state, original.Items[0]));
+            requester.Refresh(state);
+            Assert.HasCount(1, PromptWidget.DisplayCandidates(state, engine.Catalog));
+            Assert.AreEqual("page-" + (page + 1), engine.Calls[page + 1].Request.Cursor);
+        }
+
+        var final = Reply(engine, "WriteLine", length: 12);
+        engine.Calls[3].Answer.SetResult(hasMatch ? final : final with { Items = [], Total = 0 });
+        await DrainAsync(state);
+        Assert.IsNull(state.PendingDisplay);
+        Assert.HasCount(hasMatch ? 1 : 0, PromptWidget.DisplayCandidates(state, engine.Catalog));
+        Assert.HasCount(hasMatch ? 1 : 0, PromptWidget.Candidates(state, engine.Catalog));
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>
+    /// Editing again during an empty intermediate page retains the last visible rows while cancelling that page.
+    /// </summary>
+    [TestMethod]
+    public async Task Refresh_EditDuringEmptyPage_PreservesDisabledRows()
+    {
+        await using var engine = new CompletionEngine();
+        var state = State(engine, "call Console::Wr");
+        var requester = state.Requester!;
+        requester.Refresh(state);
+        engine.Calls[0].Answer.SetResult(Reply(engine, "WriteLine"));
+        await DrainAsync(state);
+        state.Editor.InsertText("i");
+        requester.Refresh(state);
+        engine.Calls[1].Answer.SetResult(Reply(engine, "WriteLine", length: 12) with { Items = [], Cursor = "next" });
+        await DrainAsync(state);
+        requester.Refresh(state);
+        state.Editor.InsertText("t");
+        requester.Refresh(state);
+        Assert.IsTrue(engine.Calls[2].Cancellation.IsCancellationRequested);
+        Assert.HasCount(1, PromptWidget.DisplayCandidates(state, engine.Catalog));
+        Assert.IsEmpty(PromptWidget.Candidates(state, engine.Catalog));
+        await engine.DisposeAsync();
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>
     /// Identical redraws retain one request and an explicit retry lifts a pending dismissal.
     /// </summary>
     [TestMethod]

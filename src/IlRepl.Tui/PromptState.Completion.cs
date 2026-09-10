@@ -66,7 +66,7 @@ public sealed partial class PromptState
 
     private void CompletionTextChanged()
     {
-        var display = Completions ?? PendingDisplay;
+        var display = PendingDisplay ?? Completions;
         Requester?.Cancel(this);
         PendingDisplay = display;
         Completions = null;

@@ -223,10 +223,10 @@ public sealed class CompletionRequester
             return;
         }
 
-        state.PendingDisplay = null;
         if (result.Cancelled || result.Faulted)
         {
             LastAnswered = null;
+            state.PendingDisplay = null;
             state.Completions = null;
             state.Palette = result.Faulted ? PaletteMode.Faulted : PaletteMode.Closed;
             state.DismissedVersion = state.Editor.Document.Version;
@@ -250,11 +250,15 @@ public sealed class CompletionRequester
 
         LastAnswered = result.Key with { Cursor = null };
         state.Completions = snapshot;
-        state.Palette = reply.Items.Count > 0 || reply.Cursor is not null || snapshot.Reply.Items.Count > 0
-            ? PaletteMode.Open : PaletteMode.Closed;
         if (snapshot.Reply.Items.Count == 0 && reply.Cursor is not null)
         {
+            state.Palette = PaletteMode.Requested;
             state.MoreCompletions = true;
+        }
+        else
+        {
+            state.PendingDisplay = null;
+            state.Palette = snapshot.Reply.Items.Count > 0 ? PaletteMode.Open : PaletteMode.Closed;
         }
     }
 

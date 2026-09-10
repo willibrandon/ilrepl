@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using Hex1b.Automation;
 using Hex1b.Input;
 using IlRepl.Protocol;
@@ -42,7 +43,7 @@ public sealed class IlReplAppCompletionTests
         await auto.TypeAsync("string>", ct: ct);
         await auto.WaitUntilAsync(_ => prompt.Text == "call Generic::Constrained<string>"
             && PromptWidget.Candidates(prompt, engine.Catalog).Count == 0, description: "the invalid argument has no signature");
-        await adapter.SendAsync(System.Text.Encoding.UTF8.GetBytes(new string('\x7f', "string>".Length)));
+        await adapter.SendAsync(Encoding.UTF8.GetBytes(new string('\x7f', "string>".Length)));
 
         await auto.WaitUntilAsync(_ => prompt.Text == "call Generic::Constrained<", description: "all seven characters were deleted");
         await auto.TypeAsync("int32>", ct: ct);
@@ -190,6 +191,59 @@ public sealed class IlReplAppCompletionTests
     }
 
     /// <summary>
+    /// Empty replacement pages preserve the palette in every rendered frame while disabling the retained rows.
+    /// </summary>
+    [TestMethod]
+    public async Task Operand_EmptyReplacementPages_KeepPaletteVisible()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new CompletionEngine();
+        PromptState prompt = null!;
+        var recorder = new FrameRecorder();
+        await using var terminal = AppTest.Build(engine, new Transcript(),
+            configure: builder => builder.AddPresentationFilter(recorder), onPrompt: value => prompt = value);
+        recorder.Terminal = terminal;
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        await auto.WaitUntilTextAsync("il[1]>");
+        const string prefix = "call Console::W";
+        await auto.TypeAsync(prefix, ct: ct);
+        await auto.WaitUntilAsync(_ => engine.Calls.LastOrDefault()?.Request.Lines[0] == prefix,
+            description: "the first operand request arrives");
+        var item = new CompletionItem("WriteLine", "[] → void", "Console", false)
+        {
+            Kind = CompletionKind.Members, Insert = "Console::WriteLine()",
+        };
+        var reply = new CompletionReply(CompletionKind.Members, 5, 10, [item], null, 1, false,
+            engine.Status.Revision, "initial", 1, []);
+        engine.Calls[^1].Answer.SetResult(reply);
+        await auto.WaitUntilTextAsync("members");
+        var firstFrame = recorder.Count;
+        await auto.TypeAsync("r", ct: ct);
+        await auto.WaitUntilAsync(_ => engine.Calls[^1].Request.Lines[0] == prefix + "r",
+            description: "the replacement request arrives");
+        reply = reply with { ReplaceLength = 11, QueryId = "replacement" };
+        for (var page = 2; page <= 3; page++)
+        {
+            var cursor = "page-" + page;
+            engine.Calls[^1].Answer.SetResult(reply with { Items = [], Cursor = cursor, TotalIsProvisional = true });
+            await auto.WaitUntilAsync(_ => engine.Calls[^1].Request.Cursor == cursor,
+                description: "the empty page is followed");
+            await auto.WaitUntilTextAsync("updating members");
+            Assert.IsEmpty(PromptWidget.Candidates(prompt, engine.Catalog));
+            Assert.IsNull(CompletionEdit.For(prompt, item));
+        }
+
+        engine.Calls[^1].Answer.SetResult(reply);
+        await auto.WaitUntilAsync(_ => PromptWidget.Candidates(prompt, engine.Catalog).Count == 1,
+            description: "the replacement row becomes current");
+        Assert.IsTrue(recorder.Since(firstFrame).All(frame => frame.Contains("members")));
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+        await IlReplApp.SettleAsync(prompt);
+    }
+
+    /// <summary>
     /// A typed operand reaches the real host and returns as visible, current rows within the input budget.
     /// </summary>
     [TestMethod]
@@ -231,8 +285,11 @@ public sealed class IlReplAppCompletionTests
                 && snapshot.GetText().Contains("members", StringComparison.Ordinal),
                 description: "the edited operand's current rows are painted");
             times.Add(watch.Elapsed.TotalMilliseconds);
-            Assert.IsTrue(recorder.Since(firstFrame).All(frame => frame.Lines.Any(line => line.Contains("members",
-                StringComparison.Ordinal))), "An operand edit must not collapse and reopen the palette between replies.");
+            var missing = recorder.Since(firstFrame).Where(frame => !frame.Lines.Any(line => line.Contains("members",
+                StringComparison.Ordinal))).ToArray();
+            Assert.IsEmpty(missing, $"An operand edit must not collapse and reopen the palette between replies (edit {index}, "
+                + $"assembly {prompt.Completions?.Reply.AssemblyVersion}/{engine.AssemblyVersion}).\n"
+                + string.Join("\n---\n", missing.Select(frame => string.Join("\n", frame.Lines))));
         }
 
         times.Sort();

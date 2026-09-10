@@ -16,7 +16,7 @@ public sealed partial record PromptWidget
     {
         var candidates = Candidates(state, catalog);
         return candidates.Count != 0 ? candidates
-            : state.Palette == PaletteMode.Requested && !state.Busy && state.Requester is { IsPending: true }
+            : state.Palette == PaletteMode.Requested && !state.Busy && (state.Requester is { IsPending: true } || state.MoreCompletions)
                 && state.PendingDisplay is { } display ? display.Visible() : [];
     }
 
@@ -48,7 +48,7 @@ public sealed partial record PromptWidget
         var version = state.Editor.Document.Version;
         var caret = state.Editor.Cursor.Position;
         var snapshot = state.Completions;
-        var updating = snapshot is null && state.PendingDisplay is not null;
+        var updating = state.PendingDisplay is not null;
         var lines = new List<Hex1bWidget>();
         foreach (var (item, offset) in candidates.Skip(first).Take(rows).Select((item, index) => (item, index)))
         {
@@ -117,7 +117,7 @@ public sealed partial record PromptWidget
 
     private static string PaletteTitle(IReadOnlyList<CompletionItem> candidates, PromptState state, int rows)
     {
-        var reply = candidates[0].Kind == CompletionKind.None ? null : (state.Completions ?? state.PendingDisplay)?.Reply;
+        var reply = candidates[0].Kind == CompletionKind.None ? null : (state.PendingDisplay ?? state.Completions)?.Reply;
         var kind = reply?.Kind switch
         {
             CompletionKind.Types => "types",
@@ -134,7 +134,7 @@ public sealed partial record PromptWidget
         };
         var total = reply?.Total ?? candidates.Count;
         var provisional = reply?.TotalIsProvisional == true ? "~" : "";
-        return state.Completions is null && state.PendingDisplay is not null ? "updating " + kind
+        return state.PendingDisplay is not null ? "updating " + kind
             : total > rows || reply is not null ? $"{kind} {state.SelectedIndex + 1}/{provisional}{total}" : kind;
     }
 }
