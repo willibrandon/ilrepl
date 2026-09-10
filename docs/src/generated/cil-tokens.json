@@ -361,7 +361,7 @@
       ]
     },
     "0c07c573867c62ac300c8ca994b1844773044fcceba81ee6aae70be6e066c270": {
-      "where": "usage/member-references.md:44",
+      "where": "usage/member-references.md:49",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -752,7 +752,7 @@
       ]
     },
     "16bad22936561ecd748ff86c8f8367b8162496217f57d333183971e85ff17a0d": {
-      "where": "usage/member-references.md:64",
+      "where": "usage/member-references.md:72",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -894,7 +894,7 @@
       ]
     },
     "187c607d102b8e274cd536303285e7088a358f990a3b87ea6a1970c9b76ca6b3": {
-      "where": "usage/editing.md:210",
+      "where": "usage/editing.md:212",
       "language": "ilrepl",
       "editor": true,
       "lines": [
@@ -1013,7 +1013,7 @@
       ]
     },
     "1be175a52da520e0bfb06c7f92a40e7af461bd89f4c4db9ade2e4c0f2644fe0c": {
-      "where": "usage/editing.md:192",
+      "where": "usage/editing.md:194",
       "language": "ilrepl",
       "editor": true,
       "lines": [
@@ -3394,7 +3394,7 @@
       ]
     },
     "456d6cc40b2e79e2456a7ccc77218074744d26ed187a2d743c2ad3e2996ee5a9": {
-      "where": "usage/member-references.md:34",
+      "where": "usage/member-references.md:39",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -3461,7 +3461,7 @@
       ]
     },
     "56ac2198a67fd9659326751c52facc1a9c311441860358183734f69584fa768a": {
-      "where": "usage/member-references.md:102",
+      "where": "usage/member-references.md:123",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -3817,7 +3817,7 @@
       ]
     },
     "5e43805226b459129c10861805264fe6904bd03fcd52801b8f5f97f4ec12fa36": {
-      "where": "usage/member-references.md:89",
+      "where": "usage/member-references.md:110",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -4464,7 +4464,7 @@
       ]
     },
     "772fcaf9aab43018416e06e5be914171b990a5eb27c9ea7baf809cceabfea505": {
-      "where": "usage/member-references.md:74",
+      "where": "usage/member-references.md:82",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -5067,7 +5067,7 @@
       ]
     },
     "7ff7fa4040e18b4b04d05969f8bd3387063f5708d022675eb8f5d032e4e28e3f": {
-      "where": "usage/editing.md:229",
+      "where": "usage/editing.md:231",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -7949,7 +7949,7 @@
       ]
     },
     "96e9166ade779a1e27f70f78747a314da2e4f804beb2c828e027aefdeb36fd34": {
-      "where": "usage/member-references.md:113",
+      "where": "usage/member-references.md:134",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -8397,8 +8397,8 @@
             "Number"
           ],
           [
-            47,
-            8,
+            19,
+            36,
             "Dim"
           ]
         ],
@@ -8476,8 +8476,8 @@
             "Opcode"
           ],
           [
-            47,
-            3,
+            10,
+            40,
             "Dim"
           ]
         ],
@@ -8729,7 +8729,7 @@
       ]
     },
     "a19bfbbfa847dc61a0d12ad05d8bccc755adf3d1a1f2902e1b3ea41ef35229d4": {
-      "where": "usage/member-references.md:26",
+      "where": "usage/member-references.md:31",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -11490,7 +11490,7 @@
       ]
     },
     "d15644566284ab5eacf8404713f6468272a428ac08c312a634e2d77da3f780a8": {
-      "where": "usage/member-references.md:56",
+      "where": "usage/member-references.md:64",
       "language": "cil",
       "editor": true,
       "lines": [
