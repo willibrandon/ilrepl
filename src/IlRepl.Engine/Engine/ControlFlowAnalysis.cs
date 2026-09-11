@@ -305,7 +305,12 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return $"{op.Name} needs an instance method";
         }
 
-        if (view.MethodIsStatic == true && op == OpCodes.Newobj)
+        if (view.MethodIsConstructor == true && op == OpCodes.Callvirt)
+        {
+            return "callvirt cannot call a constructor; use call";
+        }
+
+        if (op == OpCodes.Newobj && (view.MethodIsStatic == true || view.MethodIsConstructor == false))
         {
             return "newobj needs an instance constructor";
         }

@@ -244,6 +244,52 @@ public sealed class IlReplAppCompletionTests
     }
 
     /// <summary>
+    /// An assembly refresh keeps old rows visible but disabled until their replacements arrive.
+    /// </summary>
+    [TestMethod]
+    public async Task Operand_AssemblyRefresh_KeepsPaletteVisible()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new CompletionEngine();
+        PromptState prompt = null!;
+        var recorder = new FrameRecorder();
+        await using var terminal = AppTest.Build(engine, new Transcript(),
+            configure: builder => builder.AddPresentationFilter(recorder), onPrompt: value => prompt = value);
+        recorder.Terminal = terminal;
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        await auto.WaitUntilTextAsync("il[1]>");
+        const string prefix = "call Console::W";
+        await auto.TypeAsync(prefix, ct: ct);
+        await auto.WaitUntilAsync(_ => engine.Calls.LastOrDefault()?.Request.Lines[0] == prefix,
+            description: "the first operand request arrives");
+        var item = new CompletionItem("WriteLine", "[] → void", "Console", false)
+        {
+            Kind = CompletionKind.Members, Insert = "Console::WriteLine()",
+        };
+        var reply = new CompletionReply(CompletionKind.Members, 5, 10, [item], null, 1, false,
+            engine.Status.Revision, "initial", 1, []) { AssemblyVersion = engine.AssemblyVersion };
+        engine.Calls[^1].Answer.SetResult(reply);
+        await auto.WaitUntilTextAsync("members");
+        var firstFrame = recorder.Count;
+        var firstCall = engine.Calls.Count;
+        engine.ChangeAssemblies();
+        await auto.WaitUntilAsync(_ => engine.Calls.Count > firstCall,
+            description: "the changed assembly catalog starts a replacement request");
+        await auto.WaitUntilTextAsync("updating members");
+        Assert.IsEmpty(PromptWidget.Candidates(prompt, engine.Catalog));
+        Assert.IsNull(CompletionEdit.For(prompt, item));
+        reply = reply with { QueryId = "replacement", AssemblyVersion = engine.AssemblyVersion };
+        engine.Calls[^1].Answer.SetResult(reply);
+        await auto.WaitUntilAsync(_ => PromptWidget.Candidates(prompt, engine.Catalog).Count == 1,
+            description: "the replacement row becomes current");
+        Assert.IsTrue(recorder.Since(firstFrame).All(frame => frame.Contains("members")));
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+        await IlReplApp.SettleAsync(prompt);
+    }
+
+    /// <summary>
     /// A typed operand reaches the real host and returns as visible, current rows within the input budget.
     /// </summary>
     [TestMethod]

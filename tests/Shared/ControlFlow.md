@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 157 method examples and the paired constructor example
+not justify refusing a correct body. The 159 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -20,7 +20,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Worklist convergence and backward edges | III.1.7.5, III.1.8.1.1 | Loop | BackwardStack, UnreachableForwardBackwardStack |
 | Switch and unreachable instructions | III.3.66, III.1.8.1.1 | Switch, DeadCode | Underflow on a reachable path |
 | Return shape and parameter assignment | III.3.57, I.8.7.3 | Diamond, NativeAddition | WrongReturn, WrongCall |
-| Virtual calls, constructors, and function pointers | III.3.19, III.4.18, III.4.21 | ConstrainedReceiver, ConstructorFunctionPointer, NonVirtualFunctionPointer, VirtualFunctionPointer | WrongStaticConstructorAllocation, WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer |
+| Virtual calls, constructors, and function pointers | III.3.19, III.4.18, III.4.21 | ConstrainedReceiver, ConstructorFunctionPointer, NonVirtualFunctionPointer, VirtualFunctionPointer | WrongMethodAllocation, WrongStaticConstructorAllocation, WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer, WrongVirtualConstructorCall |
 | Instance receiver representation | I.12.4.1.4, II.13.3 | ValueTypeReceiver, NativeValueTypeReceiver, PointerValueTypeReceiver | WrongManagedReferenceReceiver, WrongPointerValueTypeReceiver, WrongUnboxedValueTypeReceiver |
 | Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
 | Managed-pointer verification types | I.8.7, III.1.8.1.2.3 | BooleanPointerCall, BooleanPointerJoin, CharacterPointerJoin, EnumPointerJoin, ReducedPointerJoin | ByrefJoin |
@@ -152,6 +152,10 @@ instance type, ending verification with `NullReferenceException`. `WrongStaticVi
 pins that exact unsupported failure while both analyzers reject the source directly.
 The same importer failure occurs when raw metadata gives `newobj` a static `.cctor`; the source
 binder and decoded-body analyzer both reject `WrongStaticConstructorAllocation`.
+
+ECMA III.4.21 requires `newobj` to name an instance constructor, and III.4.1 forbids `callvirt`
+from invoking an instance initializer. `WrongMethodAllocation` and `WrongVirtualConstructorCall`
+keep both operand rules in the shared desktop and browser corpus.
 
 The library reports only `Unverifiable` when `cpblk` or `initblk` receives an object reference
 where the instruction requires an address. ECMA III.3.30 and III.3.36 make those operand shapes
