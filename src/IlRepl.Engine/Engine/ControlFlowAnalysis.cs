@@ -304,6 +304,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return $"{op.Name} needs an instance method";
         }
 
+        if (view.MethodIsStatic == true && op == OpCodes.Newobj)
+        {
+            return "newobj needs an instance constructor";
+        }
+
         var pops = StackTransfer<T>.PopCount(view);
         if (pops > count)
         {
@@ -336,8 +341,20 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return _types.CanAssign(type, owner);
         }
 
-        bool FieldReceiver(T? type, T? owner) => type is not null && owner is not null && _types.Algebra.IsPointer(type)
-            ? _types.CanAssign(_types.Algebra.ElementOf(type), owner) : Receiver(type, owner);
+        bool FieldReceiver(T? type, T? owner)
+        {
+            if (type is not null && owner is not null && _types.Algebra.IsPointer(type))
+            {
+                return _types.CanAssign(_types.Algebra.ElementOf(type), owner);
+            }
+
+            if (type is not null && _types.Category(type) == StackCategory.NativeInt)
+            {
+                return true;
+            }
+
+            return Receiver(type, owner);
+        }
 
         if (op.Name is "add" or "add.ovf" or "add.ovf.un" or "sub" or "sub.ovf" or "sub.ovf.un"
             or "mul" or "mul.ovf" or "mul.ovf.un" or "div" or "div.un" or "rem" or "rem.un"
@@ -631,7 +648,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     private bool UsesNativeAddress(StackOperandView<T> view, FlowValue<T>[] values)
     {
         var name = view.Op.Name;
-        if (name is null || name is not ("ldobj" or "stobj" or "initobj" or "cpobj")
+        if (name is null || name is not ("ldobj" or "stobj" or "initobj" or "cpobj" or "ldfld" or "ldflda" or "stfld")
             && !name.StartsWith("ldind", StringComparison.Ordinal)
             && !name.StartsWith("stind", StringComparison.Ordinal))
         {

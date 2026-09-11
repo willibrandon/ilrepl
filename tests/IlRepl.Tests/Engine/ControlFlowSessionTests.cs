@@ -213,6 +213,20 @@ public sealed class ControlFlowSessionTests
     }
 
     /// <summary>
+    /// A native-integer field receiver is accepted and ldflda retains an unmanaged address on the stack.
+    /// </summary>
+    [TestMethod]
+    public void FieldReceiver_NativeIntegerRetainsNativeAddress()
+    {
+        var session = new Session();
+        Add(session, ".method int32 AddressNative(int32 value) {", "ldarga.s value", "conv.u",
+            "ldflda !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1");
+        Assert.AreEqual("[native int]", session.State.StackText);
+        Add(session, "ldind.i4", "ret", "}", "ldc.i4.s 42", "call int32 AddressNative(int32)");
+        Assert.AreEqual(42, session.Run().Value);
+    }
+
+    /// <summary>
     /// A jmp cannot transfer control from any protected region.
     /// </summary>
     [TestMethod]

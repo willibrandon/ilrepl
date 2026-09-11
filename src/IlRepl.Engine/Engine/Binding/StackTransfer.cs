@@ -121,8 +121,8 @@ public sealed class StackTransfer<T> where T : class
             case "ldsflda":
                 return [_types.MakeByRef(view.FieldType!)];
             case "ldflda":
-                return [popped.Count > 0 && popped[0] is { } receiver && _types.IsPointer(receiver)
-                    ? _types.MakePointer(view.FieldType!) : _types.MakeByRef(view.FieldType!)];
+                return [popped.Count > 0 && popped[0] is { } receiver
+                    ? FieldAddress(receiver, view.FieldType!) : _types.MakeByRef(view.FieldType!)];
             case "ldloc":
             case "ldloc.s":
             case "ldloc.0":
@@ -233,6 +233,19 @@ public sealed class StackTransfer<T> where T : class
 
         return _types.Boxed(_types.NullableUnderlying(operand) ?? operand);
     }
+
+    private T FieldAddress(T receiver, T fieldType)
+    {
+        if (_types.IsPointer(receiver))
+        {
+            return _types.MakePointer(fieldType);
+        }
+
+        return IsNativeInteger(receiver) ? _types.Primitive("native int") : _types.MakeByRef(fieldType);
+    }
+
+    private bool IsNativeInteger(T type) => _types.Same(type, _types.Primitive("native int"))
+        || _types.Same(type, _types.Primitive("native uint"));
 
     private T? NumericSuffix(string suffix) => suffix switch
     {

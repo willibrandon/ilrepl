@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 139 method examples and the paired constructor example
+not justify refusing a correct body. The 143 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -20,10 +20,10 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Worklist convergence and backward edges | III.1.7.5, III.1.8.1.1 | Loop | BackwardStack, UnreachableForwardBackwardStack |
 | Switch and unreachable instructions | III.3.66, III.1.8.1.1 | Switch, DeadCode | Underflow on a reachable path |
 | Return shape and parameter assignment | III.3.57, I.8.7.3 | Diamond, NativeAddition | WrongReturn, WrongCall |
-| Virtual calls and function pointers | III.3.19, III.4.18 | ConstrainedReceiver, VirtualFunctionPointer | WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer |
+| Virtual calls, constructors, and function pointers | III.3.19, III.4.18, III.4.21 | ConstrainedReceiver, VirtualFunctionPointer | WrongStaticConstructorAllocation, WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer |
 | Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
 | Reduced pointer elements | I.8.7, III.1.8.1.2.3 | ReducedPointerJoin, EnumPointerJoin | ByrefJoin |
-| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.13, III.4.29 | ManagedPointer, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore, GenericIndirectReference | WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore, WrongGenericIndirectLoad, WrongGenericIndirectStore |
+| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.10–III.4.11, III.4.13, III.4.29 | ManagedPointer, NativeFieldAddress, NativeFieldLoad, NativeFieldStore, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore, GenericIndirectReference | WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore, WrongGenericIndirectLoad, WrongGenericIndirectStore |
 | Field storage form | III.4.10–III.4.12, III.4.24–III.4.31 | PointerFields, StaticField, StaticFieldToken | WrongStaticFieldOpcode, WrongInstanceFieldOpcode |
 | Readonly provenance | III.2.3, III.3.62 | ReadOnlyLoad, ReadOnlyFieldWrite | WrongPrefix |
 | Correct operations outside verification | III.1.8, III.3.47 | StackAllocation, ReadOnlyWrite, PointerDifference | WrongArithmetic, WrongAllocationHandler |
@@ -128,6 +128,8 @@ ECMA III.1.7.5, so it accepts a later backward branch carrying a stack into that
 The library records `CallVirtOnStatic` for a static target and then dereferences its absent
 instance type, ending verification with `NullReferenceException`. `WrongStaticVirtualCall`
 pins that exact unsupported failure while both analyzers reject the source directly.
+The same importer failure occurs when raw metadata gives `newobj` a static `.cctor`; the source
+binder and decoded-body analyzer both reject `WrongStaticConstructorAllocation`.
 
 The library reports only `Unverifiable` when `cpblk` or `initblk` receives an object reference
 where the instruction requires an address. ECMA III.3.30 and III.3.36 make those operand shapes
@@ -144,7 +146,7 @@ accepted and rejected operand shapes, which CoreCLR and browser Mono exercise in
 The library reports `ExpectedNumericType` when `conv.u` turns a managed address into the unmanaged
 pointer used by the field and memory fixtures. ECMA III.3.27 permits that correct but unverifiable
 conversion, and the memory instructions accept a native integer address. CoreCLR and browser Mono
-execute each indirect and object load, store, initialization, and copy reproduction.
+execute each field, indirect, and object load, store, address, initialization, and copy reproduction.
 
 For a native integer address made from an integer, the library instead reports `StackByRef`; it also
 reports `StackUnexpected` for `initobj`. ECMA III.3.42, III.3.62, III.4.4–III.4.5, III.4.13, and

@@ -56,15 +56,18 @@ public sealed class ControlFlowCorpusTests
 
         Assert.AreEqual(example.Accepted, refusal is null, refusal?.Message);
         var implementation = example.Implementation.Length == 0 ? "" : " " + example.Implementation;
+        var members = example.Members.Length == 0 ? "" : example.Members.Replace("\n", "\n    ", StringComparison.Ordinal) + "\n    ";
+        var body = string.Join('\n', example.Body).Replace("} handler {", "} {", StringComparison.Ordinal)
+            .Replace("FlowGeneric::", "Fixture::", StringComparison.Ordinal);
         var source = $$"""
             .assembly extern System.Runtime { }
             .assembly extern System.Private.CoreLib { }
             .assembly FlowCorpus { }
             .module FlowCorpus.dll
             .class public Fixture extends [System.Runtime]System.Object {
-                .method public static int32 {{name}}{{example.GenericHeader}}(int32 n) cil managed{{implementation}} {
+                {{members}}.method public static int32 {{name}}{{example.GenericHeader}}(int32 n) cil managed{{implementation}} {
                     .maxstack 64
-                    {{string.Join('\n', example.Body).Replace("} handler {", "} {", StringComparison.Ordinal)}}
+                    {{body}}
                 }
             }
             """;
@@ -177,17 +180,21 @@ public sealed class ControlFlowCorpusTests
 
     private static byte[] AssembleOriginal(string name, string source)
     {
-        if (name != "WrongStaticVirtualCall")
+        if (name is not ("WrongStaticVirtualCall" or "WrongStaticConstructorAllocation"))
         {
             return IlasmLocator.Assemble(source);
         }
 
-        var validSource = source.Replace("callvirt int32 WrongStaticVirtualCall(int32)",
-            "call int32 Fixture::WrongStaticVirtualCall(int32)", StringComparison.Ordinal);
+        var constructor = name == "WrongStaticConstructorAllocation";
+        var validSource = constructor
+            ? source.Replace("newobj void Fixture::.cctor()", "call void Fixture::.cctor()", StringComparison.Ordinal)
+            : source.Replace("callvirt int32 WrongStaticVirtualCall(int32)",
+                "call int32 Fixture::WrongStaticVirtualCall(int32)", StringComparison.Ordinal);
         using var input = new MemoryStream(IlasmLocator.Assemble(validSource), writable: false);
         using var module = ModuleDefinition.ReadModule(input);
         var method = module.Types.Single(type => type.Name == "Fixture").Methods.Single(candidate => candidate.Name == name);
-        method.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Call).OpCode = OpCodes.Callvirt;
+        method.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Call).OpCode = constructor
+            ? OpCodes.Newobj : OpCodes.Callvirt;
         using var output = new MemoryStream();
         module.Write(output);
         return output.ToArray();

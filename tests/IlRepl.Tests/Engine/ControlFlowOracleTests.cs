@@ -127,6 +127,33 @@ public sealed class ControlFlowOracleTests
     }
 
     /// <summary>
+    /// A decoded newobj targeting a static constructor is rejected before malformed metadata reaches emission.
+    /// </summary>
+    [TestMethod]
+    public void StaticConstructor_NewObjectIsRejected()
+    {
+        var session = new Session();
+        var (_, _, fixture) = CecilFixture.Build((module, type) =>
+        {
+            var initializer = new MethodDefinition(".cctor", MethodAttributes.Private | MethodAttributes.Static
+                | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+            type.Methods.Add(initializer);
+            initializer.Body.GetILProcessor().Emit(OpCodes.Ret);
+            var method = new MethodDefinition("M", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Int32);
+            type.Methods.Add(method);
+            var il = method.Body.GetILProcessor();
+            il.Emit(OpCodes.Newobj, initializer);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldc_I4, 42);
+            il.Emit(OpCodes.Ret);
+        }, session.Resolver);
+        var listing = MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
+        var diagnostics = StackAnalysis.Diagnostics(listing);
+        Assert.Contains(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error
+            && diagnostic.Message.Contains("newobj needs an instance constructor", StringComparison.Ordinal), diagnostics);
+    }
+
+    /// <summary>
     /// Missing reference metadata cannot be mistaken for the expected rejection of a malformed stack.
     /// </summary>
     [TestMethod]

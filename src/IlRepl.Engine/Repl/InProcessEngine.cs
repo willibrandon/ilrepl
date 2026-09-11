@@ -59,61 +59,61 @@ public sealed class InProcessEngine : IReplEngine
         ArgumentOutOfRangeException.ThrowIfNegative(request.Line);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(request.Line, request.Lines.Count);
         request = request with { Lines = [.. request.Lines] };
+        Task<AnalysisReply> analysis;
         lock (_analysisLock)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            _analyses.Add(settled.Task);
-            return AnalyzeCoreAsync(request, settled, cancellationToken);
+            analysis = AnalyzeCoreAsync(request, cancellationToken);
+            _analyses.Add(analysis);
         }
+
+        _ = analysis.ContinueWith(RemoveAnalysis, CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return analysis;
     }
 
-    private async Task<AnalysisReply> AnalyzeCoreAsync(AnalysisRequest request, TaskCompletionSource settled,
-        CancellationToken cancellationToken)
+    private async Task<AnalysisReply> AnalyzeCoreAsync(AnalysisRequest request, CancellationToken cancellationToken)
     {
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
+        await Task.Yield();
+        await _gate.WaitAsync(cancellation.Token).ConfigureAwait(false);
+        EditingSeed seed;
+        long version;
         try
         {
-            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
-            await Task.Yield();
-            await _gate.WaitAsync(cancellation.Token).ConfigureAwait(false);
-            EditingSeed seed;
-            long version;
-            try
-            {
-                version = AssemblyVersion;
-                lock (_analysisLock)
-                {
-                    if (_analysisCache is { } cached && cached.Reply.Revision == _core.Status.Revision
-                        && cached.Reply.AssemblyVersion == version && cached.Lines.SequenceEqual(request.Lines))
-                    {
-                        return cached.At(request);
-                    }
-                }
-
-                seed = _core.Session.CaptureEditingSeed();
-            }
-            finally
-            {
-                _gate.Release();
-            }
-
-            using var editing = new EditingSession(seed);
-            var reply = await editing.AnalyzeAsync(request, cancellation.Token).ConfigureAwait(false);
-            reply = reply with { AssemblyVersion = version };
+            version = AssemblyVersion;
             lock (_analysisLock)
             {
-                _analysisCache = !_disposed && editing.AnalyzedDocument is { } document ? document with { Reply = reply } : null;
+                if (_analysisCache is { } cached && cached.Reply.Revision == _core.Status.Revision
+                    && cached.Reply.AssemblyVersion == version && cached.Lines.SequenceEqual(request.Lines))
+                {
+                    return cached.At(request);
+                }
             }
 
-            return reply;
+            seed = _core.Session.CaptureEditingSeed();
         }
         finally
         {
-            lock (_analysisLock)
-            {
-                _analyses.Remove(settled.Task);
-                settled.SetResult();
-            }
+            _gate.Release();
+        }
+
+        using var editing = new EditingSession(seed);
+        var reply = await editing.AnalyzeAsync(request, cancellation.Token).ConfigureAwait(false);
+        reply = reply with { AssemblyVersion = version };
+        lock (_analysisLock)
+        {
+            _analysisCache = !_disposed && editing.AnalyzedDocument is { } document ? document with { Reply = reply } : null;
+        }
+
+        return reply;
+    }
+
+    private void RemoveAnalysis(Task analysis)
+    {
+        lock (_analysisLock)
+        {
+            _analyses.Remove(analysis);
         }
     }
 
@@ -262,7 +262,13 @@ public sealed class InProcessEngine : IReplEngine
         }
         _core.Session.CompletionChanged -= CancelWarmup;
         await _shutdown.CancelAsync().ConfigureAwait(false);
-        await Task.WhenAll(analyses).ConfigureAwait(false);
+        try
+        {
+            await Task.WhenAll(analyses).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_shutdown.IsCancellationRequested)
+        {
+        }
         await _warmupCancellation.CancelAsync().ConfigureAwait(false);
         await _warmup.ConfigureAwait(false);
         await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
