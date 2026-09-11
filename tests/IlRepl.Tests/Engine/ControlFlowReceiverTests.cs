@@ -134,6 +134,42 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
+    /// Exposing argument zero by address invalidates this for every supported indirect write form.
+    /// </summary>
+    [TestMethod]
+    [DataRow("stind.ref")]
+    [DataRow("stobj")]
+    [DataRow("initobj")]
+    [DataRow("cpobj")]
+    [DataRow("initblk")]
+    [DataRow("cpblk")]
+    public async Task ArgumentAddress_InvalidatesReceiverProvenance(string write)
+    {
+        var lines = ControlFlowReceiverExamples.AddressSource(write);
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.Contains(diagnostic => diagnostic.Message.Contains("through this", StringComparison.Ordinal), preview.Diagnostics);
+
+        ReplException? refusal = null;
+        foreach (var line in lines)
+        {
+            try
+            {
+                session.AddLine(line);
+            }
+            catch (ReplException error)
+            {
+                refusal = error;
+                break;
+            }
+        }
+
+        Assert.Contains("through this", refusal!.Message);
+        Assert.IsNotNull(session.OpenMethod);
+    }
+
+    /// <summary>
     /// Decoded constructors use the same readonly receiver rule as live and symbolic source bodies.
     /// </summary>
     [TestMethod]
@@ -187,6 +223,39 @@ public sealed class ControlFlowReceiverTests
             il.Emit(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!));
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Starg, constructor.Body.ThisParameter);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stfld, field);
+            il.Emit(OpCodes.Ret);
+        }, session.Resolver);
+        var listing = MethodDisassembler.Disassemble(fixture.GetConstructors()[0], session);
+        var diagnostics = StackAnalysis.Diagnostics(listing);
+        Assert.Contains(diagnostic => diagnostic.Message.Contains("through this", StringComparison.Ordinal), diagnostics);
+        using var oracle = new IlVerificationOracle();
+        Assert.IsEmpty(oracle.Verify(image));
+    }
+
+    /// <summary>
+    /// Decoded writable addresses invalidate this even when ILVerification retains its receiver tag.
+    /// </summary>
+    [TestMethod]
+    public void Disassembly_TracksAnIndirectThisArgumentWrite()
+    {
+        var session = new Session();
+        var (_, image, fixture) = CecilFixture.Build((module, type) =>
+        {
+            var field = new FieldDefinition("Value", FieldAttributes.Public | FieldAttributes.InitOnly, module.TypeSystem.Int32);
+            type.Fields.Add(field);
+            var constructor = new MethodDefinition(".ctor",
+                MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+            constructor.Parameters.Add(new ParameterDefinition(type));
+            type.Methods.Add(constructor);
+            var il = constructor.Body.GetILProcessor();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!));
+            il.Emit(OpCodes.Ldarga, constructor.Body.ThisParameter);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stind_Ref);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Stfld, field);

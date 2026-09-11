@@ -275,7 +275,7 @@ public sealed partial class LiveSessionTests
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
-        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.ArgumentSource(false, true)));
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.AddressSource("stind.ref")));
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
         await ClearPromptAsync(page);
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.ArgumentSource(true, true)));

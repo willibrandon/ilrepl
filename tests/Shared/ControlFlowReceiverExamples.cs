@@ -76,4 +76,33 @@ public static class ControlFlowReceiverExamples
         "}",
         "}",
     ];
+
+    /// <summary>
+    /// Builds a constructor that writes through the address of argument zero before loading it again.
+    /// </summary>
+    public static string[] AddressSource(string write) =>
+    [
+        ".class public FlowAddressArgument {",
+        ".field public initonly int32 Value",
+        ".method public instance void .ctor(class FlowAddressArgument other) {",
+        "ldarg.0",
+        "call instance void object::.ctor()",
+        "ldarga.s 0",
+        .. (write switch
+        {
+            "stind.ref" => new[] { "ldarg.1", "stind.ref" },
+            "stobj" => ["ldarg.1", "stobj class FlowAddressArgument"],
+            "initobj" => ["initobj class FlowAddressArgument"],
+            "cpobj" => ["ldarga.s 1", "cpobj class FlowAddressArgument"],
+            "initblk" => ["ldc.i4.0", "ldc.i4.8", "initblk"],
+            "cpblk" => ["ldarga.s 1", "ldc.i4.8", "cpblk"],
+            _ => throw new ArgumentOutOfRangeException(nameof(write)),
+        }),
+        "ldarg.0",
+        "ldc.i4.s 42",
+        "stfld int32 FlowAddressArgument::Value",
+        "ret",
+        "}",
+        "}",
+    ];
 }

@@ -236,7 +236,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                             output.Clear();
                         }
 
-                        var thisArgumentIsOriginal = view.WritesThisArgument ? popped[^1].IsThis : state.ThisArgumentIsOriginal;
+                        var thisArgumentIsOriginal = view.WritesThisArgument ? popped[^1].IsThis
+                            : view.ReadsThisArgument && view.Op.Name is "ldarga" or "ldarga.s" ? false
+                            : state.ThisArgumentIsOriginal;
                         state = new FlowState<T>([.. output], state.HasUnknownPath,
                             ThisArgumentIsOriginal: thisArgumentIsOriginal);
                     }

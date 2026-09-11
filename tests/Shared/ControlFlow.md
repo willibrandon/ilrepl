@@ -113,9 +113,9 @@ with that rule while executing the same body through CoreCLR and browser Mono.
 The numeric fixtures separately assert ECMA correctness and the library result. These are pinned
 observations, not skipped assertions. Review them when changing the verifier package.
 
-The library tags every later `ldarg.0` as `IsThisPtr`, even after `starg.0` replaces the receiver, and
-its `initonly` store rule does not consult the recorded modification. It therefore reports no diagnostic.
-FlowArgument retains the original receiver through argument writes and joins so the REPL enforces II.16.1.2.
+The library tags every later `ldarg.0` as `IsThisPtr`, even after `starg.0` replaces the receiver or
+`ldarga.0` exposes its writable address. Its `initonly` store rule does not consult the recorded
+modification, so FlowArgument retains that provenance itself and enforces II.16.1.2.
 
 `ILImporter.Verify.cs` selects the larger `StackValueKind` in `ImportBinaryOperation` and permits a
 mixed pair whenever that kind is native integer. It consequently accepts int64/native-integer

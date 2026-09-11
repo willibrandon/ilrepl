@@ -125,7 +125,7 @@ public sealed record StackOperandView<T> where T : class
     public T? SlotType { get; init; }
 
     /// <summary>
-    /// True when the instruction loads the argument slot that originally held <c>this</c> or its address.
+    /// True when the instruction loads the argument slot that originally held <c>this</c> or exposes its writable address.
     /// </summary>
     public bool ReadsThisArgument { get; init; }
 
