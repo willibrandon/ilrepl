@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 163 method examples and the paired constructor example
+not justify refusing a correct body. The 171 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -24,7 +24,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Instance receiver representation | I.12.4.1.4, II.13.3 | ValueTypeReceiver, NativeValueTypeReceiver, PointerValueTypeReceiver | WrongManagedReferenceReceiver, WrongPointerValueTypeReceiver, WrongUnboxedValueTypeReceiver |
 | Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
 | Managed-pointer verification types | I.8.7, III.1.8.1.2.3 | BooleanPointerCall, BooleanPointerJoin, CharacterPointerJoin, EnumPointerJoin, ReducedPointerJoin | ByrefJoin |
-| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.10–III.4.11, III.4.13, III.4.29 | ManagedPointer, NativeFieldAddress, NativeFieldLoad, NativeFieldStore, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore, GenericIndirectReference | WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore, WrongGenericIndirectLoad, WrongGenericIndirectStore |
+| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.10–III.4.11, III.4.13, III.4.29 | ByteIndirectLoad, ByteIndirectStore, FloatIndirectLoad, FloatIndirectStore, ManagedPointer, NativeFieldAddress, NativeFieldLoad, NativeFieldStore, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore, GenericIndirectReference | WrongNarrowFloatStore, WrongNarrowIndirectStore, WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore, WrongGenericIndirectLoad, WrongGenericIndirectStore, WrongWideFloatLoad, WrongWideIndirectLoad |
 | Field storage form | III.4.10–III.4.12, III.4.24–III.4.31 | PointerFields, StaticField, StaticFieldToken | WrongStaticFieldOpcode, WrongInstanceFieldOpcode |
 | Readonly provenance | III.2.3, III.3.62 | ReadOnlyLoad, ReadOnlyFieldWrite | WrongPrefix |
 | Correct operations outside verification | III.1.8, III.3.47 | ManagedPointerOverflowAddition, NativeValueTypeReceiver, PointerDifference, ReadOnlyWrite, StackAllocation | WrongArithmetic, WrongAllocationHandler |
@@ -165,6 +165,10 @@ incorrect. The bad size and initialization-value cases also report `ExpectedInte
 The library checks that both `cpobj` operands are managed pointers but leaves their element-type
 assignment checks as a TODO. ECMA III.4.4 requires the source element to assign to the operand type
 and the operand type to assign to the destination element. The analyzer rejects both wrong directions.
+
+The library accepts `stind.i1` through an `int32&` and `stind.r4` through a `float64&`.
+ECMA III.3.62 still requires the opcode to match the pointer's storage type. The analyzer keeps
+that storage width separate from the intermediate value on the evaluation stack and rejects both.
 
 The library cannot inspect a fixture containing typed-reference instructions and reports
 `TypedReference not supported in .NET Core`. ECMA III.4.19 and III.4.22–III.4.23 define the

@@ -214,6 +214,11 @@ internal sealed class FlowTypeRules<T>(
         return Algebra.Same(actual, expected) || Assignable(actual, expected) || SameReducedType(actual, expected);
     }
 
+    /// <summary>
+    /// Applies the CLI's verification-type equivalence for managed storage locations.
+    /// </summary>
+    public bool SameVerificationLocation(T left, T right) => SameLocation(left, right);
+
     private bool SameReducedType(T left, T right)
     {
         bool Pair(string signed, string unsigned) => Algebra.Same(left, Algebra.Primitive(signed))

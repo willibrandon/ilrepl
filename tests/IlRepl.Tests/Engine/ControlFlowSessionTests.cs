@@ -183,6 +183,45 @@ public sealed class ControlFlowSessionTests
     }
 
     /// <summary>
+    /// An inline cell return cannot insert boxing between a tail call and its return.
+    /// </summary>
+    [TestMethod]
+    public void TailCall_InlineCellReturnCannotBox()
+    {
+        var session = new Session();
+        Add(session, "ldc.i4.0", "brtrue PENDING", "ldc.i4.s -42", "tail.",
+            "call int32 [System.Runtime]System.Math::Abs(int32)");
+        var error = Assert.ThrowsExactly<ReplException>(() => session.AddLine("ret"));
+        Assert.Contains("must return object directly", error.Message);
+        Assert.AreEqual("[int32]", session.State.StackText);
+    }
+
+    /// <summary>
+    /// An inline cell return cannot synthesize null after a void tail call.
+    /// </summary>
+    [TestMethod]
+    public void TailCall_InlineCellReturnCannotAddNull()
+    {
+        var session = new Session();
+        Add(session, "ldc.i4.0", "brtrue PENDING", "tail.", "call void [System.Console]System.Console::WriteLine()");
+        var error = Assert.ThrowsExactly<ReplException>(() => session.AddLine("ret"));
+        Assert.Contains("must return object directly", error.Message);
+        Assert.AreEqual("[]", session.State.StackText);
+    }
+
+    /// <summary>
+    /// An inline cell return may directly return a tail call's reference result.
+    /// </summary>
+    [TestMethod]
+    public void TailCall_InlineCellReferenceReturnRuns()
+    {
+        var session = new Session();
+        Add(session, "ldc.i4.0", "brtrue PENDING", "ldstr \"forty\"", "ldstr \"two\"", "tail.",
+            "call string string::Concat(string, string)", "ret", "PENDING: ldstr \"fallback\"");
+        Assert.AreEqual("fortytwo", session.Run().Value);
+    }
+
+    /// <summary>
     /// A typed unmanaged pointer can receive fields only from its own element type.
     /// </summary>
     [TestMethod]

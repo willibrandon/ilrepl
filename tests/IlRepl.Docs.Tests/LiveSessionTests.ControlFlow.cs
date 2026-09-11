@@ -165,7 +165,7 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
-    /// A browser cell returns a reference tail call directly and refuses one that would need boxing.
+    /// A browser cell returns a reference tail call directly and refuses implicit or inline boxing.
     /// </summary>
     /// <param name="browser">The browser engine.</param>
     [TestMethod]
@@ -184,6 +184,15 @@ public sealed partial class LiveSessionTests
         await Assertions.Expect(terminal).ToContainTextAsync("4 instructions", options);
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(terminal).ToContainTextAsync("= \"fortytwo\" : string", options);
+        await TypeLineAsync(page, "ldc.i4.0");
+        await TypeLineAsync(page, "brtrue PENDING");
+        await TypeLineAsync(page, "ldc.i4.s -42");
+        await TypeLineAsync(page, "tail.");
+        await TypeLineAsync(page, "call int32 [System.Runtime]System.Math::Abs(int32)");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(terminal).ToContainTextAsync(
+            "error: a tail call in the cell must return object directly", options);
+        await TypeLineAsync(page, ".clear");
         await PasteAsync(page, "ldc.i4.s -42\ntail.\ncall int32 [System.Runtime]System.Math::Abs(int32)");
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(terminal).ToContainTextAsync("3 instructions", options);

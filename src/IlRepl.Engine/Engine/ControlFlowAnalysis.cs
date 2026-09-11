@@ -248,6 +248,13 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     return $"the stack must hold 0 or 1 value at ret, but has {count}: {_types.Render(new FlowState<T>(values))}";
                 }
 
+                if (FollowsTailCall(graph, index) && (count == 0 || top is { } returned
+                    && (_types.Algebra.IsValueType(returned) || _types.Algebra.IsGenericParameter(returned))
+                    && _types.BoxedType(returned) is null))
+                {
+                    return "a tail call in the cell must return object directly; boxing or a synthesized null before ret is not allowed";
+                }
+
                 return top is not null && (_types.Algebra.IsByRef(top) || _types.Algebra.IsPointer(top))
                     ? $"cannot return a {_types.Name(top)} from the cell; load through it first (ldind/ldobj)" : null;
             }
@@ -577,7 +584,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
 
             var address = values[count - pops].Type;
-            var storage = StorageType(view);
+            var storage = AccessType(view);
             if (memory == "cpobj" && top is { } source && _types.Algebra.IsByRef(source) && storage is not null
                 && _types.Algebra.ElementOf(source) is { } sourceType && !_types.CanAssign(sourceType, storage))
             {
@@ -588,6 +595,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 && _types.Algebra.ElementOf(address) is { } element
                 && !(memory is "ldind.ref" or "stind.ref"
                     ? Reference(element)
+                    : memory.StartsWith("ldind", StringComparison.Ordinal) || memory.StartsWith("stind", StringComparison.Ordinal)
+                        ? _types.SameVerificationLocation(element, storage)
                     : memory.StartsWith("stind", StringComparison.Ordinal) || memory is "stobj" or "initobj" or "cpobj"
                         ? _types.CanAssign(storage, element) : _types.CanAssign(element, storage)))
             {
@@ -719,7 +728,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         return _types.Algebra.ElementOf(address) is { } element && _types.Algebra.IsGenericParameter(element);
     }
 
-    private T? StorageType(StackOperandView<T> view)
+    private T? AccessType(StackOperandView<T> view)
     {
         if (view.Type is { } type)
         {
@@ -728,14 +737,36 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         var keyword = view.Op.Name?.Split('.').Last() switch
         {
-            "i1" or "u1" or "i2" or "u2" or "i4" or "u4" => "int32",
+            "i1" => "int8",
+            "u1" => "uint8",
+            "i2" => "int16",
+            "u2" => "uint16",
+            "i4" => "int32",
+            "u4" => "uint32",
             "i8" => "int64",
             "i" => "native int",
-            "r4" or "r8" => "float64",
+            "r4" => "float32",
+            "r8" => "float64",
             "ref" => "object",
             _ => null,
         };
         return keyword is null ? null : _types.Algebra.Primitive(keyword);
+    }
+
+    private static bool FollowsTailCall(FlowGraph<T> graph, int index)
+    {
+        for (var previous = index - 1; previous >= 0; previous--)
+        {
+            if (graph.Nodes[previous].Instruction is not { } instruction)
+            {
+                continue;
+            }
+
+            return instruction.Op.Name is "call" or "callvirt" or "calli"
+                && graph.Prefixes(previous).Any(prefix => prefix.Op == OpCodes.Tailcall);
+        }
+
+        return false;
     }
 
     private T? ArrayInstructionType(StackOperandView<T> view)
