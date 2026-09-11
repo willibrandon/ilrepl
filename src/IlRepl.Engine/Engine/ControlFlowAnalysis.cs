@@ -658,12 +658,19 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
 
             if (actualElement is not null && instructionElement is not null && arrayOp != "ldlen"
-                && arrayOp is not ("ldelem.ref" or "stelem.ref")
-                && !(arrayOp.StartsWith("stelem", StringComparison.Ordinal)
-                    ? _types.ArrayElementCompatible(instructionElement, actualElement)
-                    : _types.ArrayElementCompatible(actualElement, instructionElement)))
+                && arrayOp is not ("ldelem.ref" or "stelem.ref"))
             {
-                return $"{arrayOp} cannot access {_types.Name(actualElement)} elements as {_types.Name(instructionElement)}";
+                var mutableAddress = arrayOp == "ldelema"
+                    && !graph.Prefixes(index).Any(prefix => prefix.Op == OpCodes.Readonly);
+                var compatibleElement = mutableAddress
+                    ? _types.SameVerificationLocation(actualElement, instructionElement)
+                    : arrayOp.StartsWith("stelem", StringComparison.Ordinal)
+                        ? _types.ArrayElementCompatible(instructionElement, actualElement)
+                        : _types.ArrayElementCompatible(actualElement, instructionElement);
+                if (!compatibleElement)
+                {
+                    return $"{arrayOp} cannot access {_types.Name(actualElement)} elements as {_types.Name(instructionElement)}";
+                }
             }
 
             var storedAs = arrayOp == "stelem.ref" ? actualElement : instructionElement;

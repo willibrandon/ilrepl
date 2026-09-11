@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 177 method examples and the paired constructor example
+not justify refusing a correct body. The 179 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -26,7 +26,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Managed-pointer verification types | I.8.7, III.1.8.1.2.3 | BooleanPointerCall, BooleanPointerJoin, CharacterPointerJoin, EnumPointerJoin, ReducedPointerJoin | ByrefJoin |
 | Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.10–III.4.11, III.4.13, III.4.29 | ByteIndirectLoad, ByteIndirectStore, FloatIndirectLoad, FloatIndirectStore, ManagedPointer, NativeFieldAddress, NativeFieldLoad, NativeFieldStore, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore, GenericIndirectReference | WrongNarrowFloatStore, WrongNarrowIndirectStore, WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore, WrongGenericIndirectLoad, WrongGenericIndirectStore, WrongWideFloatLoad, WrongWideIndirectLoad |
 | Field storage form | III.4.10–III.4.12, III.4.24–III.4.31 | PointerFields, StaticField, StaticFieldToken | WrongStaticFieldOpcode, WrongInstanceFieldOpcode |
-| Readonly provenance | III.2.3, III.3.62 | ReadOnlyLoad, ReadOnlyFieldWrite | WrongPrefix |
+| Readonly provenance | III.2.3, III.3.62 | CovariantReadOnlyArrayAddress, ReadOnlyLoad, ReadOnlyFieldWrite | WrongCovariantArrayAddress, WrongPrefix |
 | Correct operations outside verification | III.1.8, III.3.47 | ManagedPointerOverflowAddition, NativeValueTypeReceiver, PointerDifference, ReadOnlyWrite, StackAllocation | WrongArithmetic, WrongAllocationHandler |
 | Numeric operand categories | III.1.5 tables III.2–III.8, III.3.27 | ManagedPointerOverflowAddition, ManagedPointerOverflowDifference, ManagedPointerOverflowSubtraction, MixedFloats, NativeAddition, UnsignedIntegerToFloat, 288 raw pairs | BadOverflowFloat, BadNotFloat, BadShift, WrongUnsignedFloatConversion |
 | Comparisons | III.1.5 table III.4 | ObjectComparison, GenericReferenceComparison | BadComparison, WrongGenericComparison |
@@ -42,7 +42,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Readonly store receiver across paths | II.16.1.2 | FlowReceiver with this on both paths | FlowReceiver with another receiver |
 | Indirect calls | III.3.20 | IndirectCall, InstanceIndirectCall, ManagedPointerInstanceIndirectCall, NativePointerInstanceIndirectCall | WrongIndirectCall, WrongIndirectTarget, WrongInstanceIndirectReceiver |
 | Block memory operands | III.3.30, III.3.36 | CopyBlock, InitializeBlock | WrongCopyBlock, WrongInitializeBlock |
-| Array element, index and pointer operands | I.8.7.1, III.4.7–III.4.9, III.4.26–III.4.27 | ArrayElement, ArrayIndex, ArrayReferenceLoad, ArrayReferenceStore, BooleanArrayElement, CharacterArrayElement, GenericArrayReferenceLoad, GenericArrayReferenceStore, NullArrayReferenceStore, TypedArrayReferenceStore | WrongArrayElement, WrongArrayIndex, WrongArrayValue, WrongArrayReferenceStore, WrongGenericArrayReferenceLoad, WrongManagedPointerArray, WrongNullArrayReferenceStore, WrongTypedArrayReferenceStore, WrongValueArrayReferenceLoad, WrongValueArrayReferenceStore |
+| Array element, index and pointer operands | I.8.7.1, III.4.7–III.4.9, III.4.26–III.4.27 | ArrayElement, ArrayIndex, ArrayReferenceLoad, ArrayReferenceStore, BooleanArrayElement, CharacterArrayElement, CovariantReadOnlyArrayAddress, GenericArrayReferenceLoad, GenericArrayReferenceStore, NullArrayReferenceStore, TypedArrayReferenceStore | WrongArrayElement, WrongArrayIndex, WrongArrayValue, WrongArrayReferenceStore, WrongCovariantArrayAddress, WrongGenericArrayReferenceLoad, WrongManagedPointerArray, WrongNullArrayReferenceStore, WrongTypedArrayReferenceStore, WrongValueArrayReferenceLoad, WrongValueArrayReferenceStore |
 | Object copy operands | III.4.4 | CopyObject, CopyReferenceObject | WrongCopyObjectSource, WrongCopyObjectSourceType, WrongCopyObjectDestinationType |
 | Typed references | III.4.19, III.4.22–III.4.23 | TypedReference | WrongMakeTypedReference, WrongTypedReferenceType, WrongTypedReferenceValue |
 | Unboxing | III.4.32 | UnboxValue | WrongUnboxType |
@@ -134,6 +134,11 @@ meets the correctness rule and verifies without a diagnostic.
 The C# compiler uses byte and word element opcodes for `bool[]` and `char[]`. CoreCLR, Mono, and
 ILVerification accept those forms by comparing the array element's verification type. The array
 rules retain that distinction from the intermediate `int32` value placed on the evaluation stack.
+
+The `readonly.` prefix suppresses `ldelema`'s exact runtime element check and makes a covariant
+address safe by preventing writes through it. CoreCLR and Mono execute `string[]` addressed as
+`object&` with the prefix and reject the mutable form. ILVerification reports
+`StackUnexpectedArrayType` for both, so the tests preserve that known difference.
 
 The library reports `ImportCalli not implemented` for the indirect calls it reaches. The native
 pointer fixture stops earlier at `ExpectedNumericType` for `conv.u`. The tests assert those exact
