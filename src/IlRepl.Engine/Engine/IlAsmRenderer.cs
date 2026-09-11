@@ -470,7 +470,9 @@ public static class IlAsmRenderer
         var declaring = field.DeclaringType is null ? "?" : TypeNameFormatter.IlAsmDeclaring(field.DeclaringType);
         var definition = DefinitionOf(field);
         var type = SignatureType(RuntimeSymbolImporter.Import(definition).FieldType);
-        if (CecilMetadataSignatures.IsRequired(definition))
+        // A prototype builder has no readable metadata image. Its reflection signature is the declaration
+        // supplied by the session, including the element type needed for ordinary pointer fields.
+        if (CecilMetadataSignatures.IsRequired(definition) && !definition.Module.Assembly.IsDynamic)
         {
             var signature = IlSignatureRenderer.IlAsm(RuntimeMetadataSignatures.Read(definition));
             return $"{signature} {declaring}::{MemberName(field.Name)}";

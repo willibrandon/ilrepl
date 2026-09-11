@@ -186,8 +186,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 }
 
                 var tailCallPassesManagedPointer = TailCallPassesManagedPointer(graph, index, view, values);
-                var nativeIntegerAssignedToPointer = NativeIntegerAssignedToPointer(view, values, returnType);
-                if (tailCallPassesManagedPointer || nativeIntegerAssignedToPointer
+                var integerAssignedToPointer = IntegerAssignedToPointer(view, values, returnType);
+                if (tailCallPassesManagedPointer || integerAssignedToPointer
                     || view.DecodedPrefixName == "no."
                     || view.Op.Name is "localloc" or "cpblk" or "initblk" or "calli" or "jmp"
                     || view.Op == OpCodes.Mkrefany && values.LastOrDefault()?.Type is { } typedReference
@@ -860,9 +860,10 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             .Any(value => value.Type is { } type && _types.Algebra.IsByRef(type));
     }
 
-    private bool NativeIntegerAssignedToPointer(StackOperandView<T> view, FlowValue<T>[] values, T? returnType)
+    private bool IntegerAssignedToPointer(StackOperandView<T> view, FlowValue<T>[] values, T? returnType)
     {
-        bool Native(T? type) => type is not null && _types.Category(type) == StackCategory.NativeInt;
+        bool Integer(T? type) => type is not null
+            && _types.Category(type) is StackCategory.Int32 or StackCategory.NativeInt;
         bool Pointer(T? type) => type is not null && _types.Algebra.IsPointer(type);
         if (values.Length == 0)
         {
@@ -872,23 +873,36 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         var name = view.Op.Name;
         if (view.Op == OpCodes.Ret)
         {
-            return Pointer(returnType) && Native(values[^1].Type);
+            return Pointer(returnType) && Integer(values[^1].Type);
         }
 
         if (name is not null && (name.StartsWith("stloc", StringComparison.Ordinal)
             || name.StartsWith("starg", StringComparison.Ordinal)))
         {
-            return Pointer(view.SlotType) && Native(values[^1].Type);
+            return Pointer(view.SlotType) && Integer(values[^1].Type);
         }
 
         if (name is "stfld" or "stsfld")
         {
-            return Pointer(view.FieldType) && Native(values[^1].Type);
+            return Pointer(view.FieldType) && Integer(values[^1].Type);
+        }
+
+        if (name?.StartsWith("stelem", StringComparison.Ordinal) == true)
+        {
+            var element = view.Type;
+            var pops = StackTransfer<T>.PopCount(view);
+            if (element is null && values.Length >= pops && values[values.Length - pops].Type is { } array
+                && _types.Algebra.IsArray(array))
+            {
+                element = _types.Algebra.ElementOf(array);
+            }
+
+            return Pointer(element) && Integer(values[^1].Type);
         }
 
         if (view.Op == OpCodes.Stobj)
         {
-            return Pointer(view.Type) && Native(values[^1].Type);
+            return Pointer(view.Type) && Integer(values[^1].Type);
         }
 
         if (name is not ("call" or "callvirt" or "calli" or "newobj"))
@@ -904,7 +918,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         var first = values.Length - view.ArgumentPops + (view.IsInstance || view.HasImplicitThis ? 1 : 0);
         for (var parameter = 0; parameter < view.ParameterTypes.Count; parameter++)
         {
-            if (Pointer(view.ParameterTypes[parameter]) && Native(values[first + parameter].Type))
+            if (Pointer(view.ParameterTypes[parameter]) && Integer(values[first + parameter].Type))
             {
                 return true;
             }

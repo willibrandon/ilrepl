@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 204 method examples and the paired constructor example
+not justify refusing a correct body. The 213 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -24,7 +24,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Instance receiver representation | I.12.4.1.4, II.13.3 | ValueTypeReceiver, NativeValueTypeReceiver, PointerValueTypeReceiver | WrongManagedReferenceReceiver, WrongPointerValueTypeReceiver, WrongUnboxedValueTypeReceiver |
 | Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
 | Managed-pointer verification types | I.8.7, III.1.8.1.2.3 | BooleanPointerCall, BooleanPointerJoin, CharacterPointerJoin, EnumPointerJoin, ReducedPointerJoin | ByrefJoin |
-| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.10–III.4.11, III.4.13, III.4.29 | ByteIndirectLoad, ByteIndirectStore, FloatIndirectLoad, FloatIndirectStore, ManagedPointer, NativeFieldAddress, NativeFieldLoad, NativeFieldStore, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, NativePointerArgument, NativePointerLocal, NativePointerReturn, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore, GenericIndirectReference | WrongNarrowFloatStore, WrongNarrowIndirectStore, WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore, WrongGenericIndirectLoad, WrongGenericIndirectStore, WrongWideFloatLoad, WrongWideIndirectLoad |
+| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.10–III.4.11, III.4.13, III.4.26–III.4.29 | ByteIndirectLoad, ByteIndirectStore, FloatIndirectLoad, FloatIndirectStore, Int32PointerArgument, Int32PointerArrayElement, Int32PointerField, Int32PointerLocal, Int32PointerObjectStore, Int32PointerReturn, Int32PointerStoredArgument, ManagedPointer, NativeFieldAddress, NativeFieldLoad, NativeFieldStore, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, NativePointerArgument, NativePointerArrayElement, NativePointerLocal, NativePointerReturn, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore, GenericIndirectReference | WrongNarrowFloatStore, WrongNarrowIndirectStore, WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore, WrongGenericIndirectLoad, WrongGenericIndirectStore, WrongWideFloatLoad, WrongWideIndirectLoad |
 | Field storage form | III.4.10–III.4.12, III.4.24–III.4.31 | PointerFields, StaticField, StaticFieldToken | WrongInstanceFieldOpcode, WrongReferenceFieldReceiver, WrongStaticFieldOpcode |
 | Readonly provenance | III.2.3, III.3.62 | CovariantReadOnlyArrayAddress, ReadOnlyLoad, ReadOnlyFieldWrite | WrongCovariantArrayAddress, WrongPrefix |
 | Correct operations outside verification | III.1.8, III.3.47 | ManagedPointerOverflowAddition, NativeValueTypeReceiver, PointerDifference, ReadOnlyWrite, StackAllocation | WrongArithmetic, WrongAllocationHandler |
@@ -44,7 +44,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Block memory operands | III.3.30, III.3.36 | CopyBlock, InitializeBlock | WrongCopyBlock, WrongInitializeBlock |
 | Array element, index and pointer operands | I.8.7.1, III.4.7–III.4.9, III.4.26–III.4.27 | ArrayElement, ArrayIndex, ArrayReferenceLoad, ArrayReferenceStore, BooleanArrayElement, CharacterArrayElement, CovariantReadOnlyArrayAddress, GenericArrayReferenceLoad, GenericArrayReferenceStore, NullArrayReferenceStore, TypedArrayReferenceLoad, TypedArrayReferenceStore | WrongArrayElement, WrongArrayIndex, WrongArrayValue, WrongArrayReferenceStore, WrongCovariantArrayAddress, WrongGenericArrayReferenceLoad, WrongManagedPointerArray, WrongNullArrayReferenceStore, WrongReferenceTypedArrayStore, WrongTypedArrayReferenceStore, WrongValueArrayReferenceLoad, WrongValueArrayReferenceStore, WrongValueTypedArrayLoad |
 | Object copy operands | III.4.4 | CopyObject, CopyReferenceObject | WrongCopyObjectSource, WrongCopyObjectSourceType, WrongCopyObjectDestinationType |
-| Typed references | III.4.19, III.4.22–III.4.23 | TypedReference | WrongMakeTypedReference, WrongTypedReferenceType, WrongTypedReferenceValue |
+| Typed references | III.4.19, III.4.22–III.4.23 | TypedReference, UnmanagedTypedReference | WrongMakeTypedReference, WrongTypedReferenceType, WrongTypedReferenceValue |
 | Unboxing | III.4.32 | UnboxValue | WrongUnboxType |
 | Type size | III.4.25 | SizeOf | |
 | Stack allocation depth | III.3.47 | StackAllocation | WrongAllocationStack |
@@ -75,10 +75,15 @@ The same receiver distinction applies to instance fields. A managed pointer to a
 addresses that value, while a managed pointer to a reference type addresses a slot containing the
 reference. WrongReferenceFieldReceiver prevents the latter from being treated as the object.
 
-A native integer can carry an unmanaged pointer for correct CIL, but assigning it to a typed
-pointer local, parameter, or return remains unverifiable. NativePointerLocal,
-NativePointerArgument, and NativePointerReturn carry that diagnostic and execute on both runtimes.
-ILVerification reports no diagnostic for the three assignments.
+A native integer or `int32` can carry an unmanaged pointer for correct CIL, but assigning either
+to typed pointer storage remains unverifiable. The pointer assignment fixtures cover locals,
+arguments, returns, fields, array elements, and indirect storage and execute on both runtimes.
+
+ECMA III.4.19 permits `mkrefany` to receive a managed pointer or native integer that points to the
+named type. Only the managed-pointer form is verifiable. UnmanagedTypedReference records the
+correct, unverifiable form and executes on both runtimes.
+ILVerification reports no diagnostic for the native-integer assignments and `StackUnexpected`
+for each `int32` form.
 
 ECMA III.4.18 requires a correct `ldvirtftn` target to be nonstatic and defined for the supplied
 object. It does not require the target to be virtual. CoreCLR, Mono, and ILVerification accept the
