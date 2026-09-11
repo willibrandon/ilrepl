@@ -41,6 +41,11 @@ internal sealed class FlowGraph<T> where T : class
     public Dictionary<int, FlowRegion> Sections { get; } = [];
 
     /// <summary>
+    /// Exception clauses in source or metadata dispatch order.
+    /// </summary>
+    public List<FlowClause> Clauses { get; } = [];
+
+    /// <summary>
     /// Findings established while connecting the body.
     /// </summary>
     public List<AnalysisDiagnostic> Diagnostics { get; } = [];
@@ -100,6 +105,19 @@ internal sealed class FlowGraph<T> where T : class
                     Sections[i] = new FlowRegion(kind, i, nodes.Count, groups[^1]);
                     Seeds[i] = kind is BlockKind.Catch or BlockKind.Filter or BlockKind.FilterHandler
                         ? Entry([new FlowValue<T>(node.CatchType ?? objectType, [i])]) : Entry([]);
+                    if (kind == BlockKind.FilterHandler)
+                    {
+                        var filter = Clauses.FindLastIndex(clause => clause.Group == groups[^1]
+                            && clause.Kind == BlockKind.Filter && clause.Handler < 0);
+                        if (filter >= 0)
+                        {
+                            Clauses[filter] = Clauses[filter] with { Handler = i };
+                        }
+                    }
+                    else
+                    {
+                        Clauses.Add(new FlowClause(groups[^1], kind, i, kind == BlockKind.Filter ? -1 : i));
+                    }
                 }
             }
 
@@ -346,6 +364,50 @@ internal sealed class FlowGraph<T> where T : class
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Finds clauses searched after the filter containing this instruction returns zero.
+    /// </summary>
+    /// <param name="instruction">An instruction inside the rejecting filter.</param>
+    /// <returns>Later clause entry points, followed by entries in enclosing protected regions.</returns>
+    public IEnumerable<int> FilterContinuationTargets(int instruction)
+    {
+        var filter = Regions[instruction].Reverse().Select(id => Sections[id])
+            .FirstOrDefault(section => section.Kind == BlockKind.Filter);
+        if (filter is null)
+        {
+            yield break;
+        }
+
+        var clause = Clauses.FindIndex(candidate => candidate.Group == filter.Group
+            && candidate.Kind == BlockKind.Filter && candidate.Entry == filter.Start);
+        if (clause < 0)
+        {
+            yield break;
+        }
+
+        var targets = new HashSet<int>();
+        for (var index = clause + 1; index < Clauses.Count; index++)
+        {
+            if (Clauses[index].Group == filter.Group && targets.Add(Clauses[index].Entry))
+            {
+                yield return Clauses[index].Entry;
+            }
+        }
+
+        foreach (var group in Regions[instruction].Reverse().Select(id => Sections[id])
+            .Where(section => section.Kind == BlockKind.Try && section.Group != filter.Group)
+            .Select(section => section.Group).Distinct())
+        {
+            foreach (var candidate in Clauses.Where(candidate => candidate.Group == group))
+            {
+                if (targets.Add(candidate.Entry))
+                {
+                    yield return candidate.Entry;
+                }
+            }
+        }
     }
 
     /// <summary>

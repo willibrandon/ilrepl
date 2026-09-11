@@ -147,6 +147,14 @@ public static class StackAnalysis
             {
                 Section(BlockKind.Filter, filter, clause.HandlerStart, group);
             }
+
+            graph.Clauses.Add(new FlowClause(group, clause.Kind switch
+            {
+                IlClauseKind.Catch => BlockKind.Catch,
+                IlClauseKind.Filter => BlockKind.Filter,
+                IlClauseKind.Finally => BlockKind.Finally,
+                _ => BlockKind.Fault,
+            }, Position(clause.FilterStart ?? clause.HandlerStart), Position(clause.HandlerStart)));
         }
 
         for (var index = 0; index < entries.Length; index++)

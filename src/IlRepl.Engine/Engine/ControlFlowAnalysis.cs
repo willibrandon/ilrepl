@@ -10,6 +10,7 @@ namespace IlRepl.Engine;
 /// <typeparam name="T">The type representation.</typeparam>
 internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : class
 {
+    private const int MaxFilterPaths = 64;
     private readonly FlowTypeRules<T> _types = types;
     private readonly StackTransfer<T> _transfer = new(types.Algebra);
 
@@ -91,6 +92,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         var queue = new Queue<int>();
         var queued = new bool[count];
         var maxStack = 0;
+        var tracksFilterPaths = graph.Sections.Values.Any(section => section.Kind == BlockKind.Filter);
 
         void Enqueue(int position)
         {
@@ -108,6 +110,20 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             var location = position < nodes.Count ? nodes[position].Location
                 : nodes.Count > 0 ? nodes[^1].Location : new AnalysisLocation("cell", -1, 0, 0);
             diagnostics[(position, code)] = new AnalysisDiagnostic(code, kind, message, location, related ?? []);
+        }
+
+        void ContinueFilterSearch(int source, FilterPathState[]? paths, bool fallbackThis)
+        {
+            foreach (var target in graph.FilterContinuationTargets(source))
+            {
+                var entry = graph.Seeds[target];
+                var thisArgumentIsOriginal = paths?.All(path => path.ThisArgumentIsOriginal) ?? fallbackThis;
+                Propagate(target, source, entry with
+                {
+                    ThisArgumentIsOriginal = thisArgumentIsOriginal,
+                    FilterPaths = EnterExceptionRegion(paths, entry),
+                });
+            }
         }
 
         void Propagate(int target, int predecessor, FlowState<T> state)
@@ -165,7 +181,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         foreach (var (position, seed) in seeds ?? graph.Seeds)
         {
-            Propagate(position, -1, seed);
+            Propagate(position, -1, tracksFilterPaths ? StartFilterPaths(seed) : seed);
         }
 
         var iterations = 0;
@@ -233,10 +249,15 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
 
             var node = nodes[index];
+            var filterPathsBeforeInstruction = state.FilterPaths;
+            var transferredPops = 0;
+            var transferredPushes = 0;
+            var transferredValues = (FlowValue<T>[]?)null;
+            var filterPathsAtEnd = !state.Invalid && node.Instruction?.Op == OpCodes.Endfilter ? state.FilterPaths : null;
             if (node.EffectUnknown)
             {
                 Report(index, "FLOW004", "the instruction's stack effect is unknown", AnalysisDiagnosticKind.Unknown);
-                state = state.Invalid ? state : state with { Values = null, HasUnknownPath = true };
+                state = state.Invalid ? state : state with { Values = null, HasUnknownPath = true, FilterPaths = null };
             }
             else if (node.Instruction is { } view && !state.Invalid && state.Values is { } values)
             {
@@ -266,6 +287,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         var popped = values.Skip(values.Length - pops).ToArray();
                         var output = values.Take(values.Length - pops).ToList();
                         var pushed = _transfer.PushTypes(view, popped.Select(value => value.Type).ToArray());
+                        transferredPops = pops;
+                        transferredPushes = pushed.Count;
+                        transferredValues = popped;
                         var loadsThis = view.ReadsThisArgument && state.ThisArgumentIsOriginal;
                         foreach (var type in pushed)
                         {
@@ -285,7 +309,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                             : view.ReadsThisArgument && view.Op.Name is "ldarga" or "ldarga.s" ? false
                             : state.ThisArgumentIsOriginal;
                         state = new FlowState<T>([.. output], state.HasUnknownPath,
-                            ThisArgumentIsOriginal: thisArgumentIsOriginal);
+                            ThisArgumentIsOriginal: thisArgumentIsOriginal,
+                            FilterPaths: TransferFilterPaths(state.FilterPaths, view, pops, pushed.Count, popped));
                     }
                 }
 
@@ -327,18 +352,56 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
             after[slot] = state;
             maxStack = Math.Max(maxStack, state.Values?.Length ?? 0);
+            // ECMA-335 III.3.34 sends zero onward and one to the paired handler. An unknown result can take either path.
+            var acceptingFilterPaths = filterPathsAtEnd?
+                .Where(path => path.Values.LastOrDefault().IsZero != true).ToArray();
+            var rejectingFilterPaths = filterPathsAtEnd?
+                .Where(path => path.Values.LastOrDefault().IsOne != true).ToArray();
             if (!state.Invalid && node.Instruction?.Op == OpCodes.Endfilter
+                && (acceptingFilterPaths is null || acceptingFilterPaths.Length > 0)
                 && graph.FilterHandlerFor(index) is { } handler && graph.Seeds.TryGetValue(handler, out var handlerEntry))
             {
                 Propagate(handler, index, handlerEntry with
                 {
-                    ThisArgumentIsOriginal = state.ThisArgumentIsOriginal,
+                    ThisArgumentIsOriginal = acceptingFilterPaths?.All(path => path.ThisArgumentIsOriginal)
+                        ?? state.ThisArgumentIsOriginal,
+                    FilterPaths = EnterExceptionRegion(acceptingFilterPaths, handlerEntry),
                 });
+            }
+
+            if (!state.Invalid && node.Instruction?.Op == OpCodes.Endfilter
+                && (rejectingFilterPaths is null || rejectingFilterPaths.Length > 0))
+            {
+                ContinueFilterSearch(index, rejectingFilterPaths, state.ThisArgumentIsOriginal);
+            }
+
+            if (!state.Invalid && node.Instruction is { } filterInstruction && InsideFilter(graph, index)
+                && CanThrow(filterInstruction))
+            {
+                ContinueFilterSearch(index, state.FilterPaths, state.ThisArgumentIsOriginal);
             }
 
             foreach (var edge in graph.Edges[index])
             {
-                var outgoing = (FlowState<T>?)(edge.ClearsStack && !state.Invalid ? state with { Values = [] } : state);
+                var edgeFilterPaths = state.FilterPaths;
+                if (!state.Invalid && node.Instruction is { } branch && transferredValues is not null
+                    && IsBooleanBranch(branch)
+                    && !graph.Edges[index].Any(other => other.Target == edge.Target
+                        && other.IsExplicit != edge.IsExplicit))
+                {
+                    edgeFilterPaths = TransferFilterPaths(
+                        SelectBranchPaths(filterPathsBeforeInstruction, branch, edge.IsExplicit),
+                        branch, transferredPops, transferredPushes, transferredValues);
+                }
+
+                if (edgeFilterPaths is { Length: 0 })
+                {
+                    continue;
+                }
+
+                var outgoing = (FlowState<T>?)(edge.ClearsStack && !state.Invalid
+                    ? state with { Values = [], FilterPaths = ClearFilterPathStacks(edgeFilterPaths) }
+                    : state with { FilterPaths = edgeFilterPaths });
                 if (edge.ClearsStack && finalizerEffects is not null)
                 {
                     foreach (var finalizer in graph.FinalizersForTransfer(index, edge.Target))
@@ -357,6 +420,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         outgoing = continuing with
                         {
                             ThisArgumentIsOriginal = continuing.ThisArgumentIsOriginal && preservesThis.Value,
+                            FilterPaths = preservesThis.Value ? continuing.FilterPaths
+                                : InvalidateFilterReceivers(continuing.FilterPaths),
                         };
                     }
                 }
@@ -367,13 +432,15 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 }
             }
 
-            if (!state.Invalid && graph.Sections.Count > 0)
+            if (!state.Invalid && graph.Sections.Count > 0
+                && (node.EffectUnknown || node.Instruction is { } exceptionInstruction && CanThrow(exceptionInstruction)))
             {
                 foreach (var target in ExceptionTargets(graph, index))
                 {
                     var entry = graph.Seeds[target] with
                     {
                         ThisArgumentIsOriginal = state.ThisArgumentIsOriginal,
+                        FilterPaths = EnterExceptionRegion(state.FilterPaths, graph.Seeds[target]),
                     };
                     Propagate(target, -index - 2, entry);
                 }
@@ -1256,10 +1323,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         var unknown = left.HasUnknownPath || right.HasUnknownPath;
         var thisArgumentIsOriginal = left.ThisArgumentIsOriginal && right.ThisArgumentIsOriginal;
+        var filterPaths = MergeFilterPaths(left.FilterPaths, right.FilterPaths);
         if (left.Values is not { } a || right.Values is not { } b)
         {
             merged = new FlowState<T>(left.Values ?? right.Values, unknown,
-                ThisArgumentIsOriginal: thisArgumentIsOriginal);
+                ThisArgumentIsOriginal: thisArgumentIsOriginal, FilterPaths: filterPaths);
             return true;
         }
 
@@ -1280,14 +1348,16 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 a[i].IsThis && b[i].IsThis, a[i].IsReadOnly || b[i].IsReadOnly);
         }
 
-        merged = new FlowState<T>(values, unknown, ThisArgumentIsOriginal: thisArgumentIsOriginal);
+        merged = new FlowState<T>(values, unknown, ThisArgumentIsOriginal: thisArgumentIsOriginal,
+            FilterPaths: filterPaths);
         return true;
     }
 
     private bool Equal(FlowState<T> left, FlowState<T> right)
     {
         if (left.Invalid != right.Invalid || left.HasUnknownPath != right.HasUnknownPath
-            || left.ThisArgumentIsOriginal != right.ThisArgumentIsOriginal || left.Values?.Length != right.Values?.Length)
+            || left.ThisArgumentIsOriginal != right.ThisArgumentIsOriginal || left.Values?.Length != right.Values?.Length
+            || !SameFilterPaths(left.FilterPaths, right.FilterPaths))
         {
             return false;
         }
@@ -1307,6 +1377,246 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         }
 
         return true;
+    }
+
+    private static bool InsideFilter(FlowGraph<T> graph, int index) => graph.Regions[index]
+        .Any(section => graph.Sections[section].Kind == BlockKind.Filter);
+
+    private FilterPathState[]? TransferFilterPaths(FilterPathState[]? paths, StackOperandView<T> view,
+        int pops, int pushes, FlowValue<T>[] popped)
+    {
+        if (paths is null || paths.Any(path => path.Values.Length < pops))
+        {
+            return null;
+        }
+
+        var result = new List<FilterPathState>();
+        foreach (var path in paths)
+        {
+            var pathPopped = path.Values.TakeLast(pops).ToArray();
+            var output = path.Values.Take(path.Values.Length - pops).ToList();
+            var locals = path.Locals is null ? null : new Dictionary<int, FilterPathValue>(path.Locals);
+            var arguments = path.Arguments is null ? null : new Dictionary<int, FilterPathValue>(path.Arguments);
+            if (StoresLocal(view) && view.LocalIndex is { } storedLocal)
+            {
+                locals ??= [];
+                locals[storedLocal] = pathPopped[^1];
+            }
+            else if (StoresArgument(view) && view.ArgumentIndex is { } storedArgument)
+            {
+                arguments ??= [];
+                arguments[storedArgument] = pathPopped[^1];
+            }
+            else if (LoadsLocalAddress(view) && view.LocalIndex is { } exposedLocal)
+            {
+                locals?.Remove(exposedLocal);
+                locals = locals?.Count == 0 ? null : locals;
+            }
+            else if (LoadsArgumentAddress(view) && view.ArgumentIndex is { } exposedArgument)
+            {
+                arguments?.Remove(exposedArgument);
+                arguments = arguments?.Count == 0 ? null : arguments;
+            }
+
+            var pushed = LoadsLocal(view) && view.LocalIndex is { } loadedLocal
+                && locals?.TryGetValue(loadedLocal, out var local) == true ? local
+                : LoadsArgument(view) && view.ArgumentIndex is { } loadedArgument
+                    && arguments?.TryGetValue(loadedArgument, out var argument) == true ? argument
+                : PreservesFilterDecision(view, popped)
+                    ? new FilterPathValue(pathPopped[^1].IsZero, pathPopped[^1].IsOne, false)
+                : ConstantFilterValue(view, view.ReadsThisArgument && path.ThisArgumentIsOriginal);
+            for (var index = 0; index < pushes; index++)
+            {
+                output.Add(view.Op == OpCodes.Dup ? pathPopped[0] : pushed);
+            }
+
+            if (StackTransfer<T>.EndsPath(view.Op))
+            {
+                output.Clear();
+            }
+
+            var thisArgumentIsOriginal = view.WritesThisArgument ? pathPopped[^1].IsThis
+                : view.ReadsThisArgument && view.Op.Name is "ldarga" or "ldarga.s" ? false
+                : path.ThisArgumentIsOriginal;
+            var next = new FilterPathState([.. output], locals, arguments, thisArgumentIsOriginal);
+            if (!result.Any(existing => SameFilterPath(existing, next)))
+            {
+                if (result.Count == MaxFilterPaths)
+                {
+                    return null;
+                }
+
+                result.Add(next);
+            }
+        }
+
+        return [.. result];
+    }
+
+    private bool PreservesFilterDecision(StackOperandView<T> view, FlowValue<T>[] popped)
+    {
+        if (popped is not [{ Type: { } type }] || _types.Category(type) != StackCategory.Int32)
+        {
+            return false;
+        }
+
+        return view.Op == OpCodes.Conv_I4 || view.Op == OpCodes.Conv_U4
+            || view.Op == OpCodes.Conv_Ovf_I4 || view.Op == OpCodes.Conv_Ovf_I4_Un
+            || view.Op == OpCodes.Conv_Ovf_U4 || view.Op == OpCodes.Conv_Ovf_U4_Un;
+    }
+
+    private static bool LoadsLocal(StackOperandView<T> view) => view.Op.Name is
+        "ldloc" or "ldloc.s" or "ldloc.0" or "ldloc.1" or "ldloc.2" or "ldloc.3";
+
+    private static bool StoresLocal(StackOperandView<T> view) => view.Op.Name is
+        "stloc" or "stloc.s" or "stloc.0" or "stloc.1" or "stloc.2" or "stloc.3";
+
+    private static bool LoadsLocalAddress(StackOperandView<T> view) => view.Op.Name is "ldloca" or "ldloca.s";
+
+    private static bool LoadsArgument(StackOperandView<T> view) => view.Op.Name is
+        "ldarg" or "ldarg.s" or "ldarg.0" or "ldarg.1" or "ldarg.2" or "ldarg.3";
+
+    private static bool StoresArgument(StackOperandView<T> view) => view.Op.Name is "starg" or "starg.s";
+
+    private static bool LoadsArgumentAddress(StackOperandView<T> view) => view.Op.Name is "ldarga" or "ldarga.s";
+
+    private static bool IsBooleanBranch(StackOperandView<T> view) => view.Op.Name is
+        "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s";
+
+    private static FilterPathState[]? SelectBranchPaths(FilterPathState[]? paths, StackOperandView<T> view,
+        bool branchTaken)
+    {
+        if (paths is null)
+        {
+            return null;
+        }
+
+        var branchesOnTrue = view.Op.Name is "brtrue" or "brtrue.s";
+        return [.. paths.Where(path => path.Values.LastOrDefault().IsZero is not { } zero
+            || (branchesOnTrue ? !zero : zero) == branchTaken)];
+    }
+
+    private static bool CanThrow(StackOperandView<T> view)
+    {
+        var name = view.Op.Name!;
+        if (view.DecodedPrefixName is not null || view.Op.FlowControl is FlowControl.Branch or FlowControl.Cond_Branch
+            || name is "nop" or "break" or "dup" or "pop" or "ldnull" or "endfilter" or "endfinally"
+            || name.StartsWith("ldarg", StringComparison.Ordinal) || name.StartsWith("starg", StringComparison.Ordinal)
+            || name.StartsWith("ldloc", StringComparison.Ordinal) || name.StartsWith("stloc", StringComparison.Ordinal)
+            || name.StartsWith("ldc.", StringComparison.Ordinal)
+            || name.StartsWith("conv.", StringComparison.Ordinal) && !name.Contains("ovf", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return name is not ("add" or "sub" or "mul" or "and" or "or" or "xor" or "shl" or "shr" or "shr.un"
+            or "neg" or "not" or "ceq" or "cgt" or "cgt.un" or "clt" or "clt.un");
+    }
+
+    private static FilterPathState[]? ClearFilterPathStacks(FilterPathState[]? paths) => paths is null
+        ? null : [.. paths.Select(path => path with { Values = [] })];
+
+    private static FilterPathState[]? InvalidateFilterReceivers(FilterPathState[]? paths) => paths is null
+        ? null : [.. paths.Select(path => path with { ThisArgumentIsOriginal = false })];
+
+    private static FlowState<T> StartFilterPaths(FlowState<T> state) => state.Values is not { } values ? state : state with
+    {
+        FilterPaths =
+        [
+            new FilterPathState(
+                [.. values.Select(value => new FilterPathValue(null, null, value.IsThis))],
+                null,
+                null,
+                state.ThisArgumentIsOriginal),
+        ],
+    };
+
+    private static FilterPathState[]? EnterExceptionRegion(FilterPathState[]? paths, FlowState<T> entry)
+    {
+        if (paths is null || entry.Values is not { } values)
+        {
+            return null;
+        }
+
+        return [.. paths.Select(path => new FilterPathState(
+            [.. values.Select(_ => new FilterPathValue(null, null, false))], path.Locals, path.Arguments,
+            path.ThisArgumentIsOriginal))];
+    }
+
+    private static FilterPathState[]? MergeFilterPaths(FilterPathState[]? left, FilterPathState[]? right)
+    {
+        if (left is null || right is null)
+        {
+            return null;
+        }
+
+        var result = new List<FilterPathState>(left);
+        foreach (var path in right)
+        {
+            if (!result.Any(existing => SameFilterPath(existing, path)))
+            {
+                if (result.Count == MaxFilterPaths)
+                {
+                    return null;
+                }
+
+                result.Add(path);
+            }
+        }
+
+        return [.. result];
+    }
+
+    private static bool SameFilterPaths(FilterPathState[]? left, FilterPathState[]? right) =>
+        left is null && right is null || left is not null && right is not null && left.Length == right.Length
+            && left.All(path => right.Any(candidate => SameFilterPath(path, candidate)));
+
+    private static bool SameFilterPath(FilterPathState left, FilterPathState right)
+    {
+        if (left.ThisArgumentIsOriginal != right.ThisArgumentIsOriginal || !left.Values.SequenceEqual(right.Values)
+            || left.Locals?.Count != right.Locals?.Count || left.Arguments?.Count != right.Arguments?.Count)
+        {
+            return false;
+        }
+
+        var localsMatch = left.Locals is null || right.Locals is not null
+            && left.Locals.All(pair => right.Locals.TryGetValue(pair.Key, out var value) && value == pair.Value);
+        var argumentsMatch = left.Arguments is null || right.Arguments is not null
+            && left.Arguments.All(pair => right.Arguments.TryGetValue(pair.Key, out var value) && value == pair.Value);
+        return localsMatch && argumentsMatch;
+    }
+
+    private static FilterPathValue ConstantFilterValue(StackOperandView<T> view, bool isThis)
+    {
+        if (view.Op == OpCodes.Ldc_I4_0)
+        {
+            return new FilterPathValue(true, false, isThis);
+        }
+
+        if (view.Op == OpCodes.Ldc_I4_1)
+        {
+            return new FilterPathValue(false, true, isThis);
+        }
+
+        if (view.Op == OpCodes.Ldc_I4_M1 || view.Op == OpCodes.Ldc_I4_2
+            || view.Op == OpCodes.Ldc_I4_3 || view.Op == OpCodes.Ldc_I4_4 || view.Op == OpCodes.Ldc_I4_5
+            || view.Op == OpCodes.Ldc_I4_6 || view.Op == OpCodes.Ldc_I4_7 || view.Op == OpCodes.Ldc_I4_8)
+        {
+            return new FilterPathValue(false, false, isThis);
+        }
+
+        if (view.Op != OpCodes.Ldc_I4 && view.Op != OpCodes.Ldc_I4_S && view.Op != OpCodes.Ldc_I8)
+        {
+            return new FilterPathValue(null, null, isThis);
+        }
+
+        return view.IntegerOperand switch
+        {
+            0 => new FilterPathValue(true, false, isThis),
+            1 => new FilterPathValue(false, true, isThis),
+            not null => new FilterPathValue(false, false, isThis),
+            _ => new FilterPathValue(null, null, isThis),
+        };
     }
 
     private List<AnalysisRelatedLocation> Related(IReadOnlyList<FlowNode<T>> nodes, int predecessor, FlowState<T> state)

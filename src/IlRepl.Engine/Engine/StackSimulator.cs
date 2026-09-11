@@ -335,8 +335,17 @@ public sealed class StackSimulator
         var view = new StackOperandView<Type>
         {
             Op = op,
-            ByteOperand = instruction.Kind == OperandKind.Byte && instruction.Operand is byte value ? value : null,
+            ByteOperand = instruction.Kind == OperandKind.Byte && instruction.Operand is byte byteOperand ? byteOperand : null,
+            IntegerOperand = instruction.Kind switch
+            {
+                OperandKind.SByte when instruction.Operand is sbyte value => value,
+                OperandKind.Int32 when instruction.Operand is int value => value,
+                OperandKind.Int64 when instruction.Operand is long value => value,
+                _ => null,
+            },
             RetPops = instruction.RetPops,
+            LocalIndex = instruction.LocalIndex,
+            ArgumentIndex = instruction.ArgumentIndex,
             ReadsThisArgument = instruction.ArgumentIndex == 0 && context.ThisIndex == 0
                 && op.Name is "ldarg.0" or "ldarg" or "ldarg.s" or "ldarga" or "ldarga.s",
             WritesThisArgument = instruction.ArgumentIndex == 0 && context.ThisIndex == 0 && op.Name is "starg" or "starg.s",

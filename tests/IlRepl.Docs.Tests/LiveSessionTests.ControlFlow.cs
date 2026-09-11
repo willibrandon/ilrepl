@@ -286,7 +286,7 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
-    /// Argument writes and accepting filters carry receiver provenance in the browser runtime.
+    /// Argument writes and filter decisions carry receiver provenance in the browser runtime.
     /// </summary>
     [TestMethod]
     [DataRow("chromium")]
@@ -310,6 +310,28 @@ public sealed partial class LiveSessionTests
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.FilterSource(true)));
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class FlowFilterArgument", options);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.SelectiveFilterSource()));
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class SelectiveFilterArgument", options);
+        await TypeLineAsync(page, "ldnull");
+        await TypeLineAsync(page, "ldc.i4.1");
+        await TypeLineAsync(page,
+            "newobj instance void SelectiveFilterArgument::.ctor(class SelectiveFilterArgument, bool)");
+        await TypeLineAsync(page, "ldfld int32 SelectiveFilterArgument::Value");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 42 : int32", options);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.CorrelatedReceiverFilterSource()));
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class CorrelatedFilterArgument", options);
+        await TypeLineAsync(page, "ldnull");
+        await TypeLineAsync(page, "ldc.i4.1");
+        await TypeLineAsync(page,
+            "newobj instance void CorrelatedFilterArgument::.ctor(class CorrelatedFilterArgument, bool)");
+        await TypeLineAsync(page, "ldfld int32 CorrelatedFilterArgument::Value");
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 42 : int32", options);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.SiblingFilterSource()));
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
     }
 
     /// <summary>

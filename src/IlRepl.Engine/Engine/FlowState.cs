@@ -10,7 +10,8 @@ internal sealed record FlowState<T>(
     FlowValue<T>[]? Values,
     bool HasUnknownPath = false,
     bool Invalid = false,
-    bool ThisArgumentIsOriginal = false) where T : class
+    bool ThisArgumentIsOriginal = false,
+    FilterPathState[]? FilterPaths = null) where T : class
 {
     /// <summary>
     /// The empty entry stack outside an instance member.

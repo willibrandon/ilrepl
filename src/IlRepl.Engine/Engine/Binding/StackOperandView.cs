@@ -25,6 +25,11 @@ public sealed record StackOperandView<T> where T : class
     public byte? ByteOperand { get; init; }
 
     /// <summary>
+    /// The signed integer operand of an integer constant, or null for other instructions.
+    /// </summary>
+    public long? IntegerOperand { get; init; }
+
+    /// <summary>
     /// For an inline <c>ret</c>: how many values it pops.
     /// </summary>
     public int RetPops { get; init; }
@@ -123,6 +128,16 @@ public sealed record StackOperandView<T> where T : class
     /// The type of the local or argument a load reads.
     /// </summary>
     public T? SlotType { get; init; }
+
+    /// <summary>
+    /// The local slot read or written by the instruction, or null for other instructions.
+    /// </summary>
+    public int? LocalIndex { get; init; }
+
+    /// <summary>
+    /// The argument slot read or written by the instruction, or null for other instructions.
+    /// </summary>
+    public int? ArgumentIndex { get; init; }
 
     /// <summary>
     /// True when the instruction loads the argument slot that originally held <c>this</c> or exposes its writable address.
