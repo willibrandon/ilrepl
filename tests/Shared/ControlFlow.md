@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 195 method examples and the paired constructor example
+not justify refusing a correct body. The 196 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -46,6 +46,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Object copy operands | III.4.4 | CopyObject, CopyReferenceObject | WrongCopyObjectSource, WrongCopyObjectSourceType, WrongCopyObjectDestinationType |
 | Typed references | III.4.19, III.4.22–III.4.23 | TypedReference | WrongMakeTypedReference, WrongTypedReferenceType, WrongTypedReferenceValue |
 | Unboxing | III.4.32 | UnboxValue | WrongUnboxType |
+| Type size | III.4.25 | SizeOf | |
 | Stack allocation depth | III.3.47 | StackAllocation | WrongAllocationStack |
 | Transitive generic constraints | III.1.8.1.2.3 | TransitiveBox | GenericNeedsBox |
 | Header stack limit | III.1.7.4, II.25.4.3 | DeepStack, DeadCode through live and both exports | Raw underflow fixture |
@@ -69,6 +70,9 @@ ECMA III.4.18 requires a correct `ldvirtftn` target to be nonstatic and defined 
 object. It does not require the target to be virtual. CoreCLR, Mono, and ILVerification accept the
 nonvirtual `string::get_Length` fixture. A constructor target is also correct and executable, but
 unverifiable; the palette omits both shapes while explicitly entered IL retains their CLI behavior.
+
+ECMA III.4.25 makes `sizeof` always verifiable. SizeOf keeps the analyzer and ILVerification aligned
+with that rule while executing the same body through CoreCLR and browser Mono.
 
 ## Disagreements with Microsoft.ILVerification 10.0.11
 

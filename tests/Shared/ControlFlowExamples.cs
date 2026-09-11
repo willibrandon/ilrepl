@@ -54,6 +54,7 @@ public static class ControlFlowExamples
             "newarr [System.Runtime]System.Exception", "DONE: ldlen", "pop", "ldc.i4.s 42", "ret"], true),
         new("StackAllocation", ["ldc.i4.4", "conv.u", "localloc", "pop", "ldc.i4.s 42", "ret"], true,
             Unverifiable: true, Verification: "Unverifiable"),
+        new("SizeOf", ["sizeof int32", "pop", "ldc.i4.s 42", "ret"], true),
         new("WrongAllocationHandler", [".try {", "leave DONE", "} catch [System.Runtime]System.Exception {", "pop",
             "ldc.i4.4", "localloc", "pop", "leave DONE", "}", "DONE: ldc.i4.s 42", "ret"], false,
             "localloc is not allowed inside an exception handler", Verification: "Unverifiable"),
