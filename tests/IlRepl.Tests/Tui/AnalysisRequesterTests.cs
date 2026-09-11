@@ -46,6 +46,40 @@ public sealed class AnalysisRequesterTests
     }
 
     /// <summary>
+    /// A cancelled request with the same document key cannot retire or prevent cancellation of its replacement.
+    /// </summary>
+    [TestMethod]
+    public async Task SameKeyReply_DoesNotRetireReplacement()
+    {
+        await using var engine = new CompletionEngine { HoldAnalysis = true };
+        var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
+        var invalidations = 0;
+        state.Invalidate = () => Interlocked.Increment(ref invalidations);
+        var requester = new AnalysisRequester(engine);
+        state.SetText("nop", 3);
+        requester.Refresh(state);
+        await WaitAsync(() => engine.Analyses.Count == 1);
+        var old = engine.Analyses.First();
+        requester.Cancel();
+        requester.Refresh(state);
+        await WaitAsync(() => engine.Analyses.Count == 2);
+        var current = engine.Analyses.Last();
+        old.Answer.SetResult(Reply(engine, old, "string"));
+        await WaitAsync(() => Volatile.Read(ref invalidations) == 1);
+        requester.Refresh(state);
+        Assert.IsTrue(requester.IsPending);
+        state.SetText("ret", 3);
+        requester.Refresh(state);
+        Assert.IsTrue(current.Cancellation.IsCancellationRequested);
+        foreach (var call in engine.Analyses)
+        {
+            call.Answer.TrySetResult(Reply(engine, call, "int32"));
+        }
+
+        await requester.SettleAsync();
+    }
+
+    /// <summary>
     /// A changed assembly context clears old diagnostics, and shutdown settles cancelled workers before returning.
     /// </summary>
     [TestMethod]

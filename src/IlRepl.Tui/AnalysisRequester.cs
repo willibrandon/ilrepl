@@ -13,6 +13,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
     private readonly ConcurrentQueue<CompletedAnalysis> _completed = new();
     private AnalysisRequestKey? _current;
     private PendingAnalysis? _pending;
+    private long _nextRequestId;
     private bool _stopped;
 
     /// <summary>
@@ -62,15 +63,16 @@ public sealed class AnalysisRequester(IReplEngine engine)
             if (key.Text.Length > 0)
             {
                 var cancellation = new CancellationTokenSource();
-                var task = SendAsync(state, key, cancellation.Token);
-                _pending = new PendingAnalysis(key, cancellation, task);
+                var id = ++_nextRequestId;
+                var task = SendAsync(state, id, key, cancellation.Token);
+                _pending = new PendingAnalysis(id, key, cancellation, task);
                 _owned.Add(_pending);
             }
         }
 
         while (_completed.TryDequeue(out var completed))
         {
-            if (completed.Key != _current)
+            if (completed.Key != _current || completed.Id != _pending?.Id)
             {
                 continue;
             }
@@ -126,7 +128,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
         _completed.Clear();
     }
 
-    private async Task SendAsync(PromptState state, AnalysisRequestKey key, CancellationToken cancellationToken)
+    private async Task SendAsync(PromptState state, long id, AnalysisRequestKey key, CancellationToken cancellationToken)
     {
         AnalysisReply? reply = null;
         try
@@ -147,7 +149,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
                     new AnalysisLocation("document", key.Line, 0, 0), [])]);
         }
 
-        _completed.Enqueue(new CompletedAnalysis(key, reply));
+        _completed.Enqueue(new CompletedAnalysis(id, key, reply));
         state.Invalidate?.Invoke();
     }
 }
