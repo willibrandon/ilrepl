@@ -71,12 +71,13 @@ public sealed class AnalysisRequesterTests
         state.SetText("ret", 3);
         requester.Refresh(state);
         Assert.IsTrue(current.Cancellation.IsCancellationRequested);
+        await WaitAsync(() => engine.Analyses.Count == 3);
         foreach (var call in engine.Analyses)
         {
             call.Answer.TrySetResult(Reply(engine, call, "int32"));
         }
 
-        await requester.SettleAsync();
+        await requester.SettleAsync().WaitAsync(TimeSpan.FromSeconds(5), TestContext.CancellationToken);
     }
 
     /// <summary>
