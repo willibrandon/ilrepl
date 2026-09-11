@@ -48,7 +48,11 @@ internal sealed class FlowGraph<T> where T : class
     /// <summary>
     /// Builds a graph using the supplied exception-object type.
     /// </summary>
-    public FlowGraph(IReadOnlyList<FlowNode<T>> nodes, T objectType, bool complete = false)
+    /// <param name="nodes">The source entries.</param>
+    /// <param name="objectType">The type pushed when a catch type is omitted.</param>
+    /// <param name="complete">Whether undefined targets are final errors.</param>
+    /// <param name="hasThis">Whether argument zero begins as the original receiver.</param>
+    public FlowGraph(IReadOnlyList<FlowNode<T>> nodes, T objectType, bool complete = false, bool hasThis = false)
     {
         Nodes = nodes;
         Edges = Enumerable.Range(0, nodes.Count + 1).Select(_ => new List<FlowEdge>()).ToArray();
@@ -58,7 +62,10 @@ internal sealed class FlowGraph<T> where T : class
         var groups = new List<int>();
         var ends = new Dictionary<int, int>();
         var groupAt = new Dictionary<int, int>();
-        Seeds[0] = FlowState<T>.Empty;
+        FlowState<T> Entry(FlowValue<T>[] values) => values.Length == 0
+            ? hasThis ? FlowState<T>.ThisEntry : FlowState<T>.Empty
+            : new FlowState<T>(values, ThisArgumentIsOriginal: hasThis);
+        Seeds[0] = Entry([]);
         for (var i = 0; i < nodes.Count; i++)
         {
             var node = nodes[i];
@@ -92,7 +99,7 @@ internal sealed class FlowGraph<T> where T : class
                     sections[^1] = i;
                     Sections[i] = new FlowRegion(kind, i, nodes.Count, groups[^1]);
                     Seeds[i] = kind is BlockKind.Catch or BlockKind.Filter or BlockKind.FilterHandler
-                        ? new FlowState<T>([new FlowValue<T>(node.CatchType ?? objectType, [i])]) : FlowState<T>.Empty;
+                        ? Entry([new FlowValue<T>(node.CatchType ?? objectType, [i])]) : Entry([]);
                 }
             }
 

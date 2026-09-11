@@ -46,7 +46,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         graph.ValidateRegions();
         var before = new FlowState<T>?[nodes.Count + 1];
         var after = new FlowState<T>?[nodes.Count + 1];
-        var incoming = Enumerable.Range(0, before.Length).Select(_ => new Dictionary<int, FlowState<T>>()).ToArray();
+        var incomingStates = new FlowState<T>?[before.Length];
+        var incomingPredecessors = new int[before.Length];
+        var additionalIncoming = new Dictionary<int, FlowState<T>>?[before.Length];
         var diagnostics = new Dictionary<(int, string), AnalysisDiagnostic>();
         var queue = new Queue<int>();
         var queued = new bool[before.Length];
@@ -71,9 +73,29 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         void Propagate(int target, int predecessor, FlowState<T> state)
         {
-            if (!incoming[target].TryGetValue(predecessor, out var old) || !Equal(old, state))
+            if (incomingStates[target] is null)
             {
-                incoming[target][predecessor] = state;
+                incomingStates[target] = state;
+                incomingPredecessors[target] = predecessor;
+                Enqueue(target);
+                return;
+            }
+
+            if (incomingPredecessors[target] == predecessor)
+            {
+                if (!Equal(incomingStates[target]!, state))
+                {
+                    incomingStates[target] = state;
+                    Enqueue(target);
+                }
+
+                return;
+            }
+
+            var others = additionalIncoming[target] ??= [];
+            if (!others.TryGetValue(predecessor, out var old) || !Equal(old, state))
+            {
+                others[predecessor] = state;
                 Enqueue(target);
             }
         }
@@ -111,35 +133,44 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 yield return null;
             }
             queued[index] = false;
-            FlowState<T>? state = null;
-            var first = -1;
-            var predecessors = (IEnumerable<KeyValuePair<int, FlowState<T>>>)incoming[index];
-            if (incoming[index].Count > 1)
+            var state = incomingStates[index];
+            var first = incomingPredecessors[index];
+            if (additionalIncoming[index] is { } others)
             {
-                predecessors = incoming[index].OrderBy(pair => pair.Key);
-            }
+                var predecessors = new KeyValuePair<int, FlowState<T>>[others.Count + 1];
+                predecessors[0] = new KeyValuePair<int, FlowState<T>>(first, state!);
+                var position = 1;
+                foreach (var pair in others)
+                {
+                    predecessors[position++] = pair;
+                }
 
-            foreach (var (predecessor, value) in predecessors)
-            {
-                if (state is null)
+                Array.Sort(predecessors, static (left, right) => left.Key.CompareTo(right.Key));
+                state = null;
+                first = -1;
+
+                foreach (var (predecessor, value) in predecessors)
                 {
-                    state = value;
-                    first = predecessor;
-                }
-                else if (!TryMerge(state, value, out var merged))
-                {
-                    var label = index < nodes.Count && nodes[index].Labels.Count > 0 ? nodes[index].Labels[0] : null;
-                    var where = label ?? "this instruction";
-                    var left = _types.Render(state);
-                    var right = _types.Render(value);
-                    var related = Related(nodes, first, state).Concat(Related(nodes, predecessor, value)).Distinct().ToArray();
-                    Report(index, "FLOW003", $"{where} receives incompatible stacks: {left} from {Path(nodes, first)}"
-                        + $" and {right} from {Path(nodes, predecessor)}", related: related);
-                    state = new FlowState<T>(null, Invalid: true);
-                }
-                else
-                {
-                    state = merged;
+                    if (state is null)
+                    {
+                        state = value;
+                        first = predecessor;
+                    }
+                    else if (!TryMerge(state, value, out var merged))
+                    {
+                        var label = index < nodes.Count && nodes[index].Labels.Count > 0 ? nodes[index].Labels[0] : null;
+                        var where = label ?? "this instruction";
+                        var left = _types.Render(state);
+                        var right = _types.Render(value);
+                        var related = Related(nodes, first, state).Concat(Related(nodes, predecessor, value)).Distinct().ToArray();
+                        Report(index, "FLOW003", $"{where} receives incompatible stacks: {left} from {Path(nodes, first)}"
+                            + $" and {right} from {Path(nodes, predecessor)}", related: related);
+                        state = new FlowState<T>(null, Invalid: true);
+                    }
+                    else
+                    {
+                        state = merged;
+                    }
                 }
             }
 
@@ -160,7 +191,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (node.EffectUnknown)
             {
                 Report(index, "FLOW004", "the instruction's stack effect is unknown", AnalysisDiagnosticKind.Unknown);
-                state = state.Invalid ? state : FlowState<T>.Unknown;
+                state = state.Invalid ? state : state with { Values = null, HasUnknownPath = true };
             }
             else if (node.Instruction is { } view && !state.Invalid && state.Values is { } values)
             {
@@ -190,10 +221,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         var popped = values.Skip(values.Length - pops).ToArray();
                         var output = values.Take(values.Length - pops).ToList();
                         var pushed = _transfer.PushTypes(view, popped.Select(value => value.Type).ToArray());
+                        var loadsThis = view.ReadsThisArgument && state.ThisArgumentIsOriginal;
                         foreach (var type in pushed)
                         {
                             output.Add(view.Op == OpCodes.Dup ? popped[0]
-                                : new FlowValue<T>(type, [index], view.LoadsThis || view.AddressOfThis,
+                                : new FlowValue<T>(type, [index], loadsThis,
                                     graph.Prefixes(index).Any(prefix => prefix.Op == OpCodes.Readonly)
                                         || view.Op == OpCodes.Unbox
                                         || view.Op == OpCodes.Ldflda && popped.Any(value => value.IsReadOnly)));
@@ -204,7 +236,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                             output.Clear();
                         }
 
-                        state = new FlowState<T>([.. output], state.HasUnknownPath);
+                        var thisArgumentIsOriginal = view.WritesThisArgument ? popped[^1].IsThis : state.ThisArgumentIsOriginal;
+                        state = new FlowState<T>([.. output], state.HasUnknownPath,
+                            ThisArgumentIsOriginal: thisArgumentIsOriginal);
                     }
                 }
 
@@ -247,8 +281,20 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             maxStack = Math.Max(maxStack, state.Values?.Length ?? 0);
             foreach (var edge in graph.Edges[index])
             {
-                var outgoing = edge.ClearsStack && !state.Invalid ? FlowState<T>.Empty : state;
+                var outgoing = edge.ClearsStack && !state.Invalid ? state with { Values = [] } : state;
                 Propagate(edge.Target, index, outgoing);
+            }
+
+            if (!state.Invalid && graph.Sections.Count > 0)
+            {
+                foreach (var target in ExceptionTargets(graph, index))
+                {
+                    var entry = graph.Seeds[target] with
+                    {
+                        ThisArgumentIsOriginal = state.ThisArgumentIsOriginal,
+                    };
+                    Propagate(target, -index - 2, entry);
+                }
             }
         }
 
@@ -1041,19 +1087,49 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         return false;
     }
 
+    private static IEnumerable<int> ExceptionTargets(FlowGraph<T> graph, int index)
+    {
+        HashSet<int>? groups = null;
+        foreach (var section in graph.Sections.Values)
+        {
+            if (section.Kind == BlockKind.Try && index >= section.Start && index < section.End)
+            {
+                (groups ??= []).Add(section.Group);
+            }
+        }
+
+        if (groups is null)
+        {
+            yield break;
+        }
+
+        var targets = new HashSet<int>();
+        foreach (var section in graph.Sections.Values)
+        {
+            if (section.Kind != BlockKind.Try && groups.Contains(section.Group)
+                && graph.Seeds.ContainsKey(section.Start) && targets.Add(section.Start))
+            {
+                yield return section.Start;
+            }
+        }
+    }
+
     private bool TryMerge(FlowState<T> left, FlowState<T> right, out FlowState<T> merged)
     {
         merged = left;
         if (left.Invalid || right.Invalid)
         {
-            merged = new FlowState<T>(null, Invalid: true);
+            merged = new FlowState<T>(null, Invalid: true,
+                ThisArgumentIsOriginal: left.ThisArgumentIsOriginal && right.ThisArgumentIsOriginal);
             return true;
         }
 
         var unknown = left.HasUnknownPath || right.HasUnknownPath;
+        var thisArgumentIsOriginal = left.ThisArgumentIsOriginal && right.ThisArgumentIsOriginal;
         if (left.Values is not { } a || right.Values is not { } b)
         {
-            merged = new FlowState<T>(left.Values ?? right.Values, unknown);
+            merged = new FlowState<T>(left.Values ?? right.Values, unknown,
+                ThisArgumentIsOriginal: thisArgumentIsOriginal);
             return true;
         }
 
@@ -1074,13 +1150,14 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 a[i].IsThis && b[i].IsThis, a[i].IsReadOnly || b[i].IsReadOnly);
         }
 
-        merged = new FlowState<T>(values, unknown);
+        merged = new FlowState<T>(values, unknown, ThisArgumentIsOriginal: thisArgumentIsOriginal);
         return true;
     }
 
     private bool Equal(FlowState<T> left, FlowState<T> right)
     {
-        if (left.Invalid != right.Invalid || left.HasUnknownPath != right.HasUnknownPath || left.Values?.Length != right.Values?.Length)
+        if (left.Invalid != right.Invalid || left.HasUnknownPath != right.HasUnknownPath
+            || left.ThisArgumentIsOriginal != right.ThisArgumentIsOriginal || left.Values?.Length != right.Values?.Length)
         {
             return false;
         }

@@ -125,14 +125,14 @@ public sealed record StackOperandView<T> where T : class
     public T? SlotType { get; init; }
 
     /// <summary>
-    /// True when the instruction loads <c>this</c>.
+    /// True when the instruction loads the argument slot that originally held <c>this</c> or its address.
     /// </summary>
-    public bool LoadsThis { get; init; }
+    public bool ReadsThisArgument { get; init; }
 
     /// <summary>
-    /// True when the instruction loads the address of <c>this</c>.
+    /// True when the instruction replaces the argument slot that originally held <c>this</c>.
     /// </summary>
-    public bool AddressOfThis { get; init; }
+    public bool WritesThisArgument { get; init; }
 
     /// <summary>
     /// Explains why a <c>jmp</c> target is incompatible with the enclosing method.

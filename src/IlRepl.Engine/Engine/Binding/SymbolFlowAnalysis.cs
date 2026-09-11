@@ -35,7 +35,10 @@ internal static class SymbolFlowAnalysis
     {
         var returnType = body.Signature?.ReturnType;
         return new ControlFlowAnalysis<TypeSymbol>(Rules(scope)).Run(
-            new FlowGraph<TypeSymbol>(body.FlowNodes, TypeSymbol.Object) { BodyName = body.Signature?.Name ?? "cell" },
+            new FlowGraph<TypeSymbol>(body.FlowNodes, TypeSymbol.Object, hasThis: body.ThisIndex == 0)
+            {
+                BodyName = body.Signature?.Name ?? "cell",
+            },
             SymbolIdentity.Equal(returnType, TypeSymbol.Void) ? null : returnType, body.Signature is null, cancellationToken);
     }
 
@@ -47,7 +50,10 @@ internal static class SymbolFlowAnalysis
     {
         var returnType = body.Signature?.ReturnType;
         return new ControlFlowAnalysis<TypeSymbol>(Rules(scope)).RunAsync(
-            new FlowGraph<TypeSymbol>(body.FlowNodes, TypeSymbol.Object) { BodyName = body.Signature?.Name ?? "cell" },
+            new FlowGraph<TypeSymbol>(body.FlowNodes, TypeSymbol.Object, hasThis: body.ThisIndex == 0)
+            {
+                BodyName = body.Signature?.Name ?? "cell",
+            },
             SymbolIdentity.Equal(returnType, TypeSymbol.Void) ? null : returnType, body.Signature is null, cancellationToken);
     }
 

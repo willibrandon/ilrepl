@@ -83,7 +83,7 @@ internal sealed class EditingStack
         foreach (var type in SymbolStackAlgebra.Transfer.PushTypes(view, popped))
         {
             _items.Add(type);
-            _receivers.Add(view.LoadsThis || view.AddressOfThis || duplicateReceiver);
+            _receivers.Add(view.ReadsThisArgument || duplicateReceiver);
         }
     }
 
@@ -102,8 +102,9 @@ internal sealed class EditingStack
             Op = op,
             ByteOperand = instruction.Operand.Kind == OperandKind.Byte && instruction.Operand.Value is byte value ? value : null,
             RetPops = retPops,
-            LoadsThis = instruction.ArgumentIndex == 0 && scope.ThisIndex == 0 && op.Name is "ldarg.0" or "ldarg" or "ldarg.s",
-            AddressOfThis = instruction.ArgumentIndex == 0 && scope.ThisIndex == 0 && op.Name is "ldarga" or "ldarga.s",
+            ReadsThisArgument = instruction.ArgumentIndex == 0 && scope.ThisIndex == 0
+                && op.Name is "ldarg.0" or "ldarg" or "ldarg.s" or "ldarga" or "ldarga.s",
+            WritesThisArgument = instruction.ArgumentIndex == 0 && scope.ThisIndex == 0 && op.Name is "starg" or "starg.s",
         };
         if (instruction.LocalIndex is int local && local < scope.Locals.Count)
         {

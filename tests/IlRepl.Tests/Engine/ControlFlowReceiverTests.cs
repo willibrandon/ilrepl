@@ -59,6 +59,81 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
+    /// Replacing argument zero removes its original-receiver provenance on direct and merged paths.
+    /// </summary>
+    [TestMethod]
+    [DataRow(true, false)]
+    [DataRow(false, false)]
+    [DataRow(true, true)]
+    [DataRow(false, true)]
+    public async Task ArgumentWrite_ChangesReceiverProvenance(bool originalReceiver, bool branch)
+    {
+        var lines = ControlFlowReceiverExamples.ArgumentSource(originalReceiver, branch);
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual(originalReceiver, !preview.Diagnostics.Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error),
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+
+        ReplException? refusal = null;
+        foreach (var line in lines)
+        {
+            try
+            {
+                session.AddLine(line);
+            }
+            catch (ReplException error)
+            {
+                refusal = error;
+                break;
+            }
+        }
+
+        Assert.AreEqual(originalReceiver, refusal is null, refusal?.Message);
+        if (!originalReceiver)
+        {
+            Assert.Contains("through this", refusal!.Message);
+            Assert.IsNotNull(session.OpenMethod);
+        }
+    }
+
+    /// <summary>
+    /// A handler sees the receiver provenance carried into its protected region.
+    /// </summary>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task ArgumentWrite_ReachesExceptionHandlers(bool originalReceiver)
+    {
+        var lines = ControlFlowReceiverExamples.HandlerSource(originalReceiver);
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual(originalReceiver, !preview.Diagnostics.Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error),
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+
+        ReplException? refusal = null;
+        foreach (var line in lines)
+        {
+            try
+            {
+                session.AddLine(line);
+            }
+            catch (ReplException error)
+            {
+                refusal = error;
+                break;
+            }
+        }
+
+        Assert.AreEqual(originalReceiver, refusal is null, refusal?.Message);
+        if (!originalReceiver)
+        {
+            Assert.Contains("through this", refusal!.Message);
+        }
+    }
+
+    /// <summary>
     /// Decoded constructors use the same readonly receiver rule as live and symbolic source bodies.
     /// </summary>
     [TestMethod]
@@ -90,5 +165,37 @@ public sealed class ControlFlowReceiverTests
         {
             Assert.Contains(diagnostic => diagnostic.Message.Contains("through this", StringComparison.Ordinal), diagnostics);
         }
+    }
+
+    /// <summary>
+    /// Decoded argument writes invalidate this before a later readonly field store is analyzed.
+    /// </summary>
+    [TestMethod]
+    public void Disassembly_TracksAnOverwrittenThisArgument()
+    {
+        var session = new Session();
+        var (_, image, fixture) = CecilFixture.Build((module, type) =>
+        {
+            var field = new FieldDefinition("Value", FieldAttributes.Public | FieldAttributes.InitOnly, module.TypeSystem.Int32);
+            type.Fields.Add(field);
+            var constructor = new MethodDefinition(".ctor",
+                MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+            constructor.Parameters.Add(new ParameterDefinition(type));
+            type.Methods.Add(constructor);
+            var il = constructor.Body.GetILProcessor();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!));
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Starg, constructor.Body.ThisParameter);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stfld, field);
+            il.Emit(OpCodes.Ret);
+        }, session.Resolver);
+        var listing = MethodDisassembler.Disassemble(fixture.GetConstructors()[0], session);
+        var diagnostics = StackAnalysis.Diagnostics(listing);
+        Assert.Contains(diagnostic => diagnostic.Message.Contains("through this", StringComparison.Ordinal), diagnostics);
+        using var oracle = new IlVerificationOracle();
+        Assert.IsEmpty(oracle.Verify(image));
     }
 }

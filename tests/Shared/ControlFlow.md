@@ -39,7 +39,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Generic object references | I.8.7.1, III.1.8.1.1 | GenericReferenceThrow, GenericReferenceBranch | GenericNeedsBoxThrow, GenericNeedsBoxBranch |
 | Runtime extensions to constrained calls | .NET ECMA-335 Augments | StaticAbstractCall, StaticAbstractFunction, StaticAbstract_ImplementedAndCalled | WrongStaticAbstractCall, WrongStaticAbstractImplementor, WrongStaticAbstractFunction, existing member eligibility tests |
 | Constrained receiver type | III.2.1 | ConstrainedReceiver | WrongConstrainedReceiver |
-| Readonly store receiver across paths | II.16.1.2 | FlowReceiver with this on both paths | FlowReceiver with another receiver |
+| Readonly store receiver across paths | II.16.1.2 | FlowReceiver and FlowArgument preserving this | Another receiver at a join or in argument zero |
 | Indirect calls | III.3.20 | IndirectCall, InstanceIndirectCall, ManagedPointerInstanceIndirectCall, NativePointerInstanceIndirectCall | WrongIndirectCall, WrongIndirectTarget, WrongInstanceIndirectReceiver |
 | Block memory operands | III.3.30, III.3.36 | CopyBlock, InitializeBlock | WrongCopyBlock, WrongInitializeBlock |
 | Array element, index and pointer operands | I.8.7.1, III.4.7–III.4.9, III.4.26–III.4.27 | ArrayElement, ArrayIndex, ArrayReferenceLoad, ArrayReferenceStore, BooleanArrayElement, CharacterArrayElement, CovariantReadOnlyArrayAddress, GenericArrayReferenceLoad, GenericArrayReferenceStore, NullArrayReferenceStore, TypedArrayReferenceLoad, TypedArrayReferenceStore | WrongArrayElement, WrongArrayIndex, WrongArrayValue, WrongArrayReferenceStore, WrongCovariantArrayAddress, WrongGenericArrayReferenceLoad, WrongManagedPointerArray, WrongNullArrayReferenceStore, WrongReferenceTypedArrayStore, WrongTypedArrayReferenceStore, WrongValueArrayReferenceLoad, WrongValueArrayReferenceStore, WrongValueTypedArrayLoad |
@@ -112,6 +112,10 @@ with that rule while executing the same body through CoreCLR and browser Mono.
 
 The numeric fixtures separately assert ECMA correctness and the library result. These are pinned
 observations, not skipped assertions. Review them when changing the verifier package.
+
+The library tags every later `ldarg.0` as `IsThisPtr`, even after `starg.0` replaces the receiver, and
+its `initonly` store rule does not consult the recorded modification. It therefore reports no diagnostic.
+FlowArgument retains the original receiver through argument writes and joins so the REPL enforces II.16.1.2.
 
 `ILImporter.Verify.cs` selects the larger `StackValueKind` in `ImportBinaryOperation` and permits a
 mixed pair whenever that kind is native integer. It consequently accepts int64/native-integer

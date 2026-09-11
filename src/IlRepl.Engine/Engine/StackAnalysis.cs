@@ -83,15 +83,16 @@ public static class StackAnalysis
                 ? [IlReader.LabelFor(target)] : raw.Operand.SwitchTargets.Select(IlReader.LabelFor).ToArray() : [],
             EffectUnknown = entry.EffectUnknown,
         }).ToArray();
-        var graph = new FlowGraph<Type>(nodes, typeof(object), complete: true) { BodyName = method.Method.Name };
+        var hasThis = !method.Method.IsStatic;
+        var graph = new FlowGraph<Type>(nodes, typeof(object), complete: true, hasThis: hasThis) { BodyName = method.Method.Name };
         var offsets = entries.Select((entry, index) => (entry.Offset, index)).ToDictionary(pair => pair.Offset, pair => pair.index);
 
         void Seed(int offset, Type? type)
         {
             if (offsets.TryGetValue(offset, out var index))
             {
-                graph.Seeds[index] = type is null ? FlowState<Type>.Empty
-                    : new FlowState<Type>([new FlowValue<Type>(type, [index])]);
+                graph.Seeds[index] = type is null ? hasThis ? FlowState<Type>.ThisEntry : FlowState<Type>.Empty
+                    : new FlowState<Type>([new FlowValue<Type>(type, [index])], ThisArgumentIsOriginal: hasThis);
             }
         }
 

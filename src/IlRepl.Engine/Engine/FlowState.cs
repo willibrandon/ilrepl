@@ -3,20 +3,24 @@ using IlRepl.Protocol;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Holds a path's stack while keeping unknown incoming paths separate from known witnesses.
+/// Holds a path's stack and original-receiver state while keeping unknown paths separate.
 /// </summary>
 /// <typeparam name="T">The type representation.</typeparam>
-internal sealed record FlowState<T>(FlowValue<T>[]? Values, bool HasUnknownPath = false, bool Invalid = false) where T : class
+internal sealed record FlowState<T>(
+    FlowValue<T>[]? Values,
+    bool HasUnknownPath = false,
+    bool Invalid = false,
+    bool ThisArgumentIsOriginal = false) where T : class
 {
     /// <summary>
-    /// The prescribed empty entry stack.
+    /// The empty entry stack outside an instance member.
     /// </summary>
     public static FlowState<T> Empty { get; } = new([]);
 
     /// <summary>
-    /// An incoming path whose stack effect could not be established.
+    /// The empty entry stack whose argument zero still holds the original receiver.
     /// </summary>
-    public static FlowState<T> Unknown { get; } = new(null, true);
+    public static FlowState<T> ThisEntry { get; } = new([], ThisArgumentIsOriginal: true);
 
     /// <summary>
     /// The presentation of this reachable state.

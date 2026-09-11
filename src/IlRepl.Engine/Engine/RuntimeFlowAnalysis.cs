@@ -58,7 +58,8 @@ internal static class RuntimeFlowAnalysis
             CatchType = entry.CatchType,
         }).ToArray();
         var returnType = state.Signature?.ReturnType;
-        return new ControlFlowAnalysis<Type>(Rules(state.Types)).Run(new FlowGraph<Type>(nodes, typeof(object)) { BodyName = body },
+        return new ControlFlowAnalysis<Type>(Rules(state.Types)).Run(
+            new FlowGraph<Type>(nodes, typeof(object), hasThis: context.ThisIndex == 0) { BodyName = body },
             returnType == typeof(void) ? null : returnType, !state.IsMethod, cancellationToken);
     }
 
@@ -94,7 +95,7 @@ internal static class RuntimeFlowAnalysis
         {
             Instruction = View(state, instruction, state.Context),
         };
-        var graph = new FlowGraph<Type>([node], typeof(object)) { BodyName = body };
+        var graph = new FlowGraph<Type>([node], typeof(object), hasThis: state.Context.ThisIndex == 0) { BodyName = body };
         var original = previous.End;
         var values = original?.Values;
         var copies = values?.Select(value => value with { Origins = [] }).ToArray();

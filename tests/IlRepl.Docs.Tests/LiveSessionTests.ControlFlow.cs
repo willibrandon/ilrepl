@@ -262,6 +262,27 @@ public sealed partial class LiveSessionTests
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 42 : int32", options);
     }
 
+    /// <summary>
+    /// Replacing argument zero removes its original-receiver provenance in the browser runtime.
+    /// </summary>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(120_000, CooperativeCancellation = true)]
+    public async Task ControlFlow_ArgumentWriteMatchesDesktop(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.ArgumentSource(false, true)));
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
+        await ClearPromptAsync(page);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.ArgumentSource(true, true)));
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class FlowArgument", options);
+    }
+
     private static async Task ArmSubmissionOutputAsync(IPage page)
     {
         await page.EvaluateAsync("""

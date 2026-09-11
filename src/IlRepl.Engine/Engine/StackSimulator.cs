@@ -317,7 +317,7 @@ public sealed class StackSimulator
 
         foreach (var t in RuntimeStackAlgebra.Transfer.PushTypes(view, popped))
         {
-            Push(t, view.LoadsThis || view.AddressOfThis || (op == OpCodes.Dup && poppedThis[0]));
+            Push(t, view.ReadsThisArgument || (op == OpCodes.Dup && poppedThis[0]));
         }
     }
 
@@ -337,8 +337,9 @@ public sealed class StackSimulator
             Op = op,
             ByteOperand = instruction.Kind == OperandKind.Byte && instruction.Operand is byte value ? value : null,
             RetPops = instruction.RetPops,
-            LoadsThis = instruction.ArgumentIndex == 0 && context.ThisIndex == 0 && op.Name is "ldarg.0" or "ldarg" or "ldarg.s",
-            AddressOfThis = instruction.ArgumentIndex == 0 && context.ThisIndex == 0 && op.Name is "ldarga" or "ldarga.s",
+            ReadsThisArgument = instruction.ArgumentIndex == 0 && context.ThisIndex == 0
+                && op.Name is "ldarg.0" or "ldarg" or "ldarg.s" or "ldarga" or "ldarga.s",
+            WritesThisArgument = instruction.ArgumentIndex == 0 && context.ThisIndex == 0 && op.Name is "starg" or "starg.s",
         };
         if (instruction.LocalIndex is int local && local < context.Locals.Count)
         {
