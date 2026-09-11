@@ -960,6 +960,7 @@ public sealed partial class LiveSessionTests
     /// <param name="browser">The browser engine to drive.</param>
     /// <returns>A task that completes when the assertions have run.</returns>
     [TestMethod]
+    [DoNotParallelize]
     [DataRow("chromium")]
     [DataRow("webkit")]
     [Timeout(240_000, CooperativeCancellation = true)]
@@ -976,7 +977,7 @@ public sealed partial class LiveSessionTests
             await route.FulfillAsync(new RouteFulfillOptions
             {
                 Response = response,
-                Body = "Object.defineProperty(self, 'indexedDB', { value: undefined });\n" + body,
+                Body = "const indexedDB = undefined;\n" + body,
                 ContentType = "text/javascript",
             });
         });
