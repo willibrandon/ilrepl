@@ -13,7 +13,8 @@ namespace IlRepl.Engine;
 /// Each walk takes a passing reference on every collectible loader allocator, and an assembly
 /// being unloaded stays alive for as long as any thread keeps walking. An assembly in a
 /// collectible context the session did not create is left out for the same reason a cell could
-/// never bind it: it can be gone at any moment.
+/// never bind it: it can be gone at any moment. The load notification appends atomically because
+/// it may run while another thread is enumerating assemblies under the runtime's loader lock.
 /// </remarks>
 internal static class ProcessAssemblies
 {
@@ -36,13 +37,7 @@ internal static class ProcessAssemblies
             return;
         }
 
-        lock (Gate)
-        {
-            if (s_initialized && !s_current.Contains(assembly))
-            {
-                Volatile.Write(ref s_current, [.. s_current, assembly]);
-            }
-        }
+        Append(assembly);
 
         lock (ChangeGate)
         {
@@ -88,15 +83,49 @@ internal static class ProcessAssemblies
                 return Volatile.Read(ref s_current);
             }
 
+            var snapshot = AppDomain.CurrentDomain.GetAssemblies().Where(IsSearchable).ToArray();
             lock (Gate)
             {
                 if (!s_initialized)
                 {
-                    Volatile.Write(ref s_current, [.. AppDomain.CurrentDomain.GetAssemblies().Where(IsSearchable)]);
+                    Merge(snapshot);
                     Volatile.Write(ref s_initialized, true);
                 }
 
                 return Volatile.Read(ref s_current);
+            }
+        }
+    }
+
+    private static void Append(Assembly assembly)
+    {
+        while (true)
+        {
+            var current = Volatile.Read(ref s_current);
+            if (Array.IndexOf(current, assembly) >= 0)
+            {
+                return;
+            }
+
+            var updated = new Assembly[current.Length + 1];
+            Array.Copy(current, updated, current.Length);
+            updated[^1] = assembly;
+            if (ReferenceEquals(Interlocked.CompareExchange(ref s_current, updated, current), current))
+            {
+                return;
+            }
+        }
+    }
+
+    private static void Merge(Assembly[] snapshot)
+    {
+        while (true)
+        {
+            var current = Volatile.Read(ref s_current);
+            var merged = snapshot.Concat(current.Where(assembly => !snapshot.Contains(assembly))).ToArray();
+            if (ReferenceEquals(Interlocked.CompareExchange(ref s_current, merged, current), current))
+            {
+                return;
             }
         }
     }
