@@ -435,6 +435,12 @@ public sealed partial class LiveSessionTests
         await page.Keyboard.PressAsync("Enter");
     }
 
+    private static async Task ClearPromptAsync(IPage page)
+    {
+        await page.Keyboard.PressAsync("Control+c");
+        await EmptyPromptAsync(page);
+    }
+
     private static async Task<IBrowser> LaunchAsync(string browser) => browser switch
     {
         "webkit" => await s_playwright!.Webkit.LaunchAsync(),
@@ -645,7 +651,7 @@ public sealed partial class LiveSessionTests
         var text = await BufferTextAsync(page);
         Assert.DoesNotContain("end of method Bad", text, "the invalid definition was never committed");
 
-        await page.Keyboard.PressAsync("Control+c");
+        await ClearPromptAsync(page);
         await TypeLineAsync(page, "ldc.i4.s 42");
         await TypeLineAsync(page, "ret");
         await Assertions.Expect(terminal).ToContainTextAsync("= 42 : int32",
@@ -689,8 +695,7 @@ public sealed partial class LiveSessionTests
         await Assertions.Expect(terminal).ToContainTextAsync("editing 6 lines", options);
         rows = await BufferRowsAsync(page);
         Assert.Contains(r => r.TrimEnd() == "il[2]> .method int32 Twice(int32 n) {", rows, "the recalled block starts at the prompt:\n" + string.Join('\n', rows));
-        await page.Keyboard.PressAsync("Control+c");
-        await Assertions.Expect(terminal).Not.ToContainTextAsync("editing", options);
+        await ClearPromptAsync(page);
 
         await TypeLineAsync(page, "ldc.i4 21");
         await TypeLineAsync(page, "call int32 Twice(int32)");
@@ -1050,8 +1055,7 @@ public sealed partial class LiveSessionTests
         await Assertions.Expect(terminal).ToContainTextAsync("method Long abandoned; the block is back in the editor", options);
         await Assertions.Expect(terminal).ToContainTextAsync("editing 3002 lines", options);
         Assert.DoesNotContain("end of method Long", await BufferTextAsync(page));
-        await page.Keyboard.PressAsync("Control+c");
-        await Assertions.Expect(terminal).Not.ToContainTextAsync("editing", options);
+        await ClearPromptAsync(page);
         await TypeLineAsync(page, "ldc.i4 6");
         await TypeLineAsync(page, "ret");
         await Assertions.Expect(terminal).ToContainTextAsync("= 6 : int32", options);

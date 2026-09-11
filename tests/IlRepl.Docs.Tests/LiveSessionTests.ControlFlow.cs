@@ -70,7 +70,7 @@ public sealed partial class LiveSessionTests
             {
                 await ReturnedBodyAsync(page);
                 await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync(example.Finding, options);
-                await page.Keyboard.PressAsync("Control+c");
+                await ClearPromptAsync(page);
                 await TypeLineAsync(page, "ldc.i4.s 42");
                 await TypeLineAsync(page, "ret");
                 await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 42 : int32", options);
@@ -220,7 +220,7 @@ public sealed partial class LiveSessionTests
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("incompatible stacks", options);
         await page.Keyboard.PressAsync("F8");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("stack before invalid", options);
-        await page.Keyboard.PressAsync("Control+c");
+        await ClearPromptAsync(page);
         var good = ControlFlowExamples.All.Single(example => example.Name == "Diamond");
         await PasteAsync(page, good.Source);
         await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("incompatible stacks", options);
@@ -251,7 +251,7 @@ public sealed partial class LiveSessionTests
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("stack before", options);
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("error:", options);
-        await page.Keyboard.PressAsync("Control+c");
+        await ClearPromptAsync(page);
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.Source(true)));
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class FlowReceiver", options);

@@ -112,15 +112,15 @@ public sealed partial class LiveSessionTests
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".class public FieldHost {\n.field public static vo*");
         await page.Keyboard.PressAsync("ArrowLeft");
-        await CompletionAtCaretAsync(page, "  ...> .field public static vo", "❯ void");
+        await CompletionAtCaretAsync(page, "  ...> .field public static vo", "❯ void", "*");
         await page.Keyboard.PressAsync("Delete");
-        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ void");
+        await PromptWithoutCompletionAsync(page, "  ...> .field public static vo", "❯ void");
         await page.Keyboard.TypeAsync("*");
         await page.Keyboard.PressAsync("ArrowLeft");
-        await CompletionAtCaretAsync(page, "  ...> .field public static vo", "❯ void");
+        await CompletionAtCaretAsync(page, "  ...> .field public static vo", "❯ void", "*");
         await page.Keyboard.PressAsync("Tab");
         await page.Keyboard.PressAsync("End");
-        await CompletionAtCaretAsync(page, "  ...> .field public static void*", ".field public static void*");
+        await PromptAtCaretAsync(page, "  ...> .field public static void*");
         await PasteAsync(page, " Address\n}\nldsfld FieldHost::Address\npop\nldc.i4.7\nret");
         await page.Keyboard.PressAsync("Enter");
         await ExpectCompletionAsync(page, "= 7 : int32");
@@ -142,12 +142,12 @@ public sealed partial class LiveSessionTests
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".method void M(vo*");
         await page.Keyboard.PressAsync("ArrowLeft");
-        await CompletionAtCaretAsync(page, "il[1]> .method void M(vo", "❯ void");
+        await CompletionAtCaretAsync(page, "il[1]> .method void M(vo", "❯ void", "*");
         await page.Keyboard.PressAsync("Delete");
-        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ void");
+        await PromptWithoutCompletionAsync(page, "il[1]> .method void M(vo", "❯ void");
         await page.Keyboard.TypeAsync("*");
         await page.Keyboard.PressAsync("ArrowLeft");
-        await CompletionAtCaretAsync(page, "il[1]> .method void M(vo", "❯ void");
+        await CompletionAtCaretAsync(page, "il[1]> .method void M(vo", "❯ void", "*");
         await page.Keyboard.PressAsync("Tab");
         await page.Keyboard.PressAsync("End");
         await PromptAtCaretAsync(page, "il[1]> .method void M(void*");
@@ -368,11 +368,11 @@ public sealed partial class LiveSessionTests
         await ExpectCompletionAsync(page, "end of class Holder");
         await PasteAsync(page, ".class public Outer {\n}\n.dis Outer/Inn");
         await ExpectCompletionAsync(page, "❯ Inner");
-        await page.Keyboard.PressAsync("Control+c");
+        await ClearPromptAsync(page);
         await TypeLineAsync(page, ".class public Outer {");
         await TypeLineAsync(page, "}");
         await ExpectCompletionAsync(page, "error: cannot redefine");
-        await page.Keyboard.PressAsync("Control+c");
+        await ClearPromptAsync(page);
         await TypeLineAsync(page, ".clear");
         await page.Keyboard.TypeAsync("ldtoken Outer/Inn");
         await ExpectCompletionAsync(page, "❯ Inner");
@@ -642,7 +642,7 @@ public sealed partial class LiveSessionTests
                 prompt => {
                   const terminal = window.ilreplTerminal;
                   const row = terminal.buffer.active.getLine(terminal.rows - 2);
-                  return row?.translateToString(true).trim() === prompt
+                  return row?.translateToString(true).trimEnd() === prompt
                     && row.getCell(prompt.length)?.getBgColor() === 0x61afef;
                 }
                 """, prompt, new() { PollingInterval = 16, Timeout = 30_000 });
@@ -663,7 +663,29 @@ public sealed partial class LiveSessionTests
         }
     }
 
-    private static async Task<IJSHandle> CompletionAtCaretAsync(IPage page, string prompt, string choice)
+    private static async Task<IJSHandle> CompletionAtCaretAsync(IPage page, string prompt, string choice, string? suffix = null)
+    {
+        try
+        {
+            return await page.WaitForFunctionAsync("""
+                ({ prompt, choice, suffix }) => {
+                  const terminal = window.ilreplTerminal;
+                  const row = terminal.buffer.active.getLine(terminal.rows - 2);
+                  if (row?.getCell(prompt.length)?.getBgColor() !== 0x61afef) return false;
+                  if (suffix !== null && row.translateToString(true).trimEnd() !== prompt + suffix) return false;
+                  const rows = Array.from({ length: terminal.rows }, (_, index) =>
+                    terminal.buffer.active.getLine(index)?.translateToString(true) ?? '');
+                  return rows.some(line => line.includes(choice)) && !rows.some(line => line.includes('updating '));
+                }
+                """, new { prompt, choice, suffix }, new() { PollingInterval = 16, Timeout = 30_000 });
+        }
+        catch (TimeoutException exception)
+        {
+            throw new TimeoutException($"Expected {choice} at caret {prompt.Length}:\n{await BufferTextAsync(page)}", exception);
+        }
+    }
+
+    private static async Task<IJSHandle> PromptWithoutCompletionAsync(IPage page, string prompt, string choice)
     {
         try
         {
@@ -671,16 +693,17 @@ public sealed partial class LiveSessionTests
                 ({ prompt, choice }) => {
                   const terminal = window.ilreplTerminal;
                   const row = terminal.buffer.active.getLine(terminal.rows - 2);
-                  if (row?.getCell(prompt.length)?.getBgColor() !== 0x61afef) return false;
+                  if (row?.translateToString(true).trimEnd() !== prompt
+                    || row.getCell(prompt.length)?.getBgColor() !== 0x61afef) return false;
                   const rows = Array.from({ length: terminal.rows }, (_, index) =>
                     terminal.buffer.active.getLine(index)?.translateToString(true) ?? '');
-                  return rows.some(line => line.includes(choice)) && !rows.some(line => line.includes('updating '));
+                  return !rows.some(line => line.includes(choice));
                 }
                 """, new { prompt, choice }, new() { PollingInterval = 16, Timeout = 30_000 });
         }
         catch (TimeoutException exception)
         {
-            throw new TimeoutException($"Expected {choice} at caret {prompt.Length}:\n{await BufferTextAsync(page)}", exception);
+            throw new TimeoutException($"Expected {prompt} without {choice}:\n{await BufferTextAsync(page)}", exception);
         }
     }
 

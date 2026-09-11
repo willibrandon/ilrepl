@@ -28,10 +28,10 @@ public sealed partial class LiveSessionTests
         await ExpectCompletionAsync(page, "il[2]>");
         await page.Keyboard.TypeAsync("ldtoken [System.Runtime]System.Strin");
         await ExpectCompletionAsync(page, "❯ string");
-        await page.Keyboard.PressAsync("Control+c");
+        await ClearPromptAsync(page);
         await page.Keyboard.TypeAsync("ldtoken [System.Collections]System.Collections.Generic.List");
         await ExpectCompletionAsync(page, "❯ List<");
-        await page.Keyboard.PressAsync("Control+c");
+        await ClearPromptAsync(page);
         await TypeLineAsync(page, ".clear");
         await TypeLineAsync(page, "call [System.Runtime]System.Reflection.Assembly::GetExecutingAssembly()");
         await TypeLineAsync(page, "call [Greeter]Greeter.CompletionProbe::Report([System.Runtime]System.Reflection.Assembly)");
@@ -87,7 +87,7 @@ public sealed partial class LiveSessionTests
             TestContext.CancellationToken.ThrowIfCancellationRequested();
             if (edit != 0)
             {
-                await page.Keyboard.PressAsync("Control+c");
+                await ClearPromptAsync(page);
             }
 
             var name = "PreviewBox" + edit;
@@ -99,7 +99,7 @@ public sealed partial class LiveSessionTests
         }
 
         TestContext.WriteLine($"1000 generic editor previews in {browser}: {started.Elapsed.TotalSeconds:F1} s");
-        await page.Keyboard.PressAsync("Control+c");
+        await ClearPromptAsync(page);
         await TypeLineAsync(page, ".clear");
         await TypeLineAsync(page, "call [System.Runtime]System.Reflection.Assembly::GetExecutingAssembly()");
         await TypeLineAsync(page, "call [Greeter]Greeter.CompletionProbe::Report([System.Runtime]System.Reflection.Assembly)");
