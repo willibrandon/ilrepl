@@ -232,15 +232,17 @@ internal sealed class FlowTypeRules<T>(
             return true;
         }
 
-        int Width(T type) => Algebra.Same(type, Algebra.Primitive("bool")) || Algebra.Same(type, Algebra.Primitive("int8"))
-            || Algebra.Same(type, Algebra.Primitive("uint8")) ? 1
-            : Algebra.Same(type, Algebra.Primitive("char")) || Algebra.Same(type, Algebra.Primitive("int16"))
-                || Algebra.Same(type, Algebra.Primitive("uint16")) ? 2
-            : Algebra.Same(type, Algebra.Primitive("int32")) || Algebra.Same(type, Algebra.Primitive("uint32")) ? 4
-            : Algebra.Same(type, Algebra.Primitive("int64")) || Algebra.Same(type, Algebra.Primitive("uint64")) ? 8
-            : Algebra.Same(type, Algebra.Primitive("native int")) || Algebra.Same(type, Algebra.Primitive("native uint")) ? -1 : 0;
-        var width = Width(left);
-        return width != 0 && width == Width(right);
+        // ECMA-335 I.8.7 defines these managed-pointer verification types explicitly.
+        bool Group(string first, string second, string? third = null)
+        {
+            bool Member(T type) => Algebra.Same(type, Algebra.Primitive(first))
+                || Algebra.Same(type, Algebra.Primitive(second))
+                || third is not null && Algebra.Same(type, Algebra.Primitive(third));
+            return Member(left) && Member(right);
+        }
+
+        return Group("bool", "int8", "uint8") || Group("char", "int16", "uint16")
+            || Group("int32", "uint32") || Group("int64", "uint64") || Group("native int", "native uint");
     }
 
     private bool IsReferenceParameter(T type, List<T> visited)

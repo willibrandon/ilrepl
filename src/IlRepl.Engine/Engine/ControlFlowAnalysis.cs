@@ -204,7 +204,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         && view.ParameterTypes.Select((parameter, argument) =>
                         (parameter, actual: values[values.Length - view.ArgumentPops + (view.IsInstance ? 1 : 0) + argument].Type))
                         .Any(pair => pair.actual is { } actual && _types.Algebra.IsGenericParameter(actual)
-                            && !_types.Algebra.Same(actual, pair.parameter)))
+                            && !_types.Algebra.Same(actual, pair.parameter))
+                    || view.Op == OpCodes.Ldvirtftn && view.MethodIsConstructor == true)
                 {
                     Report(index, "FLOW007", $"{view.Op.Name} uses an operation outside verifiable IL",
                         AnalysisDiagnosticKind.Unverifiable);

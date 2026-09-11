@@ -143,6 +143,7 @@ internal sealed class EditingStack
                 ParameterTypes = [.. method.Parameters.Select(parameter => parameter.Type), .. bound.OptionalParameterTypes ?? []],
                 IsInstance = !method.IsStatic && op != OpCodes.Newobj,
                 MethodIsStatic = method.IsStatic,
+                MethodIsConstructor = method.IsConstructor,
                 Token = StackTokenKind.Method,
             };
         }

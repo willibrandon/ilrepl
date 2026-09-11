@@ -167,7 +167,8 @@ public sealed class StackSimulator
         {
             // Two different parameters share only what their constraints promise; a reference
             // constraint promises object.
-            static bool IsReference(Type t) => !t.IsGenericParameter || t.GenericParameterAttributes.HasFlag(System.Reflection.GenericParameterAttributes.ReferenceTypeConstraint);
+            static bool IsReference(Type type) => !type.IsGenericParameter
+                || type.GenericParameterAttributes.HasFlag(GenericParameterAttributes.ReferenceTypeConstraint);
             return IsReference(a) && IsReference(b) ? typeof(object) : null;
         }
 
@@ -297,7 +298,9 @@ public sealed class StackSimulator
         var pops = StackTransfer<Type>.PopCount(view);
         if (pops > _items.Count)
         {
-            throw new ReplException($"stack underflow: '{op.Name}' pops {pops} value{(pops == 1 ? "" : "s")} but the stack has {_items.Count}: {Render()}");
+            var suffix = pops == 1 ? "" : "s";
+            throw new ReplException(
+                $"stack underflow: '{op.Name}' pops {pops} value{suffix} but the stack has {_items.Count}: {Render()}");
         }
 
         var popped = _items.GetRange(_items.Count - pops, pops);
@@ -367,6 +370,7 @@ public sealed class StackSimulator
                     ParameterTypes = [.. method.ParameterTypes, .. method.OptionalParameterTypes ?? []],
                     IsInstance = !method.IsStatic && op != OpCodes.Newobj,
                     MethodIsStatic = method.IsStatic,
+                    MethodIsConstructor = method.IsConstructor,
                     Token = StackTokenKind.Method,
                 };
             case CalliSignature signature:

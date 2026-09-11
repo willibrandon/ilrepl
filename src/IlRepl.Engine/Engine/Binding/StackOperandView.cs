@@ -60,6 +60,11 @@ public sealed record StackOperandView<T> where T : class
     public bool? MethodIsStatic { get; init; }
 
     /// <summary>
+    /// Whether a method operand names a constructor or type initializer; null when there is no method operand.
+    /// </summary>
+    public bool? MethodIsConstructor { get; init; }
+
+    /// <summary>
     /// The type <c>newobj</c> constructs.
     /// </summary>
     public T? DeclaringType { get; init; }

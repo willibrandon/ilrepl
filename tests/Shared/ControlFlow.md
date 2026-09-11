@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 152 method examples and the paired constructor example
+not justify refusing a correct body. The 157 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -20,10 +20,10 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Worklist convergence and backward edges | III.1.7.5, III.1.8.1.1 | Loop | BackwardStack, UnreachableForwardBackwardStack |
 | Switch and unreachable instructions | III.3.66, III.1.8.1.1 | Switch, DeadCode | Underflow on a reachable path |
 | Return shape and parameter assignment | III.3.57, I.8.7.3 | Diamond, NativeAddition | WrongReturn, WrongCall |
-| Virtual calls, constructors, and function pointers | III.3.19, III.4.18, III.4.21 | ConstrainedReceiver, VirtualFunctionPointer | WrongStaticConstructorAllocation, WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer |
+| Virtual calls, constructors, and function pointers | III.3.19, III.4.18, III.4.21 | ConstrainedReceiver, ConstructorFunctionPointer, NonVirtualFunctionPointer, VirtualFunctionPointer | WrongStaticConstructorAllocation, WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer |
 | Instance receiver representation | I.12.4.1.4, II.13.3 | ValueTypeReceiver, NativeValueTypeReceiver, PointerValueTypeReceiver | WrongManagedReferenceReceiver, WrongPointerValueTypeReceiver, WrongUnboxedValueTypeReceiver |
 | Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
-| Reduced pointer elements | I.8.7, III.1.8.1.2.3 | ReducedPointerJoin, EnumPointerJoin | ByrefJoin |
+| Managed-pointer verification types | I.8.7, III.1.8.1.2.3 | BooleanPointerCall, BooleanPointerJoin, CharacterPointerJoin, EnumPointerJoin, ReducedPointerJoin | ByrefJoin |
 | Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.10–III.4.11, III.4.13, III.4.29 | ManagedPointer, NativeFieldAddress, NativeFieldLoad, NativeFieldStore, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore, GenericIndirectReference | WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore, WrongGenericIndirectLoad, WrongGenericIndirectStore |
 | Field storage form | III.4.10–III.4.12, III.4.24–III.4.31 | PointerFields, StaticField, StaticFieldToken | WrongStaticFieldOpcode, WrongInstanceFieldOpcode |
 | Readonly provenance | III.2.3, III.3.62 | ReadOnlyLoad, ReadOnlyFieldWrite | WrongPrefix |
@@ -64,6 +64,11 @@ ECMA I.12.4.1.4 gives a value-type method a pointer to its unboxed instance. A m
 verifiable; an unmanaged pointer or native integer is correct but unverifiable. A class method
 instead requires an object reference. The receiver fixtures preserve that distinction and reject
 an unboxed value or managed pointer to a reference variable before either can reach the runtime.
+
+ECMA III.4.18 requires a correct `ldvirtftn` target to be nonstatic and defined for the supplied
+object. It does not require the target to be virtual. CoreCLR, Mono, and ILVerification accept the
+nonvirtual `string::get_Length` fixture. A constructor target is also correct and executable, but
+unverifiable; the palette omits both shapes while explicitly entered IL retains their CLI behavior.
 
 ## Disagreements with Microsoft.ILVerification 10.0.11
 
@@ -116,9 +121,15 @@ empty the stack as side effects. It does not require `leave` to cross a region b
 library and CoreCLR agree; RethrowPreservesStack, EndfinallyClearsStack, and LeaveWithinTry keep
 those correct bodies accepted.
 
-The library reports `PathStackUnexpected` when merging int32 and uint32 managed pointers, or an
-enum pointer and its underlying integer pointer. ECMA I.8.7 gives these the same verification
-type. `ReducedPointerJoin` and `EnumPointerJoin` check that they remain accepted and executable.
+The library reports `PathStackUnexpected` when merging managed pointers whose elements have the
+same CLI verification type: signed and unsigned integers, an enum and its underlying integer,
+`bool` and `int8`, or `char` and `int16`. It also reports `StackUnexpected` when passing `bool&` to
+an `int8&` parameter. ECMA I.8.7 explicitly equates these verification types. The pointer fixtures
+keep each form accepted and executable.
+
+ILVerification reports `LdftnCtor` for a constructor operand to `ldvirtftn`, matching the analyzer's
+unverifiable diagnostic. CoreCLR and browser Mono execute the body. A nonvirtual instance method
+meets the correctness rule and verifies without a diagnostic.
 
 The library accepts `ldelem.i1` over a `bool[]`, using their common verification type. Array
 instructions use the narrower array-element compatibility relation in ECMA I.8.7.1, whose reduced
