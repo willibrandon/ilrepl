@@ -52,6 +52,20 @@ public sealed class ControlFlowSessionTests
     }
 
     /// <summary>
+    /// An incrementally appended unreachable instruction retains the full analysis diagnostics.
+    /// </summary>
+    [TestMethod]
+    public void UnreachableAppend_MatchesFullAnalysisDiagnostics()
+    {
+        var session = new Session();
+        Add(session, ".method void Dead() {", ".locals init (int32* pointer)", "ldnull", "throw", "ldloc pointer");
+        var incremental = session.State.Diagnostics;
+        Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Unverifiable, incremental);
+        Add(session, "FULL:");
+        Assert.AreSequenceEqual(incremental, session.State.Diagnostics);
+    }
+
+    /// <summary>
     /// A depth conflict refuses its defining line and identifies both incoming paths.
     /// </summary>
     [TestMethod]

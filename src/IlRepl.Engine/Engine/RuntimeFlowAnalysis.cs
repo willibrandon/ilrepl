@@ -102,6 +102,10 @@ internal static class RuntimeFlowAnalysis
         {
             graph.Seeds[0] = original with { Values = copies };
         }
+        else
+        {
+            graph.Seeds.Clear();
+        }
 
         var returnType = state.Signature?.ReturnType;
         var step = new ControlFlowAnalysis<Type>(Rules(state.Types)).Run(graph,
