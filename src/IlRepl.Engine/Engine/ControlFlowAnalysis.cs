@@ -189,6 +189,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     || view.Op == OpCodes.Mkrefany && values.LastOrDefault()?.Type is { } typedReference
                         && _types.Category(typedReference) == StackCategory.NativeInt
                     || values.Any(value => value.Type is { } type && _types.Algebra.IsPointer(type))
+                    || UsesNativeAddress(view, values)
                     || view.Op.Name is "add" or "sub" or "add.ovf.un" or "sub.ovf.un"
                         && values.TakeLast(2).Any(value => value.Type is { } type && _types.Algebra.IsByRef(type))
                     || view.Op.Name?.StartsWith("conv.", StringComparison.Ordinal) == true
@@ -362,6 +363,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         {
             var addressConversion = unary is "conv.i" or "conv.u"
                 && kind is StackCategory.ByRef or StackCategory.ObjectReference;
+            if (op == OpCodes.Conv_R_Un && kind == StackCategory.Float)
+            {
+                return $"conv.r.un needs an integer value but found {_types.Name(top)}";
+            }
+
             if (!Numeric(top) && !addressConversion || unary == "not" && kind == StackCategory.Float)
             {
                 return $"{unary} needs a numeric value but found {_types.Name(top)}";
@@ -596,6 +602,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 return $"{arrayOp} needs an array with reference elements but found {_types.Name(array)}";
             }
 
+            if (arrayOp == "stelem.ref" && !Reference(top))
+            {
+                return $"stelem.ref needs an object reference but found {_types.Name(top)}";
+            }
+
             if (actualElement is not null && instructionElement is not null && arrayOp != "ldlen"
                 && arrayOp is not ("ldelem.ref" or "stelem.ref")
                 && !(arrayOp.StartsWith("stelem", StringComparison.Ordinal)
@@ -614,6 +625,28 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         }
 
         return null;
+    }
+
+    private bool UsesNativeAddress(StackOperandView<T> view, FlowValue<T>[] values)
+    {
+        var name = view.Op.Name;
+        if (name is null || name is not ("ldobj" or "stobj" or "initobj" or "cpobj")
+            && !name.StartsWith("ldind", StringComparison.Ordinal)
+            && !name.StartsWith("stind", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var pops = StackTransfer<T>.PopCount(view);
+        if (pops > values.Length)
+        {
+            return false;
+        }
+
+        var destination = values[values.Length - pops].Type;
+        return destination is not null && _types.Category(destination) == StackCategory.NativeInt
+            || name == "cpobj" && values[^1].Type is { } source
+                && _types.Category(source) == StackCategory.NativeInt;
     }
 
     private T? StorageType(StackOperandView<T> view)
