@@ -38,6 +38,20 @@ public sealed class ControlFlowSessionTests
     }
 
     /// <summary>
+    /// An incrementally appended unreachable instruction still has its operand shape checked.
+    /// </summary>
+    [TestMethod]
+    public void UnreachableInvalidOperand_IsRefusedDuringIncrementalAppend()
+    {
+        var session = new Session();
+        Add(session, ".method int32 Dead() {", "ldnull", "throw", "ldc.i4.1");
+        var error = Assert.ThrowsExactly<ReplException>(() => session.AddLine("newarr int32&"));
+        Assert.Contains("array element type", error.Message);
+        Assert.AreEqual("unreachable", session.State.StackText);
+        Add(session, "newarr int32", "pop", "ldnull", "throw", "}");
+    }
+
+    /// <summary>
     /// A depth conflict refuses its defining line and identifies both incoming paths.
     /// </summary>
     [TestMethod]

@@ -96,21 +96,26 @@ internal static class RuntimeFlowAnalysis
         };
         var graph = new FlowGraph<Type>([node], typeof(object)) { BodyName = body };
         var original = previous.End;
-        if (original is null)
+        var values = original?.Values;
+        var copies = values?.Select(value => value with { Origins = [] }).ToArray();
+        if (original is not null)
         {
-            result = Append(previous, null, null, null, previous.Diagnostics, previous.MaxStack);
-            return true;
+            graph.Seeds[0] = original with { Values = copies };
         }
 
-        var values = original.Values;
-        var copies = values?.Select(value => value with { Origins = [] }).ToArray();
-        graph.Seeds[0] = original with { Values = copies };
         var returnType = state.Signature?.ReturnType;
         var step = new ControlFlowAnalysis<Type>(Rules(state.Types)).Run(graph,
             returnType == typeof(void) ? null : returnType, !state.IsMethod);
         if (step.Diagnostics.Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error))
         {
             return false;
+        }
+
+        var diagnostics = previous.Diagnostics.Concat(step.Diagnostics).ToArray();
+        if (original is null)
+        {
+            result = Append(previous, null, null, null, diagnostics, previous.MaxStack);
+            return true;
         }
 
         FlowState<Type>? Restore(FlowState<Type>? current)
@@ -139,7 +144,6 @@ internal static class RuntimeFlowAnalysis
             };
         }
 
-        var diagnostics = previous.Diagnostics.Concat(step.Diagnostics).ToArray();
         result = Append(previous, Restore(step.Before[0]), Restore(step.After[0]), Restore(step.End), diagnostics,
             Math.Max(previous.MaxStack, step.MaxStack));
         return true;
