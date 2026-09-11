@@ -379,6 +379,8 @@ public sealed class StackSimulator
                     ReturnType = signature.ReturnType == typeof(void) ? null : signature.ReturnType,
                     ArgumentPops = signature.ArgumentPopCount + 1,
                     ParameterTypes = [.. signature.ParameterTypes, .. signature.OptionalParameterTypes ?? []],
+                    HasImplicitThis = signature.ManagedConvention.HasFlag(CallingConventions.HasThis)
+                        && !signature.ManagedConvention.HasFlag(CallingConventions.ExplicitThis),
                 };
             default:
                 return view;

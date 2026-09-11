@@ -55,6 +55,11 @@ public sealed record StackOperandView<T> where T : class
     public bool IsInstance { get; init; }
 
     /// <summary>
+    /// Whether a <c>calli</c> signature consumes an implicit <c>this</c> before its declared parameters.
+    /// </summary>
+    public bool HasImplicitThis { get; init; }
+
+    /// <summary>
     /// Whether a method operand names a static method; null when the instruction has no method operand.
     /// </summary>
     public bool? MethodIsStatic { get; init; }

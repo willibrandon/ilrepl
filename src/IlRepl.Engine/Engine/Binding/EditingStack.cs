@@ -153,6 +153,7 @@ internal sealed class EditingStack
             ReturnType = SymbolIdentity.Equal(signature.ReturnType, TypeSymbol.Void) ? null : signature.ReturnType,
             ArgumentPops = signature.ArgumentPopCount + 1,
             ParameterTypes = signature.Parameters,
+            HasImplicitThis = signature.HasThis && !signature.ExplicitThis,
         } : view;
     }
 

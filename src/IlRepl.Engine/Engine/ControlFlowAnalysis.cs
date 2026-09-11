@@ -491,17 +491,19 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 {
                     return $"calli needs a function pointer but found {_types.Name(top)}";
                 }
-
-                first = count - view.ParameterTypes.Count - 1;
             }
             if (view.IsInstance && !Receiver(values[first].Type, view.DeclaringType))
             {
                 return $"{op.Name} needs a {_types.Name(view.DeclaringType)} receiver but found {_types.Name(values[first].Type)}";
             }
+            if (view.HasImplicitThis && !Address(values[first].Type) && !Reference(values[first].Type))
+            {
+                return $"calli needs a reference or pointer receiver but found {_types.Name(values[first].Type)}";
+            }
 
             for (var parameter = 0; parameter < view.ParameterTypes.Count; parameter++)
             {
-                var actual = values[first + (view.IsInstance ? 1 : 0) + parameter].Type;
+                var actual = values[first + (view.IsInstance || view.HasImplicitThis ? 1 : 0) + parameter].Type;
                 var expected = view.ParameterTypes[parameter];
                 if (!_types.CanAssign(actual, expected))
                 {

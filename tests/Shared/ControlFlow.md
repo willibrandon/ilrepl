@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 159 method examples and the paired constructor example
+not justify refusing a correct body. The 163 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -40,7 +40,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Runtime extensions to constrained calls | .NET ECMA-335 Augments | StaticAbstract_ImplementedAndCalled | Existing member eligibility tests |
 | Constrained receiver type | III.2.1 | ConstrainedReceiver | WrongConstrainedReceiver |
 | Readonly store receiver across paths | II.16.1.2 | FlowReceiver with this on both paths | FlowReceiver with another receiver |
-| Indirect calls | III.3.20 | IndirectCall | WrongIndirectCall, WrongIndirectTarget |
+| Indirect calls | III.3.20 | IndirectCall, InstanceIndirectCall, ManagedPointerInstanceIndirectCall, NativePointerInstanceIndirectCall | WrongIndirectCall, WrongIndirectTarget, WrongInstanceIndirectReceiver |
 | Block memory operands | III.3.30, III.3.36 | CopyBlock, InitializeBlock | WrongCopyBlock, WrongInitializeBlock |
 | Array element, index and pointer operands | I.8.7.1, III.4.7–III.4.9, III.4.26–III.4.27 | ArrayElement, ArrayIndex, ArrayReferenceLoad, ArrayReferenceStore, GenericArrayReferenceLoad, GenericArrayReferenceStore, NullArrayReferenceStore, TypedArrayReferenceStore | WrongArrayElement, WrongArrayIndex, WrongArrayValue, WrongArrayReferenceStore, WrongGenericArrayReferenceLoad, WrongNullArrayReferenceStore, WrongTypedArrayReferenceStore, WrongValueArrayReferenceLoad, WrongValueArrayReferenceStore |
 | Object copy operands | III.4.4 | CopyObject, CopyReferenceObject | WrongCopyObjectSource, WrongCopyObjectSourceType, WrongCopyObjectDestinationType |
@@ -135,10 +135,11 @@ The library accepts `ldelem.i1` over a `bool[]`, using their common verification
 instructions use the narrower array-element compatibility relation in ECMA I.8.7.1, whose reduced
 types keep `bool` distinct from `int8`, so `WrongBooleanArrayLoad` remains a correctness error.
 
-The library reports `ImportCalli not implemented` for both indirect-call fixtures. The tests
-assert that exact unsupported-operation failure separately; it is not treated as verification
-success or as evidence that the invalid argument is rejected. ECMA III.3.20 supplies the argument
-rule, and the accepted body runs through desktop, both exports, and browser Mono.
+The library reports `ImportCalli not implemented` for the indirect calls it reaches. The native
+pointer fixture stops earlier at `ExpectedNumericType` for `conv.u`. The tests assert those exact
+outcomes; neither counts as evidence that an invalid argument is rejected. ECMA III.3.20 supplies
+the argument and implicit-receiver rules. The accepted bodies run through desktop, both exports,
+and browser Mono.
 
 The library reports only `Unverifiable` for `jmp` inside a try. ECMA III.3.37 makes that transfer
 incorrect as well as unverifiable, so `JumpFromTry` pins the analyzer's stricter rejection.

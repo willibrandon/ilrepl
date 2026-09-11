@@ -180,6 +180,35 @@ public sealed class ControlFlowOracleTests
     }
 
     /// <summary>
+    /// A decoded instance calli rejects a scalar receiver before malformed metadata reaches emission.
+    /// </summary>
+    [TestMethod]
+    public void InstanceIndirectCall_ScalarReceiverIsRejected()
+    {
+        var session = new Session();
+        var (_, _, fixture) = CecilFixture.Build((module, type) =>
+        {
+            var target = new MethodDefinition("Target", MethodAttributes.Public, module.TypeSystem.Int32);
+            type.Methods.Add(target);
+            var targetIl = target.Body.GetILProcessor();
+            targetIl.Emit(OpCodes.Ldc_I4, 42);
+            targetIl.Emit(OpCodes.Ret);
+            var method = new MethodDefinition("M", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Int32);
+            type.Methods.Add(method);
+            var site = new CallSite(module.TypeSystem.Int32) { HasThis = true };
+            var il = method.Body.GetILProcessor();
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldftn, target);
+            il.Emit(OpCodes.Calli, site);
+            il.Emit(OpCodes.Ret);
+        }, session.Resolver);
+        var listing = MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
+        var diagnostics = StackAnalysis.Diagnostics(listing);
+        Assert.Contains(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error
+            && diagnostic.Message.Contains("calli needs a reference or pointer receiver", StringComparison.Ordinal), diagnostics);
+    }
+
+    /// <summary>
     /// Missing reference metadata cannot be mistaken for the expected rejection of a malformed stack.
     /// </summary>
     [TestMethod]
