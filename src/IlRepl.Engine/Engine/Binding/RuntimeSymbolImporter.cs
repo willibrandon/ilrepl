@@ -313,6 +313,11 @@ public static class RuntimeSymbolImporter
         bool declared)
     {
         ArgumentNullException.ThrowIfNull(signature);
+        if (signature.ExactSymbol is { } exact)
+        {
+            return exact.WithDefinition(id, declaring, source, declared);
+        }
+
         var genericParameters = new List<GenericParameterSymbol>();
         for (var i = 0; i < signature.TypeParameters.Count; i++)
         {
@@ -361,7 +366,7 @@ public static class RuntimeSymbolImporter
             Source = MethodSymbolSource.Declared,
             DeclaringType = declaring,
             Name = declaration.Name,
-            FieldType = Import(declaration.Type),
+            FieldType = declaration.ExactType ?? Import(declaration.Type),
             Attributes = declaration.Attributes,
             RequiredModifiers = [.. declaration.RequiredModifiers.Select(Import)],
             OptionalModifiers = [.. declaration.OptionalModifiers.Select(Import)],

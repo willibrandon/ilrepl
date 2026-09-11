@@ -549,8 +549,8 @@ public static class SymbolBinder
         var explicitMethodArguments = syntax.GenericArguments is null ? null : methodArguments;
         if (scope.TryGetDeclaration(declaring, out var own))
         {
-            return BindOwnMethod(own, declaring, scope, syntax, parameterTypes, returnType, syntax.ExplicitInstance, wantConstructor
-                || name is ".ctor" or ".cctor", explicitMethodArguments, optionalTypes);
+            return BindOwnMethod(own, declaring, scope, syntax, parameterTypes, returnType, syntax.ExplicitInstance,
+                wantConstructor || name == ".ctor", explicitMethodArguments, optionalTypes);
         }
 
         if (wantConstructor || name is ".ctor" or ".cctor")

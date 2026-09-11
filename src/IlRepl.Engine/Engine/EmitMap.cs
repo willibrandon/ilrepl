@@ -1,4 +1,5 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -113,6 +114,27 @@ public sealed class EmitMap
         }
 
         return type;
+    }
+
+    /// <summary>
+    /// Maps a symbolic type without losing signature shapes that have no distinct runtime type.
+    /// </summary>
+    /// <param name="type">The bound symbolic type.</param>
+    /// <returns>The symbolic type to emit.</returns>
+    internal TypeSymbol Map(TypeSymbol type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        return SymbolRelations.Rewrite(type, candidate =>
+        {
+            if (candidate.Kind is not (TypeSymbolKind.Named or TypeSymbolKind.TypeParameter or TypeSymbolKind.MethodParameter))
+            {
+                return null;
+            }
+
+            var runtime = RuntimeBindingAdapter.Materialize(candidate);
+            var mapped = Map(runtime);
+            return ReferenceEquals(runtime, mapped) ? null : RuntimeSymbolImporter.Import(mapped);
+        });
     }
 
     /// <summary>

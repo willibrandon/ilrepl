@@ -40,8 +40,7 @@ public sealed partial class Session
             foreach (var method in _methods)
             {
                 var referenced = SessionMentions.Types(method.State)
-                    .Concat(method.Signature.ParameterTypes)
-                    .Append(method.Signature.ReturnType)
+                    .Concat(SignatureTypes(method.Signature))
                     .Concat(method.Signature.ReturnRequiredModifiers)
                     .Concat(method.Signature.ReturnOptionalModifiers)
                     .Concat(method.Signature.Parameters.SelectMany(parameter =>

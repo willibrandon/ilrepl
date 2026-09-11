@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using IlRepl.Engine.Binding;
 using Mono.Cecil;
 using CecilEventAttributes = Mono.Cecil.EventAttributes;
 using CecilFieldAttributes = Mono.Cecil.FieldAttributes;
@@ -172,7 +173,8 @@ internal sealed class TypeFamilyEmitter(
         var (prototype, members) = prototypes[declaration.FullName];
         foreach (var field in declaration.Fields)
         {
-            var type = Modified(writer.Import(field.Type), field.RequiredModifiers, field.OptionalModifiers);
+            var fieldType = field.ExactType is null ? writer.Import(field.Type) : writer.Import(field.ExactType);
+            var type = Modified(fieldType, field.RequiredModifiers, field.OptionalModifiers);
             var cecilField = new FieldDefinition(field.Name, (CecilFieldAttributes)field.Attributes, type);
             if (field.Offset is { } offset)
             {
@@ -275,8 +277,11 @@ internal sealed class TypeFamilyEmitter(
         {
             var signature = method.Signature;
             var cecilMethod = _methods[method];
-            cecilMethod.ReturnType = Modified(writer.Import(signature.ReturnType), signature.ReturnRequiredModifiers,
-                signature.ReturnOptionalModifiers);
+            var exact = signature.ExactSymbol;
+            var returnType = exact is not null
+                ? writer.Import(exact.ReturnType)
+                : writer.Import(signature.ReturnType);
+            cecilMethod.ReturnType = Modified(returnType, signature.ReturnRequiredModifiers, signature.ReturnOptionalModifiers);
             for (var i = 0; i < signature.TypeParameters.Count; i++)
             {
                 var declared = signature.TypeParameters[i];
@@ -291,7 +296,8 @@ internal sealed class TypeFamilyEmitter(
             for (var i = 0; i < signature.Parameters.Count; i++)
             {
                 var parameter = signature.Parameters[i];
-                var type = Modified(writer.Import(parameter.Type), parameter.RequiredModifiers, parameter.OptionalModifiers);
+                var exactType = exact is null ? writer.Import(parameter.Type) : writer.Import(exact.Parameters[i].Type);
+                var type = Modified(exactType, parameter.RequiredModifiers, parameter.OptionalModifiers);
                 var cecilParameter = new ParameterDefinition(parameter.Name ?? ("arg" + i.ToString(System.Globalization
                     .CultureInfo.InvariantCulture)), (CecilParameterAttributes)parameter.Attributes, type);
                 if (parameter.HasDefault)
@@ -410,12 +416,18 @@ internal sealed class TypeFamilyEmitter(
         }
 
         var signature = method.Signature;
+        var exact = signature.ExactSymbol;
         var wanted = signature.ParameterTypes.Select(TypeNameFormatter.Pretty).ToArray();
         IEnumerable<MethodBase> candidates = method.IsConstructor || method.IsTypeInitializer
             ? runtime.GetConstructors(AllMembers).Where(c => c.IsStatic == method.IsTypeInitializer)
             : runtime.GetMethods(AllMembers).Where(m => m.Name == signature.Name && m.IsStatic == signature.IsStatic);
         return candidates.FirstOrDefault(m =>
         {
+            if (exact is not null)
+            {
+                return SignatureSymbolIdentity.Equal(exact, RuntimeSymbolImporter.Import(m));
+            }
+
             var parameters = m.GetParameters();
             return parameters.Length == wanted.Length && parameters.Select(p => TypeNameFormatter.Pretty(p.ParameterType))
                 .SequenceEqual(wanted);
@@ -436,7 +448,7 @@ internal sealed class TypeFamilyEmitter(
         {
             if (isDeclared && declared.Name == signature.Name && declared.IsStatic == signature.IsStatic && declared
                 .Parameters.Count == signature.Parameters.Count
-                && declared.ParameterTypes.Zip(signature.ParameterTypes).All(p => TypeIdentity.Equal(p.First, p.Second)))
+                && SignatureIdentity.Same(declared, signature))
             {
                 return builder;
             }

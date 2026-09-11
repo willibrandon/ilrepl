@@ -222,7 +222,7 @@ public sealed class ControlFlowSessionTests
     }
 
     /// <summary>
-    /// A typed unmanaged pointer can receive fields only from its own element type.
+    /// A typed unmanaged pointer selects fields from its element and yields native addresses.
     /// </summary>
     [TestMethod]
     public void FieldReceiver_TypedPointerRequiresItsElementType()
@@ -239,7 +239,7 @@ public sealed class ControlFlowSessionTests
             ".locals init (valuetype [System.Runtime]System.ValueTuple`1<int32>* pointer)",
             "ldarga.s value", "conv.u", "stloc pointer", "ldloc pointer",
             "ldflda !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1");
-        Assert.AreEqual("[int32*]", session.State.StackText);
+        Assert.AreEqual("[native int]", session.State.StackText);
         Add(session, "ldind.i4", "ret", "}", "ldc.i4.s 42", "call int32 AddressPointer(int32)");
         Assert.AreEqual(42, session.Run().Value);
 

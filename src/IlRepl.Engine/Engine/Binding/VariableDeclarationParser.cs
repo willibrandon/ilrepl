@@ -91,6 +91,12 @@ public static class VariableDeclarationParser
             var literal = equals < 0 ? null : part[(equals + 1)..].Trim();
             var position = 0;
             var type = SymbolBinder.BindType(CilSyntaxParser.ParseTypeAt(declaration, ref position), scope).Type;
+            var problem = MemberEligibility.TypeVerdict(type, scope.Access, AccessFacts.From(scope));
+            if (problem is not null)
+            {
+                throw new ReplException(problem);
+            }
+
             var name = Name(declaration[position..], "argument");
             if (name is not null && (scope.Arguments.Any(v => v.Name == name) || declared.Any(v => v.Name == name)))
             {

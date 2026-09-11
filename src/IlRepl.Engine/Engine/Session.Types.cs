@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Reflection.Emit;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -632,7 +633,10 @@ public sealed partial class Session
     private LineResult AddField(OpenTypeBlock block, string rest, string line)
     {
         var field = FieldDeclarationParser.Parse(rest, TypeContext(block), line);
-        MemberAccess.CheckType(field.Type, block.Scope, _typeTable);
+        foreach (var type in FieldTypes(field))
+        {
+            MemberAccess.CheckType(type, block.Scope, _typeTable);
+        }
         if (block.Fields.Any(f => f.Name == field.Name))
         {
             throw new ReplException($"field {field.Name} is already declared on {block.Path}");
@@ -733,7 +737,7 @@ public sealed partial class Session
         var context = TypeContext(block);
         var owner = block.Header with { Kind = block.Kind, Attributes = block.Header.Attributes };
         var signature = MethodHeaderParser.ParseMember(rest, context, owner, out var braceOpen, out var closes, out var throwaway);
-        foreach (var mentioned in signature.ParameterTypes.Append(signature.ReturnType))
+        foreach (var mentioned in SignatureTypes(signature))
         {
             MemberAccess.CheckType(mentioned, block.Scope, context.Types);
         }
@@ -1249,8 +1253,8 @@ public sealed partial class Session
             _methods,
             family => family.Types.Values.Concat(family.Prototypes.Values.Select(p => (Type)p.Prototype)),
             (family, types, methods) => FamilyMentions(family.Declaration, types, methods),
-            (method, types, methods) => BodyMentions(method.State, types, methods) || method.Signature.ParameterTypes.Append(
-                method.Signature.ReturnType).Any(t => Mentions(t, types)),
+            (method, types, methods) => BodyMentions(method.State, types, methods)
+                || SignatureTypes(method.Signature).Any(type => Mentions(type, types)),
             method => method.Signature.Name,
             ReferenceEqualityComparer.Instance);
         return ([.. closure.Families], [.. closure.Methods]);
@@ -1273,7 +1277,7 @@ public sealed partial class Session
 
             declared.AddRange(declaration.Interfaces);
             declared.AddRange(declaration.TypeParameters.SelectMany(p => p.Constraints));
-            declared.AddRange(declaration.Fields.Select(f => f.Type));
+            declared.AddRange(declaration.Fields.SelectMany(FieldTypes));
             declared.AddRange(declaration.Fields.SelectMany(f => f.RequiredModifiers.Concat(f.OptionalModifiers)));
             declared.AddRange(declaration.Properties.Select(p => p.Type));
             declared.AddRange(declaration.Events.Select(e => e.HandlerType));
@@ -1284,9 +1288,8 @@ public sealed partial class Session
             declared.AddRange(declaration.Overrides.Select(o => o.Target.DeclaringType!));
             foreach (var method in declaration.Methods)
             {
-                declared.Add(method.Signature.ReturnType);
+                declared.AddRange(SignatureTypes(method.Signature));
                 declared.AddRange(method.Signature.ReturnRequiredModifiers.Concat(method.Signature.ReturnOptionalModifiers));
-                declared.AddRange(method.Signature.ParameterTypes);
                 declared.AddRange(method.Signature.Parameters.SelectMany(p => p.RequiredModifiers.Concat(p.OptionalModifiers)));
                 declared.AddRange(method.Signature.TypeParameters.SelectMany(p => p.Constraints));
                 declared.AddRange(method.Overrides.Select(o => o.Target.DeclaringType!));
@@ -1360,6 +1363,12 @@ public sealed partial class Session
                 return false;
             }
 
+            if (TypeNameFormatter.IsFunctionPointer(type))
+            {
+                return Mentions(type.GetFunctionPointerReturnType(), types)
+                    || type.GetFunctionPointerParameterTypes().Any(parameter => Mentions(parameter, types));
+            }
+
             if (type.IsConstructedGenericType && type.GetGenericArguments().Any(a => Mentions(a, types)))
             {
                 return true;
@@ -1369,6 +1378,43 @@ public sealed partial class Session
         }
 
         return false;
+    }
+
+    private static IEnumerable<Type> FieldTypes(FieldDeclaration field)
+    {
+        yield return field.Type;
+        if (field.ExactType is not null)
+        {
+            foreach (var type in RuntimeSymbolTypes.Materialized(field.ExactType))
+            {
+                yield return type;
+            }
+        }
+    }
+
+    private static IEnumerable<Type> SignatureTypes(MethodSignature signature)
+    {
+        yield return signature.ReturnType;
+        foreach (var parameter in signature.ParameterTypes)
+        {
+            yield return parameter;
+        }
+
+        if (signature.ExactSymbol is not null)
+        {
+            foreach (var type in RuntimeSymbolTypes.Materialized(signature.ExactSymbol.ReturnType))
+            {
+                yield return type;
+            }
+
+            foreach (var parameter in signature.ExactSymbol.Parameters)
+            {
+                foreach (var type in RuntimeSymbolTypes.Materialized(parameter.Type))
+                {
+                    yield return type;
+                }
+            }
+        }
     }
 
     private bool UndoTypeLine()

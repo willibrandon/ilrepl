@@ -457,7 +457,8 @@ public sealed class RuntimeBindingScope : IBindingScope
     {
         get
         {
-            _registry.Locals ??= [.. Context.Locals.Select(l => new VariableSymbol(ImportType(l.Type), l.Name, l.IsPinned))];
+            _registry.Locals ??= [.. Context.Locals.Select(l => new VariableSymbol(l.ExactType ?? ImportType(l.Type), l.Name,
+                l.IsPinned))];
             return _registry.Locals;
         }
     }
@@ -467,7 +468,8 @@ public sealed class RuntimeBindingScope : IBindingScope
     {
         get
         {
-            _registry.Arguments ??= [.. Context.Arguments.Select(a => new VariableSymbol(ImportType(a.Type), a.Name, false))];
+            _registry.Arguments ??= [.. Context.Arguments.Select(a => new VariableSymbol(a.ExactType ?? ImportType(a.Type), a.Name,
+                false))];
             return _registry.Arguments;
         }
     }

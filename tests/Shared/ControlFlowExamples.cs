@@ -151,6 +151,23 @@ public static class ControlFlowExamples
             "ldc.i4.s 42", "ret"], true),
         new("ConstructorFunctionPointer", ["newobj instance void object::.ctor()", "ldvirtftn instance void object::.ctor()",
             "pop", "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "LdftnCtor"),
+        new("DirectConstructorFunctionPointer", ["ldftn instance void object::.ctor()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "LdftnCtor"),
+        new("StaticInitializerFunctionPointer", ["ldftn void FlowGeneric::.cctor()", "pop", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "T", GenericArguments: "int32", Members: ".method static void .cctor() {\nret\n}"),
+        new("FunctionPointerLocal", [".locals init (method int32 *(int32) pointer)",
+            "ldftn int32 FlowGeneric::Id(int32)", "stloc pointer", "ldloc pointer", "pop", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "T", GenericArguments: "int32",
+            Members: ".method public static int32 Id(int32) {\nldarg.0\nret\n}"),
+        new("FunctionPointerField", ["ldftn int32 FlowGeneric::Id(int32)",
+            "stsfld method int32 *(int32) FlowGeneric::Pointer", "ldsfld method int32 *(int32) FlowGeneric::Pointer",
+            "pop", "ldc.i4.s 42", "ret"], true, GenericParameters: "T", GenericArguments: "int32",
+            Members: ".field public static method int32 *(int32) Pointer\n"
+                + ".method public static int32 Id(int32) {\nldarg.0\nret\n}"),
+        new("FunctionPointerReturn", ["call method int32 *(int32) FlowGeneric::Pointer()", "pop", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "T", GenericArguments: "int32", Members: ".method public static int32 Id(int32) {\n"
+                + "ldarg.0\nret\n}\n.method public static method int32 *(int32) Pointer() {\n"
+                + "ldftn int32 FlowGeneric::Id(int32)\nret\n}"),
         new("WrongStaticVirtualFunctionPointer", ["ldnull", "ldvirtftn int32 [System.Runtime]System.Math::Abs(int32)", "pop",
             "ldc.i4.s 42", "ret"], false, "needs an instance method", Verification: "LdvirtftnOnStatic"),
         new("WrongStaticConstructorAllocation", ["newobj void FlowGeneric::.cctor()", "pop", "ldc.i4.s 42", "ret"], false,
@@ -192,6 +209,25 @@ public static class ControlFlowExamples
             "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "ExpectedIntegerType"),
         new("ManagedPointerOverflowDifference", ["ldarga.s n", "dup", "sub.ovf.un", "pop", "ldc.i4.s 42", "ret"], true,
             Unverifiable: true, Verification: "ExpectedIntegerType"),
+        new("UnmanagedPointerAddition", [
+            ".locals init (valuetype [System.Runtime]System.DateTime item, int32* pointer)",
+            "ldloca item", "conv.u", "stloc pointer", "ldloc pointer", "ldc.i4.0", "add",
+            "call instance int64 [System.Runtime]System.DateTime::get_Ticks()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("UnmanagedPointerShift", [
+            ".locals init (valuetype [System.Runtime]System.DateTime item, int32* pointer)",
+            "ldloca item", "conv.u", "stloc pointer", "ldloc pointer", "ldc.i4.0", "shl",
+            "call instance int64 [System.Runtime]System.DateTime::get_Ticks()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("UnmanagedPointerNot", [
+            ".locals init (valuetype [System.Runtime]System.DateTime item, int32* pointer)",
+            "ldloca item", "conv.u", "stloc pointer", "ldloc pointer", "not", "not",
+            "call instance int64 [System.Runtime]System.DateTime::get_Ticks()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("UnmanagedFieldAddress", [".locals init (valuetype Holder item, valuetype Holder* owner)",
+            "ldloca item", "conv.u", "stloc owner", "ldloc owner", "ldflda int64 Holder::Ticks",
+            "call instance int64 [System.Runtime]System.DateTime::get_Ticks()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType", Declarations: HolderDeclarations),
         new("NativeAddition", ["ldc.i4.1", "conv.i", "ldc.i4.s 41", "add", "conv.i4", "ret"], true),
         new("NativePointerLocal", [".locals init (int32* pointer)", "ldc.i4.0", "conv.i", "stloc pointer",
             "ldc.i4.s 42", "ret"], true, Unverifiable: true),
@@ -203,6 +239,28 @@ public static class ControlFlowExamples
             Members: ".method public static int32* Pointer() {\nldc.i4.0\nconv.i\nret\n}"),
         new("NativePointerArrayElement", ["ldc.i4.1", "newarr int32*", "ldc.i4.0", "ldc.i4.0", "conv.i",
             "stelem int32*", "ldc.i4.s 42", "ret"], true, Unverifiable: true),
+        new("PointerArrayLoad", ["ldc.i4.1", "newarr int32*", "ldc.i4.0", "ldelem int32*", "pop",
+            "ldc.i4.s 42", "ret"], true),
+        new("PointerObjectLoad", [".locals init (int32* pointer)", "ldloca pointer", "ldobj int32*", "pop",
+            "ldc.i4.s 42", "ret"], true),
+        new("PointerFieldToLocal", [".locals init (int32* copy)", "ldsfld int32* FlowGeneric::Pointer", "stloc copy",
+            "ldc.i4.s 42", "ret"], true, GenericParameters: "T", GenericArguments: "int32",
+            Members: ".field public static int32* Pointer"),
+        new("PointerFieldArgument", ["ldsfld int32* FlowGeneric::Pointer", "call void FlowGeneric::Accept(int32*)",
+            "ldc.i4.s 42", "ret"], true, GenericParameters: "T", GenericArguments: "int32",
+            Members: ".field public static int32* Pointer\n.method public static void Accept(int32*) {\nret\n}"),
+        new("PointerFieldReturn", ["call int32* FlowGeneric::Read()", "pop", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "T", GenericArguments: "int32", Members: ".field public static int32* Pointer\n"
+                + ".method public static int32* Read() {\nldsfld int32* FlowGeneric::Pointer\nret\n}"),
+        new("PointerFieldArithmetic", ["ldsfld int32* FlowGeneric::Pointer", "ldc.i4.0", "add", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, GenericParameters: "T", GenericArguments: "int32",
+            Members: ".field public static int32* Pointer"),
+        new("PointerLocalLoad", [".locals init (int32* pointer)", "ldloc pointer", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "UnmanagedPointer"),
+        new("PointerArgumentLoad", ["ldsfld int32* FlowGeneric::Pointer", "call int32 FlowGeneric::Read(int32*)", "ret"], true,
+            Unverifiable: true, Verification: "UnmanagedPointer", GenericParameters: "T", GenericArguments: "int32",
+            Members: ".field public static int32* Pointer\n.method public static int32 Read(int32* pointer) {\n"
+                + "ldarg pointer\npop\nldc.i4.s 42\nret\n}"),
         new("Int32PointerLocal", [".locals init (int32* pointer)", "ldc.i4.0", "stloc pointer",
             "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "StackUnexpected"),
         new("Int32PointerArgument", ["ldc.i4.0", "call int32 FlowGeneric::Accept(int32*)", "ret"], true,
@@ -464,6 +522,10 @@ public static class ControlFlowExamples
         new("UnmanagedReferenceStore", [".locals init (object item, native int pointer)", "ldloca item", "conv.u",
             "stloc pointer", "ldloc pointer", "ldstr \"value\"", "stind.ref", "ldc.i4.s 42", "ret"], true,
             Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("UnmanagedReferenceLoad", [".locals init (object item, int32* pointer)", "ldloca item", "conv.u",
+            "stloc pointer", "ldloc pointer", "ldstr \"value\"", "stind.ref", "ldloc pointer", "ldind.ref",
+            "callvirt instance int32 object::GetHashCode()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
         new("NativeIndirectLoad", ["ldarg.0", "brtrue DONE", "ldc.i4.0", "conv.i", "ldind.i4", "pop",
             "DONE: ldc.i4.s 42", "ret"], true,
             Unverifiable: true, Verification: "StackByRef"),
@@ -536,6 +598,12 @@ public static class ControlFlowExamples
         call instance void AbstractThing::.ctor()
         ret
         }
+        }
+        """;
+
+    private const string HolderDeclarations = """
+        .class public sequential ansi sealed Holder extends [System.Runtime]System.ValueType {
+        .field public int64 Ticks
         }
         """;
 }

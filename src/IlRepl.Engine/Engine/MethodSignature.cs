@@ -1,3 +1,5 @@
+using IlRepl.Engine.Binding;
+
 namespace IlRepl.Engine;
 
 /// <summary>
@@ -9,6 +11,11 @@ namespace IlRepl.Engine;
 /// <param name="Parameters">The parameters in order. Names are optional and values are unused.</param>
 public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList<ArgumentDeclaration> Parameters)
 {
+    /// <summary>
+    /// The exact signature retained when its runtime projection cannot represent its complete shape.
+    /// </summary>
+    internal MethodSymbol? ExactSymbol { get; init; }
+
     /// <summary>
     /// The method attributes as declared: access, <c>static</c>, <c>virtual</c>, and the rest. A
     /// session method is public and static.
@@ -70,8 +77,10 @@ public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList
     /// Renders the signature the way a call names it, for example <c>int32 Fib(int32)</c>.
     /// </summary>
     /// <returns>The call form.</returns>
-    public string Describe() =>
-        $"{TypeNameFormatter.Pretty(ReturnType)} {Name}{GenericSuffix}({string.Join(", ", Parameters.Select(p => TypeNameFormatter.Pretty(p.Type)))})";
+    public string Describe() => ExactSymbol is null
+        ? $"{TypeNameFormatter.Pretty(ReturnType)} {Name}{GenericSuffix}"
+            + $"({string.Join(", ", Parameters.Select(p => TypeNameFormatter.Pretty(p.Type)))})"
+        : SymbolRenderer.DescribeSignature(ExactSymbol, SymbolRenderer.Pretty);
 
     private string GenericSuffix => TypeParameters.Count == 0 ? "" : "<" + string.Join(", ", TypeParameters.Select(p => p.Name)) + ">";
 
@@ -79,6 +88,15 @@ public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList
     /// Renders the signature with its parameter names, for example <c>int32 Fib(int32 n)</c>.
     /// </summary>
     /// <returns>The header form.</returns>
-    public string DescribeWithNames() =>
-        $"{TypeNameFormatter.Pretty(ReturnType)} {Name}({string.Join(", ", Parameters.Select(p => (TypeNameFormatter.Pretty(p.Type) + " " + (p.Name ?? "")).TrimEnd()))})";
+    public string DescribeWithNames()
+    {
+        var returnType = ExactSymbol is null ? TypeNameFormatter.Pretty(ReturnType) : SymbolRenderer.Pretty(ExactSymbol.ReturnType);
+        var parameters = Parameters.Select((parameter, index) =>
+        {
+            var type = ExactSymbol is null ? TypeNameFormatter.Pretty(parameter.Type)
+                : SymbolRenderer.Pretty(ExactSymbol.Parameters[index].Type);
+            return (type + " " + (parameter.Name ?? "")).TrimEnd();
+        });
+        return $"{returnType} {Name}({string.Join(", ", parameters)})";
+    }
 }

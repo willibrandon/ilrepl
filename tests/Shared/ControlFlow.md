@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 213 method examples and the paired constructor example
+not justify refusing a correct body. The 231 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -20,14 +20,14 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Worklist convergence and backward edges | III.1.7.5, III.1.8.1.1 | Loop | BackwardStack, UnreachableForwardBackwardStack |
 | Switch and unreachable instructions | III.3.66, III.1.8.1.1 | Switch, DeadCode | Underflow on a reachable path |
 | Return shape and parameter assignment | III.3.57, I.8.7.3 | Diamond, NativeAddition | WrongReturn, WrongCall |
-| Virtual calls, constructors, and function pointers | II.15.2, III.3.19, III.3.41, III.4.18, III.4.21 | AbstractVirtualCall, ConcreteAllocation, ConstrainedReceiver, ConstructorFunctionPointer, InstanceFunctionPointer, NonVirtualFunctionPointer, VirtualFunctionPointer | WrongAbstractAllocation, WrongAbstractCall, WrongAbstractFunctionPointer, WrongMethodAllocation, WrongStaticConstructorAllocation, WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer, WrongVirtualConstructorCall |
+| Virtual calls, constructors, and function pointers | II.14.5, II.15.2, III.3.19, III.3.41, III.4.18, III.4.21 | AbstractVirtualCall, ConcreteAllocation, ConstrainedReceiver, ConstructorFunctionPointer, DirectConstructorFunctionPointer, FunctionPointerField, FunctionPointerLocal, FunctionPointerReturn, InstanceFunctionPointer, NonVirtualFunctionPointer, StaticInitializerFunctionPointer, VirtualFunctionPointer | WrongAbstractAllocation, WrongAbstractCall, WrongAbstractFunctionPointer, WrongMethodAllocation, WrongStaticConstructorAllocation, WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer, WrongVirtualConstructorCall |
 | Instance receiver representation | I.12.4.1.4, II.13.3 | ValueTypeReceiver, NativeValueTypeReceiver, PointerValueTypeReceiver | WrongManagedReferenceReceiver, WrongPointerValueTypeReceiver, WrongUnboxedValueTypeReceiver |
 | Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
 | Managed-pointer verification types | I.8.7, III.1.8.1.2.3 | BooleanPointerCall, BooleanPointerJoin, CharacterPointerJoin, EnumPointerJoin, ReducedPointerJoin | ByrefJoin |
-| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.10–III.4.11, III.4.13, III.4.26–III.4.29 | ByteIndirectLoad, ByteIndirectStore, FloatIndirectLoad, FloatIndirectStore, Int32PointerArgument, Int32PointerArrayElement, Int32PointerField, Int32PointerLocal, Int32PointerObjectStore, Int32PointerReturn, Int32PointerStoredArgument, ManagedPointer, NativeFieldAddress, NativeFieldLoad, NativeFieldStore, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, NativePointerArgument, NativePointerArrayElement, NativePointerLocal, NativePointerReturn, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore, GenericIndirectReference | WrongNarrowFloatStore, WrongNarrowIndirectStore, WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore, WrongGenericIndirectLoad, WrongGenericIndirectStore, WrongWideFloatLoad, WrongWideIndirectLoad |
+| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.10–III.4.11, III.4.13, III.4.26–III.4.29 | ByteIndirectLoad, ByteIndirectStore, FloatIndirectLoad, FloatIndirectStore, GenericIndirectReference, IndirectReferenceStore, Int32PointerArgument, Int32PointerArrayElement, Int32PointerField, Int32PointerLocal, Int32PointerObjectStore, Int32PointerReturn, Int32PointerStoredArgument, ManagedPointer, NativeFieldAddress, NativeFieldLoad, NativeFieldStore, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, NativePointerArgument, NativePointerArrayElement, NativePointerLocal, NativePointerReturn, PointerArgumentLoad, PointerArrayLoad, PointerFieldArgument, PointerFieldArithmetic, PointerFieldReturn, PointerFields, PointerFieldToLocal, PointerLocalLoad, PointerObjectLoad, UnmanagedFieldAddress, UnmanagedReferenceLoad, UnmanagedReferenceStore | WrongGenericIndirectLoad, WrongGenericIndirectStore, WrongIndirectReferenceStore, WrongNarrowFloatStore, WrongNarrowIndirectStore, WrongPointerField, WrongUnmanagedReferenceStore, WrongWideFloatLoad, WrongWideIndirectLoad |
 | Field storage form | III.4.10–III.4.12, III.4.24–III.4.31 | PointerFields, StaticField, StaticFieldToken | WrongInstanceFieldOpcode, WrongReferenceFieldReceiver, WrongStaticFieldOpcode |
 | Readonly provenance | III.2.3, III.3.62 | CovariantReadOnlyArrayAddress, ReadOnlyLoad, ReadOnlyFieldWrite | WrongCovariantArrayAddress, WrongPrefix |
-| Correct operations outside verification | III.1.8, III.3.47 | ManagedPointerOverflowAddition, NativeValueTypeReceiver, PointerDifference, ReadOnlyWrite, StackAllocation | WrongArithmetic, WrongAllocationHandler |
+| Correct operations outside verification | III.1.8, III.3.47 | ManagedPointerOverflowAddition, NativeValueTypeReceiver, PointerDifference, ReadOnlyWrite, StackAllocation, UnmanagedPointerAddition, UnmanagedPointerNot, UnmanagedPointerShift | WrongArithmetic, WrongAllocationHandler |
 | Numeric operand categories | III.1.5 tables III.2–III.8, III.3.27 | ManagedPointerOverflowAddition, ManagedPointerOverflowDifference, ManagedPointerOverflowSubtraction, MixedFloats, NativeAddition, UnsignedIntegerToFloat, 288 raw pairs | BadOverflowFloat, BadNotFloat, BadShift, WrongUnsignedFloatConversion |
 | Comparisons | III.1.5 table III.4 | ObjectComparison, GenericReferenceComparison | BadComparison, WrongGenericComparison |
 | Reference and float operands | III.3.22, III.3.27, III.4.31 | Catch, MixedFloats | BadThrow, BadFinite, WrongReferenceConversion |
@@ -85,10 +85,25 @@ correct, unverifiable form and executes on both runtimes.
 ILVerification reports no diagnostic for the native-integer assignments and `StackUnexpected`
 for each `int32` form.
 
+An exact `ldelem` or `ldobj` can load a typed pointer through managed storage without making the
+body unverifiable. PointerArrayLoad and PointerObjectLoad keep a later `pop` from inheriting a
+diagnostic merely because it consumes that value.
+
+The same exact pointer loaded from a field can move to a pointer local, argument, or return. The
+PointerField fixtures distinguish those moves from assigning an integer stack value to the slot.
+Loading a pointer local or argument is itself unverifiable. Arithmetic, shifts, and unary numeric
+operations consume its storage signature and leave the native-integer stack type.
+
+An unmanaged receiver makes `ldflda` return a native integer, and `ldind.ref` through an unmanaged
+address returns an object reference. The field and reference-load fixtures keep the pointer's
+metadata element type from leaking into either result.
+
 ECMA III.4.18 requires a correct `ldvirtftn` target to be nonstatic and defined for the supplied
 object. It does not require the target to be virtual. CoreCLR, Mono, and ILVerification accept the
 nonvirtual `string::get_Length` fixture. A constructor target is also correct and executable, but
 unverifiable; the palette omits both shapes while explicitly entered IL retains their CLI behavior.
+Function-pointer signatures can hold an `ldftn` result and return it as a native-integer stack
+value. Loading an instance initializer's address is unverifiable; loading a type initializer's is not.
 
 ECMA III.4.25 makes `sizeof` always verifiable. SizeOf keeps the analyzer and ILVerification aligned
 with that rule while executing the same body through CoreCLR and browser Mono.
@@ -106,6 +121,10 @@ The same importer reports `ExpectedIntegerType` for the managed-pointer forms of
 `sub.ovf.un`. ECMA table III.7 explicitly permits pointer/integer addition, pointer/integer
 subtraction, and pointer/pointer subtraction for these unsigned overflow instructions as correct
 but unverifiable IL. All three forms execute through CoreCLR, browser Mono, ILAsm, and `.save`.
+
+The library maps a typed pointer field to native integer before arithmetic and reports no diagnostic.
+ECMA III.1.1.5 still makes unmanaged-pointer arithmetic unverifiable. PointerFieldArithmetic keeps
+the analyzer's diagnostic at the arithmetic instruction without marking an unrelated consumer.
 
 `ILImporter.StackValue.cs` returns immediately for equal stack kinds and types in `IsBinaryComparable`.
 It accepts `cgt` on two null references although table III.4 limits reference comparisons. Its Int32

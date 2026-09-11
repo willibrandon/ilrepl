@@ -192,7 +192,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     || view.Op.Name is "localloc" or "cpblk" or "initblk" or "calli" or "jmp"
                     || view.Op == OpCodes.Mkrefany && values.LastOrDefault()?.Type is { } typedReference
                         && _types.Category(typedReference) == StackCategory.NativeInt
-                    || values.Any(value => value.Type is { } type && _types.Algebra.IsPointer(type))
+                    || LoadsPointerSlot(view)
+                    || TransformsDataPointer(view, values)
                     || UsesNativeAddress(view, values)
                     || UsesGenericReferenceAddress(view, values)
                     || view.Op.Name is "add" or "sub" or "add.ovf.un" or "sub.ovf.un"
@@ -209,7 +210,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         (parameter, actual: values[values.Length - view.ArgumentPops + (view.IsInstance ? 1 : 0) + argument].Type))
                         .Any(pair => pair.actual is { } actual && _types.Algebra.IsGenericParameter(actual)
                             && !_types.Algebra.Same(actual, pair.parameter))
-                    || view.Op == OpCodes.Ldvirtftn && view.MethodIsConstructor == true)
+                    || (view.Op.Name is "ldftn" or "ldvirtftn") && view.MethodIsConstructor == true
+                        && view.MethodIsStatic == false)
                 {
                     var operation = tailCallPassesManagedPointer ? "tail." : view.DecodedPrefixName ?? view.Op.Name;
                     Report(index, "FLOW007", $"{operation} uses an operation outside verifiable IL",
@@ -260,7 +262,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     return "a tail call in the cell must return object directly; boxing or a synthesized null before ret is not allowed";
                 }
 
-                return top is not null && (_types.Algebra.IsByRef(top) || _types.Algebra.IsPointer(top))
+                return top is not null && (_types.Algebra.IsByRef(top) || IsDataPointer(top))
                     ? $"cannot return a {_types.Name(top)} from the cell; load through it first (ldind/ldobj)" : null;
             }
 
@@ -393,7 +395,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (_types.Algebra.IsValueType(owner))
             {
                 // ECMA-335 I.12.4.1.4 permits managed, unmanaged, and native-integer pointers to an unboxed value.
-                if (_types.Algebra.IsByRef(type) || _types.Algebra.IsPointer(type))
+                if (_types.Algebra.IsByRef(type) || IsDataPointer(type))
                 {
                     return _types.Algebra.Same(_types.Algebra.ElementOf(type), owner);
                 }
@@ -411,7 +413,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 return true;
             }
 
-            if (_types.Algebra.IsPointer(type))
+            if (IsDataPointer(type))
             {
                 return _types.CanAssign(_types.Algebra.ElementOf(type), owner);
             }
@@ -589,7 +591,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         if (op == OpCodes.Mkrefany && view.Type is { } referenced && top is { } pointer)
         {
-            if (_types.Algebra.IsByRef(pointer) || _types.Algebra.IsPointer(pointer))
+            if (_types.Algebra.IsByRef(pointer) || IsDataPointer(pointer))
             {
                 if (!_types.Algebra.Same(_types.Algebra.ElementOf(pointer), referenced))
                 {
@@ -862,9 +864,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
     private bool IntegerAssignedToPointer(StackOperandView<T> view, FlowValue<T>[] values, T? returnType)
     {
-        bool Integer(T? type) => type is not null
+        bool Integer(T? type) => type is not null && !IsDataPointer(type)
             && _types.Category(type) is StackCategory.Int32 or StackCategory.NativeInt;
-        bool Pointer(T? type) => type is not null && _types.Algebra.IsPointer(type);
+        bool Pointer(T? type) => type is not null && IsDataPointer(type);
         if (values.Length == 0)
         {
             return false;
@@ -926,6 +928,26 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         return false;
     }
+
+    private bool LoadsPointerSlot(StackOperandView<T> view)
+    {
+        var name = view.Op.Name;
+        return name is ("ldloc" or "ldloc.s" or "ldloc.0" or "ldloc.1" or "ldloc.2" or "ldloc.3"
+            or "ldarg" or "ldarg.s" or "ldarg.0" or "ldarg.1" or "ldarg.2" or "ldarg.3")
+            && view.SlotType is { } slot && IsDataPointer(slot);
+    }
+
+    private bool TransformsDataPointer(StackOperandView<T> view, FlowValue<T>[] values)
+    {
+        var name = view.Op.Name;
+        return name is ("add" or "sub" or "mul" or "div" or "div.un" or "rem" or "rem.un" or "and" or "or" or "xor"
+            or "add.ovf" or "add.ovf.un" or "sub.ovf" or "sub.ovf.un" or "mul.ovf" or "mul.ovf.un"
+            or "shl" or "shr" or "shr.un" or "neg" or "not")
+            && values.TakeLast(StackTransfer<T>.PopCount(view))
+                .Any(value => value.Type is { } type && IsDataPointer(type));
+    }
+
+    private bool IsDataPointer(T type) => _types.Algebra.IsPointer(type) && _types.Algebra.ElementOf(type) is not null;
 
     private T? ArrayInstructionType(StackOperandView<T> view)
     {

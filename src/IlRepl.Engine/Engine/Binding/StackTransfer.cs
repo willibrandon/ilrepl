@@ -168,10 +168,10 @@ public sealed class StackTransfer<T> where T : class
             case "shr.un":
             case "neg":
             case "not":
-                return [popped[0]];
+                return [UnmanagedPointerAsNative(popped[0])];
             case "ldind.ref":
-                return [popped.Count > 0 && popped[0] is { } indirect && (_types.IsByRef(indirect) || _types.IsPointer(
-                    indirect)) ? _types.ElementOf(indirect) : _types.UnknownReference];
+                return [popped.Count > 0 && popped[0] is { } indirect && _types.IsByRef(indirect)
+                    ? _types.ElementOf(indirect) : _types.UnknownReference];
             case "ldelem.ref":
                 return [popped.Count > 1 && popped[0] is { } array && _types.IsArray(array) ? _types.ElementOf(
                     array) : _types.UnknownReference];
@@ -238,7 +238,7 @@ public sealed class StackTransfer<T> where T : class
     {
         if (_types.IsPointer(receiver))
         {
-            return _types.MakePointer(fieldType);
+            return _types.Primitive("native int");
         }
 
         return IsNativeInteger(receiver) ? _types.Primitive("native int") : _types.MakeByRef(fieldType);
@@ -300,17 +300,12 @@ public sealed class StackTransfer<T> where T : class
             return b;
         }
 
-        if (a is not null && _types.IsPointer(a))
-        {
-            return a;
-        }
-
-        if (b is not null && _types.IsPointer(b))
-        {
-            return b;
-        }
-
         var nativeInt = _types.Primitive("native int");
+        if ((a is not null && _types.IsPointer(a)) || (b is not null && _types.IsPointer(b)))
+        {
+            return nativeInt;
+        }
+
         if (_types.Same(a, nativeInt) || _types.Same(b, nativeInt))
         {
             return nativeInt;
@@ -329,4 +324,7 @@ public sealed class StackTransfer<T> where T : class
 
         return _types.Primitive("int32");
     }
+
+    private T? UnmanagedPointerAsNative(T? type) => type is not null && _types.IsPointer(type)
+        ? _types.Primitive("native int") : type;
 }

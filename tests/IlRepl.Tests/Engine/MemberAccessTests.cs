@@ -243,4 +243,17 @@ public sealed class MemberAccessTests
             ".class public Host {", ".method public static int32 Touch<T>() { ldc.i4 1; ret }", ".method public static int32 Use() {");
         Assert.Contains("Outer/Inner is nested private", Refused(session, "call int32 Host::Touch<class Outer/Inner>()"));
     }
+
+    /// <summary>
+    /// Types nested in a function-pointer signature keep the same visibility as direct mentions.
+    /// </summary>
+    [TestMethod]
+    public void FunctionPointerTypes_AreJudgedRecursively()
+    {
+        var session = Load(".class public Outer {", ".class nested private Inner { }", "}");
+        Assert.Contains("Outer/Inner is nested private",
+            Refused(session, ".locals init (method void *(class Outer/Inner) pointer)"));
+        Assert.Contains("Outer/Inner is nested private",
+            Refused(session, ".args (method void *(class Outer/Inner) pointer)"));
+    }
 }

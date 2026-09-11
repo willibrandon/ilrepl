@@ -51,8 +51,13 @@ internal sealed class RuntimeDeclarationMembers : IDeclarationMembers
     public MethodSymbol DefineForward(MethodSymbol signature)
     {
         var declared = new MethodSignature(signature.Name, _scope.TypeOf(signature.ReturnType), [.. signature.Parameters.Select(p
-            => new ArgumentDeclaration(_scope.TypeOf(p.Type), null, null, ""))])
+            => new ArgumentDeclaration(_scope.TypeOf(p.Type), null, null, "")
+            {
+                ExactType = RuntimeSymbolTypes.RequiresExact(p.Type) ? p.Type : null,
+            })])
         {
+            ExactSymbol = RuntimeSymbolTypes.RequiresExact(signature.ReturnType)
+                || signature.Parameters.Any(parameter => RuntimeSymbolTypes.RequiresExact(parameter.Type)) ? signature : null,
             Attributes = signature.Attributes,
             CallingConvention = signature.CallingConvention,
         };

@@ -37,6 +37,30 @@ public static partial class MemberEligibility
             return null;
         }
 
+        if (type.Kind == TypeSymbolKind.FunctionPointer)
+        {
+            if (TypeVerdict(type.Signature!.ReturnType, where, facts, judgeAll) is { } returnProblem)
+            {
+                return returnProblem;
+            }
+
+            foreach (var parameter in type.Signature.Parameters)
+            {
+                if (TypeVerdict(parameter, where, facts, judgeAll) is { } parameterProblem)
+                {
+                    return parameterProblem;
+                }
+            }
+
+            return null;
+        }
+
+        if (type.Kind == TypeSymbolKind.Modified
+            && TypeVerdict(type.Modifier!, where, facts, judgeAll) is { } modifierProblem)
+        {
+            return modifierProblem;
+        }
+
         while (type.HasElement)
         {
             type = type.Element!;
@@ -255,6 +279,11 @@ public static partial class MemberEligibility
         }
 
         if (type.Kind == TypeSymbolKind.Unresolved)
+        {
+            return false;
+        }
+
+        if (type.Kind == TypeSymbolKind.Modified && !IsReachable(type.Modifier!, where, facts))
         {
             return false;
         }

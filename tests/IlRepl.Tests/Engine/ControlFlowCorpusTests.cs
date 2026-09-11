@@ -56,7 +56,9 @@ public sealed class ControlFlowCorpusTests
 
         Assert.AreEqual(example.Accepted, refusal is null, refusal?.Message);
         var implementation = example.Implementation.Length == 0 ? "" : " " + example.Implementation;
-        var members = example.Members.Length == 0 ? "" : example.Members.Replace("\n", "\n    ", StringComparison.Ordinal) + "\n    ";
+        var members = example.Members.Length == 0 ? ""
+            : example.Members.Replace("FlowGeneric::", "Fixture::", StringComparison.Ordinal)
+                .Replace("\n", "\n    ", StringComparison.Ordinal) + "\n    ";
         var declarations = example.Declarations.Length == 0 ? "" : example.Declarations + "\n";
         var body = string.Join('\n', example.Body).Replace("} handler {", "} {", StringComparison.Ordinal)
             .Replace("FlowGeneric::", "Fixture::", StringComparison.Ordinal);
@@ -89,9 +91,17 @@ public sealed class ControlFlowCorpusTests
         var expected = example.Verification.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         Assert.AreSequenceEqual(expected.Order(),
             verification.Select(code => code.ToString()).Distinct().Order(), string.Join(", ", verification));
-        if (example.Unverifiable)
+        if (example.Accepted)
         {
-            Assert.Contains(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Unverifiable, preview.Diagnostics);
+            Assert.AreEqual(example.Unverifiable,
+                preview.Diagnostics.Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Unverifiable),
+                string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        }
+        if (name == "PointerFieldArithmetic")
+        {
+            var diagnostics = preview.Diagnostics.Where(diagnostic => diagnostic.Code == "FLOW007").ToArray();
+            Assert.HasCount(1, diagnostics);
+            Assert.AreEqual(Array.IndexOf(lines, "add"), diagnostics[0].Location.Line);
         }
         if (refusal is not null)
         {
@@ -119,6 +129,68 @@ public sealed class ControlFlowCorpusTests
         {
             File.Delete(path);
         }
+    }
+
+    /// <summary>
+    /// A function-pointer signature returns from a cell as its native-integer stack value.
+    /// </summary>
+    [TestMethod]
+    public async Task CellFunctionPointer_ReturnsNativeInteger()
+    {
+        var session = new Session();
+        foreach (var line in new[] { ".method int32 Id(int32 value) {", "ldarg value", "ret", "}" })
+        {
+            session.AddLine(line);
+        }
+
+        var lines = new[]
+        {
+            ".locals init (method int32 *(int32) pointer)", "ldftn int32 Id(int32)", "stloc pointer", "ldloc pointer", "ret",
+        };
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 4, 3, 1), TestContext.CancellationToken);
+        Assert.DoesNotContain(diagnostic => diagnostic.Kind is AnalysisDiagnosticKind.Error
+            or AnalysisDiagnosticKind.Unverifiable, preview.Diagnostics,
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        foreach (var line in lines)
+        {
+            session.AddLine(line);
+        }
+
+        Assert.IsInstanceOfType<nint>(session.Run().Value);
+    }
+
+    /// <summary>
+    /// A session method keeps its function-pointer signature through execution and export.
+    /// </summary>
+    [TestMethod]
+    public void SessionMethodFunctionPointer_RetainsExactSignature()
+    {
+        var session = new Session();
+        Add(session, ".method int32 Id(int32 value) {", "ldarg value", "ret", "}",
+            ".method method int32 *(int32) Pointer() {", "ldftn int32 Id(int32)", "ret", "}");
+
+        AddCall(session);
+        Assert.AreEqual(42, session.Run().Value);
+
+        AddCall(session);
+        var il = session.ToIlAsm();
+        Assert.Contains(".method public static method int32 *(int32) Pointer()", il);
+        Execute(IlasmLocator.Assemble(il), "IlRepl.Cell", "Run", null);
+
+        var path = Path.Combine(Path.GetTempPath(), "ilrepl-flow-" + Guid.NewGuid().ToString("N") + ".dll");
+        try
+        {
+            session.Save(path);
+            Execute(File.ReadAllBytes(path), "IlRepl.Cell", "Run", null);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+
+        static void AddCall(Session target) => Add(target,
+            "call method int32 *(int32) Pointer()", "pop", "ldc.i4.s 42", "ret");
     }
 
     /// <summary>
@@ -177,6 +249,14 @@ public sealed class ControlFlowCorpusTests
         finally
         {
             context.Unload();
+        }
+    }
+
+    private static void Add(Session session, params string[] lines)
+    {
+        foreach (var line in lines)
+        {
+            session.AddLine(line);
         }
     }
 

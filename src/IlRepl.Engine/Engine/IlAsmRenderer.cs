@@ -57,11 +57,13 @@ public static class IlAsmRenderer
             foreach (var l in state.Locals)
             {
                 Note(l.Type);
+                NoteExact(l.ExactType);
             }
 
             foreach (var a in state.Arguments)
             {
                 Note(a.Type);
+                NoteExact(a.ExactType);
             }
 
             foreach (var e in state.Entries)
@@ -84,9 +86,28 @@ public static class IlAsmRenderer
             }
         }
 
+        void NoteExact(TypeSymbol? type)
+        {
+            if (type is null)
+            {
+                return;
+            }
+
+            foreach (var runtime in RuntimeSymbolTypes.Materialized(type))
+            {
+                Note(runtime);
+            }
+        }
+
         foreach (var method in session.Methods)
         {
             Note(method.Signature.ReturnType);
+            NoteExact(method.Signature.ExactSymbol?.ReturnType);
+            foreach (var parameter in method.Signature.ExactSymbol?.Parameters ?? [])
+            {
+                NoteExact(parameter.Type);
+            }
+
             NoteState(method.State);
         }
 
@@ -94,7 +115,7 @@ public static class IlAsmRenderer
         {
             foreach (var declaration in family.Declaration.Family)
             {
-                NoteDeclaration(declaration, Note, NoteState);
+                NoteDeclaration(declaration, Note, NoteExact, NoteState);
             }
         }
 
@@ -120,8 +141,13 @@ public static class IlAsmRenderer
         foreach (var method in session.Methods)
         {
             var signature = method.Signature;
-            var methodParameters = string.Join(", ", signature.Parameters.Select((p, i) => TypeNameFormatter.IlAsm(p.Type) + " " + TypeNameFormatter.IlAsmIdentifier(p.Name ?? "arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))));
-            sb.Append("    .method public static ").Append(TypeNameFormatter.IlAsm(signature.ReturnType)).Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(signature.Name)).Append('(').Append(methodParameters).AppendLine(") cil managed");
+            var methodParameters = string.Join(", ", signature.Parameters.Select((parameter, index) =>
+                DeclarationType(parameter.Type, parameter.ExactType) + " " + TypeNameFormatter.IlAsmIdentifier(
+                    parameter.Name ?? "arg" + index.ToString(CultureInfo.InvariantCulture))));
+            sb.Append("    .method public static ")
+                .Append(DeclarationType(signature.ReturnType, signature.ExactSymbol?.ReturnType)).Append(' ')
+                .Append(TypeNameFormatter.IlAsmIdentifier(signature.Name)).Append('(').Append(methodParameters)
+                .AppendLine(") cil managed");
             sb.AppendLine("    {");
             RenderBody(sb, method.State);
             sb.AppendLine("    }");
@@ -130,7 +156,9 @@ public static class IlAsmRenderer
 
         var generic = session.TypeParameterNames.Count > 0 ? "<" + string.Join(", ", session.TypeParameterNames) + ">" : "";
         var convention = cell.IsVarArg ? "vararg " : "";
-        var parameters = string.Join(", ", cell.Arguments.Select((a, i) => TypeNameFormatter.IlAsm(a.Type) + " " + TypeNameFormatter.IlAsmIdentifier(a.Name ?? "arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        var parameters = string.Join(", ", cell.Arguments.Select((argument, index) =>
+            DeclarationType(argument.Type, argument.ExactType) + " " + TypeNameFormatter.IlAsmIdentifier(
+                argument.Name ?? "arg" + index.ToString(CultureInfo.InvariantCulture))));
         sb.Append("    .method public static ").Append(convention).Append("object Run").Append(generic).Append('(').Append(parameters).AppendLine(") cil managed");
         sb.AppendLine("    {");
         RenderBody(sb, cell);
@@ -148,7 +176,8 @@ public static class IlAsmRenderer
         if (state.Locals.Count > 0)
         {
             var locals = state.Locals.Select((l, i) =>
-                $"[{i}] {TypeNameFormatter.IlAsm(l.Type)}{(l.IsPinned ? " pinned" : "")} {TypeNameFormatter.IlAsmIdentifier(l.Name ?? "V_" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))}");
+                $"[{i}] {DeclarationType(l.Type, l.ExactType)}{(l.IsPinned ? " pinned" : "")} "
+                + TypeNameFormatter.IlAsmIdentifier(l.Name ?? "V_" + i.ToString(CultureInfo.InvariantCulture)));
             sb.Append(Pad(level)).Append(".locals init (").Append(string.Join(", ", locals)).AppendLine(")");
         }
 
@@ -405,7 +434,9 @@ public static class IlAsmRenderer
     {
         if (resolved.Definition is { } definition)
         {
-            return $"{TypeNameFormatter.IlAsm(definition.ReturnType)} IlRepl.Cell::{TypeNameFormatter.IlAsmIdentifier(definition.Name)}({string.Join(", ", definition.ParameterTypes.Select(TypeNameFormatter.IlAsm))})";
+            var sessionParameters = definition.Parameters.Select(parameter => SignatureType(parameter.Type, parameter.ExactType));
+            return $"{SignatureType(definition.ReturnType, definition.ExactSymbol?.ReturnType)} "
+                + $"IlRepl.Cell::{TypeNameFormatter.IlAsmIdentifier(definition.Name)}({string.Join(", ", sessionParameters)})";
         }
 
         if (resolved.Declared is { } declared)
@@ -414,7 +445,7 @@ public static class IlAsmRenderer
             // the declaring type's and the method's own parameters as !N and !!N; the owner and
             // the method's arguments carry the instantiation.
             var written = resolved.DeclaredDefinition ?? declared;
-            var declaredParameters = written.ParameterTypes.Select(SignatureType).ToList();
+            var declaredParameters = written.Parameters.Select(parameter => SignatureType(parameter.Type, parameter.ExactType)).ToList();
             if (resolved.OptionalParameterTypes is not null)
             {
                 declaredParameters.Add("...");
@@ -426,7 +457,10 @@ public static class IlAsmRenderer
                 ? "<" + string.Join(", ", arguments.Select(TypeNameFormatter.IlAsm)) + ">"
                 : written.TypeParameters.Count == 0 ? "" : "<[" + written.TypeParameters.Count + "]>";
             var declaredName = MemberName(written.Name) + declaredArguments;
-            return $"{(written.IsStatic ? "" : "instance ")}{declaredVarArg}{SignatureType(written.ReturnType)} {TypeNameFormatter.IlAsmDeclaring(resolved.DeclaringType!)}::{declaredName}({string.Join(", ", declaredParameters)})";
+            return $"{(written.IsStatic ? "" : "instance ")}{declaredVarArg}"
+                + $"{SignatureType(written.ReturnType, written.ExactSymbol?.ReturnType)} "
+                + $"{TypeNameFormatter.IlAsmDeclaring(resolved.DeclaringType!)}::{declaredName}"
+                + $"({string.Join(", ", declaredParameters)})";
         }
 
         var method = resolved.Method!;
@@ -469,7 +503,9 @@ public static class IlAsmRenderer
     {
         var declaring = field.DeclaringType is null ? "?" : TypeNameFormatter.IlAsmDeclaring(field.DeclaringType);
         var definition = DefinitionOf(field);
-        var type = SignatureType(RuntimeSymbolImporter.Import(definition).FieldType);
+        var type = SignatureType(RuntimeFieldSignatures.TypeOf(field)
+            ?? RuntimeFieldSignatures.TypeOf(definition)
+            ?? RuntimeSymbolImporter.Import(definition).FieldType);
         // A prototype builder has no readable metadata image. Its reflection signature is the declaration
         // supplied by the session, including the element type needed for ordinary pointer fields.
         if (CecilMetadataSignatures.IsRequired(definition) && !definition.Module.Assembly.IsDynamic)
@@ -551,22 +587,64 @@ public static class IlAsmRenderer
                 return SignatureType(type.Element!) + "&";
             case TypeSymbolKind.Pointer:
                 return SignatureType(type.Element!) + "*";
+            case TypeSymbolKind.Modified:
+                return ModifiedType(type, SignatureType);
+            case TypeSymbolKind.Pinned:
+                return SignatureType(type.Element!) + " pinned";
             case TypeSymbolKind.Constructed:
                 return (type.IsValueTypeShape ? "valuetype " : "class ")
                     + TypeNameFormatter.IlAsmDeclaring(RuntimeBindingAdapter.Materialize(type.Element!))
                     + "<" + string.Join(", ", type.Arguments.Select(SignatureType)) + ">";
             case TypeSymbolKind.FunctionPointer:
-            {
-                var signature = type.Signature!;
-                var returnType = SignatureType(signature.ReturnType);
-                var text = SymbolRenderer.Signature(signature, candidate => SignatureType(candidate!));
-                var end = text.IndexOf(returnType, StringComparison.Ordinal) + returnType.Length;
-                return "method " + text[..end] + " *" + text[end..];
-            }
+                return FunctionPointerType(type.Signature!, SignatureType);
             default:
                 return SignatureType(RuntimeBindingAdapter.Materialize(type));
         }
     }
+
+    private static string DeclarationType(TypeSymbol type)
+    {
+        switch (type.Kind)
+        {
+            case TypeSymbolKind.TypeParameter:
+                return "!" + TypeNameFormatter.IlAsmIdentifier(type.Name);
+            case TypeSymbolKind.MethodParameter:
+                return "!!" + TypeNameFormatter.IlAsmIdentifier(type.Name);
+            case TypeSymbolKind.Array:
+                return DeclarationType(type.Element!) + ArraySignatureShape.RenderNative(
+                    type.Rank, type.Sizes, type.LowerBounds);
+            case TypeSymbolKind.SzArray:
+                return DeclarationType(type.Element!) + "[]";
+            case TypeSymbolKind.ByRef:
+                return DeclarationType(type.Element!) + "&";
+            case TypeSymbolKind.Pointer:
+                return DeclarationType(type.Element!) + "*";
+            case TypeSymbolKind.Modified:
+                return ModifiedType(type, DeclarationType);
+            case TypeSymbolKind.Pinned:
+                return DeclarationType(type.Element!) + " pinned";
+            case TypeSymbolKind.Constructed:
+                return (type.IsValueTypeShape ? "valuetype " : "class ")
+                    + TypeNameFormatter.IlAsmDeclaring(RuntimeBindingAdapter.Materialize(type.Element!))
+                    + "<" + string.Join(", ", type.Arguments.Select(DeclarationType)) + ">";
+            case TypeSymbolKind.FunctionPointer:
+                return FunctionPointerType(type.Signature!, DeclarationType);
+            default:
+                return SignatureType(RuntimeBindingAdapter.Materialize(type));
+        }
+    }
+
+    private static string FunctionPointerType(MethodSignatureSymbol signature, Func<TypeSymbol, string> render)
+    {
+        var returnType = render(signature.ReturnType);
+        var text = SymbolRenderer.Signature(signature, candidate => render(candidate!));
+        var end = text.IndexOf(returnType, StringComparison.Ordinal) + returnType.Length;
+        return "method " + text[..end] + " *" + text[end..];
+    }
+
+    private static string ModifiedType(TypeSymbol type, Func<TypeSymbol, string> render) => render(type.Element!)
+        + (type.IsRequired ? " modreq(" : " modopt(")
+        + TypeNameFormatter.IlAsmDeclaring(RuntimeBindingAdapter.Materialize(type.Modifier!)) + ")";
 
     private static string SignatureType(Type type)
     {
@@ -600,6 +678,14 @@ public static class IlAsmRenderer
         return TypeNameFormatter.IlAsm(type);
     }
 
+    private static string SignatureType(Type type, TypeSymbol? exact) => exact is null
+        ? SignatureType(type)
+        : SignatureType(exact);
+
+    private static string DeclarationType(Type type, TypeSymbol? exact) => exact is null
+        ? TypeNameFormatter.IlAsm(type)
+        : DeclarationType(exact);
+
     private static string SignatureIlAsm(CalliSignature signature)
     {
         var sb = new StringBuilder();
@@ -632,7 +718,11 @@ public static class IlAsmRenderer
         return sb.ToString();
     }
 
-    private static void NoteDeclaration(TypeDeclaration declaration, Action<Type?> note, Action<CellState> noteState)
+    private static void NoteDeclaration(
+        TypeDeclaration declaration,
+        Action<Type?> note,
+        Action<TypeSymbol?> noteExact,
+        Action<CellState> noteState)
     {
         note(declaration.BaseType);
         foreach (var i in declaration.Interfaces)
@@ -651,6 +741,7 @@ public static class IlAsmRenderer
         foreach (var field in declaration.Fields)
         {
             note(field.Type);
+            noteExact(field.ExactType);
             foreach (var modifier in field.RequiredModifiers.Concat(field.OptionalModifiers))
             {
                 note(modifier);
@@ -690,6 +781,7 @@ public static class IlAsmRenderer
         {
             var signature = method.Signature;
             note(signature.ReturnType);
+            noteExact(signature.ExactSymbol?.ReturnType);
             foreach (var modifier in signature.ReturnRequiredModifiers.Concat(signature.ReturnOptionalModifiers))
             {
                 note(modifier);
@@ -698,6 +790,7 @@ public static class IlAsmRenderer
             foreach (var parameter in signature.Parameters)
             {
                 note(parameter.Type);
+                noteExact(parameter.ExactType);
                 foreach (var modifier in parameter.RequiredModifiers.Concat(parameter.OptionalModifiers))
                 {
                     note(modifier);
@@ -896,7 +989,8 @@ public static class IlAsmRenderer
         }
 
         sb.Append(IlAsmWords.Field(field.Attributes));
-        sb.Append(Modified(TypeNameFormatter.IlAsm(field.Type), field.RequiredModifiers, field.OptionalModifiers)).Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(field.Name));
+        sb.Append(Modified(DeclarationType(field.Type, field.ExactType), field.RequiredModifiers, field.OptionalModifiers))
+            .Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(field.Name));
         if (field.HasDefault)
         {
             sb.Append(" = ").Append(ConstantText.IlAsm(field.DefaultValue));
@@ -925,10 +1019,11 @@ public static class IlAsmRenderer
     {
         var pad = Pad(level);
         var signature = method.Signature;
-        var parameters = string.Join(", ", signature.Parameters.Select((p, i) => ParameterIlAsm(p, i)));
+        var parameters = string.Join(", ", signature.Parameters.Select((parameter, index) => ParameterIlAsm(parameter, index)));
         var generic = signature.TypeParameters.Count == 0 ? "" : "<" + string.Join(", ", signature.TypeParameters.Select(GenericParameterIlAsm)) + ">";
         var convention = (signature.IsStatic ? "" : "instance ") + (signature.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "");
-        var returnType = Modified(TypeNameFormatter.IlAsm(signature.ReturnType), signature.ReturnRequiredModifiers, signature.ReturnOptionalModifiers);
+        var returnType = Modified(DeclarationType(signature.ReturnType, signature.ExactSymbol?.ReturnType),
+            signature.ReturnRequiredModifiers, signature.ReturnOptionalModifiers);
         sb.Append(pad).Append(".method ").Append(IlAsmWords.Method(signature.Attributes)).Append(convention).Append(returnType).Append(' ')
             .Append(MemberName(signature.Name)).Append(generic).Append('(').Append(parameters).Append(") ").AppendLine(IlAsmWords.Implementation(signature.ImplAttributes));
         sb.Append(pad).AppendLine("{");
@@ -997,14 +1092,20 @@ public static class IlAsmRenderer
             words.Append("[opt] ");
         }
 
-        words.Append(Modified(TypeNameFormatter.IlAsm(parameter.Type), parameter.RequiredModifiers, parameter.OptionalModifiers)).Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(parameter.Name ?? "arg" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        words.Append(Modified(DeclarationType(parameter.Type, parameter.ExactType), parameter.RequiredModifiers,
+            parameter.OptionalModifiers)).Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(
+                parameter.Name ?? "arg" + index.ToString(CultureInfo.InvariantCulture)));
         return words.ToString();
     }
 
     private static string AccessorIlAsm(TypeDeclaration declaration, MethodDeclaration accessor)
     {
         var signature = accessor.Signature;
-        return (signature.IsStatic ? "" : "instance ") + TypeNameFormatter.IlAsm(signature.ReturnType) + " " + TypePath(declaration.FullName) + "::" + MemberName(signature.Name) + "(" + string.Join(", ", signature.ParameterTypes.Select(TypeNameFormatter.IlAsm)) + ")";
+        var parameters = signature.Parameters.Select(parameter => DeclarationType(parameter.Type, parameter.ExactType));
+        return (signature.IsStatic ? "" : "instance ")
+            + DeclarationType(signature.ReturnType, signature.ExactSymbol?.ReturnType) + " "
+            + TypePath(declaration.FullName) + "::"
+            + MemberName(signature.Name) + "(" + string.Join(", ", parameters) + ")";
     }
 
     private static string OverrideTargetIlAsm(MethodBase target)

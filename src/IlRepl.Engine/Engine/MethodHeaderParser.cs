@@ -60,11 +60,13 @@ public static class MethodHeaderParser
         adapter.ToType(method.ReturnType),
         [.. method.Parameters.Select(p => new ArgumentDeclaration(adapter.ToType(p.Type), p.Name, null, "")
         {
+            ExactType = RuntimeSymbolTypes.RequiresExact(p.Type) ? p.Type : null,
             Attributes = p.Attributes,
             RequiredModifiers = adapter.ToTypes(p.RequiredModifiers),
             OptionalModifiers = adapter.ToTypes(p.OptionalModifiers),
         })])
     {
+        ExactSymbol = RequiresExact(method) ? method : null,
         Attributes = method.Attributes,
         ImplAttributes = method.ImplAttributes,
         CallingConvention = method.CallingConvention,
@@ -73,4 +75,7 @@ public static class MethodHeaderParser
         TypeParameters = [.. method.GenericParameters.Select(p => new GenericParameterDeclaration(
             p.Name, p.Attributes, adapter.ToTypes(p.Constraints)))],
     };
+
+    private static bool RequiresExact(MethodSymbol method) => RuntimeSymbolTypes.RequiresExact(method.ReturnType)
+        || method.Parameters.Any(parameter => RuntimeSymbolTypes.RequiresExact(parameter.Type));
 }

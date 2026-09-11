@@ -1,4 +1,5 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 using Mono.Cecil;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
@@ -18,6 +19,12 @@ internal static class CecilCellBody
     /// <returns>Whether its body requires metadata emission.</returns>
     public static bool IsRequired(CellState state)
     {
+        if (state.Locals.Any(local => local.ExactType is not null && NeedsMetadata(local.ExactType))
+            || state.Arguments.Any(argument => argument.ExactType is not null && NeedsMetadata(argument.ExactType)))
+        {
+            return true;
+        }
+
         foreach (var entry in state.Entries)
         {
             switch (entry.Instruction?.Operand)
@@ -48,6 +55,12 @@ internal static class CecilCellBody
     private static bool NeedsMetadata(Type type) => TypeNameFormatter.IsFunctionPointer(type)
         || type.HasElementType || type.IsConstructedGenericType;
 
+    private static bool NeedsMetadata(TypeSymbol type) => type.Kind == TypeSymbolKind.FunctionPointer
+        || type.Element is not null && NeedsMetadata(type.Element)
+        || type.Arguments.Any(NeedsMetadata)
+        || type.Signature is { } signature
+            && (NeedsMetadata(signature.ReturnType) || signature.Parameters.Any(NeedsMetadata));
+
     /// <summary>
     /// Emits a callable cell body with exact metadata references and the cell's existing session bindings.
     /// </summary>
@@ -77,7 +90,8 @@ internal static class CecilCellBody
 
         foreach (var argument in state.Arguments)
         {
-            run.Parameters.Add(new ParameterDefinition(argument.Name, ParameterAttributes.None, writer.Import(argument.Type)));
+            var argumentType = argument.ExactType is null ? writer.Import(argument.Type) : writer.Import(argument.ExactType);
+            run.Parameters.Add(new ParameterDefinition(argument.Name, ParameterAttributes.None, argumentType));
         }
 
         var map = new EmitMap(signature => methods.TryGetValue(signature.Name, out var method) ? method

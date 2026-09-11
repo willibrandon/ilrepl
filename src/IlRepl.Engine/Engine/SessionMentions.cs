@@ -1,4 +1,5 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -37,11 +38,25 @@ public static class SessionMentions
         foreach (var local in state.Locals)
         {
             yield return local.Type;
+            if (local.ExactType is not null)
+            {
+                foreach (var type in RuntimeSymbolTypes.Materialized(local.ExactType))
+                {
+                    yield return type;
+                }
+            }
         }
 
         foreach (var argument in state.Arguments)
         {
             yield return argument.Type;
+            if (argument.ExactType is not null)
+            {
+                foreach (var type in RuntimeSymbolTypes.Materialized(argument.ExactType))
+                {
+                    yield return type;
+                }
+            }
         }
 
         foreach (var entry in state.Entries)
@@ -127,6 +142,17 @@ public static class SessionMentions
                 }
 
                 type = type.GetGenericTypeDefinition();
+            }
+
+            if (TypeNameFormatter.IsFunctionPointer(type))
+            {
+                Note(type.GetFunctionPointerReturnType(), found);
+                foreach (var parameter in type.GetFunctionPointerParameterTypes())
+                {
+                    Note(parameter, found);
+                }
+
+                return;
             }
 
             if (SessionAssemblies.TryGetDefinition(type.Assembly, out var definition) && !found.Contains(definition))

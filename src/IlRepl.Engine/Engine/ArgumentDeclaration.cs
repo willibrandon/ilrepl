@@ -1,3 +1,5 @@
+using IlRepl.Engine.Binding;
+
 namespace IlRepl.Engine;
 
 /// <summary>
@@ -9,6 +11,11 @@ namespace IlRepl.Engine;
 /// <param name="ValueText">The literal the value was parsed from, kept for display.</param>
 public sealed record ArgumentDeclaration(Type Type, string? Name, object? Value, string ValueText)
 {
+    /// <summary>
+    /// The exact type retained when its runtime projection cannot represent its complete shape.
+    /// </summary>
+    internal TypeSymbol? ExactType { get; init; }
+
     /// <summary>
     /// The parameter attributes written before the type: <c>[in]</c>, <c>[out]</c>, <c>[opt]</c>, and
     /// a default set with <c>.param</c>.

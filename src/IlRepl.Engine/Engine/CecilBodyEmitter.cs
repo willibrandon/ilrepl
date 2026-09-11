@@ -54,7 +54,9 @@ public static class CecilBodyEmitter
             method.Body.MaxStackSize = Math.Max(1, state.Analysis.MaxStack);
             foreach (var local in state.Locals)
             {
-                var type = writer.Import(map.Map(local.Type));
+                var type = local.ExactType is null
+                    ? writer.Import(map.Map(local.Type))
+                    : writer.Import(map.Map(local.ExactType));
                 var variable = new VariableDefinition(local.IsPinned ? new PinnedType(type) : type);
                 method.Body.Variables.Add(variable);
                 _locals.Add(variable);

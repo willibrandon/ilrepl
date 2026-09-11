@@ -54,11 +54,20 @@ public static class DefinitionCompiler
         }
 
         var cell = writer.DefineType("IlRepl", "Cell", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit, writer.Object);
-        var method = new MethodDefinition(name, MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, writer.Import(signature.ReturnType));
+        var exact = signature.ExactSymbol;
+        var returnType = exact is not null
+            ? writer.Import(exact.ReturnType)
+            : writer.Import(signature.ReturnType);
+        var method = new MethodDefinition(
+            name, MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, returnType);
         for (var i = 0; i < signature.Parameters.Count; i++)
         {
             var parameter = signature.Parameters[i];
-            method.Parameters.Add(new ParameterDefinition(parameter.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)), ParameterAttributes.None, writer.Import(parameter.Type)));
+            var parameterType = exact is null ? writer.Import(parameter.Type) : writer.Import(exact.Parameters[i].Type);
+            method.Parameters.Add(new ParameterDefinition(
+                parameter.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ParameterAttributes.None,
+                parameterType));
         }
 
         cell.Methods.Add(method);

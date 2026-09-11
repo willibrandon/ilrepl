@@ -145,8 +145,14 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
     /// </summary>
     /// <param name="definition">The definition's identity.</param>
     /// <param name="owner">The declaring type, or null for a session method.</param>
+    /// <param name="source">The source to assign, or null to infer it from the owner.</param>
+    /// <param name="declared">Whether the source header was accepted, or null to retain the current state.</param>
     /// <returns>The declaration with its identity and owner.</returns>
-    internal MethodSymbol WithDefinition(DefinitionId definition, TypeSymbol? owner)
+    internal MethodSymbol WithDefinition(
+        DefinitionId definition,
+        TypeSymbol? owner,
+        MethodSymbolSource? source = null,
+        bool? declared = null)
     {
         TypeSymbol Map(TypeSymbol type) => SymbolRelations.Rewrite(type, parameter =>
             parameter.Kind == TypeSymbolKind.MethodParameter && GenericParameters.Any(generic => generic.Owner == parameter.Owner)
@@ -154,7 +160,7 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
         return new MethodSymbol
         {
             Definition = definition,
-            Source = owner is null ? MethodSymbolSource.Session : MethodSymbolSource.Declared,
+            Source = source ?? (owner is null ? MethodSymbolSource.Session : MethodSymbolSource.Declared),
             DeclaringType = owner,
             Name = Name,
             Attributes = Attributes,
@@ -174,7 +180,7 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
             GenericArguments = [.. GenericArguments.Select(Map)],
             ReturnRequiredModifiers = [.. ReturnRequiredModifiers.Select(Map)],
             ReturnOptionalModifiers = [.. ReturnOptionalModifiers.Select(Map)],
-            IsDeclared = IsDeclared,
+            IsDeclared = declared ?? IsDeclared,
             BodyAvailable = BodyAvailable,
         };
     }

@@ -115,8 +115,14 @@ public sealed class RuntimeBindingAdapter
                 var effective = declared.Signature with
                 {
                     ReturnType = ToType(method.ReturnType),
+                    ExactSymbol = declared.Signature.ExactSymbol is null ? null : method,
                     Parameters = [.. declared.Signature.Parameters.Select((p, i)
-                            => p with { Type = ToType(method.Parameters[i].Type) })],
+                            => p with
+                            {
+                                Type = ToType(method.Parameters[i].Type),
+                                ExactType = declared.Signature.Parameters[i].ExactType is null
+                                    ? null : method.Parameters[i].Type,
+                            })],
                 };
                 return new ResolvedMethod(declared.Builder, effective, declaringType)
                 {
@@ -159,11 +165,13 @@ public sealed class RuntimeBindingAdapter
     private MethodSignature ToSignature(MethodSymbol method) => new(method.Name, ToType(method.ReturnType),
         [.. method.Parameters.Select(parameter => new ArgumentDeclaration(ToType(parameter.Type), parameter.Name, null, "")
         {
+            ExactType = RuntimeSymbolTypes.RequiresExact(parameter.Type) ? parameter.Type : null,
             Attributes = parameter.Attributes,
             RequiredModifiers = ToTypes(parameter.RequiredModifiers),
             OptionalModifiers = ToTypes(parameter.OptionalModifiers),
         })])
     {
+        ExactSymbol = RequiresExact(method) ? method : null,
         Attributes = method.Attributes,
         ImplAttributes = method.ImplAttributes,
         CallingConvention = method.CallingConvention,
@@ -172,6 +180,9 @@ public sealed class RuntimeBindingAdapter
         TypeParameters = [.. method.GenericParameters.Select(parameter =>
             new GenericParameterDeclaration(parameter.Name, parameter.Attributes, ToTypes(parameter.Constraints)))],
     };
+
+    private static bool RequiresExact(MethodSymbol method) => RuntimeSymbolTypes.RequiresExact(method.ReturnType)
+        || method.Parameters.Any(parameter => RuntimeSymbolTypes.RequiresExact(parameter.Type));
 
     /// <summary>
     /// The <c>calli</c> signature the emitter takes for a bound signature.
@@ -235,10 +246,12 @@ public sealed class RuntimeBindingAdapter
             case RuntimeDeclaredField declared:
             {
                 var declaringType = ToType(field.DeclaringType);
-                return declaringType.IsGenericType && !declaringType.IsGenericTypeDefinition
+                var runtime = declaringType.IsGenericType && !declaringType.IsGenericTypeDefinition
                     && declared.Builder is FieldBuilder fieldBuilder
                     ? TypeBuilder.GetField(declaringType, fieldBuilder)
                     : declared.Builder;
+                RuntimeFieldSignatures.Record(runtime, field.FieldType);
+                return runtime;
             }
 
             case RuntimeDefinitionField definition:

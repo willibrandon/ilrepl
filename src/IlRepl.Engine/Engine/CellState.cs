@@ -722,9 +722,19 @@ public sealed class CellState
                 }
 
                 MemberAccess.CheckType(field.FieldType, scope, Types);
+                CheckExactAccess(RuntimeFieldSignatures.TypeOf(field), scope);
                 MemberAccess.CheckField(field, scope, Types);
                 break;
             case ResolvedMethod { Method: not null } method:
+                if (method.Declared?.ExactSymbol is { } exact)
+                {
+                    CheckExactAccess(exact.ReturnType, scope);
+                    foreach (var parameter in exact.Parameters)
+                    {
+                        CheckExactAccess(parameter.Type, scope);
+                    }
+                }
+
                 MemberAccess.CheckMethod(method, scope, Types);
                 break;
             case Type type:
@@ -732,6 +742,19 @@ public sealed class CellState
                 break;
             default:
                 break;
+        }
+    }
+
+    private void CheckExactAccess(TypeSymbol? exact, AccessScope scope)
+    {
+        if (exact is null)
+        {
+            return;
+        }
+
+        foreach (var type in RuntimeSymbolTypes.Materialized(exact))
+        {
+            MemberAccess.CheckType(type, scope, Types);
         }
     }
 
@@ -814,7 +837,10 @@ public sealed class CellState
         var scope = new RuntimeBindingScope(Context);
         var adapter = new RuntimeBindingAdapter(scope);
         return [.. VariableDeclarationParser.ParseLocals(spec, scope)
-            .Select(local => new LocalDeclaration(adapter.ToType(local.Type), local.Name, local.IsPinned))];
+            .Select(local => new LocalDeclaration(adapter.ToType(local.Type), local.Name, local.IsPinned)
+            {
+                ExactType = RuntimeSymbolTypes.RequiresExact(local.Type) ? local.Type : null,
+            })];
     }
 
     private List<ArgumentDeclaration> ParseArguments(string spec)
@@ -826,8 +852,12 @@ public sealed class CellState
     }
 
     private string DescribeLocals() =>
-        string.Join(", ", _locals.Select((l, i) => $"{i}:{TypeNameFormatter.Pretty(l.Type)}{(l.IsPinned ? " pinned" : "")} {l.Name ?? ""}".TrimEnd()));
+        string.Join(", ", _locals.Select((l, i) =>
+            $"{i}:{(l.ExactType is null ? TypeNameFormatter.Pretty(l.Type) : SymbolRenderer.Pretty(l.ExactType))}"
+            + $"{(l.IsPinned ? " pinned" : "")} {l.Name ?? ""}".TrimEnd()));
 
     private string DescribeArguments() =>
-        string.Join(", ", _arguments.Select((a, i) => $"{i}:{TypeNameFormatter.Pretty(a.Type)} {a.Name ?? ""} = {a.ValueText}".Replace("  ", " ", StringComparison.Ordinal)));
+        string.Join(", ", _arguments.Select((a, i) =>
+            $"{i}:{(a.ExactType is null ? TypeNameFormatter.Pretty(a.Type) : SymbolRenderer.Pretty(a.ExactType))} "
+            + $"{a.Name ?? ""} = {a.ValueText}".Replace("  ", " ", StringComparison.Ordinal)));
 }

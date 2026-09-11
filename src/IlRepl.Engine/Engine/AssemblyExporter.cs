@@ -77,11 +77,16 @@ public static class AssemblyExporter
             foreach (var (method, definition) in methods)
             {
                 var signature = method.Signature;
-                definition.ReturnType = writer.Import(signature.ReturnType);
+                var exact = signature.ExactSymbol;
+                definition.ReturnType = exact is null ? writer.Import(signature.ReturnType) : writer.Import(exact.ReturnType);
                 for (var i = 0; i < signature.Parameters.Count; i++)
                 {
                     var parameter = signature.Parameters[i];
-                    definition.Parameters.Add(new ParameterDefinition(parameter.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)), ParameterAttributes.None, writer.Import(parameter.Type)));
+                    var type = exact is null ? writer.Import(parameter.Type) : writer.Import(exact.Parameters[i].Type);
+                    definition.Parameters.Add(new ParameterDefinition(
+                        parameter.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                        ParameterAttributes.None,
+                        type));
                 }
             }
 
@@ -125,7 +130,11 @@ public static class AssemblyExporter
         for (var i = 0; i < state.Arguments.Count; i++)
         {
             var argument = state.Arguments[i];
-            run.Parameters.Add(new ParameterDefinition(argument.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)), ParameterAttributes.None, writer.Import(argument.Type)));
+            var type = argument.ExactType is null ? writer.Import(argument.Type) : writer.Import(argument.ExactType);
+            run.Parameters.Add(new ParameterDefinition(
+                argument.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ParameterAttributes.None,
+                type));
         }
 
         Guarded("the cell", () => CecilBodyEmitter.Emit(run, state, writer, map));
