@@ -211,13 +211,25 @@ internal sealed class FlowTypeRules<T>(
     {
         actual = _underlyingType(actual);
         expected = _underlyingType(expected);
-        return Algebra.Same(actual, expected) || Assignable(actual, expected) || SameReducedType(actual, expected);
+        return Algebra.Same(actual, expected) || Assignable(actual, expected) || SameReducedType(actual, expected)
+            || SameLocation(actual, expected);
     }
 
     /// <summary>
     /// Applies the CLI's verification-type equivalence for managed storage locations.
     /// </summary>
+    /// <param name="left">The first storage type.</param>
+    /// <param name="right">The second storage type.</param>
+    /// <returns>True when both have the same verification type.</returns>
     public bool SameVerificationLocation(T left, T right) => SameLocation(left, right);
+
+    /// <summary>
+    /// True when a type can be used as the operand of <c>box</c>.
+    /// </summary>
+    /// <param name="type">The operand type.</param>
+    /// <returns>True when the type is boxable.</returns>
+    public bool IsBoxable(T type) => !Algebra.IsByRef(type) && !Algebra.IsPointer(type) && !Algebra.IsByRefLike(type)
+        && !Algebra.Same(type, Algebra.Primitive("void")) && !Algebra.Same(type, Algebra.Primitive("typedref"));
 
     private bool SameReducedType(T left, T right)
     {

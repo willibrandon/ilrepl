@@ -107,6 +107,13 @@ public interface IStackTypeAlgebra<T> where T : class
     bool IsValueType(T type);
 
     /// <summary>
+    /// True for a type that cannot be boxed because it may contain managed stack references.
+    /// </summary>
+    /// <param name="type">The type.</param>
+    /// <returns>True for a byref-like type or parameter.</returns>
+    bool IsByRefLike(T type);
+
+    /// <summary>
     /// True for a generic parameter.
     /// </summary>
     /// <param name="type">The type.</param>

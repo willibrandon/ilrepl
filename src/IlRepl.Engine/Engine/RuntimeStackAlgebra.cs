@@ -1,3 +1,4 @@
+using System.Reflection;
 using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
@@ -74,6 +75,10 @@ public sealed class RuntimeStackAlgebra : IStackTypeAlgebra<Type>
 
     /// <inheritdoc/>
     public bool IsValueType(Type type) => type.IsValueType;
+
+    /// <inheritdoc/>
+    public bool IsByRefLike(Type type) => type.IsByRefLike || type.IsGenericParameter
+        && type.GenericParameterAttributes.HasFlag(GenericParameterAttributes.AllowByRefLike);
 
     /// <inheritdoc/>
     public bool IsGenericParameter(Type type) => type.IsGenericParameter;

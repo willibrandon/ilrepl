@@ -544,6 +544,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return $"ldvirtftn needs a {_types.Name(view.DeclaringType)} receiver but found {_types.Name(top)}";
         }
 
+        if (op == OpCodes.Box && view.Type is { } boxType && !_types.IsBoxable(boxType))
+        {
+            return $"box needs a boxable type but found {_types.Name(boxType)}";
+        }
+
         if (op == OpCodes.Box && view.Type is { } boxed && !_types.CanAssign(top, boxed))
         {
             return $"box needs {_types.Name(boxed)} but found {_types.Name(top)}";

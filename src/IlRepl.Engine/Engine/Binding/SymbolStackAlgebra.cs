@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
@@ -87,6 +89,10 @@ public sealed class SymbolStackAlgebra : IStackTypeAlgebra<TypeSymbol>
 
     /// <inheritdoc/>
     public bool IsValueType(TypeSymbol type) => type.IsValueTypeShape;
+
+    /// <inheritdoc/>
+    public bool IsByRefLike(TypeSymbol type) => type.IsByRefLike || type.IsGenericParameter
+        && type.ParameterAttributes.HasFlag(GenericParameterAttributes.AllowByRefLike);
 
     /// <inheritdoc/>
     public bool IsGenericParameter(TypeSymbol type) => type.IsGenericParameter;
