@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 201 method examples and the paired constructor example
+not justify refusing a correct body. The 204 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -42,7 +42,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Readonly store receiver across paths | II.16.1.2 | FlowReceiver with this on both paths | FlowReceiver with another receiver |
 | Indirect calls | III.3.20 | IndirectCall, InstanceIndirectCall, ManagedPointerInstanceIndirectCall, NativePointerInstanceIndirectCall | WrongIndirectCall, WrongIndirectTarget, WrongInstanceIndirectReceiver |
 | Block memory operands | III.3.30, III.3.36 | CopyBlock, InitializeBlock | WrongCopyBlock, WrongInitializeBlock |
-| Array element, index and pointer operands | I.8.7.1, III.4.7–III.4.9, III.4.26–III.4.27 | ArrayElement, ArrayIndex, ArrayReferenceLoad, ArrayReferenceStore, BooleanArrayElement, CharacterArrayElement, CovariantReadOnlyArrayAddress, GenericArrayReferenceLoad, GenericArrayReferenceStore, NullArrayReferenceStore, TypedArrayReferenceStore | WrongArrayElement, WrongArrayIndex, WrongArrayValue, WrongArrayReferenceStore, WrongCovariantArrayAddress, WrongGenericArrayReferenceLoad, WrongManagedPointerArray, WrongNullArrayReferenceStore, WrongTypedArrayReferenceStore, WrongValueArrayReferenceLoad, WrongValueArrayReferenceStore |
+| Array element, index and pointer operands | I.8.7.1, III.4.7–III.4.9, III.4.26–III.4.27 | ArrayElement, ArrayIndex, ArrayReferenceLoad, ArrayReferenceStore, BooleanArrayElement, CharacterArrayElement, CovariantReadOnlyArrayAddress, GenericArrayReferenceLoad, GenericArrayReferenceStore, NullArrayReferenceStore, TypedArrayReferenceLoad, TypedArrayReferenceStore | WrongArrayElement, WrongArrayIndex, WrongArrayValue, WrongArrayReferenceStore, WrongCovariantArrayAddress, WrongGenericArrayReferenceLoad, WrongManagedPointerArray, WrongNullArrayReferenceStore, WrongReferenceTypedArrayStore, WrongTypedArrayReferenceStore, WrongValueArrayReferenceLoad, WrongValueArrayReferenceStore, WrongValueTypedArrayLoad |
 | Object copy operands | III.4.4 | CopyObject, CopyReferenceObject | WrongCopyObjectSource, WrongCopyObjectSourceType, WrongCopyObjectDestinationType |
 | Typed references | III.4.19, III.4.22–III.4.23 | TypedReference | WrongMakeTypedReference, WrongTypedReferenceType, WrongTypedReferenceValue |
 | Unboxing | III.4.32 | UnboxValue | WrongUnboxType |
@@ -157,6 +157,9 @@ meets the correctness rule and verifies without a diagnostic.
 The C# compiler uses byte and word element opcodes for `bool[]` and `char[]`. CoreCLR, Mono, and
 ILVerification accept those forms by comparing the array element's verification type. The array
 rules retain that distinction from the intermediate `int32` value placed on the evaluation stack.
+
+Typed array opcodes allow covariance between reference elements. They do not box or unbox array
+storage, so the value and reference element fixtures keep that covariance within reference types.
 
 The `readonly.` prefix suppresses `ldelema`'s exact runtime element check and makes a covariant
 address safe by preventing writes through it. CoreCLR and Mono execute `string[]` addressed as

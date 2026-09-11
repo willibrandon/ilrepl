@@ -211,8 +211,9 @@ internal sealed class FlowTypeRules<T>(
     {
         actual = _underlyingType(actual);
         expected = _underlyingType(expected);
-        return Algebra.Same(actual, expected) || Assignable(actual, expected) || SameReducedType(actual, expected)
-            || SameLocation(actual, expected);
+        return Algebra.Same(actual, expected) || SameReducedType(actual, expected) || SameLocation(actual, expected)
+            || Category(actual) == StackCategory.ObjectReference && Category(expected) == StackCategory.ObjectReference
+                && Assignable(actual, expected);
     }
 
     /// <summary>
