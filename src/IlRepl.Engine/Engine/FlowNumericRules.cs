@@ -31,6 +31,7 @@ internal static class FlowNumericRules
 
         if (left == StackCategory.ByRef || right == StackCategory.ByRef)
         {
+            // ECMA-335 table III.7 keeps these unsigned overflow forms as correct but unverifiable pointer arithmetic.
             var addition = op is "add" or "add.ovf.un";
             var subtraction = op is "sub" or "sub.ovf.un";
             return left == StackCategory.ByRef && right == StackCategory.ByRef && subtraction

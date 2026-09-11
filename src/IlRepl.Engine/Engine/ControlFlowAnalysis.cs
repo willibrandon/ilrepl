@@ -333,27 +333,43 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         ? _types.Algebra.Boxed(constrained) : constrained, owner);
             }
 
+            if (_types.Algebra.IsValueType(owner))
+            {
+                // ECMA-335 I.12.4.1.4 permits managed, unmanaged, and native-integer pointers to an unboxed value.
+                if (_types.Algebra.IsByRef(type) || _types.Algebra.IsPointer(type))
+                {
+                    return _types.Algebra.Same(_types.Algebra.ElementOf(type), owner);
+                }
+
+                return _types.Category(type) == StackCategory.NativeInt;
+            }
+
+            return _types.Category(type) == StackCategory.ObjectReference && _types.CanAssign(type, owner);
+        }
+
+        bool FieldReceiver(T? type, T? owner)
+        {
+            if (type is null || owner is null)
+            {
+                return true;
+            }
+
+            if (_types.Algebra.IsPointer(type))
+            {
+                return _types.CanAssign(_types.Algebra.ElementOf(type), owner);
+            }
+
+            if (_types.Category(type) == StackCategory.NativeInt)
+            {
+                return true;
+            }
+
             if (_types.Algebra.IsByRef(type))
             {
                 return _types.Algebra.Same(_types.Algebra.ElementOf(type), owner);
             }
 
             return _types.CanAssign(type, owner);
-        }
-
-        bool FieldReceiver(T? type, T? owner)
-        {
-            if (type is not null && owner is not null && _types.Algebra.IsPointer(type))
-            {
-                return _types.CanAssign(_types.Algebra.ElementOf(type), owner);
-            }
-
-            if (type is not null && _types.Category(type) == StackCategory.NativeInt)
-            {
-                return true;
-            }
-
-            return Receiver(type, owner);
         }
 
         if (op.Name is "add" or "add.ovf" or "add.ovf.un" or "sub" or "sub.ovf" or "sub.ovf.un"
@@ -648,6 +664,17 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     private bool UsesNativeAddress(StackOperandView<T> view, FlowValue<T>[] values)
     {
         var name = view.Op.Name;
+        if (name is "call" or "callvirt" or "ldvirtftn" && view.IsInstance
+            && view.DeclaringType is { } owner && _types.Algebra.IsValueType(owner))
+        {
+            var callPops = StackTransfer<T>.PopCount(view);
+            if (callPops <= values.Length && values[values.Length - callPops].Type is { } receiver)
+            {
+                return _types.Algebra.IsPointer(receiver)
+                    || !_types.Algebra.IsByRef(receiver) && _types.Category(receiver) == StackCategory.NativeInt;
+            }
+        }
+
         if (name is null || name is not ("ldobj" or "stobj" or "initobj" or "cpobj" or "ldfld" or "ldflda" or "stfld")
             && !name.StartsWith("ldind", StringComparison.Ordinal)
             && !name.StartsWith("stind", StringComparison.Ordinal))
