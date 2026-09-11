@@ -45,6 +45,7 @@ public sealed class TypeLifetimeTests
     /// Loading a collectible definition leaves the process assembly catalog on the same snapshot.
     /// </summary>
     [TestMethod]
+    [DoNotParallelize]
     public void CollectibleLoad_DoesNotRebuildProcessAssemblyCatalog()
     {
         _ = DefineAndReset(new Session());

@@ -71,6 +71,12 @@ public static class StackAnalysis
             new AnalysisLocation(method.Method.Name, index, 0, entry.DisplayText.Length, entry.Offset), entry.DisplayText)
         {
             Instruction = entry.Instruction is { } instruction ? View(instruction, method)
+                : entry.Raw is { Op.IsSkipChecksPrefix: true } skipPrefix ? new StackOperandView<Type>
+                {
+                    Op = OpCodes.Prefix1,
+                    ByteOperand = (byte)skipPrefix.Operand.Integer,
+                    DecodedPrefixName = skipPrefix.Op.Name,
+                }
                 : entry.Raw?.Op.Emit is { } op ? new StackOperandView<Type> { Op = op } : null,
             Labels = [IlReader.LabelFor(entry.Offset)],
             Targets = entry.Raw is { } raw ? raw.BranchTarget is { } target

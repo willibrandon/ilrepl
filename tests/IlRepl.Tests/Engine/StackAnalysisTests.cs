@@ -271,6 +271,53 @@ public sealed class StackAnalysisTests
     }
 
     /// <summary>
+    /// A decoded no. prefix keeps its stack and reports its required unverifiable status.
+    /// </summary>
+    [TestMethod]
+    public void NoPrefix_ValidApplicationIsUnverifiable()
+    {
+        var method = Body((module, _, il, _) =>
+        {
+            il.Emit(OpCodes.Ldstr, "");
+            il.Emit(OpCodes.No, (byte)4);
+            il.Emit(OpCodes.Callvirt, module.ImportReference(typeof(object).GetMethod(nameof(ToString), Type.EmptyTypes)!));
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+        });
+
+        var prefix = method.Entries.Single(entry => entry.Raw?.Op.IsSkipChecksPrefix == true);
+        Assert.AreEqual("[string]", DisassemblyText.StackAt(method, prefix.Offset));
+        StackAnalysis.Run(method, out var diagnostics);
+        Assert.Contains(diagnostic => diagnostic.Code == "FLOW007" && diagnostic.Kind == AnalysisDiagnosticKind.Unverifiable
+            && diagnostic.Message.StartsWith("no. uses", StringComparison.Ordinal), diagnostics);
+        Assert.DoesNotContain(diagnostic => diagnostic.Code == "FLOW019", diagnostics);
+    }
+
+    /// <summary>
+    /// A decoded no. prefix retains branch-boundary and instruction-applicability checks.
+    /// </summary>
+    [TestMethod]
+    public void NoPrefix_InvalidApplicationAndBranchTargetAreReported()
+    {
+        var method = Body((module, _, il, body) =>
+        {
+            body.Parameters.Add(new ParameterDefinition(module.TypeSystem.Boolean));
+            var target = il.Create(OpCodes.Nop);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Brtrue_S, target);
+            il.Emit(OpCodes.No, (byte)4);
+            il.Append(target);
+            il.Emit(OpCodes.Ret);
+        });
+
+        StackAnalysis.Run(method, out var diagnostics);
+        Assert.Contains(diagnostic => diagnostic.Code == "FLOW007" && diagnostic.Kind == AnalysisDiagnosticKind.Unverifiable,
+            diagnostics);
+        Assert.Contains(diagnostic => diagnostic.Code == "FLOW018", diagnostics);
+        Assert.Contains(diagnostic => diagnostic.Code == "FLOW019" && diagnostic.Message == "no. cannot prefix nop", diagnostics);
+    }
+
+    /// <summary>
     /// Decoded unaligned prefixes accept only the three alignments defined by ECMA-335.
     /// </summary>
     /// <param name="alignment">The encoded alignment.</param>

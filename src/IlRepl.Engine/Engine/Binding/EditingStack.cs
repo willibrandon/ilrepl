@@ -145,6 +145,7 @@ internal sealed class EditingStack
                 MethodIsStatic = method.IsStatic,
                 MethodIsConstructor = method.IsConstructor,
                 MethodIsAbstract = method.IsAbstract,
+                MethodIsVirtual = method.IsVirtual,
                 Token = StackTokenKind.Method,
             };
         }

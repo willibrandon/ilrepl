@@ -75,6 +75,16 @@ public sealed record StackOperandView<T> where T : class
     public bool? MethodIsAbstract { get; init; }
 
     /// <summary>
+    /// Whether a method operand names a virtual method; null when there is no method operand.
+    /// </summary>
+    public bool? MethodIsVirtual { get; init; }
+
+    /// <summary>
+    /// The name of a decoded prefix that has no Reflection.Emit opcode; null otherwise.
+    /// </summary>
+    public string? DecodedPrefixName { get; init; }
+
+    /// <summary>
     /// The type <c>newobj</c> constructs.
     /// </summary>
     public T? DeclaringType { get; init; }

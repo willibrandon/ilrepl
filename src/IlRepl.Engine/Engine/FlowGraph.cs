@@ -296,7 +296,7 @@ internal sealed class FlowGraph<T> where T : class
                 continue;
             }
 
-            if (instruction.Op.OpCodeType != OpCodeType.Prefix)
+            if (!IsPrefix(instruction))
             {
                 yield break;
             }
@@ -334,7 +334,7 @@ internal sealed class FlowGraph<T> where T : class
                 }
             }
 
-            if (instruction.Op.OpCodeType == OpCodeType.Prefix)
+            if (IsPrefix(instruction))
             {
                 if (instruction.Op == OpCodes.Unaligned && instruction.ByteOperand is { } alignment
                     && alignment is not (1 or 2 or 4))
@@ -349,7 +349,8 @@ internal sealed class FlowGraph<T> where T : class
 
             foreach (var prefix in prefixes)
             {
-                var name = Nodes[prefix].Instruction!.Op.Name;
+                var prefixInstruction = Nodes[prefix].Instruction!;
+                var name = PrefixName(prefixInstruction);
                 var op = instruction.Op.Name ?? "";
                 var memory = op.StartsWith("ldind", StringComparison.Ordinal) || op.StartsWith("stind", StringComparison.Ordinal)
                     || op is "ldfld" or "stfld" or "ldobj" or "stobj" or "initblk" or "cpblk";
@@ -360,6 +361,7 @@ internal sealed class FlowGraph<T> where T : class
                     "tail." => op is "call" or "callvirt" or "calli",
                     "volatile." => memory || op is "ldsfld" or "stsfld",
                     "unaligned." => memory,
+                    "no." => NoPrefixAllows(prefixInstruction.ByteOperand, op),
                     _ => true,
                 };
                 if (!allowed)
@@ -394,6 +396,27 @@ internal sealed class FlowGraph<T> where T : class
         {
             Report(prefix, "FLOW020", AnalysisDiagnosticKind.Incomplete, "the prefix is waiting for its instruction");
         }
+    }
+
+    private static bool IsPrefix(StackOperandView<T> instruction) => instruction.DecodedPrefixName is not null
+        || instruction.Op.OpCodeType == OpCodeType.Prefix;
+
+    private static string PrefixName(StackOperandView<T> instruction) => instruction.DecodedPrefixName
+        ?? instruction.Op.Name ?? "";
+
+    private static bool NoPrefixAllows(byte? mask, string op)
+    {
+        if (mask is not { } checks || checks == 0 || (checks & ~0x07) != 0)
+        {
+            return false;
+        }
+
+        var array = op.StartsWith("ldelem", StringComparison.Ordinal) || op.StartsWith("stelem", StringComparison.Ordinal)
+            || op == "ldelema";
+        var typeCheck = op is "castclass" or "unbox" or "ldelema" or "stelem" or "stelem.ref";
+        var nullCheck = array || op is "ldfld" or "stfld" or "callvirt" or "ldvirtftn";
+        return ((checks & 0x01) == 0 || typeCheck) && ((checks & 0x02) == 0 || array)
+            && ((checks & 0x04) == 0 || nullCheck);
     }
 
     private bool IsFirstInstruction(int target, int start)

@@ -14,21 +14,23 @@ namespace IlRepl.Tests.Shared;
 /// <param name="VerificationFailure">An exact documented unsupported operation in the independent verifier.</param>
 /// <param name="Implementation">Optional method implementation attributes written after the parameter list.</param>
 /// <param name="Members">Optional members declared before the method in its containing type.</param>
+/// <param name="Declarations">Optional top-level types declared before the method.</param>
 public sealed record ControlFlowExample(string Name, string[] Body, bool Accepted, string Finding = "", bool Unverifiable = false,
     string Verification = "", string GenericParameters = "", string GenericArguments = "", string VerificationFailure = "",
-    string Implementation = "", string Members = "")
+    string Implementation = "", string Members = "", string Declarations = "")
 {
     /// <summary>
     /// The complete declaration entered at the prompt.
     /// </summary>
-    public string Source => GenericParameters.Length == 0
+    public string Source => DeclarationPrefix + (GenericParameters.Length == 0
         ? $".method int32 {Name}(int32 n){ImplementationSuffix} {{\n" + string.Join('\n', Body) + "\n}"
         : $".class public FlowGeneric {{\n{MemberPrefix}"
             + $".method public static int32 {Name}{GenericHeader}(int32 n){ImplementationSuffix} {{\n"
-            + string.Join('\n', Body) + "\n}\n}";
+            + string.Join('\n', Body) + "\n}\n}");
 
     private string ImplementationSuffix => Implementation.Length == 0 ? "" : " " + Implementation;
     private string MemberPrefix => Members.Length == 0 ? "" : Members + "\n";
+    private string DeclarationPrefix => Declarations.Length == 0 ? "" : Declarations + "\n";
 
     /// <summary>
     /// The method's generic declaration suffix, including its constraints.

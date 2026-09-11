@@ -262,6 +262,16 @@ public static class ControlFlowExamples
             "ldc.i4.s 42", "ret"], true),
         new("WrongConstrainedReceiver", ["ldarga.s n", "constrained. int64", "callvirt instance string object::ToString()", "pop",
             "ldc.i4.s 42", "ret"], false, "receiver", Verification: "StackUnexpected"),
+        new("StaticAbstractCall", ["constrained. Num", "call int32 IZero::Zero()", "pop", "ldc.i4.s 42", "ret"], true,
+            Verification: "CallAbstract,Constrained", Declarations: StaticAbstractDeclarations),
+        new("WrongStaticAbstractCall", ["call int32 IZero::Zero()", "pop", "ldc.i4.s 42", "ret"], false,
+            "needs constrained.", Verification: "CallAbstract", Declarations: StaticAbstractDeclarations),
+        new("WrongStaticAbstractImplementor", ["constrained. object", "call int32 IZero::Zero()", "pop", "ldc.i4.s 42", "ret"],
+            false, "type that implements IZero", Verification: "CallAbstract,Constrained", Declarations: StaticAbstractDeclarations),
+        new("StaticAbstractFunction", ["constrained. Num", "ldftn int32 IZero::Zero()", "pop", "ldc.i4.s 42", "ret"], true,
+            Verification: "Constrained", Declarations: StaticAbstractDeclarations),
+        new("WrongStaticAbstractFunction", ["ldftn int32 IZero::Zero()", "pop", "ldc.i4.s 42", "ret"], false,
+            "needs constrained.", Declarations: StaticAbstractDeclarations),
         new("EnumPointerJoin", [".locals init (valuetype [System.Runtime]System.DayOfWeek a, int32 b)", "ldarg.0", "brtrue OTHER",
             "ldloca a", "br DONE", "OTHER: ldloca b", "DONE: ldind.i4", "pop", "ldc.i4.s 42", "ret"], true,
             Verification: "PathStackUnexpected"),
@@ -425,4 +435,17 @@ public static class ControlFlowExamples
             "value type or generic parameter", Verification: "ValueTypeExpected"),
         new("DeepStack", [.. Enumerable.Repeat("ldc.i4.0", 32), .. Enumerable.Repeat("pop", 32), "ldc.i4.s 42", "ret"], true),
     ];
+
+    private const string StaticAbstractDeclarations = """
+        .class interface public abstract IZero {
+        .method public static abstract virtual int32 Zero() { }
+        }
+        .class public Num implements IZero {
+        .method public static int32 Zero() {
+        ldc.i4.0
+        ret
+        }
+        .override method int32 IZero::Zero() with method int32 Num::Zero()
+        }
+        """;
 }

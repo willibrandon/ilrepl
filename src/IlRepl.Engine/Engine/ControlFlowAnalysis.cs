@@ -185,7 +185,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     }
                 }
 
-                if (view.Op.Name is "localloc" or "cpblk" or "initblk" or "calli" or "jmp"
+                if (view.DecodedPrefixName == "no."
+                    || view.Op.Name is "localloc" or "cpblk" or "initblk" or "calli" or "jmp"
                     || view.Op == OpCodes.Mkrefany && values.LastOrDefault()?.Type is { } typedReference
                         && _types.Category(typedReference) == StackCategory.NativeInt
                     || values.Any(value => value.Type is { } type && _types.Algebra.IsPointer(type))
@@ -207,7 +208,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                             && !_types.Algebra.Same(actual, pair.parameter))
                     || view.Op == OpCodes.Ldvirtftn && view.MethodIsConstructor == true)
                 {
-                    Report(index, "FLOW007", $"{view.Op.Name} uses an operation outside verifiable IL",
+                    Report(index, "FLOW007", $"{view.DecodedPrefixName ?? view.Op.Name} uses an operation outside verifiable IL",
                         AnalysisDiagnosticKind.Unverifiable);
                 }
             }
@@ -320,6 +321,25 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         if (view.MethodIsAbstract == true && view.MethodIsStatic == false && op == OpCodes.Call)
         {
             return "call cannot invoke an abstract method; use callvirt";
+        }
+
+        var constrained = graph.Prefixes(index).FirstOrDefault(prefix => prefix.Op == OpCodes.Constrained)?.Type;
+        if (constrained is not null && (op == OpCodes.Call || op == OpCodes.Ldftn)
+            && view.MethodIsStatic is { } isStatic && view.MethodIsVirtual is { } isVirtual && (!isStatic || !isVirtual))
+        {
+            return $"constrained. {op.Name} needs a static virtual interface method";
+        }
+
+        if (view.MethodIsStatic == true && view.MethodIsVirtual == true
+            && (op == OpCodes.Call || op == OpCodes.Ldftn))
+        {
+            var implementor = constrained is not null && (_types.Algebra.IsValueType(constrained)
+                || _types.Algebra.IsGenericParameter(constrained)) ? _types.Algebra.Boxed(constrained) : constrained;
+            if (implementor is null || view.DeclaringType is null || !_types.CanAssign(implementor, view.DeclaringType))
+            {
+                return $"{op.Name} to a static virtual method needs constrained. with a type that implements "
+                    + _types.Name(view.DeclaringType);
+            }
         }
 
         if (op == OpCodes.Newobj && (view.MethodIsStatic == true || view.MethodIsConstructor == false))

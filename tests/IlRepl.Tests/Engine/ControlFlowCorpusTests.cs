@@ -57,6 +57,7 @@ public sealed class ControlFlowCorpusTests
         Assert.AreEqual(example.Accepted, refusal is null, refusal?.Message);
         var implementation = example.Implementation.Length == 0 ? "" : " " + example.Implementation;
         var members = example.Members.Length == 0 ? "" : example.Members.Replace("\n", "\n    ", StringComparison.Ordinal) + "\n    ";
+        var declarations = example.Declarations.Length == 0 ? "" : example.Declarations + "\n";
         var body = string.Join('\n', example.Body).Replace("} handler {", "} {", StringComparison.Ordinal)
             .Replace("FlowGeneric::", "Fixture::", StringComparison.Ordinal);
         var source = $$"""
@@ -64,6 +65,7 @@ public sealed class ControlFlowCorpusTests
             .assembly extern System.Private.CoreLib { }
             .assembly FlowCorpus { }
             .module FlowCorpus.dll
+            {{declarations}}
             .class public Fixture extends [System.Runtime]System.Object {
                 {{members}}.method public static int32 {{name}}{{example.GenericHeader}}(int32 n) cil managed{{implementation}} {
                     .maxstack 64

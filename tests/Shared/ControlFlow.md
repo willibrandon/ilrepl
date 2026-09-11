@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 181 method examples and the paired constructor example
+not justify refusing a correct body. The 186 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -37,7 +37,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Prefix boundaries, operands, and applicability | III.2 | TailCall, SynchronizedTailCall, UnalignedLoad, VolatileObjectLoad, VolatileObjectStore, ReadOnlyLoad | WrongPrefix, WrongUnalignedValue, BranchIntoPrefix |
 | Generic identity and boxing | I.8.2.4, III.1.8.1.1–III.1.8.1.3, III.4.1, III.4.23, III.4.30, III.4.33 | GenericBox, GenericReference | GenericNeedsBox, GenericDistinct, WrongManagedPointerBox, WrongManagedPointerCast, WrongManagedPointerIsInstance, WrongManagedPointerUnboxAny |
 | Generic object references | I.8.7.1, III.1.8.1.1 | GenericReferenceThrow, GenericReferenceBranch | GenericNeedsBoxThrow, GenericNeedsBoxBranch |
-| Runtime extensions to constrained calls | .NET ECMA-335 Augments | StaticAbstract_ImplementedAndCalled | Existing member eligibility tests |
+| Runtime extensions to constrained calls | .NET ECMA-335 Augments | StaticAbstractCall, StaticAbstractFunction, StaticAbstract_ImplementedAndCalled | WrongStaticAbstractCall, WrongStaticAbstractImplementor, WrongStaticAbstractFunction, existing member eligibility tests |
 | Constrained receiver type | III.2.1 | ConstrainedReceiver | WrongConstrainedReceiver |
 | Readonly store receiver across paths | II.16.1.2 | FlowReceiver with this on both paths | FlowReceiver with another receiver |
 | Indirect calls | III.3.20 | IndirectCall, InstanceIndirectCall, ManagedPointerInstanceIndirectCall, NativePointerInstanceIndirectCall | WrongIndirectCall, WrongIndirectTarget, WrongInstanceIndirectReceiver |
@@ -190,7 +190,9 @@ reports `StackUnexpected` for `initobj`. ECMA III.3.42, III.3.62, III.4.4–III.
 III.4.29 permit the address in correct but unverifiable CIL.
 
 The current runtime augments ECMA's `constrained.` prefix with static interface `call` and `ldftn`.
-The parser and analyzer accept those forms; the published callvirt-only rule is insufficient here.
+The analyzer requires that prefix for a static virtual interface member and checks that its type
+implements the interface. ILVerification still reports `Constrained` for both permitted forms and
+`CallAbstract` for `call`, while missing an unprefixed `ldftn`; the runtime follows the augment.
 
 The independent verifier resolves framework metadata without running constructors or fixture bodies.
 Missing metadata and uncategorized verifier failures fail the fixture instead of counting as the
