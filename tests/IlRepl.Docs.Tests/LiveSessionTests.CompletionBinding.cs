@@ -53,7 +53,9 @@ public sealed partial class LiveSessionTests
         await CompletionAtCaretAsync(page, "  ...> ldtoken RefSuffix<int3", "❯ int32");
         await page.Keyboard.PressAsync("Delete");
         await page.Keyboard.PressAsync("Delete");
-        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ int32");
+        await page.Keyboard.PressAsync("End");
+        await PromptAtCaretAsync(page, "  ...> ldtoken RefSuffix<int3>");
+        await page.Keyboard.PressAsync("ArrowLeft");
         await page.Keyboard.TypeAsync("[]");
         await page.Keyboard.PressAsync("ArrowLeft");
         await page.Keyboard.PressAsync("ArrowLeft");
