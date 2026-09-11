@@ -294,6 +294,32 @@ internal sealed class FlowGraph<T> where T : class
     }
 
     /// <summary>
+    /// Finds the finally handlers that a leave executes, ordered from the innermost protected group outward.
+    /// </summary>
+    public IEnumerable<int> FinalizersForTransfer(int source, int target)
+    {
+        var targetGroups = Regions[target].Select(id => Sections[id].Group).ToHashSet();
+        var visited = new HashSet<int>();
+        for (var index = Regions[source].Length - 1; index >= 0; index--)
+        {
+            var group = Sections[Regions[source][index]].Group;
+            if (targetGroups.Contains(group) || !visited.Add(group))
+            {
+                continue;
+            }
+
+            foreach (var (id, section) in Sections)
+            {
+                if (section.Group == group && section.Kind == BlockKind.Finally)
+                {
+                    yield return id;
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Enumerates the prefixes attached to an instruction, skipping source labels and comments.
     /// </summary>
     public IEnumerable<StackOperandView<T>> Prefixes(int index)

@@ -42,23 +42,62 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
     private IEnumerable<FlowResult<T>?> Steps(FlowGraph<T> graph, T? returnType, bool cell, CancellationToken cancellationToken)
     {
+        var finalizers = new Dictionary<int, bool?>();
+        foreach (var (id, section) in graph.Sections.Where(pair => pair.Value.Kind == BlockKind.Finally)
+            .OrderBy(pair => pair.Value.End - pair.Value.Start))
+        {
+            var seeds = new Dictionary<int, FlowState<T>> { [section.Start] = FlowState<T>.ThisEntry };
+            FlowResult<T>? result = null;
+            foreach (var step in AnalyzeSteps(graph, returnType, cell, cancellationToken, seeds,
+                section.Start, section.End, finalizers, validateGraph: false))
+            {
+                if (step is null)
+                {
+                    yield return null;
+                }
+                else
+                {
+                    result = step;
+                }
+            }
+
+            finalizers[id] = FinalizerEffect(graph, id, section, result!);
+        }
+
+        foreach (var result in AnalyzeSteps(graph, returnType, cell, cancellationToken,
+            finalizerEffects: finalizers, validateGraph: true))
+        {
+            yield return result;
+        }
+    }
+
+    private IEnumerable<FlowResult<T>?> AnalyzeSteps(FlowGraph<T> graph, T? returnType, bool cell,
+        CancellationToken cancellationToken, IReadOnlyDictionary<int, FlowState<T>>? seeds = null,
+        int start = 0, int? end = null, Dictionary<int, bool?>? finalizerEffects = null, bool validateGraph = true)
+    {
         var nodes = graph.Nodes;
-        graph.ValidateRegions();
-        var before = new FlowState<T>?[nodes.Count + 1];
-        var after = new FlowState<T>?[nodes.Count + 1];
-        var incomingStates = new FlowState<T>?[before.Length];
-        var incomingPredecessors = new int[before.Length];
-        var additionalIncoming = new Dictionary<int, FlowState<T>>?[before.Length];
+        var limit = end ?? nodes.Count + 1;
+        var count = limit - start;
+        if (validateGraph)
+        {
+            graph.ValidateRegions();
+        }
+        var before = new FlowState<T>?[count];
+        var after = new FlowState<T>?[count];
+        var incomingStates = new FlowState<T>?[count];
+        var incomingPredecessors = new int[count];
+        var additionalIncoming = new Dictionary<int, FlowState<T>>?[count];
         var diagnostics = new Dictionary<(int, string), AnalysisDiagnostic>();
         var queue = new Queue<int>();
-        var queued = new bool[before.Length];
+        var queued = new bool[count];
         var maxStack = 0;
 
         void Enqueue(int position)
         {
-            if (!queued[position])
+            var slot = position - start;
+            if (!queued[slot])
             {
-                queued[position] = true;
+                queued[slot] = true;
                 queue.Enqueue(position);
             }
         }
@@ -73,26 +112,32 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         void Propagate(int target, int predecessor, FlowState<T> state)
         {
-            if (incomingStates[target] is null)
+            if (target < start || target >= limit)
             {
-                incomingStates[target] = state;
-                incomingPredecessors[target] = predecessor;
+                return;
+            }
+
+            var slot = target - start;
+            if (incomingStates[slot] is null)
+            {
+                incomingStates[slot] = state;
+                incomingPredecessors[slot] = predecessor;
                 Enqueue(target);
                 return;
             }
 
-            if (incomingPredecessors[target] == predecessor)
+            if (incomingPredecessors[slot] == predecessor)
             {
-                if (!Equal(incomingStates[target]!, state))
+                if (!Equal(incomingStates[slot]!, state))
                 {
-                    incomingStates[target] = state;
+                    incomingStates[slot] = state;
                     Enqueue(target);
                 }
 
                 return;
             }
 
-            var others = additionalIncoming[target] ??= [];
+            var others = additionalIncoming[slot] ??= [];
             if (!others.TryGetValue(predecessor, out var old) || !Equal(old, state))
             {
                 others[predecessor] = state;
@@ -100,26 +145,25 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
         }
 
-        var structuralProblems = new string?[nodes.Count];
-        for (var index = 0; index < nodes.Count; index++)
+        var structuralProblems = new string?[Math.Min(limit, nodes.Count) - start];
+        for (var index = start; index < Math.Min(limit, nodes.Count); index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (index > 0 && index % 64 == 0)
+            if (index > start && (index - start) % 64 == 0)
             {
                 yield return null;
             }
 
-            if (nodes[index].Instruction is not { } instruction
-                || ValidateStructure(instruction, graph, index) is not { } problem)
+            if (nodes[index].Instruction is not { } instruction || ValidateStructure(instruction, graph, index) is not { } problem)
             {
                 continue;
             }
 
-            structuralProblems[index] = problem;
+            structuralProblems[index - start] = problem;
             Report(index, "FLOW005", problem);
         }
 
-        foreach (var (position, seed) in graph.Seeds)
+        foreach (var (position, seed) in seeds ?? graph.Seeds)
         {
             Propagate(position, -1, seed);
         }
@@ -132,10 +176,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             {
                 yield return null;
             }
-            queued[index] = false;
-            var state = incomingStates[index];
-            var first = incomingPredecessors[index];
-            if (additionalIncoming[index] is { } others)
+            var slot = index - start;
+            queued[slot] = false;
+            var state = incomingStates[slot];
+            var first = incomingPredecessors[slot];
+            if (additionalIncoming[slot] is { } others)
             {
                 var predecessors = new KeyValuePair<int, FlowState<T>>[others.Count + 1];
                 predecessors[0] = new KeyValuePair<int, FlowState<T>>(first, state!);
@@ -174,7 +219,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 }
             }
 
-            before[index] = state;
+            before[slot] = state;
             if (state is null)
             {
                 continue;
@@ -183,7 +228,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             maxStack = Math.Max(maxStack, state.Values?.Length ?? 0);
             if (index == nodes.Count)
             {
-                after[index] = state;
+                after[slot] = state;
                 continue;
             }
 
@@ -195,10 +240,10 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
             else if (node.Instruction is { } view && !state.Invalid && state.Values is { } values)
             {
-                var problem = structuralProblems[index] ?? ValidateStack(view, values, graph, index, returnType, cell);
+                var problem = structuralProblems[slot] ?? ValidateStack(view, values, graph, index, returnType, cell);
                 if (problem is not null)
                 {
-                    if (structuralProblems[index] is null)
+                    if (structuralProblems[slot] is null)
                     {
                         Report(index, "FLOW005", problem, related: Related(nodes, index, state));
                     }
@@ -280,12 +325,37 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 }
             }
 
-            after[index] = state;
+            after[slot] = state;
             maxStack = Math.Max(maxStack, state.Values?.Length ?? 0);
             foreach (var edge in graph.Edges[index])
             {
-                var outgoing = edge.ClearsStack && !state.Invalid ? state with { Values = [] } : state;
-                Propagate(edge.Target, index, outgoing);
+                var outgoing = (FlowState<T>?)(edge.ClearsStack && !state.Invalid ? state with { Values = [] } : state);
+                if (edge.ClearsStack && finalizerEffects is not null)
+                {
+                    foreach (var finalizer in graph.FinalizersForTransfer(index, edge.Target))
+                    {
+                        if (!finalizerEffects.TryGetValue(finalizer, out var preservesThis) || preservesThis is null)
+                        {
+                            outgoing = null;
+                            break;
+                        }
+
+                        if (outgoing is not { } continuing)
+                        {
+                            break;
+                        }
+
+                        outgoing = continuing with
+                        {
+                            ThisArgumentIsOriginal = continuing.ThisArgumentIsOriginal && preservesThis.Value,
+                        };
+                    }
+                }
+
+                if (outgoing is not null)
+                {
+                    Propagate(edge.Target, index, outgoing);
+                }
             }
 
             if (!state.Invalid && graph.Sections.Count > 0)
@@ -301,11 +371,43 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
         }
 
-        graph.ValidateStacks(before);
+        if (validateGraph)
+        {
+            graph.ValidateStacks(before);
+        }
+
         yield return new FlowResult<T>(before, after,
-            [.. graph.Diagnostics,
+            [.. validateGraph ? graph.Diagnostics : [],
                 .. diagnostics.OrderBy(pair => pair.Key.Item1).ThenBy(pair => pair.Key.Item2).Select(pair => pair.Value)],
             maxStack);
+    }
+
+    private static bool? FinalizerEffect(FlowGraph<T> graph, int sectionId, FlowRegion section, FlowResult<T> result)
+    {
+        var preservesThis = true;
+        var completes = false;
+        for (var index = section.Start; index < section.End; index++)
+        {
+            if (result.After[index - section.Start] is not { Invalid: false } state)
+            {
+                continue;
+            }
+
+            var op = graph.Nodes[index].Instruction?.Op;
+            var explicitEnd = op == OpCodes.Endfinally && graph.Regions[index].LastOrDefault(-1) == sectionId;
+            var fallsThrough = index + 1 == section.End && (op is null
+                || op.Value.FlowControl is not (FlowControl.Branch or FlowControl.Return or FlowControl.Throw)
+                    && op != OpCodes.Jmp);
+            if (!explicitEnd && !fallsThrough)
+            {
+                continue;
+            }
+
+            completes = true;
+            preservesThis &= state.ThisArgumentIsOriginal;
+        }
+
+        return completes ? preservesThis : null;
     }
 
     private string? ValidateStructure(StackOperandView<T> view, FlowGraph<T> graph, int index)

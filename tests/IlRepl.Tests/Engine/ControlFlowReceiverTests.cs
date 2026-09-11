@@ -134,6 +134,64 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
+    /// A leave carries receiver changes made by its finally handler to the instruction at the target.
+    /// </summary>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task FinallyWrite_ReachesLeaveTarget(bool originalReceiver)
+    {
+        var lines = ControlFlowReceiverExamples.FinallySource(originalReceiver);
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 13, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual(originalReceiver, !preview.Diagnostics.Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error),
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+
+        ReplException? refusal = null;
+        foreach (var line in lines)
+        {
+            try
+            {
+                session.AddLine(line);
+            }
+            catch (ReplException error)
+            {
+                refusal = error;
+                break;
+            }
+        }
+
+        Assert.AreEqual(originalReceiver, refusal is null, refusal?.Message);
+        if (!originalReceiver)
+        {
+            Assert.Contains("through this", refusal!.Message);
+            Assert.IsNotNull(session.OpenMethod);
+        }
+    }
+
+    /// <summary>
+    /// Completing a nested finally does not make a noncompleting outer finally reach its leave target.
+    /// </summary>
+    [TestMethod]
+    public async Task NestedFinallyEnd_DoesNotCompleteOuterFinally()
+    {
+        var lines = ControlFlowReceiverExamples.NestedNonCompletingFinallySource();
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 19, 0, 1), TestContext.CancellationToken);
+        Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error, preview.Diagnostics,
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        foreach (var line in lines)
+        {
+            session.AddLine(line);
+        }
+
+        Assert.IsNull(session.OpenMethod);
+        Assert.IsNull(session.OpenType);
+    }
+
+    /// <summary>
     /// Exposing argument zero by address invalidates this for every supported indirect write form.
     /// </summary>
     [TestMethod]

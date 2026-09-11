@@ -78,6 +78,63 @@ public static class ControlFlowReceiverExamples
     ];
 
     /// <summary>
+    /// Builds a constructor whose finally handler either preserves or replaces argument zero.
+    /// </summary>
+    /// <param name="originalReceiver">Whether the handler stores the original receiver.</param>
+    /// <returns>The complete class declaration.</returns>
+    public static string[] FinallySource(bool originalReceiver) =>
+    [
+        ".class public FlowFinallyArgument {",
+        ".field public initonly int32 Value",
+        ".method public instance void .ctor(class FlowFinallyArgument other) {",
+        "ldarg.0",
+        "call instance void object::.ctor()",
+        ".try {",
+        "leave DONE",
+        "} finally {",
+        originalReceiver ? "ldarg.0" : "ldarg.1",
+        "starg.s 0",
+        "}",
+        "DONE: ldarg.0",
+        "ldc.i4.s 42",
+        "stfld int32 FlowFinallyArgument::Value",
+        "ret",
+        "}",
+        "}",
+    ];
+
+    /// <summary>
+    /// Builds a constructor whose inner finally completes while its outer finally cannot complete.
+    /// </summary>
+    /// <returns>The complete class declaration.</returns>
+    public static string[] NestedNonCompletingFinallySource() =>
+    [
+        ".class public NestedFinallyArgument {",
+        ".field public initonly int32 Value",
+        ".method public instance void .ctor(class NestedFinallyArgument other) {",
+        "ldarg.0",
+        "call instance void object::.ctor()",
+        ".try {",
+        "leave DONE",
+        "} finally {",
+        ".try {",
+        "nop",
+        "} finally {",
+        "ldarg.1",
+        "starg.s 0",
+        "endfinally",
+        "}",
+        "OUTERLOOP: br OUTERLOOP",
+        "}",
+        "DONE: ldarg.0",
+        "ldc.i4.1",
+        "stfld int32 NestedFinallyArgument::Value",
+        "ret",
+        "}",
+        "}",
+    ];
+
+    /// <summary>
     /// Builds a constructor that writes through the address of argument zero before loading it again.
     /// </summary>
     public static string[] AddressSource(string write) =>

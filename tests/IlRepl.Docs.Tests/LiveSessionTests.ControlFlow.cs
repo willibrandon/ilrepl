@@ -283,6 +283,33 @@ public sealed partial class LiveSessionTests
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class FlowArgument", options);
     }
 
+    /// <summary>
+    /// Receiver changes made by a finally handler reach the leave target in browser analysis.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(120_000, CooperativeCancellation = true)]
+    public async Task ControlFlow_FinallyWriteMatchesDesktop(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.FinallySource(false)));
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("error:", options);
+        await ClearPromptAsync(page);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.FinallySource(true)));
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class FlowFinallyArgument", options);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.NestedNonCompletingFinallySource()));
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class NestedFinallyArgument", options);
+    }
+
     private static async Task ArmSubmissionOutputAsync(IPage page)
     {
         await page.EvaluateAsync("""
