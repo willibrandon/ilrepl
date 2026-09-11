@@ -210,7 +210,7 @@ public sealed partial class EditingSession
         var operand = instruction.Operand;
         var facts = AccessFacts.From(scope);
         var problem = operand.Type is { } type
-            ? MemberEligibility.TypeVerdict(type, scope.Access, facts)
+            ? MemberEligibility.TypeVerdict(operand.ExactType ?? type, scope.Access, facts)
             : operand.Field is { } field
                 ? MemberEligibility.TypeVerdict(field.FieldType, scope.Access, facts)
                     ?? MemberEligibility.FieldVerdict(field, scope.Access, facts)

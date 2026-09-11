@@ -39,10 +39,9 @@ public static class SymbolBinder
     {
         ArgumentNullException.ThrowIfNull(syntax);
         ArgumentNullException.ThrowIfNull(scope);
-        var type = BindCore(syntax.Unwrapped, scope, lenientGenerics);
-        var required = syntax.Modifiers(true).Select(m => BindType(m, scope, lenientGenerics).Type).ToList();
-        var optional = syntax.Modifiers(false).Select(m => BindType(m, scope, lenientGenerics).Type).ToList();
-        return new BoundType(type, syntax.IsPinned, required, optional);
+        var exactType = BindCore(syntax, scope, lenientGenerics);
+        var type = SymbolSignatureProvider.StripModifiers(exactType, out var required, out var optional);
+        return new BoundType(type, syntax.IsPinned, required, optional, exactType);
     }
 
     private static TypeSymbol BindCore(TypeSyntax syntax, IBindingScope scope, bool lenient)
@@ -304,12 +303,7 @@ public static class SymbolBinder
                 }
 
             case OperandSyntaxKind.Type:
-                return new BoundInstruction(op, text, new BoundOperand
-                {
-                    Kind = OperandKind.Type,
-                    Type = BindType(operand.Type!,
-                    scope).Type
-                }, null, null);
+                return new BoundInstruction(op, text, TypeOperand(OperandKind.Type), null, null);
 
             case OperandSyntaxKind.Member:
                 return new BoundInstruction(op, text, new BoundOperand
@@ -338,7 +332,7 @@ public static class SymbolBinder
                     }
                     : operand.IsFieldToken
                         ? new BoundOperand { Kind = OperandKind.Token, Field = BindFieldReference(operand.Member!, scope) }
-                        : new BoundOperand { Kind = OperandKind.Token, Type = BindType(operand.Type!, scope).Type };
+                        : TypeOperand(OperandKind.Token);
                 return new BoundInstruction(op, text, token, null, null);
             }
 
@@ -356,6 +350,12 @@ public static class SymbolBinder
 
         BoundInstruction Literal(OperandKind kind, object value) => new(op, text, new BoundOperand { Kind = kind, Value = value }, null,
             null);
+
+        BoundOperand TypeOperand(OperandKind kind)
+        {
+            var bound = BindType(operand.Type!, scope);
+            return new BoundOperand { Kind = kind, Type = bound.Type, ExactType = bound.ExactType };
+        }
     }
 
     private static void RequireNoOperand(string opName, string operandText)

@@ -230,7 +230,7 @@ public sealed class RuntimeBindingAdapter
             Text = bound.Text,
             Kind = operand.Kind,
             Operand = value,
-            ExactTypeOperand = operand.Type is { } type && RuntimeSymbolTypes.RequiresExact(type) ? type : null,
+            ExactTypeOperand = operand.ExactType is { } type && RuntimeSymbolTypes.RequiresExact(type) ? type : null,
             LocalIndex = bound.LocalIndex,
             ArgumentIndex = bound.ArgumentIndex,
         };

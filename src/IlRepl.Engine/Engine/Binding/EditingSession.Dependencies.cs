@@ -64,7 +64,7 @@ public sealed partial class EditingSession
             var operand = instruction.Operand;
             if (operand.Type is { } type)
             {
-                yield return type;
+                yield return operand.ExactType ?? type;
             }
 
             if (operand.Field is { } field)

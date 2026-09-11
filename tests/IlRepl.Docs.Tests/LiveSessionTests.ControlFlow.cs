@@ -139,6 +139,29 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
+    /// Top-level custom modifiers on instruction type operands survive browser emission.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(120_000, CooperativeCancellation = true)]
+    public async Task ControlFlow_ModifiedTypeOperandsMatchDesktop(string browser)
+    {
+        const string Modifier = "[System.Runtime]System.Runtime.CompilerServices.IsVolatile";
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+        await PasteAsync(page, $"ldc.i4.1\nnewarr int32 modreq({Modifier}) modopt({Modifier})\npop\n"
+            + $"ldtoken int32 modopt({Modifier})\ncall Type::GetTypeFromHandle(RuntimeTypeHandle)\nret");
+        await Assertions.Expect(terminal).ToContainTextAsync("Enter sends 6 lines", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("typeof(int32)", options);
+    }
+
+    /// <summary>
     /// The return synthesized when a method closes completes its trailing tail call in browser Mono.
     /// </summary>
     /// <param name="browser">The browser engine.</param>
