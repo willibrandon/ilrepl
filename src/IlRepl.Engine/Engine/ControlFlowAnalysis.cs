@@ -186,7 +186,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 }
 
                 var tailCallPassesManagedPointer = TailCallPassesManagedPointer(graph, index, view, values);
-                if (tailCallPassesManagedPointer
+                var nativeIntegerAssignedToPointer = NativeIntegerAssignedToPointer(view, values, returnType);
+                if (tailCallPassesManagedPointer || nativeIntegerAssignedToPointer
                     || view.DecodedPrefixName == "no."
                     || view.Op.Name is "localloc" or "cpblk" or "initblk" or "calli" or "jmp"
                     || view.Op == OpCodes.Mkrefany && values.LastOrDefault()?.Type is { } typedReference
@@ -422,7 +423,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
             if (_types.Algebra.IsByRef(type))
             {
-                return _types.Algebra.Same(_types.Algebra.ElementOf(type), owner);
+                return _types.Algebra.IsValueType(owner) && _types.Algebra.Same(_types.Algebra.ElementOf(type), owner);
             }
 
             return _types.CanAssign(type, owner);
@@ -857,6 +858,59 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         var first = values.Length - view.ArgumentPops;
         return values.Skip(first).Take(argumentCount)
             .Any(value => value.Type is { } type && _types.Algebra.IsByRef(type));
+    }
+
+    private bool NativeIntegerAssignedToPointer(StackOperandView<T> view, FlowValue<T>[] values, T? returnType)
+    {
+        bool Native(T? type) => type is not null && _types.Category(type) == StackCategory.NativeInt;
+        bool Pointer(T? type) => type is not null && _types.Algebra.IsPointer(type);
+        if (values.Length == 0)
+        {
+            return false;
+        }
+
+        var name = view.Op.Name;
+        if (view.Op == OpCodes.Ret)
+        {
+            return Pointer(returnType) && Native(values[^1].Type);
+        }
+
+        if (name is not null && (name.StartsWith("stloc", StringComparison.Ordinal)
+            || name.StartsWith("starg", StringComparison.Ordinal)))
+        {
+            return Pointer(view.SlotType) && Native(values[^1].Type);
+        }
+
+        if (name is "stfld" or "stsfld")
+        {
+            return Pointer(view.FieldType) && Native(values[^1].Type);
+        }
+
+        if (view.Op == OpCodes.Stobj)
+        {
+            return Pointer(view.Type) && Native(values[^1].Type);
+        }
+
+        if (name is not ("call" or "callvirt" or "calli" or "newobj"))
+        {
+            return false;
+        }
+
+        if (values.Length < view.ArgumentPops)
+        {
+            return false;
+        }
+
+        var first = values.Length - view.ArgumentPops + (view.IsInstance || view.HasImplicitThis ? 1 : 0);
+        for (var parameter = 0; parameter < view.ParameterTypes.Count; parameter++)
+        {
+            if (Pointer(view.ParameterTypes[parameter]) && Native(values[first + parameter].Type))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private T? ArrayInstructionType(StackOperandView<T> view)

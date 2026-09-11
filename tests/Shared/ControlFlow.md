@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 197 method examples and the paired constructor example
+not justify refusing a correct body. The 201 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -24,8 +24,8 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Instance receiver representation | I.12.4.1.4, II.13.3 | ValueTypeReceiver, NativeValueTypeReceiver, PointerValueTypeReceiver | WrongManagedReferenceReceiver, WrongPointerValueTypeReceiver, WrongUnboxedValueTypeReceiver |
 | Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
 | Managed-pointer verification types | I.8.7, III.1.8.1.2.3 | BooleanPointerCall, BooleanPointerJoin, CharacterPointerJoin, EnumPointerJoin, ReducedPointerJoin | ByrefJoin |
-| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.10–III.4.11, III.4.13, III.4.29 | ByteIndirectLoad, ByteIndirectStore, FloatIndirectLoad, FloatIndirectStore, ManagedPointer, NativeFieldAddress, NativeFieldLoad, NativeFieldStore, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore, GenericIndirectReference | WrongNarrowFloatStore, WrongNarrowIndirectStore, WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore, WrongGenericIndirectLoad, WrongGenericIndirectStore, WrongWideFloatLoad, WrongWideIndirectLoad |
-| Field storage form | III.4.10–III.4.12, III.4.24–III.4.31 | PointerFields, StaticField, StaticFieldToken | WrongStaticFieldOpcode, WrongInstanceFieldOpcode |
+| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.10–III.4.11, III.4.13, III.4.29 | ByteIndirectLoad, ByteIndirectStore, FloatIndirectLoad, FloatIndirectStore, ManagedPointer, NativeFieldAddress, NativeFieldLoad, NativeFieldStore, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, NativePointerArgument, NativePointerLocal, NativePointerReturn, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore, GenericIndirectReference | WrongNarrowFloatStore, WrongNarrowIndirectStore, WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore, WrongGenericIndirectLoad, WrongGenericIndirectStore, WrongWideFloatLoad, WrongWideIndirectLoad |
+| Field storage form | III.4.10–III.4.12, III.4.24–III.4.31 | PointerFields, StaticField, StaticFieldToken | WrongInstanceFieldOpcode, WrongReferenceFieldReceiver, WrongStaticFieldOpcode |
 | Readonly provenance | III.2.3, III.3.62 | CovariantReadOnlyArrayAddress, ReadOnlyLoad, ReadOnlyFieldWrite | WrongCovariantArrayAddress, WrongPrefix |
 | Correct operations outside verification | III.1.8, III.3.47 | ManagedPointerOverflowAddition, NativeValueTypeReceiver, PointerDifference, ReadOnlyWrite, StackAllocation | WrongArithmetic, WrongAllocationHandler |
 | Numeric operand categories | III.1.5 tables III.2–III.8, III.3.27 | ManagedPointerOverflowAddition, ManagedPointerOverflowDifference, ManagedPointerOverflowSubtraction, MixedFloats, NativeAddition, UnsignedIntegerToFloat, 288 raw pairs | BadOverflowFloat, BadNotFloat, BadShift, WrongUnsignedFloatConversion |
@@ -70,6 +70,15 @@ ECMA I.12.4.1.4 gives a value-type method a pointer to its unboxed instance. A m
 verifiable; an unmanaged pointer or native integer is correct but unverifiable. A class method
 instead requires an object reference. The receiver fixtures preserve that distinction and reject
 an unboxed value or managed pointer to a reference variable before either can reach the runtime.
+
+The same receiver distinction applies to instance fields. A managed pointer to a value type
+addresses that value, while a managed pointer to a reference type addresses a slot containing the
+reference. WrongReferenceFieldReceiver prevents the latter from being treated as the object.
+
+A native integer can carry an unmanaged pointer for correct CIL, but assigning it to a typed
+pointer local, parameter, or return remains unverifiable. NativePointerLocal,
+NativePointerArgument, and NativePointerReturn carry that diagnostic and execute on both runtimes.
+ILVerification reports no diagnostic for the three assignments.
 
 ECMA III.4.18 requires a correct `ldvirtftn` target to be nonstatic and defined for the supplied
 object. It does not require the target to be virtual. CoreCLR, Mono, and ILVerification accept the
