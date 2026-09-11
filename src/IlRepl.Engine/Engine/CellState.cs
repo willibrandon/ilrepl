@@ -402,8 +402,13 @@ public sealed class CellState
                 throw new ReplException($"abstract method {Signature!.Name} has no body; close it with }}");
             }
 
-            AcceptEntry(new CellEntry { Kind = EntryKind.Labels, Source = line, Labels = labels,
-                Location = Location(normalized) });
+            AcceptEntry(new CellEntry
+            {
+                Kind = EntryKind.Labels,
+                Source = line,
+                Labels = labels,
+                Location = Location(normalized)
+            });
             _definedLabels.UnionWith(labels);
             return new LineResult(LineOutcome.Labels, null, null);
         }
@@ -432,8 +437,14 @@ public sealed class CellState
             throw new ReplException("endfilter is only valid inside a filter block (} filter {)");
         }
 
-        AcceptEntry(new CellEntry { Kind = EntryKind.Instruction, Source = line, Labels = labels, Instruction = instruction,
-            Location = Location(normalized) });
+        AcceptEntry(new CellEntry
+        {
+            Kind = EntryKind.Instruction,
+            Source = line,
+            Labels = labels,
+            Instruction = instruction,
+            Location = Location(normalized)
+        });
         _definedLabels.UnionWith(labels);
         return new LineResult(LineOutcome.Instruction, _entries[^1].Instruction, null);
     }
@@ -713,6 +724,16 @@ public sealed class CellState
     private void CheckAccess(Instruction instruction)
     {
         var scope = Scope;
+        CheckExactAccess(instruction.ExactTypeOperand, scope);
+        if (instruction.Operand is CalliSignature { ExactSymbol: { } exactSignature })
+        {
+            CheckExactAccess(exactSignature.ReturnType, scope);
+            foreach (var parameter in exactSignature.Parameters)
+            {
+                CheckExactAccess(parameter, scope);
+            }
+        }
+
         switch (instruction.Operand)
         {
             case System.Reflection.FieldInfo field:
@@ -745,7 +766,7 @@ public sealed class CellState
         }
     }
 
-    private void CheckExactAccess(TypeSymbol? exact, AccessScope scope)
+    private void CheckExactAccess(TypeSymbol? exact, AccessScope scope, TypeTable? types = null)
     {
         if (exact is null)
         {
@@ -754,7 +775,7 @@ public sealed class CellState
 
         foreach (var type in RuntimeSymbolTypes.Materialized(exact))
         {
-            MemberAccess.CheckType(type, scope, Types);
+            MemberAccess.CheckType(type, scope, types ?? Types);
         }
     }
 
@@ -769,6 +790,19 @@ public sealed class CellState
         ArgumentNullException.ThrowIfNull(types);
         foreach (var entry in _entries)
         {
+            if (entry.Instruction is { } instruction)
+            {
+                CheckExactAccess(instruction.ExactTypeOperand, Scope, types);
+                if (instruction.Operand is CalliSignature { ExactSymbol: { } exactSignature })
+                {
+                    CheckExactAccess(exactSignature.ReturnType, Scope, types);
+                    foreach (var parameter in exactSignature.Parameters)
+                    {
+                        CheckExactAccess(parameter, Scope, types);
+                    }
+                }
+            }
+
             switch (entry.Instruction?.Operand)
             {
                 case System.Reflection.FieldInfo field:

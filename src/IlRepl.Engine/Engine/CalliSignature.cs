@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -21,6 +22,11 @@ public sealed record CalliSignature(
     Type[] ParameterTypes,
     Type[]? OptionalParameterTypes)
 {
+    /// <summary>
+    /// The bound call-site signature before its types are projected onto runtime objects.
+    /// </summary>
+    internal MethodSignatureSymbol? ExactSymbol { get; init; }
+
     /// <summary>
     /// The number of values popped for arguments, including <c>this</c> for instance signatures.
     /// Under <c>instance explicit</c> the receiver is already the first parameter (ECMA-335

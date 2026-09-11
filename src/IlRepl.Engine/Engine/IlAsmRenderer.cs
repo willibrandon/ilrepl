@@ -69,6 +69,16 @@ public static class IlAsmRenderer
             foreach (var e in state.Entries)
             {
                 Note(e.CatchType);
+                NoteExact(e.Instruction?.ExactTypeOperand);
+                if (e.Instruction?.Operand is CalliSignature { ExactSymbol: { } exactSignature })
+                {
+                    NoteExact(exactSignature.ReturnType);
+                    foreach (var parameter in exactSignature.Parameters)
+                    {
+                        NoteExact(parameter);
+                    }
+                }
+
                 switch (e.Instruction?.Operand)
                 {
                     case Type t:
@@ -341,14 +351,15 @@ public static class IlAsmRenderer
                             indent++;
                             break;
                         case BlockKind.End:
-                            {
-                                var (endLabel, region) = open.Pop();
-                                sb.Append(Pad(indent)).AppendLine(region is BlockKind.Finally or BlockKind.Fault ? "endfinally" : "leave " + endLabel);
-                                indent--;
-                                sb.Append(Pad(indent)).AppendLine("}");
-                                sb.Append(Pad(indent - 1)).Append(endLabel).AppendLine(":");
-                                break;
-                            }
+                        {
+                            var (endLabel, region) = open.Pop();
+                            var ending = region is BlockKind.Finally or BlockKind.Fault ? "endfinally" : "leave " + endLabel;
+                            sb.Append(Pad(indent)).AppendLine(ending);
+                            indent--;
+                            sb.Append(Pad(indent)).AppendLine("}");
+                            sb.Append(Pad(indent - 1)).Append(endLabel).AppendLine(":");
+                            break;
+                        }
                         default:
                             break;
                     }
@@ -397,12 +408,14 @@ public static class IlAsmRenderer
         return instruction.Kind switch
         {
             OperandKind.String => name + " " + LiteralParser.Escape((string)instruction.Operand!),
-            OperandKind.Type => name + " " + TypeNameFormatter.IlAsm((Type)instruction.Operand!),
+            OperandKind.Type => name + " " + (instruction.ExactTypeOperand is { } exactType
+                ? DeclarationType(exactType)
+                : TypeNameFormatter.IlAsm((Type)instruction.Operand!)),
             OperandKind.Method => name + " " + MethodIlAsm((ResolvedMethod)instruction.Operand!),
             OperandKind.Field => name + " " + FieldIlAsm((FieldInfo)instruction.Operand!),
             OperandKind.Token => name + " " + instruction.Operand switch
             {
-                Type t => TypeNameFormatter.IlAsm(t),
+                Type t => instruction.ExactTypeOperand is { } exactType ? DeclarationType(exactType) : TypeNameFormatter.IlAsm(t),
                 ResolvedMethod m => "method " + MethodIlAsm(m),
                 FieldInfo f => "field " + FieldIlAsm(f),
                 _ => "?",
@@ -688,6 +701,11 @@ public static class IlAsmRenderer
 
     private static string SignatureIlAsm(CalliSignature signature)
     {
+        if (signature.ExactSymbol is { } exact)
+        {
+            return SymbolRenderer.Signature(exact, type => SignatureType(type!));
+        }
+
         var sb = new StringBuilder();
         if (signature.IsUnmanaged)
         {

@@ -191,7 +191,9 @@ public static class CecilBodyEmitter
                     Append(_il.Create(op, Parameter((int)instruction.Operand!)));
                     break;
                 case OperandKind.Type:
-                    Append(_il.Create(op, writer.Import(map.Map((Type)instruction.Operand!))));
+                    Append(_il.Create(op, instruction.ExactTypeOperand is { } exactType
+                        ? writer.Import(map.Map(exactType))
+                        : writer.Import(map.Map((Type)instruction.Operand!))));
                     break;
                 case OperandKind.Field:
                     Append(_il.Create(op, writer.Import(map.Map((FieldInfo)instruction.Operand!))));
@@ -202,7 +204,9 @@ public static class CecilBodyEmitter
                 case OperandKind.Token:
                     Append(instruction.Operand switch
                     {
-                        Type t => _il.Create(op, writer.Import(map.Map(t))),
+                        Type t => _il.Create(op, instruction.ExactTypeOperand is { } exactTokenType
+                            ? writer.Import(map.Map(exactTokenType))
+                            : writer.Import(map.Map(t))),
                         FieldInfo f => _il.Create(op, writer.Import(map.Map(f))),
                         ResolvedMethod r => _il.Create(op, MethodOperand(r, callSite: false)),
                         _ => throw new ReplException("unsupported token operand"),
@@ -259,7 +263,10 @@ public static class CecilBodyEmitter
 
         private CallSite CallSite(CalliSignature signature)
         {
-            var site = new CallSite(writer.Import(map.Map(signature.ReturnType)));
+            var exact = signature.ExactSymbol;
+            var site = new CallSite(exact is null
+                ? writer.Import(map.Map(signature.ReturnType))
+                : writer.Import(map.Map(exact.ReturnType)));
             if (signature.IsUnmanaged)
             {
                 site.CallingConvention = signature.UnmanagedConvention switch
@@ -276,6 +283,17 @@ public static class CecilBodyEmitter
                 site.HasThis = signature.ManagedConvention.HasFlag(CallingConventions.HasThis);
                 site.ExplicitThis = signature.ManagedConvention.HasFlag(CallingConventions.ExplicitThis);
                 site.CallingConvention = signature.ManagedConvention.HasFlag(CallingConventions.VarArgs) ? MethodCallingConvention.VarArg : MethodCallingConvention.Default;
+            }
+
+            if (exact is not null)
+            {
+                for (var i = 0; i < exact.Parameters.Count; i++)
+                {
+                    var type = writer.Import(map.Map(exact.Parameters[i]));
+                    site.Parameters.Add(new ParameterDefinition(exact.SentinelIndex == i ? new SentinelType(type) : type));
+                }
+
+                return site;
             }
 
             foreach (var type in signature.ParameterTypes)

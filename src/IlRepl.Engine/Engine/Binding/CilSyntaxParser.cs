@@ -897,14 +897,15 @@ public static partial class CilSyntaxParser
             break;
         }
 
-        var open = s.IndexOf('(', pos);
-        if (open < 0 || open >= end)
+        var returnType = ParseTypeAt(s, ref pos, end);
+        SkipWhitespace(s, ref pos);
+        if (pos >= end || s[pos] != '(')
         {
             throw new ReplException("calli needs a parameter list in parentheses");
         }
 
+        var open = pos;
         var close = FindMatchingParen(s, open);
-        var returnType = ParseTypeIn(s, pos, open);
         var parameters = new List<TypeSyntax>();
         int? sentinel = null;
         foreach (var (itemStart, itemEnd) in SplitTopLevelRanges(s, open + 1, close))

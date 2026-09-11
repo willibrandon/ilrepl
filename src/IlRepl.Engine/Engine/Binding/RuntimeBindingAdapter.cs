@@ -198,7 +198,10 @@ public sealed class RuntimeBindingAdapter
             signature.ManagedConvention,
             ToType(signature.ReturnType),
             ToTypes(signature.FixedParameters),
-            signature.OptionalParameters is null ? null : ToTypes(signature.OptionalParameters));
+            signature.OptionalParameters is null ? null : ToTypes(signature.OptionalParameters))
+        {
+            ExactSymbol = signature,
+        };
     }
 
     /// <summary>
@@ -227,6 +230,7 @@ public sealed class RuntimeBindingAdapter
             Text = bound.Text,
             Kind = operand.Kind,
             Operand = value,
+            ExactTypeOperand = operand.Type is { } type && RuntimeSymbolTypes.RequiresExact(type) ? type : null,
             LocalIndex = bound.LocalIndex,
             ArgumentIndex = bound.ArgumentIndex,
         };

@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -28,6 +29,11 @@ public sealed class Instruction
     /// index, a <see cref="Type"/>, a <see cref="ResolvedMethod"/>, a field, or a <see cref="CalliSignature"/>.
     /// </summary>
     public object? Operand { get; init; }
+
+    /// <summary>
+    /// The bound type operand when runtime projection would lose its metadata shape.
+    /// </summary>
+    internal TypeSymbol? ExactTypeOperand { get; init; }
 
     /// <summary>
     /// The local this instruction reads or writes, for both short forms and explicit operands.

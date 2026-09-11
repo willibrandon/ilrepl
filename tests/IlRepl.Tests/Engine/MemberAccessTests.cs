@@ -259,5 +259,9 @@ public sealed class MemberAccessTests
             Refused(session, ".locals init (method void *(class Outer/Inner)[] pointers)"));
         Assert.Contains("Outer/Inner is nested private",
             Refused(session, ".args (method void *(class Outer/Inner)[] pointers)"));
+        Assert.Contains("Outer/Inner is nested private",
+            Refused(session, "newarr method void *(class Outer/Inner)"));
+        Assert.Contains("Outer/Inner is nested private",
+            Refused(session, "calli void(class Outer/Inner)"));
     }
 }

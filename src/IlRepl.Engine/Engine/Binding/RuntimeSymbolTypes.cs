@@ -20,6 +20,17 @@ internal static class RuntimeSymbolTypes
     }
 
     /// <summary>
+    /// Returns whether projecting a call-site signature would lose metadata shape.
+    /// </summary>
+    /// <param name="signature">The symbolic signature.</param>
+    /// <returns>Whether the exact signature must be retained.</returns>
+    public static bool RequiresExact(MethodSignatureSymbol signature)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        return RequiresExact(signature.ReturnType) || signature.Parameters.Any(RequiresExact);
+    }
+
+    /// <summary>
     /// Returns the materialized types contained in a symbolic type.
     /// </summary>
     /// <param name="type">The symbolic type.</param>

@@ -1,5 +1,7 @@
 using System.Runtime.Loader;
 using IlRepl.Engine;
+using Mono.Cecil;
+using Mono.Cecil.Cil;
 
 namespace IlRepl.Tests.Engine;
 
@@ -65,6 +67,103 @@ public sealed class FunctionPointerDeclarationTests
     }
 
     /// <summary>
+    /// A function pointer used only as an instruction operand keeps its exact runtime and exported array element type.
+    /// </summary>
+    [TestMethod]
+    public void TypeOperand_FunctionPointerSignature_RunsRendersAndExportsExactly()
+    {
+        var session = IlLines.Load("ldc.i4.1", "newarr method int32 *(int32)");
+
+        Assert.Contains("newarr method int32 *(int32)", session.ToIlAsm());
+        var image = AssemblyExporter.Write(session, "function-pointer-operand");
+        var value = (Array)session.Run().Value!;
+        Assert.IsTrue(value.GetType().GetElementType()!.IsFunctionPointer);
+        using (var definition = AssemblyDefinition.ReadAssembly(new MemoryStream(image)))
+        {
+            var run = definition.MainModule.GetType("IlRepl.Cell").Methods.Single(method => method.Name == "Run");
+            var operand = (TypeReference)run.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Newarr).Operand;
+            Assert.IsInstanceOfType<FunctionPointerType>(operand);
+        }
+
+        var context = new AssemblyLoadContext("function-pointer-operand", isCollectible: true);
+        try
+        {
+            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var exported = (Array)assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null)!;
+            Assert.IsTrue(exported.GetType().GetElementType()!.IsFunctionPointer);
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
+    /// <summary>
+    /// An instruction-only function pointer maps the cell's generic parameter into live and exported metadata.
+    /// </summary>
+    [TestMethod]
+    public void TypeOperand_FunctionPointerWithCellParameter_MapsExactly()
+    {
+        var session = IlLines.Load(
+            ".typeparams (T)",
+            ".typeargs (int32)",
+            "ldc.i4.1",
+            "newarr method !!T *(!!T)");
+
+        var image = AssemblyExporter.Write(session, "generic-function-pointer-operand");
+        var value = (Array)session.Run().Value!;
+        AssertFunctionPointerElement(value, typeof(int));
+
+        var context = new AssemblyLoadContext("generic-function-pointer-operand", isCollectible: true);
+        try
+        {
+            var assembly = context.LoadFromStream(new MemoryStream(image));
+            var run = assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.MakeGenericMethod(typeof(int));
+            AssertFunctionPointerElement((Array)run.Invoke(null, null)!, typeof(int));
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
+    /// <summary>
+    /// A call-site return used nowhere else keeps its function-pointer signature in listings and exported metadata.
+    /// </summary>
+    [TestMethod]
+    public void CallSite_FunctionPointerSignature_RunsRendersAndExportsExactly()
+    {
+        var session = IlLines.Load(
+            ".method int32 Id(int32 value) { ldarg value; ret }",
+            ".method method int32 *(int32) Pointer() { ldftn int32 Id(int32); ret }",
+            "ldc.i4.s 42",
+            "ldftn method int32 *(int32) Pointer()",
+            "calli method int32 *(int32)()",
+            "calli int32(int32)");
+
+        var il = session.ToIlAsm();
+        Assert.Contains("calli method int32 *(int32)()", il);
+        var image = AssemblyExporter.Write(session, "function-pointer-call-site");
+        Assert.AreEqual(42, session.Run().Value);
+        using var definition = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        var run = definition.MainModule.GetType("IlRepl.Cell").Methods.Single(method => method.Name == "Run");
+        var sites = run.Body.Instructions.Where(instruction => instruction.OpCode == OpCodes.Calli)
+            .Select(instruction => (CallSite)instruction.Operand).ToArray();
+        Assert.IsInstanceOfType<FunctionPointerType>(sites[0].ReturnType);
+
+        var context = new AssemblyLoadContext("function-pointer-call-site", isCollectible: true);
+        try
+        {
+            var assembly = context.LoadFromStream(new MemoryStream(IlasmLocator.Assemble(il)));
+            Assert.AreEqual(42, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
+    /// <summary>
     /// Exported fields and methods retain function-pointer metadata and execute through those signatures.
     /// </summary>
     [TestMethod]
@@ -117,6 +216,34 @@ public sealed class FunctionPointerDeclarationTests
     }
 
     /// <summary>
+    /// Replacing a type rebuilds a method that names it only inside a function-pointer instruction operand.
+    /// </summary>
+    [TestMethod]
+    public void Replacement_FunctionPointerOperand_RebindsItsNestedTypes()
+    {
+        var session = IlLines.Load(
+            ".class public Point { }",
+            ".method object Make() { ldc.i4.1; newarr method class Point *(class Point); ret }",
+            ".method object Indirect() { ldnull; ldc.i4.0; conv.i; calli object(class Point); ret }");
+
+        var message = "";
+        foreach (var line in IlLines.Expand(".class public Point {", ".field public int32 X", "}"))
+        {
+            message = session.AddLine(line).Message ?? message;
+        }
+
+        Assert.Contains("rebuilt method Make", message);
+        Assert.Contains("method Indirect", message);
+        var point = session.Types.Single(type => type.Declaration.Name == "Point").RuntimeType!;
+        var array = (Array)session.Methods.Single(method => method.Signature.Name == "Make").Version.Body.Invoke(null, null)!;
+        var pointer = array.GetType().GetElementType()!;
+        Assert.IsTrue(pointer.IsFunctionPointer);
+        Assert.AreSame(point, pointer.GetFunctionPointerReturnType());
+        Assert.AreSame(point, pointer.GetFunctionPointerParameterTypes().Single());
+        _ = AssemblyExporter.Write(session, "function-pointer-operand-replacement");
+    }
+
+    /// <summary>
     /// Type and method parameters retain their owners inside function-pointer signatures.
     /// </summary>
     [TestMethod]
@@ -150,5 +277,13 @@ public sealed class FunctionPointerDeclarationTests
                 context.Unload();
             }
         }
+    }
+
+    private static void AssertFunctionPointerElement(Array array, Type expected)
+    {
+        var pointer = array.GetType().GetElementType()!;
+        Assert.IsTrue(pointer.IsFunctionPointer);
+        Assert.AreSame(expected, pointer.GetFunctionPointerReturnType());
+        Assert.AreSame(expected, pointer.GetFunctionPointerParameterTypes().Single());
     }
 }

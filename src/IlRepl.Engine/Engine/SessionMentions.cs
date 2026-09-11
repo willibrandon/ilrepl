@@ -61,6 +61,30 @@ public static class SessionMentions
 
         foreach (var entry in state.Entries)
         {
+            if (entry.Instruction?.ExactTypeOperand is { } exactType)
+            {
+                foreach (var type in RuntimeSymbolTypes.Materialized(exactType))
+                {
+                    yield return type;
+                }
+            }
+
+            if (entry.Instruction?.Operand is CalliSignature { ExactSymbol: { } exactSignature })
+            {
+                foreach (var type in RuntimeSymbolTypes.Materialized(exactSignature.ReturnType))
+                {
+                    yield return type;
+                }
+
+                foreach (var parameter in exactSignature.Parameters)
+                {
+                    foreach (var type in RuntimeSymbolTypes.Materialized(parameter))
+                    {
+                        yield return type;
+                    }
+                }
+            }
+
             if (entry.CatchType is { } catchType)
             {
                 yield return catchType;
@@ -107,7 +131,7 @@ public static class SessionMentions
                     break;
                 case CalliSignature signature:
                     yield return signature.ReturnType;
-                    foreach (var parameter in signature.ParameterTypes)
+                    foreach (var parameter in signature.ParameterTypes.Concat(signature.OptionalParameterTypes ?? []))
                     {
                         yield return parameter;
                     }
