@@ -78,6 +78,25 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
         }
 
+        var structuralProblems = new string?[nodes.Count];
+        for (var index = 0; index < nodes.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (index > 0 && index % 64 == 0)
+            {
+                yield return null;
+            }
+
+            if (nodes[index].Instruction is not { } instruction
+                || ValidateStructure(instruction, graph, index) is not { } problem)
+            {
+                continue;
+            }
+
+            structuralProblems[index] = problem;
+            Report(index, "FLOW005", problem);
+        }
+
         foreach (var (position, seed) in graph.Seeds)
         {
             Propagate(position, -1, seed);
@@ -145,10 +164,14 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
             else if (node.Instruction is { } view && !state.Invalid && state.Values is { } values)
             {
-                var problem = Validate(view, values, graph, index, returnType, cell);
+                var problem = structuralProblems[index] ?? ValidateStack(view, values, graph, index, returnType, cell);
                 if (problem is not null)
                 {
-                    Report(index, "FLOW005", problem, related: Related(nodes, index, state));
+                    if (structuralProblems[index] is null)
+                    {
+                        Report(index, "FLOW005", problem, related: Related(nodes, index, state));
+                    }
+
                     state = new FlowState<T>(null, Invalid: true);
                 }
                 else
@@ -235,75 +258,12 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             maxStack);
     }
 
-    private string? Validate(StackOperandView<T> view, FlowValue<T>[] values, FlowGraph<T> graph, int index, T? returnType, bool cell)
+    private string? ValidateStructure(StackOperandView<T> view, FlowGraph<T> graph, int index)
     {
         var op = view.Op;
-        var count = values.Length;
-        var top = count > 0 ? values[^1].Type : null;
-        var kind = top is null ? (StackCategory?)null : _types.Category(top);
-        if (op == OpCodes.Ret)
+        if (op == OpCodes.Ret && graph.Regions[index].Length > 0)
         {
-            if (graph.Regions[index].Length > 0)
-            {
-                return "ret is not allowed inside a protected region; use leave to exit it first";
-            }
-
-            if (cell)
-            {
-                if (count > 1)
-                {
-                    return $"the stack must hold 0 or 1 value at ret, but has {count}: {_types.Render(new FlowState<T>(values))}";
-                }
-
-                if (FollowsTailCall(graph, index) && (count == 0 || top is { } returned
-                    && (_types.Algebra.IsValueType(returned) || _types.Algebra.IsGenericParameter(returned))
-                    && _types.BoxedType(returned) is null))
-                {
-                    return "a tail call in the cell must return object directly; boxing or a synthesized null before ret is not allowed";
-                }
-
-                return top is not null && (_types.Algebra.IsByRef(top) || IsDataPointer(top))
-                    ? $"cannot return a {_types.Name(top)} from the cell; load through it first (ldind/ldobj)" : null;
-            }
-
-            if (count != (returnType is null ? 0 : 1))
-            {
-                return returnType is null ? $"ret in void method {graph.BodyName} needs an empty stack"
-                    + $" but found {_types.Render(new FlowState<T>(values))} (pop first)"
-                    : count == 0 ? $"ret needs {_types.Name(returnType)} on the stack but the stack is empty"
-                    : $"ret needs exactly one {_types.Name(returnType)} on the stack but found {_types.Render(new FlowState<T>(values))}";
-            }
-
-            if (returnType is not null && !_types.CanAssign(top, returnType))
-            {
-                var box = top is not null && _types.Algebra.IsValueType(top)
-                    && _types.Category(returnType) == StackCategory.ObjectReference ? " (box it first)" : "";
-                return $"ret needs {_types.Name(returnType)} on the stack but found {_types.Name(top)}{box}";
-            }
-        }
-
-        if (op == OpCodes.Switch && kind is not null and not StackCategory.Int32)
-        {
-            return $"switch needs int32 on the stack but found {_types.Name(top)}";
-        }
-
-        if (op.Name is "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s"
-            && kind is not (null or StackCategory.Int32 or StackCategory.Int64 or StackCategory.NativeInt or StackCategory.ByRef)
-            && !_types.CanAssign(top, _types.Algebra.Primitive("object")))
-        {
-            return $"{op.Name} needs an integer, pointer, or reference but found {_types.Name(top)}";
-        }
-
-        if (op == OpCodes.Endfilter && (count != 1 || kind is not null and not StackCategory.Int32))
-        {
-            return $"endfilter needs exactly one int32 but found {_types.Render(new FlowState<T>(values))}";
-        }
-
-        if (op.Name is { } name
-            && (name.StartsWith("stloc", StringComparison.Ordinal) || name.StartsWith("starg", StringComparison.Ordinal))
-            && count > 0 && view.SlotType is { } slot && !_types.CanAssign(top, slot))
-        {
-            return $"{name} needs {_types.Name(slot)} but found {_types.Name(top)}";
+            return "ret is not allowed inside a protected region; use leave to exit it first";
         }
 
         var usesStaticField = op.Name is "ldsfld" or "ldsflda" or "stsfld";
@@ -363,15 +323,90 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return "newobj cannot create abstract type " + _types.Name(view.DeclaringType);
         }
 
+        if (view.Type is { } operandType && TypeOperandProblem(op, operandType) is { } typeProblem)
+        {
+            return typeProblem;
+        }
+
+        if (op == OpCodes.Jmp && view.JumpRestriction is { } jumpRestriction)
+        {
+            return jumpRestriction;
+        }
+
+        return view.StoreRestriction;
+    }
+
+    private string? ValidateStack(StackOperandView<T> view, FlowValue<T>[] values, FlowGraph<T> graph, int index,
+        T? returnType, bool cell)
+    {
+        var op = view.Op;
+        var count = values.Length;
+        var top = count > 0 ? values[^1].Type : null;
+        var kind = top is null ? (StackCategory?)null : _types.Category(top);
+        if (op == OpCodes.Ret)
+        {
+            if (cell)
+            {
+                if (count > 1)
+                {
+                    return $"the stack must hold 0 or 1 value at ret, but has {count}: {_types.Render(new FlowState<T>(values))}";
+                }
+
+                if (FollowsTailCall(graph, index) && (count == 0 || top is { } returned
+                    && (_types.Algebra.IsValueType(returned) || _types.Algebra.IsGenericParameter(returned))
+                    && _types.BoxedType(returned) is null))
+                {
+                    return "a tail call in the cell must return object directly; boxing or a synthesized null before ret is not allowed";
+                }
+
+                return top is not null && (_types.Algebra.IsByRef(top) || IsDataPointer(top))
+                    ? $"cannot return a {_types.Name(top)} from the cell; load through it first (ldind/ldobj)" : null;
+            }
+
+            if (count != (returnType is null ? 0 : 1))
+            {
+                return returnType is null ? $"ret in void method {graph.BodyName} needs an empty stack"
+                    + $" but found {_types.Render(new FlowState<T>(values))} (pop first)"
+                    : count == 0 ? $"ret needs {_types.Name(returnType)} on the stack but the stack is empty"
+                    : $"ret needs exactly one {_types.Name(returnType)} on the stack but found {_types.Render(new FlowState<T>(values))}";
+            }
+
+            if (returnType is not null && !_types.CanAssign(top, returnType))
+            {
+                var box = top is not null && _types.Algebra.IsValueType(top)
+                    && _types.Category(returnType) == StackCategory.ObjectReference ? " (box it first)" : "";
+                return $"ret needs {_types.Name(returnType)} on the stack but found {_types.Name(top)}{box}";
+            }
+        }
+
+        if (op == OpCodes.Switch && kind is not null and not StackCategory.Int32)
+        {
+            return $"switch needs int32 on the stack but found {_types.Name(top)}";
+        }
+
+        if (op.Name is "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s"
+            && kind is not (null or StackCategory.Int32 or StackCategory.Int64 or StackCategory.NativeInt or StackCategory.ByRef)
+            && !_types.CanAssign(top, _types.Algebra.Primitive("object")))
+        {
+            return $"{op.Name} needs an integer, pointer, or reference but found {_types.Name(top)}";
+        }
+
+        if (op == OpCodes.Endfilter && (count != 1 || kind is not null and not StackCategory.Int32))
+        {
+            return $"endfilter needs exactly one int32 but found {_types.Render(new FlowState<T>(values))}";
+        }
+
+        if (op.Name is { } name
+            && (name.StartsWith("stloc", StringComparison.Ordinal) || name.StartsWith("starg", StringComparison.Ordinal))
+            && count > 0 && view.SlotType is { } slot && !_types.CanAssign(top, slot))
+        {
+            return $"{name} needs {_types.Name(slot)} but found {_types.Name(top)}";
+        }
+
         var pops = StackTransfer<T>.PopCount(view);
         if (pops > count)
         {
             return null;
-        }
-
-        if (view.Type is { } operandType && TypeOperandProblem(op, operandType) is { } typeProblem)
-        {
-            return typeProblem;
         }
 
         bool Numeric(T? type) => type is null || _types.Category(type) is StackCategory.Int32 or StackCategory.Int64
@@ -483,11 +518,6 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return "jmp requires an empty evaluation stack";
         }
 
-        if (op == OpCodes.Jmp && view.JumpRestriction is { } jumpRestriction)
-        {
-            return jumpRestriction;
-        }
-
         if (op == OpCodes.Localloc && (count != 1 || kind is not (null or StackCategory.Int32 or StackCategory.NativeInt)))
         {
             return "localloc needs exactly one integer size on the evaluation stack";
@@ -562,11 +592,6 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         if (op.Name is "stfld" or "stsfld" && view.FieldType is { } field && !_types.CanAssign(top, field))
         {
             return $"{op.Name} needs {_types.Name(field)} but found {_types.Name(top)}";
-        }
-
-        if (view.StoreRestriction is { } storeRestriction)
-        {
-            return storeRestriction;
         }
 
         if (view.ReceiverRestriction is { } receiverRestriction && !values[count - pops].IsThis)

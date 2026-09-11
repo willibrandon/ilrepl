@@ -37,6 +37,17 @@ public static partial class MemberEligibility
             return null;
         }
 
+        if (type.Kind == TypeSymbolKind.Modified
+            && TypeVerdict(type.Modifier!, where, facts, judgeAll) is { } modifierProblem)
+        {
+            return modifierProblem;
+        }
+
+        if (type.HasElement)
+        {
+            return TypeVerdict(type.Element!, where, facts, judgeAll);
+        }
+
         if (type.Kind == TypeSymbolKind.FunctionPointer)
         {
             if (TypeVerdict(type.Signature!.ReturnType, where, facts, judgeAll) is { } returnProblem)
@@ -53,21 +64,6 @@ public static partial class MemberEligibility
             }
 
             return null;
-        }
-
-        if (type.Kind == TypeSymbolKind.Modified
-            && TypeVerdict(type.Modifier!, where, facts, judgeAll) is { } modifierProblem)
-        {
-            return modifierProblem;
-        }
-
-        while (type.HasElement)
-        {
-            type = type.Element!;
-            if (type.IsGenericParameter)
-            {
-                return null;
-            }
         }
 
         if (type.Kind == TypeSymbolKind.Constructed)
