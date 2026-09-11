@@ -924,7 +924,7 @@ public sealed partial class LiveSessionTests
         await using var launched = await LaunchAsync(browser);
         await using var context = await NewContextAsync(launched);
         var page = await context.NewPageAsync();
-        await page.GotoAsync(s_site!.BaseUrl + "/try/");
+        await page.GotoAsync(s_site!.BaseUrl + "/");
         await page.EvaluateAsync(@"() => new Promise((resolve, reject) => {
             const q = indexedDB.open('ilrepl', 1);
             q.onupgradeneeded = () => q.result.createObjectStore('history', { autoIncrement: true });
@@ -937,7 +937,7 @@ public sealed partial class LiveSessionTests
             };
             q.onerror = () => reject(q.error);
         })");
-        await page.ReloadAsync();
+        await page.GotoAsync(s_site.BaseUrl + "/try/");
         await WaitForSessionAsync(page, 1, 180_000);
         await ClickIntoTerminalAsync(page);
         await TypeLineAsync(page, "nop");
@@ -1132,7 +1132,7 @@ public sealed partial class LiveSessionTests
         await using var launched = await LaunchAsync(browser);
         await using var context = await NewContextAsync(launched);
         var page = await context.NewPageAsync();
-        await page.GotoAsync(s_site!.BaseUrl + "/try/");
+        await page.GotoAsync(s_site!.BaseUrl + "/");
         await page.EvaluateAsync(@"() => new Promise((resolve, reject) => {
             const q = indexedDB.open('ilrepl', 1);
             q.onupgradeneeded = () => q.result.createObjectStore('history', { autoIncrement: true });
@@ -1146,7 +1146,7 @@ public sealed partial class LiveSessionTests
             };
             q.onerror = () => reject(q.error);
         })");
-        await page.ReloadAsync();
+        await page.GotoAsync(s_site.BaseUrl + "/try/");
         await WaitForSessionAsync(page, 1, 180_000);
         await ClickIntoTerminalAsync(page);
         var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };

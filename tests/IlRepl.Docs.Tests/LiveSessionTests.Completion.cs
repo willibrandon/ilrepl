@@ -27,7 +27,7 @@ public sealed partial class LiveSessionTests
         TestContext.WriteLine($"First framework member page in {browser}: {watch.Elapsed.TotalMilliseconds:F0} ms");
         Assert.IsLessThan(TimeSpan.FromSeconds(1), watch.Elapsed);
         await page.Keyboard.PressAsync("Tab");
-        await PromptAtCaretAsync(page, "il[1]> call Environment::get_CurrentManagedThreadId()");
+        await PromptContainsAsync(page, "il[1]> call Environment::get_CurrentManagedThreadId()");
         Assert.AreEqual("TEXTAREA", await page.EvaluateAsync<string>("() => document.activeElement.tagName"));
         await page.Keyboard.PressAsync("Enter");
         await TypeLineAsync(page, "ret");

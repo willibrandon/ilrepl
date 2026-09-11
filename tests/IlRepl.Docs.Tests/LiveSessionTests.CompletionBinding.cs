@@ -634,13 +634,34 @@ public sealed partial class LiveSessionTests
         }
         """, text, new() { PollingInterval = 16, Timeout = 30_000 });
 
-    private static Task<IJSHandle> PromptAtCaretAsync(IPage page, string prompt) => page.WaitForFunctionAsync("""
-        prompt => {
-          const terminal = window.ilreplTerminal;
-          const row = terminal.buffer.active.getLine(terminal.rows - 2);
-          return row?.translateToString(true).trim() === prompt && row.getCell(prompt.length)?.getBgColor() === 0x61afef;
+    private static async Task<IJSHandle> PromptAtCaretAsync(IPage page, string prompt)
+    {
+        try
+        {
+            return await page.WaitForFunctionAsync("""
+                prompt => {
+                  const terminal = window.ilreplTerminal;
+                  const row = terminal.buffer.active.getLine(terminal.rows - 2);
+                  return row?.translateToString(true).trim() === prompt
+                    && row.getCell(prompt.length)?.getBgColor() === 0x61afef;
+                }
+                """, prompt, new() { PollingInterval = 16, Timeout = 30_000 });
         }
-        """, prompt, new() { PollingInterval = 16, Timeout = 30_000 });
+        catch (TimeoutException exception)
+        {
+            var state = await page.EvaluateAsync<string>("""
+                () => JSON.stringify({
+                  active: document.activeElement.tagName,
+                  cursorX: window.ilreplTerminal.buffer.active.cursorX,
+                  cursorY: window.ilreplTerminal.buffer.active.cursorY,
+                  expectedBackground: window.ilreplTerminal.buffer.active
+                    .getLine(window.ilreplTerminal.rows - 2)?.getCell(prompt.length)?.getBgColor()
+                })
+                """, prompt);
+            var buffer = await BufferTextAsync(page);
+            throw new TimeoutException($"Expected prompt at caret {prompt.Length}; browser state: {state}:\n{buffer}", exception);
+        }
+    }
 
     private static async Task<IJSHandle> CompletionAtCaretAsync(IPage page, string prompt, string choice)
     {
