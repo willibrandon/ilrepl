@@ -371,6 +371,7 @@ public sealed class StackSimulator
                     IsInstance = !method.IsStatic && op != OpCodes.Newobj,
                     MethodIsStatic = method.IsStatic,
                     MethodIsConstructor = method.IsConstructor,
+                    MethodIsAbstract = method.Declared?.Attributes.HasFlag(MethodAttributes.Abstract) ?? method.Method?.IsAbstract,
                     Token = StackTokenKind.Method,
                 };
             case CalliSignature signature:

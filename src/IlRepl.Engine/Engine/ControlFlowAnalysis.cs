@@ -317,6 +317,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return "callvirt cannot call a constructor; use call";
         }
 
+        if (view.MethodIsAbstract == true && view.MethodIsStatic == false && op == OpCodes.Call)
+        {
+            return "call cannot invoke an abstract method; use callvirt";
+        }
+
         if (op == OpCodes.Newobj && (view.MethodIsStatic == true || view.MethodIsConstructor == false))
         {
             return "newobj needs an instance constructor";

@@ -144,6 +144,7 @@ internal sealed class EditingStack
                 IsInstance = !method.IsStatic && op != OpCodes.Newobj,
                 MethodIsStatic = method.IsStatic,
                 MethodIsConstructor = method.IsConstructor,
+                MethodIsAbstract = method.IsAbstract,
                 Token = StackTokenKind.Method,
             };
         }
