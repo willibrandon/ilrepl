@@ -171,6 +171,44 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
+    /// An accepting filter carries the receiver it stored into its paired handler.
+    /// </summary>
+    /// <param name="originalReceiver">Whether the filter stores the original receiver.</param>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task FilterWrite_ReachesPairedHandler(bool originalReceiver)
+    {
+        var lines = ControlFlowReceiverExamples.FilterSource(originalReceiver);
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 18, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual(originalReceiver, !preview.Diagnostics.Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error),
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+
+        ReplException? refusal = null;
+        foreach (var line in lines)
+        {
+            try
+            {
+                session.AddLine(line);
+            }
+            catch (ReplException error)
+            {
+                refusal = error;
+                break;
+            }
+        }
+
+        Assert.AreEqual(originalReceiver, refusal is null, refusal?.Message);
+        if (!originalReceiver)
+        {
+            Assert.Contains("through this", refusal!.Message);
+            Assert.IsNotNull(session.OpenMethod);
+        }
+    }
+
+    /// <summary>
     /// Completing a nested finally does not make a noncompleting outer finally reach its leave target.
     /// </summary>
     [TestMethod]
@@ -291,6 +329,55 @@ public sealed class ControlFlowReceiverTests
         Assert.Contains(diagnostic => diagnostic.Message.Contains("through this", StringComparison.Ordinal), diagnostics);
         using var oracle = new IlVerificationOracle();
         Assert.IsEmpty(oracle.Verify(image));
+    }
+
+    /// <summary>
+    /// A decoded filter carries its argument write into the paired handler.
+    /// </summary>
+    [TestMethod]
+    public void Disassembly_TracksAFilterThisArgumentWrite()
+    {
+        var session = new Session();
+        var (_, _, fixture) = CecilFixture.Build((module, type) =>
+        {
+            var field = new FieldDefinition("Value", FieldAttributes.Public | FieldAttributes.InitOnly, module.TypeSystem.Int32);
+            type.Fields.Add(field);
+            var constructor = new MethodDefinition(".ctor",
+                MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+            constructor.Parameters.Add(new ParameterDefinition(type));
+            type.Methods.Add(constructor);
+            var il = constructor.Body.GetILProcessor();
+            var tryStart = il.Create(OpCodes.Ldnull);
+            var filterStart = il.Create(OpCodes.Pop);
+            var handlerStart = il.Create(OpCodes.Pop);
+            var done = il.Create(OpCodes.Ret);
+            il.Append(il.Create(OpCodes.Ldarg_0));
+            il.Append(il.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
+            il.Append(tryStart);
+            il.Append(il.Create(OpCodes.Throw));
+            il.Append(filterStart);
+            il.Append(il.Create(OpCodes.Ldarg_1));
+            il.Append(il.Create(OpCodes.Starg, constructor.Body.ThisParameter));
+            il.Append(il.Create(OpCodes.Ldc_I4_1));
+            il.Append(il.Create(OpCodes.Endfilter));
+            il.Append(handlerStart);
+            il.Append(il.Create(OpCodes.Ldarg_0));
+            il.Append(il.Create(OpCodes.Ldc_I4_1));
+            il.Append(il.Create(OpCodes.Stfld, field));
+            il.Append(il.Create(OpCodes.Leave, done));
+            il.Append(done);
+            constructor.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Filter)
+            {
+                TryStart = tryStart,
+                TryEnd = filterStart,
+                FilterStart = filterStart,
+                HandlerStart = handlerStart,
+                HandlerEnd = done,
+            });
+        }, session.Resolver);
+        var listing = MethodDisassembler.Disassemble(fixture.GetConstructors()[0], session);
+        var diagnostics = StackAnalysis.Diagnostics(listing);
+        Assert.Contains(diagnostic => diagnostic.Message.Contains("through this", StringComparison.Ordinal), diagnostics);
     }
 
     /// <summary>

@@ -320,6 +320,35 @@ internal sealed class FlowGraph<T> where T : class
     }
 
     /// <summary>
+    /// Finds the handler paired with the filter containing an endfilter instruction.
+    /// </summary>
+    /// <param name="instruction">The endfilter instruction's position.</param>
+    /// <returns>The paired handler's position, or null when the instruction is not inside a filter.</returns>
+    public int? FilterHandlerFor(int instruction)
+    {
+        for (var index = Regions[instruction].Length - 1; index >= 0; index--)
+        {
+            var filter = Sections[Regions[instruction][index]];
+            if (filter.Kind != BlockKind.Filter)
+            {
+                continue;
+            }
+
+            foreach (var section in Sections.Values)
+            {
+                if (section.Kind == BlockKind.FilterHandler && section.Group == filter.Group && section.Start == filter.End)
+                {
+                    return section.Start;
+                }
+            }
+
+            return null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Enumerates the prefixes attached to an instruction, skipping source labels and comments.
     /// </summary>
     public IEnumerable<StackOperandView<T>> Prefixes(int index)

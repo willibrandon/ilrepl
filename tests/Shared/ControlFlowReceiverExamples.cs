@@ -104,6 +104,39 @@ public static class ControlFlowReceiverExamples
     ];
 
     /// <summary>
+    /// Builds a constructor whose accepting filter preserves or replaces argument zero before its handler uses it.
+    /// </summary>
+    /// <param name="originalReceiver">Whether the filter stores the original receiver.</param>
+    /// <returns>The complete class declaration.</returns>
+    public static string[] FilterSource(bool originalReceiver) =>
+    [
+        ".class public FlowFilterArgument {",
+        ".field public initonly int32 Value",
+        ".method public instance void .ctor(class FlowFilterArgument other) {",
+        "ldarg.0",
+        "call instance void object::.ctor()",
+        ".try {",
+        "ldnull",
+        "throw",
+        "} filter {",
+        "pop",
+        originalReceiver ? "ldarg.0" : "ldarg.1",
+        "starg.s 0",
+        "ldc.i4.1",
+        "endfilter",
+        "} handler {",
+        "pop",
+        "ldarg.0",
+        "ldc.i4.s 42",
+        "stfld int32 FlowFilterArgument::Value",
+        "leave DONE",
+        "}",
+        "DONE: ret",
+        "}",
+        "}",
+    ];
+
+    /// <summary>
     /// Builds a constructor whose inner finally completes while its outer finally cannot complete.
     /// </summary>
     /// <returns>The complete class declaration.</returns>

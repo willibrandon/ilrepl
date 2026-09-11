@@ -327,6 +327,15 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
             after[slot] = state;
             maxStack = Math.Max(maxStack, state.Values?.Length ?? 0);
+            if (!state.Invalid && node.Instruction?.Op == OpCodes.Endfilter
+                && graph.FilterHandlerFor(index) is { } handler && graph.Seeds.TryGetValue(handler, out var handlerEntry))
+            {
+                Propagate(handler, index, handlerEntry with
+                {
+                    ThisArgumentIsOriginal = state.ThisArgumentIsOriginal,
+                });
+            }
+
             foreach (var edge in graph.Edges[index])
             {
                 var outgoing = (FlowState<T>?)(edge.ClearsStack && !state.Invalid ? state with { Values = [] } : state);
@@ -1227,7 +1236,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         var targets = new HashSet<int>();
         foreach (var section in graph.Sections.Values)
         {
-            if (section.Kind != BlockKind.Try && groups.Contains(section.Group)
+            if (section.Kind is not (BlockKind.Try or BlockKind.FilterHandler) && groups.Contains(section.Group)
                 && graph.Seeds.ContainsKey(section.Start) && targets.Add(section.Start))
             {
                 yield return section.Start;

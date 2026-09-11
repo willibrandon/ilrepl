@@ -263,7 +263,7 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
-    /// Replacing argument zero removes its original-receiver provenance in the browser runtime.
+    /// Argument writes and accepting filters carry receiver provenance in the browser runtime.
     /// </summary>
     [TestMethod]
     [DataRow("chromium")]
@@ -281,6 +281,12 @@ public sealed partial class LiveSessionTests
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.ArgumentSource(true, true)));
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class FlowArgument", options);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.FilterSource(false)));
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
+        await ClearPromptAsync(page);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.FilterSource(true)));
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class FlowFilterArgument", options);
     }
 
     /// <summary>
