@@ -55,13 +55,14 @@ public sealed class ControlFlowCorpusTests
         }
 
         Assert.AreEqual(example.Accepted, refusal is null, refusal?.Message);
+        var implementation = example.Implementation.Length == 0 ? "" : " " + example.Implementation;
         var source = $$"""
             .assembly extern System.Runtime { }
             .assembly extern System.Private.CoreLib { }
             .assembly FlowCorpus { }
             .module FlowCorpus.dll
             .class public Fixture extends [System.Runtime]System.Object {
-                .method public static int32 {{name}}{{example.GenericHeader}}(int32 n) cil managed {
+                .method public static int32 {{name}}{{example.GenericHeader}}(int32 n) cil managed{{implementation}} {
                     .maxstack 64
                     {{string.Join('\n', example.Body).Replace("} handler {", "} {", StringComparison.Ordinal)}}
                 }

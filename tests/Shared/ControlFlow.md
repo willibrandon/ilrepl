@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 138 method examples and the paired constructor example
+not justify refusing a correct body. The 139 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -33,7 +33,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Exception entry and handler stacks | III.1.7.6, III.1.8.1.1 | Catch, Finally, CatchFinally, EndfinallyClearsStack, Fault, Filter, RethrowPreservesStack | NonemptyTry, WrongFilterStack |
 | Protected returns and transfers | III.3.37, III.3.46, III.3.57 | Catch, Finally, Fault, Jump, LeaveWithinTry | JumpFromTry, JumpFromSynchronizedMethod, ReturnInTry, WrongJumpSignature |
 | Protected-region entry | III.3.15 | Catch, Finally | BranchIntoTry |
-| Prefix boundaries, operands, and applicability | III.2 | TailCall, UnalignedLoad, VolatileObjectLoad, VolatileObjectStore, ReadOnlyLoad | WrongPrefix, WrongUnalignedValue, BranchIntoPrefix |
+| Prefix boundaries, operands, and applicability | III.2 | TailCall, SynchronizedTailCall, UnalignedLoad, VolatileObjectLoad, VolatileObjectStore, ReadOnlyLoad | WrongPrefix, WrongUnalignedValue, BranchIntoPrefix |
 | Generic identity and boxing | III.1.8.1.1–III.1.8.1.3 | GenericBox, GenericReference | GenericNeedsBox, GenericDistinct |
 | Generic object references | I.8.7.1, III.1.8.1.1 | GenericReferenceThrow, GenericReferenceBranch | GenericNeedsBoxThrow, GenericNeedsBoxBranch |
 | Runtime extensions to constrained calls | .NET ECMA-335 Augments | StaticAbstract_ImplementedAndCalled | Existing member eligibility tests |
@@ -54,6 +54,10 @@ check that a later edge revisits an earlier instruction, identifies the producer
 or removing the edge recomputes the stack. `EngineAnalysisTests`, `HostServerRpcTests`, and
 `AnalysisRequesterTests` cover source positions, stale replies, cancellation, disposal, navigation,
 and withdrawal of an entire refused block. Existing viewport tests check actual terminal frames.
+
+ECMA III.2.4 says a synchronized method ignores `tail.` so its lock remains held until the call
+returns. `SynchronizedTailCall` verifies and returns 42 through CoreCLR, browser Mono, ILAsm, and
+the saved assembly.
 
 ## Disagreements with Microsoft.ILVerification 10.0.11
 

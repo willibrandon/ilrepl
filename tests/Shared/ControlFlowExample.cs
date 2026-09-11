@@ -12,16 +12,20 @@ namespace IlRepl.Tests.Shared;
 /// <param name="GenericArguments">The corresponding closed type arguments used for execution.</param>
 /// <param name="Verification">The independent verifier diagnostic codes, separated by commas.</param>
 /// <param name="VerificationFailure">An exact documented unsupported operation in the independent verifier.</param>
+/// <param name="Implementation">Optional method implementation attributes written after the parameter list.</param>
 public sealed record ControlFlowExample(string Name, string[] Body, bool Accepted, string Finding = "", bool Unverifiable = false,
-    string Verification = "", string GenericParameters = "", string GenericArguments = "", string VerificationFailure = "")
+    string Verification = "", string GenericParameters = "", string GenericArguments = "", string VerificationFailure = "",
+    string Implementation = "")
 {
     /// <summary>
     /// The complete declaration entered at the prompt.
     /// </summary>
     public string Source => GenericParameters.Length == 0
-        ? $".method int32 {Name}(int32 n) {{\n" + string.Join('\n', Body) + "\n}"
-        : $".class public FlowGeneric {{\n.method public static int32 {Name}{GenericHeader}(int32 n) {{\n"
+        ? $".method int32 {Name}(int32 n){ImplementationSuffix} {{\n" + string.Join('\n', Body) + "\n}"
+        : $".class public FlowGeneric {{\n.method public static int32 {Name}{GenericHeader}(int32 n){ImplementationSuffix} {{\n"
             + string.Join('\n', Body) + "\n}\n}";
+
+    private string ImplementationSuffix => Implementation.Length == 0 ? "" : " " + Implementation;
 
     /// <summary>
     /// The method's generic declaration suffix, including its constraints.
