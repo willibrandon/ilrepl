@@ -190,6 +190,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         && _types.Category(typedReference) == StackCategory.NativeInt
                     || values.Any(value => value.Type is { } type && _types.Algebra.IsPointer(type))
                     || UsesNativeAddress(view, values)
+                    || UsesGenericReferenceAddress(view, values)
                     || view.Op.Name is "add" or "sub" or "add.ovf.un" or "sub.ovf.un"
                         && values.TakeLast(2).Any(value => value.Type is { } type && _types.Algebra.IsByRef(type))
                     || view.Op.Name?.StartsWith("conv.", StringComparison.Ordinal) == true
@@ -545,7 +546,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (address is not null && _types.Algebra.IsByRef(address) && storage is not null
                 && _types.Algebra.ElementOf(address) is { } element
                 && !(memory is "ldind.ref" or "stind.ref"
-                    ? !_types.Algebra.IsGenericParameter(element) && _types.Category(element) == StackCategory.ObjectReference
+                    ? Reference(element)
                     : memory.StartsWith("stind", StringComparison.Ordinal) || memory is "stobj" or "initobj" or "cpobj"
                         ? _types.CanAssign(storage, element) : _types.CanAssign(element, storage)))
             {
@@ -647,6 +648,23 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         return destination is not null && _types.Category(destination) == StackCategory.NativeInt
             || name == "cpobj" && values[^1].Type is { } source
                 && _types.Category(source) == StackCategory.NativeInt;
+    }
+
+    private bool UsesGenericReferenceAddress(StackOperandView<T> view, FlowValue<T>[] values)
+    {
+        if (view.Op.Name is not ("ldind.ref" or "stind.ref"))
+        {
+            return false;
+        }
+
+        var pops = StackTransfer<T>.PopCount(view);
+        if (pops > values.Length || values[values.Length - pops].Type is not { } address
+            || !_types.Algebra.IsByRef(address))
+        {
+            return false;
+        }
+
+        return _types.Algebra.ElementOf(address) is { } element && _types.Algebra.IsGenericParameter(element);
     }
 
     private T? StorageType(StackOperandView<T> view)

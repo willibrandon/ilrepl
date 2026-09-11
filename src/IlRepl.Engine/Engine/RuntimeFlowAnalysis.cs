@@ -80,6 +80,7 @@ internal static class RuntimeFlowAnalysis
             || instruction.Kind is OperandKind.Label or OperandKind.Labels
             || instruction.Op.OpCodeType == OpCodeType.Prefix
             || instruction.Op == OpCodes.Jmp
+            || instruction.Op == OpCodes.Localloc
             || instruction.Op.FlowControl is not (FlowControl.Next or FlowControl.Call)
             || previous.Diagnostics.Any(diagnostic => diagnostic.Code is "FLOW020" or "FLOW021"))
         {

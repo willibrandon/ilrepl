@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 135 method examples and the paired constructor example
+not justify refusing a correct body. The 138 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -23,7 +23,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Virtual calls and function pointers | III.3.19, III.4.18 | ConstrainedReceiver, VirtualFunctionPointer | WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer |
 | Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
 | Reduced pointer elements | I.8.7, III.1.8.1.2.3 | ReducedPointerJoin, EnumPointerJoin | ByrefJoin |
-| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.13, III.4.29 | ManagedPointer, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore | WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore |
+| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.13, III.4.29 | ManagedPointer, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore, GenericIndirectReference | WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore, WrongGenericIndirectLoad, WrongGenericIndirectStore |
 | Field storage form | III.4.10–III.4.12, III.4.24–III.4.31 | PointerFields, StaticField, StaticFieldToken | WrongStaticFieldOpcode, WrongInstanceFieldOpcode |
 | Readonly provenance | III.2.3, III.3.62 | ReadOnlyLoad, ReadOnlyFieldWrite | WrongPrefix |
 | Correct operations outside verification | III.1.8, III.3.47 | StackAllocation, ReadOnlyWrite, PointerDifference | WrongArithmetic, WrongAllocationHandler |
@@ -75,6 +75,11 @@ unverifiable diagnostic; `GenericBox` explicitly boxes the parameter and verifie
 `GenericReferenceThrow` likewise runs with its reference constraint while the library reports
 `StackObjRef`, and `GenericReferenceBranch` reports `StackUnexpected`. An unconstrained parameter
 cannot be treated as an object reference without boxing.
+
+CoreCLR and Mono also execute `ldind.ref` and `stind.ref` through a managed pointer to a `class T`
+parameter. ECMA III.3.42 and III.3.62 exclude generic parameters from correct use of those short
+forms, and ILVerification reports `StackUnexpected`. `GenericIndirectReference` records the runtime
+extension while an unconstrained parameter remains rejected.
 
 ILVerification accepts `ceq` over an unconstrained generic parameter even though the parameter can
 be an arbitrary value type. `WrongGenericComparison` closes that gap while the class-constrained

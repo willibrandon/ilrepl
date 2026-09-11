@@ -226,6 +226,46 @@ public sealed class ControlFlowSessionTests
     }
 
     /// <summary>
+    /// Stack allocation is refused as soon as it is entered in every exception-handler section.
+    /// </summary>
+    /// <param name="section">The handler section containing the allocation.</param>
+    [TestMethod]
+    [DataRow("catch")]
+    [DataRow("filter")]
+    [DataRow("filter handler")]
+    [DataRow("finally")]
+    [DataRow("fault")]
+    public void LocallocInExceptionHandler_IsRejectedImmediately(string section)
+    {
+        var session = new Session();
+        Add(session, ".method void Allocate() {", ".try {", "leave DONE");
+        if (section == "filter handler")
+        {
+            Add(session, "} filter {", "pop", "ldc.i4.1", "endfilter", "} handler {");
+        }
+        else
+        {
+            Add(session, section switch
+            {
+                "catch" => "} catch [System.Runtime]System.Exception {",
+                "filter" => "} filter {",
+                "finally" => "} finally {",
+                _ => "} fault {",
+            });
+        }
+
+        if (section is "catch" or "filter" or "filter handler")
+        {
+            Add(session, "pop");
+        }
+
+        Add(session, "ldc.i4.4");
+        var error = Assert.ThrowsExactly<ReplException>(() => session.AddLine("localloc"));
+        Assert.Contains("localloc is not allowed inside an exception handler", error.Message);
+        Assert.AreEqual("[int32]", session.State.StackText, "the refused instruction must not change the open handler");
+    }
+
+    /// <summary>
     /// A manually entered jump cannot reinterpret the enclosing method's parameters.
     /// </summary>
     [TestMethod]
