@@ -216,6 +216,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     || view.Op == OpCodes.Mkrefany && values.LastOrDefault()?.Type is { } typedReference
                         && _types.Category(typedReference) == StackCategory.NativeInt
                     || LoadsPointerSlot(view)
+                    || LoadsPointerSlotIndirectly(view, values)
                     || TransformsDataPointer(view, values)
                     || UsesNativeAddress(view, values)
                     || UsesGenericReferenceAddress(view, values)
@@ -661,7 +662,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 && !(memory is "ldind.ref" or "stind.ref"
                     ? Reference(element)
                     : memory.StartsWith("ldind", StringComparison.Ordinal) || memory.StartsWith("stind", StringComparison.Ordinal)
-                        ? _types.SameVerificationLocation(element, storage)
+                        ? SameIndirectLocation(memory, element, storage)
                     : memory.StartsWith("stind", StringComparison.Ordinal) || memory is "stobj" or "initobj" or "cpobj"
                         ? _types.CanAssign(storage, element) : _types.CanAssign(element, storage)))
             {
@@ -961,6 +962,24 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             or "ldarg" or "ldarg.s" or "ldarg.0" or "ldarg.1" or "ldarg.2" or "ldarg.3")
             && view.SlotType is { } slot && IsDataPointer(slot);
     }
+
+    private bool LoadsPointerSlotIndirectly(StackOperandView<T> view, FlowValue<T>[] values)
+    {
+        if (view.Op != OpCodes.Ldind_I)
+        {
+            return false;
+        }
+
+        var pops = StackTransfer<T>.PopCount(view);
+        return pops <= values.Length && values[values.Length - pops].Type is { } address
+            && _types.Algebra.IsByRef(address) && _types.Algebra.ElementOf(address) is { } element
+            && _types.Algebra.IsPointer(element);
+    }
+
+    private bool SameIndirectLocation(string instruction, T element, T storage) =>
+        _types.SameVerificationLocation(element, storage)
+        || instruction is "ldind.i" or "stind.i" && _types.Algebra.IsPointer(element)
+            && _types.Category(storage) == StackCategory.NativeInt;
 
     private bool TransformsDataPointer(StackOperandView<T> view, FlowValue<T>[] values)
     {
