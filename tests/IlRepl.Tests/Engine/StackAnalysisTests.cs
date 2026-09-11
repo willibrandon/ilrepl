@@ -294,6 +294,32 @@ public sealed class StackAnalysisTests
     }
 
     /// <summary>
+    /// A decoded tail call reports a managed-pointer argument as unverifiable.
+    /// </summary>
+    [TestMethod]
+    public void TailCall_ManagedPointerArgumentIsUnverifiable()
+    {
+        var method = Body((module, type, il, _) =>
+        {
+            var field = new FieldDefinition("Value", FieldAttributes.Public | FieldAttributes.Static, module.TypeSystem.Int32);
+            type.Fields.Add(field);
+            var consume = new MethodDefinition("Consume", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
+            consume.Parameters.Add(new ParameterDefinition(new ByReferenceType(module.TypeSystem.Int32)));
+            type.Methods.Add(consume);
+            consume.Body.GetILProcessor().Emit(OpCodes.Ret);
+            il.Emit(OpCodes.Ldsflda, field);
+            il.Emit(OpCodes.Tail);
+            il.Emit(OpCodes.Call, consume);
+            il.Emit(OpCodes.Ret);
+        });
+
+        StackAnalysis.Run(method, out var diagnostics);
+        Assert.Contains(diagnostic => diagnostic.Code == "FLOW007" && diagnostic.Kind == AnalysisDiagnosticKind.Unverifiable
+            && diagnostic.Message.StartsWith("tail. uses", StringComparison.Ordinal), diagnostics);
+        Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error, diagnostics);
+    }
+
+    /// <summary>
     /// A decoded no. prefix retains branch-boundary and instruction-applicability checks.
     /// </summary>
     [TestMethod]

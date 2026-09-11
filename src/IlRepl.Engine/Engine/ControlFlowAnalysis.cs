@@ -185,7 +185,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     }
                 }
 
-                if (view.DecodedPrefixName == "no."
+                var tailCallPassesManagedPointer = TailCallPassesManagedPointer(graph, index, view, values);
+                if (tailCallPassesManagedPointer
+                    || view.DecodedPrefixName == "no."
                     || view.Op.Name is "localloc" or "cpblk" or "initblk" or "calli" or "jmp"
                     || view.Op == OpCodes.Mkrefany && values.LastOrDefault()?.Type is { } typedReference
                         && _types.Category(typedReference) == StackCategory.NativeInt
@@ -208,7 +210,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                             && !_types.Algebra.Same(actual, pair.parameter))
                     || view.Op == OpCodes.Ldvirtftn && view.MethodIsConstructor == true)
                 {
-                    Report(index, "FLOW007", $"{view.DecodedPrefixName ?? view.Op.Name} uses an operation outside verifiable IL",
+                    var operation = tailCallPassesManagedPointer ? "tail." : view.DecodedPrefixName ?? view.Op.Name;
+                    Report(index, "FLOW007", $"{operation} uses an operation outside verifiable IL",
                         AnalysisDiagnosticKind.Unverifiable);
                 }
             }
@@ -840,6 +843,20 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         }
 
         return false;
+    }
+
+    private bool TailCallPassesManagedPointer(FlowGraph<T> graph, int index, StackOperandView<T> view, FlowValue<T>[] values)
+    {
+        if (view.Op != OpCodes.Call && view.Op != OpCodes.Callvirt && view.Op != OpCodes.Calli
+            || !graph.Prefixes(index).Any(prefix => prefix.Op == OpCodes.Tailcall))
+        {
+            return false;
+        }
+
+        var argumentCount = view.ArgumentPops - (view.Op == OpCodes.Calli ? 1 : 0);
+        var first = values.Length - view.ArgumentPops;
+        return values.Skip(first).Take(argumentCount)
+            .Any(value => value.Type is { } type && _types.Algebra.IsByRef(type));
     }
 
     private T? ArrayInstructionType(StackOperandView<T> view)

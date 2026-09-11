@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 196 method examples and the paired constructor example
+not justify refusing a correct body. The 197 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -34,7 +34,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Exception entry and handler stacks | III.1.7.6, III.1.8.1.1 | Catch, Finally, CatchFinally, EndfinallyClearsStack, Fault, Filter, RethrowPreservesStack | NonemptyTry, WrongFilterStack |
 | Protected returns and transfers | II.15.2, III.3.34–III.3.35, III.3.37, III.3.46, III.3.57 | Catch, Finally, Fault, Jump, LeaveWithinCatch, LeaveWithinTry | JumpFromTry, JumpFromSynchronizedMethod, ReturnInTry, WrongAbstractJump, WrongJumpSignature, WrongLeaveWithinFilter, WrongLeaveWithinFinally, WrongLeaveWithinFault |
 | Protected-region entry | III.3.15 | Catch, Finally | BranchIntoTry |
-| Prefix boundaries, operands, and applicability | III.2 | TailCall, SynchronizedTailCall, UnalignedLoad, VolatileObjectLoad, VolatileObjectStore, ReadOnlyLoad | WrongPrefix, WrongUnalignedValue, BranchIntoPrefix |
+| Prefix boundaries, operands, and applicability | III.2 | ManagedPointerTailCall, TailCall, SynchronizedTailCall, UnalignedLoad, VolatileObjectLoad, VolatileObjectStore, ReadOnlyLoad | WrongPrefix, WrongUnalignedValue, BranchIntoPrefix |
 | Generic identity and boxing | I.8.2.4, III.1.8.1.1–III.1.8.1.3, III.4.1, III.4.23, III.4.30, III.4.33 | GenericBox, GenericReference | GenericNeedsBox, GenericDistinct, WrongManagedPointerBox, WrongManagedPointerCast, WrongManagedPointerIsInstance, WrongManagedPointerUnboxAny |
 | Generic object references | I.8.7.1, III.1.8.1.1 | GenericReferenceThrow, GenericReferenceBranch | GenericNeedsBoxThrow, GenericNeedsBoxBranch |
 | Runtime extensions to constrained calls | .NET ECMA-335 Augments | StaticAbstractCall, StaticAbstractFunction, StaticAbstract_ImplementedAndCalled | WrongStaticAbstractCall, WrongStaticAbstractImplementor, WrongStaticAbstractFunction, existing member eligibility tests |
@@ -60,6 +60,11 @@ and withdrawal of an entire refused block. Existing viewport tests check actual 
 ECMA III.2.4 says a synchronized method ignores `tail.` so its lock remains held until the call
 returns. `SynchronizedTailCall` verifies and returns 42 through CoreCLR, browser Mono, ILAsm, and
 the saved assembly.
+
+The same rule permits a managed pointer argument when it does not point into the departing frame,
+but verification rejects every managed pointer because it does not track that provenance.
+ManagedPointerTailCall executes correctly and carries an unverifiable diagnostic; TailCall remains
+verifiable with an ordinary integer argument.
 
 ECMA I.12.4.1.4 gives a value-type method a pointer to its unboxed instance. A managed pointer is
 verifiable; an unmanaged pointer or native integer is correct but unverifiable. A class method

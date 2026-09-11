@@ -199,6 +199,11 @@ public static class ControlFlowExamples
         new("WrongGenericComparison", [".locals init (!!T left, !!T right)", "ldloc left", "ldloc right", "ceq",
             "pop", "ldc.i4.s 42", "ret"], false, "cannot combine", GenericParameters: "T", GenericArguments: "int32"),
         new("TailCall", ["ldc.i4.s 42", "tail.", "call int32 [System.Runtime]System.Math::Abs(int32)", "ret"], true),
+        new("ManagedPointerTailCall", ["ldsflda int32 FlowGeneric::Value", "tail.",
+            "call int32 FlowGeneric::Consume(int32&)", "ret"], true, Unverifiable: true,
+            Verification: "TailByRef", GenericParameters: "T", GenericArguments: "int32",
+            Members: ".field public static int32 Value\n"
+                + ".method public static int32 Consume(int32&) {\nldc.i4.s 42\nret\n}"),
         new("SynchronizedTailCall", ["ldc.i4.s -42", "tail.",
             "call int32 [System.Runtime]System.Math::Abs(int32)", "ret"], true,
             GenericParameters: "T", GenericArguments: "int32",
