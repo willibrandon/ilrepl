@@ -82,7 +82,7 @@ public sealed class SymbolStackAlgebra : IStackTypeAlgebra<TypeSymbol>
     public bool IsByRef(TypeSymbol type) => type.Kind == TypeSymbolKind.ByRef;
 
     /// <inheritdoc/>
-    public bool IsPointer(TypeSymbol type) => type.Kind == TypeSymbolKind.Pointer;
+    public bool IsPointer(TypeSymbol type) => type.Kind is TypeSymbolKind.Pointer or TypeSymbolKind.FunctionPointer;
 
     /// <inheritdoc/>
     public bool IsArray(TypeSymbol type) => type.IsArray;

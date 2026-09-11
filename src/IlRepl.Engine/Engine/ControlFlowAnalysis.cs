@@ -328,6 +328,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return null;
         }
 
+        if (view.Type is { } operandType && TypeOperandProblem(op, operandType) is { } typeProblem)
+        {
+            return typeProblem;
+        }
+
         bool Numeric(T? type) => type is null || _types.Category(type) is StackCategory.Int32 or StackCategory.Int64
             or StackCategory.NativeInt or StackCategory.Float;
         bool Address(T? type) => type is null || _types.Category(type) is StackCategory.ByRef or StackCategory.NativeInt;
@@ -430,12 +435,6 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             && !_types.CanAssign(top, _types.Algebra.Primitive("object")))
         {
             return $"{op.Name} needs an object reference but found {_types.Name(top)}";
-        }
-
-        if (op == OpCodes.Unbox && view.Type is { } unboxed && !_types.Algebra.IsValueType(unboxed)
-            && !_types.Algebra.IsGenericParameter(unboxed))
-        {
-            return $"unbox needs a value type or generic parameter but found {_types.Name(unboxed)}";
         }
 
         if (op == OpCodes.Jmp && count != 0)
@@ -542,11 +541,6 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         if (op == OpCodes.Ldvirtftn && !Receiver(top, view.DeclaringType))
         {
             return $"ldvirtftn needs a {_types.Name(view.DeclaringType)} receiver but found {_types.Name(top)}";
-        }
-
-        if (op == OpCodes.Box && view.Type is { } boxType && !_types.IsBoxable(boxType))
-        {
-            return $"box needs a boxable type but found {_types.Name(boxType)}";
         }
 
         if (op == OpCodes.Box && view.Type is { } boxed && !_types.CanAssign(top, boxed))
@@ -678,6 +672,38 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             {
                 return $"{arrayOp} needs {_types.Name(storedAs)} but found {_types.Name(top)}";
             }
+        }
+
+        return null;
+    }
+
+    private string? TypeOperandProblem(OpCode op, T type)
+    {
+        if (op.Name is "newarr" or "ldelem" or "ldelema" or "stelem" && !_types.IsArrayElement(type))
+        {
+            return $"{op.Name} needs an array element type but found {_types.Name(type)}";
+        }
+
+        if (op.Name is "box" or "unbox.any" or "castclass" or "isinst" && !_types.IsBoxable(type))
+        {
+            return $"{op.Name} needs a boxable type but found {_types.Name(type)}";
+        }
+
+        if (op == OpCodes.Unbox && (!_types.IsBoxable(type)
+            || !_types.Algebra.IsValueType(type) && !_types.Algebra.IsGenericParameter(type)))
+        {
+            return $"unbox needs a boxable value type or generic parameter but found {_types.Name(type)}";
+        }
+
+        if (op == OpCodes.Constrained && (!_types.IsStorageType(type) || _types.Algebra.IsPointer(type)))
+        {
+            return $"constrained. needs a non-pointer storage type but found {_types.Name(type)}";
+        }
+
+        if (op.Name is "ldobj" or "stobj" or "cpobj" or "initobj" or "sizeof" or "mkrefany" or "refanyval"
+            && !_types.IsStorageType(type))
+        {
+            return $"{op.Name} needs a storage type but found {_types.Name(type)}";
         }
 
         return null;

@@ -231,6 +231,47 @@ internal sealed class FlowTypeRules<T>(
     public bool IsBoxable(T type) => !Algebra.IsByRef(type) && !Algebra.IsPointer(type) && !Algebra.IsByRefLike(type)
         && !Algebra.Same(type, Algebra.Primitive("void")) && !Algebra.Same(type, Algebra.Primitive("typedref"));
 
+    /// <summary>
+    /// True when a type can occupy a CLI storage location.
+    /// </summary>
+    /// <param name="type">The candidate type.</param>
+    /// <returns>True when the type is a storage type.</returns>
+    public bool IsStorageType(T type)
+    {
+        if (Algebra.IsByRef(type) || Algebra.Same(type, Algebra.Primitive("void")))
+        {
+            return false;
+        }
+
+        if (Algebra.IsArray(type))
+        {
+            return Algebra.ElementOf(type) is { } element && IsArrayElement(element);
+        }
+
+        return !Algebra.IsPointer(type) || Algebra.ElementOf(type) is not { } target || IsPointerTarget(target);
+    }
+
+    /// <summary>
+    /// True when a type can be used as a CLI array element.
+    /// </summary>
+    /// <param name="type">The candidate element type.</param>
+    /// <returns>True when an array can contain the type.</returns>
+    public bool IsArrayElement(T type)
+    {
+        if (Algebra.IsByRef(type) || Algebra.IsByRefLike(type) || Algebra.Same(type, Algebra.Primitive("void"))
+            || Algebra.Same(type, Algebra.Primitive("typedref")))
+        {
+            return false;
+        }
+
+        if (Algebra.IsArray(type))
+        {
+            return Algebra.ElementOf(type) is { } element && IsArrayElement(element);
+        }
+
+        return !Algebra.IsPointer(type) || Algebra.ElementOf(type) is not { } target || IsPointerTarget(target);
+    }
+
     private bool SameReducedType(T left, T right)
     {
         bool Pair(string signed, string unsigned) => Algebra.Same(left, Algebra.Primitive(signed))
@@ -261,6 +302,9 @@ internal sealed class FlowTypeRules<T>(
         return Group("bool", "int8", "uint8") || Group("char", "int16", "uint16")
             || Group("int32", "uint32") || Group("int64", "uint64") || Group("native int", "native uint");
     }
+
+    private bool IsPointerTarget(T type) => !Algebra.IsByRef(type)
+        && (!Algebra.IsPointer(type) || Algebra.ElementOf(type) is not { } element || IsPointerTarget(element));
 
     private bool IsReferenceParameter(T type, List<T> visited)
     {
