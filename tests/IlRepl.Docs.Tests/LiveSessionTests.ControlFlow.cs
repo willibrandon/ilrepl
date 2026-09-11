@@ -165,6 +165,33 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
+    /// A browser cell returns a reference tail call directly and refuses one that would need boxing.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(120_000, CooperativeCancellation = true)]
+    public async Task ControlFlow_CellTailReturnMatchesEmission(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+        await PasteAsync(page, "ldstr \"forty\"\nldstr \"two\"\ntail.\ncall string string::Concat(string, string)");
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("4 instructions", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("= \"fortytwo\" : string", options);
+        await PasteAsync(page, "ldc.i4.s -42\ntail.\ncall int32 [System.Runtime]System.Math::Abs(int32)");
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("3 instructions", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("error: a tail call must be followed by ret", options);
+    }
+
+    /// <summary>
     /// A later branch updates an earlier caret stack, and a correction removes the diagnostic before submission.
     /// </summary>
     /// <param name="browser">The browser engine.</param>

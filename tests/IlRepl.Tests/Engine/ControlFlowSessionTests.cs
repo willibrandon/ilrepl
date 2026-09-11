@@ -159,6 +159,30 @@ public sealed class ControlFlowSessionTests
     }
 
     /// <summary>
+    /// A cell may use its synthesized return directly after a tail call that already returns a reference.
+    /// </summary>
+    [TestMethod]
+    public void TailCall_CellReferenceReturnRuns()
+    {
+        var session = new Session();
+        Add(session, "ldstr \"forty\"", "ldstr \"two\"", "tail.",
+            "call string string::Concat(string, string)");
+        Assert.AreEqual("fortytwo", session.Run().Value);
+    }
+
+    /// <summary>
+    /// A cell refuses a trailing value-type call because boxing would separate the tail call and return.
+    /// </summary>
+    [TestMethod]
+    public void TailCall_CellValueReturnNeedsAnotherShape()
+    {
+        var session = new Session();
+        Add(session, "ldc.i4.s -42", "tail.", "call int32 [System.Runtime]System.Math::Abs(int32)");
+        var error = Assert.ThrowsExactly<ReplException>(() => session.Run());
+        Assert.Contains("tail call must be followed by ret", error.Message);
+    }
+
+    /// <summary>
     /// A typed unmanaged pointer can receive fields only from its own element type.
     /// </summary>
     [TestMethod]

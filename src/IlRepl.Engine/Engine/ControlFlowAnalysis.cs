@@ -311,6 +311,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         bool Numeric(T? type) => type is null || _types.Category(type) is StackCategory.Int32 or StackCategory.Int64
             or StackCategory.NativeInt or StackCategory.Float;
         bool Address(T? type) => type is null || _types.Category(type) is StackCategory.ByRef or StackCategory.NativeInt;
+        bool Reference(T? type) => type is null || _types.CanAssign(type, _types.Algebra.Primitive("object"));
         bool Receiver(T? type, T? owner)
         {
             if (type is null || owner is null)
@@ -344,6 +345,14 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             var right = values[^1].Type;
             if (left is not null && right is not null
                 && !FlowNumericRules.Binary(op.Name!, _types.Category(left), _types.Category(right)))
+            {
+                return $"{op.Name} cannot combine {_types.Name(left)} and {_types.Name(right)}";
+            }
+
+            if (left is not null && right is not null && FlowNumericRules.Comparison(op.Name!)
+                && _types.Category(left) == StackCategory.ObjectReference
+                && _types.Category(right) == StackCategory.ObjectReference
+                && (!Reference(left) || !Reference(right)))
             {
                 return $"{op.Name} cannot combine {_types.Name(left)} and {_types.Name(right)}";
             }
@@ -537,6 +546,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 return $"{memory} cannot access {_types.Name(element)} through {_types.Name(address)}";
             }
 
+            if (memory == "stind.ref" && !Reference(top))
+            {
+                return $"stind.ref needs an object reference but found {_types.Name(top)}";
+            }
+
             if (memory == "stind.ref" && address is not null && _types.Algebra.IsByRef(address)
                 && _types.Algebra.ElementOf(address) is { } reference && !_types.CanAssign(top, reference))
             {
@@ -577,6 +591,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
             var actualElement = array is not null && _types.Algebra.IsArray(array) ? _types.Algebra.ElementOf(array) : null;
             var instructionElement = ArrayInstructionType(view);
+            if (actualElement is not null && arrayOp is ("ldelem.ref" or "stelem.ref") && !Reference(actualElement))
+            {
+                return $"{arrayOp} needs an array with reference elements but found {_types.Name(array)}";
+            }
+
             if (actualElement is not null && instructionElement is not null && arrayOp != "ldlen"
                 && arrayOp is not ("ldelem.ref" or "stelem.ref")
                 && !(arrayOp.StartsWith("stelem", StringComparison.Ordinal)

@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 114 method examples and the paired constructor example
+not justify refusing a correct body. The 124 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -23,12 +23,12 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Virtual calls and function pointers | III.3.19, III.4.18 | ConstrainedReceiver, VirtualFunctionPointer | WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer |
 | Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
 | Reduced pointer elements | I.8.7, III.1.8.1.2.3 | ReducedPointerJoin, EnumPointerJoin | ByrefJoin |
-| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.10, III.4.11, III.4.28 | ManagedPointer, PointerFields, IndirectReferenceStore | WrongPointerField, WrongIndirectReferenceStore |
+| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.10, III.4.11, III.4.28 | ManagedPointer, PointerFields, IndirectReferenceStore, UnmanagedReferenceStore | WrongPointerField, WrongIndirectReferenceStore, WrongUnmanagedReferenceStore |
 | Field storage form | III.4.10–III.4.12, III.4.24–III.4.31 | PointerFields, StaticField, StaticFieldToken | WrongStaticFieldOpcode, WrongInstanceFieldOpcode |
 | Readonly provenance | III.2.3, III.3.62 | ReadOnlyLoad, ReadOnlyFieldWrite | WrongPrefix |
 | Correct operations outside verification | III.1.8, III.3.47 | StackAllocation, ReadOnlyWrite, PointerDifference | WrongArithmetic, WrongAllocationHandler |
 | Numeric operand categories | III.1.5 tables III.2–III.8 | NativeAddition, MixedFloats, 288 raw pairs | BadOverflowFloat, BadNotFloat, BadShift |
-| Comparisons | III.1.5 table III.4 | ObjectComparison | BadComparison |
+| Comparisons | III.1.5 table III.4 | ObjectComparison, GenericReferenceComparison | BadComparison, WrongGenericComparison |
 | Reference and float operands | III.3.22, III.3.27, III.4.31 | Catch, MixedFloats | BadThrow, BadFinite, WrongReferenceConversion |
 | Exception entry and handler stacks | III.1.7.6, III.1.8.1.1 | Catch, Finally, CatchFinally, EndfinallyClearsStack, Fault, Filter, RethrowPreservesStack | NonemptyTry, WrongFilterStack |
 | Protected returns and transfers | III.3.37, III.3.46, III.3.57 | Catch, Finally, Fault, Jump, LeaveWithinTry | JumpFromTry, JumpFromSynchronizedMethod, ReturnInTry, WrongJumpSignature |
@@ -41,7 +41,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Readonly store receiver across paths | II.16.1.2 | FlowReceiver with this on both paths | FlowReceiver with another receiver |
 | Indirect calls | III.3.20 | IndirectCall | WrongIndirectCall, WrongIndirectTarget |
 | Block memory operands | III.3.30, III.3.36 | CopyBlock, InitializeBlock | WrongCopyBlock, WrongInitializeBlock |
-| Array element, index and pointer operands | I.8.7.1, III.4.7–III.4.9, III.4.26–III.4.27 | ArrayElement, ArrayIndex, ArrayReferenceStore, TypedArrayReferenceStore | WrongArrayElement, WrongArrayIndex, WrongArrayValue, WrongArrayReferenceStore, WrongTypedArrayReferenceStore |
+| Array element, index and pointer operands | I.8.7.1, III.4.7–III.4.9, III.4.26–III.4.27 | ArrayElement, ArrayIndex, ArrayReferenceLoad, ArrayReferenceStore, GenericArrayReferenceLoad, GenericArrayReferenceStore, TypedArrayReferenceStore | WrongArrayElement, WrongArrayIndex, WrongArrayValue, WrongArrayReferenceStore, WrongGenericArrayReferenceLoad, WrongTypedArrayReferenceStore, WrongValueArrayReferenceLoad, WrongValueArrayReferenceStore |
 | Object copy operands | III.4.4 | CopyObject, CopyReferenceObject | WrongCopyObjectSource, WrongCopyObjectSourceType, WrongCopyObjectDestinationType |
 | Typed references | III.4.19, III.4.22–III.4.23 | TypedReference | WrongMakeTypedReference, WrongTypedReferenceType, WrongTypedReferenceValue |
 | Unboxing | III.4.32 | UnboxValue | WrongUnboxType |
@@ -75,6 +75,10 @@ unverifiable diagnostic; `GenericBox` explicitly boxes the parameter and verifie
 `GenericReferenceThrow` likewise runs with its reference constraint while the library reports
 `StackObjRef`, and `GenericReferenceBranch` reports `StackUnexpected`. An unconstrained parameter
 cannot be treated as an object reference without boxing.
+
+ILVerification accepts `ceq` over an unconstrained generic parameter even though the parameter can
+be an arbitrary value type. `WrongGenericComparison` closes that gap while the class-constrained
+`GenericReferenceComparison` remains accepted.
 
 ECMA-335 III.3.15 forbids an ordinary branch across a protected-region boundary. The library's
 `IsValidBranchTarget` instead accepts a branch to the first instruction of a directly nested try.
