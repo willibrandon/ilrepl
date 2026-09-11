@@ -246,7 +246,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
                 var tailCallPassesManagedPointer = TailCallPassesManagedPointer(graph, index, view, values);
                 var integerAssignedToPointer = IntegerAssignedToPointer(view, values, returnType);
-                if (tailCallPassesManagedPointer || integerAssignedToPointer
+                var nativePointerArrayInstruction = UsesNativePointerArrayInstruction(view, values);
+                if (tailCallPassesManagedPointer || integerAssignedToPointer || nativePointerArrayInstruction
                     || view.DecodedPrefixName == "no."
                     || view.Op.Name is "localloc" or "cpblk" or "initblk" or "calli" or "jmp"
                     || view.Op == OpCodes.Mkrefany && values.LastOrDefault()?.Type is { } typedReference
@@ -777,11 +778,14 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             {
                 var mutableAddress = arrayOp == "ldelema"
                     && !graph.Prefixes(index).Any(prefix => prefix.Op == OpCodes.Readonly);
-                var compatibleElement = mutableAddress
+                var nativePointerElement = arrayOp is "ldelem.i" or "stelem.i"
+                    && _types.Algebra.IsPointer(actualElement)
+                    && _types.Category(instructionElement) == StackCategory.NativeInt;
+                var compatibleElement = nativePointerElement || (mutableAddress
                     ? _types.SameVerificationLocation(actualElement, instructionElement)
                     : arrayOp.StartsWith("stelem", StringComparison.Ordinal)
                         ? _types.ArrayElementCompatible(instructionElement, actualElement)
-                        : _types.ArrayElementCompatible(actualElement, instructionElement);
+                        : _types.ArrayElementCompatible(actualElement, instructionElement));
                 if (!compatibleElement)
                 {
                     return $"{arrayOp} cannot access {_types.Name(actualElement)} elements as {_types.Name(instructionElement)}";
@@ -1001,6 +1005,19 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         }
 
         return false;
+    }
+
+    private bool UsesNativePointerArrayInstruction(StackOperandView<T> view, FlowValue<T>[] values)
+    {
+        if (view.Op.Name is not ("ldelem.i" or "stelem.i"))
+        {
+            return false;
+        }
+
+        var pops = StackTransfer<T>.PopCount(view);
+        return pops <= values.Length && values[values.Length - pops].Type is { } array
+            && _types.Algebra.IsArray(array) && _types.Algebra.ElementOf(array) is { } element
+            && _types.Algebra.IsPointer(element);
     }
 
     private bool LoadsPointerSlot(StackOperandView<T> view)
