@@ -336,6 +336,13 @@ internal sealed class FlowGraph<T> where T : class
 
             if (instruction.Op.OpCodeType == OpCodeType.Prefix)
             {
+                if (instruction.Op == OpCodes.Unaligned && instruction.ByteOperand is { } alignment
+                    && alignment is not (1 or 2 or 4))
+                {
+                    Report(index, "FLOW019", AnalysisDiagnosticKind.Error,
+                        $"unaligned. alignment must be 1, 2, or 4 but found {alignment}");
+                }
+
                 prefixes.Add(index);
                 continue;
             }

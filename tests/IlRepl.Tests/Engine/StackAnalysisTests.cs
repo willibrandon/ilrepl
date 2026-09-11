@@ -269,4 +269,32 @@ public sealed class StackAnalysisTests
         Assert.Contains("[]", column);
         Assert.Contains(diagnostic => diagnostic.Code == "FLOW020" && diagnostic.Kind == AnalysisDiagnosticKind.Error, diagnostics);
     }
+
+    /// <summary>
+    /// Decoded unaligned prefixes accept only the three alignments defined by ECMA-335.
+    /// </summary>
+    /// <param name="alignment">The encoded alignment.</param>
+    /// <param name="accepted">Whether ECMA-335 permits the value.</param>
+    [TestMethod]
+    [DataRow(0, false)]
+    [DataRow(1, true)]
+    [DataRow(2, true)]
+    [DataRow(3, false)]
+    [DataRow(4, true)]
+    [DataRow(255, false)]
+    public void UnalignedPrefix_RequiresPermittedAlignment(int alignment, bool accepted)
+    {
+        var method = Body((module, _, il, body) =>
+        {
+            body.Body.Variables.Add(new VariableDefinition(module.TypeSystem.Int32));
+            il.Emit(OpCodes.Ldloca_S, body.Body.Variables[0]);
+            il.Emit(OpCodes.Unaligned, (byte)alignment);
+            il.Emit(OpCodes.Ldind_I4);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+        });
+
+        StackAnalysis.Run(method, out var diagnostics);
+        Assert.AreEqual(accepted, diagnostics.All(diagnostic => diagnostic.Code != "FLOW019"));
+    }
 }

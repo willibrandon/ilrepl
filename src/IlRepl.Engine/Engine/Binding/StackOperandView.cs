@@ -20,6 +20,11 @@ public sealed record StackOperandView<T> where T : class
     public required OpCode Op { get; init; }
 
     /// <summary>
+    /// The byte operand of a prefix such as <c>unaligned.</c>, or null for other instructions.
+    /// </summary>
+    public byte? ByteOperand { get; init; }
+
+    /// <summary>
     /// For an inline <c>ret</c>: how many values it pops.
     /// </summary>
     public int RetPops { get; init; }

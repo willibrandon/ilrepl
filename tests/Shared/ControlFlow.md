@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 134 method examples and the paired constructor example
+not justify refusing a correct body. The 135 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -33,7 +33,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Exception entry and handler stacks | III.1.7.6, III.1.8.1.1 | Catch, Finally, CatchFinally, EndfinallyClearsStack, Fault, Filter, RethrowPreservesStack | NonemptyTry, WrongFilterStack |
 | Protected returns and transfers | III.3.37, III.3.46, III.3.57 | Catch, Finally, Fault, Jump, LeaveWithinTry | JumpFromTry, JumpFromSynchronizedMethod, ReturnInTry, WrongJumpSignature |
 | Protected-region entry | III.3.15 | Catch, Finally | BranchIntoTry |
-| Prefix boundaries and applicability | III.2 | TailCall, UnalignedLoad, VolatileObjectLoad, VolatileObjectStore, ReadOnlyLoad | WrongPrefix, BranchIntoPrefix |
+| Prefix boundaries, operands, and applicability | III.2 | TailCall, UnalignedLoad, VolatileObjectLoad, VolatileObjectStore, ReadOnlyLoad | WrongPrefix, WrongUnalignedValue, BranchIntoPrefix |
 | Generic identity and boxing | III.1.8.1.1–III.1.8.1.3 | GenericBox, GenericReference | GenericNeedsBox, GenericDistinct |
 | Generic object references | I.8.7.1, III.1.8.1.1 | GenericReferenceThrow, GenericReferenceBranch | GenericNeedsBoxThrow, GenericNeedsBoxBranch |
 | Runtime extensions to constrained calls | .NET ECMA-335 Augments | StaticAbstract_ImplementedAndCalled | Existing member eligibility tests |
@@ -83,6 +83,9 @@ be an arbitrary value type. `WrongGenericComparison` closes that gap while the c
 ILVerification accepts a floating-point input to `conv.r.un`, although ECMA III.3.27 requires an
 integer, and an integer value passed to `stelem.ref` when the tracked array is null, although ECMA
 III.4.27 requires a reference. The paired integer conversion and null-reference store remain valid.
+
+ILVerification ignores the operand of `unaligned.`. ECMA III.2.5 permits only 1, 2, or 4, so
+`WrongUnalignedValue` pins the analyzer's rejection while `UnalignedLoad` uses a permitted value.
 
 ECMA-335 III.3.15 forbids an ordinary branch across a protected-region boundary. The library's
 `IsValidBranchTarget` instead accepts a branch to the first instruction of a directly nested try.

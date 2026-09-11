@@ -100,6 +100,7 @@ internal sealed class EditingStack
         var view = new StackOperandView<TypeSymbol>
         {
             Op = op,
+            ByteOperand = instruction.Operand.Kind == OperandKind.Byte && instruction.Operand.Value is byte value ? value : null,
             RetPops = retPops,
             LoadsThis = instruction.ArgumentIndex == 0 && scope.ThisIndex == 0 && op.Name is "ldarg.0" or "ldarg" or "ldarg.s",
             AddressOfThis = instruction.ArgumentIndex == 0 && scope.ThisIndex == 0 && op.Name is "ldarga" or "ldarga.s",
