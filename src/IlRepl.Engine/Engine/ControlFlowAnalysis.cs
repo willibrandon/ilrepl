@@ -323,6 +323,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return "call cannot invoke an abstract method; use callvirt";
         }
 
+        if (view.MethodIsAbstract == true && view.MethodIsStatic == false && op == OpCodes.Ldftn)
+        {
+            return "ldftn cannot load an abstract method; use ldvirtftn with a receiver";
+        }
+
         var constrained = graph.Prefixes(index).FirstOrDefault(prefix => prefix.Op == OpCodes.Constrained)?.Type;
         if (constrained is not null && (op == OpCodes.Call || op == OpCodes.Ldftn)
             && view.MethodIsStatic is { } isStatic && view.MethodIsVirtual is { } isVirtual && (!isStatic || !isVirtual))
@@ -345,6 +350,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         if (op == OpCodes.Newobj && (view.MethodIsStatic == true || view.MethodIsConstructor == false))
         {
             return "newobj needs an instance constructor";
+        }
+
+        if (op == OpCodes.Newobj && view.DeclaringTypeIsAbstract == true)
+        {
+            return "newobj cannot create abstract type " + _types.Name(view.DeclaringType);
         }
 
         var pops = StackTransfer<T>.PopCount(view);

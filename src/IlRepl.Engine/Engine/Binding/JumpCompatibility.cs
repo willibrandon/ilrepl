@@ -22,6 +22,11 @@ internal static class JumpCompatibility
             return "jmp is not allowed in a synchronized method";
         }
 
+        if (target.IsAbstract)
+        {
+            return "jmp cannot target an abstract method";
+        }
+
         var convention = source?.CallingConvention ?? (isVarArg ? CallingConventions.VarArgs : CallingConventions.Standard);
         var parameters = source?.Parameters
             ?? arguments.Select(argument => new ParameterSymbol(argument.Type, argument.Name)).ToArray();

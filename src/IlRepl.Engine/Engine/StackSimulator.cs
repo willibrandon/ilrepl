@@ -373,6 +373,7 @@ public sealed class StackSimulator
                     MethodIsConstructor = method.IsConstructor,
                     MethodIsAbstract = method.Declared?.Attributes.HasFlag(MethodAttributes.Abstract) ?? method.Method?.IsAbstract,
                     MethodIsVirtual = method.Declared?.Attributes.HasFlag(MethodAttributes.Virtual) ?? method.Method?.IsVirtual,
+                    DeclaringTypeIsAbstract = method.DeclaringType?.IsAbstract,
                     Token = StackTokenKind.Method,
                 };
             case CalliSignature signature:

@@ -79,6 +79,8 @@ public static class ControlFlowExamples
             "jmp target must match", Verification: "Unverifiable"),
         new("WrongJumpParameters", ["jmp int32 [System.Runtime]System.Math::Clamp(int32, int32, int32)"], false,
             "jmp target must match", Verification: "Unverifiable"),
+        new("WrongAbstractJump", ["jmp int32 IZero::Identity(int32)"], false,
+            "jmp cannot target an abstract method", Verification: "Unverifiable", Declarations: StaticAbstractDeclarations),
         new("RethrowPreservesStack", ["ldarg.0", "brtrue DONE", ".try {", "ldnull", "throw",
             "} catch [System.Runtime]System.Exception {", "pop", "ldc.i4.1", "rethrow", "}",
             "DONE: ldc.i4.s 42", "ret"], true),
@@ -126,6 +128,10 @@ public static class ControlFlowExamples
             "newobj instance void [System.Runtime]System.IO.MemoryStream::.ctor()", "stloc.0", "ldloc.0",
             "call instance void [System.Runtime]System.IO.Stream::Flush()", "ldc.i4.s 42", "ret"], false,
             "call cannot invoke an abstract method", Verification: "CallAbstract,ThisMismatch"),
+        new("InstanceFunctionPointer", ["ldftn instance void [System.Runtime]System.IO.MemoryStream::Flush()",
+            "pop", "ldc.i4.s 42", "ret"], true),
+        new("WrongAbstractFunctionPointer", ["ldftn instance void [System.Runtime]System.IO.Stream::Flush()",
+            "pop", "ldc.i4.s 42", "ret"], false, "ldftn cannot load an abstract method"),
         new("VirtualFunctionPointer", ["ldstr \"\"", "ldvirtftn instance string object::ToString()", "pop", "ldc.i4.s 42", "ret"], true),
         new("NonVirtualFunctionPointer", ["ldstr \"\"", "ldvirtftn instance int32 string::get_Length()", "pop",
             "ldc.i4.s 42", "ret"], true),
@@ -139,6 +145,11 @@ public static class ControlFlowExamples
             Members: ".method static void .cctor() {\nret\n}"),
         new("WrongMethodAllocation", ["newobj instance int32 string::get_Length()", "pop", "ldc.i4.s 42", "ret"], false,
             "no constructor string()", Verification: "CtorExpected"),
+        new("ConcreteAllocation", ["newobj instance void ConcreteThing::.ctor()", "pop", "ldc.i4.s 42", "ret"], true,
+            Declarations: AbstractTypeDeclarations),
+        new("WrongAbstractAllocation", ["newobj instance void AbstractThing::.ctor()", "pop", "ldc.i4.s 42", "ret"], false,
+            "newobj cannot create abstract type AbstractThing", Verification: "NewobjAbstractClass",
+            Declarations: AbstractTypeDeclarations),
         new("ByrefJoin", [".locals init (int32 a, string b)", "ldarg.0", "brtrue OTHER", "ldloca a", "br DONE",
             "OTHER: ldloca b", "DONE: pop", "ldc.i4.s 42", "ret"], false, "incompatible stacks", Verification: "PathStackUnexpected"),
         new("CatchFinally", [".locals init (int32 result)", ".try {", ".try {", "ldnull", "throw",
@@ -439,13 +450,36 @@ public static class ControlFlowExamples
     private const string StaticAbstractDeclarations = """
         .class interface public abstract IZero {
         .method public static abstract virtual int32 Zero() { }
+        .method public static abstract virtual int32 Identity(int32) { }
         }
         .class public Num implements IZero {
         .method public static int32 Zero() {
         ldc.i4.0
         ret
         }
+        .method public static int32 Identity(int32) {
+        ldarg.0
+        ret
+        }
         .override method int32 IZero::Zero() with method int32 Num::Zero()
+        .override method int32 IZero::Identity(int32) with method int32 Num::Identity(int32)
+        }
+        """;
+
+    private const string AbstractTypeDeclarations = """
+        .class public abstract AbstractThing {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        .class public ConcreteThing extends AbstractThing {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void AbstractThing::.ctor()
+        ret
+        }
         }
         """;
 }

@@ -80,6 +80,11 @@ public sealed record StackOperandView<T> where T : class
     public bool? MethodIsVirtual { get; init; }
 
     /// <summary>
+    /// Whether a method operand's declaring type is abstract; null when there is no method operand.
+    /// </summary>
+    public bool? DeclaringTypeIsAbstract { get; init; }
+
+    /// <summary>
     /// The name of a decoded prefix that has no Reflection.Emit opcode; null otherwise.
     /// </summary>
     public string? DecodedPrefixName { get; init; }
