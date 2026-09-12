@@ -384,6 +384,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             var transferredPops = 0;
             var transferredPushes = 0;
             var transferredValues = (FlowValue<T>[]?)null;
+            var invalidatedAddressSlots = Array.Empty<(bool IsArgument, int Index)>();
+            var addressMutationCompletesOnlyOnSuccess = false;
             var initializesConstructorThis = false;
             var initializesConstructorPath = false;
             var filterPathsAtEnd = !state.Invalid && node.Instruction?.Op == OpCodes.Endfilter ? state.FilterPaths : null;
@@ -426,7 +428,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         var popped = values.Skip(values.Length - pops).ToArray();
                         var output = values.Take(values.Length - pops).ToList();
                         var pushed = _transfer.PushTypes(view, popped.Select(value => value.Type).ToArray());
-                        var invalidatedAddressSlots = InvalidatedAddressSlots(view, popped, graph);
+                        invalidatedAddressSlots = InvalidatedAddressSlots(view, popped, graph);
+                        addressMutationCompletesOnlyOnSuccess = invalidatedAddressSlots.Length > 0
+                            && AddressMutationCompletesOnlyOnSuccess(view);
                         initializesConstructorThis = InitializesConstructorThis(view, values, graph, state.ConstructorState);
                         transferredPops = pops;
                         transferredPushes = pushed.Count;
@@ -574,14 +578,20 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (!state.Invalid && canCompleteFilter && InsideFilter(graph, index)
                 && (node.EffectUnknown || node.Instruction is { } filterInstruction && CanThrow(filterInstruction)))
             {
+                var restoresFilterPaths = initializesConstructorThis || initializesConstructorPath
+                    || addressMutationCompletesOnlyOnSuccess;
                 var constructorState = initializesConstructorThis || initializesConstructorPath
                     ? ConstructorStateFor(filterPathsBeforeInstruction,
                         stateBeforeInstruction.ConstructorState)
                     : state.ConstructorState;
-                var filterPaths = initializesConstructorThis || initializesConstructorPath
+                var filterPaths = restoresFilterPaths
                     ? filterPathsBeforeInstruction : state.FilterPaths;
-                ContinueFilterSearch(index, filterPaths, state.ThisArgumentIsOriginal,
-                    state.IsCorrelationOnly || filterPaths is { Length: 0 }, constructorState,
+                var originalReceiver = addressMutationCompletesOnlyOnSuccess
+                    ? stateBeforeInstruction.ThisArgumentIsOriginal : state.ThisArgumentIsOriginal;
+                var correlationOnly = restoresFilterPaths
+                    ? stateBeforeInstruction.IsCorrelationOnly : state.IsCorrelationOnly;
+                ContinueFilterSearch(index, filterPaths, originalReceiver,
+                    correlationOnly || filterPaths is { Length: 0 }, constructorState,
                     state.PendingUnwindHandlers, syntheticFilter ? state.SyntheticHandler : null);
             }
 
@@ -647,14 +657,20 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (!state.Invalid && graph.Sections.Count > 0
                 && (node.EffectUnknown || node.Instruction is { } exceptionInstruction && CanThrow(exceptionInstruction)))
             {
-                var exceptionState = initializesConstructorThis || initializesConstructorPath
-                    ? state with
-                    {
-                        FilterPaths = filterPathsBeforeInstruction,
-                        ConstructorState = ConstructorStateFor(filterPathsBeforeInstruction,
-                            stateBeforeInstruction.ConstructorState),
-                    }
-                    : state;
+                var restoresFilterPaths = initializesConstructorThis || initializesConstructorPath
+                    || addressMutationCompletesOnlyOnSuccess;
+                var exceptionState = state with
+                {
+                    ThisArgumentIsOriginal = addressMutationCompletesOnlyOnSuccess
+                        ? stateBeforeInstruction.ThisArgumentIsOriginal : state.ThisArgumentIsOriginal,
+                    FilterPaths = restoresFilterPaths ? filterPathsBeforeInstruction : state.FilterPaths,
+                    ConstructorState = initializesConstructorThis || initializesConstructorPath
+                        ? ConstructorStateFor(filterPathsBeforeInstruction,
+                            stateBeforeInstruction.ConstructorState)
+                        : state.ConstructorState,
+                    IsCorrelationOnly = restoresFilterPaths
+                        ? stateBeforeInstruction.IsCorrelationOnly : state.IsCorrelationOnly,
+                };
                 foreach (var target in graph.ExceptionSearchTargets(index))
                 {
                     if (state.SyntheticHandler is { } synthetic
@@ -3321,6 +3337,10 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 || name is "ldobj" or "ldfld" or "ldflda" or "stfld")
             || position == 1 && name is "cpobj" or "cpblk";
     }
+
+    private static bool AddressMutationCompletesOnlyOnSuccess(StackOperandView<T> view) =>
+        view.Op.Name!.StartsWith("stind.", StringComparison.Ordinal)
+        || view.Op.Name is "stobj" or "initobj" or "cpobj" or "cpblk" or "initblk";
 
     private static bool LoadsReceiverThroughAddress(
         StackOperandView<T> view, IReadOnlyList<FlowValue<T>> popped) => popped is [{ IsThis: true }]

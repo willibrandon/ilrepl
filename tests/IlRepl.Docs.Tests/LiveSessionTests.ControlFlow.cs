@@ -406,6 +406,14 @@ public sealed partial class LiveSessionTests
             await Assertions.Expect(page.Locator("#terminal"))
                 .ToContainTextAsync($"end of class FlowAddress{suffix}Argument", options);
         }
+        foreach (var clause in new[] { "catch", "filter" })
+        {
+            await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.AddressExceptionSource(clause)));
+            await page.Keyboard.PressAsync("Enter");
+            var clauseName = char.ToUpperInvariant(clause[0]) + clause[1..];
+            await Assertions.Expect(page.Locator("#terminal"))
+                .ToContainTextAsync($"end of class ExceptionalAddress{clauseName}Argument", options);
+        }
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.AddressSource("stind.ref")));
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
         await ClearPromptAsync(page);

@@ -2477,4 +2477,46 @@ public static class ControlFlowReceiverExamples
             "}",
         ];
     }
+
+    /// <summary>
+    /// Builds a constructor whose handler observes argument zero around an indirect store.
+    /// </summary>
+    /// <param name="clause">Whether the exception clause is a catch or filter.</param>
+    /// <param name="throwAfterStore">Whether a later instruction throws after the store succeeds.</param>
+    /// <returns>The complete class declaration.</returns>
+    public static string[] AddressExceptionSource(string clause, bool throwAfterStore = false)
+    {
+        var clauseName = clause switch
+        {
+            "catch" => "Catch",
+            "filter" => "Filter",
+            _ => throw new ArgumentOutOfRangeException(nameof(clause)),
+        };
+        var name = $"ExceptionalAddress{clauseName}{(throwAfterStore ? "Later" : "")}Argument";
+        var handler = clause == "catch"
+            ? new[] { "} catch object {", "pop" }
+            : ["} filter {", "pop", "ldc.i4.1", "endfilter", "} handler {", "pop"];
+        return
+        [
+            $".class public {name} {{",
+            ".field public initonly int32 Value",
+            $".method public instance void .ctor(class {name} other) {{",
+            "ldarg.0",
+            "call instance void object::.ctor()",
+            ".try {",
+            "ldarga.s 0",
+            "ldarg.1",
+            "stind.ref",
+            .. throwAfterStore ? new[] { "ldnull", "throw" } : ["leave DONE"],
+            .. handler,
+            "ldarg.0",
+            "ldc.i4.s 42",
+            $"stfld int32 {name}::Value",
+            "leave DONE",
+            "}",
+            "DONE: ret",
+            "}",
+            "}",
+        ];
+    }
 }

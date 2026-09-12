@@ -1828,6 +1828,55 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
+    /// An indirect store changes argument zero only on its successful path through a catch or filter.
+    /// </summary>
+    /// <param name="clause">Whether the exception clause is a catch or filter.</param>
+    /// <param name="throwAfterStore">Whether a later instruction throws after the store succeeds.</param>
+    /// <param name="accepted">Whether the handler still receives the original receiver.</param>
+    [TestMethod]
+    [DataRow("catch", false, true)]
+    [DataRow("filter", false, true)]
+    [DataRow("catch", true, false)]
+    public async Task ArgumentAddress_ExceptionPathPreservesPreStoreReceiver(
+        string clause, bool throwAfterStore, bool accepted)
+    {
+        var lines = ControlFlowReceiverExamples.AddressExceptionSource(clause, throwAfterStore);
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual(accepted,
+            !preview.Diagnostics.Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error),
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        var refusal = (ReplException?)null;
+        foreach (var line in lines)
+        {
+            try
+            {
+                session.AddLine(line);
+            }
+            catch (ReplException error)
+            {
+                refusal = error;
+                break;
+            }
+        }
+
+        Assert.AreEqual(accepted, refusal is null, refusal?.Message);
+        if (!accepted)
+        {
+            Assert.Contains("through this", refusal!.Message);
+            return;
+        }
+
+        var clauseName = char.ToUpperInvariant(clause[0]) + clause[1..];
+        var name = $"ExceptionalAddress{clauseName}Argument";
+        session.AddLine("ldnull");
+        session.AddLine($"newobj instance void {name}::.ctor(class {name})");
+        session.AddLine($"ldfld int32 {name}::Value");
+        Assert.AreEqual(0, session.Run().Value);
+    }
+
+    /// <summary>
     /// Generic constructors distinguish their own field definition from an inherited one.
     /// </summary>
     /// <param name="inherited">Whether the store targets the generic base type's field.</param>
