@@ -46,6 +46,10 @@ public static class ControlFlowExamples
             Unverifiable: true, Verification: "ExpectedNumericType"),
         new("StaticField", ["ldsfld string string::Empty", "pop", "ldc.i4.s 42", "ret"], true),
         new("StaticFieldToken", ["ldtoken field string string::Empty", "pop", "ldc.i4.s 42", "ret"], true),
+        new("InitOnlyFieldAddresses", ["newobj instance void InitOnlyAddress::.ctor()",
+            "dup", "ldflda int32 InitOnlyAddress::Value", "pop", "pop",
+            "ldsflda int32 InitOnlyAddress::StaticValue", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "InitOnly", Declarations: InitOnlyAddressDeclarations),
         new("WrongStaticFieldOpcode", ["ldsfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "pop",
             "ldc.i4.s 42", "ret"], false, "cannot access an instance field", Verification: "ExpectedStaticField"),
         new("WrongUnreachableStaticFieldOpcode", ["br DONE",
@@ -159,6 +163,12 @@ public static class ControlFlowExamples
             "ldc.i4.s 42", "ret"], true, Declarations: DelegatingConstructorDeclarations),
         new("UnusedThisBeforeBaseCall", ["newobj instance void PopConstructor::.ctor()", "pop",
             "ldc.i4.s 42", "ret"], true, Declarations: PopConstructorDeclarations),
+        new("OwnFieldsBeforeBaseCall", ["newobj instance void OwnFieldsConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: OwnFieldsConstructorDeclarations),
+        new("InheritedFieldsBeforeBaseCall", ["newobj instance void InheritedFieldsConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Declarations: InheritedFieldsConstructorDeclarations),
+        new("InheritedFieldsAfterBaseCall", ["newobj instance void InitializedFieldsConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: InitializedFieldsConstructorDeclarations),
         new("DirectSelfConstructorCall", ["ldc.i4.1", "newobj instance void SelfConstructor::.ctor(bool)", "pop",
             "ldc.i4.s 42", "ret"], true, Unverifiable: true, Declarations: SelfConstructorDeclarations),
         new("DoubleReferenceConstructorCall", ["newobj instance void DoubleConstructor::.ctor()", "pop",
@@ -177,6 +187,10 @@ public static class ControlFlowExamples
         new("MixedConstructorInitialization", ["ldarg.0",
             "newobj instance void MixedConstructor::.ctor(bool)", "pop", "ldc.i4.s 42", "ret"], true,
             Unverifiable: true, Verification: "ThisUninitReturn", Declarations: MixedConstructorDeclarations),
+        new("ConstantBranchConstructorInitialization", [
+            "newobj instance void ConstantBranchConstructor::.ctor()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ThisUninitReturn",
+            Declarations: ConstantBranchConstructorDeclarations),
         new("ConstructorRetryAfterCatch", ["newobj instance void RetryingConstructor::.ctor()", "pop",
             "ldc.i4.s 42", "ret"], true, Declarations: RetryingConstructorDeclarations),
         new("DeferredInitializedConstructorHandler", ["newobj instance void DeferredConstructor::.ctor()", "pop",
@@ -771,6 +785,18 @@ public static class ControlFlowExamples
         }
         """;
 
+    private const string InitOnlyAddressDeclarations = """
+        .class public InitOnlyAddress {
+        .field public initonly int32 Value
+        .field public static initonly int32 StaticValue
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        """;
+
     private const string DelegatingConstructorDeclarations = """
         .class public DelegatingConstructor {
         .method public instance void .ctor() {
@@ -806,6 +832,87 @@ public static class ControlFlowExamples
         pop
         ldarg.0
         call instance void object::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string OwnFieldsConstructorDeclarations = """
+        .class public OwnFieldsBase {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        .class public OwnFieldsConstructor extends OwnFieldsBase {
+        .field public int32 Value
+        .method public instance void .ctor() {
+        ldarg.0
+        ldfld int32 OwnFieldsConstructor::Value
+        pop
+        ldarg.0
+        ldflda int32 OwnFieldsConstructor::Value
+        pop
+        ldarg.0
+        ldc.i4.1
+        stfld int32 OwnFieldsConstructor::Value
+        ldarg.0
+        call instance void OwnFieldsBase::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string InheritedFieldsConstructorDeclarations = """
+        .class public InheritedFieldsBase {
+        .field public int32 Value
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        .class public InheritedFieldsConstructor extends InheritedFieldsBase {
+        .method public instance void .ctor() {
+        ldarg.0
+        ldfld int32 InheritedFieldsBase::Value
+        pop
+        ldarg.0
+        ldflda int32 InheritedFieldsBase::Value
+        pop
+        ldarg.0
+        ldc.i4.1
+        stfld int32 InheritedFieldsBase::Value
+        ldarg.0
+        call instance void InheritedFieldsBase::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string InitializedFieldsConstructorDeclarations = """
+        .class public InitializedFieldsBase {
+        .field public int32 Value
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        .class public InitializedFieldsConstructor extends InitializedFieldsBase {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void InitializedFieldsBase::.ctor()
+        ldarg.0
+        ldfld int32 InitializedFieldsBase::Value
+        pop
+        ldarg.0
+        ldflda int32 InitializedFieldsBase::Value
+        pop
+        ldarg.0
+        ldc.i4.1
+        stfld int32 InitializedFieldsBase::Value
         ret
         }
         }
@@ -895,6 +1002,26 @@ public static class ControlFlowExamples
         ldarg.0
         call instance void object::.ctor()
         DONE: ret
+        }
+        }
+        """;
+
+    private const string ConstantBranchConstructorDeclarations = """
+        .class public ConstantBranchConstructor {
+        .method public instance void .ctor() {
+        .try {
+        leave START
+        } finally {
+        endfinally
+        }
+        START: ldc.i4.0
+        brtrue BAD
+        ldarg.0
+        call instance void object::.ctor()
+        br DONE
+        BAD: nop
+        DONE: nop
+        ret
         }
         }
         """;

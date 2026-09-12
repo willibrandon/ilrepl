@@ -104,6 +104,20 @@ public sealed class ControlFlowCorpusTests
             Assert.HasCount(1, diagnostics);
             Assert.AreEqual(Array.IndexOf(lines, "add"), diagnostics[0].Location.Line);
         }
+        if (name == "InheritedFieldsBeforeBaseCall")
+        {
+            var diagnostics = preview.Diagnostics.Where(diagnostic => diagnostic.Code == "FLOW007").ToArray();
+            Assert.HasCount(3, diagnostics);
+            Assert.AreSequenceEqual(["ldfld", "ldflda", "stfld"], diagnostics.Select(diagnostic =>
+                diagnostic.Message.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0]));
+        }
+        if (name == "InitOnlyFieldAddresses")
+        {
+            var diagnostics = preview.Diagnostics.Where(diagnostic => diagnostic.Code == "FLOW007").ToArray();
+            Assert.HasCount(2, diagnostics);
+            Assert.AreSequenceEqual(["ldflda", "ldsflda"], diagnostics.Select(diagnostic =>
+                diagnostic.Message.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0]));
+        }
         if (refusal is not null)
         {
             Assert.Contains(example.Finding, refusal.Message);

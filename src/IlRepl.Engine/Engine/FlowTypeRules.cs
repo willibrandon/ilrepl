@@ -16,7 +16,8 @@ internal sealed class FlowTypeRules<T>(
     Func<T, FlowParameter<T>> parameter,
     Func<T, (int Rank, bool Vector)> arrayShape,
     Func<T, int, bool, T> makeArray,
-    Func<T, T> underlyingType) where T : class
+    Func<T, T> underlyingType,
+    Func<T, T> definition) where T : class
 {
     /// <summary>
     /// The type operations used by opcode transfer.
@@ -47,6 +48,11 @@ internal sealed class FlowTypeRules<T>(
     /// Retrieves the type retained by a boxed stack value.
     /// </summary>
     public Func<T?, T?> BoxedType { get; } = boxedType;
+
+    /// <summary>
+    /// Retrieves the named definition behind a constructed type.
+    /// </summary>
+    public Func<T, T> Definition { get; } = definition;
 
     private readonly Func<T, FlowParameter<T>> _parameter = parameter;
     private readonly Func<T, (int Rank, bool Vector)> _arrayShape = arrayShape;

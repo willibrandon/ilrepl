@@ -1247,6 +1247,85 @@ public static class ControlFlowReceiverExamples
     ];
 
     /// <summary>
+    /// Builds a constant branch whose untaken edge stores a readonly field through another instance.
+    /// </summary>
+    public static string[] ConstantBranchReceiverSource() =>
+    [
+        ".class public ConstantBranchReceiver {",
+        ".field public initonly int32 Value",
+        ".method public instance void .ctor(class ConstantBranchReceiver other) {",
+        "ldarg.0",
+        "call instance void object::.ctor()",
+        ".try {",
+        "leave START",
+        "} finally {",
+        "endfinally",
+        "}",
+        "START: ldc.i4.0",
+        "brtrue BAD",
+        "ret",
+        "BAD: ldarg other",
+        "ldc.i4.1",
+        "stfld int32 ConstantBranchReceiver::Value",
+        "ret",
+        "}",
+        "}",
+    ];
+
+    /// <summary>
+    /// Builds a constant branch whose untaken receiver joins the original receiver before a readonly store.
+    /// </summary>
+    public static string[] ConstantBranchReceiverMergeSource() =>
+    [
+        ".class public ConstantBranchReceiverMerge {",
+        ".field public initonly int32 Value",
+        ".method public instance void .ctor(class ConstantBranchReceiverMerge other) {",
+        "ldarg.0",
+        "call instance void object::.ctor()",
+        ".try {",
+        "leave START",
+        "} finally {",
+        "endfinally",
+        "}",
+        "START: ldc.i4.0",
+        "brtrue BAD",
+        "ldarg.0",
+        "br STORE",
+        "BAD: ldarg other",
+        "STORE: ldc.i4.1",
+        "stfld int32 ConstantBranchReceiverMerge::Value",
+        "ret",
+        "}",
+        "}",
+    ];
+
+    /// <summary>
+    /// Builds a constant branch whose untaken edge stores a readonly field through this.
+    /// </summary>
+    public static string[] ConstantBranchThisReceiverSource() =>
+    [
+        ".class public ConstantBranchThisReceiver {",
+        ".field public initonly int32 Value",
+        ".method public instance void .ctor() {",
+        "ldarg.0",
+        "call instance void object::.ctor()",
+        ".try {",
+        "leave START",
+        "} finally {",
+        "endfinally",
+        "}",
+        "START: ldc.i4.0",
+        "brtrue BAD",
+        "br DONE",
+        "BAD: ldarg.0",
+        "ldc.i4.1",
+        "stfld int32 ConstantBranchThisReceiver::Value",
+        "DONE: ret",
+        "}",
+        "}",
+    ];
+
+    /// <summary>
     /// Builds an untaken leave whose invalid target follows a required finally unwind.
     /// </summary>
     public static string[] ConstantBranchAfterUnwindSource() =>

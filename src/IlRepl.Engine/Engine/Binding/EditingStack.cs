@@ -137,6 +137,7 @@ internal sealed class EditingStack
             {
                 FieldType = field.FieldType,
                 FieldIsStatic = field.IsStatic,
+                FieldIsInitOnly = field.IsInitOnly,
                 DeclaringType = field.DeclaringType,
                 Token = StackTokenKind.Field,
             };

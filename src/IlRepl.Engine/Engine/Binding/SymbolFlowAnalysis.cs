@@ -26,7 +26,8 @@ internal static class SymbolFlowAnalysis
         },
         type => (type.Kind == TypeSymbolKind.SzArray ? 1 : type.Rank, type.Kind == TypeSymbolKind.SzArray),
         (element, rank, vector) => vector ? TypeSymbol.SzArray(element) : TypeSymbol.Array(element, rank, [], []),
-        type => scope.EnumUnderlyingType(type) ?? type);
+        type => scope.EnumUnderlyingType(type) ?? type,
+        type => type.DefinitionOrSelf);
 
     /// <summary>
     /// Analyzes the body without creating runtime definitions.

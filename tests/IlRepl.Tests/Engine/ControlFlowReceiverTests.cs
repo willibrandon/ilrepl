@@ -245,6 +245,53 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
+    /// Constant reasoning does not bypass readonly receiver checks on an untaken edge.
+    /// </summary>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ConstantBranch_StillValidatesUntakenReceiver(bool merge)
+    {
+        var lines = merge ? ControlFlowReceiverExamples.ConstantBranchReceiverMergeSource()
+            : ControlFlowReceiverExamples.ConstantBranchReceiverSource();
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.Contains(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error
+            && diagnostic.Message.Contains("through this", StringComparison.Ordinal), preview.Diagnostics);
+
+        var error = Assert.ThrowsExactly<ReplException>(() =>
+        {
+            foreach (var line in lines)
+            {
+                session.AddLine(line);
+            }
+        });
+        Assert.Contains("through this", error.Message);
+        Assert.IsNotNull(session.OpenType);
+    }
+
+    /// <summary>
+    /// A constant untaken edge retains the original receiver when filter tracking is active.
+    /// </summary>
+    [TestMethod]
+    public async Task ConstantBranch_RetainsThisOnUntakenEdge()
+    {
+        var lines = ControlFlowReceiverExamples.ConstantBranchThisReceiverSource();
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error, preview.Diagnostics,
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        foreach (var line in lines)
+        {
+            session.AddLine(line);
+        }
+
+        Assert.IsNull(session.OpenType);
+    }
+
+    /// <summary>
     /// A leave carries receiver changes made by its finally handler to the instruction at the target.
     /// </summary>
     [TestMethod]
@@ -1684,6 +1731,54 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
+    /// Generic constructors distinguish their own field definition from an inherited one.
+    /// </summary>
+    /// <param name="inherited">Whether the store targets the generic base type's field.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task GenericConstructor_DistinguishesInheritedFieldBeforeBaseCall(bool inherited)
+    {
+        var owner = inherited ? "GenericFieldBase" : "GenericFieldDerived";
+        var field = inherited ? "BaseValue" : "OwnValue";
+        var lines = $$"""
+            .class public GenericFieldBase<T> {
+            .field public !0 BaseValue
+            .method public instance void .ctor() {
+            ldarg.0
+            call instance void object::.ctor()
+            ret
+            }
+            }
+            .class public GenericFieldDerived<T> extends class GenericFieldBase`1<!0> {
+            .field public !0 OwnValue
+            .method public instance void .ctor(!0 value) {
+            ldarg.0
+            ldarg value
+            stfld !0 class {{owner}}`1<!0>::{{field}}
+            ldarg.0
+            call instance void class GenericFieldBase`1<!0>::.ctor()
+            ret
+            }
+            }
+            """.Split('\n');
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual(inherited, preview.Diagnostics.Any(diagnostic => diagnostic.Code == "FLOW007"),
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        foreach (var line in lines)
+        {
+            session.AddLine(line);
+        }
+
+        session.AddLine("ldc.i4.s 42");
+        session.AddLine("newobj instance void class GenericFieldDerived`1<int32>::.ctor(!0)");
+        session.AddLine($"ldfld !0 class {owner}`1<int32>::{field}");
+        Assert.AreEqual(42, session.Run().Value);
+    }
+
+    /// <summary>
     /// Decoded constructors use the same readonly receiver rule as live and symbolic source bodies.
     /// </summary>
     [TestMethod]
@@ -1798,13 +1893,13 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
-    /// A constructor state from an impossible filter-tracked edge does not contaminate a feasible join.
+    /// Every verifier-visible edge contributes its constructor state at a join.
     /// </summary>
     /// <param name="constantCondition">Whether the unsafe edge is statically impossible.</param>
     [TestMethod]
     [DataRow(true)]
     [DataRow(false)]
-    public async Task FilterTracking_ExcludesImpossibleConstructorJoin(bool constantCondition)
+    public async Task FilterTracking_ValidatesEveryConstructorJoin(bool constantCondition)
     {
         var condition = constantCondition ? "ldc.i4.0" : "ldarg chooseBad";
         var lines = ($$"""
@@ -1832,19 +1927,18 @@ public sealed class ControlFlowReceiverTests
         var session = new Session();
         using var editing = new EditingSession(session);
         var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
-        Assert.AreEqual(!constantCondition,
-            preview.Diagnostics.Any(diagnostic => diagnostic.Code == "FLOW007"),
+        Assert.Contains(diagnostic => diagnostic.Code == "FLOW007", preview.Diagnostics,
             string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
     }
 
     /// <summary>
-    /// An impossible constructor return remains harmless when later exception syntax enables path tracking.
+    /// Every verifier-visible constructor return is checked when exception syntax enables path tracking.
     /// </summary>
     /// <param name="constantCondition">Whether the returning edge is statically impossible.</param>
     [TestMethod]
     [DataRow(true)]
     [DataRow(false)]
-    public async Task FilterTracking_IgnoresImpossibleConstructorReturn(bool constantCondition)
+    public async Task FilterTracking_ValidatesEveryConstructorReturn(bool constantCondition)
     {
         var condition = constantCondition ? "ldc.i4.0" : "ldarg returnEarly";
         var lines = ($$"""
@@ -1873,8 +1967,7 @@ public sealed class ControlFlowReceiverTests
         var session = new Session();
         using var editing = new EditingSession(session);
         var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
-        Assert.AreEqual(!constantCondition,
-            preview.Diagnostics.Any(diagnostic => diagnostic.Code == "FLOW007"),
+        Assert.Contains(diagnostic => diagnostic.Code == "FLOW007", preview.Diagnostics,
             string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
     }
 

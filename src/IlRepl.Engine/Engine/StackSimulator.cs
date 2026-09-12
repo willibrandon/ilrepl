@@ -368,6 +368,7 @@ public sealed class StackSimulator
                 {
                     FieldType = TypeRelations.SubstituteFor(field.DeclaringType!, field.FieldType),
                     FieldIsStatic = field.IsStatic,
+                    FieldIsInitOnly = field.IsInitOnly,
                     DeclaringType = field.DeclaringType,
                     Token = StackTokenKind.Field,
                 };

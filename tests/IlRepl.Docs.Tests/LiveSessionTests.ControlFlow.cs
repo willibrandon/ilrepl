@@ -396,6 +396,21 @@ public sealed partial class LiveSessionTests
             await ReturnedBodyAfterOutputAsync(page, "stack underflow");
             await ClearPromptAsync(page);
         }
+        foreach (var source in new[]
+        {
+            ControlFlowReceiverExamples.ConstantBranchReceiverSource(),
+            ControlFlowReceiverExamples.ConstantBranchReceiverMergeSource(),
+        })
+        {
+            await PasteAsync(page, string.Join('\n', source));
+            await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
+            await ClearPromptAsync(page);
+        }
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.ConstantBranchThisReceiverSource()));
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync(
+            "end of class ConstantBranchThisReceiver", options);
+        await TypeLineAsync(page, ".reset");
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.NestedNonCompletingFinallySource()));
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class NestedFinallyArgument", options);
@@ -495,8 +510,8 @@ public sealed partial class LiveSessionTests
 
     private static async Task ResetReturnedCorpusAsync(IPage page)
     {
-        await page.Keyboard.PressAsync("Control+a");
-        await PasteAsync(page, ".reset");
+        await page.Keyboard.PressAsync("Control+c");
+        await page.Keyboard.TypeAsync(".reset");
         await SubmitResetAsync(page);
     }
 

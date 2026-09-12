@@ -23,7 +23,8 @@ internal static class RuntimeFlowAnalysis
         RuntimeGenericConstraints.Read,
         type => (type.GetArrayRank(), type.IsSZArray),
         (element, rank, vector) => vector ? element.MakeArrayType() : element.MakeArrayType(rank),
-        type => UnderlyingType(type, types));
+        type => UnderlyingType(type, types),
+        TypeRelations.Definition);
 
     private static Type UnderlyingType(Type type, TypeTable types)
     {

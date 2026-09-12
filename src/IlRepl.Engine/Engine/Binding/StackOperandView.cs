@@ -120,6 +120,11 @@ public sealed record StackOperandView<T> where T : class
     public bool? FieldIsStatic { get; init; }
 
     /// <summary>
+    /// Whether a field operand names init-only storage.
+    /// </summary>
+    public bool FieldIsInitOnly { get; init; }
+
+    /// <summary>
     /// Explains why this field store is forbidden in the enclosing method.
     /// </summary>
     public string? StoreRestriction { get; init; }
