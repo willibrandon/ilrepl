@@ -156,7 +156,7 @@ public static class IlReplApp
         prompt.Anchors.Dispose();
         if (prompt.Analyzer is { } analyzer)
         {
-            await analyzer.SettleAsync().ConfigureAwait(false);
+            await analyzer.SettleAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         }
     }
 

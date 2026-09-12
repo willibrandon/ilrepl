@@ -137,7 +137,7 @@ public sealed class DiagnosticRefreshTests
             request.Answer.TrySetCanceled(ct);
         }
 
-        await requester.SettleAsync().WaitAsync(TimeSpan.FromSeconds(5), TestContext.CancellationToken);
+        await requester.SettleAsync(TimeSpan.FromSeconds(2)).WaitAsync(TimeSpan.FromSeconds(5), TestContext.CancellationToken);
         Assert.IsNull(PromptDiagnostics.Display(state));
     }
 

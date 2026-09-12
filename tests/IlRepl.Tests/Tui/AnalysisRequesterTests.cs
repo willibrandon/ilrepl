@@ -40,7 +40,7 @@ public sealed class AnalysisRequesterTests
         current.Answer.SetResult(Reply(engine, current, "int32"));
         await WaitAsync(() => { requester.Refresh(state); return state.Analysis is not null; });
         old.Answer.SetResult(Reply(engine, old, "string"));
-        await requester.SettleAsync();
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
         requester.Refresh(state);
         Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
     }
@@ -77,7 +77,7 @@ public sealed class AnalysisRequesterTests
             call.Answer.TrySetResult(Reply(engine, call, "int32"));
         }
 
-        await requester.SettleAsync().WaitAsync(TimeSpan.FromSeconds(5), TestContext.CancellationToken);
+        await requester.SettleAsync(TimeSpan.FromSeconds(2)).WaitAsync(TimeSpan.FromSeconds(5), TestContext.CancellationToken);
     }
 
     /// <summary>
@@ -96,7 +96,7 @@ public sealed class AnalysisRequesterTests
         requester.Refresh(state);
         await WaitAsync(() => engine.Analyses.Count == 2);
         Assert.IsNull(state.Analysis);
-        var settling = requester.SettleAsync();
+        var settling = requester.SettleAsync(TimeSpan.FromSeconds(2));
         Assert.IsFalse(settling.IsCompleted);
         foreach (var call in engine.Analyses)
         {
@@ -107,6 +107,27 @@ public sealed class AnalysisRequesterTests
         await settling;
         requester.Refresh(state);
         Assert.IsNull(state.Analysis);
+    }
+
+    /// <summary>
+    /// Settlement closes the engine when an analysis worker ignores cancellation.
+    /// </summary>
+    [TestMethod]
+    public async Task Settlement_DisposesEngineWhenCancellationIsIgnored()
+    {
+        await using var engine = new CompletionEngine { HoldAnalysis = true };
+        var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
+        var requester = new AnalysisRequester(engine);
+        state.SetText("nop", 3);
+        requester.Refresh(state);
+        await WaitAsync(() => engine.Analyses.Count == 1);
+        var call = engine.Analyses.Single();
+
+        await requester.SettleAsync(TimeSpan.FromMilliseconds(50))
+            .WaitAsync(TimeSpan.FromSeconds(2), TestContext.CancellationToken);
+
+        Assert.IsTrue(call.Cancellation.IsCancellationRequested);
+        Assert.IsTrue(call.Answer.Task.IsCanceled);
     }
 
     /// <summary>

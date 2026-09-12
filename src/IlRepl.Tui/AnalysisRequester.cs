@@ -13,6 +13,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
     private readonly ConcurrentQueue<CompletedAnalysis> _completed = new();
     private AnalysisRequestKey? _current;
     private PendingAnalysis? _pending;
+    private Task? _settlement;
     private long _nextRequestId;
     private bool _stopped;
 
@@ -103,10 +104,13 @@ public sealed class AnalysisRequester(IReplEngine engine)
     }
 
     /// <summary>
-    /// Stops publication and waits until all owned workers have released their snapshots.
+    /// Stops publication and waits for workers, closing the engine when cancellation does not settle in time.
     /// </summary>
+    /// <param name="timeout">The maximum wait before closing a stalled engine.</param>
     /// <returns>The completion of every outstanding request.</returns>
-    public async Task SettleAsync()
+    public Task SettleAsync(TimeSpan timeout) => _settlement ??= SettleCoreAsync(timeout);
+
+    private async Task SettleCoreAsync(TimeSpan timeout)
     {
         _stopped = true;
         Cancel();
@@ -118,7 +122,17 @@ public sealed class AnalysisRequester(IReplEngine engine)
             }
         }
 
-        await Task.WhenAll(_owned.Select(work => work.Task)).ConfigureAwait(false);
+        var joined = Task.WhenAll(_owned.Select(work => work.Task));
+        try
+        {
+            await joined.WaitAsync(timeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            await _engine.DisposeAsync().AsTask().WaitAsync(timeout).ConfigureAwait(false);
+            await joined.WaitAsync(timeout).ConfigureAwait(false);
+        }
+
         foreach (var work in _owned)
         {
             work.Cancellation.Dispose();

@@ -487,26 +487,44 @@ public sealed partial class LiveSessionTests
 
     private static async Task ResetSessionAsync(IPage page)
     {
-        await PasteAsync(page, ".reset");
+        await EmptyPromptAsync(page);
+        await page.Keyboard.TypeAsync(".reset");
         await ReadyToSubmitResetAsync(page);
         await ArmSubmissionOutputAsync(page);
         await page.Keyboard.PressAsync("Enter");
         await ResetCompletedAsync(page);
     }
 
-    private static Task<IJSHandle> ReadyToSubmitResetAsync(IPage page) => page.WaitForFunctionAsync("""
-        () => {
-          const terminal = window.ilreplTerminal;
-          const buffer = terminal.buffer.active;
-          const first = buffer.baseY;
-          const lines = Array.from({ length: terminal.rows }, (_, row) =>
-            buffer.getLine(first + row)?.translateToString(true) ?? '');
-          const prompt = lines.findLast(line => /il\[\d+\]>/.test(line));
-          const status = lines.at(-1) ?? '';
-          return /^il\[\d+\]> \.reset\s*$/.test(prompt ?? '')
-            && !status.includes('updating') && !status.includes('sending');
+    private static async Task ReadyToSubmitResetAsync(IPage page)
+    {
+        try
+        {
+            await page.WaitForFunctionAsync("""
+                () => {
+                  const terminal = window.ilreplTerminal;
+                  const buffer = terminal.buffer.active;
+                  const prompt = buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true) ?? '';
+                  const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
+                  return /^il\[\d+\]> \.reset\s*$/.test(prompt)
+                    && !status.includes('editing') && !status.includes('updating') && !status.includes('sending');
+                }
+                """, null, new() { PollingInterval = 16, Timeout = 30_000 });
         }
-        """, null, new() { PollingInterval = 16, Timeout = 30_000 });
+        catch (TimeoutException exception)
+        {
+            var state = await page.EvaluateAsync<string>("""
+                () => {
+                  const terminal = window.ilreplTerminal;
+                  const buffer = terminal.buffer.active;
+                  const count = Math.min(buffer.length, 20);
+                  const rows = Array.from({ length: count }, (_, index) =>
+                    buffer.getLine(buffer.length - count + index)?.translateToString(true) ?? '');
+                  return JSON.stringify({ active: document.activeElement?.className ?? '', rows });
+                }
+                """);
+            throw new InvalidOperationException("reset was not ready: " + state, exception);
+        }
+    }
 
     private static async Task RunCorpusCellAsync(IPage page, string source, int expected)
     {
