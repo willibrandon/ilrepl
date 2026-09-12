@@ -208,6 +208,14 @@ internal sealed class FlowGraph<T> where T : class
     public void ValidateRegions()
     {
         ValidatePrefixes();
+        foreach (var section in Sections.Values.Where(section => section.Kind == BlockKind.Try))
+        {
+            if (Regions[section.Start].Any(id => id != section.Start && Sections[id].Kind == BlockKind.Filter))
+            {
+                Report(section.Start, "FLOW024", AnalysisDiagnosticKind.Error, "a try region is not allowed inside a filter");
+            }
+        }
+
         for (var index = 0; index < Nodes.Count; index++)
         {
             var op = Nodes[index].Instruction?.Op;

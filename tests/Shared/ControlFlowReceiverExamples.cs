@@ -2270,6 +2270,53 @@ public static class ControlFlowReceiverExamples
     ];
 
     /// <summary>
+    /// Builds a filter whose nested catch can restore the receiver before the filter rejects.
+    /// </summary>
+    /// <param name="restoresOriginal">Whether the nested catch restores the constructor receiver.</param>
+    /// <returns>The complete class declaration.</returns>
+    public static string[] NestedFilterCatchSource(bool restoresOriginal) =>
+    [
+        ".class public NestedFilterCatchArgument {",
+        ".field public initonly int32 Value",
+        ".method public instance void .ctor(class NestedFilterCatchArgument other) {",
+        ".locals init (class NestedFilterCatchArgument original)",
+        "ldarg.0",
+        "call instance void object::.ctor()",
+        "ldarg.0",
+        "stloc original",
+        ".try {",
+        "ldnull",
+        "throw",
+        "} filter {",
+        "pop",
+        ".try {",
+        "ldarg.1",
+        "starg.s 0",
+        "ldnull",
+        "throw",
+        "} catch object {",
+        "pop",
+        restoresOriginal ? "ldloc original" : "ldarg.1",
+        "starg.s 0",
+        "}",
+        "ldc.i4.0",
+        "endfilter",
+        "} handler {",
+        "pop",
+        "leave DONE",
+        "} catch object {",
+        "pop",
+        "ldarg.0",
+        "ldc.i4.s 42",
+        "stfld int32 NestedFilterCatchArgument::Value",
+        "leave DONE",
+        "}",
+        "DONE: ret",
+        "}",
+        "}",
+    ];
+
+    /// <summary>
     /// Builds a filter with enough independent decisions to exercise the path-state bound.
     /// </summary>
     /// <param name="diamonds">The number of independent decision diamonds.</param>

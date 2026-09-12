@@ -124,6 +124,27 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
+    /// Filters reject nested protected regions before Mono compiles the submitted constructor.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(120_000, CooperativeCancellation = true)]
+    public async Task ControlFlow_FilterCannotContainTry(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.NestedFilterCatchSource(true)));
+        await Assertions.Expect(terminal).ToContainTextAsync("a try region is not allowed inside a filter", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("error: a try region is not allowed inside a filter", options);
+    }
+
+    /// <summary>
     /// Closing a structured finally clears its remaining stack in browser Mono.
     /// </summary>
     /// <param name="browser">The browser engine.</param>

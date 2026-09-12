@@ -57,6 +57,7 @@ The boundaries are:
 
 Leave a region with `leave`, not `ret` or `br`. The stack is empty at every boundary except the
 start of a catch, filter, or filter handler, where it holds the exception.
+A filter cannot contain another `.try`. If the filter throws, exception search continues with the next clause.
 
 ## A filter
 

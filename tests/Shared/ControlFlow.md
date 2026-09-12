@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 285 method examples and the paired constructor example
+not justify refusing a correct body. The 286 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -32,7 +32,7 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Comparisons | III.1.5 table III.4 | ObjectComparison, GenericReferenceComparison | BadComparison, WrongGenericComparison |
 | Reference and float operands | III.3.22, III.3.27, III.4.31 | Catch, MixedFloats | BadThrow, BadFinite, WrongReferenceConversion |
 | Exception entry and handler stacks | III.1.7.6, III.1.8.1.1 | Catch, Finally, CatchFinally, EndfinallyClearsStack, Fault, Filter, RethrowPreservesStack | NonemptyTry, WrongFilterStack |
-| Protected returns and transfers | II.15.2, III.3.34–III.3.35, III.3.37, III.3.46, III.3.57 | Catch, Finally, Fault, Jump, LeaveWithinCatch, LeaveWithinTry | JumpFromTry, JumpFromSynchronizedMethod, ReturnInTry, WrongAbstractJump, WrongJumpSignature, WrongLeaveWithinFilter, WrongLeaveWithinFinally, WrongLeaveWithinFault |
+| Protected returns and transfers | II.15.2, III.3.34–III.3.35, III.3.37, III.3.46, III.3.57 | Catch, Finally, Fault, Jump, LeaveWithinCatch, LeaveWithinTry | JumpFromTry, JumpFromSynchronizedMethod, ReturnInTry, WrongAbstractJump, WrongJumpSignature, WrongLeaveWithinFilter, WrongLeaveWithinFinally, WrongLeaveWithinFault, WrongNestedFilterTry |
 | Protected-region entry | III.3.15 | Catch, Finally | BranchIntoTry |
 | Prefix boundaries, operands, and applicability | III.2 | ManagedPointerTailCall, TailCall, SynchronizedTailCall, UnalignedLoad, VolatileObjectLoad, VolatileObjectStore, ReadOnlyLoad | WrongPrefix, WrongUnalignedValue, BranchIntoPrefix |
 | Generic identity and boxing | I.8.2.4, III.1.8.1.1–III.1.8.1.3, III.4.1, III.4.23, III.4.30, III.4.33 | GenericBox, GenericReference | GenericNeedsBox, GenericDistinct, WrongManagedPointerBox, WrongManagedPointerCast, WrongManagedPointerIsInstance, WrongManagedPointerUnboxAny |
@@ -175,6 +175,10 @@ ECMA-335 III.3.34 and III.3.35 prohibit `leave` anywhere inside a filter, finall
 when its target remains in the same clause. ILVerification reports no diagnostic for these bodies,
 and CoreCLR prepares them. WrongLeaveWithinFilter, WrongLeaveWithinFinally, and
 WrongLeaveWithinFault keep the analyzer aligned with the specification.
+
+ECMA-335 III.3.34 also prohibits a nested `try` inside a filter and makes an exception thrown by
+the filter continue the clause search. ILVerification reports no diagnostic for WrongNestedFilterTry,
+while CoreCLR rejects the assembled method. The analyzer refuses it before emission.
 
 The library reports `PathStackUnexpected` when merging managed pointers whose elements have the
 same CLI verification type: signed and unsigned integers, an enum and its underlying integer,

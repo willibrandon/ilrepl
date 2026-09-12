@@ -1340,6 +1340,75 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
+    /// A filter cannot contain a nested try even when its catch would restore the receiver.
+    /// </summary>
+    /// <param name="restoresOriginal">Whether the nested catch restores the constructor receiver.</param>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task NestedFilterCatch_IsRejectedBeforeReceiverAnalysis(bool restoresOriginal)
+    {
+        var lines = ControlFlowReceiverExamples.NestedFilterCatchSource(restoresOriginal);
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.Contains(diagnostic => diagnostic.Code == "FLOW024"
+            && diagnostic.Message == "a try region is not allowed inside a filter", preview.Diagnostics);
+        var error = Assert.ThrowsExactly<ReplException>(() =>
+        {
+            foreach (var line in lines)
+            {
+                session.AddLine(line);
+            }
+        });
+        Assert.Contains("a try region is not allowed inside a filter", error.Message);
+        Assert.IsNotNull(session.OpenMethod);
+    }
+
+    /// <summary>
+    /// A filter's paired handler may contain a nested try and catch.
+    /// </summary>
+    [TestMethod]
+    public async Task FilterHandler_AllowsNestedTry()
+    {
+        var lines = """
+            .method int32 NestedTryInFilterHandler() {
+            .try {
+            ldnull
+            throw
+            } filter {
+            pop
+            ldc.i4.1
+            endfilter
+            } handler {
+            pop
+            .try {
+            ldnull
+            throw
+            } catch object {
+            pop
+            leave HANDLED
+            }
+            HANDLED: leave DONE
+            }
+            DONE: ldc.i4.s 42
+            ret
+            }
+            """.Split('\n');
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error, preview.Diagnostics);
+        foreach (var line in lines)
+        {
+            session.AddLine(line);
+        }
+
+        session.AddLine("call int32 NestedTryInFilterHandler()");
+        Assert.AreEqual(42, session.Run().Value);
+    }
+
+    /// <summary>
     /// An accepting filter carries the receiver it stored into its paired handler.
     /// </summary>
     /// <param name="originalReceiver">Whether the filter stores the original receiver.</param>
