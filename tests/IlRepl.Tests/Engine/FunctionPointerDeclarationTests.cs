@@ -250,6 +250,38 @@ public sealed class FunctionPointerDeclarationTests
     }
 
     /// <summary>
+    /// A replacement group binds another family's function-pointer field with its exact signature.
+    /// </summary>
+    [TestMethod]
+    public void Replacement_CrossFamilyFunctionPointerField_BindsExactly()
+    {
+        var session = IlLines.Load(
+            ".class public Point { }",
+            ".class public Host {",
+            ".field public static method class Point *(class Point) Transform",
+            "}",
+            ".class public Consumer {",
+            ".method public static int32 Read() {",
+            "ldsfld method class Point *(class Point) Host::Transform",
+            "pop",
+            "ldc.i4.s 42",
+            "ret",
+            "}",
+            "}");
+
+        var message = "";
+        foreach (var line in IlLines.Expand(".class public Point {", ".field public int32 X", "}"))
+        {
+            message = session.AddLine(line).Message ?? message;
+        }
+
+        Assert.Contains("rebuilt class Host and class Consumer", message);
+        session.AddLine("call int32 Consumer::Read()");
+        Assert.AreEqual(42, session.Run().Value);
+        _ = AssemblyExporter.Write(session, "cross-family-function-pointer-field");
+    }
+
+    /// <summary>
     /// Replacing a type rebuilds a method that names it only inside a function-pointer instruction operand.
     /// </summary>
     [TestMethod]

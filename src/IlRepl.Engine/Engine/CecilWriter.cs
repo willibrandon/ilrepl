@@ -504,8 +504,11 @@ public sealed class CecilWriter
             var declaration = external!.Members.FindField(field.Name)?.Declaration
                 ?? throw new ReplException($"{external.Name} declares no field {field.Name}");
             var externalDefinitionReference = Import(externalDefinition!);
-            var fieldType = Import(declaration.Type);
-            fieldType = WithModifiers(fieldType, declaration.RequiredModifiers, declaration.OptionalModifiers);
+            var fieldType = ImportSignature(
+                declaration.Type,
+                declaration.ExactType,
+                declaration.RequiredModifiers,
+                declaration.OptionalModifiers);
             _ = externalDefinitionReference;
             return new FieldReference(field.Name, fieldType, Import(field.DeclaringType!));
         }
