@@ -11,6 +11,11 @@ namespace IlRepl.Engine;
 internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : class
 {
     private const int MaxFilterPaths = 64;
+    private const int MaxCorrelatedAlternatives = 256;
+    private static readonly FilterPathValue UnknownReceiverValue = new(
+        null, null, false, HasNonSourceAlternative: true);
+    private static readonly FilterPathState IdentityReceiverTransformation = new([], null, null, true);
+    private static readonly FilterPathState[] IdentityReceiverTransformations = [IdentityReceiverTransformation];
     private readonly FlowTypeRules<T> _types = types;
     private readonly StackTransfer<T> _transfer = new(types.Algebra);
 
@@ -43,30 +48,41 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
     private IEnumerable<FlowResult<T>?> Steps(FlowGraph<T> graph, T? returnType, bool cell, CancellationToken cancellationToken)
     {
-        var finalizers = new Dictionary<int, bool?>();
-        foreach (var (id, section) in graph.Sections.Where(pair => pair.Value.Kind == BlockKind.Finally)
-            .OrderBy(pair => pair.Value.End - pair.Value.Start))
+        Dictionary<int, (bool Completes, FilterPathState[] Transformations)>? unwindEffects = null;
+        if (graph.Sections.Values.Any(section => section.Kind is BlockKind.Finally or BlockKind.Fault))
         {
-            var seeds = new Dictionary<int, FlowState<T>> { [section.Start] = FlowState<T>.ThisEntry };
-            FlowResult<T>? result = null;
-            foreach (var step in AnalyzeSteps(graph, returnType, cell, cancellationToken, seeds,
-                section.Start, section.End, finalizers, validateGraph: false))
+            unwindEffects = [];
+            foreach (var (id, section) in graph.Sections
+                .Where(pair => pair.Value.Kind is BlockKind.Finally or BlockKind.Fault)
+                .OrderBy(pair => pair.Value.End - pair.Value.Start))
             {
-                if (step is null)
+                var seeds = new Dictionary<int, FlowState<T>>
                 {
-                    yield return null;
-                }
-                else
+                    [section.Start] = FlowState<T>.ThisEntry with
+                    {
+                        FilterPaths = [new FilterPathState([], null, null, true)],
+                    },
+                };
+                var result = (FlowResult<T>?)null;
+                foreach (var step in AnalyzeSteps(graph, returnType, cell, cancellationToken, seeds,
+                    section.Start, section.End, unwindEffects, validateGraph: false))
                 {
-                    result = step;
+                    if (step is null)
+                    {
+                        yield return null;
+                    }
+                    else
+                    {
+                        result = step;
+                    }
                 }
-            }
 
-            finalizers[id] = FinalizerEffect(graph, id, section, result!);
+                unwindEffects[id] = FinalizerEffect(graph, id, section, result!);
+            }
         }
 
         foreach (var result in AnalyzeSteps(graph, returnType, cell, cancellationToken,
-            finalizerEffects: finalizers, validateGraph: true))
+            finalizerEffects: unwindEffects, validateGraph: true))
         {
             yield return result;
         }
@@ -74,7 +90,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
     private IEnumerable<FlowResult<T>?> AnalyzeSteps(FlowGraph<T> graph, T? returnType, bool cell,
         CancellationToken cancellationToken, IReadOnlyDictionary<int, FlowState<T>>? seeds = null,
-        int start = 0, int? end = null, Dictionary<int, bool?>? finalizerEffects = null, bool validateGraph = true)
+        int start = 0, int? end = null,
+        Dictionary<int, (bool Completes, FilterPathState[] Transformations)>? finalizerEffects = null,
+        bool validateGraph = true)
     {
         var nodes = graph.Nodes;
         var limit = end ?? nodes.Count + 1;
@@ -91,8 +109,10 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         var diagnostics = new Dictionary<(int, string), AnalysisDiagnostic>();
         var queue = new Queue<int>();
         var queued = new bool[count];
+        var unwindEntries = (Dictionary<(int Source, int Handler), FlowState<T>>?)null;
         var maxStack = 0;
-        var tracksFilterPaths = graph.Sections.Values.Any(section => section.Kind == BlockKind.Filter);
+        var tracksFilterPaths = graph.Sections.Values.Any(section =>
+            section.Kind is BlockKind.Filter or BlockKind.Finally or BlockKind.Fault);
 
         void Enqueue(int position)
         {
@@ -112,18 +132,61 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             diagnostics[(position, code)] = new AnalysisDiagnostic(code, kind, message, location, related ?? []);
         }
 
-        void ContinueFilterSearch(int source, FilterPathState[]? paths, bool fallbackThis)
+        void ContinueFilterSearch(int source, FilterPathState[]? paths, bool fallbackThis,
+            IReadOnlyList<int>? fallbackUnwindHandlers)
         {
             foreach (var target in graph.FilterContinuationTargets(source))
             {
-                var entry = graph.Seeds[target];
-                var thisArgumentIsOriginal = paths?.All(path => path.ThisArgumentIsOriginal) ?? fallbackThis;
-                Propagate(target, source, entry with
+                var outgoing = WithExceptional(new FlowState<T>([], ThisArgumentIsOriginal: fallbackThis,
+                    FilterPaths: paths), fallbackUnwindHandlers, null);
+                outgoing = QueueUnwindHandlers(outgoing, graph.UnwindHandlersForException(source, target),
+                    finalizerEffects);
+                if (graph.ClauseKindAt(target) != BlockKind.Filter)
                 {
-                    ThisArgumentIsOriginal = thisArgumentIsOriginal,
-                    FilterPaths = EnterExceptionRegion(paths, entry),
-                });
+                    outgoing = ApplyUnwindEffects(outgoing, finalizerEffects,
+                        (handler, incoming) => EnterUnwindHandler(source, handler, incoming));
+                    if (outgoing is null)
+                    {
+                        continue;
+                    }
+                }
+                var entry = graph.Seeds[target];
+                var targetState = entry with
+                {
+                    ThisArgumentIsOriginal = outgoing.ThisArgumentIsOriginal,
+                    FilterPaths = EnterExceptionRegion(outgoing.FilterPaths, entry),
+                };
+                Propagate(target, source, WithExceptional(targetState,
+                    outgoing.PendingUnwindHandlers, null));
             }
+        }
+
+        void EnterUnwindHandler(int source, int handler, FlowState<T> incoming)
+        {
+            if (!graph.Sections.TryGetValue(handler, out var section))
+            {
+                return;
+            }
+
+            var entry = graph.Seeds.TryGetValue(section.Start, out var seeded) ? seeded : FlowState<T>.Empty;
+            var paths = incoming.FilterPaths is null ? null : ExpandFilterPaths(incoming.FilterPaths).Select(path => path with
+            {
+                Values = [],
+                PendingUnwindEffect = null,
+            }).ToArray();
+            var state = WithExceptional(entry with
+            {
+                ThisArgumentIsOriginal = incoming.ThisArgumentIsOriginal,
+                FilterPaths = paths,
+            }, null, incoming.SyntheticHandler);
+            var key = (source, handler);
+            unwindEntries ??= [];
+            if (unwindEntries.TryGetValue(key, out var current))
+            {
+                _ = TryMerge(current, state, out state);
+            }
+            unwindEntries[key] = state;
+            Propagate(section.Start, source, state);
         }
 
         void Propagate(int target, int predecessor, FlowState<T> state)
@@ -179,12 +242,32 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             Report(index, "FLOW005", problem);
         }
 
-        foreach (var (position, seed) in seeds ?? graph.Seeds)
+        KeyValuePair<int, FlowState<T>>[]? deferredEntries = null;
+        if (seeds is not null)
         {
-            Propagate(position, -1, tracksFilterPaths ? StartFilterPaths(seed) : seed);
+            foreach (var (position, seed) in seeds)
+            {
+                Propagate(position, -1, tracksFilterPaths ? StartFilterPaths(seed) : seed);
+            }
+        }
+        else
+        {
+            foreach (var (position, seed) in graph.Seeds)
+            {
+                if (position == 0)
+                {
+                    Propagate(position, -1, tracksFilterPaths ? StartFilterPaths(seed) : seed);
+                }
+            }
+
+            if (graph.Seeds.Count > 1)
+            {
+                deferredEntries = [.. graph.Seeds.Where(entry => entry.Key != 0)];
+            }
         }
 
         var iterations = 0;
+    AnalyzeQueue:
         while (queue.TryDequeue(out var index))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -257,7 +340,12 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (node.EffectUnknown)
             {
                 Report(index, "FLOW004", "the instruction's stack effect is unknown", AnalysisDiagnosticKind.Unknown);
-                state = state.Invalid ? state : state with { Values = null, HasUnknownPath = true, FilterPaths = null };
+                state = state.Invalid ? state : state with
+                {
+                    Values = null,
+                    HasUnknownPath = true,
+                    FilterPaths = UnknownFilterPathStacks(state.FilterPaths),
+                };
             }
             else if (node.Instruction is { } view && !state.Invalid && state.Values is { } values)
             {
@@ -290,11 +378,17 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         transferredPops = pops;
                         transferredPushes = pushed.Count;
                         transferredValues = popped;
+                        var filterPaths = TransferFilterPaths(state.FilterPaths, view, pops, pushed.Count, popped);
                         var loadsThis = view.ReadsThisArgument && state.ThisArgumentIsOriginal;
-                        foreach (var type in pushed)
+                        for (var pushedIndex = 0; pushedIndex < pushed.Count; pushedIndex++)
                         {
-                            output.Add(view.Op == OpCodes.Dup ? popped[0]
-                                : new FlowValue<T>(type, [index], loadsThis,
+                            var outputIndex = values.Length - pops + pushedIndex;
+                            var pathLoadsThis = filterPaths is { Length: > 0 }
+                                && filterPaths.All(path => !path.StackUnknown && path.Values.Length > outputIndex
+                                    && path.Values[outputIndex].IsThis);
+                            var valueIsThis = filterPaths is null ? loadsThis : pathLoadsThis;
+                            output.Add(view.Op == OpCodes.Dup ? popped[0] with { IsThis = valueIsThis }
+                                : new FlowValue<T>(pushed[pushedIndex], [index], valueIsThis,
                                     graph.Prefixes(index).Any(prefix => prefix.Op == OpCodes.Readonly)
                                         || view.Op == OpCodes.Unbox
                                         || view.Op == OpCodes.Ldflda && popped.Any(value => value.IsReadOnly)));
@@ -308,9 +402,14 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         var thisArgumentIsOriginal = view.WritesThisArgument ? popped[^1].IsThis
                             : view.ReadsThisArgument && view.Op.Name is "ldarga" or "ldarga.s" ? false
                             : state.ThisArgumentIsOriginal;
-                        state = new FlowState<T>([.. output], state.HasUnknownPath,
+                        if (filterPaths is { Length: > 0 })
+                        {
+                            thisArgumentIsOriginal = filterPaths.All(path => path.ThisArgumentIsOriginal);
+                        }
+                        state = WithExceptional(new FlowState<T>([.. output], state.HasUnknownPath,
                             ThisArgumentIsOriginal: thisArgumentIsOriginal,
-                            FilterPaths: TransferFilterPaths(state.FilterPaths, view, pops, pushed.Count, popped));
+                            FilterPaths: filterPaths),
+                            state.PendingUnwindHandlers, state.SyntheticHandler);
                     }
                 }
 
@@ -350,48 +449,89 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 }
             }
 
+            if (!node.EffectUnknown && node.Instruction is { } unknownStackView && !state.Invalid
+                && state.Values is null && state.FilterPaths is not null)
+            {
+                state = state with
+                {
+                    FilterPaths = TransferFilterPaths(state.FilterPaths, unknownStackView, 0, 0, []),
+                };
+            }
+
             after[slot] = state;
             maxStack = Math.Max(maxStack, state.Values?.Length ?? 0);
             // ECMA-335 III.3.34 sends zero onward and one to the paired handler. An unknown result can take either path.
-            var acceptingFilterPaths = filterPathsAtEnd?
+            var pathsAtEnd = filterPathsAtEnd is null ? null : ExpandFilterPaths(filterPathsAtEnd).ToArray();
+            var acceptingFilterPaths = pathsAtEnd?
                 .Where(path => path.Values.LastOrDefault().IsZero != true).ToArray();
-            var rejectingFilterPaths = filterPathsAtEnd?
+            var rejectingFilterPaths = pathsAtEnd?
                 .Where(path => path.Values.LastOrDefault().IsOne != true).ToArray();
-            if (!state.Invalid && node.Instruction?.Op == OpCodes.Endfilter
+            if (!state.Invalid && state.SyntheticHandler is null && node.Instruction?.Op == OpCodes.Endfilter
                 && (acceptingFilterPaths is null || acceptingFilterPaths.Length > 0)
                 && graph.FilterHandlerFor(index) is { } handler && graph.Seeds.TryGetValue(handler, out var handlerEntry))
             {
-                Propagate(handler, index, handlerEntry with
+                var outgoing = ApplyUnwindEffects(state with
                 {
                     ThisArgumentIsOriginal = acceptingFilterPaths?.All(path => path.ThisArgumentIsOriginal)
                         ?? state.ThisArgumentIsOriginal,
-                    FilterPaths = EnterExceptionRegion(acceptingFilterPaths, handlerEntry),
-                });
+                    FilterPaths = acceptingFilterPaths,
+                }, finalizerEffects, (unwind, incoming) => EnterUnwindHandler(index, unwind, incoming));
+                if (outgoing is not null)
+                {
+                    var targetState = handlerEntry with
+                    {
+                        ThisArgumentIsOriginal = outgoing.ThisArgumentIsOriginal,
+                        FilterPaths = EnterExceptionRegion(outgoing.FilterPaths, handlerEntry),
+                    };
+                    Propagate(handler, index, WithExceptional(targetState, null, null));
+                }
             }
 
-            if (!state.Invalid && node.Instruction?.Op == OpCodes.Endfilter
+            if (!state.Invalid && state.SyntheticHandler is null && node.Instruction?.Op == OpCodes.Endfilter
                 && (rejectingFilterPaths is null || rejectingFilterPaths.Length > 0))
             {
-                ContinueFilterSearch(index, rejectingFilterPaths, state.ThisArgumentIsOriginal);
+                ContinueFilterSearch(index, rejectingFilterPaths,
+                    rejectingFilterPaths?.All(path => path.ThisArgumentIsOriginal) ?? state.ThisArgumentIsOriginal,
+                    state.PendingUnwindHandlers);
             }
 
-            if (!state.Invalid && node.Instruction is { } filterInstruction && InsideFilter(graph, index)
-                && CanThrow(filterInstruction))
+            if (!state.Invalid && state.SyntheticHandler is null && InsideFilter(graph, index)
+                && (node.EffectUnknown || node.Instruction is { } filterInstruction && CanThrow(filterInstruction)))
             {
-                ContinueFilterSearch(index, state.FilterPaths, state.ThisArgumentIsOriginal);
+                ContinueFilterSearch(index, state.FilterPaths, state.ThisArgumentIsOriginal,
+                    state.PendingUnwindHandlers);
             }
 
+            var propagatedSwitchTargets = node.Instruction?.Op == OpCodes.Switch ? new HashSet<int>() : null;
             foreach (var edge in graph.Edges[index])
             {
+                if (propagatedSwitchTargets is not null && !propagatedSwitchTargets.Add(edge.Target))
+                {
+                    continue;
+                }
+
+                if (state.SyntheticHandler is { } synthetic
+                    && !graph.Regions[edge.Target].Contains(synthetic))
+                {
+                    continue;
+                }
+
                 var edgeFilterPaths = state.FilterPaths;
                 if (!state.Invalid && node.Instruction is { } branch && transferredValues is not null
-                    && IsBooleanBranch(branch)
+                    && branch.Op == OpCodes.Switch)
+                {
+                    edgeFilterPaths = TransferFilterPaths(SelectSwitchTargetPaths(
+                        filterPathsBeforeInstruction, branch, graph.Edges[index], edge.Target,
+                        node.Targets.Count), branch, transferredPops, transferredPushes, transferredValues);
+                }
+                else if (!state.Invalid && node.Instruction is { } booleanBranch && transferredValues is not null
+                    && IsConditionedBranch(booleanBranch)
                     && !graph.Edges[index].Any(other => other.Target == edge.Target
                         && other.IsExplicit != edge.IsExplicit))
                 {
                     edgeFilterPaths = TransferFilterPaths(
-                        SelectBranchPaths(filterPathsBeforeInstruction, branch, edge.IsExplicit),
-                        branch, transferredPops, transferredPushes, transferredValues);
+                        SelectBranchPaths(filterPathsBeforeInstruction, booleanBranch, edge, 0),
+                        booleanBranch, transferredPops, transferredPushes, transferredValues);
                 }
 
                 if (edgeFilterPaths is { Length: 0 })
@@ -402,28 +542,12 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 var outgoing = (FlowState<T>?)(edge.ClearsStack && !state.Invalid
                     ? state with { Values = [], FilterPaths = ClearFilterPathStacks(edgeFilterPaths) }
                     : state with { FilterPaths = edgeFilterPaths });
-                if (edge.ClearsStack && finalizerEffects is not null)
+                if (edge.ClearsStack)
                 {
-                    foreach (var finalizer in graph.FinalizersForTransfer(index, edge.Target))
-                    {
-                        if (!finalizerEffects.TryGetValue(finalizer, out var preservesThis) || preservesThis is null)
-                        {
-                            outgoing = null;
-                            break;
-                        }
-
-                        if (outgoing is not { } continuing)
-                        {
-                            break;
-                        }
-
-                        outgoing = continuing with
-                        {
-                            ThisArgumentIsOriginal = continuing.ThisArgumentIsOriginal && preservesThis.Value,
-                            FilterPaths = preservesThis.Value ? continuing.FilterPaths
-                                : InvalidateFilterReceivers(continuing.FilterPaths),
-                        };
-                    }
+                    outgoing = QueueUnwindHandlers(outgoing!, graph.FinalizersForTransfer(index, edge.Target),
+                        finalizerEffects);
+                    outgoing = ApplyUnwindEffects(outgoing, finalizerEffects,
+                        (handler, incoming) => EnterUnwindHandler(index, handler, incoming));
                 }
 
                 if (outgoing is not null)
@@ -435,16 +559,55 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (!state.Invalid && graph.Sections.Count > 0
                 && (node.EffectUnknown || node.Instruction is { } exceptionInstruction && CanThrow(exceptionInstruction)))
             {
-                foreach (var target in ExceptionTargets(graph, index))
+                foreach (var target in graph.ExceptionSearchTargets(index))
                 {
+                    if (state.SyntheticHandler is { } synthetic
+                        && !graph.Regions[target].Contains(synthetic))
+                    {
+                        continue;
+                    }
+
+                    if (InsideFilter(graph, index) && !SharesFilterRegion(graph, index, target))
+                    {
+                        continue;
+                    }
+
+                    var outgoing = QueueUnwindHandlers(state,
+                        graph.UnwindHandlersForException(index, target), finalizerEffects);
+                    if (graph.ClauseKindAt(target) != BlockKind.Filter)
+                    {
+                        outgoing = ApplyUnwindEffects(outgoing, finalizerEffects,
+                            (handler, incoming) => EnterUnwindHandler(index, handler, incoming));
+                        if (outgoing is null)
+                        {
+                            continue;
+                        }
+                    }
+
                     var entry = graph.Seeds[target] with
                     {
-                        ThisArgumentIsOriginal = state.ThisArgumentIsOriginal,
-                        FilterPaths = EnterExceptionRegion(state.FilterPaths, graph.Seeds[target]),
+                        ThisArgumentIsOriginal = outgoing.ThisArgumentIsOriginal,
+                        FilterPaths = EnterExceptionRegion(outgoing.FilterPaths, graph.Seeds[target]),
                     };
-                    Propagate(target, -index - 2, entry);
+                    Propagate(target, -index - 2, WithExceptional(entry,
+                        outgoing.PendingUnwindHandlers, state.SyntheticHandler));
                 }
             }
+        }
+
+        if (deferredEntries is not null)
+        {
+            var pendingEntries = deferredEntries;
+            deferredEntries = null;
+            foreach (var (position, seed) in pendingEntries)
+            {
+                if (before[position - start] is null)
+                {
+                    Propagate(position, -1, tracksFilterPaths ? StartFilterPaths(seed) : seed);
+                }
+            }
+
+            goto AnalyzeQueue;
         }
 
         if (validateGraph)
@@ -458,10 +621,10 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             maxStack);
     }
 
-    private static bool? FinalizerEffect(FlowGraph<T> graph, int sectionId, FlowRegion section, FlowResult<T> result)
+    private static (bool Completes, FilterPathState[] Transformations) FinalizerEffect(
+        FlowGraph<T> graph, int sectionId, FlowRegion section, FlowResult<T> result)
     {
-        var preservesThis = true;
-        var completes = false;
+        var transformations = new List<FilterPathState>();
         for (var index = section.Start; index < section.End; index++)
         {
             if (result.After[index - section.Start] is not { Invalid: false } state)
@@ -479,12 +642,907 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 continue;
             }
 
-            completes = true;
-            preservesThis &= state.ThisArgumentIsOriginal;
+            if (state.FilterPaths is not { } paths)
+            {
+                transformations.Add(new FilterPathState([], null,
+                    new Dictionary<int, FilterPathValue> { [0] = new(null, null, false) }, false,
+                    StackUnknown: true));
+                continue;
+            }
+
+            foreach (var path in ExpandFilterPaths(paths))
+            {
+                var transformation = path with
+                {
+                    Values = [],
+                    PendingUnwindEffect = null,
+                    StackUnknown = true,
+                };
+                if (!transformations.Any(candidate => SameFilterPath(candidate, transformation)))
+                {
+                    transformations.Add(transformation);
+                }
+            }
         }
 
-        return completes ? preservesThis : null;
+        return (transformations.Count > 0,
+            transformations.Count > MaxFilterPaths ? CollapseFilterPaths([.. transformations]) : [.. transformations]);
     }
+
+    private static FlowState<T> QueueUnwindHandlers(FlowState<T> state, IEnumerable<int> handlers,
+        Dictionary<int, (bool Completes, FilterPathState[] Transformations)>? effects)
+    {
+        var additions = handlers.ToArray();
+        var pending = AppendUnwindHandlers(state.PendingUnwindHandlers, additions);
+        var queued = state with
+        {
+            FilterPaths = state.FilterPaths is null ? null :
+            [
+                .. ExpandFilterPaths(state.FilterPaths).Select(path => path with
+                {
+                    PendingUnwindEffect = AppendUnwindEffect(path.PendingUnwindEffect, additions, effects),
+                }),
+            ],
+        };
+        return WithExceptional(queued, pending, state.SyntheticHandler);
+    }
+
+    private static PendingUnwindEffect? AppendUnwindEffect(PendingUnwindEffect? current,
+        IEnumerable<int> handlers,
+        Dictionary<int, (bool Completes, FilterPathState[] Transformations)>? effects)
+    {
+        var transformations = current?.Transformations
+            ?? IdentityReceiverTransformations;
+        var entries = current?.HandlerEntries.ToDictionary() ?? [];
+        var boundOutputs = current is { CorrelationLost: false } ? current.BoundOutputs : null;
+        var boundEntries = current is { CorrelationLost: false, BoundHandlerEntries: not null }
+            ? current.BoundHandlerEntries.ToDictionary() : null;
+        var changed = false;
+        foreach (var handler in handlers)
+        {
+            if (transformations.Length == 0)
+            {
+                break;
+            }
+
+            if (entries.ContainsKey(handler))
+            {
+                continue;
+            }
+
+            entries.Add(handler, transformations);
+            if (boundOutputs is not null)
+            {
+                boundEntries ??= [];
+                boundEntries.Add(handler, boundOutputs);
+            }
+            changed = true;
+            var effectTransformations = effects is not null && effects.TryGetValue(handler, out var effect)
+                && effect.Completes ? effect.Transformations : null;
+            transformations = effectTransformations is not null
+                ? ComposeReceiverTransformations(transformations, effectTransformations) : [];
+            if (boundOutputs is not null)
+            {
+                boundOutputs = effectTransformations is not null
+                    ? ApplyReceiverTransformations(boundOutputs, effectTransformations) : [];
+            }
+        }
+
+        return changed ? new PendingUnwindEffect(transformations, entries, boundOutputs, boundEntries,
+            current?.CorrelationLost == true) : current;
+    }
+
+    private static FlowState<T>? ApplyUnwindEffects(FlowState<T>? state,
+        Dictionary<int, (bool Completes, FilterPathState[] Transformations)>? effects,
+        Action<int, FlowState<T>>? enterHandler = null)
+    {
+        if (state is null || state.PendingUnwindHandlers is not { Count: > 0 } pending)
+        {
+            return state;
+        }
+
+        if (state.FilterPaths is { } paths)
+        {
+            var completed = new List<FilterPathState>();
+            var handlerInputs = new Dictionary<int, List<FilterPathState>>();
+            foreach (var path in ExpandFilterPaths(paths))
+            {
+                if (path.PendingUnwindEffect is not { } effect)
+                {
+                    AppendFilterPaths(completed, [path]);
+                    continue;
+                }
+
+                var bound = !effect.CorrelationLost && effect.BoundOutputs is not null;
+                var entries = bound ? effect.BoundHandlerEntries! : effect.HandlerEntries;
+                foreach (var (handler, transformations) in entries)
+                {
+                    if (!handlerInputs.TryGetValue(handler, out var inputs))
+                    {
+                        inputs = [];
+                        handlerInputs.Add(handler, inputs);
+                    }
+
+                    AppendFilterPaths(inputs, bound ? transformations : ApplyReceiverTransformations(
+                        [path], transformations));
+                }
+
+                if (effect.CorrelationLost && entries.Count == 0)
+                {
+                    var transformations = effect.Transformations.Length == 0
+                        ? [UnknownUnwindTransformation([path])] : effect.Transformations;
+                    var uncertain = ApplyReceiverTransformations([path], transformations);
+                    foreach (var handler in pending)
+                    {
+                        if (!handlerInputs.TryGetValue(handler, out var inputs))
+                        {
+                            inputs = [];
+                            handlerInputs.Add(handler, inputs);
+                        }
+
+                        AppendFilterPaths(inputs, uncertain);
+                    }
+                }
+
+                AppendFilterPaths(completed, bound ? effect.BoundOutputs! : ApplyReceiverTransformations(
+                    [path], effect.Transformations));
+            }
+
+            foreach (var (handler, inputs) in handlerInputs)
+            {
+                var boundedInputs = BoundFilterPaths(inputs);
+                var handlerState = state with
+                {
+                    ThisArgumentIsOriginal = boundedInputs.All(input => input.ThisArgumentIsOriginal),
+                    FilterPaths = boundedInputs,
+                };
+                enterHandler?.Invoke(handler, WithExceptional(handlerState, null, state.SyntheticHandler));
+            }
+
+            var boundedCompleted = BoundFilterPaths(completed);
+            var result = state with
+            {
+                ThisArgumentIsOriginal = boundedCompleted.All(path => path.ThisArgumentIsOriginal),
+                FilterPaths = boundedCompleted,
+            };
+            return completed.Count == 0 ? null : WithExceptional(result, null, state.SyntheticHandler);
+        }
+
+        var aggregateThis = state.ThisArgumentIsOriginal;
+        foreach (var handler in pending)
+        {
+            enterHandler?.Invoke(handler, state with { ThisArgumentIsOriginal = aggregateThis });
+
+            if (effects is null || !effects.TryGetValue(handler, out var effect)
+                || !effect.Completes)
+            {
+                return null;
+            }
+
+            aggregateThis &= EffectPreservesThis(effect.Transformations);
+        }
+
+        return WithExceptional(state with
+        {
+            ThisArgumentIsOriginal = aggregateThis,
+        }, null, state.SyntheticHandler);
+    }
+
+    private static void AddFilterPaths(List<FilterPathState> target, IEnumerable<FilterPathState> paths)
+    {
+        foreach (var path in ExpandFilterPaths(paths))
+        {
+            AddFilterPath(target, path);
+        }
+    }
+
+    private static void AppendFilterPaths(List<FilterPathState> target, IEnumerable<FilterPathState> paths) =>
+        target.AddRange(ExpandFilterPaths(paths));
+
+    private static FilterPathState[] BoundFilterPaths(List<FilterPathState> paths) =>
+        paths.Count > MaxFilterPaths ? CollapseFilterPaths([.. paths]) : [.. paths];
+
+    private static IEnumerable<FilterPathState> ExpandFilterPaths(IEnumerable<FilterPathState> paths)
+    {
+        foreach (var path in paths)
+        {
+            if (path.CorrelatedAlternatives is null or { Length: 0 })
+            {
+                yield return path.CorrelatedAlternatives is null
+                    ? path : path with { CorrelatedAlternatives = null };
+                continue;
+            }
+
+            foreach (var alternative in ExpandFilterPaths(path.CorrelatedAlternatives))
+            {
+                yield return alternative;
+            }
+        }
+    }
+
+    private static void AddFilterPath(List<FilterPathState> target, FilterPathState path)
+    {
+        if (target.Any(candidate => SameFilterPathForAccumulation(candidate, path)
+            || candidate.CorrelatedAlternatives?.Any(alternative =>
+                SameFilterPathForAccumulation(alternative, path)) == true))
+        {
+            return;
+        }
+
+        if (target.Count >= MaxFilterPaths)
+        {
+            if (target[^1].CorrelatedAlternatives is { } alternatives)
+            {
+                if (alternatives.Length > 0 && alternatives.Length < MaxCorrelatedAlternatives
+                    && (alternatives.Length < MaxFilterPaths
+                        || alternatives.All(alternative => ReceiverConditionsExcludeEachOther(
+                            alternative.ReceiverConditions, path.ReceiverConditions))))
+                {
+                    target[^1] = target[^1] with { CorrelatedAlternatives = [.. alternatives, path] };
+                    return;
+                }
+
+                var inputs = alternatives.Length == 0
+                    ? new[] { target[^1] with { CorrelatedAlternatives = null }, path }
+                    : [.. alternatives, path];
+                target[^1] = CollapseFilterPathGroup(inputs, widenUnwind: true) with
+                {
+                    CorrelatedAlternatives = [],
+                };
+                return;
+            }
+
+            var collapsed = CollapseFilterPaths([.. target, path]);
+            target.Clear();
+            target.AddRange(collapsed);
+            return;
+        }
+
+        target.Add(path);
+    }
+
+    private static bool SameFilterPathForAccumulation(FilterPathState left, FilterPathState right) =>
+        ReferenceEquals(left.ReceiverConditions, right.ReceiverConditions) && SameFilterPath(left, right);
+
+    private static FilterPathState[] CollapseFilterPaths(FilterPathState[] paths)
+    {
+        paths = [.. ExpandFilterPaths(paths)];
+        var groups = new List<List<FilterPathState>>();
+        foreach (var path in paths)
+        {
+            var group = groups.FirstOrDefault(candidate =>
+                candidate[0].ThisArgumentIsOriginal == path.ThisArgumentIsOriginal
+                && candidate[0].StackUnknown == path.StackUnknown
+                && SameFilterStackFacts(candidate[0].Values, path.Values)
+                && SameReceiverConditions(candidate[0].ReceiverConditions, path.ReceiverConditions)
+                && SameUnwindResult(candidate[0].PendingUnwindEffect, path.PendingUnwindEffect));
+            if (group is null)
+            {
+                groups.Add([path]);
+            }
+            else
+            {
+                group.Add(path);
+            }
+        }
+
+        var collapsed = groups.Select(group => CollapseFilterPathGroup(group)).ToArray();
+        if (collapsed.Length <= MaxFilterPaths)
+        {
+            return collapsed;
+        }
+
+        var result = collapsed.Take(MaxFilterPaths - 1).ToList();
+        var overflow = collapsed.Skip(MaxFilterPaths - 1).ToArray();
+        var summary = CollapseFilterPathGroup(overflow,
+            bindUnwind: overflow.Any(path => path.PendingUnwindEffect is not null));
+        result.Add(summary.CorrelatedAlternatives is null
+            ? summary with { CorrelatedAlternatives = [] } : summary);
+        return [.. result];
+    }
+
+    private static bool SameFilterStackFacts(FilterPathValue[] left, FilterPathValue[] right) =>
+        left.Length == right.Length && left.Zip(right).All(pair => pair.First.IsZero == pair.Second.IsZero
+            && pair.First.IsOne == pair.Second.IsOne && pair.First.IsThis == pair.Second.IsThis
+            && pair.First.IntegerValue == pair.Second.IntegerValue
+            && pair.First.ComparedSource == pair.Second.ComparedSource
+            && pair.First.ComparedInteger == pair.Second.ComparedInteger
+            && pair.First.IsNull == pair.Second.IsNull
+            && pair.First.ComparedOtherSource == pair.Second.ComparedOtherSource
+            && pair.First.ComparedWithNull == pair.Second.ComparedWithNull
+            && pair.First.MayBeNaN == pair.Second.MayBeNaN
+            && pair.First.IsNaN == pair.Second.IsNaN
+            && SameSet(pair.First.ExcludedIntegers, pair.Second.ExcludedIntegers)
+            && SameSet(pair.First.EqualSources, pair.Second.EqualSources)
+            && SameSet(pair.First.ExcludedSources, pair.Second.ExcludedSources));
+
+    private static FilterPathState CollapseFilterPathGroup(IReadOnlyList<FilterPathState> paths,
+        bool bindUnwind = false, bool widenUnwind = false)
+    {
+        var knownStack = paths.All(path => !path.StackUnknown)
+            && paths.Select(path => path.Values.Length).Distinct().Count() == 1;
+        var values = knownStack
+            ? Enumerable.Range(0, paths[0].Values.Length)
+                .Select(index => CollapseFilterValue(paths.Select(path => path.Values[index]))).ToArray()
+            : [];
+        return new FilterPathState(values,
+            CollapseReceiverMappings(paths, locals: true), CollapseReceiverMappings(paths, locals: false),
+            paths.All(path => path.ThisArgumentIsOriginal),
+            widenUnwind ? WidenUnwindEffects(paths)
+                : bindUnwind ? BindUnwindEffects(paths) : CollapseUnwindEffects(paths),
+            StackUnknown: !knownStack, ReceiverConditions: CollapseReceiverConditions(paths),
+            CorrelatedAlternatives: RetainCorrelatedAlternatives(paths));
+    }
+
+    private static PendingUnwindEffect? WidenUnwindEffects(IReadOnlyList<FilterPathState> paths)
+    {
+        if (paths.All(path => path.PendingUnwindEffect is null))
+        {
+            return null;
+        }
+
+        var transformation = UnknownUnwindTransformation(paths);
+        return new PendingUnwindEffect([transformation], new Dictionary<int, FilterPathState[]>(),
+            CorrelationLost: true);
+    }
+
+    private static FilterPathState UnknownUnwindTransformation(
+        IEnumerable<FilterPathState> paths)
+    {
+        var localKeys = new HashSet<int>();
+        var argumentKeys = new HashSet<int> { 0 };
+        foreach (var path in ExpandFilterPaths(paths))
+        {
+            if (path.PendingUnwindEffect is not { } effect)
+            {
+                continue;
+            }
+
+            foreach (var state in ExpandFilterPaths(UnwindReceiverStates(effect)))
+            {
+                localKeys.UnionWith(state.Locals?.Keys ?? []);
+                argumentKeys.UnionWith(state.Arguments?.Keys ?? []);
+            }
+        }
+
+        var locals = localKeys.Count == 0 ? null : localKeys.ToDictionary(
+            key => key, _ => UnknownReceiverValue);
+        var arguments = argumentKeys.ToDictionary(key => key, _ => UnknownReceiverValue);
+        return new FilterPathState([], locals, arguments, false, StackUnknown: true);
+    }
+
+    private static IEnumerable<FilterPathState> UnwindReceiverStates(PendingUnwindEffect effect)
+    {
+        foreach (var transformation in effect.Transformations)
+        {
+            yield return transformation;
+        }
+
+        foreach (var entry in effect.HandlerEntries.Values.SelectMany(entries => entries))
+        {
+            yield return entry;
+        }
+
+        foreach (var output in effect.BoundOutputs ?? [])
+        {
+            yield return output;
+        }
+
+        foreach (var entry in effect.BoundHandlerEntries?.Values.SelectMany(entries => entries) ?? [])
+        {
+            yield return entry;
+        }
+    }
+
+    private static Dictionary<int, FilterPathValue>? CollapseReceiverConditions(
+        IReadOnlyList<FilterPathState> paths)
+    {
+        if (paths[0].ReceiverConditions is not { } first)
+        {
+            return null;
+        }
+
+        var result = new Dictionary<int, FilterPathValue>();
+        foreach (var (source, condition) in first)
+        {
+            if (paths.Skip(1).All(path => path.ReceiverConditions?.TryGetValue(source, out var candidate) == true
+                && SameFilterValue(condition, candidate)))
+            {
+                result.Add(source, condition);
+            }
+        }
+
+        return result.Count == 0 ? null : result;
+    }
+
+    private static FilterPathState[]? RetainCorrelatedAlternatives(IReadOnlyList<FilterPathState> paths)
+    {
+        if (paths.Count is < 2 or > MaxCorrelatedAlternatives)
+        {
+            return null;
+        }
+
+        var mutuallyExclusive = paths.Count <= MaxFilterPaths
+            || paths.Select((path, index) => (path, index)).All(left =>
+                paths.Skip(left.index + 1).All(right => ReceiverConditionsExcludeEachOther(
+                    left.path.ReceiverConditions, right.ReceiverConditions)));
+        if (!mutuallyExclusive)
+        {
+            return null;
+        }
+
+        return [.. paths.Select(path => path with { CorrelatedAlternatives = null })];
+    }
+
+    private static bool ReceiverConditionsExcludeEachOther(
+        IReadOnlyDictionary<int, FilterPathValue>? left,
+        IReadOnlyDictionary<int, FilterPathValue>? right) => left is not null && right is not null
+        && left.Any(pair => right.TryGetValue(pair.Key, out var condition)
+            && !ConditionsCompatible(pair.Value, condition));
+
+    private static PendingUnwindEffect BindUnwindEffects(IReadOnlyList<FilterPathState> paths)
+    {
+        var outputs = new List<FilterPathState>();
+        var handlerEntries = new Dictionary<int, List<FilterPathState>>();
+        var rawTransformations = new List<FilterPathState>();
+        var rawHandlerEntries = new Dictionary<int, List<FilterPathState>>();
+        var correlationLost = false;
+        foreach (var path in ExpandFilterPaths(paths))
+        {
+            var effect = path.PendingUnwindEffect;
+            AddFilterPaths(rawTransformations, effect?.Transformations ?? IdentityReceiverTransformations);
+            MergeHandlerEntries(rawHandlerEntries, effect?.HandlerEntries);
+            if (effect?.CorrelationLost == true)
+            {
+                correlationLost = true;
+                continue;
+            }
+
+            AppendFilterPaths(outputs, effect?.BoundOutputs ?? ApplyReceiverTransformations(
+                [path], effect?.Transformations ?? IdentityReceiverTransformations));
+            var entries = effect?.BoundHandlerEntries ?? effect?.HandlerEntries.ToDictionary(pair => pair.Key,
+                pair => ApplyReceiverTransformations([path], pair.Value));
+            if (entries is not null)
+            {
+                MergeHandlerEntries(handlerEntries, entries);
+            }
+        }
+
+        return new PendingUnwindEffect([.. rawTransformations], ToHandlerEntryArrays(rawHandlerEntries),
+            correlationLost ? null : BoundFilterPaths(outputs),
+            correlationLost ? null : ToHandlerEntryArrays(handlerEntries), correlationLost);
+    }
+
+    private static void MergeHandlerEntries(Dictionary<int, List<FilterPathState>> target,
+        IReadOnlyDictionary<int, FilterPathState[]>? source)
+    {
+        if (source is null)
+        {
+            return;
+        }
+
+        foreach (var (handler, inputs) in source)
+        {
+            if (!target.TryGetValue(handler, out var aggregate))
+            {
+                aggregate = [];
+                target.Add(handler, aggregate);
+            }
+
+            AddFilterPaths(aggregate, inputs);
+        }
+    }
+
+    private static Dictionary<int, FilterPathState[]> ToHandlerEntryArrays(
+        Dictionary<int, List<FilterPathState>> entries) => entries.ToDictionary(
+        pair => pair.Key, pair => pair.Value.ToArray());
+
+    private static PendingUnwindEffect? CollapseUnwindEffects(IReadOnlyList<FilterPathState> paths)
+    {
+        if (paths.All(path => path.PendingUnwindEffect is null))
+        {
+            return null;
+        }
+
+        if (paths.Any(path => path.PendingUnwindEffect?.BoundOutputs is not null))
+        {
+            return BindUnwindEffects(paths);
+        }
+
+        var transformations = new List<FilterPathState>();
+        var handlerEntries = new Dictionary<int, List<FilterPathState>>();
+        foreach (var path in paths)
+        {
+            var effect = path.PendingUnwindEffect;
+            AddFilterPaths(transformations, effect?.Transformations ?? IdentityReceiverTransformations);
+            if (effect is null)
+            {
+                continue;
+            }
+
+            foreach (var (handler, entries) in effect.HandlerEntries)
+            {
+                if (!handlerEntries.TryGetValue(handler, out var aggregate))
+                {
+                    aggregate = [];
+                    handlerEntries.Add(handler, aggregate);
+                }
+
+                AddFilterPaths(aggregate, entries);
+            }
+        }
+
+        return new PendingUnwindEffect([.. transformations], handlerEntries.ToDictionary(
+            pair => pair.Key, pair => pair.Value.ToArray()));
+    }
+
+    private static FilterPathValue CollapseFilterValue(IEnumerable<FilterPathValue> values)
+    {
+        var entries = values.ToArray();
+        var sources = entries.SelectMany(ReceiverSourcesOf).Distinct().Order().ToArray();
+        var hasNonSource = sources.Length > 0 && entries.Any(value =>
+            value.HasNonSourceAlternative || !ReceiverSourcesOf(value).Any());
+        var comparisons = entries.Select(value => (value.ComparedSource, value.ComparedInteger,
+            value.ComparedOtherSource, value.ComparedWithNull)).Distinct().ToArray();
+        return new FilterPathValue(
+            entries.Select(value => value.IsZero).Distinct().Count() == 1 ? entries[0].IsZero : null,
+            entries.Select(value => value.IsOne).Distinct().Count() == 1 ? entries[0].IsOne : null,
+            entries.All(value => value.IsThis), sources.Length == 1 ? sources[0] : null,
+            sources.Length > 1 ? sources : null, hasNonSource,
+            entries.Select(value => value.IntegerValue).Distinct().Count() == 1
+                ? entries[0].IntegerValue : null,
+            IntersectExcludedIntegers(entries),
+            comparisons.Length == 1 ? comparisons[0].ComparedSource : null,
+            comparisons.Length == 1 ? comparisons[0].ComparedInteger : null,
+            entries.Select(value => value.IsNull).Distinct().Count() == 1 ? entries[0].IsNull : null,
+            comparisons.Length == 1 ? comparisons[0].ComparedOtherSource : null,
+            comparisons.Length == 1 && comparisons[0].ComparedWithNull,
+            IntersectSourceSet(entries, equal: true), IntersectSourceSet(entries, equal: false),
+            entries.Any(value => value.MayBeNaN),
+            entries.Select(value => value.IsNaN).Distinct().Count() == 1 ? entries[0].IsNaN : null);
+    }
+
+    private static int[]? IntersectSourceSet(FilterPathValue[] values, bool equal)
+    {
+        var first = equal ? values[0].EqualSources : values[0].ExcludedSources;
+        if (first is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var result = first.Where(source => values.Skip(1).All(candidate =>
+            (equal ? candidate.EqualSources : candidate.ExcludedSources)?.Contains(source) == true))
+            .Distinct().Order().ToArray();
+        return result.Length == 0 ? null : result;
+    }
+
+    private static long[]? IntersectExcludedIntegers(FilterPathValue[] values)
+    {
+        if (values[0].ExcludedIntegers is not { Count: > 0 } first)
+        {
+            return null;
+        }
+
+        var result = first.Where(value => values.Skip(1)
+            .All(candidate => candidate.ExcludedIntegers?.Contains(value) == true)).Distinct().Order().ToArray();
+        return result.Length == 0 ? null : result;
+    }
+
+    private static Dictionary<int, FilterPathValue>? CollapseReceiverMappings(
+        IReadOnlyList<FilterPathState> paths, bool locals)
+    {
+        var keys = paths.SelectMany(path => (locals ? path.Locals : path.Arguments)?.Keys ?? []).Distinct().ToArray();
+        if (keys.Length == 0)
+        {
+            return null;
+        }
+
+        var result = new Dictionary<int, FilterPathValue>();
+        foreach (var key in keys)
+        {
+            var values = paths.Select(path =>
+            {
+                var mappings = locals ? path.Locals : path.Arguments;
+                return mappings?.TryGetValue(key, out var value) == true ? value
+                    : new FilterPathValue(null, null, !locals && key == 0 && path.ThisArgumentIsOriginal,
+                        locals ? ~key : key);
+            }).ToArray();
+            result[key] = CollapseFilterValue(values);
+        }
+
+        return result;
+    }
+
+    private static FilterPathValue ReceiverFrom(FilterPathState path, FilterPathValue source)
+    {
+        var candidates = ReceiverSourcesOf(source)
+            .Select(value => ReceiverFrom(path, value)).ToList();
+        if (candidates.Count == 0 || source.HasNonSourceAlternative)
+        {
+            candidates.Add(new FilterPathValue(source.IsZero, source.IsOne, source.IsThis,
+                IntegerValue: source.IntegerValue, ExcludedIntegers: source.ExcludedIntegers,
+                ComparedSource: source.ComparedSource, ComparedInteger: source.ComparedInteger,
+                IsNull: source.IsNull, ComparedOtherSource: source.ComparedOtherSource,
+                ComparedWithNull: source.ComparedWithNull, EqualSources: source.EqualSources,
+                ExcludedSources: source.ExcludedSources, MayBeNaN: source.MayBeNaN,
+                IsNaN: source.IsNaN));
+        }
+
+        return CollapseFilterValue(candidates);
+    }
+
+    private static FilterPathValue ReceiverFrom(FilterPathState path, int source)
+    {
+        if (path.Arguments?.TryGetValue(source, out var value) == true)
+        {
+            return value;
+        }
+
+        if (source < 0 && path.Locals?.TryGetValue(~source, out value) == true)
+        {
+            return value;
+        }
+
+        return new FilterPathValue(null, null, source == 0 && path.ThisArgumentIsOriginal, source);
+    }
+
+    private static bool TryApplyReceiverConditions(FilterPathState path,
+        IReadOnlyDictionary<int, FilterPathValue>? required,
+        out IReadOnlyDictionary<int, FilterPathValue>? result)
+    {
+        result = path.ReceiverConditions;
+        if (required is null)
+        {
+            return true;
+        }
+
+        foreach (var (input, condition) in required)
+        {
+            var actual = ReceiverFrom(path, input);
+            var mappedCondition = RemapReceiverCondition(path, condition);
+            if (!ConditionsCompatible(actual, mappedCondition))
+            {
+                return false;
+            }
+
+            var sources = ReceiverSourcesOf(actual).ToArray();
+            if (sources is [var source] && !actual.HasNonSourceAlternative
+                && !TryAddReceiverCondition(result, source, mappedCondition, out result))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static FilterPathValue RemapReceiverCondition(FilterPathState path, FilterPathValue condition) =>
+        condition with
+        {
+            EqualSources = RemapReceiverSources(path, condition.EqualSources),
+            ExcludedSources = RemapReceiverSources(path, condition.ExcludedSources),
+        };
+
+    private static int[]? RemapReceiverSources(FilterPathState path, IReadOnlyList<int>? sources)
+    {
+        if (sources is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var result = new List<int>();
+        foreach (var source in sources)
+        {
+            var mapped = ReceiverSourcesOf(ReceiverFrom(path, source)).ToArray();
+            if (mapped is not [var single])
+            {
+                return null;
+            }
+
+            result.Add(single);
+        }
+
+        return [.. result.Distinct().Order()];
+    }
+
+    private static bool TryApplyReceiverTransformation(FilterPathState path,
+        FilterPathState transformation, out FilterPathState result)
+    {
+        result = path;
+        if (!TryApplyReceiverConditions(path, transformation.ReceiverConditions, out var conditions))
+        {
+            return false;
+        }
+
+        var arguments = path.Arguments is null ? null : new Dictionary<int, FilterPathValue>(path.Arguments);
+        if (transformation.Arguments is { } argumentTransformations)
+        {
+            foreach (var (target, value) in argumentTransformations)
+            {
+                arguments ??= [];
+                arguments[target] = ReceiverFrom(path, value);
+            }
+        }
+
+        var locals = path.Locals is null ? null : new Dictionary<int, FilterPathValue>(path.Locals);
+        if (transformation.Locals is { } localTransformations)
+        {
+            foreach (var (target, value) in localTransformations)
+            {
+                locals ??= [];
+                locals[target] = ReceiverFrom(path, value);
+            }
+        }
+
+        var original = arguments?.TryGetValue(0, out var receiver) == true
+            ? receiver.IsThis : path.ThisArgumentIsOriginal;
+        result = path with
+        {
+            Arguments = arguments,
+            Locals = locals,
+            ThisArgumentIsOriginal = original,
+            PendingUnwindEffect = null,
+            ReceiverConditions = conditions,
+        };
+        return true;
+    }
+
+    private static FilterPathState[] ComposeReceiverTransformations(FilterPathState[] preceding,
+        FilterPathState[] following)
+    {
+        var result = new List<FilterPathState>();
+        foreach (var left in ExpandFilterPaths(preceding))
+        {
+            foreach (var right in ExpandFilterPaths(following))
+            {
+                if (TryComposeReceiverTransformation(left, right, out var composed))
+                {
+                    if (!result.Any(candidate => SameFilterPath(candidate, composed)))
+                    {
+                        result.Add(composed);
+                    }
+                }
+            }
+        }
+
+        return result.Count > MaxFilterPaths ? CollapseFilterPaths([.. result]) : [.. result];
+    }
+
+    private static FilterPathState[] ApplyReceiverTransformations(FilterPathState[] inputs,
+        FilterPathState[] transformations)
+    {
+        var result = new List<FilterPathState>();
+        foreach (var input in ExpandFilterPaths(inputs))
+        {
+            foreach (var transformation in ExpandFilterPaths(transformations))
+            {
+                if (TryApplyReceiverTransformation(input, transformation, out var output))
+                {
+                    if (!result.Any(candidate => SameFilterPath(candidate, output)))
+                    {
+                        result.Add(output);
+                    }
+                }
+            }
+        }
+
+        return result.Count > MaxFilterPaths ? CollapseFilterPaths([.. result]) : [.. result];
+    }
+
+    private static bool TryComposeReceiverTransformation(FilterPathState preceding,
+        FilterPathState following, out FilterPathState result)
+    {
+        result = preceding;
+        if (!TryApplyReceiverConditions(preceding, following.ReceiverConditions, out var conditions))
+        {
+            return false;
+        }
+
+        var arguments = preceding.Arguments is null ? null
+            : new Dictionary<int, FilterPathValue>(preceding.Arguments);
+        if (following.Arguments is { } followingArguments)
+        {
+            foreach (var (target, value) in followingArguments)
+            {
+                arguments ??= [];
+                arguments[target] = SubstituteReceiverSources(preceding, value);
+            }
+        }
+
+        var locals = preceding.Locals is null ? null
+            : new Dictionary<int, FilterPathValue>(preceding.Locals);
+        if (following.Locals is { } followingLocals)
+        {
+            foreach (var (target, value) in followingLocals)
+            {
+                locals ??= [];
+                locals[target] = SubstituteReceiverSources(preceding, value);
+            }
+        }
+
+        var original = arguments?.TryGetValue(0, out var receiver) != true || receiver.IsThis;
+        result = new FilterPathState([], locals, arguments, original,
+            ReceiverConditions: conditions);
+        return true;
+    }
+
+    private static FilterPathValue SubstituteReceiverSources(FilterPathState preceding,
+        FilterPathValue value)
+    {
+        var candidates = new List<FilterPathValue>();
+        foreach (var source in ReceiverSourcesOf(value))
+        {
+            var mappings = source < 0 ? preceding.Locals : preceding.Arguments;
+            var key = source < 0 ? ~source : source;
+            candidates.Add(mappings?.TryGetValue(key, out var mapped) == true ? mapped
+                : new FilterPathValue(null, null, source == 0, source));
+        }
+
+        if (candidates.Count == 0 || value.HasNonSourceAlternative)
+        {
+            candidates.Add(new FilterPathValue(value.IsZero, value.IsOne, value.IsThis,
+                IntegerValue: value.IntegerValue, ExcludedIntegers: value.ExcludedIntegers,
+                ComparedSource: value.ComparedSource, ComparedInteger: value.ComparedInteger,
+                IsNull: value.IsNull, ComparedOtherSource: value.ComparedOtherSource,
+                ComparedWithNull: value.ComparedWithNull, EqualSources: value.EqualSources,
+                ExcludedSources: value.ExcludedSources, MayBeNaN: value.MayBeNaN,
+                IsNaN: value.IsNaN));
+        }
+
+        return CollapseFilterValue(candidates);
+    }
+
+    private static IEnumerable<int> ReceiverSourcesOf(FilterPathValue value)
+    {
+        if (value.ReceiverSources is not null)
+        {
+            return value.ReceiverSources;
+        }
+
+        return value.ReceiverSource is { } source ? [source] : [];
+    }
+
+    private static bool EffectPreservesThis(FilterPathState[] transformations) => transformations.All(transformation =>
+        transformation.Arguments?.TryGetValue(0, out var receiver) != true
+        || !receiver.HasNonSourceAlternative && ReceiverSourcesOf(receiver).SequenceEqual([0]));
+
+    private static List<int>? AppendUnwindHandlers(IReadOnlyList<int>? pending,
+        IEnumerable<int> handlers)
+    {
+        var result = pending is null ? [] : new List<int>(pending);
+        foreach (var handler in handlers)
+        {
+            if (!result.Contains(handler))
+            {
+                result.Add(handler);
+            }
+        }
+
+        return result.Count == 0 ? null : result;
+    }
+
+    private static List<int>? MergeUnwindHandlers(IReadOnlyList<int>? left,
+        IReadOnlyList<int>? right) => AppendUnwindHandlers(left, right ?? []);
+
+    private static FlowState<T> WithExceptional(FlowState<T> state,
+        IReadOnlyList<int>? pending, int? synthetic)
+    {
+        if (pending is not null || synthetic is not null)
+        {
+            return new ExceptionalFlowState<T>(state, pending, synthetic);
+        }
+
+        return state is ExceptionalFlowState<T>
+            ? new FlowState<T>(state.Values, state.HasUnknownPath, state.Invalid,
+                state.ThisArgumentIsOriginal, state.FilterPaths)
+            : state;
+    }
+
+    private static bool SameUnwindHandlers(IReadOnlyList<int>? left, IReadOnlyList<int>? right) =>
+        left is null && right is null || left is not null && right is not null
+            && left.SequenceEqual(right);
+
+    private static int? MergeSyntheticHandler(int? left, int? right) => left == right ? left : null;
 
     private string? ValidateStructure(StackOperandView<T> view, FlowGraph<T> graph, int index)
     {
@@ -1284,40 +2342,15 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         return false;
     }
 
-    private static IEnumerable<int> ExceptionTargets(FlowGraph<T> graph, int index)
-    {
-        HashSet<int>? groups = null;
-        foreach (var section in graph.Sections.Values)
-        {
-            if (section.Kind == BlockKind.Try && index >= section.Start && index < section.End)
-            {
-                (groups ??= []).Add(section.Group);
-            }
-        }
-
-        if (groups is null)
-        {
-            yield break;
-        }
-
-        var targets = new HashSet<int>();
-        foreach (var section in graph.Sections.Values)
-        {
-            if (section.Kind is not (BlockKind.Try or BlockKind.FilterHandler) && groups.Contains(section.Group)
-                && graph.Seeds.ContainsKey(section.Start) && targets.Add(section.Start))
-            {
-                yield return section.Start;
-            }
-        }
-    }
-
     private bool TryMerge(FlowState<T> left, FlowState<T> right, out FlowState<T> merged)
     {
         merged = left;
         if (left.Invalid || right.Invalid)
         {
-            merged = new FlowState<T>(null, Invalid: true,
-                ThisArgumentIsOriginal: left.ThisArgumentIsOriginal && right.ThisArgumentIsOriginal);
+            merged = WithExceptional(new FlowState<T>(null, Invalid: true,
+                ThisArgumentIsOriginal: left.ThisArgumentIsOriginal && right.ThisArgumentIsOriginal),
+                MergeUnwindHandlers(left.PendingUnwindHandlers, right.PendingUnwindHandlers),
+                MergeSyntheticHandler(left.SyntheticHandler, right.SyntheticHandler));
             return true;
         }
 
@@ -1326,8 +2359,10 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         var filterPaths = MergeFilterPaths(left.FilterPaths, right.FilterPaths);
         if (left.Values is not { } a || right.Values is not { } b)
         {
-            merged = new FlowState<T>(left.Values ?? right.Values, unknown,
-                ThisArgumentIsOriginal: thisArgumentIsOriginal, FilterPaths: filterPaths);
+            merged = WithExceptional(new FlowState<T>(left.Values ?? right.Values, unknown,
+                ThisArgumentIsOriginal: thisArgumentIsOriginal, FilterPaths: filterPaths),
+                MergeUnwindHandlers(left.PendingUnwindHandlers, right.PendingUnwindHandlers),
+                MergeSyntheticHandler(left.SyntheticHandler, right.SyntheticHandler));
             return true;
         }
 
@@ -1348,8 +2383,10 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 a[i].IsThis && b[i].IsThis, a[i].IsReadOnly || b[i].IsReadOnly);
         }
 
-        merged = new FlowState<T>(values, unknown, ThisArgumentIsOriginal: thisArgumentIsOriginal,
-            FilterPaths: filterPaths);
+        merged = WithExceptional(new FlowState<T>(values, unknown,
+            ThisArgumentIsOriginal: thisArgumentIsOriginal, FilterPaths: filterPaths),
+            MergeUnwindHandlers(left.PendingUnwindHandlers, right.PendingUnwindHandlers),
+            MergeSyntheticHandler(left.SyntheticHandler, right.SyntheticHandler));
         return true;
     }
 
@@ -1357,7 +2394,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     {
         if (left.Invalid != right.Invalid || left.HasUnknownPath != right.HasUnknownPath
             || left.ThisArgumentIsOriginal != right.ThisArgumentIsOriginal || left.Values?.Length != right.Values?.Length
-            || !SameFilterPaths(left.FilterPaths, right.FilterPaths))
+            || !SameFilterPaths(left.FilterPaths, right.FilterPaths)
+            || !SameUnwindHandlers(left.PendingUnwindHandlers, right.PendingUnwindHandlers)
+            || left.SyntheticHandler != right.SyntheticHandler)
         {
             return false;
         }
@@ -1382,17 +2421,82 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     private static bool InsideFilter(FlowGraph<T> graph, int index) => graph.Regions[index]
         .Any(section => graph.Sections[section].Kind == BlockKind.Filter);
 
-    private FilterPathState[]? TransferFilterPaths(FilterPathState[]? paths, StackOperandView<T> view,
-        int pops, int pushes, FlowValue<T>[] popped)
+    private static bool SharesFilterRegion(FlowGraph<T> graph, int source, int target)
     {
-        if (paths is null || paths.Any(path => path.Values.Length < pops))
+        var filter = graph.Regions[source].Reverse()
+            .FirstOrDefault(section => graph.Sections[section].Kind == BlockKind.Filter, -1);
+        return filter >= 0 && graph.Regions[target].Contains(filter);
+    }
+
+    private FilterPathState[]? TransferFilterPaths(FilterPathState[]? paths, StackOperandView<T> view,
+        int pops, int pushes, FlowValue<T>[] popped, bool bounded = true)
+    {
+        if (paths is null)
         {
             return null;
         }
 
-        var result = new List<FilterPathState>();
-        foreach (var path in paths)
+        if (paths.Any(path => path.CorrelatedAlternatives is not null))
         {
+            var preserved = new List<FilterPathState>();
+            foreach (var path in paths)
+            {
+                if (path.CorrelatedAlternatives is null)
+                {
+                    var transformed = TransferFilterPaths([path], view, pops, pushes, popped, bounded: false);
+                    if (transformed is null)
+                    {
+                        return null;
+                    }
+
+                    preserved.AddRange(transformed);
+                    continue;
+                }
+
+                var summary = TransferFilterPaths(
+                    [path with { CorrelatedAlternatives = null }], view, pops, pushes, popped, bounded: false);
+                if (summary is not [var transformedSummary])
+                {
+                    return null;
+                }
+
+                if (path.CorrelatedAlternatives.Length == 0)
+                {
+                    preserved.Add(transformedSummary with { CorrelatedAlternatives = [] });
+                    continue;
+                }
+
+                var alternatives = TransferFilterPaths(
+                    path.CorrelatedAlternatives, view, pops, pushes, popped, bounded: false);
+                if (alternatives is null)
+                {
+                    return null;
+                }
+
+                preserved.Add(transformedSummary with { CorrelatedAlternatives = alternatives });
+            }
+
+            return [.. preserved];
+        }
+
+        var result = new List<FilterPathState>();
+        foreach (var path in ExpandFilterPaths(paths))
+        {
+            if (path.StackUnknown)
+            {
+                var unknown = TransferUnknownFilterPath(path, view);
+                if (!result.Any(existing => SameFilterPath(existing, unknown)))
+                {
+                    result.Add(unknown);
+                }
+                continue;
+            }
+
+            if (path.Values.Length < pops)
+            {
+                return null;
+            }
+
             var pathPopped = path.Values.TakeLast(pops).ToArray();
             var output = path.Values.Take(path.Values.Length - pops).ToList();
             var locals = path.Locals is null ? null : new Dictionary<int, FilterPathValue>(path.Locals);
@@ -1409,22 +2513,43 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
             else if (LoadsLocalAddress(view) && view.LocalIndex is { } exposedLocal)
             {
-                locals?.Remove(exposedLocal);
-                locals = locals?.Count == 0 ? null : locals;
+                locals ??= [];
+                locals[exposedLocal] = new FilterPathValue(null, null, false);
             }
             else if (LoadsArgumentAddress(view) && view.ArgumentIndex is { } exposedArgument)
             {
-                arguments?.Remove(exposedArgument);
-                arguments = arguments?.Count == 0 ? null : arguments;
+                arguments ??= [];
+                arguments[exposedArgument] = new FilterPathValue(null, null, false);
             }
 
             var pushed = LoadsLocal(view) && view.LocalIndex is { } loadedLocal
                 && locals?.TryGetValue(loadedLocal, out var local) == true ? local
+                : LoadsLocal(view) && view.LocalIndex is { } receiverLocal
+                    ? ConstantFilterValue(view, false) with
+                    {
+                        ReceiverSource = ~receiverLocal,
+                        ReceiverSources = null,
+                        HasNonSourceAlternative = false,
+                    }
                 : LoadsArgument(view) && view.ArgumentIndex is { } loadedArgument
                     && arguments?.TryGetValue(loadedArgument, out var argument) == true ? argument
+                : LoadsArgument(view) && view.ArgumentIndex is { } receiverSource
+                    ? ConstantFilterValue(view, view.ReadsThisArgument && path.ThisArgumentIsOriginal) with
+                    {
+                        ReceiverSource = receiverSource,
+                        ReceiverSources = null,
+                        HasNonSourceAlternative = false,
+                    }
                 : PreservesFilterDecision(view, popped)
-                    ? new FilterPathValue(pathPopped[^1].IsZero, pathPopped[^1].IsOne, false)
+                    ? pathPopped[^1] with { IsThis = false }
                 : ConstantFilterValue(view, view.ReadsThisArgument && path.ThisArgumentIsOriginal);
+            if (view.SlotType is { } slotType && _types.Category(slotType) == StackCategory.Float
+                && (LoadsLocal(view) || LoadsArgument(view)))
+            {
+                pushed = pushed with { MayBeNaN = true };
+            }
+            pushed = RefineComputedFilterValue(view, pathPopped, pushed);
+            pushed = ApplyReceiverConditions(pushed, path.ReceiverConditions);
             for (var index = 0; index < pushes; index++)
             {
                 output.Add(view.Op == OpCodes.Dup ? pathPopped[0] : pushed);
@@ -1438,20 +2563,220 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             var thisArgumentIsOriginal = view.WritesThisArgument ? pathPopped[^1].IsThis
                 : view.ReadsThisArgument && view.Op.Name is "ldarga" or "ldarga.s" ? false
                 : path.ThisArgumentIsOriginal;
-            var next = new FilterPathState([.. output], locals, arguments, thisArgumentIsOriginal);
-            if (!result.Any(existing => SameFilterPath(existing, next)))
-            {
-                if (result.Count == MaxFilterPaths)
-                {
-                    return null;
-                }
+            var pendingEffect = InvalidatesBoundUnwind(view) && path.PendingUnwindEffect?.BoundOutputs is not null
+                ? path.PendingUnwindEffect with { CorrelationLost = true }
+                : path.PendingUnwindEffect;
+            var next = new FilterPathState([.. output], locals, arguments, thisArgumentIsOriginal,
+                pendingEffect, ReceiverConditions: path.ReceiverConditions);
+            result.Add(next);
+        }
 
-                result.Add(next);
+        return bounded && result.Count > MaxFilterPaths ? CollapseFilterPaths([.. result]) : [.. result];
+    }
+
+    private static FilterPathValue RefineComputedFilterValue(StackOperandView<T> view,
+        FilterPathValue[] inputs, FilterPathValue fallback)
+    {
+        if (view.Op != OpCodes.Ceq || inputs.Length != 2)
+        {
+            return fallback;
+        }
+
+        return EqualityFilterValue(inputs[0], inputs[1], fallback);
+    }
+
+    private static FilterPathValue EqualityFilterValue(
+        FilterPathValue left, FilterPathValue right, FilterPathValue fallback)
+    {
+        if (KnownEqual(left, right) is { } equal)
+        {
+            return new FilterPathValue(!equal, equal, false, IntegerValue: equal ? 1 : 0);
+        }
+
+        var leftSources = ReceiverSourcesOf(left).ToArray();
+        var rightSources = ReceiverSourcesOf(right).ToArray();
+        if (!left.HasNonSourceAlternative && !right.HasNonSourceAlternative
+            && leftSources is [var leftSource] && rightSources is [var rightSource])
+        {
+            return new FilterPathValue(null, null, false,
+                ComparedSource: leftSource, ComparedOtherSource: rightSource,
+                MayBeNaN: left.MayBeNaN || right.MayBeNaN);
+        }
+
+        if (EqualitySource(left, right) is { } comparison)
+        {
+            return new FilterPathValue(null, null, false,
+                ComparedSource: comparison.Source, ComparedInteger: comparison.Integer,
+                ComparedWithNull: comparison.WithNull);
+        }
+
+        return fallback;
+    }
+
+    private static (int Source, long? Integer, bool WithNull)? EqualitySource(
+        FilterPathValue left, FilterPathValue right)
+    {
+        var rightSources = ReceiverSourcesOf(right).ToArray();
+        if (left.IntegerValue is { } leftInteger && rightSources is [var rightSource]
+            && !right.HasNonSourceAlternative)
+        {
+            return (rightSource, leftInteger, false);
+        }
+
+        if (left.IsNull == true && rightSources is [var nullComparedSource]
+            && !right.HasNonSourceAlternative)
+        {
+            return (nullComparedSource, null, true);
+        }
+
+        var leftSources = ReceiverSourcesOf(left).ToArray();
+        if (right.IntegerValue is { } rightInteger && leftSources is [var leftSource]
+            && !left.HasNonSourceAlternative)
+        {
+            return (leftSource, rightInteger, false);
+        }
+
+        return right.IsNull == true && leftSources is [var otherNullComparedSource]
+            && !left.HasNonSourceAlternative ? (otherNullComparedSource, null, true) : null;
+    }
+
+    private static bool? KnownEqual(FilterPathValue left, FilterPathValue right)
+    {
+        if (left.IsNaN == true || right.IsNaN == true)
+        {
+            return false;
+        }
+
+        if (left.IntegerValue is { } leftInteger && right.IntegerValue is { } rightInteger)
+        {
+            return leftInteger == rightInteger;
+        }
+
+        if (left.IsNull == true && right.IsNull is { } rightNull)
+        {
+            return rightNull;
+        }
+
+        if (right.IsNull == true && left.IsNull is { } leftNull)
+        {
+            return leftNull;
+        }
+
+        var leftSources = ReceiverSourcesOf(left).ToArray();
+        var rightSources = ReceiverSourcesOf(right).ToArray();
+        if (!left.HasNonSourceAlternative && !right.HasNonSourceAlternative
+            && leftSources is [var leftSource] && rightSources is [var rightSource])
+        {
+            if (left.EqualSources?.Contains(rightSource) == true
+                || right.EqualSources?.Contains(leftSource) == true)
+            {
+                return true;
+            }
+
+            if (left.ExcludedSources?.Contains(rightSource) == true
+                || right.ExcludedSources?.Contains(leftSource) == true)
+            {
+                return false;
+            }
+
+            if (leftSource == rightSource
+                && (left.IsNaN == false || !left.MayBeNaN)
+                && (right.IsNaN == false || !right.MayBeNaN))
+            {
+                return true;
             }
         }
 
-        return [.. result];
+        if (left.IntegerValue is { } excludedLeft && right.ExcludedIntegers?.Contains(excludedLeft) == true
+            || right.IntegerValue is { } excludedRight && left.ExcludedIntegers?.Contains(excludedRight) == true)
+        {
+            return false;
+        }
+
+        if (left.IntegerValue == 0 && right.IsZero is { } rightZero)
+        {
+            return rightZero;
+        }
+
+        if (right.IntegerValue == 0 && left.IsZero is { } leftZero)
+        {
+            return leftZero;
+        }
+
+        if (left.IntegerValue == 1 && right.IsOne is { } rightOne)
+        {
+            return rightOne;
+        }
+
+        return right.IntegerValue == 1 && left.IsOne is { } leftOne ? leftOne : null;
     }
+
+    private static FilterPathValue ApplyReceiverConditions(FilterPathValue value,
+        IReadOnlyDictionary<int, FilterPathValue>? conditions)
+    {
+        var sources = ReceiverSourcesOf(value).ToArray();
+        if (sources is not [var source] || value.HasNonSourceAlternative
+            || conditions?.TryGetValue(source, out var condition) != true
+            || !TryMergeReceiverCondition(value, condition, out var merged))
+        {
+            return value;
+        }
+
+        return merged with
+        {
+            IsThis = value.IsThis,
+            ReceiverSource = value.ReceiverSource,
+            ReceiverSources = value.ReceiverSources,
+            HasNonSourceAlternative = value.HasNonSourceAlternative,
+            MayBeNaN = value.MayBeNaN,
+        };
+    }
+
+    private static FilterPathState TransferUnknownFilterPath(FilterPathState path, StackOperandView<T> view)
+    {
+        var unknown = new FilterPathValue(null, null, false);
+        var locals = path.Locals is null ? null : new Dictionary<int, FilterPathValue>(path.Locals);
+        var arguments = path.Arguments is null ? null : new Dictionary<int, FilterPathValue>(path.Arguments);
+        if (StoresLocal(view) && view.LocalIndex is { } storedLocal)
+        {
+            locals ??= [];
+            locals[storedLocal] = unknown;
+        }
+        else if (StoresArgument(view) && view.ArgumentIndex is { } storedArgument)
+        {
+            arguments ??= [];
+            arguments[storedArgument] = unknown;
+        }
+        else if (LoadsLocalAddress(view) && view.LocalIndex is { } exposedLocal)
+        {
+            locals ??= [];
+            locals[exposedLocal] = unknown;
+        }
+        else if (LoadsArgumentAddress(view) && view.ArgumentIndex is { } exposedArgument)
+        {
+            arguments ??= [];
+            arguments[exposedArgument] = unknown;
+        }
+
+        var original = view.WritesThisArgument
+            || view.ReadsThisArgument && view.Op.Name is "ldarga" or "ldarga.s"
+            ? false : path.ThisArgumentIsOriginal;
+        return path with
+        {
+            Values = [],
+            Locals = locals,
+            Arguments = arguments,
+            ThisArgumentIsOriginal = original,
+            StackUnknown = true,
+            PendingUnwindEffect = InvalidatesBoundUnwind(view)
+                && path.PendingUnwindEffect?.BoundOutputs is not null
+                ? path.PendingUnwindEffect with { CorrelationLost = true }
+                : path.PendingUnwindEffect,
+        };
+    }
+
+    private static bool InvalidatesBoundUnwind(StackOperandView<T> view) => StoresLocal(view)
+        || StoresArgument(view) || LoadsLocalAddress(view) || LoadsArgumentAddress(view);
 
     private bool PreservesFilterDecision(StackOperandView<T> view, FlowValue<T>[] popped)
     {
@@ -1480,20 +2805,340 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
     private static bool LoadsArgumentAddress(StackOperandView<T> view) => view.Op.Name is "ldarga" or "ldarga.s";
 
-    private static bool IsBooleanBranch(StackOperandView<T> view) => view.Op.Name is
-        "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s";
+    private static bool IsConditionedBranch(StackOperandView<T> view) => view.Op.Name is
+        "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s"
+        or "beq" or "beq.s" or "bne.un" or "bne.un.s";
 
-    private static FilterPathState[]? SelectBranchPaths(FilterPathState[]? paths, StackOperandView<T> view,
-        bool branchTaken)
+    private static FilterPathState[]? SelectSwitchTargetPaths(FilterPathState[]? paths,
+        StackOperandView<T> view, IEnumerable<FlowEdge> edges, int target, int switchCaseCount)
     {
         if (paths is null)
         {
             return null;
         }
 
-        var branchesOnTrue = view.Op.Name is "brtrue" or "brtrue.s";
-        return [.. paths.Where(path => path.Values.LastOrDefault().IsZero is not { } zero
-            || (branchesOnTrue ? !zero : zero) == branchTaken)];
+        var result = new List<FilterPathState>();
+        foreach (var edge in edges.Where(candidate => candidate.Target == target))
+        {
+            AddFilterPaths(result, SelectBranchPaths(paths, view, edge, switchCaseCount) ?? []);
+        }
+
+        return [.. result];
+    }
+
+    private static FilterPathState[]? SelectBranchPaths(FilterPathState[]? paths, StackOperandView<T> view,
+        FlowEdge edge, int switchCaseCount)
+    {
+        if (paths is null)
+        {
+            return null;
+        }
+
+        var result = new List<FilterPathState>();
+        foreach (var path in ExpandFilterPaths(paths))
+        {
+            var value = path.Values.LastOrDefault();
+            if (view.Op == OpCodes.Switch)
+            {
+                AddSwitchBranchPaths(result, path, value, edge.SwitchCases, switchCaseCount);
+                continue;
+            }
+
+            if (view.Op.Name is "beq" or "beq.s" or "bne.un" or "bne.un.s")
+            {
+                if (path.Values.Length < 2)
+                {
+                    result.Add(path);
+                    continue;
+                }
+
+                var comparison = EqualityFilterValue(path.Values[^2], path.Values[^1],
+                    new FilterPathValue(null, null, false));
+                var branchOnEqual = view.Op.Name is "beq" or "beq.s";
+                var requiresEqual = branchOnEqual == edge.IsExplicit;
+                AddConditionedPath(result, path, comparison,
+                    new FilterPathValue(!requiresEqual, requiresEqual, false,
+                        IntegerValue: requiresEqual ? 1 : 0));
+                continue;
+            }
+
+            var branchesOnTrue = view.Op.Name is "brtrue" or "brtrue.s";
+            var requiresZero = branchesOnTrue ? !edge.IsExplicit : edge.IsExplicit;
+            var condition = new FilterPathValue(requiresZero, requiresZero ? false : null, false,
+                IntegerValue: requiresZero ? 0 : null,
+                ExcludedIntegers: requiresZero ? null : [0]);
+            AddConditionedPath(result, path, value, condition);
+        }
+
+        return [.. result];
+    }
+
+    private static void AddSwitchBranchPaths(List<FilterPathState> result, FilterPathState path,
+        FilterPathValue value, IReadOnlyList<int>? switchCases, int switchCaseCount)
+    {
+        if (switchCases is null)
+        {
+            var excluded = Enumerable.Range(0, switchCaseCount).Select(index => (long)index).ToArray();
+            AddConditionedPath(result, path, value,
+                new FilterPathValue(switchCaseCount > 0 ? false : null,
+                    switchCaseCount > 1 ? false : null, false,
+                    ExcludedIntegers: excluded.Length == 0 ? null : excluded));
+            return;
+        }
+
+        foreach (var @case in switchCases)
+        {
+            AddConditionedPath(result, path, value,
+                new FilterPathValue(@case == 0, @case == 1, false, IntegerValue: @case));
+        }
+    }
+
+    private static void AddConditionedPath(List<FilterPathState> result, FilterPathState path,
+        FilterPathValue value, FilterPathValue condition)
+    {
+        if (!ConditionsCompatible(value, condition))
+        {
+            return;
+        }
+
+        if (value.ComparedSource is { } comparedSource && EqualityRequirement(condition) is { } equal)
+        {
+            var sourceCondition = ComparisonCondition(value, equal);
+            if (TryAddReceiverCondition(path.ReceiverConditions, comparedSource,
+                sourceCondition, out var comparisonConditions))
+            {
+                result.Add(path with { ReceiverConditions = comparisonConditions });
+            }
+            return;
+        }
+
+        var sources = ReceiverSourcesOf(value).ToArray();
+        if (sources is [var source] && !value.HasNonSourceAlternative)
+        {
+            if (TryAddReceiverCondition(path.ReceiverConditions, source, condition, out var conditions))
+            {
+                result.Add(path with { ReceiverConditions = conditions });
+            }
+            return;
+        }
+
+        result.Add(path);
+    }
+
+    private static FilterPathValue ComparisonCondition(FilterPathValue comparison, bool equal)
+    {
+        if (comparison.ComparedWithNull)
+        {
+            return new FilterPathValue(null, null, false, IsNull: equal);
+        }
+
+        if (comparison.ComparedOtherSource is { } otherSource)
+        {
+            if (otherSource == comparison.ComparedSource && comparison.MayBeNaN)
+            {
+                return new FilterPathValue(null, null, false, IsNaN: !equal);
+            }
+
+            return new FilterPathValue(null, null, false,
+                EqualSources: equal ? [otherSource] : null,
+                ExcludedSources: equal ? null : [otherSource],
+                IsNaN: equal && comparison.MayBeNaN ? false : null);
+        }
+
+        var integer = comparison.ComparedInteger!.Value;
+        return equal
+            ? new FilterPathValue(integer == 0, integer == 1, false, IntegerValue: integer)
+            : new FilterPathValue(integer == 0 ? false : null,
+                integer == 1 ? false : null, false, ExcludedIntegers: [integer]);
+    }
+
+    private static bool? EqualityRequirement(FilterPathValue condition)
+    {
+        if (condition.IntegerValue is 0)
+        {
+            return false;
+        }
+
+        if (condition.IntegerValue is 1 || condition.IsOne == true || condition.IsZero == false)
+        {
+            return true;
+        }
+
+        return condition.IsZero == true ? false : null;
+    }
+
+    private static bool TryAddReceiverCondition(IReadOnlyDictionary<int, FilterPathValue>? existing,
+        int source, FilterPathValue condition,
+        out IReadOnlyDictionary<int, FilterPathValue>? result)
+    {
+        var conditions = existing is null ? [] : new Dictionary<int, FilterPathValue>(existing);
+        if (conditions.TryGetValue(source, out var current))
+        {
+            if (!TryMergeReceiverCondition(current, condition, out condition))
+            {
+                result = existing;
+                return false;
+            }
+        }
+
+        conditions[source] = condition;
+        return TryNormalizeReceiverConditions(conditions, out result);
+    }
+
+    private static bool TryNormalizeReceiverConditions(
+        Dictionary<int, FilterPathValue> conditions,
+        out IReadOnlyDictionary<int, FilterPathValue>? result)
+    {
+        var sources = conditions.Keys.Concat(conditions.Values.SelectMany(condition =>
+            (condition.EqualSources ?? []).Concat(condition.ExcludedSources ?? []))).Distinct().ToArray();
+        var parents = sources.ToDictionary(source => source);
+
+        int Find(int source)
+        {
+            var root = source;
+            while (parents[root] != root)
+            {
+                root = parents[root];
+            }
+
+            while (parents[source] != source)
+            {
+                var next = parents[source];
+                parents[source] = root;
+                source = next;
+            }
+
+            return root;
+        }
+
+        void Union(int left, int right)
+        {
+            var leftRoot = Find(left);
+            var rightRoot = Find(right);
+            if (leftRoot != rightRoot)
+            {
+                parents[rightRoot] = leftRoot;
+            }
+        }
+
+        foreach (var (source, condition) in conditions)
+        {
+            foreach (var equal in condition.EqualSources ?? [])
+            {
+                Union(source, equal);
+            }
+        }
+
+        var exclusions = new Dictionary<int, HashSet<int>>();
+        foreach (var (source, condition) in conditions)
+        {
+            foreach (var excluded in condition.ExcludedSources ?? [])
+            {
+                var sourceRoot = Find(source);
+                var excludedRoot = Find(excluded);
+                if (sourceRoot == excludedRoot)
+                {
+                    result = conditions;
+                    return false;
+                }
+
+                if (!exclusions.TryGetValue(sourceRoot, out var sourceExclusions))
+                {
+                    sourceExclusions = [];
+                    exclusions.Add(sourceRoot, sourceExclusions);
+                }
+                if (!exclusions.TryGetValue(excludedRoot, out var excludedExclusions))
+                {
+                    excludedExclusions = [];
+                    exclusions.Add(excludedRoot, excludedExclusions);
+                }
+                sourceExclusions.Add(excludedRoot);
+                excludedExclusions.Add(sourceRoot);
+            }
+        }
+
+        var scalarConditions = new Dictionary<int, FilterPathValue>();
+        foreach (var source in sources)
+        {
+            var scalar = conditions.TryGetValue(source, out var condition)
+                ? condition with { EqualSources = null, ExcludedSources = null }
+                : new FilterPathValue(null, null, false);
+            var root = Find(source);
+            if (scalarConditions.TryGetValue(root, out var current)
+                && !TryMergeReceiverCondition(current, scalar, out scalar))
+            {
+                result = conditions;
+                return false;
+            }
+            scalarConditions[root] = scalar;
+        }
+
+        var groups = sources.GroupBy(Find).ToDictionary(group => group.Key, group => group.Order().ToArray());
+        var normalized = new Dictionary<int, FilterPathValue>();
+        foreach (var source in sources)
+        {
+            var root = Find(source);
+            var equalSources = groups[root].Where(candidate => candidate != source).ToArray();
+            var excludedSources = exclusions.TryGetValue(root, out var excludedRoots)
+                ? excludedRoots.SelectMany(excludedRoot => groups[excludedRoot]).Distinct().Order().ToArray()
+                : [];
+            normalized[source] = scalarConditions[root] with
+            {
+                EqualSources = equalSources.Length == 0 ? null : equalSources,
+                ExcludedSources = excludedSources.Length == 0 ? null : excludedSources,
+            };
+        }
+
+        result = normalized;
+        return true;
+    }
+
+    private static bool TryMergeReceiverCondition(FilterPathValue left, FilterPathValue right,
+        out FilterPathValue result)
+    {
+        result = left;
+        if (!ConditionsCompatible(left, right))
+        {
+            return false;
+        }
+
+        var excluded = (left.ExcludedIntegers ?? []).Concat(right.ExcludedIntegers ?? [])
+            .Distinct().Order().ToArray();
+        var equalSources = (left.EqualSources ?? []).Concat(right.EqualSources ?? [])
+            .Distinct().Order().ToArray();
+        var excludedSources = (left.ExcludedSources ?? []).Concat(right.ExcludedSources ?? [])
+            .Distinct().Order().ToArray();
+        result = new FilterPathValue(left.IsZero ?? right.IsZero, left.IsOne ?? right.IsOne, false,
+            IntegerValue: left.IntegerValue ?? right.IntegerValue,
+            ExcludedIntegers: excluded.Length == 0 ? null : excluded,
+            IsNull: left.IsNull ?? right.IsNull,
+            EqualSources: equalSources.Length == 0 ? null : equalSources,
+            ExcludedSources: excludedSources.Length == 0 ? null : excludedSources,
+            MayBeNaN: left.MayBeNaN || right.MayBeNaN,
+            IsNaN: left.IsNaN ?? right.IsNaN);
+        return true;
+    }
+
+    private static bool ConditionsCompatible(FilterPathValue actual, FilterPathValue required)
+    {
+        var actualZero = actual.IntegerValue is { } actualInteger ? actualInteger == 0 : actual.IsZero;
+        var requiredZero = required.IntegerValue is { } requiredInteger ? requiredInteger == 0 : required.IsZero;
+        var actualOne = actual.IntegerValue is { } actualOneInteger ? actualOneInteger == 1 : actual.IsOne;
+        var requiredOne = required.IntegerValue is { } requiredOneInteger ? requiredOneInteger == 1 : required.IsOne;
+        if (actualZero is { } zero && requiredZero is { } neededZero && zero != neededZero
+            || actualOne is { } one && requiredOne is { } neededOne && one != neededOne
+            || actual.IntegerValue is { } exact && required.IntegerValue is { } needed && exact != needed
+            || actual.IntegerValue is { } actualValue && required.ExcludedIntegers?.Contains(actualValue) == true
+            || required.IntegerValue is { } requiredValue && actual.ExcludedIntegers?.Contains(requiredValue) == true
+            || actual.IsNull is { } actualNull && required.IsNull is { } requiredNull && actualNull != requiredNull
+            || actual.IsNaN is { } actualNaN && required.IsNaN is { } requiredNaN && actualNaN != requiredNaN
+            || actual.EqualSources?.Any(source => required.ExcludedSources?.Contains(source) == true) == true
+            || required.EqualSources?.Any(source => actual.ExcludedSources?.Contains(source) == true) == true)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static bool CanThrow(StackOperandView<T> view)
@@ -1514,10 +3159,10 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     }
 
     private static FilterPathState[]? ClearFilterPathStacks(FilterPathState[]? paths) => paths is null
-        ? null : [.. paths.Select(path => path with { Values = [] })];
+        ? null : [.. ExpandFilterPaths(paths).Select(path => path with { Values = [] })];
 
-    private static FilterPathState[]? InvalidateFilterReceivers(FilterPathState[]? paths) => paths is null
-        ? null : [.. paths.Select(path => path with { ThisArgumentIsOriginal = false })];
+    private static FilterPathState[]? UnknownFilterPathStacks(FilterPathState[]? paths) => paths is null
+        ? null : [.. ExpandFilterPaths(paths).Select(path => path with { Values = [], StackUnknown = true })];
 
     private static FlowState<T> StartFilterPaths(FlowState<T> state) => state.Values is not { } values ? state : state with
     {
@@ -1538,9 +3183,10 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return null;
         }
 
-        return [.. paths.Select(path => new FilterPathState(
+        return [.. ExpandFilterPaths(paths).Select(path => new FilterPathState(
             [.. values.Select(_ => new FilterPathValue(null, null, false))], path.Locals, path.Arguments,
-            path.ThisArgumentIsOriginal))];
+            path.ThisArgumentIsOriginal, path.PendingUnwindEffect,
+            ReceiverConditions: path.ReceiverConditions))];
     }
 
     private static FilterPathState[]? MergeFilterPaths(FilterPathState[]? left, FilterPathState[]? right)
@@ -1551,18 +3197,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         }
 
         var result = new List<FilterPathState>(left);
-        foreach (var path in right)
-        {
-            if (!result.Any(existing => SameFilterPath(existing, path)))
-            {
-                if (result.Count == MaxFilterPaths)
-                {
-                    return null;
-                }
-
-                result.Add(path);
-            }
-        }
+        AddFilterPaths(result, right);
 
         return [.. result];
     }
@@ -1573,36 +3208,111 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
     private static bool SameFilterPath(FilterPathState left, FilterPathState right)
     {
-        if (left.ThisArgumentIsOriginal != right.ThisArgumentIsOriginal || !left.Values.SequenceEqual(right.Values)
-            || left.Locals?.Count != right.Locals?.Count || left.Arguments?.Count != right.Arguments?.Count)
+        if (left.ThisArgumentIsOriginal != right.ThisArgumentIsOriginal || left.StackUnknown != right.StackUnknown
+            || !SameFilterValues(left.Values, right.Values)
+            || left.Locals?.Count != right.Locals?.Count || left.Arguments?.Count != right.Arguments?.Count
+            || !SameReceiverConditions(left.ReceiverConditions, right.ReceiverConditions)
+            || !SameFilterPaths(left.CorrelatedAlternatives, right.CorrelatedAlternatives)
+            || !SameUnwindEffect(left.PendingUnwindEffect, right.PendingUnwindEffect))
         {
             return false;
         }
 
         var localsMatch = left.Locals is null || right.Locals is not null
-            && left.Locals.All(pair => right.Locals.TryGetValue(pair.Key, out var value) && value == pair.Value);
+            && left.Locals.All(pair => right.Locals.TryGetValue(pair.Key, out var value)
+                && SameFilterValue(value, pair.Value));
         var argumentsMatch = left.Arguments is null || right.Arguments is not null
-            && left.Arguments.All(pair => right.Arguments.TryGetValue(pair.Key, out var value) && value == pair.Value);
+            && left.Arguments.All(pair => right.Arguments.TryGetValue(pair.Key, out var value)
+                && SameFilterValue(value, pair.Value));
         return localsMatch && argumentsMatch;
     }
+
+    private static bool SameReceiverConditions(IReadOnlyDictionary<int, FilterPathValue>? left,
+        IReadOnlyDictionary<int, FilterPathValue>? right) => left is null && right is null
+        || left is not null && right is not null && left.Count == right.Count
+            && left.All(pair => right.TryGetValue(pair.Key, out var condition)
+                && SameFilterValue(pair.Value, condition));
+
+    private static bool SameUnwindResult(PendingUnwindEffect? left, PendingUnwindEffect? right)
+    {
+        var leftBound = left is { CorrelationLost: false, BoundOutputs: not null };
+        var rightBound = right is { CorrelationLost: false, BoundOutputs: not null };
+        return leftBound || rightBound
+            ? leftBound && rightBound && SameTransformations(left!.BoundOutputs!, right!.BoundOutputs!)
+            : SameTransformations(left?.Transformations ?? IdentityReceiverTransformations,
+                right?.Transformations ?? IdentityReceiverTransformations);
+    }
+
+    private static bool SameUnwindEffect(PendingUnwindEffect? left, PendingUnwindEffect? right)
+    {
+        if (left is null || right is null)
+        {
+            return left is null && right is null;
+        }
+
+        return left.CorrelationLost == right.CorrelationLost
+            && SameTransformations(left.Transformations, right.Transformations)
+            && SameHandlerEntries(left.HandlerEntries, right.HandlerEntries)
+            && (left.BoundOutputs is null && right.BoundOutputs is null
+                || left.BoundOutputs is not null && right.BoundOutputs is not null
+                    && SameTransformations(left.BoundOutputs, right.BoundOutputs))
+            && (left.BoundHandlerEntries is null && right.BoundHandlerEntries is null
+                || left.BoundHandlerEntries is not null && right.BoundHandlerEntries is not null
+                    && SameHandlerEntries(left.BoundHandlerEntries, right.BoundHandlerEntries));
+    }
+
+    private static bool SameHandlerEntries(IReadOnlyDictionary<int, FilterPathState[]> left,
+        IReadOnlyDictionary<int, FilterPathState[]> right) => left.Count == right.Count
+        && left.All(pair => right.TryGetValue(pair.Key, out var entries)
+            && SameTransformations(pair.Value, entries));
+
+    private static bool SameTransformations(FilterPathState[] left, FilterPathState[] right) =>
+        left.Length == right.Length && left.All(path => right.Any(candidate => SameFilterPath(path, candidate)));
+
+    private static bool SameFilterValues(FilterPathValue[] left, FilterPathValue[] right) =>
+        left.Length == right.Length && left.Zip(right).All(pair => SameFilterValue(pair.First, pair.Second));
+
+    private static bool SameFilterValue(FilterPathValue left, FilterPathValue right) =>
+        left.IsZero == right.IsZero && left.IsOne == right.IsOne && left.IsThis == right.IsThis
+        && left.HasNonSourceAlternative == right.HasNonSourceAlternative
+        && left.IntegerValue == right.IntegerValue
+        && left.ComparedSource == right.ComparedSource && left.ComparedInteger == right.ComparedInteger
+        && left.IsNull == right.IsNull && left.ComparedOtherSource == right.ComparedOtherSource
+        && left.ComparedWithNull == right.ComparedWithNull
+        && left.MayBeNaN == right.MayBeNaN
+        && left.IsNaN == right.IsNaN
+        && ReceiverSourcesOf(left).SequenceEqual(ReceiverSourcesOf(right))
+        && SameSet(left.ExcludedIntegers, right.ExcludedIntegers)
+        && SameSet(left.EqualSources, right.EqualSources)
+        && SameSet(left.ExcludedSources, right.ExcludedSources);
+
+    private static bool SameSet<TValue>(IReadOnlyList<TValue>? left, IReadOnlyList<TValue>? right) =>
+        left is null && right is null || left is not null && right is not null
+            && left.Count == right.Count && left.SequenceEqual(right);
 
     private static FilterPathValue ConstantFilterValue(StackOperandView<T> view, bool isThis)
     {
         if (view.Op == OpCodes.Ldc_I4_0)
         {
-            return new FilterPathValue(true, false, isThis);
+            return new FilterPathValue(true, false, isThis, IntegerValue: 0);
         }
 
         if (view.Op == OpCodes.Ldc_I4_1)
         {
-            return new FilterPathValue(false, true, isThis);
+            return new FilterPathValue(false, true, isThis, IntegerValue: 1);
         }
 
         if (view.Op == OpCodes.Ldc_I4_M1 || view.Op == OpCodes.Ldc_I4_2
             || view.Op == OpCodes.Ldc_I4_3 || view.Op == OpCodes.Ldc_I4_4 || view.Op == OpCodes.Ldc_I4_5
             || view.Op == OpCodes.Ldc_I4_6 || view.Op == OpCodes.Ldc_I4_7 || view.Op == OpCodes.Ldc_I4_8)
         {
-            return new FilterPathValue(false, false, isThis);
+            var value = view.Op == OpCodes.Ldc_I4_M1 ? -1 : view.Op.Value - OpCodes.Ldc_I4_0.Value;
+            return new FilterPathValue(false, false, isThis, IntegerValue: value);
+        }
+
+        if (view.Op == OpCodes.Ldnull)
+        {
+            return new FilterPathValue(null, null, isThis, IsNull: true);
         }
 
         if (view.Op != OpCodes.Ldc_I4 && view.Op != OpCodes.Ldc_I4_S && view.Op != OpCodes.Ldc_I8)
@@ -1612,9 +3322,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         return view.IntegerOperand switch
         {
-            0 => new FilterPathValue(true, false, isThis),
-            1 => new FilterPathValue(false, true, isThis),
-            not null => new FilterPathValue(false, false, isThis),
+            0 => new FilterPathValue(true, false, isThis, IntegerValue: 0),
+            1 => new FilterPathValue(false, true, isThis, IntegerValue: 1),
+            { } value => new FilterPathValue(false, false, isThis, IntegerValue: value),
             _ => new FilterPathValue(null, null, isThis),
         };
     }

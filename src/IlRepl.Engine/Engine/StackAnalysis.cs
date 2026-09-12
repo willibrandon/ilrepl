@@ -87,42 +87,30 @@ public static class StackAnalysis
         var graph = new FlowGraph<Type>(nodes, typeof(object), complete: true, hasThis: hasThis) { BodyName = method.Method.Name };
         var offsets = entries.Select((entry, index) => (entry.Offset, index)).ToDictionary(pair => pair.Offset, pair => pair.index);
 
-        void Seed(int offset, Type? type)
+        void Seed(int offset, Type? type, int syntheticHandler)
         {
             if (offsets.TryGetValue(offset, out var index))
             {
-                graph.Seeds[index] = type is null ? hasThis ? FlowState<Type>.ThisEntry : FlowState<Type>.Empty
+                var state = type is null ? hasThis ? FlowState<Type>.ThisEntry : FlowState<Type>.Empty
                     : new FlowState<Type>([new FlowValue<Type>(type, [index])], ThisArgumentIsOriginal: hasThis);
-            }
-        }
-
-        foreach (var clause in method.Clauses)
-        {
-            switch (clause.Kind)
-            {
-                case IlClauseKind.Catch:
-                    Seed(clause.HandlerStart, clause.CatchType ?? typeof(object));
-                    break;
-                case IlClauseKind.Filter:
-                    Seed(clause.FilterStart ?? clause.HandlerStart, typeof(object));
-                    Seed(clause.HandlerStart, typeof(object));
-                    break;
-                default:
-                    Seed(clause.HandlerStart, null);
-                    break;
+                graph.Seeds[index] = new ExceptionalFlowState<Type>(state, null, syntheticHandler);
             }
         }
 
         var groups = new Dictionary<(int, int), int>();
         var sections = new Dictionary<(BlockKind, int, int, int), int>();
         int Position(int offset) => offsets.TryGetValue(offset, out var index) ? index : entries.Length;
-        void Section(BlockKind kind, int start, int end, int group)
+        int Section(BlockKind kind, int start, int end, int group)
         {
             var key = (kind, start, end, group);
-            if (sections.TryAdd(key, sections.Count))
+            if (!sections.TryGetValue(key, out var id))
             {
-                graph.Sections[sections[key]] = new FlowRegion(kind, Position(start), Position(end), group);
+                id = sections.Count;
+                sections.Add(key, id);
+                graph.Sections[id] = new FlowRegion(kind, Position(start), Position(end), group);
             }
+
+            return id;
         }
 
         foreach (var clause in method.Clauses)
@@ -134,7 +122,7 @@ public static class StackAnalysis
                 groups[key] = group;
             }
 
-            Section(BlockKind.Try, clause.TryStart, clause.TryEnd, group);
+            _ = Section(BlockKind.Try, clause.TryStart, clause.TryEnd, group);
             var kind = clause.Kind switch
             {
                 IlClauseKind.Catch => BlockKind.Catch,
@@ -142,10 +130,25 @@ public static class StackAnalysis
                 IlClauseKind.Finally => BlockKind.Finally,
                 _ => BlockKind.Fault,
             };
-            Section(kind, clause.HandlerStart, clause.HandlerEnd, group);
+            var handlerSection = Section(kind, clause.HandlerStart, clause.HandlerEnd, group);
+            var filterSection = -1;
             if (clause.FilterStart is { } filter)
             {
-                Section(BlockKind.Filter, filter, clause.HandlerStart, group);
+                filterSection = Section(BlockKind.Filter, filter, clause.HandlerStart, group);
+            }
+
+            switch (clause.Kind)
+            {
+                case IlClauseKind.Catch:
+                    Seed(clause.HandlerStart, clause.CatchType ?? typeof(object), handlerSection);
+                    break;
+                case IlClauseKind.Filter:
+                    Seed(clause.FilterStart ?? clause.HandlerStart, typeof(object), filterSection);
+                    Seed(clause.HandlerStart, typeof(object), handlerSection);
+                    break;
+                default:
+                    Seed(clause.HandlerStart, null, handlerSection);
+                    break;
             }
 
             graph.Clauses.Add(new FlowClause(group, clause.Kind switch
@@ -154,7 +157,8 @@ public static class StackAnalysis
                 IlClauseKind.Filter => BlockKind.Filter,
                 IlClauseKind.Finally => BlockKind.Finally,
                 _ => BlockKind.Fault,
-            }, Position(clause.FilterStart ?? clause.HandlerStart), Position(clause.HandlerStart)));
+            }, Position(clause.FilterStart ?? clause.HandlerStart), Position(clause.HandlerStart),
+                CatchesAll: clause.Kind == IlClauseKind.Catch && clause.CatchType == typeof(object)));
         }
 
         for (var index = 0; index < entries.Length; index++)

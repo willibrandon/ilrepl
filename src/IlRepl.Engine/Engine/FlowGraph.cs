@@ -103,8 +103,9 @@ internal sealed class FlowGraph<T> where T : class
                 {
                     sections[^1] = i;
                     Sections[i] = new FlowRegion(kind, i, nodes.Count, groups[^1]);
-                    Seeds[i] = kind is BlockKind.Catch or BlockKind.Filter or BlockKind.FilterHandler
+                    var handlerEntry = kind is BlockKind.Catch or BlockKind.Filter or BlockKind.FilterHandler
                         ? Entry([new FlowValue<T>(node.CatchType ?? objectType, [i])]) : Entry([]);
+                    Seeds[i] = new ExceptionalFlowState<T>(handlerEntry, null, i);
                     if (kind == BlockKind.FilterHandler)
                     {
                         var filter = Clauses.FindLastIndex(clause => clause.Group == groups[^1]
@@ -116,7 +117,9 @@ internal sealed class FlowGraph<T> where T : class
                     }
                     else
                     {
-                        Clauses.Add(new FlowClause(groups[^1], kind, i, kind == BlockKind.Filter ? -1 : i));
+                        Clauses.Add(new FlowClause(groups[^1], kind, i, kind == BlockKind.Filter ? -1 : i,
+                            CatchesAll: kind == BlockKind.Catch && (node.CatchType is null
+                                || EqualityComparer<T>.Default.Equals(node.CatchType, objectType))));
                     }
                 }
             }
@@ -134,16 +137,19 @@ internal sealed class FlowGraph<T> where T : class
         {
             var node = nodes[i];
             var op = node.Instruction?.Op;
-            foreach (var target in node.Targets.Distinct(StringComparer.Ordinal))
+            foreach (var targets in node.Targets.Select((target, index) => (target, index))
+                .GroupBy(item => item.target, StringComparer.Ordinal))
             {
-                if (labels.TryGetValue(target, out var position))
+                if (labels.TryGetValue(targets.Key, out var position))
                 {
-                    Edges[i].Add(new FlowEdge(position, op == OpCodes.Leave || op == OpCodes.Leave_S, IsExplicit: true));
+                    Edges[i].Add(new FlowEdge(position, op == OpCodes.Leave || op == OpCodes.Leave_S,
+                        IsExplicit: true, op == OpCodes.Switch ? targets.Select(item => item.index).ToArray() : null));
                 }
                 else
                 {
                     Report(i, "FLOW002", complete ? AnalysisDiagnosticKind.Error : AnalysisDiagnosticKind.Incomplete,
-                        complete ? $"branch target '{target}' is outside an instruction boundary" : $"label '{target}' is not defined yet");
+                        complete ? $"branch target '{targets.Key}' is outside an instruction boundary"
+                            : $"label '{targets.Key}' is not defined yet");
                 }
             }
 
@@ -250,8 +256,9 @@ internal sealed class FlowGraph<T> where T : class
                     continue;
                 }
 
-                var entersTry = !edge.IsExplicit && target.Length == source.Length + 1 && target.Take(source.Length).SequenceEqual(source)
-                    && Sections[target[^1]].Kind == BlockKind.Try && IsFirstInstruction(edge.Target, Sections[target[^1]].Start);
+                var entersTry = !edge.IsExplicit && target.Length > source.Length && target.Take(source.Length).SequenceEqual(source)
+                    && target.Skip(source.Length).All(id => Sections[id].Kind == BlockKind.Try
+                        && IsFirstInstruction(edge.Target, Sections[id].Start));
                 if (!entersTry)
                 {
                     Report(index, "FLOW015", AnalysisDiagnosticKind.Error,
@@ -316,19 +323,37 @@ internal sealed class FlowGraph<T> where T : class
     /// </summary>
     public IEnumerable<int> FinalizersForTransfer(int source, int target)
     {
+        return UnwindHandlersForTransfer(source, target, exceptional: false);
+    }
+
+    /// <summary>
+    /// Finds the finally and fault handlers executed while an exception unwinds to a clause.
+    /// </summary>
+    /// <param name="source">The instruction that threw or completed a filter.</param>
+    /// <param name="target">The selected clause entry point.</param>
+    /// <returns>The unwind handlers ordered from the innermost protected group outward.</returns>
+    public IEnumerable<int> UnwindHandlersForException(int source, int target)
+    {
+        return UnwindHandlersForTransfer(source, target, exceptional: true);
+    }
+
+    private IEnumerable<int> UnwindHandlersForTransfer(int source, int target, bool exceptional)
+    {
         var targetGroups = Regions[target].Select(id => Sections[id].Group).ToHashSet();
         var visited = new HashSet<int>();
         for (var index = Regions[source].Length - 1; index >= 0; index--)
         {
-            var group = Sections[Regions[source][index]].Group;
-            if (targetGroups.Contains(group) || !visited.Add(group))
+            var active = Sections[Regions[source][index]];
+            if (targetGroups.Contains(active.Group) || !visited.Add(active.Group)
+                || active.Kind is BlockKind.Finally or BlockKind.Fault)
             {
                 continue;
             }
 
             foreach (var (id, section) in Sections)
             {
-                if (section.Group == group && section.Kind == BlockKind.Finally)
+                if (section.Group == active.Group && (section.Kind == BlockKind.Finally
+                    || exceptional && section.Kind == BlockKind.Fault))
                 {
                     yield return id;
                     break;
@@ -367,6 +392,30 @@ internal sealed class FlowGraph<T> where T : class
     }
 
     /// <summary>
+    /// Finds the exception-clause kind whose first instruction is the supplied entry point.
+    /// </summary>
+    public BlockKind? ClauseKindAt(int entry) => Clauses
+        .FirstOrDefault(clause => clause.Entry == entry)?.Kind;
+
+    /// <summary>
+    /// Finds initial catch candidates through the first filter in exception-search order.
+    /// </summary>
+    public IEnumerable<int> ExceptionSearchTargets(int instruction)
+    {
+        foreach (var group in EnclosingTryGroups(instruction))
+        {
+            foreach (var clause in Clauses.Where(candidate => candidate.Group == group && IsSearchClause(candidate)))
+            {
+                yield return clause.Entry;
+                if (clause.Kind == BlockKind.Filter || IsCatchAll(clause))
+                {
+                    yield break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Finds clauses searched after the filter containing this instruction returns zero.
     /// </summary>
     /// <param name="instruction">An instruction inside the rejecting filter.</param>
@@ -390,25 +439,40 @@ internal sealed class FlowGraph<T> where T : class
         var targets = new HashSet<int>();
         for (var index = clause + 1; index < Clauses.Count; index++)
         {
-            if (Clauses[index].Group == filter.Group && targets.Add(Clauses[index].Entry))
+            if (Clauses[index].Group == filter.Group && IsSearchClause(Clauses[index])
+                && targets.Add(Clauses[index].Entry))
             {
                 yield return Clauses[index].Entry;
+                if (Clauses[index].Kind == BlockKind.Filter || IsCatchAll(Clauses[index]))
+                {
+                    yield break;
+                }
             }
         }
 
-        foreach (var group in Regions[instruction].Reverse().Select(id => Sections[id])
-            .Where(section => section.Kind == BlockKind.Try && section.Group != filter.Group)
-            .Select(section => section.Group).Distinct())
+        foreach (var group in EnclosingTryGroups(instruction).Where(group => group != filter.Group))
         {
-            foreach (var candidate in Clauses.Where(candidate => candidate.Group == group))
+            foreach (var candidate in Clauses.Where(candidate => candidate.Group == group && IsSearchClause(candidate)))
             {
                 if (targets.Add(candidate.Entry))
                 {
                     yield return candidate.Entry;
+                    if (candidate.Kind == BlockKind.Filter || IsCatchAll(candidate))
+                    {
+                        yield break;
+                    }
                 }
             }
         }
     }
+
+    private static bool IsSearchClause(FlowClause clause) => clause.Kind is BlockKind.Catch or BlockKind.Filter;
+
+    private static bool IsCatchAll(FlowClause clause) => clause.Kind == BlockKind.Catch && clause.CatchesAll;
+
+    private IEnumerable<int> EnclosingTryGroups(int instruction) => Regions[instruction].Reverse()
+        .Select(id => Sections[id]).Where(section => section.Kind == BlockKind.Try)
+        .Select(section => section.Group).Distinct();
 
     /// <summary>
     /// Enumerates the prefixes attached to an instruction, skipping source labels and comments.
