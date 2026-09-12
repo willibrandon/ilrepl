@@ -437,9 +437,20 @@ public sealed partial class LiveSessionTests
 
     private static async Task ClearPromptAsync(IPage page)
     {
+        await InputIdleAsync(page);
         await page.Keyboard.PressAsync("Control+c");
         await EmptyPromptAsync(page);
     }
+
+    private static Task<IJSHandle> InputIdleAsync(IPage page) => page.WaitForFunctionAsync("""
+        () => {
+          const terminal = window.ilreplTerminal;
+          const buffer = terminal.buffer.active;
+          const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
+          return !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
+            && !status.includes('Ctrl+C cancels');
+        }
+        """);
 
     private static async Task<IBrowser> LaunchAsync(string browser) => browser switch
     {

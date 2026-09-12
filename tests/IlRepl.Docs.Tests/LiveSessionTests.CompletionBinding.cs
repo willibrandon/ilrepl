@@ -726,7 +726,8 @@ public sealed partial class LiveSessionTests
           const buffer = terminal.buffer.active;
           const row = buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true).trim() ?? '';
           const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
-          return /^il\[\d+\]>$/.test(row) && !status.includes('sending ');
+          return /^il\[\d+\]>$/.test(row) && !status.includes('updating') && !status.includes('sending')
+            && !status.includes('cancelling') && !status.includes('Ctrl+C cancels');
         }
         """);
 }

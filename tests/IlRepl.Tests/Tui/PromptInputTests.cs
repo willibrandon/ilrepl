@@ -53,4 +53,35 @@ public sealed class PromptInputTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
+
+    /// <summary>
+    /// A grouped clear, command, and Enter packet replaces a returned multiline block and submits the command.
+    /// </summary>
+    [TestMethod]
+    public async Task GroupedClearAndSubmission_ReplacesReturnedBlock()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        PromptState prompt = null!;
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript,
+            onPrompt: value => prompt = value).WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        await auto.WaitUntilTextAsync("il[1]>");
+        await AppTest.TypeLinesAsync(auto,
+            [".method int32 F() {", "ldc.i4 1", "lcd.i4 2", "add", "ret", "}"], ct);
+        await auto.WaitUntilAsync(_ => prompt.SelectionIsReturned,
+            description: "the refused method is selected in the editor");
+
+        await adapter.SendAsync(Encoding.UTF8.GetBytes("\u0003.reset // grouped\r"));
+
+        await auto.WaitUntilTextAsync("cell, declarations, methods, and types cleared");
+        await auto.WaitUntilAsync(_ => prompt.Text.Length == 0 && engine.Status.OpenDepth == 0,
+            description: "the grouped packet clears the returned block and submits reset");
+        Assert.AreEqual("il[1]> .reset // grouped", AppTest.Echoes(transcript)[^1]);
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
 }

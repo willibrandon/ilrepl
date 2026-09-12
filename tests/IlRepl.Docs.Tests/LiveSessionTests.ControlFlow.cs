@@ -106,7 +106,8 @@ public sealed partial class LiveSessionTests
                     buffer.getLine(row)?.translateToString(true) ?? '').some(line => line.includes(committed));
                   const lastChange = Math.max(window.ilreplControlFlowArmed, window.ilreplControlFlowLastWrite);
                   return found && /^il\[\d+\]>$/.test(prompt) && performance.now() - lastChange >= 100
-                    && !status.includes('editing ') && !status.includes('updating') && !status.includes('sending');
+                    && !status.includes('editing ') && !status.includes('updating') && !status.includes('sending')
+                    && !status.includes('cancelling') && !status.includes('Ctrl+C cancels');
                 }
                 """, committed, new() { PollingInterval = 16, Timeout = 30_000 });
         }
@@ -527,7 +528,8 @@ public sealed partial class LiveSessionTests
               const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
               const lastChange = Math.max(window.ilreplControlFlowArmed, window.ilreplControlFlowLastWrite);
               return prompt.endsWith('> }') && status.includes('Enter sends') && performance.now() - lastChange >= 100
-                && !status.includes('updating') && !status.includes('sending');
+                && !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
+                && !status.includes('Ctrl+C cancels');
             }
             """, null, new() { PollingInterval = 16, Timeout = 30_000 });
     }
@@ -548,7 +550,8 @@ public sealed partial class LiveSessionTests
                   const lastChange = Math.max(window.ilreplControlFlowArmed, window.ilreplControlFlowLastWrite);
                   return output.includes(finding) && window.ilreplControlFlowWriteCount > 0
                     && performance.now() - lastChange >= 100 && status.includes('editing ')
-                    && !status.includes('updating') && !status.includes('sending');
+                    && !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
+                    && !status.includes('Ctrl+C cancels');
                 }
                 """, finding, new() { PollingInterval = 16, Timeout = 30_000 });
         }
@@ -586,7 +589,8 @@ public sealed partial class LiveSessionTests
           return window.ilreplControlFlowWriteCount > 0 && window.ilreplControlFlowOutput.includes('error:')
             && count > window.ilreplControlFlowExpectedCount
             && performance.now() - window.ilreplControlFlowLastWrite >= 100 && status.includes('editing ')
-            && !status.includes('updating') && !status.includes('sending');
+            && !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
+            && !status.includes('Ctrl+C cancels');
         }
         """, expected, new() { PollingInterval = 16, Timeout = 30_000 });
 
@@ -598,39 +602,15 @@ public sealed partial class LiveSessionTests
 
     private static async Task ResetReturnedCorpusAsync(IPage page)
     {
-        await ClearReturnedCorpusAsync(page);
-        await SubmitResetAsync(page);
+        await SubmitResetAsync(page, clearReturned: true);
     }
 
-    private static async Task ClearReturnedCorpusAsync(IPage page)
+    private static async Task SubmitResetAsync(IPage page, bool clearReturned = false)
     {
-        await ArmSubmissionOutputAsync(page);
-        await SendTerminalInputAsync(page, "\x03");
-        try
-        {
-            await page.WaitForFunctionAsync("""
-                () => {
-                  const terminal = window.ilreplTerminal;
-                  const buffer = terminal.buffer.active;
-                  const prompt = buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true).trim() ?? '';
-                  const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
-                  const lastChange = Math.max(window.ilreplControlFlowArmed, window.ilreplControlFlowLastWrite);
-                  return /^il\[\d+\]>$/.test(prompt) && performance.now() - lastChange >= 100
-                    && !status.includes('editing ') && !status.includes('updating') && !status.includes('sending');
-                }
-                """, null, new() { PollingInterval = 16, Timeout = 30_000 });
-        }
-        catch (TimeoutException exception)
-        {
-            throw new InvalidOperationException(
-                "the returned block was not cleared: " + await BrowserWaitStateAsync(page), exception);
-        }
-    }
-
-    private static async Task SubmitResetAsync(IPage page)
-    {
+        await InputIdleAsync(page);
         var marker = "reset-" + Guid.NewGuid().ToString("N");
-        await SendTerminalInputAsync(page, $".reset // {marker}");
+        await ArmSubmissionOutputAsync(page);
+        await SendTerminalInputAsync(page, (clearReturned ? "\x03" : string.Empty) + $".reset // {marker}");
         await ReadyToSubmitResetAsync(page, marker);
         await ArmSubmissionOutputAsync(page);
         await SendTerminalInputAsync(page, "\r");
@@ -645,26 +625,20 @@ public sealed partial class LiveSessionTests
                 marker => {
                   const terminal = window.ilreplTerminal;
                   const buffer = terminal.buffer.active;
-                  const prompt = buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true) ?? '';
+                  const prompt = buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true).trimEnd() ?? '';
                   const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
-                  return /^il\[\d+\]> \.reset\b/.test(prompt) && prompt.includes(marker)
-                    && !status.includes('editing') && !status.includes('updating') && !status.includes('sending');
+                  const lastChange = Math.max(window.ilreplControlFlowArmed, window.ilreplControlFlowLastWrite);
+                  return prompt.endsWith(`> .reset // ${marker}`) && window.ilreplControlFlowWriteCount > 0
+                    && performance.now() - lastChange >= 100 && !status.includes('editing ')
+                    && !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
+                    && !status.includes('Ctrl+C cancels');
                 }
                 """, marker, new() { PollingInterval = 16, Timeout = 30_000 });
         }
         catch (TimeoutException exception)
         {
-            var state = await page.EvaluateAsync<string>("""
-                () => {
-                  const terminal = window.ilreplTerminal;
-                  const buffer = terminal.buffer.active;
-                  const count = Math.min(buffer.length, 20);
-                  const rows = Array.from({ length: count }, (_, index) =>
-                    buffer.getLine(buffer.length - count + index)?.translateToString(true) ?? '');
-                  return JSON.stringify({ active: document.activeElement?.className ?? '', rows });
-                }
-                """);
-            throw new InvalidOperationException("reset was not ready: " + state, exception);
+            throw new InvalidOperationException(
+                "reset was not ready to submit: " + await BrowserWaitStateAsync(page), exception);
         }
     }
 
@@ -685,7 +659,8 @@ public sealed partial class LiveSessionTests
                     buffer.getLine(row)?.translateToString(true) ?? '').some(line => line.includes(expected));
                   const lastChange = Math.max(window.ilreplControlFlowArmed, window.ilreplControlFlowLastWrite);
                   return found && /^il\[\d+\]>$/.test(prompt) && performance.now() - lastChange >= 100
-                    && !status.includes('editing ') && !status.includes('updating') && !status.includes('sending');
+                    && !status.includes('editing ') && !status.includes('updating') && !status.includes('sending')
+                    && !status.includes('cancelling') && !status.includes('Ctrl+C cancels');
                 }
                 """, $"= {expected} : int32", new() { PollingInterval = 16, Timeout = 30_000 });
         }
@@ -721,7 +696,8 @@ public sealed partial class LiveSessionTests
                   return reset >= 0 && cleared && /^il\[\d+\]>$/.test(prompt)
                     && window.ilreplControlFlowWriteCount > 0
                     && performance.now() - window.ilreplControlFlowLastWrite >= 100 && !status.includes('editing ')
-                    && !status.includes('updating') && !status.includes('sending');
+                    && !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
+                    && !status.includes('Ctrl+C cancels');
                 }
                 """, marker, new() { PollingInterval = 16, Timeout = 30_000 });
         }
