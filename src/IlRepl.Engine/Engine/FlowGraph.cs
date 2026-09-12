@@ -235,7 +235,8 @@ internal sealed class FlowGraph<T> where T : class
                 Report(index, "FLOW011", AnalysisDiagnosticKind.Error, "rethrow is only valid inside a catch handler");
             }
 
-            if (op == OpCodes.Endfinally && !kinds.Any(kind => kind is BlockKind.Finally or BlockKind.Fault))
+            if (op == OpCodes.Endfinally
+                && (kinds.Length == 0 || kinds[^1] is not (BlockKind.Finally or BlockKind.Fault)))
             {
                 Report(index, "FLOW012", AnalysisDiagnosticKind.Error, "endfinally is only valid inside finally or fault");
             }

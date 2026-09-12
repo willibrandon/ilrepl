@@ -347,6 +347,48 @@ public sealed class ControlFlowSessionTests
     }
 
     /// <summary>
+    /// An outer finalizer does not make endfinally valid inside a nested non-finalizer region.
+    /// </summary>
+    /// <param name="section">The nested region containing endfinally.</param>
+    [TestMethod]
+    [DataRow("try")]
+    [DataRow("catch")]
+    [DataRow("filter")]
+    [DataRow("filter handler")]
+    public void EndfinallyInNestedNonFinalizer_IsRejectedImmediately(string section)
+    {
+        var session = new Session();
+        Add(session, ".method void Nested() {", ".try {", "leave DONE", "} finally {", ".try {");
+        if (section != "try")
+        {
+            Add(session, "ldnull", "throw", section == "catch"
+                ? "} catch [System.Runtime]System.Exception {" : "} filter {", "pop");
+        }
+
+        if (section == "filter handler")
+        {
+            Add(session, "ldc.i4.1", "endfilter", "} handler {", "pop");
+        }
+
+        var error = Assert.ThrowsExactly<ReplException>(() => session.AddLine("endfinally"));
+        Assert.Contains("endfinally is only valid inside finally or fault", error.Message);
+    }
+
+    /// <summary>
+    /// Endfinally remains valid when the innermost region is a finally or fault handler.
+    /// </summary>
+    /// <param name="section">The finalizer section containing endfinally.</param>
+    [TestMethod]
+    [DataRow("finally")]
+    [DataRow("fault")]
+    public void EndfinallyInInnermostFinalizer_IsAccepted(string section)
+    {
+        var session = new Session();
+        Add(session, ".method void Direct() {", ".try {", "ldnull", "throw", $"}} {section} {{", "endfinally");
+        Assert.AreEqual("[]", session.State.StackText);
+    }
+
+    /// <summary>
     /// A manually entered jump cannot reinterpret the enclosing method's parameters.
     /// </summary>
     [TestMethod]
