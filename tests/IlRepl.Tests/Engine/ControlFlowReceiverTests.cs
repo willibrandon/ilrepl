@@ -139,6 +139,7 @@ public sealed class ControlFlowReceiverTests
     /// </summary>
     [TestMethod]
     [DataRow("initobj")]
+    [DataRow("isinst")]
     [DataRow("ldftn")]
     [DataRow("ldstr")]
     [DataRow("ldtoken")]

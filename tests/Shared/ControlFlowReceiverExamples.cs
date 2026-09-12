@@ -1144,6 +1144,7 @@ public static class ControlFlowReceiverExamples
     private static string InstructionName(string instruction) => instruction switch
     {
         "initobj" => "Initobj",
+        "isinst" => "Isinst",
         "ldftn" => "Ldftn",
         "ldstr" => "Ldstr",
         "ldtoken" => "Ldtoken",
@@ -1156,6 +1157,7 @@ public static class ControlFlowReceiverExamples
     private static string[] NonThrowingInstructions(string instruction) => instruction switch
     {
         "initobj" => ["ldloca.s scratch", "initobj int32"],
+        "isinst" => ["ldnull", "isinst object", "pop"],
         "ldftn" => ["ldftn int32 Math::Abs(int32)", "pop"],
         "ldstr" => ["ldstr \"value\"", "pop"],
         "ldtoken" => [$"ldtoken class NonThrowing{InstructionName(instruction)}Receiver", "pop"],

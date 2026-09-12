@@ -109,13 +109,18 @@ unverifiable; the palette omits both shapes while explicitly entered IL retains 
 Function-pointer signatures can hold an `ldftn` result and return it as a native-integer stack
 value. Loading an instance initializer's address is unverifiable; loading a type initializer's is not.
 
-ECMA III.4.25 makes `sizeof` always verifiable. SizeOf keeps the analyzer and ILVerification aligned
-with that rule while executing the same body through CoreCLR and browser Mono.
+ECMA III.4.25 makes `sizeof` always verifiable for a valid type token. Simple reference and value
+types use TypeDef or TypeRef tokens; II.23.2.14 admits unmanaged pointers, function pointers,
+arrays, and constructed generics as TypeSpecs, but not a managed pointer or `void`. The SizeOf
+fixtures exercise that boundary through CoreCLR and browser Mono.
 
 ## Disagreements with Microsoft.ILVerification 10.0.11
 
 The numeric fixtures separately assert ECMA correctness and the library result. These are pinned
 observations, not skipped assertions. Review them when changing the verifier package.
+
+`ILImporter.Verify.cs` resolves a `sizeof` token and pushes `int32` without checking its signature.
+It consequently accepts managed-pointer and `void` operands that CoreCLR rejects as invalid IL.
 
 The library tags every later `ldarg.0` as `IsThisPtr`, even after `starg.0` replaces the receiver or
 `ldarga.0` exposes its writable address. Its `initonly` store rule does not consult the recorded
