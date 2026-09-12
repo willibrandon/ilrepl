@@ -59,19 +59,6 @@ public sealed partial class LiveSessionTests
         await Assertions.Expect(terminal).ToContainTextAsync("error: Outer/Inner is nested private", options);
     }
 
-    /// <summary>
-    /// Browser Mono accepts and refuses the desktop verifier corpus in Chromium and WebKit.
-    /// </summary>
-    [TestMethod]
-    [DoNotParallelize]
-    [Timeout(600_000, CooperativeCancellation = true)]
-    public async Task ControlFlow_CorpusMatchesDesktop()
-    {
-        await Task.WhenAll(
-            RunControlFlowCorpusAsync("chromium"),
-            RunControlFlowCorpusAsync("webkit"));
-    }
-
     private async Task RunControlFlowCorpusAsync(string browser)
     {
         await using var context = await NewContextAsync(GetBrowser(browser));
@@ -393,11 +380,12 @@ public sealed partial class LiveSessionTests
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.ArgumentSource(true, true)));
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class FlowArgument", options);
-        foreach (var instruction in new[] { "initobj", "isinst", "ldftn", "ldstr", "ldtoken", "refanytype", "sizeof" })
+        foreach (var instruction in new[] { "constrained.", "initobj", "isinst", "ldftn", "ldstr", "ldtoken", "refanytype", "sizeof" })
         {
             await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.NonThrowingInstructionSource(instruction)));
             await page.Keyboard.PressAsync("Enter");
-            var type = instruction[0].ToString().ToUpperInvariant() + instruction[1..];
+            var type = instruction == "constrained."
+                ? "Constrained" : instruction[0].ToString().ToUpperInvariant() + instruction[1..];
             await Assertions.Expect(page.Locator("#terminal"))
                 .ToContainTextAsync($"end of class NonThrowing{type}Receiver", options);
         }

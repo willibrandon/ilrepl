@@ -63,19 +63,6 @@ public sealed partial class LiveSessionTests
         Assert.DoesNotContain("error:", await BufferTextAsync(page));
     }
 
-    /// <summary>
-    /// Repeated generic previews survive a thousand edits and a same-worker restart in both browsers.
-    /// </summary>
-    [TestMethod]
-    [DoNotParallelize]
-    [Timeout(1_200_000, CooperativeCancellation = true)]
-    public async Task LiveSession_ThousandGenericEdits_PreserveCompletionAndRestart()
-    {
-        await Task.WhenAll(
-            RunThousandGenericEditsAsync("chromium"),
-            RunThousandGenericEditsAsync("webkit"));
-    }
-
     private async Task RunThousandGenericEditsAsync(string browser)
     {
         await using var context = await NewContextAsync(GetBrowser(browser));

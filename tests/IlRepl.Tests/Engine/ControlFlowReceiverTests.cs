@@ -138,6 +138,7 @@ public sealed class ControlFlowReceiverTests
     /// Bound instructions with no remaining execution-time exception do not reach a catch.
     /// </summary>
     [TestMethod]
+    [DataRow("constrained.")]
     [DataRow("initobj")]
     [DataRow("isinst")]
     [DataRow("ldftn")]

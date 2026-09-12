@@ -1117,6 +1117,7 @@ public static class ControlFlowReceiverExamples
     /// <returns>The complete class declaration.</returns>
     public static string[] NonThrowingInstructionSource(string instruction) =>
     [
+        .. instruction == "constrained." ? StaticAbstractDeclarations() : [],
         $".class public NonThrowing{InstructionName(instruction)}Receiver {{",
         ".field public initonly int32 Value",
         $".method public instance void .ctor(class NonThrowing{InstructionName(instruction)}Receiver other"
@@ -1143,6 +1144,7 @@ public static class ControlFlowReceiverExamples
 
     private static string InstructionName(string instruction) => instruction switch
     {
+        "constrained." => "Constrained",
         "initobj" => "Initobj",
         "isinst" => "Isinst",
         "ldftn" => "Ldftn",
@@ -1156,6 +1158,7 @@ public static class ControlFlowReceiverExamples
 
     private static string[] NonThrowingInstructions(string instruction) => instruction switch
     {
+        "constrained." => ["constrained. Num", "ldftn int32 IZero::Zero()", "pop"],
         "initobj" => ["ldloca.s scratch", "initobj int32"],
         "isinst" => ["ldnull", "isinst object", "pop"],
         "ldftn" => ["ldftn int32 Math::Abs(int32)", "pop"],
@@ -1166,6 +1169,20 @@ public static class ControlFlowReceiverExamples
         "sizeof" => ["sizeof int32", "pop"],
         _ => throw new ArgumentOutOfRangeException(nameof(instruction)),
     };
+
+    private static string[] StaticAbstractDeclarations() =>
+    [
+        ".class interface public abstract IZero {",
+        ".method public static abstract virtual int32 Zero() { }",
+        "}",
+        ".class public Num implements IZero {",
+        ".method public static int32 Zero() {",
+        "ldc.i4.0",
+        "ret",
+        "}",
+        ".override method int32 IZero::Zero() with method int32 Num::Zero()",
+        "}",
+    ];
 
     /// <summary>
     /// Builds a constructor whose ldvirtftn can reach a catch through its null receiver.
