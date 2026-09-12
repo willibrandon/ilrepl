@@ -220,7 +220,8 @@ public sealed partial class EditingSession
                 ? MemberEligibility.TypeVerdict(field.FieldType, scope.Access, facts)
                     ?? MemberEligibility.FieldVerdict(field, scope.Access, facts)
                 : operand.Method is { } method
-                    ? MemberEligibility.MethodVerdict(method.Method, scope.Access, facts) : null;
+                    ? MemberEligibility.MethodVerdict(method.Method, scope.Access, facts,
+                        exactGenericArguments: method.ExactGenericArguments) : null;
         if (problem is not null)
         {
             throw new ReplException(problem);

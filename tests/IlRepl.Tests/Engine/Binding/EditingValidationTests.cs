@@ -134,6 +134,21 @@ public sealed class EditingValidationTests
     }
 
     /// <summary>
+    /// Preview checks a private type retained only as a custom modifier on a generic method argument.
+    /// </summary>
+    [TestMethod]
+    public void GenericArgumentModifier_UsesTheAcceptingAccessibilityRule()
+    {
+        var session = IlLines.Load(".class public Outer {", ".class nested private Inner { }", "}");
+        var line = "call !!0[] [System.Runtime]System.Array::Empty<int32 modopt(Outer/Inner)>()";
+        var expected = Assert.ThrowsExactly<ReplException>(() => session.AddLine(line)).Message;
+        using var editing = new EditingSession(session);
+        var view = editing.Speculate([line, ""], 1, cancellationToken: TestContext.CancellationToken);
+
+        Assert.AreEqual(expected, view.SkippedLines.Single().Message);
+    }
+
+    /// <summary>
     /// Undo removes a cell instruction while preserving declarations that survived an earlier clear.
     /// </summary>
     [TestMethod]

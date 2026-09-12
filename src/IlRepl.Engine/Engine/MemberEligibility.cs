@@ -194,8 +194,10 @@ public static partial class MemberEligibility
     /// <param name="where">Where the access happens.</param>
     /// <param name="facts">The base chain, the session's types, and the spelling.</param>
     /// <param name="judgeAll">True to judge methods of any assembly by the session rules.</param>
+    /// <param name="exactGenericArguments">Generic arguments with metadata-only shapes retained.</param>
     /// <returns>The reason, or null.</returns>
-    public static string? MethodVerdict(MethodSymbol method, AccessContext where, AccessFacts facts, bool judgeAll = false)
+    public static string? MethodVerdict(MethodSymbol method, AccessContext where, AccessFacts facts, bool judgeAll = false,
+        IReadOnlyList<TypeSymbol>? exactGenericArguments = null)
     {
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(where);
@@ -212,6 +214,14 @@ public static partial class MemberEligibility
         }
 
         foreach (var argument in method.GenericArguments)
+        {
+            if (TypeVerdict(argument, where, facts, judgeAll) is { } argumentProblem)
+            {
+                return argumentProblem;
+            }
+        }
+
+        foreach (var argument in exactGenericArguments ?? [])
         {
             if (TypeVerdict(argument, where, facts, judgeAll) is { } argumentProblem)
             {

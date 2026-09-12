@@ -142,6 +142,7 @@ public sealed class ControlFlowReceiverTests
     [DataRow("ldftn")]
     [DataRow("ldstr")]
     [DataRow("ldtoken")]
+    [DataRow("mkrefany")]
     [DataRow("refanytype")]
     [DataRow("sizeof")]
     public async Task NonThrowingInstruction_DoesNotReachExceptionHandler(string instruction)
