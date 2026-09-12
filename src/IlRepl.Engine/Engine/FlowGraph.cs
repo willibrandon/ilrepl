@@ -259,18 +259,18 @@ internal sealed class FlowGraph<T> where T : class
                 Report(index, "FLOW013", AnalysisDiagnosticKind.Error, "endfilter is only valid inside a filter");
             }
 
-            if ((op == OpCodes.Leave || op == OpCodes.Leave_S)
-                && kinds.Any(kind => kind is BlockKind.Finally or BlockKind.Fault or BlockKind.Filter))
-            {
-                Report(index, "FLOW014", AnalysisDiagnosticKind.Error, "leave is not allowed inside finally, fault, or filter");
-                continue;
-            }
-
             foreach (var edge in Edges[index])
             {
                 var target = Regions[edge.Target];
                 if (source.SequenceEqual(target))
                 {
+                    if (op is { } instruction && (instruction == OpCodes.Leave || instruction == OpCodes.Leave_S)
+                        && kinds.Any(kind => kind is BlockKind.Finally or BlockKind.Fault or BlockKind.Filter))
+                    {
+                        Report(index, "FLOW014", AnalysisDiagnosticKind.Error,
+                            "leave is not allowed inside finally, fault, or filter");
+                    }
+
                     continue;
                 }
 
