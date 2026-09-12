@@ -265,7 +265,7 @@ internal sealed class FlowGraph<T> where T : class
                 if (source.SequenceEqual(target))
                 {
                     if (op is { } instruction && (instruction == OpCodes.Leave || instruction == OpCodes.Leave_S)
-                        && kinds.Any(kind => kind is BlockKind.Finally or BlockKind.Fault or BlockKind.Filter))
+                        && kinds.Length > 0 && kinds[^1] is BlockKind.Finally or BlockKind.Fault or BlockKind.Filter)
                     {
                         Report(index, "FLOW014", AnalysisDiagnosticKind.Error,
                             "leave is not allowed inside finally, fault, or filter");

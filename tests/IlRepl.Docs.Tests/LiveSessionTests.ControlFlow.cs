@@ -138,6 +138,30 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
+    /// A leave whose target stays in a nested try remains valid inside an outer finalizer.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(120_000, CooperativeCancellation = true)]
+    public async Task ControlFlow_NestedTryLocalLeaveWithinFinalizerMatchesDesktop(string browser)
+    {
+        var launched = GetBrowser(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+        var example = ControlFlowExamples.All.Single(candidate => candidate.Name == "NestedTryLocalLeaveWithinFinally");
+        await PasteAsync(page, example.Source);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of method " + example.Name, options);
+        await TypeLineAsync(page, "ldc.i4.1");
+        await TypeLineAsync(page, example.Call);
+        await TypeLineAsync(page, "ret");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 42 : int32", options);
+    }
+
+    /// <summary>
     /// Browser Mono refuses transfers and prefixes that cross protected-region boundaries.
     /// </summary>
     /// <param name="browser">The browser engine.</param>
