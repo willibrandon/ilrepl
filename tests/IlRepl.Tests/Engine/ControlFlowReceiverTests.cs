@@ -156,6 +156,42 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
+    /// Constant reasoning does not remove an untaken edge from CLI stack verification.
+    /// </summary>
+    [TestMethod]
+    [DataRow("branch")]
+    [DataRow("unwind-target")]
+    [DataRow("endfilter")]
+    [DataRow("endfinally")]
+    public async Task ConstantBranch_StillValidatesUntakenEdge(string shape)
+    {
+        var lines = shape switch
+        {
+            "branch" => ControlFlowReceiverExamples.ConstantBranchStackSource(),
+            "unwind-target" => ControlFlowReceiverExamples.ConstantBranchAfterUnwindSource(),
+            "endfilter" => ControlFlowReceiverExamples.ConstantBranchAtEndfilterSource(),
+            "endfinally" => ControlFlowReceiverExamples.ConstantBranchAtEndfinallySource(),
+            _ => throw new InvalidOperationException(shape),
+        };
+        const string Expected = "stack underflow";
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.Contains(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error
+            && diagnostic.Message.Contains(Expected, StringComparison.Ordinal), preview.Diagnostics);
+
+        var error = Assert.ThrowsExactly<ReplException>(() =>
+        {
+            foreach (var line in lines)
+            {
+                session.AddLine(line);
+            }
+        });
+        Assert.Contains(Expected, error.Message);
+        Assert.IsNotNull(session.OpenType);
+    }
+
+    /// <summary>
     /// A leave carries receiver changes made by its finally handler to the instruction at the target.
     /// </summary>
     [TestMethod]

@@ -349,7 +349,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
             else if (node.Instruction is { } view && !state.Invalid && state.Values is { } values)
             {
-                var problem = structuralProblems[slot] ?? ValidateStack(view, values, graph, index, returnType, cell);
+                var problem = structuralProblems[slot] ?? ValidateStack(view, values, graph, index, returnType, cell,
+                    state.FilterPaths is not { Length: 0 });
                 if (problem is not null)
                 {
                     if (structuralProblems[slot] is null)
@@ -466,14 +467,14 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 .Where(path => path.Values.LastOrDefault().IsZero != true).ToArray();
             var rejectingFilterPaths = pathsAtEnd?
                 .Where(path => path.Values.LastOrDefault().IsOne != true).ToArray();
+            var hasOrdinaryFilterPathOnly = pathsAtEnd is { Length: 0 };
             if (!state.Invalid && state.SyntheticHandler is null && node.Instruction?.Op == OpCodes.Endfilter
-                && (acceptingFilterPaths is null || acceptingFilterPaths.Length > 0)
+                && (acceptingFilterPaths is null || acceptingFilterPaths.Length > 0 || hasOrdinaryFilterPathOnly)
                 && graph.FilterHandlerFor(index) is { } handler && graph.Seeds.TryGetValue(handler, out var handlerEntry))
             {
                 var outgoing = ApplyUnwindEffects(state with
                 {
-                    ThisArgumentIsOriginal = acceptingFilterPaths?.All(path => path.ThisArgumentIsOriginal)
-                        ?? state.ThisArgumentIsOriginal,
+                    ThisArgumentIsOriginal = OriginalReceiverFor(acceptingFilterPaths, state.ThisArgumentIsOriginal),
                     FilterPaths = acceptingFilterPaths,
                 }, finalizerEffects, (unwind, incoming) => EnterUnwindHandler(index, unwind, incoming));
                 if (outgoing is not null)
@@ -488,10 +489,10 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
 
             if (!state.Invalid && state.SyntheticHandler is null && node.Instruction?.Op == OpCodes.Endfilter
-                && (rejectingFilterPaths is null || rejectingFilterPaths.Length > 0))
+                && (rejectingFilterPaths is null || rejectingFilterPaths.Length > 0 || hasOrdinaryFilterPathOnly))
             {
                 ContinueFilterSearch(index, rejectingFilterPaths,
-                    rejectingFilterPaths?.All(path => path.ThisArgumentIsOriginal) ?? state.ThisArgumentIsOriginal,
+                    OriginalReceiverFor(rejectingFilterPaths, state.ThisArgumentIsOriginal),
                     state.PendingUnwindHandlers);
             }
 
@@ -532,11 +533,6 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     edgeFilterPaths = TransferFilterPaths(
                         SelectBranchPaths(filterPathsBeforeInstruction, booleanBranch, edge, 0),
                         booleanBranch, transferredPops, transferredPushes, transferredValues);
-                }
-
-                if (edgeFilterPaths is { Length: 0 })
-                {
-                    continue;
                 }
 
                 var outgoing = (FlowState<T>?)(edge.ClearsStack && !state.Invalid
@@ -625,6 +621,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         FlowGraph<T> graph, int sectionId, FlowRegion section, FlowResult<T> result)
     {
         var transformations = new List<FilterPathState>();
+        var completes = false;
         for (var index = section.Start; index < section.End; index++)
         {
             if (result.After[index - section.Start] is not { Invalid: false } state)
@@ -642,6 +639,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 continue;
             }
 
+            completes = true;
             if (state.FilterPaths is not { } paths)
             {
                 transformations.Add(new FilterPathState([], null,
@@ -665,7 +663,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
         }
 
-        return (transformations.Count > 0,
+        return (completes,
             transformations.Count > MaxFilterPaths ? CollapseFilterPaths([.. transformations]) : [.. transformations]);
     }
 
@@ -741,6 +739,20 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return state;
         }
 
+        if (state.FilterPaths is { Length: 0 })
+        {
+            foreach (var handler in pending)
+            {
+                enterHandler?.Invoke(handler, state);
+                if (!UnwindCompletes(handler, effects))
+                {
+                    return null;
+                }
+            }
+
+            return WithExceptional(state, null, state.SyntheticHandler);
+        }
+
         if (state.FilterPaths is { } paths)
         {
             var completed = new List<FilterPathState>();
@@ -793,7 +805,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 var boundedInputs = BoundFilterPaths(inputs);
                 var handlerState = state with
                 {
-                    ThisArgumentIsOriginal = boundedInputs.All(input => input.ThisArgumentIsOriginal),
+                    ThisArgumentIsOriginal = OriginalReceiverFor(boundedInputs, state.ThisArgumentIsOriginal),
                     FilterPaths = boundedInputs,
                 };
                 enterHandler?.Invoke(handler, WithExceptional(handlerState, null, state.SyntheticHandler));
@@ -802,10 +814,28 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             var boundedCompleted = BoundFilterPaths(completed);
             var result = state with
             {
-                ThisArgumentIsOriginal = boundedCompleted.All(path => path.ThisArgumentIsOriginal),
+                ThisArgumentIsOriginal = OriginalReceiverFor(boundedCompleted, state.ThisArgumentIsOriginal),
                 FilterPaths = boundedCompleted,
             };
-            return completed.Count == 0 ? null : WithExceptional(result, null, state.SyntheticHandler);
+            if (completed.Count > 0)
+            {
+                return WithExceptional(result, null, state.SyntheticHandler);
+            }
+
+            foreach (var handler in pending)
+            {
+                if (!UnwindCompletes(handler, effects))
+                {
+                    return null;
+                }
+
+                if (!handlerInputs.ContainsKey(handler))
+                {
+                    enterHandler?.Invoke(handler, state with { FilterPaths = [] });
+                }
+            }
+
+            return WithExceptional(result, null, state.SyntheticHandler);
         }
 
         var aggregateThis = state.ThisArgumentIsOriginal;
@@ -827,6 +857,13 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             ThisArgumentIsOriginal = aggregateThis,
         }, null, state.SyntheticHandler);
     }
+
+    private static bool UnwindCompletes(int handler,
+        Dictionary<int, (bool Completes, FilterPathState[] Transformations)>? effects) =>
+        effects is not null && effects.TryGetValue(handler, out var effect) && effect.Completes;
+
+    private static bool OriginalReceiverFor(FilterPathState[]? paths, bool fallback) =>
+        paths is { Length: > 0 } ? paths.All(path => path.ThisArgumentIsOriginal) : fallback;
 
     private static void AddFilterPaths(List<FilterPathState> target, IEnumerable<FilterPathState> paths)
     {
@@ -1623,7 +1660,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     }
 
     private string? ValidateStack(StackOperandView<T> view, FlowValue<T>[] values, FlowGraph<T> graph, int index,
-        T? returnType, bool cell)
+        T? returnType, bool cell, bool receiverPathFeasible)
     {
         var op = view.Op;
         var count = values.Length;
@@ -1880,7 +1917,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return $"{op.Name} needs {_types.Name(field)} but found {_types.Name(top)}";
         }
 
-        if (view.ReceiverRestriction is { } receiverRestriction && !values[count - pops].IsThis)
+        if (receiverPathFeasible && view.ReceiverRestriction is { } receiverRestriction && !values[count - pops].IsThis)
         {
             return receiverRestriction;
         }
@@ -2355,7 +2392,16 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         }
 
         var unknown = left.HasUnknownPath || right.HasUnknownPath;
-        var thisArgumentIsOriginal = left.ThisArgumentIsOriginal && right.ThisArgumentIsOriginal;
+        var leftReceiverPathFeasible = left.FilterPaths is not { Length: 0 };
+        var rightReceiverPathFeasible = right.FilterPaths is not { Length: 0 };
+        bool MergeReceiverFact(bool leftFact, bool rightFact) => (leftReceiverPathFeasible, rightReceiverPathFeasible) switch
+        {
+            (true, true) => leftFact && rightFact,
+            (true, false) => leftFact,
+            (false, true) => rightFact,
+            _ => leftFact && rightFact,
+        };
+        var thisArgumentIsOriginal = MergeReceiverFact(left.ThisArgumentIsOriginal, right.ThisArgumentIsOriginal);
         var filterPaths = MergeFilterPaths(left.FilterPaths, right.FilterPaths);
         if (left.Values is not { } a || right.Values is not { } b)
         {
@@ -2380,7 +2426,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
 
             values[i] = new FlowValue<T>(type, [.. a[i].Origins.Union(b[i].Origins).Order()],
-                a[i].IsThis && b[i].IsThis, a[i].IsReadOnly || b[i].IsReadOnly);
+                MergeReceiverFact(a[i].IsThis, b[i].IsThis), a[i].IsReadOnly || b[i].IsReadOnly);
         }
 
         merged = WithExceptional(new FlowState<T>(values, unknown,

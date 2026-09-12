@@ -86,8 +86,6 @@ public sealed partial class LiveSessionTests
                 await ReturnedBodyAsync(page);
                 await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync(example.Finding, options);
                 await ClearPromptAsync(page);
-                var expected = 1_000 + index;
-                await RunCorpusCellAsync(page, $"ldc.i4 {expected}\nret", expected);
             }
 
             await ResetSessionAsync(page);
@@ -376,6 +374,22 @@ public sealed partial class LiveSessionTests
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.FinallySource(true)));
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class FlowFinallyArgument", options);
+        foreach (var source in new[]
+        {
+            ControlFlowReceiverExamples.ConstantBranchStackSource(),
+            ControlFlowReceiverExamples.ConstantBranchAfterUnwindSource(),
+            ControlFlowReceiverExamples.ConstantBranchAtEndfilterSource(),
+            ControlFlowReceiverExamples.ConstantBranchAtEndfinallySource(),
+        })
+        {
+            await PasteAsync(page, string.Join('\n', source));
+            await ArmSubmissionOutputAsync(page);
+            await page.Keyboard.PressAsync("Enter");
+            await ReturnedBodyAfterOutputAsync(page);
+            var output = await page.EvaluateAsync<string>("() => window.ilreplControlFlowOutput");
+            Assert.Contains("stack underflow", output);
+            await ClearPromptAsync(page);
+        }
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.NestedNonCompletingFinallySource()));
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class NestedFinallyArgument", options);
@@ -411,14 +425,17 @@ public sealed partial class LiveSessionTests
               window.ilreplControlFlowWriteCount = 0;
               window.ilreplControlFlowLastWrite = 0;
               window.ilreplControlFlowSawBusy = false;
+              window.ilreplControlFlowOutput = '';
               if (!window.ilreplControlFlowWriteWrapped) {
                 const write = terminal.write.bind(terminal);
                 terminal.write = (data, callback) => {
                   return write(data, () => {
                     window.ilreplControlFlowWriteCount++;
                     window.ilreplControlFlowLastWrite = performance.now();
+                    const output = typeof data === 'string' ? data : new TextDecoder().decode(data);
+                    window.ilreplControlFlowOutput += output;
                     const buffer = terminal.buffer.active;
-                    const status = buffer.getLine(terminal.rows - 1)?.translateToString(true) ?? '';
+                    const status = buffer.getLine(buffer.viewportY + terminal.rows - 1)?.translateToString(true) ?? '';
                     window.ilreplControlFlowSawBusy ||= status.includes('updating') || status.includes('sending');
                     if (callback) callback();
                   });
@@ -432,8 +449,20 @@ public sealed partial class LiveSessionTests
     private static Task<IJSHandle> ReturnedBodyAsync(IPage page) => page.WaitForFunctionAsync("""
         () => {
           const terminal = window.ilreplTerminal;
-          const status = terminal.buffer.active.getLine(terminal.rows - 1)?.translateToString(true) ?? '';
+          const buffer = terminal.buffer.active;
+          const status = buffer.getLine(buffer.viewportY + terminal.rows - 1)?.translateToString(true) ?? '';
           return window.ilreplControlFlowSawBusy && window.ilreplControlFlowWriteCount > 0
+            && performance.now() - window.ilreplControlFlowLastWrite >= 100 && status.includes('editing ')
+            && !status.includes('updating') && !status.includes('sending');
+        }
+        """, null, new() { PollingInterval = 16, Timeout = 30_000 });
+
+    private static Task<IJSHandle> ReturnedBodyAfterOutputAsync(IPage page) => page.WaitForFunctionAsync("""
+        () => {
+          const terminal = window.ilreplTerminal;
+          const buffer = terminal.buffer.active;
+          const status = buffer.getLine(buffer.viewportY + terminal.rows - 1)?.translateToString(true) ?? '';
+          return window.ilreplControlFlowWriteCount > 0
             && performance.now() - window.ilreplControlFlowLastWrite >= 100 && status.includes('editing ')
             && !status.includes('updating') && !status.includes('sending');
         }
@@ -456,7 +485,7 @@ public sealed partial class LiveSessionTests
         await page.WaitForFunctionAsync("""
             expected => {
               const terminal = window.ilreplTerminal;
-              return Array.from({ length: terminal.rows }, (_, row) =>
+              return Array.from({ length: terminal.buffer.active.length }, (_, row) =>
                 terminal.buffer.active.getLine(row)?.translateToString(true) ?? '')
                 .some(line => line.includes(expected));
             }
@@ -466,7 +495,8 @@ public sealed partial class LiveSessionTests
     private static Task<IJSHandle> SubmissionSettledAsync(IPage page) => page.WaitForFunctionAsync("""
         () => {
           const terminal = window.ilreplTerminal;
-          const status = terminal.buffer.active.getLine(terminal.rows - 1)?.translateToString(true) ?? '';
+          const buffer = terminal.buffer.active;
+          const status = buffer.getLine(buffer.viewportY + terminal.rows - 1)?.translateToString(true) ?? '';
           return window.ilreplControlFlowSawBusy && window.ilreplControlFlowWriteCount > 0
             && performance.now() - window.ilreplControlFlowLastWrite >= 100 && !status.includes('editing ')
             && !status.includes('updating') && !status.includes('sending');

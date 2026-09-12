@@ -1139,6 +1139,104 @@ public static class ControlFlowReceiverExamples
     ];
 
     /// <summary>
+    /// Builds a constant branch whose untaken edge still has an invalid stack transition.
+    /// </summary>
+    public static string[] ConstantBranchStackSource() =>
+    [
+        ".class public ConstantBranchStack {",
+        ".method public instance void .ctor(class ConstantBranchStack other) {",
+        "ldarg.0",
+        "call instance void object::.ctor()",
+        ".try {",
+        "ldarg other",
+        "starg.s 0",
+        "ldc.i4.0",
+        "brtrue BAD",
+        "leave DONE",
+        "BAD: pop",
+        "leave DONE",
+        "} finally {",
+        "endfinally",
+        "}",
+        "DONE: ret",
+        "}",
+        "}",
+    ];
+
+    /// <summary>
+    /// Builds an untaken leave whose invalid target follows a required finally unwind.
+    /// </summary>
+    public static string[] ConstantBranchAfterUnwindSource() =>
+    [
+        ".class public ConstantBranchAfterUnwind {",
+        ".method public static void F() {",
+        ".try {",
+        "ldc.i4.0",
+        "brtrue BAD",
+        "leave DONE",
+        "BAD: leave BADTARGET",
+        "} finally {",
+        "endfinally",
+        "}",
+        "BADTARGET: pop",
+        "ret",
+        "DONE: ret",
+        "}",
+        "}",
+    ];
+
+    /// <summary>
+    /// Builds an untaken filter branch whose handler still has an invalid stack transition.
+    /// </summary>
+    public static string[] ConstantBranchAtEndfilterSource() =>
+    [
+        ".class public ConstantBranchAtEndfilter {",
+        ".method public static void F() {",
+        ".try {",
+        "ldnull",
+        "throw",
+        "} filter {",
+        "pop",
+        "ldc.i4.0",
+        "brtrue ACCEPT",
+        "ldc.i4.0",
+        "endfilter",
+        "ACCEPT: ldc.i4.1",
+        "endfilter",
+        "} handler {",
+        "pop",
+        "leave BADTARGET",
+        "}",
+        "BADTARGET: nop",
+        "pop",
+        "ret",
+        "}",
+        "}",
+    ];
+
+    /// <summary>
+    /// Builds an untaken finalizer branch whose unwind target still has an invalid stack transition.
+    /// </summary>
+    public static string[] ConstantBranchAtEndfinallySource() =>
+    [
+        ".class public ConstantBranchAtEndfinally {",
+        ".method public static void F() {",
+        ".try {",
+        "leave BADTARGET",
+        "} finally {",
+        "ldc.i4.0",
+        "brtrue END",
+        "LOOP: br LOOP",
+        "END: endfinally",
+        "}",
+        "BADTARGET: nop",
+        "pop",
+        "ret",
+        "}",
+        "}",
+    ];
+
+    /// <summary>
     /// Builds a constructor whose finally handler either preserves or replaces argument zero.
     /// </summary>
     /// <param name="originalReceiver">Whether the handler stores the original receiver.</param>
