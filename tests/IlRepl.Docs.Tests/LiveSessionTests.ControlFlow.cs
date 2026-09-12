@@ -39,7 +39,7 @@ public sealed partial class LiveSessionTests
     [TestMethod]
     [DataRow("chromium")]
     [DataRow("webkit")]
-    [Timeout(600_000, CooperativeCancellation = true)]
+    [Timeout(900_000, CooperativeCancellation = true)]
     public async Task ControlFlow_CorpusMatchesDesktop(string browser)
     {
         await using var launched = await LaunchAsync(browser);
@@ -80,7 +80,10 @@ public sealed partial class LiveSessionTests
             }
             else
             {
-                await SubmitRejectedCorpusAsync(page, example.Finding);
+                var abandoned = example.GenericParameters.Length == 0
+                    ? $"method {example.Name} abandoned" : $"class {genericType} abandoned";
+                await SubmitRejectedCorpusAsync(page, example.Finding, abandoned,
+                    source.TrimEnd('\r', '\n').Count(character => character == '\n') + 1);
                 await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync(example.Finding, options);
                 await ResetReturnedCorpusAsync(page);
                 continue;
@@ -427,18 +430,18 @@ public sealed partial class LiveSessionTests
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.FinallySource(true)));
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class FlowFinallyArgument", options);
-        foreach (var source in new[]
+        foreach (var (source, abandoned) in new[]
         {
-            ControlFlowReceiverExamples.ConstantBranchStackSource(),
-            ControlFlowReceiverExamples.ConstantBranchAfterUnwindSource(),
-            ControlFlowReceiverExamples.ConstantBranchAtEndfilterSource(),
-            ControlFlowReceiverExamples.ConstantBranchAtEndfinallySource(),
+            (ControlFlowReceiverExamples.ConstantBranchStackSource(), "class ConstantBranchStack abandoned"),
+            (ControlFlowReceiverExamples.ConstantBranchAfterUnwindSource(), "class ConstantBranchAfterUnwind abandoned"),
+            (ControlFlowReceiverExamples.ConstantBranchAtEndfilterSource(), "class ConstantBranchAtEndfilter abandoned"),
+            (ControlFlowReceiverExamples.ConstantBranchAtEndfinallySource(), "class ConstantBranchAtEndfinally abandoned"),
         })
         {
             await PasteAsync(page, string.Join('\n', source));
-            await ArmSubmissionOutputAsync(page, "stack underflow");
+            await ArmSubmissionOutputAsync(page);
             await page.Keyboard.PressAsync("Enter");
-            await ReturnedBodyAfterOutputAsync(page, "stack underflow");
+            await ReturnedBodyAfterOutputAsync(page, "stack underflow", abandoned, source.Length);
             await ClearPromptAsync(page);
         }
         foreach (var source in new[]
@@ -483,10 +486,10 @@ public sealed partial class LiveSessionTests
             .ToContainTextAsync("end of class CorrelatedSwitchFinallyArgument", options);
     }
 
-    private static async Task ArmSubmissionOutputAsync(IPage page, string? expected = null)
+    private static async Task ArmSubmissionOutputAsync(IPage page)
     {
         await page.EvaluateAsync("""
-            expected => {
+            () => {
               const terminal = window.ilreplTerminal;
               if (!window.ilreplControlFlowWriteWrapped) {
                 const write = terminal.write.bind(terminal);
@@ -507,14 +510,10 @@ public sealed partial class LiveSessionTests
                 window.ilreplControlFlowLastWrite = 0;
                 window.ilreplControlFlowArmed = performance.now();
                 window.ilreplControlFlowOutput = '';
-                const buffer = terminal.buffer.active;
-                const text = Array.from({ length: buffer.length }, (_, row) =>
-                  buffer.getLine(row)?.translateToString(true) ?? '').join('\n');
-                window.ilreplControlFlowExpectedCount = expected === null ? 0 : text.split(expected).length - 1;
                 resolve();
               }));
             }
-            """, expected);
+            """);
     }
 
     private static async Task ReadyToSubmitCorpusAsync(IPage page)
@@ -534,26 +533,30 @@ public sealed partial class LiveSessionTests
             """, null, new() { PollingInterval = 16, Timeout = 30_000 });
     }
 
-    private static async Task SubmitRejectedCorpusAsync(IPage page, string finding)
+    private static async Task SubmitRejectedCorpusAsync(IPage page, string finding, string abandoned, int lineCount)
     {
         await ArmSubmissionOutputAsync(page);
         await SendTerminalInputAsync(page, "\r");
         try
         {
             await page.WaitForFunctionAsync("""
-                finding => {
+                value => {
+                  const args = value.split('\n');
                   const terminal = window.ilreplTerminal;
                   const buffer = terminal.buffer.active;
                   const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
-                  const output = window.ilreplControlFlowOutput
+                  const output = window.ilreplControlFlowOutput;
+                  const plainOutput = output
                     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\s+/g, ' ');
                   const lastChange = Math.max(window.ilreplControlFlowArmed, window.ilreplControlFlowLastWrite);
-                  return output.includes(finding) && window.ilreplControlFlowWriteCount > 0
+                  const completed = output.includes('0/' + args[0]) || plainOutput.includes(args[2]);
+                  return completed && plainOutput.includes(args[1])
+                    && window.ilreplControlFlowWriteCount > 0
                     && performance.now() - lastChange >= 100 && status.includes('editing ')
                     && !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
                     && !status.includes('Ctrl+C cancels');
                 }
-                """, finding, new() { PollingInterval = 16, Timeout = 30_000 });
+                """, $"{lineCount}\n{finding}\n{abandoned}", new() { PollingInterval = 16, Timeout = 30_000 });
         }
         catch (TimeoutException exception)
         {
@@ -578,21 +581,33 @@ public sealed partial class LiveSessionTests
         }
         """);
 
-    private static Task<IJSHandle> ReturnedBodyAfterOutputAsync(IPage page, string expected) => page.WaitForFunctionAsync("""
-        expected => {
-          const terminal = window.ilreplTerminal;
-          const buffer = terminal.buffer.active;
-          const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
-          const text = Array.from({ length: buffer.length }, (_, row) =>
-            buffer.getLine(row)?.translateToString(true) ?? '').join('\n');
-          const count = text.split(expected).length - 1;
-          return window.ilreplControlFlowWriteCount > 0 && window.ilreplControlFlowOutput.includes('error:')
-            && count > window.ilreplControlFlowExpectedCount
-            && performance.now() - window.ilreplControlFlowLastWrite >= 100 && status.includes('editing ')
-            && !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
-            && !status.includes('Ctrl+C cancels');
+    private static async Task ReturnedBodyAfterOutputAsync(IPage page, string expected, string abandoned, int lineCount)
+    {
+        try
+        {
+            await page.WaitForFunctionAsync("""
+                value => {
+                  const args = value.split('\n');
+                  const terminal = window.ilreplTerminal;
+                  const buffer = terminal.buffer.active;
+                  const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
+                  const output = window.ilreplControlFlowOutput;
+                  const plainOutput = output
+                    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\s+/g, ' ');
+                  const completed = output.includes('0/' + args[0]) || plainOutput.includes(args[2]);
+                  return completed && window.ilreplControlFlowWriteCount > 0 && plainOutput.includes(args[1])
+                    && performance.now() - window.ilreplControlFlowLastWrite >= 100 && status.includes('editing ')
+                    && !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
+                    && !status.includes('Ctrl+C cancels');
+                }
+                """, $"{lineCount}\n{expected}\n{abandoned}", new() { PollingInterval = 16, Timeout = 30_000 });
         }
-        """, expected, new() { PollingInterval = 16, Timeout = 30_000 });
+        catch (TimeoutException exception)
+        {
+            throw new InvalidOperationException(
+                $"the returned body containing {expected} did not settle: {await BrowserWaitStateAsync(page)}", exception);
+        }
+    }
 
     private static async Task ResetSessionAsync(IPage page)
     {

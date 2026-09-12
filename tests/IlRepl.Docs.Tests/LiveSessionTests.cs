@@ -650,11 +650,16 @@ public sealed partial class LiveSessionTests
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
 
-        foreach (var line in new[] { ".method void Bad() {", "ldc.i4 0", "brfalse SKIP", "ldc.i4 1", "ldc.i4 2", "pop", "SKIP: pop", "}" })
+        foreach (var line in new[] { ".method void Bad() {", "ldc.i4 0", "brfalse SKIP", "ldc.i4 1", "ldc.i4 2", "pop", "SKIP: pop" })
         {
             await TypeLineAsync(page, line);
         }
 
+        await page.Keyboard.TypeAsync("}");
+        await ReadyToSubmitCorpusAsync(page);
+        await ArmSubmissionOutputAsync(page);
+        await SendTerminalInputAsync(page, "\r");
+        await ReturnedBodyAfterOutputAsync(page, "incompatible stacks", "method Bad abandoned", 8);
         await Assertions.Expect(terminal).ToContainTextAsync("incompatible stacks",
             new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
         await Assertions.Expect(terminal).ToContainTextAsync("editing 8 lines",
