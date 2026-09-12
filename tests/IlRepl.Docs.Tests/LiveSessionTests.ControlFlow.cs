@@ -45,40 +45,52 @@ public sealed partial class LiveSessionTests
     {
         await using var launched = await LaunchAsync(browser);
         await using var context = await NewContextAsync(launched);
-        var page = await OpenSessionAsync(context);
+        const int Partitions = 4;
+        var pages = await Task.WhenAll(Enumerable.Range(0, Partitions)
+            .Select(_ => OpenSessionAsync(context)));
+        var indexed = ControlFlowExamples.All.Select((example, index) => (Example: example, Index: index));
+        await Task.WhenAll(pages.Select((page, partition) => RunCorpusPartitionAsync(
+            page, indexed.Where(item => item.Index % Partitions == partition))));
+    }
+
+    private async Task RunCorpusPartitionAsync(IPage page,
+        IEnumerable<(ControlFlowExample Example, int Index)> examples)
+    {
         page.Console += (_, message) => TestContext.WriteLine(message.Text);
         var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
-        var session = 1;
-        foreach (var example in ControlFlowExamples.All)
+        foreach (var (example, index) in examples)
         {
             TestContext.CancellationToken.ThrowIfCancellationRequested();
             TestContext.WriteLine(example.Name);
-            await PasteAsync(page, example.Source);
+            var genericType = "FlowGeneric" + index;
+            var source = example.GenericParameters.Length == 0
+                ? example.Source : example.Source.Replace("FlowGeneric", genericType, StringComparison.Ordinal);
+            var call = example.GenericParameters.Length == 0
+                ? example.Call : example.Call.Replace("FlowGeneric", genericType, StringComparison.Ordinal);
+            await PasteAsync(page, source);
             await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("Enter sends", options);
             await ArmSubmissionOutputAsync(page);
             await page.Keyboard.PressAsync("Enter");
             if (example.Accepted)
             {
-                var committed = example.GenericParameters.Length == 0 ? "end of method " + example.Name : "end of class FlowGeneric";
+                await SubmissionSettledAsync(page);
+                var committed = example.GenericParameters.Length == 0
+                    ? "end of method " + example.Name : "end of class " + genericType;
                 await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync(committed, options);
-                await TypeLineAsync(page, "ldc.i4.1");
-                await TypeLineAsync(page, example.Call);
-                await TypeLineAsync(page, "ret");
-                await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 42 : int32", options);
+                var expected = 1_000 + index;
+                await RunCorpusCellAsync(page,
+                    "ldc.i4.1\n" + call + $"\nldc.i4 {expected - 42}\nadd\nret", expected);
             }
             else
             {
                 await ReturnedBodyAsync(page);
                 await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync(example.Finding, options);
                 await ClearPromptAsync(page);
-                await TypeLineAsync(page, "ldc.i4.s 42");
-                await TypeLineAsync(page, "ret");
-                await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 42 : int32", options);
+                var expected = 1_000 + index;
+                await RunCorpusCellAsync(page, $"ldc.i4 {expected}\nret", expected);
             }
 
-            await page.Keyboard.PressAsync("Control+q");
-            await WaitForSessionAsync(page, ++session, 30_000);
-            await ClickIntoTerminalAsync(page);
+            await ResetSessionAsync(page);
         }
     }
 
@@ -332,6 +344,10 @@ public sealed partial class LiveSessionTests
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("= 42 : int32", options);
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.SiblingFilterSource()));
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
+        await ClearPromptAsync(page);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.RestoringFilterSource(true)));
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class RestoringFilterArgument", options);
     }
 
     /// <summary>
@@ -359,6 +375,28 @@ public sealed partial class LiveSessionTests
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.NestedNonCompletingFinallySource()));
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class NestedFinallyArgument", options);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.ExceptionUnwindSource(false, true, true)));
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
+        await ClearPromptAsync(page);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.ExceptionUnwindSource(true, false, false)));
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class FlowExceptionUnwindArgument", options);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.UnwindHandlerStoreSource(true, true)));
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
+        await ClearPromptAsync(page);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.FilterPathUnwindHandlerSource()));
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
+        await ClearPromptAsync(page);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.ConditionalFinalizerSource(false)));
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
+        await ClearPromptAsync(page);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.ConditionalFinalizerSource(true)));
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class ConditionalFinalizer", options);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.CorrelatedSwitchFinalizerSource(true)));
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal"))
+            .ToContainTextAsync("end of class CorrelatedSwitchFinallyArgument", options);
     }
 
     private static async Task ArmSubmissionOutputAsync(IPage page)
@@ -368,13 +406,19 @@ public sealed partial class LiveSessionTests
               const terminal = window.ilreplTerminal;
               window.ilreplControlFlowWriteCount = 0;
               window.ilreplControlFlowLastWrite = 0;
+              window.ilreplControlFlowSawBusy = false;
               if (!window.ilreplControlFlowWriteWrapped) {
                 const write = terminal.write.bind(terminal);
-                terminal.write = (data, callback) => write(data, () => {
-                  window.ilreplControlFlowWriteCount++;
-                  window.ilreplControlFlowLastWrite = performance.now();
-                  if (callback) callback();
-                });
+                terminal.write = (data, callback) => {
+                  return write(data, () => {
+                    window.ilreplControlFlowWriteCount++;
+                    window.ilreplControlFlowLastWrite = performance.now();
+                    const buffer = terminal.buffer.active;
+                    const status = buffer.getLine(terminal.rows - 1)?.translateToString(true) ?? '';
+                    window.ilreplControlFlowSawBusy ||= status.includes('updating') || status.includes('sending');
+                    if (callback) callback();
+                  });
+                };
                 window.ilreplControlFlowWriteWrapped = true;
               }
             }
@@ -385,8 +429,43 @@ public sealed partial class LiveSessionTests
         () => {
           const terminal = window.ilreplTerminal;
           const status = terminal.buffer.active.getLine(terminal.rows - 1)?.translateToString(true) ?? '';
-          return window.ilreplControlFlowWriteCount > 0 && performance.now() - window.ilreplControlFlowLastWrite >= 100
-            && status.includes('editing ') && !status.includes('updating') && !status.includes('sending');
+          return window.ilreplControlFlowSawBusy && window.ilreplControlFlowWriteCount > 0
+            && performance.now() - window.ilreplControlFlowLastWrite >= 100 && status.includes('editing ')
+            && !status.includes('updating') && !status.includes('sending');
+        }
+        """, null, new() { PollingInterval = 16, Timeout = 30_000 });
+
+    private static async Task ResetSessionAsync(IPage page)
+    {
+        await page.Keyboard.TypeAsync(".reset");
+        await ArmSubmissionOutputAsync(page);
+        await page.Keyboard.PressAsync("Enter");
+        await SubmissionSettledAsync(page);
+    }
+
+    private static async Task RunCorpusCellAsync(IPage page, string source, int expected)
+    {
+        await PasteAsync(page, source);
+        await ArmSubmissionOutputAsync(page);
+        await page.Keyboard.PressAsync("Enter");
+        await SubmissionSettledAsync(page);
+        await page.WaitForFunctionAsync("""
+            expected => {
+              const terminal = window.ilreplTerminal;
+              return Array.from({ length: terminal.rows }, (_, row) =>
+                terminal.buffer.active.getLine(row)?.translateToString(true) ?? '')
+                .some(line => line.includes(expected));
+            }
+            """, $"= {expected} : int32", new() { PollingInterval = 16, Timeout = 30_000 });
+    }
+
+    private static Task<IJSHandle> SubmissionSettledAsync(IPage page) => page.WaitForFunctionAsync("""
+        () => {
+          const terminal = window.ilreplTerminal;
+          const status = terminal.buffer.active.getLine(terminal.rows - 1)?.translateToString(true) ?? '';
+          return window.ilreplControlFlowSawBusy && window.ilreplControlFlowWriteCount > 0
+            && performance.now() - window.ilreplControlFlowLastWrite >= 100 && !status.includes('editing ')
+            && !status.includes('updating') && !status.includes('sending');
         }
         """, null, new() { PollingInterval = 16, Timeout = 30_000 });
 }
