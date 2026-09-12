@@ -230,9 +230,14 @@ internal sealed class FlowGraph<T> where T : class
                 Report(index, "FLOW023", AnalysisDiagnosticKind.Error, "localloc is not allowed inside an exception handler");
             }
 
-            if (op == OpCodes.Rethrow && !kinds.Any(kind => kind is BlockKind.Catch or BlockKind.FilterHandler))
+            if (op == OpCodes.Rethrow)
             {
-                Report(index, "FLOW011", AnalysisDiagnosticKind.Error, "rethrow is only valid inside a catch handler");
+                var handler = kinds.LastOrDefault(kind => kind is BlockKind.Catch or BlockKind.FilterHandler
+                    or BlockKind.Finally or BlockKind.Fault);
+                if (handler is not (BlockKind.Catch or BlockKind.FilterHandler))
+                {
+                    Report(index, "FLOW011", AnalysisDiagnosticKind.Error, "rethrow is only valid inside a catch handler");
+                }
             }
 
             if (op == OpCodes.Endfinally

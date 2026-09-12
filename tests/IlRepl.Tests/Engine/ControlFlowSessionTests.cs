@@ -384,8 +384,40 @@ public sealed class ControlFlowSessionTests
     public void EndfinallyInInnermostFinalizer_IsAccepted(string section)
     {
         var session = new Session();
-        Add(session, ".method void Direct() {", ".try {", "ldnull", "throw", $"}} {section} {{", "endfinally");
-        Assert.AreEqual("[]", session.State.StackText);
+        Add(session, ".method void Nested() {", ".try {", ".try {", "ldnull", "throw", $"}} {section} {{",
+            "endfinally", "}", "leave DONE", "} catch [System.Runtime]System.Exception {", "pop", "leave DONE",
+            "}", "DONE: ret", "}", "call void Nested()");
+        Assert.IsTrue(session.Run().IsVoid);
+    }
+
+    /// <summary>
+    /// An outer catch does not make rethrow valid inside a nested finally or fault handler.
+    /// </summary>
+    /// <param name="section">The nested handler containing rethrow.</param>
+    [TestMethod]
+    [DataRow("finally")]
+    [DataRow("fault")]
+    public void RethrowInNestedFinalizer_IsRejectedImmediately(string section)
+    {
+        var session = new Session();
+        Add(session, ".method void Nested() {", ".try {", "ldnull", "throw",
+            "} catch [System.Runtime]System.Exception {", "pop", ".try {", "leave INNER", $"}} {section} {{");
+        var error = Assert.ThrowsExactly<ReplException>(() => session.AddLine("rethrow"));
+        Assert.Contains("rethrow is only valid inside a catch handler", error.Message);
+    }
+
+    /// <summary>
+    /// Rethrow remains valid in a nested try whose enclosing handler is a catch.
+    /// </summary>
+    [TestMethod]
+    public void RethrowInNestedTryWithinCatch_IsAccepted()
+    {
+        var session = new Session();
+        Add(session, ".method void Nested() {", ".try {", "ldnull", "throw",
+            "} catch [System.Runtime]System.Exception {", "pop", ".try {", "rethrow",
+            "} catch [System.Runtime]System.Exception {", "pop", "leave DONE", "}", "}", "DONE: ret", "}",
+            "call void Nested()");
+        Assert.IsTrue(session.Run().IsVoid);
     }
 
     /// <summary>
