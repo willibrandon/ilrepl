@@ -374,6 +374,14 @@ public sealed partial class LiveSessionTests
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+        foreach (var use in new[] { "pop", "load" })
+        {
+            await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.NonMutatingAddressSource(use)));
+            await page.Keyboard.PressAsync("Enter");
+            var suffix = char.ToUpperInvariant(use[0]) + use[1..];
+            await Assertions.Expect(page.Locator("#terminal"))
+                .ToContainTextAsync($"end of class FlowAddress{suffix}Argument", options);
+        }
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.AddressSource("stind.ref")));
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
         await ClearPromptAsync(page);

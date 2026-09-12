@@ -1802,6 +1802,32 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
+    /// Reading or discarding argument zero's address preserves its original-receiver provenance.
+    /// </summary>
+    /// <param name="use">The nonmutating address operation.</param>
+    [TestMethod]
+    [DataRow("pop")]
+    [DataRow("load")]
+    public async Task ArgumentAddress_NonMutatingUsePreservesReceiverProvenance(string use)
+    {
+        var lines = ControlFlowReceiverExamples.NonMutatingAddressSource(use);
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error, preview.Diagnostics,
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        foreach (var line in lines)
+        {
+            session.AddLine(line);
+        }
+
+        var suffix = char.ToUpperInvariant(use[0]) + use[1..];
+        session.AddLine($"newobj instance void FlowAddress{suffix}Argument::.ctor()");
+        session.AddLine($"ldfld int32 FlowAddress{suffix}Argument::Value");
+        Assert.AreEqual(42, session.Run().Value);
+    }
+
+    /// <summary>
     /// Generic constructors distinguish their own field definition from an inherited one.
     /// </summary>
     /// <param name="inherited">Whether the store targets the generic base type's field.</param>

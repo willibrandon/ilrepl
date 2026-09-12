@@ -426,6 +426,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         var popped = values.Skip(values.Length - pops).ToArray();
                         var output = values.Take(values.Length - pops).ToList();
                         var pushed = _transfer.PushTypes(view, popped.Select(value => value.Type).ToArray());
+                        var invalidatedAddressSlots = InvalidatedAddressSlots(view, popped, graph);
                         initializesConstructorThis = InitializesConstructorThis(view, values, graph, state.ConstructorState);
                         transferredPops = pops;
                         transferredPushes = pushed.Count;
@@ -433,8 +434,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         initializesConstructorPath = FilterPathInitializesConstructor(
                             state.FilterPaths, view, pops, graph);
                         var filterPaths = TransferFilterPaths(
-                            state.FilterPaths, view, pops, pushed.Count, popped, graph);
-                        var loadsThis = view.ReadsThisArgument && state.ThisArgumentIsOriginal;
+                            state.FilterPaths, view, pops, pushed.Count, popped, graph, invalidatedAddressSlots);
+                        var loadsThis = view.ReadsThisArgument && state.ThisArgumentIsOriginal
+                            || LoadsReceiverThroughAddress(view, popped);
                         for (var pushedIndex = 0; pushedIndex < pushed.Count; pushedIndex++)
                         {
                             var outputIndex = values.Length - pops + pushedIndex;
@@ -455,8 +457,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         }
 
                         var thisArgumentIsOriginal = view.WritesThisArgument ? popped[^1].IsThis
-                            : view.ReadsThisArgument && view.Op.Name is "ldarga" or "ldarga.s" ? false
-                            : state.ThisArgumentIsOriginal;
+                            : invalidatedAddressSlots.Contains((true, 0)) ? false : state.ThisArgumentIsOriginal;
                         if (filterPaths is { Length: > 0 })
                         {
                             thisArgumentIsOriginal = filterPaths.All(path => path.ThisArgumentIsOriginal);
@@ -2912,13 +2913,15 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     }
 
     private FilterPathState[]? TransferFilterPaths(FilterPathState[]? paths, StackOperandView<T> view,
-        int pops, int pushes, FlowValue<T>[] popped, FlowGraph<T> graph, bool bounded = true)
+        int pops, int pushes, FlowValue<T>[] popped, FlowGraph<T> graph,
+        IReadOnlyList<(bool IsArgument, int Index)>? invalidatedAddressSlots = null, bool bounded = true)
     {
         if (paths is null)
         {
             return null;
         }
 
+        invalidatedAddressSlots ??= InvalidatedAddressSlots(view, popped, graph);
         if (paths.Any(path => path.CorrelatedAlternatives is not null))
         {
             var preserved = new List<FilterPathState>();
@@ -2927,7 +2930,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 if (path.CorrelatedAlternatives is null)
                 {
                     var transformed = TransferFilterPaths(
-                        [path], view, pops, pushes, popped, graph, bounded: false);
+                        [path], view, pops, pushes, popped, graph, invalidatedAddressSlots, bounded: false);
                     if (transformed is null)
                     {
                         return null;
@@ -2939,7 +2942,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
                 var summary = TransferFilterPaths(
                     [path with { CorrelatedAlternatives = null }], view, pops, pushes, popped,
-                    graph, bounded: false);
+                    graph, invalidatedAddressSlots, bounded: false);
                 if (summary is not [var transformedSummary])
                 {
                     return null;
@@ -2952,7 +2955,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 }
 
                 var alternatives = TransferFilterPaths(
-                    path.CorrelatedAlternatives, view, pops, pushes, popped, graph, bounded: false);
+                    path.CorrelatedAlternatives, view, pops, pushes, popped, graph,
+                    invalidatedAddressSlots, bounded: false);
                 if (alternatives is null)
                 {
                     return null;
@@ -2969,7 +2973,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         {
             if (path.StackUnknown)
             {
-                var unknown = TransferUnknownFilterPath(path, view);
+                var unknown = TransferUnknownFilterPath(path, view, invalidatedAddressSlots);
                 if (!result.Any(existing => SameFilterPath(existing, unknown)))
                 {
                     result.Add(unknown);
@@ -2986,27 +2990,33 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             var output = path.Values.Take(path.Values.Length - pops).ToList();
             var locals = path.Locals is null ? null : new Dictionary<int, FilterPathValue>(path.Locals);
             var arguments = path.Arguments is null ? null : new Dictionary<int, FilterPathValue>(path.Arguments);
+            var addressEscapes = invalidatedAddressSlots.Count > 0;
             if (StoresLocal(view) && view.LocalIndex is { } storedLocal)
             {
                 locals ??= [];
-                locals[storedLocal] = pathPopped[^1];
+                locals[storedLocal] = addressEscapes ? UnknownReceiverValue : pathPopped[^1];
             }
             else if (StoresArgument(view) && view.ArgumentIndex is { } storedArgument)
             {
                 arguments ??= [];
-                arguments[storedArgument] = pathPopped[^1];
-            }
-            else if (LoadsLocalAddress(view) && view.LocalIndex is { } exposedLocal)
-            {
-                locals ??= [];
-                locals[exposedLocal] = new FilterPathValue(null, null, false);
-            }
-            else if (LoadsArgumentAddress(view) && view.ArgumentIndex is { } exposedArgument)
-            {
-                arguments ??= [];
-                arguments[exposedArgument] = new FilterPathValue(null, null, false);
+                arguments[storedArgument] = addressEscapes ? UnknownReceiverValue : pathPopped[^1];
             }
 
+            foreach (var (isArgument, slot) in invalidatedAddressSlots)
+            {
+                if (isArgument)
+                {
+                    arguments ??= [];
+                    arguments[slot] = UnknownReceiverValue;
+                }
+                else
+                {
+                    locals ??= [];
+                    locals[slot] = UnknownReceiverValue;
+                }
+            }
+
+            var loadsReceiverThroughAddress = LoadsReceiverThroughAddress(view, pathPopped);
             var pushed = LoadsLocal(view) && view.LocalIndex is { } loadedLocal
                 && locals?.TryGetValue(loadedLocal, out var local) == true ? local
                 : LoadsLocal(view) && view.LocalIndex is { } receiverLocal
@@ -3027,7 +3037,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     }
                 : PreservesFilterDecision(view, popped)
                     ? pathPopped[^1] with { IsThis = false }
-                : ConstantFilterValue(view, view.ReadsThisArgument && path.ThisArgumentIsOriginal);
+                : ConstantFilterValue(view, view.ReadsThisArgument && path.ThisArgumentIsOriginal
+                    || loadsReceiverThroughAddress);
             if (view.SlotType is { } slotType && _types.Category(slotType) == StackCategory.Float
                 && (LoadsLocal(view) || LoadsArgument(view)))
             {
@@ -3046,9 +3057,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
 
             var thisArgumentIsOriginal = view.WritesThisArgument ? pathPopped[^1].IsThis
-                : view.ReadsThisArgument && view.Op.Name is "ldarga" or "ldarga.s" ? false
-                : path.ThisArgumentIsOriginal;
-            var pendingEffect = InvalidatesBoundUnwind(view) && path.PendingUnwindEffect?.BoundOutputs is not null
+                : invalidatedAddressSlots.Contains((true, 0)) ? false : path.ThisArgumentIsOriginal;
+            var pendingEffect = InvalidatesBoundUnwind(view, invalidatedAddressSlots)
+                && path.PendingUnwindEffect?.BoundOutputs is not null
                 ? path.PendingUnwindEffect with { CorrelationLost = true }
                 : path.PendingUnwindEffect;
             var constructorState = CanInitializeConstructorThis(view, graph, path.ConstructorState,
@@ -3222,7 +3233,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         };
     }
 
-    private static FilterPathState TransferUnknownFilterPath(FilterPathState path, StackOperandView<T> view)
+    private static FilterPathState TransferUnknownFilterPath(FilterPathState path, StackOperandView<T> view,
+        IReadOnlyList<(bool IsArgument, int Index)> invalidatedAddressSlots)
     {
         var unknown = new FilterPathValue(null, null, false);
         var locals = path.Locals is null ? null : new Dictionary<int, FilterPathValue>(path.Locals);
@@ -3237,19 +3249,21 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             arguments ??= [];
             arguments[storedArgument] = unknown;
         }
-        else if (LoadsLocalAddress(view) && view.LocalIndex is { } exposedLocal)
+        foreach (var (isArgument, slot) in invalidatedAddressSlots)
         {
-            locals ??= [];
-            locals[exposedLocal] = unknown;
-        }
-        else if (LoadsArgumentAddress(view) && view.ArgumentIndex is { } exposedArgument)
-        {
-            arguments ??= [];
-            arguments[exposedArgument] = unknown;
+            if (isArgument)
+            {
+                arguments ??= [];
+                arguments[slot] = unknown;
+            }
+            else
+            {
+                locals ??= [];
+                locals[slot] = unknown;
+            }
         }
 
-        var original = view.WritesThisArgument
-            || view.ReadsThisArgument && view.Op.Name is "ldarga" or "ldarga.s"
+        var original = view.WritesThisArgument || invalidatedAddressSlots.Contains((true, 0))
             ? false : path.ThisArgumentIsOriginal;
         return path with
         {
@@ -3258,15 +3272,63 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             Arguments = arguments,
             ThisArgumentIsOriginal = original,
             StackUnknown = true,
-            PendingUnwindEffect = InvalidatesBoundUnwind(view)
+            PendingUnwindEffect = InvalidatesBoundUnwind(view, invalidatedAddressSlots)
                 && path.PendingUnwindEffect?.BoundOutputs is not null
                 ? path.PendingUnwindEffect with { CorrelationLost = true }
                 : path.PendingUnwindEffect,
         };
     }
 
-    private static bool InvalidatesBoundUnwind(StackOperandView<T> view) => StoresLocal(view)
-        || StoresArgument(view) || LoadsLocalAddress(view) || LoadsArgumentAddress(view);
+    private static bool InvalidatesBoundUnwind(StackOperandView<T> view,
+        IReadOnlyList<(bool IsArgument, int Index)> invalidatedAddressSlots) => StoresLocal(view)
+        || StoresArgument(view) || invalidatedAddressSlots.Count > 0;
+
+    private static (bool IsArgument, int Index)[] InvalidatedAddressSlots(
+        StackOperandView<T> view, FlowValue<T>[] popped, FlowGraph<T> graph)
+    {
+        var result = (HashSet<(bool IsArgument, int Index)>?)null;
+        for (var position = 0; position < popped.Length; position++)
+        {
+            if (AddressUseIsNonMutating(view, position))
+            {
+                continue;
+            }
+
+            foreach (var origin in popped[position].Origins)
+            {
+                var producer = graph.Nodes[origin].Instruction;
+                var slot = producer?.ArgumentIndex ?? producer?.LocalIndex;
+                var isArgument = producer is not null && LoadsArgumentAddress(producer);
+                if (slot is null || !isArgument && (producer is null || !LoadsLocalAddress(producer)))
+                {
+                    continue;
+                }
+
+                result ??= [];
+                result.Add((isArgument, slot.Value));
+            }
+        }
+
+        return result is null ? [] : [.. result];
+    }
+
+    private static bool AddressUseIsNonMutating(StackOperandView<T> view, int position)
+    {
+        var name = view.Op.Name!;
+        return name is "dup" or "pop" or "ceq" or "cgt" or "cgt.un" or "clt" or "clt.un"
+            or "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s"
+            || position == 0 && (name.StartsWith("ldind.", StringComparison.Ordinal)
+                || name is "ldobj" or "ldfld" or "ldflda" or "stfld")
+            || position == 1 && name is "cpobj" or "cpblk";
+    }
+
+    private static bool LoadsReceiverThroughAddress(
+        StackOperandView<T> view, IReadOnlyList<FlowValue<T>> popped) => popped is [{ IsThis: true }]
+        && view.Op.Name is "ldind.ref" or "ldobj";
+
+    private static bool LoadsReceiverThroughAddress(
+        StackOperandView<T> view, IReadOnlyList<FilterPathValue> popped) => popped is [{ IsThis: true }]
+        && view.Op.Name is "ldind.ref" or "ldobj";
 
     private bool PreservesFilterDecision(StackOperandView<T> view, FlowValue<T>[] popped)
     {

@@ -2444,4 +2444,37 @@ public static class ControlFlowReceiverExamples
         "}",
         "}",
     ];
+
+    /// <summary>
+    /// Builds a constructor that uses the address of argument zero without changing or exposing it.
+    /// </summary>
+    /// <param name="use">The nonmutating address operation.</param>
+    /// <returns>The complete class declaration.</returns>
+    public static string[] NonMutatingAddressSource(string use)
+    {
+        var suffix = use switch
+        {
+            "pop" => "Pop",
+            "load" => "Load",
+            _ => throw new ArgumentOutOfRangeException(nameof(use)),
+        };
+        var name = $"FlowAddress{suffix}Argument";
+        return
+        [
+            $".class public {name} {{",
+            ".field public initonly int32 Value",
+            ".method public instance void .ctor() {",
+            "ldarg.0",
+            "call instance void object::.ctor()",
+            "ldarga.s 0",
+            .. use == "pop"
+                ? ["pop", "ldarg.0"]
+                : new[] { "ldind.ref" },
+            "ldc.i4.s 42",
+            $"stfld int32 {name}::Value",
+            "ret",
+            "}",
+            "}",
+        ];
+    }
 }
