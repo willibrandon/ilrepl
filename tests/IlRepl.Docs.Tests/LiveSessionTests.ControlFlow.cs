@@ -525,39 +525,40 @@ public sealed partial class LiveSessionTests
     private static async Task ResetSessionAsync(IPage page)
     {
         await EmptyPromptAsync(page);
-        await page.Keyboard.TypeAsync(".reset");
         await SubmitResetAsync(page);
     }
 
     private static async Task ResetReturnedCorpusAsync(IPage page)
     {
         await page.Keyboard.PressAsync("Control+c");
-        await page.Keyboard.TypeAsync(".reset");
+        await EmptyPromptAsync(page);
         await SubmitResetAsync(page);
     }
 
     private static async Task SubmitResetAsync(IPage page)
     {
-        await ReadyToSubmitResetAsync(page);
+        var marker = "reset-" + Guid.NewGuid().ToString("N");
+        await page.Keyboard.TypeAsync($".reset // {marker}");
+        await ReadyToSubmitResetAsync(page, marker);
         await ArmSubmissionOutputAsync(page);
         await page.Keyboard.PressAsync("Enter");
-        await ResetCompletedAsync(page);
+        await ResetCompletedAsync(page, marker);
     }
 
-    private static async Task ReadyToSubmitResetAsync(IPage page)
+    private static async Task ReadyToSubmitResetAsync(IPage page, string marker)
     {
         try
         {
             await page.WaitForFunctionAsync("""
-                () => {
+                marker => {
                   const terminal = window.ilreplTerminal;
                   const buffer = terminal.buffer.active;
                   const prompt = buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true) ?? '';
                   const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
-                  return /^il\[\d+\]> \.reset\s*$/.test(prompt)
+                  return /^il\[\d+\]> \.reset\b/.test(prompt) && prompt.includes(marker)
                     && !status.includes('editing') && !status.includes('updating') && !status.includes('sending');
                 }
-                """, null, new() { PollingInterval = 16, Timeout = 30_000 });
+                """, marker, new() { PollingInterval = 16, Timeout = 30_000 });
         }
         catch (TimeoutException exception)
         {
@@ -602,25 +603,27 @@ public sealed partial class LiveSessionTests
         }
         """, null, new() { PollingInterval = 16, Timeout = 30_000 });
 
-    private static async Task ResetCompletedAsync(IPage page)
+    private static async Task ResetCompletedAsync(IPage page, string marker)
     {
         try
         {
             await page.WaitForFunctionAsync("""
-                () => {
+                marker => {
                   const terminal = window.ilreplTerminal;
                   const buffer = terminal.buffer.active;
+                  const prompt = buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true).trim() ?? '';
                   const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
                   const lines = Array.from({ length: buffer.length }, (_, row) =>
                     buffer.getLine(row)?.translateToString(true) ?? '');
-                  const reset = lines.findLastIndex(line => line.includes('.reset'));
+                  const reset = lines.findLastIndex(line => line.includes(marker));
                   const cleared = lines.slice(reset + 1)
                     .some(line => line.includes('cell, declarations, methods, and types cleared'));
-                  return reset >= 0 && cleared && window.ilreplControlFlowWriteCount > 0
+                  return reset >= 0 && cleared && /^il\[\d+\]>$/.test(prompt)
+                    && window.ilreplControlFlowWriteCount > 0
                     && performance.now() - window.ilreplControlFlowLastWrite >= 100 && !status.includes('editing ')
                     && !status.includes('updating') && !status.includes('sending');
                 }
-                """, null, new() { PollingInterval = 16, Timeout = 30_000 });
+                """, marker, new() { PollingInterval = 16, Timeout = 30_000 });
         }
         catch (TimeoutException exception)
         {
