@@ -193,10 +193,12 @@ rules retain that distinction from the intermediate `int32` value placed on the 
 Typed array opcodes allow covariance between reference elements. They do not box or unbox array
 storage, so the value and reference element fixtures keep that covariance within reference types.
 
-The `readonly.` prefix suppresses `ldelema`'s exact runtime element check and makes a covariant
-address safe by preventing writes through it. CoreCLR and Mono execute `string[]` addressed as
-`object&` with the prefix and reject the mutable form. ILVerification reports
-`StackUnexpectedArrayType` for both, so the tests preserve that known difference.
+The `readonly.` prefix suppresses `ldelema`'s exact runtime element check and returns a
+controlled-mutability pointer. Direct stores and ordinary byref arguments are unverifiable, but
+ECMA permits the pointer as the receiver of an instance call, so a value type can expose mutation through
+its own methods. CoreCLR and Mono execute both that call and `string[]` addressed as `object&` with
+the prefix. ILVerification accepts the call but reports `StackUnexpectedArrayType` for the
+covariant address, so the tests preserve that known difference.
 
 The library reports `ImportCalli not implemented` for the indirect calls it reaches. The native
 pointer fixture stops earlier at `ExpectedNumericType` for `conv.u`. The tests assert those exact

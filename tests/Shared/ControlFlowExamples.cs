@@ -208,6 +208,11 @@ public static class ControlFlowExamples
             "ldelema valuetype [System.Runtime]System.ValueTuple`1<int32>", "ldc.i4.s 42",
             "stfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ldc.i4.s 42", "ret"], true,
             Unverifiable: true, Verification: "StackUnexpected"),
+        new("ReadOnlyMutatingCall", [".locals init (valuetype MutableValue[] items)", "ldc.i4.1",
+            "newarr valuetype MutableValue", "stloc items", "ldloc items", "ldc.i4.0", "readonly.",
+            "ldelema valuetype MutableValue", "call instance void MutableValue::Mutate()", "ldloc items", "ldc.i4.0",
+            "ldelema valuetype MutableValue", "ldfld int32 MutableValue::Value", "ret"], true,
+            Declarations: MutableValueDeclarations),
         new("PointerDifference", ["ldarga.s n", "dup", "sub", "pop", "ldc.i4.s 42", "ret"], true,
             Unverifiable: true, Verification: "ExpectedNumericType"),
         new("ManagedPointerOverflowAddition", ["ldarga.s n", "ldc.i4.0", "add.ovf.un", "ldind.i4", "pop",
@@ -636,6 +641,18 @@ public static class ControlFlowExamples
     private const string HolderDeclarations = """
         .class public sequential ansi sealed Holder extends [System.Runtime]System.ValueType {
         .field public int64 Ticks
+        }
+        """;
+
+    private const string MutableValueDeclarations = """
+        .class public sequential ansi sealed MutableValue extends [System.Runtime]System.ValueType {
+        .field public int32 Value
+        .method public instance void Mutate() {
+        ldarg.0
+        ldc.i4.s 42
+        stfld int32 MutableValue::Value
+        ret
+        }
         }
         """;
 }
