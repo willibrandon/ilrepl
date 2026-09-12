@@ -564,7 +564,8 @@ public sealed partial class LiveSessionTests
         await page.WaitForFunctionAsync("""
             column => {
               const terminal = window.ilreplTerminal;
-              const line = terminal.buffer.active.getLine(terminal.rows - 2);
+              const buffer = terminal.buffer.active;
+              const line = buffer.getLine(buffer.baseY + terminal.rows - 2);
               return line?.getCell(column)?.getBgColor() === 0x61afef;
             }
             """, "il[2]> call '<>c__DisplayClassProbe'::Val".Length);
@@ -612,7 +613,8 @@ public sealed partial class LiveSessionTests
         await page.WaitForFunctionAsync("""
             () => {
               const terminal = window.ilreplTerminal;
-              return terminal.buffer.active.getLine(terminal.rows - 2)?.translateToString(true).trim()
+              const buffer = terminal.buffer.active;
+              return buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true).trim()
                 === 'il[1]> call Generic::Constrained<';
             }
             """);
@@ -632,7 +634,8 @@ public sealed partial class LiveSessionTests
     private static Task<IJSHandle> PromptContainsAsync(IPage page, string text) => page.WaitForFunctionAsync("""
         text => {
           const terminal = window.ilreplTerminal;
-          return terminal.buffer.active.getLine(terminal.rows - 2)?.translateToString(true).includes(text);
+          const buffer = terminal.buffer.active;
+          return buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true).includes(text);
         }
         """, text, new() { PollingInterval = 16, Timeout = 30_000 });
 
@@ -643,7 +646,8 @@ public sealed partial class LiveSessionTests
             return await page.WaitForFunctionAsync("""
                 prompt => {
                   const terminal = window.ilreplTerminal;
-                  const row = terminal.buffer.active.getLine(terminal.rows - 2);
+                  const buffer = terminal.buffer.active;
+                  const row = buffer.getLine(buffer.baseY + terminal.rows - 2);
                   return row?.translateToString(true).trimEnd() === prompt
                     && row.getCell(prompt.length)?.getBgColor() === 0x61afef;
                 }
@@ -654,10 +658,11 @@ public sealed partial class LiveSessionTests
             var state = await page.EvaluateAsync<string>("""
                 () => JSON.stringify({
                   active: document.activeElement.tagName,
-                  cursorX: window.ilreplTerminal.buffer.active.cursorX,
-                  cursorY: window.ilreplTerminal.buffer.active.cursorY,
-                  expectedBackground: window.ilreplTerminal.buffer.active
-                    .getLine(window.ilreplTerminal.rows - 2)?.getCell(prompt.length)?.getBgColor()
+                    cursorX: window.ilreplTerminal.buffer.active.cursorX,
+                    cursorY: window.ilreplTerminal.buffer.active.cursorY,
+                    expectedBackground: window.ilreplTerminal.buffer.active
+                    .getLine(window.ilreplTerminal.buffer.active.baseY + window.ilreplTerminal.rows - 2)
+                    ?.getCell(prompt.length)?.getBgColor()
                 })
                 """, prompt);
             var buffer = await BufferTextAsync(page);
@@ -672,11 +677,13 @@ public sealed partial class LiveSessionTests
             return await page.WaitForFunctionAsync("""
                 ({ prompt, choice, suffix }) => {
                   const terminal = window.ilreplTerminal;
-                  const row = terminal.buffer.active.getLine(terminal.rows - 2);
+                  const buffer = terminal.buffer.active;
+                  const first = buffer.baseY;
+                  const row = buffer.getLine(first + terminal.rows - 2);
                   if (row?.getCell(prompt.length)?.getBgColor() !== 0x61afef) return false;
                   if (suffix !== null && row.translateToString(true).trimEnd() !== prompt + suffix) return false;
                   const rows = Array.from({ length: terminal.rows }, (_, index) =>
-                    terminal.buffer.active.getLine(index)?.translateToString(true) ?? '');
+                    buffer.getLine(first + index)?.translateToString(true) ?? '');
                   return rows.some(line => line.includes(choice)) && !rows.some(line => line.includes('updating '));
                 }
                 """, new { prompt, choice, suffix }, new() { PollingInterval = 16, Timeout = 30_000 });
@@ -687,33 +694,38 @@ public sealed partial class LiveSessionTests
         }
     }
 
-    private static async Task<IJSHandle> PromptWithoutCompletionAsync(IPage page, string prompt, string choice)
+    private static async Task<IJSHandle> PromptWithoutCompletionAsync(
+        IPage page, string prompt, string choice, string suffix = "")
     {
         try
         {
             return await page.WaitForFunctionAsync("""
-                ({ prompt, choice }) => {
+                ({ prompt, choice, suffix }) => {
                   const terminal = window.ilreplTerminal;
-                  const row = terminal.buffer.active.getLine(terminal.rows - 2);
-                  if (row?.translateToString(true).trimEnd() !== prompt
+                  const buffer = terminal.buffer.active;
+                  const first = buffer.baseY;
+                  const row = buffer.getLine(first + terminal.rows - 2);
+                  const status = buffer.getLine(first + terminal.rows - 1)?.translateToString(true) ?? '';
+                  if (row?.translateToString(true).trimEnd() !== prompt + suffix
                     || row.getCell(prompt.length)?.getBgColor() !== 0x61afef) return false;
                   const rows = Array.from({ length: terminal.rows }, (_, index) =>
-                    terminal.buffer.active.getLine(index)?.translateToString(true) ?? '');
-                  return !rows.some(line => line.includes(choice));
+                    buffer.getLine(first + index)?.translateToString(true) ?? '');
+                  return !rows.some(line => line.includes(choice)) && !status.includes('updating ');
                 }
-                """, new { prompt, choice }, new() { PollingInterval = 16, Timeout = 30_000 });
+                """, new { prompt, choice, suffix }, new() { PollingInterval = 16, Timeout = 30_000 });
         }
         catch (TimeoutException exception)
         {
-            throw new TimeoutException($"Expected {prompt} without {choice}:\n{await BufferTextAsync(page)}", exception);
+            throw new TimeoutException($"Expected {prompt + suffix} without {choice}:\n{await BufferTextAsync(page)}", exception);
         }
     }
 
     private static Task<IJSHandle> EmptyPromptAsync(IPage page) => page.WaitForFunctionAsync("""
         () => {
           const terminal = window.ilreplTerminal;
-          const row = terminal.buffer.active.getLine(terminal.rows - 2)?.translateToString(true).trim() ?? '';
-          const status = terminal.buffer.active.getLine(terminal.rows - 1)?.translateToString(true) ?? '';
+          const buffer = terminal.buffer.active;
+          const row = buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true).trim() ?? '';
+          const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
           return /^il\[\d+\]>$/.test(row) && !status.includes('sending ');
         }
         """);

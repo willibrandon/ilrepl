@@ -90,6 +90,11 @@ public sealed record StackOperandView<T> where T : class
     public bool? MethodIsVirtual { get; init; }
 
     /// <summary>
+    /// Whether access to the method operand is known to pass CLI accessibility checks.
+    /// </summary>
+    public bool MethodAccessIsKnownValid { get; init; }
+
+    /// <summary>
     /// Whether a method operand's declaring type is abstract; null when there is no method operand.
     /// </summary>
     public bool? DeclaringTypeIsAbstract { get; init; }

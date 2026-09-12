@@ -383,6 +383,8 @@ public sealed class StackSimulator
                     MethodIsConstructor = method.IsConstructor,
                     MethodIsAbstract = method.Declared?.Attributes.HasFlag(MethodAttributes.Abstract) ?? method.Method?.IsAbstract,
                     MethodIsVirtual = method.Declared?.Attributes.HasFlag(MethodAttributes.Virtual) ?? method.Method?.IsVirtual,
+                    MethodAccessIsKnownValid = MemberAccess.MethodVerdict(
+                        method, context.Scope ?? AccessScope.Cell, context.Types, judgeAll: true) is null,
                     DeclaringTypeIsAbstract = method.DeclaringType?.IsAbstract,
                     Token = StackTokenKind.Method,
                 };

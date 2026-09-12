@@ -3608,6 +3608,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             || name.StartsWith("ldarg", StringComparison.Ordinal) || name.StartsWith("starg", StringComparison.Ordinal)
             || name.StartsWith("ldloc", StringComparison.Ordinal) || name.StartsWith("stloc", StringComparison.Ordinal)
             || name.StartsWith("ldc.", StringComparison.Ordinal)
+            || name == "ldftn" && view.MethodAccessIsKnownValid
             || name.StartsWith("conv.", StringComparison.Ordinal) && !name.Contains("ovf", StringComparison.Ordinal))
         {
             return false;

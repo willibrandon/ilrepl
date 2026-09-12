@@ -135,10 +135,11 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
-    /// Instructions with no specified exceptions do not make their surrounding catch reachable.
+    /// Bound instructions with no remaining execution-time exception do not reach a catch.
     /// </summary>
     [TestMethod]
     [DataRow("initobj")]
+    [DataRow("ldftn")]
     [DataRow("ldstr")]
     [DataRow("ldtoken")]
     [DataRow("refanytype")]
@@ -158,6 +159,30 @@ public sealed class ControlFlowReceiverTests
         }
 
         Assert.IsNull(session.OpenType);
+    }
+
+    /// <summary>
+    /// A null receiver keeps a catch after ldvirtftn reachable.
+    /// </summary>
+    [TestMethod]
+    public async Task Ldvirtftn_ReachesExceptionHandler()
+    {
+        var lines = ControlFlowReceiverExamples.ThrowingLdvirtftnSource();
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.Contains(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error
+            && diagnostic.Message.Contains("through this", StringComparison.Ordinal), preview.Diagnostics);
+
+        var error = Assert.ThrowsExactly<ReplException>(() =>
+        {
+            foreach (var line in lines)
+            {
+                session.AddLine(line);
+            }
+        });
+        Assert.Contains("through this", error.Message);
+        Assert.IsNotNull(session.OpenType);
     }
 
     /// <summary>

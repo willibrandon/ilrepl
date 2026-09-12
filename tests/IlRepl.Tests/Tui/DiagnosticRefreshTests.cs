@@ -123,6 +123,11 @@ public sealed class DiagnosticRefreshTests
         }
 
         requester.Refresh(state);
+        if (change != "clear")
+        {
+            await WaitAsync(() => engine.Analyses.Count == 3);
+        }
+
         Assert.IsNull(PromptDiagnostics.Display(state));
         var stale = engine.Analyses.ElementAt(1);
         stale.Answer.SetResult(new AnalysisReply(stale.Request.DocumentVersion, first.Answer.Task.Result.Revision, 1, 0,
@@ -132,7 +137,7 @@ public sealed class DiagnosticRefreshTests
             request.Answer.TrySetCanceled(ct);
         }
 
-        await requester.SettleAsync();
+        await requester.SettleAsync().WaitAsync(TimeSpan.FromSeconds(5), TestContext.CancellationToken);
         Assert.IsNull(PromptDiagnostics.Display(state));
     }
 

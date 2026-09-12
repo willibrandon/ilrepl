@@ -189,7 +189,7 @@ public sealed partial class LiveSessionTests
         await page.Keyboard.PressAsync("ArrowLeft");
         await page.Keyboard.PressAsync("ArrowLeft");
         await PromptContainsAsync(page, prefix + (generic ? ">[]" : "[]"));
-        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync(choice);
+        await PromptWithoutCompletionAsync(page, "  ...> " + prefix, choice, generic ? ">[]" : "[]");
         if (generic)
         {
             await page.Keyboard.PressAsync("ArrowRight");
@@ -202,12 +202,13 @@ public sealed partial class LiveSessionTests
             await page.Keyboard.PressAsync("ArrowLeft");
         }
 
-        await CompletionAtCaretAsync(page, "  ...> " + prefix, choice);
+        await CompletionAtCaretAsync(page, "  ...> " + prefix, choice, generic ? ">" : "");
         await page.Keyboard.PressAsync("Tab");
         if (generic)
         {
             await page.Keyboard.PressAsync("ArrowRight");
         }
+        await PromptAtCaretAsync(page, "  ...> .event " + (generic ? "System.Action<int32>" : "Action"));
 
         await PasteAsync(page, $$"""
              Changed {

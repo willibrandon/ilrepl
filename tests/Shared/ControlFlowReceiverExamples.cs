@@ -1111,7 +1111,7 @@ public static class ControlFlowReceiverExamples
     ];
 
     /// <summary>
-    /// Builds a constructor whose unreachable catch follows an instruction that cannot throw.
+    /// Builds a constructor whose unreachable catch follows a bound non-throwing instruction.
     /// </summary>
     /// <param name="instruction">The non-throwing instruction shape.</param>
     /// <returns>The complete class declaration.</returns>
@@ -1144,6 +1144,7 @@ public static class ControlFlowReceiverExamples
     private static string InstructionName(string instruction) => instruction switch
     {
         "initobj" => "Initobj",
+        "ldftn" => "Ldftn",
         "ldstr" => "Ldstr",
         "ldtoken" => "Ldtoken",
         "refanytype" => "Refanytype",
@@ -1154,12 +1155,43 @@ public static class ControlFlowReceiverExamples
     private static string[] NonThrowingInstructions(string instruction) => instruction switch
     {
         "initobj" => ["ldloca.s scratch", "initobj int32"],
+        "ldftn" => ["ldftn int32 Math::Abs(int32)", "pop"],
         "ldstr" => ["ldstr \"value\"", "pop"],
         "ldtoken" => [$"ldtoken class NonThrowing{InstructionName(instruction)}Receiver", "pop"],
         "refanytype" => ["ldarg reference", "refanytype", "pop"],
         "sizeof" => ["sizeof int32", "pop"],
         _ => throw new ArgumentOutOfRangeException(nameof(instruction)),
     };
+
+    /// <summary>
+    /// Builds a constructor whose ldvirtftn can reach a catch through its null receiver.
+    /// </summary>
+    /// <returns>The complete class declaration.</returns>
+    public static string[] ThrowingLdvirtftnSource() =>
+    [
+        ".class public ThrowingLdvirtftnReceiver {",
+        ".field public initonly int32 Value",
+        ".method public instance void .ctor(class ThrowingLdvirtftnReceiver other) {",
+        "ldarg.0",
+        "call instance void object::.ctor()",
+        ".try {",
+        "ldarg other",
+        "starg.s 0",
+        "ldnull",
+        "ldvirtftn instance string object::ToString()",
+        "pop",
+        "leave DONE",
+        "} catch object {",
+        "pop",
+        "ldarg.0",
+        "ldc.i4.s 42",
+        "stfld int32 ThrowingLdvirtftnReceiver::Value",
+        "leave DONE",
+        "}",
+        "DONE: ret",
+        "}",
+        "}",
+    ];
 
     /// <summary>
     /// Builds a constructor whose open finally can invalidate an earlier backward leave target.

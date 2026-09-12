@@ -1023,8 +1023,9 @@ public sealed partial class LiveSessionTests
         await page.WaitForFunctionAsync("""
             before => {
               const terminal = window.ilreplTerminal;
+              const buffer = terminal.buffer.active;
               return terminal.cols < before
-                && terminal.buffer.active.getLine(terminal.rows - 1)?.translateToString(true).includes('sending');
+                && buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true).includes('sending');
             }
             """, before, new() { PollingInterval = 16, Timeout = 30_000 });
         await Assertions.Expect(terminal).ToContainTextAsync("end of method Long", new LocatorAssertionsToContainTextOptions { Timeout = 180_000 });
