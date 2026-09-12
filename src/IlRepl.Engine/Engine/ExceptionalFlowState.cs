@@ -8,7 +8,7 @@ internal sealed record ExceptionalFlowState<T> : FlowState<T> where T : class
     internal ExceptionalFlowState(FlowState<T> state, IReadOnlyList<int>? pendingUnwindHandlers,
         int? syntheticHandler)
         : base(state.Values, state.HasUnknownPath, state.Invalid, state.ThisArgumentIsOriginal,
-            state.FilterPaths)
+            state.FilterPaths, state.ConstructorState)
     {
         PendingUnwindHandlers = pendingUnwindHandlers;
         SyntheticHandler = syntheticHandler;

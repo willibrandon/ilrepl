@@ -48,7 +48,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
     private IEnumerable<FlowResult<T>?> Steps(FlowGraph<T> graph, T? returnType, bool cell, CancellationToken cancellationToken)
     {
-        Dictionary<int, (bool Completes, FilterPathState[] Transformations)>? unwindEffects = null;
+        Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
+            FilterPathState[] Transformations)>? unwindEffects = null;
         if (graph.Sections.Values.Any(section => section.Kind is BlockKind.Finally or BlockKind.Fault))
         {
             unwindEffects = [];
@@ -58,9 +59,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             {
                 var seeds = new Dictionary<int, FlowState<T>>
                 {
-                    [section.Start] = FlowState<T>.ThisEntry with
+                    [section.Start] = graph.Seeds[0] with
                     {
-                        FilterPaths = [new FilterPathState([], null, null, true)],
+                        Values = [],
+                        FilterPaths = [new FilterPathState([], null, null, true,
+                            ConstructorState: graph.Seeds[0].ConstructorState)],
                     },
                 };
                 var result = (FlowResult<T>?)null;
@@ -91,7 +94,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     private IEnumerable<FlowResult<T>?> AnalyzeSteps(FlowGraph<T> graph, T? returnType, bool cell,
         CancellationToken cancellationToken, IReadOnlyDictionary<int, FlowState<T>>? seeds = null,
         int start = 0, int? end = null,
-        Dictionary<int, (bool Completes, FilterPathState[] Transformations)>? finalizerEffects = null,
+        Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
+            FilterPathState[] Transformations)>? finalizerEffects = null,
         bool validateGraph = true)
     {
         var nodes = graph.Nodes;
@@ -133,12 +137,14 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         }
 
         void ContinueFilterSearch(int source, FilterPathState[]? paths, bool fallbackThis,
-            IReadOnlyList<int>? fallbackUnwindHandlers)
+            ConstructorThisState fallbackConstructorState,
+            IReadOnlyList<int>? fallbackUnwindHandlers, int? syntheticFilter)
         {
             foreach (var target in graph.FilterContinuationTargets(source))
             {
                 var outgoing = WithExceptional(new FlowState<T>([], ThisArgumentIsOriginal: fallbackThis,
-                    FilterPaths: paths), fallbackUnwindHandlers, null);
+                    FilterPaths: paths, ConstructorState: fallbackConstructorState), fallbackUnwindHandlers,
+                    syntheticFilter);
                 outgoing = QueueUnwindHandlers(outgoing, graph.UnwindHandlersForException(source, target),
                     finalizerEffects);
                 if (graph.ClauseKindAt(target) != BlockKind.Filter)
@@ -155,10 +161,24 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 {
                     ThisArgumentIsOriginal = outgoing.ThisArgumentIsOriginal,
                     FilterPaths = EnterExceptionRegion(outgoing.FilterPaths, entry),
+                    ConstructorState = outgoing.ConstructorState,
                 };
                 Propagate(target, source, WithExceptional(targetState,
-                    outgoing.PendingUnwindHandlers, null));
+                    outgoing.PendingUnwindHandlers, syntheticFilter is null ? null : entry.SyntheticHandler));
             }
+
+            if (!graph.FilterContinuationCanEscape(source))
+            {
+                return;
+            }
+
+            var escaping = WithExceptional(new FlowState<T>([], ThisArgumentIsOriginal: fallbackThis,
+                FilterPaths: paths, ConstructorState: fallbackConstructorState), fallbackUnwindHandlers,
+                syntheticFilter);
+            escaping = QueueUnwindHandlers(escaping,
+                graph.UnwindHandlersForExceptionExit(source), finalizerEffects);
+            _ = ApplyUnwindEffects(escaping, finalizerEffects,
+                (handler, incoming) => EnterUnwindHandler(source, handler, incoming));
         }
 
         void EnterUnwindHandler(int source, int handler, FlowState<T> incoming)
@@ -178,6 +198,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             {
                 ThisArgumentIsOriginal = incoming.ThisArgumentIsOriginal,
                 FilterPaths = paths,
+                ConstructorState = incoming.ConstructorState,
             }, null, incoming.SyntheticHandler);
             var key = (source, handler);
             unwindEntries ??= [];
@@ -242,7 +263,26 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             Report(index, "FLOW005", problem);
         }
 
+        HashSet<int>? deferredFilterHandlers = null;
+        HashSet<int>? deferredUnwindHandlers = null;
+        if (graph.Seeds.Count > 1)
+        {
+            foreach (var clause in graph.Clauses)
+            {
+                if (clause.Kind == BlockKind.Filter && clause.Handler != clause.Entry)
+                {
+                    deferredFilterHandlers ??= [];
+                    deferredFilterHandlers.Add(clause.Handler);
+                }
+                else if (clause.Kind is BlockKind.Finally or BlockKind.Fault)
+                {
+                    deferredUnwindHandlers ??= [];
+                    deferredUnwindHandlers.Add(clause.Entry);
+                }
+            }
+        }
         KeyValuePair<int, FlowState<T>>[]? deferredEntries = null;
+        var seedDeferredFilterHandlers = false;
         if (seeds is not null)
         {
             foreach (var (position, seed) in seeds)
@@ -332,10 +372,13 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
 
             var node = nodes[index];
+            var stateBeforeInstruction = state;
             var filterPathsBeforeInstruction = state.FilterPaths;
             var transferredPops = 0;
             var transferredPushes = 0;
             var transferredValues = (FlowValue<T>[]?)null;
+            var initializesConstructorThis = false;
+            var initializesConstructorPath = false;
             var filterPathsAtEnd = !state.Invalid && node.Instruction?.Op == OpCodes.Endfilter ? state.FilterPaths : null;
             if (node.EffectUnknown)
             {
@@ -376,10 +419,14 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         var popped = values.Skip(values.Length - pops).ToArray();
                         var output = values.Take(values.Length - pops).ToList();
                         var pushed = _transfer.PushTypes(view, popped.Select(value => value.Type).ToArray());
+                        initializesConstructorThis = InitializesConstructorThis(view, values, graph, state.ConstructorState);
                         transferredPops = pops;
                         transferredPushes = pushed.Count;
                         transferredValues = popped;
-                        var filterPaths = TransferFilterPaths(state.FilterPaths, view, pops, pushed.Count, popped);
+                        initializesConstructorPath = FilterPathInitializesConstructor(
+                            state.FilterPaths, view, pops, graph);
+                        var filterPaths = TransferFilterPaths(
+                            state.FilterPaths, view, pops, pushed.Count, popped, graph);
                         var loadsThis = view.ReadsThisArgument && state.ThisArgumentIsOriginal;
                         for (var pushedIndex = 0; pushedIndex < pushed.Count; pushedIndex++)
                         {
@@ -409,7 +456,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         }
                         state = WithExceptional(new FlowState<T>([.. output], state.HasUnknownPath,
                             ThisArgumentIsOriginal: thisArgumentIsOriginal,
-                            FilterPaths: filterPaths),
+                            FilterPaths: filterPaths,
+                            ConstructorState: ConstructorStateFor(filterPaths, initializesConstructorThis
+                                ? ConstructorThisState.Initialized : state.ConstructorState)),
                             state.PendingUnwindHandlers, state.SyntheticHandler);
                     }
                 }
@@ -427,6 +476,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     || TransformsDataPointer(view, values)
                     || UsesNativeAddress(view, values)
                     || UsesGenericReferenceAddress(view, values)
+                    || stateBeforeInstruction.FilterPaths is not { Length: 0 }
+                        && ConstructorOperationIsUnverifiable(
+                            view, values, graph, stateBeforeInstruction.ConstructorState)
                     || view.Op.Name is "add" or "sub" or "add.ovf.un" or "sub.ovf.un"
                         && values.TakeLast(2).Any(value => value.Type is { } type && _types.Algebra.IsByRef(type))
                     || view.Op.Name?.StartsWith("conv.", StringComparison.Ordinal) == true
@@ -455,7 +507,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             {
                 state = state with
                 {
-                    FilterPaths = TransferFilterPaths(state.FilterPaths, unknownStackView, 0, 0, []),
+                    FilterPaths = TransferFilterPaths(state.FilterPaths, unknownStackView, 0, 0, [], graph),
                 };
             }
 
@@ -468,7 +520,12 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             var rejectingFilterPaths = pathsAtEnd?
                 .Where(path => path.Values.LastOrDefault().IsOne != true).ToArray();
             var hasOrdinaryFilterPathOnly = pathsAtEnd is { Length: 0 };
-            if (!state.Invalid && state.SyntheticHandler is null && node.Instruction?.Op == OpCodes.Endfilter
+            var syntheticFilter = state.SyntheticHandler is { } syntheticSectionId
+                && graph.Sections.TryGetValue(syntheticSectionId, out var syntheticSection)
+                && syntheticSection.Kind == BlockKind.Filter && graph.Regions[index].Contains(syntheticSectionId)
+                && SyntheticFilterCanBeSearched(graph, syntheticSection);
+            var canCompleteFilter = state.SyntheticHandler is null || syntheticFilter;
+            if (!state.Invalid && canCompleteFilter && node.Instruction?.Op == OpCodes.Endfilter
                 && (acceptingFilterPaths is null || acceptingFilterPaths.Length > 0 || hasOrdinaryFilterPathOnly)
                 && graph.FilterHandlerFor(index) is { } handler && graph.Seeds.TryGetValue(handler, out var handlerEntry))
             {
@@ -476,6 +533,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 {
                     ThisArgumentIsOriginal = OriginalReceiverFor(acceptingFilterPaths, state.ThisArgumentIsOriginal),
                     FilterPaths = acceptingFilterPaths,
+                    ConstructorState = ConstructorStateFor(acceptingFilterPaths, state.ConstructorState),
                 }, finalizerEffects, (unwind, incoming) => EnterUnwindHandler(index, unwind, incoming));
                 if (outgoing is not null)
                 {
@@ -483,24 +541,33 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     {
                         ThisArgumentIsOriginal = outgoing.ThisArgumentIsOriginal,
                         FilterPaths = EnterExceptionRegion(outgoing.FilterPaths, handlerEntry),
+                        ConstructorState = outgoing.ConstructorState,
                     };
-                    Propagate(handler, index, WithExceptional(targetState, null, null));
+                    Propagate(handler, index, WithExceptional(targetState, null,
+                        syntheticFilter ? handlerEntry.SyntheticHandler : null));
                 }
             }
 
-            if (!state.Invalid && state.SyntheticHandler is null && node.Instruction?.Op == OpCodes.Endfilter
+            if (!state.Invalid && canCompleteFilter && node.Instruction?.Op == OpCodes.Endfilter
                 && (rejectingFilterPaths is null || rejectingFilterPaths.Length > 0 || hasOrdinaryFilterPathOnly))
             {
                 ContinueFilterSearch(index, rejectingFilterPaths,
                     OriginalReceiverFor(rejectingFilterPaths, state.ThisArgumentIsOriginal),
-                    state.PendingUnwindHandlers);
+                    ConstructorStateFor(rejectingFilterPaths, state.ConstructorState),
+                    state.PendingUnwindHandlers, syntheticFilter ? state.SyntheticHandler : null);
             }
 
-            if (!state.Invalid && state.SyntheticHandler is null && InsideFilter(graph, index)
+            if (!state.Invalid && canCompleteFilter && InsideFilter(graph, index)
                 && (node.EffectUnknown || node.Instruction is { } filterInstruction && CanThrow(filterInstruction)))
             {
-                ContinueFilterSearch(index, state.FilterPaths, state.ThisArgumentIsOriginal,
-                    state.PendingUnwindHandlers);
+                var constructorState = initializesConstructorThis || initializesConstructorPath
+                    ? ConstructorStateFor(filterPathsBeforeInstruction,
+                        stateBeforeInstruction.ConstructorState)
+                    : state.ConstructorState;
+                var filterPaths = initializesConstructorThis || initializesConstructorPath
+                    ? filterPathsBeforeInstruction : state.FilterPaths;
+                ContinueFilterSearch(index, filterPaths, state.ThisArgumentIsOriginal, constructorState,
+                    state.PendingUnwindHandlers, syntheticFilter ? state.SyntheticHandler : null);
             }
 
             var propagatedSwitchTargets = node.Instruction?.Op == OpCodes.Switch ? new HashSet<int>() : null;
@@ -523,7 +590,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 {
                     edgeFilterPaths = TransferFilterPaths(SelectSwitchTargetPaths(
                         filterPathsBeforeInstruction, branch, graph.Edges[index], edge.Target,
-                        node.Targets.Count), branch, transferredPops, transferredPushes, transferredValues);
+                        node.Targets.Count), branch, transferredPops, transferredPushes,
+                        transferredValues, graph);
                 }
                 else if (!state.Invalid && node.Instruction is { } booleanBranch && transferredValues is not null
                     && IsConditionedBranch(booleanBranch)
@@ -532,12 +600,21 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 {
                     edgeFilterPaths = TransferFilterPaths(
                         SelectBranchPaths(filterPathsBeforeInstruction, booleanBranch, edge, 0),
-                        booleanBranch, transferredPops, transferredPushes, transferredValues);
+                        booleanBranch, transferredPops, transferredPushes, transferredValues, graph);
                 }
 
                 var outgoing = (FlowState<T>?)(edge.ClearsStack && !state.Invalid
-                    ? state with { Values = [], FilterPaths = ClearFilterPathStacks(edgeFilterPaths) }
-                    : state with { FilterPaths = edgeFilterPaths });
+                    ? state with
+                    {
+                        Values = [],
+                        FilterPaths = ClearFilterPathStacks(edgeFilterPaths),
+                        ConstructorState = ConstructorStateFor(edgeFilterPaths, state.ConstructorState),
+                    }
+                    : state with
+                    {
+                        FilterPaths = edgeFilterPaths,
+                        ConstructorState = ConstructorStateFor(edgeFilterPaths, state.ConstructorState),
+                    });
                 if (edge.ClearsStack)
                 {
                     outgoing = QueueUnwindHandlers(outgoing!, graph.FinalizersForTransfer(index, edge.Target),
@@ -555,6 +632,14 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (!state.Invalid && graph.Sections.Count > 0
                 && (node.EffectUnknown || node.Instruction is { } exceptionInstruction && CanThrow(exceptionInstruction)))
             {
+                var exceptionState = initializesConstructorThis || initializesConstructorPath
+                    ? state with
+                    {
+                        FilterPaths = filterPathsBeforeInstruction,
+                        ConstructorState = ConstructorStateFor(filterPathsBeforeInstruction,
+                            stateBeforeInstruction.ConstructorState),
+                    }
+                    : state;
                 foreach (var target in graph.ExceptionSearchTargets(index))
                 {
                     if (state.SyntheticHandler is { } synthetic
@@ -568,7 +653,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         continue;
                     }
 
-                    var outgoing = QueueUnwindHandlers(state,
+                    var outgoing = QueueUnwindHandlers(exceptionState,
                         graph.UnwindHandlersForException(index, target), finalizerEffects);
                     if (graph.ClauseKindAt(target) != BlockKind.Filter)
                     {
@@ -584,9 +669,18 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     {
                         ThisArgumentIsOriginal = outgoing.ThisArgumentIsOriginal,
                         FilterPaths = EnterExceptionRegion(outgoing.FilterPaths, graph.Seeds[target]),
+                        ConstructorState = outgoing.ConstructorState,
                     };
                     Propagate(target, -index - 2, WithExceptional(entry,
                         outgoing.PendingUnwindHandlers, state.SyntheticHandler));
+                }
+
+                if (!InsideFilter(graph, index) && graph.ExceptionSearchCanEscape(index))
+                {
+                    var escaping = QueueUnwindHandlers(exceptionState,
+                        graph.UnwindHandlersForExceptionExit(index), finalizerEffects);
+                    _ = ApplyUnwindEffects(escaping, finalizerEffects,
+                        (handler, incoming) => EnterUnwindHandler(index, handler, incoming));
                 }
             }
         }
@@ -597,10 +691,92 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             deferredEntries = null;
             foreach (var (position, seed) in pendingEntries)
             {
-                if (before[position - start] is null)
+                if (!seedDeferredFilterHandlers && deferredFilterHandlers?.Contains(position) == true)
                 {
-                    Propagate(position, -1, tracksFilterPaths ? StartFilterPaths(seed) : seed);
+                    continue;
                 }
+
+                var isUnwindHandler = deferredUnwindHandlers?.Contains(position) == true;
+                if (!isUnwindHandler && before[position - start] is null)
+                {
+                    var protectedStates = graph.Clauses
+                        .Where(clause => clause.Entry == position || clause.Handler == position)
+                        .Select(clause => graph.Sections.Values.First(section =>
+                            section.Kind == BlockKind.Try && section.Group == clause.Group).Start)
+                        .Distinct()
+                        .Select(entry => before[entry - start])
+                        .Where(state => state is not null)
+                        .Cast<FlowState<T>>()
+                        .ToArray();
+                    var deferred = protectedStates.Length == 0 ? seed : seed with
+                    {
+                        ConstructorState = protectedStates.Select(state => state.ConstructorState)
+                            .Aggregate(MergeConstructorStates),
+                    };
+                    Propagate(position, -1, tracksFilterPaths ? StartFilterPaths(deferred) : deferred);
+                    continue;
+                }
+
+                if (!isUnwindHandler)
+                {
+                    continue;
+                }
+
+                var propagatedUnresolvedEntry = false;
+                var fallbackEntry = (FlowState<T>?)null;
+                foreach (var clause in graph.Clauses.Where(clause =>
+                    clause.Kind is BlockKind.Finally or BlockKind.Fault && clause.Entry == position))
+                {
+                    var protectedSection = graph.Sections.First(pair =>
+                        pair.Value.Kind == BlockKind.Try && pair.Value.Group == clause.Group);
+                    if (clause.Kind == BlockKind.Finally)
+                    {
+                        fallbackEntry ??= before[protectedSection.Value.Start - start];
+                    }
+                    if (clause.Kind != BlockKind.Finally || before[position - start] is not null)
+                    {
+                        continue;
+                    }
+
+                    for (var index = start; index < Math.Min(limit, graph.Nodes.Count); index++)
+                    {
+                        var op = graph.Nodes[index].Instruction?.Op;
+                        if (!graph.Regions[index].Any(section => graph.Sections[section].Group == clause.Group)
+                            || op is not { } leave || leave != OpCodes.Leave && leave != OpCodes.Leave_S
+                            || graph.Edges[index].Any(edge => edge.IsExplicit)
+                            || after[index - start] is not { Invalid: false } outgoing
+                            || outgoing.FilterPaths is { Length: 0 })
+                        {
+                            continue;
+                        }
+
+                        var transformed = ApplyUnwindEffects(
+                            QueueUnwindHandlers(outgoing,
+                                graph.FinalizersForTransfer(index, position), finalizerEffects),
+                            finalizerEffects);
+                        if (transformed is null)
+                        {
+                            continue;
+                        }
+
+                        Propagate(position, -index - 2, SyntheticUnwindEntry(seed, transformed));
+                        propagatedUnresolvedEntry = true;
+                    }
+                }
+
+                if (before[position - start] is null && !propagatedUnresolvedEntry)
+                {
+                    var deferred = fallbackEntry is null ? seed : SyntheticUnwindEntry(seed, fallbackEntry);
+                    Propagate(position, -1, tracksFilterPaths && fallbackEntry is null
+                        ? StartFilterPaths(deferred) : deferred);
+                }
+            }
+
+            if (!seedDeferredFilterHandlers)
+            {
+                seedDeferredFilterHandlers = true;
+                deferredEntries = deferredFilterHandlers is null ? []
+                    : [.. pendingEntries.Where(entry => deferredFilterHandlers.Contains(entry.Key))];
             }
 
             goto AnalyzeQueue;
@@ -617,11 +793,13 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             maxStack);
     }
 
-    private static (bool Completes, FilterPathState[] Transformations) FinalizerEffect(
+    private static (bool Completes, ConstructorThisState ConstructorState,
+        FilterPathState[] Transformations) FinalizerEffect(
         FlowGraph<T> graph, int sectionId, FlowRegion section, FlowResult<T> result)
     {
         var transformations = new List<FilterPathState>();
         var completes = false;
+        var constructorState = (ConstructorThisState?)null;
         for (var index = section.Start; index < section.End; index++)
         {
             if (result.After[index - section.Start] is not { Invalid: false } state)
@@ -640,11 +818,13 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
 
             completes = true;
+            constructorState = constructorState is null ? state.ConstructorState
+                : MergeConstructorStates(constructorState.Value, state.ConstructorState);
             if (state.FilterPaths is not { } paths)
             {
                 transformations.Add(new FilterPathState([], null,
                     new Dictionary<int, FilterPathValue> { [0] = new(null, null, false) }, false,
-                    StackUnknown: true));
+                    StackUnknown: true, ConstructorState: state.ConstructorState));
                 continue;
             }
 
@@ -663,12 +843,13 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
         }
 
-        return (completes,
+        return (completes, constructorState ?? ConstructorThisState.NotTracked,
             transformations.Count > MaxFilterPaths ? CollapseFilterPaths([.. transformations]) : [.. transformations]);
     }
 
     private static FlowState<T> QueueUnwindHandlers(FlowState<T> state, IEnumerable<int> handlers,
-        Dictionary<int, (bool Completes, FilterPathState[] Transformations)>? effects)
+        Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
+            FilterPathState[] Transformations)>? effects)
     {
         var additions = handlers.ToArray();
         var pending = AppendUnwindHandlers(state.PendingUnwindHandlers, additions);
@@ -687,7 +868,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
     private static PendingUnwindEffect? AppendUnwindEffect(PendingUnwindEffect? current,
         IEnumerable<int> handlers,
-        Dictionary<int, (bool Completes, FilterPathState[] Transformations)>? effects)
+        Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
+            FilterPathState[] Transformations)>? effects)
     {
         var transformations = current?.Transformations
             ?? IdentityReceiverTransformations;
@@ -731,7 +913,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     }
 
     private static FlowState<T>? ApplyUnwindEffects(FlowState<T>? state,
-        Dictionary<int, (bool Completes, FilterPathState[] Transformations)>? effects,
+        Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
+            FilterPathState[] Transformations)>? effects,
         Action<int, FlowState<T>>? enterHandler = null)
     {
         if (state is null || state.PendingUnwindHandlers is not { Count: > 0 } pending)
@@ -741,16 +924,23 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         if (state.FilterPaths is { Length: 0 })
         {
+            var emptyPathConstructorState = state.ConstructorState;
             foreach (var handler in pending)
             {
-                enterHandler?.Invoke(handler, state);
+                enterHandler?.Invoke(handler, state with { ConstructorState = emptyPathConstructorState });
                 if (!UnwindCompletes(handler, effects))
                 {
                     return null;
                 }
+
+                emptyPathConstructorState = ApplyConstructorEffect(
+                    emptyPathConstructorState, effects![handler].ConstructorState);
             }
 
-            return WithExceptional(state, null, state.SyntheticHandler);
+            return WithExceptional(state with
+            {
+                ConstructorState = emptyPathConstructorState,
+            }, null, state.SyntheticHandler);
         }
 
         if (state.FilterPaths is { } paths)
@@ -807,6 +997,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 {
                     ThisArgumentIsOriginal = OriginalReceiverFor(boundedInputs, state.ThisArgumentIsOriginal),
                     FilterPaths = boundedInputs,
+                    ConstructorState = ConstructorStateFor(boundedInputs,
+                        ConstructorStateAtHandler(state.ConstructorState, pending, handler, effects)),
                 };
                 enterHandler?.Invoke(handler, WithExceptional(handlerState, null, state.SyntheticHandler));
             }
@@ -816,6 +1008,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             {
                 ThisArgumentIsOriginal = OriginalReceiverFor(boundedCompleted, state.ThisArgumentIsOriginal),
                 FilterPaths = boundedCompleted,
+                ConstructorState = ConstructorStateFor(boundedCompleted,
+                    ApplyConstructorEffects(state.ConstructorState, pending, effects)),
             };
             if (completed.Count > 0)
             {
@@ -839,9 +1033,14 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         }
 
         var aggregateThis = state.ThisArgumentIsOriginal;
+        var constructorState = state.ConstructorState;
         foreach (var handler in pending)
         {
-            enterHandler?.Invoke(handler, state with { ThisArgumentIsOriginal = aggregateThis });
+            enterHandler?.Invoke(handler, state with
+            {
+                ThisArgumentIsOriginal = aggregateThis,
+                ConstructorState = constructorState,
+            });
 
             if (effects is null || !effects.TryGetValue(handler, out var effect)
                 || !effect.Completes)
@@ -850,20 +1049,89 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
 
             aggregateThis &= EffectPreservesThis(effect.Transformations);
+            constructorState = ApplyConstructorEffect(constructorState, effect.ConstructorState);
         }
 
         return WithExceptional(state with
         {
             ThisArgumentIsOriginal = aggregateThis,
+            ConstructorState = constructorState,
         }, null, state.SyntheticHandler);
     }
 
     private static bool UnwindCompletes(int handler,
-        Dictionary<int, (bool Completes, FilterPathState[] Transformations)>? effects) =>
+        Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
+            FilterPathState[] Transformations)>? effects) =>
         effects is not null && effects.TryGetValue(handler, out var effect) && effect.Completes;
+
+    private static ConstructorThisState ConstructorStateAtHandler(ConstructorThisState state,
+        IReadOnlyList<int> handlers, int target,
+        Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
+            FilterPathState[] Transformations)>? effects)
+    {
+        foreach (var handler in handlers)
+        {
+            if (handler == target)
+            {
+                break;
+            }
+
+            if (effects?.TryGetValue(handler, out var effect) == true && effect.Completes)
+            {
+                state = ApplyConstructorEffect(state, effect.ConstructorState);
+            }
+        }
+
+        return state;
+    }
+
+    private static ConstructorThisState ApplyConstructorEffects(ConstructorThisState state,
+        IEnumerable<int> handlers,
+        Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
+            FilterPathState[] Transformations)>? effects)
+    {
+        foreach (var handler in handlers)
+        {
+            if (effects?.TryGetValue(handler, out var effect) == true && effect.Completes)
+            {
+                state = ApplyConstructorEffect(state, effect.ConstructorState);
+            }
+        }
+
+        return state;
+    }
+
+    private static ConstructorThisState ApplyConstructorEffect(ConstructorThisState state,
+        ConstructorThisState effect) => effect switch
+        {
+            ConstructorThisState.Initialized => ConstructorThisState.Initialized,
+            ConstructorThisState.Mixed when state != ConstructorThisState.Initialized => ConstructorThisState.Mixed,
+            _ => state,
+        };
 
     private static bool OriginalReceiverFor(FilterPathState[]? paths, bool fallback) =>
         paths is { Length: > 0 } ? paths.All(path => path.ThisArgumentIsOriginal) : fallback;
+
+    private static ConstructorThisState ConstructorStateFor(FilterPathState[]? paths,
+        ConstructorThisState fallback) => paths is { Length: > 0 }
+            ? ExpandFilterPaths(paths).Select(path => path.ConstructorState).Aggregate(MergeConstructorStates)
+            : fallback;
+
+    private static FlowState<T> SyntheticUnwindEntry(FlowState<T> seed, FlowState<T> incoming)
+    {
+        var paths = incoming.FilterPaths is null ? (FilterPathState[]?)null
+            : [.. ExpandFilterPaths(incoming.FilterPaths).Select(path => path with
+            {
+                Values = [],
+                PendingUnwindEffect = null,
+            })];
+        return WithExceptional(seed with
+        {
+            ThisArgumentIsOriginal = incoming.ThisArgumentIsOriginal,
+            FilterPaths = paths,
+            ConstructorState = ConstructorStateFor(paths, incoming.ConstructorState),
+        }, null, seed.SyntheticHandler);
+    }
 
     private static void AddFilterPaths(List<FilterPathState> target, IEnumerable<FilterPathState> paths)
     {
@@ -949,6 +1217,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         {
             var group = groups.FirstOrDefault(candidate =>
                 candidate[0].ThisArgumentIsOriginal == path.ThisArgumentIsOriginal
+                && candidate[0].ConstructorState == path.ConstructorState
                 && candidate[0].StackUnknown == path.StackUnknown
                 && SameFilterStackFacts(candidate[0].Values, path.Values)
                 && SameReceiverConditions(candidate[0].ReceiverConditions, path.ReceiverConditions)
@@ -1008,7 +1277,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             widenUnwind ? WidenUnwindEffects(paths)
                 : bindUnwind ? BindUnwindEffects(paths) : CollapseUnwindEffects(paths),
             StackUnknown: !knownStack, ReceiverConditions: CollapseReceiverConditions(paths),
-            CorrelatedAlternatives: RetainCorrelatedAlternatives(paths));
+            CorrelatedAlternatives: RetainCorrelatedAlternatives(paths),
+            ConstructorState: paths.Select(path => path.ConstructorState).Aggregate(MergeConstructorStates));
     }
 
     private static PendingUnwindEffect? WidenUnwindEffects(IReadOnlyList<FilterPathState> paths)
@@ -1045,7 +1315,10 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         var locals = localKeys.Count == 0 ? null : localKeys.ToDictionary(
             key => key, _ => UnknownReceiverValue);
         var arguments = argumentKeys.ToDictionary(key => key, _ => UnknownReceiverValue);
-        return new FilterPathState([], locals, arguments, false, StackUnknown: true);
+        var constructorState = ExpandFilterPaths(paths).Select(path => path.ConstructorState)
+            .Aggregate(ConstructorThisState.NotTracked, MergeConstructorStates);
+        return new FilterPathState([], locals, arguments, false, StackUnknown: true,
+            ConstructorState: constructorState);
     }
 
     private static IEnumerable<FilterPathState> UnwindReceiverStates(PendingUnwindEffect effect)
@@ -1420,6 +1693,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             ThisArgumentIsOriginal = original,
             PendingUnwindEffect = null,
             ReceiverConditions = conditions,
+            ConstructorState = ApplyConstructorEffect(path.ConstructorState,
+                transformation.ConstructorState),
         };
         return true;
     }
@@ -1499,7 +1774,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         var original = arguments?.TryGetValue(0, out var receiver) != true || receiver.IsThis;
         result = new FilterPathState([], locals, arguments, original,
-            ReceiverConditions: conditions);
+            ReceiverConditions: conditions,
+            ConstructorState: ApplyConstructorEffect(preceding.ConstructorState,
+                following.ConstructorState));
         return true;
     }
 
@@ -1571,7 +1848,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         return state is ExceptionalFlowState<T>
             ? new FlowState<T>(state.Values, state.HasUnknownPath, state.Invalid,
-                state.ThisArgumentIsOriginal, state.FilterPaths)
+                state.ThisArgumentIsOriginal, state.FilterPaths, state.ConstructorState)
             : state;
     }
 
@@ -2368,7 +2645,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
             var name = view.Op.Name!;
             var permitted = name is "dup" or "pop" || argument == 0
-                && (name.StartsWith("ldind", StringComparison.Ordinal) || name is "ldobj" or "ldfld" or "ldflda"
+                && (name.StartsWith("ldind", StringComparison.Ordinal) || name is "ldobj" or "ldfld" or "ldflda" or "stfld"
                     || view.IsInstance && name is "call" or "callvirt") || name == "cpobj" && argument == 1;
             if (!permitted)
             {
@@ -2379,13 +2656,102 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         return false;
     }
 
+    private bool ConstructorOperationIsUnverifiable(StackOperandView<T> view, FlowValue<T>[] values,
+        FlowGraph<T> graph, ConstructorThisState state)
+    {
+        if (graph.TracksConstructorInitialization && state is ConstructorThisState.Uninitialized or ConstructorThisState.Mixed)
+        {
+            if (view.Op == OpCodes.Ret && !IsObject(graph.DeclaringType)
+                || view.WritesThisArgument
+                || view.ReadsThisArgument && view.Op.Name is "ldarga" or "ldarga.s")
+            {
+                return true;
+            }
+
+            var pops = Math.Min(values.Length, StackTransfer<T>.PopCount(view));
+            for (var argument = 0; argument < pops; argument++)
+            {
+                if (!values[values.Length - pops + argument].IsThis)
+                {
+                    continue;
+                }
+
+                var name = view.Op.Name!;
+                var permitted = name is "dup" or "pop" || argument == 0
+                    && (name is "ldfld" or "ldflda" or "stfld"
+                        || InitializesConstructorThis(view, values, graph, state));
+                if (!permitted)
+                {
+                    return true;
+                }
+            }
+        }
+
+        if (view.Op != OpCodes.Call || view.MethodIsConstructor != true || view.MethodIsStatic != false
+            || view.DeclaringType is not { } owner || _types.Algebra.IsValueType(owner))
+        {
+            return false;
+        }
+
+        return !InitializesConstructorThis(view, values, graph, state);
+    }
+
+    private bool InitializesConstructorThis(StackOperandView<T> view, FlowValue<T>[] values,
+        FlowGraph<T> graph, ConstructorThisState state)
+    {
+        return CanInitializeConstructorThis(view, graph, state,
+            view.ArgumentPops > 0 && view.ArgumentPops <= values.Length
+                && values[values.Length - view.ArgumentPops].IsThis);
+    }
+
+    private bool FilterPathInitializesConstructor(FilterPathState[]? paths, StackOperandView<T> view,
+        int pops, FlowGraph<T> graph)
+    {
+        if (paths is null)
+        {
+            return false;
+        }
+
+        foreach (var path in ExpandFilterPaths(paths))
+        {
+            if (!path.StackUnknown && path.Values.Length >= pops
+                && CanInitializeConstructorThis(view, graph, path.ConstructorState,
+                    view.ArgumentPops > 0 && view.ArgumentPops <= path.Values.Length
+                        && path.Values[path.Values.Length - view.ArgumentPops].IsThis))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool CanInitializeConstructorThis(StackOperandView<T> view, FlowGraph<T> graph,
+        ConstructorThisState state, bool receiverIsThis)
+    {
+        if (!graph.TracksConstructorInitialization || state != ConstructorThisState.Uninitialized
+            || view.Op != OpCodes.Call || view.MethodIsConstructor != true || view.MethodIsStatic != false
+            || view.DeclaringType is not { } target || graph.DeclaringType is not { } declaring
+            || !receiverIsThis)
+        {
+            return false;
+        }
+
+        return _types.Algebra.Same(target, declaring) && !view.MethodIsCurrentDefinition
+            || _types.BaseType(declaring) is { } baseType && _types.Algebra.Same(target, baseType);
+    }
+
+    private bool IsObject(T? type) => type is not null
+        && _types.Algebra.Same(type, _types.Algebra.Primitive("object"));
+
     private bool TryMerge(FlowState<T> left, FlowState<T> right, out FlowState<T> merged)
     {
         merged = left;
         if (left.Invalid || right.Invalid)
         {
             merged = WithExceptional(new FlowState<T>(null, Invalid: true,
-                ThisArgumentIsOriginal: left.ThisArgumentIsOriginal && right.ThisArgumentIsOriginal),
+                ThisArgumentIsOriginal: left.ThisArgumentIsOriginal && right.ThisArgumentIsOriginal,
+                ConstructorState: MergeConstructorStates(left.ConstructorState, right.ConstructorState)),
                 MergeUnwindHandlers(left.PendingUnwindHandlers, right.PendingUnwindHandlers),
                 MergeSyntheticHandler(left.SyntheticHandler, right.SyntheticHandler));
             return true;
@@ -2401,12 +2767,21 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             (false, true) => rightFact,
             _ => leftFact && rightFact,
         };
+        ConstructorThisState MergeConstructorFact() => (leftReceiverPathFeasible, rightReceiverPathFeasible) switch
+        {
+            (true, true) => MergeConstructorStates(left.ConstructorState, right.ConstructorState),
+            (true, false) => left.ConstructorState,
+            (false, true) => right.ConstructorState,
+            _ => MergeConstructorStates(left.ConstructorState, right.ConstructorState),
+        };
         var thisArgumentIsOriginal = MergeReceiverFact(left.ThisArgumentIsOriginal, right.ThisArgumentIsOriginal);
+        var constructorState = MergeConstructorFact();
         var filterPaths = MergeFilterPaths(left.FilterPaths, right.FilterPaths);
         if (left.Values is not { } a || right.Values is not { } b)
         {
             merged = WithExceptional(new FlowState<T>(left.Values ?? right.Values, unknown,
-                ThisArgumentIsOriginal: thisArgumentIsOriginal, FilterPaths: filterPaths),
+                ThisArgumentIsOriginal: thisArgumentIsOriginal, FilterPaths: filterPaths,
+                ConstructorState: constructorState),
                 MergeUnwindHandlers(left.PendingUnwindHandlers, right.PendingUnwindHandlers),
                 MergeSyntheticHandler(left.SyntheticHandler, right.SyntheticHandler));
             return true;
@@ -2430,7 +2805,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         }
 
         merged = WithExceptional(new FlowState<T>(values, unknown,
-            ThisArgumentIsOriginal: thisArgumentIsOriginal, FilterPaths: filterPaths),
+            ThisArgumentIsOriginal: thisArgumentIsOriginal, FilterPaths: filterPaths,
+            ConstructorState: constructorState),
             MergeUnwindHandlers(left.PendingUnwindHandlers, right.PendingUnwindHandlers),
             MergeSyntheticHandler(left.SyntheticHandler, right.SyntheticHandler));
         return true;
@@ -2440,6 +2816,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     {
         if (left.Invalid != right.Invalid || left.HasUnknownPath != right.HasUnknownPath
             || left.ThisArgumentIsOriginal != right.ThisArgumentIsOriginal || left.Values?.Length != right.Values?.Length
+            || left.ConstructorState != right.ConstructorState
             || !SameFilterPaths(left.FilterPaths, right.FilterPaths)
             || !SameUnwindHandlers(left.PendingUnwindHandlers, right.PendingUnwindHandlers)
             || left.SyntheticHandler != right.SyntheticHandler)
@@ -2464,8 +2841,36 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         return true;
     }
 
+    private static ConstructorThisState MergeConstructorStates(ConstructorThisState left, ConstructorThisState right)
+    {
+        if (left == right)
+        {
+            return left;
+        }
+
+        if (left == ConstructorThisState.NotTracked)
+        {
+            return right;
+        }
+
+        if (right == ConstructorThisState.NotTracked)
+        {
+            return left;
+        }
+
+        return ConstructorThisState.Mixed;
+    }
+
     private static bool InsideFilter(FlowGraph<T> graph, int index) => graph.Regions[index]
         .Any(section => graph.Sections[section].Kind == BlockKind.Filter);
+
+    private static bool SyntheticFilterCanBeSearched(FlowGraph<T> graph, FlowRegion filter)
+    {
+        var filterIndex = graph.Clauses.FindIndex(clause => clause.Group == filter.Group
+            && clause.Kind == BlockKind.Filter && clause.Entry == filter.Start);
+        return filterIndex >= 0 && !graph.Clauses.Take(filterIndex)
+            .Any(clause => clause.Group == filter.Group && clause.CatchesAll);
+    }
 
     private static bool SharesFilterRegion(FlowGraph<T> graph, int source, int target)
     {
@@ -2475,7 +2880,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     }
 
     private FilterPathState[]? TransferFilterPaths(FilterPathState[]? paths, StackOperandView<T> view,
-        int pops, int pushes, FlowValue<T>[] popped, bool bounded = true)
+        int pops, int pushes, FlowValue<T>[] popped, FlowGraph<T> graph, bool bounded = true)
     {
         if (paths is null)
         {
@@ -2489,7 +2894,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             {
                 if (path.CorrelatedAlternatives is null)
                 {
-                    var transformed = TransferFilterPaths([path], view, pops, pushes, popped, bounded: false);
+                    var transformed = TransferFilterPaths(
+                        [path], view, pops, pushes, popped, graph, bounded: false);
                     if (transformed is null)
                     {
                         return null;
@@ -2500,7 +2906,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 }
 
                 var summary = TransferFilterPaths(
-                    [path with { CorrelatedAlternatives = null }], view, pops, pushes, popped, bounded: false);
+                    [path with { CorrelatedAlternatives = null }], view, pops, pushes, popped,
+                    graph, bounded: false);
                 if (summary is not [var transformedSummary])
                 {
                     return null;
@@ -2513,7 +2920,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 }
 
                 var alternatives = TransferFilterPaths(
-                    path.CorrelatedAlternatives, view, pops, pushes, popped, bounded: false);
+                    path.CorrelatedAlternatives, view, pops, pushes, popped, graph, bounded: false);
                 if (alternatives is null)
                 {
                     return null;
@@ -2612,8 +3019,13 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             var pendingEffect = InvalidatesBoundUnwind(view) && path.PendingUnwindEffect?.BoundOutputs is not null
                 ? path.PendingUnwindEffect with { CorrelationLost = true }
                 : path.PendingUnwindEffect;
+            var constructorState = CanInitializeConstructorThis(view, graph, path.ConstructorState,
+                view.ArgumentPops > 0 && view.ArgumentPops <= path.Values.Length
+                    && path.Values[path.Values.Length - view.ArgumentPops].IsThis)
+                ? ConstructorThisState.Initialized : path.ConstructorState;
             var next = new FilterPathState([.. output], locals, arguments, thisArgumentIsOriginal,
-                pendingEffect, ReceiverConditions: path.ReceiverConditions);
+                pendingEffect, ReceiverConditions: path.ReceiverConditions,
+                ConstructorState: constructorState);
             result.Add(next);
         }
 
@@ -3219,7 +3631,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 [.. values.Select(value => new FilterPathValue(null, null, value.IsThis))],
                 null,
                 null,
-                state.ThisArgumentIsOriginal),
+                state.ThisArgumentIsOriginal,
+                ConstructorState: state.ConstructorState),
         ],
     };
 
@@ -3233,7 +3646,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         return [.. ExpandFilterPaths(paths).Select(path => new FilterPathState(
             [.. values.Select(_ => new FilterPathValue(null, null, false))], path.Locals, path.Arguments,
             path.ThisArgumentIsOriginal, path.PendingUnwindEffect,
-            ReceiverConditions: path.ReceiverConditions))];
+            ReceiverConditions: path.ReceiverConditions, ConstructorState: path.ConstructorState))];
     }
 
     private static FilterPathState[]? MergeFilterPaths(FilterPathState[]? left, FilterPathState[]? right)
@@ -3256,6 +3669,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     private static bool SameFilterPath(FilterPathState left, FilterPathState right)
     {
         if (left.ThisArgumentIsOriginal != right.ThisArgumentIsOriginal || left.StackUnknown != right.StackUnknown
+            || left.ConstructorState != right.ConstructorState
             || !SameFilterValues(left.Values, right.Values)
             || left.Locals?.Count != right.Locals?.Count || left.Arguments?.Count != right.Arguments?.Count
             || !SameReceiverConditions(left.ReceiverConditions, right.ReceiverConditions)

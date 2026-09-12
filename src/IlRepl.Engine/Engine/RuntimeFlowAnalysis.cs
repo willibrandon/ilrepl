@@ -58,8 +58,15 @@ internal static class RuntimeFlowAnalysis
             CatchType = entry.CatchType,
         }).ToArray();
         var returnType = state.Signature?.ReturnType;
+        var declaringType = state.Member?.Owner;
+        var tracksConstructorInitialization = state.Signature is { Name: ".ctor", IsStatic: false }
+            && declaringType?.IsValueType == false;
         return new ControlFlowAnalysis<Type>(Rules(state.Types)).Run(
-            new FlowGraph<Type>(nodes, typeof(object), hasThis: context.ThisIndex == 0) { BodyName = body },
+            new FlowGraph<Type>(nodes, typeof(object), hasThis: context.ThisIndex == 0,
+                declaringType: declaringType, tracksConstructorInitialization: tracksConstructorInitialization)
+            {
+                BodyName = body,
+            },
             returnType == typeof(void) ? null : returnType, !state.IsMethod, cancellationToken);
     }
 
@@ -96,7 +103,14 @@ internal static class RuntimeFlowAnalysis
         {
             Instruction = View(state, instruction, state.Context),
         };
-        var graph = new FlowGraph<Type>([node], typeof(object), hasThis: state.Context.ThisIndex == 0) { BodyName = body };
+        var declaringType = state.Member?.Owner;
+        var tracksConstructorInitialization = state.Signature is { Name: ".ctor", IsStatic: false }
+            && declaringType?.IsValueType == false;
+        var graph = new FlowGraph<Type>([node], typeof(object), hasThis: state.Context.ThisIndex == 0,
+            declaringType: declaringType, tracksConstructorInitialization: tracksConstructorInitialization)
+        {
+            BodyName = body,
+        };
         var original = previous.End;
         var values = original?.Values;
         var copies = values?.Select(value => value with { Origins = [] }).ToArray();
@@ -173,6 +187,11 @@ internal static class RuntimeFlowAnalysis
     private static StackOperandView<Type> View(CellState state, Instruction instruction, ParseContext context)
     {
         var view = StackSimulator.View(instruction, context);
+        if (instruction.Operand is ResolvedMethod called && state.Signature is { } current)
+        {
+            view = view with { MethodIsCurrentDefinition = IsCurrentDefinition(called, current) };
+        }
+
         RuntimeBindingScope? bindingScope = null;
         RuntimeBindingScope Scope() => bindingScope ??= new RuntimeBindingScope(context);
         if (instruction.Op == OpCodes.Jmp && instruction.Operand is ResolvedMethod jump)
@@ -208,6 +227,17 @@ internal static class RuntimeFlowAnalysis
             ReceiverRestriction = InstructionMemberRules.InitOnlyStoreProblem(symbol, instruction.Op.Name,
                 signature, owner, false, scope.Pretty),
         };
+    }
+
+    private static bool IsCurrentDefinition(ResolvedMethod called, MethodSignature current)
+    {
+        var currentIdentity = current.ExactSymbol?.Definition;
+        var calledIdentity = called.DeclaredDefinition?.ExactSymbol?.Definition
+            ?? called.Declared?.ExactSymbol?.Definition
+            ?? called.Definition?.ExactSymbol?.Definition;
+        return currentIdentity is { } currentDefinition && calledIdentity is { } calledDefinition
+            ? currentDefinition == calledDefinition
+            : ReferenceEquals(called.DeclaredDefinition ?? called.Declared ?? called.Definition, current);
     }
 
     /// <summary>

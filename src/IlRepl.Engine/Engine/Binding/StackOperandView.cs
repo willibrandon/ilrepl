@@ -75,6 +75,11 @@ public sealed record StackOperandView<T> where T : class
     public bool? MethodIsConstructor { get; init; }
 
     /// <summary>
+    /// Whether a method operand names the method currently being analyzed.
+    /// </summary>
+    public bool MethodIsCurrentDefinition { get; init; }
+
+    /// <summary>
     /// Whether a method operand names an abstract method; null when there is no method operand.
     /// </summary>
     public bool? MethodIsAbstract { get; init; }

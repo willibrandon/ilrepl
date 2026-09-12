@@ -2,7 +2,7 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 231 method examples and the paired constructor example
+not justify refusing a correct body. The 279 method examples and the paired constructor example
 run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
@@ -20,13 +20,13 @@ fixture assembles a static `call` and changes only its opcode in metadata before
 | Worklist convergence and backward edges | III.1.7.5, III.1.8.1.1 | Loop | BackwardStack, UnreachableForwardBackwardStack |
 | Switch and unreachable instructions | III.3.66, III.1.8.1.1 | Switch, DeadCode | Underflow on a reachable path |
 | Return shape and parameter assignment | III.3.57, I.8.7.3 | Diamond, NativeAddition | WrongReturn, WrongCall |
-| Virtual calls, constructors, and function pointers | II.14.5, II.15.2, III.3.19, III.3.41, III.4.18, III.4.21 | AbstractVirtualCall, ConcreteAllocation, ConstrainedReceiver, ConstructorFunctionPointer, DirectConstructorFunctionPointer, FunctionPointerField, FunctionPointerLocal, FunctionPointerReturn, InstanceFunctionPointer, NonVirtualFunctionPointer, StaticInitializerFunctionPointer, VirtualFunctionPointer | WrongAbstractAllocation, WrongAbstractCall, WrongAbstractFunctionPointer, WrongMethodAllocation, WrongStaticConstructorAllocation, WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer, WrongVirtualConstructorCall |
+| Virtual calls, constructors, and function pointers | I.8.9.6.6, II.10.5.3.1, II.14.5, II.15.2, III.1.8.1.4, III.3.19, III.3.41, III.4.18, III.4.21 | AbstractVirtualCall, ConcreteAllocation, ConstrainedReceiver, ConstructorCallInFinally, ConstructorFailureInFilter, ConstructorFailureInFinally, ConstructorFunctionPointer, ConstructorRetryAfterCatch, CorrelatedFilterConstructor, DeferredInitializedConstructorHandler, DelegatingReferenceConstructorCall, DirectConstructorFunctionPointer, DirectSelfConstructorCall, DoubleReferenceConstructorCall, EarlyThisCall, ExceptionalConstructorFinallyUse, ExplicitStaticInitializerCall, FunctionPointerField, FunctionPointerLocal, FunctionPointerReturn, GrandparentConstructorCall, InitializedConstructorFinallyUse, InitializedReferenceConstructorCall, InstanceFunctionPointer, MixedConstructorInitialization, NonVirtualFunctionPointer, OrdinaryMethodConstructorCall, StaticInitializerFunctionPointer, UninitializedConstructorReturn, UnusedThisBeforeBaseCall, ValueTypeConstructorCall, VirtualFunctionPointer | WrongAbstractAllocation, WrongAbstractCall, WrongAbstractFunctionPointer, WrongMethodAllocation, WrongStaticConstructorAllocation, WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer, WrongVirtualConstructorCall |
 | Instance receiver representation | I.12.4.1.4, II.13.3 | ValueTypeReceiver, NativeValueTypeReceiver, PointerValueTypeReceiver | WrongManagedReferenceReceiver, WrongPointerValueTypeReceiver, WrongUnboxedValueTypeReceiver |
 | Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
 | Managed-pointer verification types | I.8.7, III.1.8.1.2.3 | BooleanPointerCall, BooleanPointerJoin, CharacterPointerJoin, EnumPointerJoin, ReducedPointerJoin | ByrefJoin |
 | Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.8, III.4.10–III.4.11, III.4.13, III.4.27–III.4.29 | ByteIndirectLoad, ByteIndirectStore, FloatIndirectLoad, FloatIndirectStore, FunctionPointerArrayInstructions, GenericIndirectReference, IndirectReferenceStore, Int32PointerArgument, Int32PointerArrayElement, Int32PointerField, Int32PointerLocal, Int32PointerObjectStore, Int32PointerReturn, Int32PointerStoredArgument, ManagedPointer, NativeFieldAddress, NativeFieldLoad, NativeFieldStore, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, NativePointerArgument, NativePointerArrayElement, NativePointerArrayInstructions, NativePointerLocal, NativePointerReturn, PointerArgumentLoad, PointerArrayLoad, PointerFieldArgument, PointerFieldArithmetic, PointerFieldReturn, PointerFields, PointerFieldToLocal, PointerLocalLoad, PointerObjectLoad, UnmanagedFieldAddress, UnmanagedReferenceLoad, UnmanagedReferenceStore | WrongFunctionPointerArrayInstructionWidth, WrongGenericIndirectLoad, WrongGenericIndirectStore, WrongIndirectReferenceStore, WrongNarrowFloatStore, WrongNarrowIndirectStore, WrongPointerArrayInstructionWidth, WrongPointerField, WrongUnmanagedReferenceStore, WrongWideFloatLoad, WrongWideIndirectLoad |
 | Field storage form | III.4.10–III.4.12, III.4.24–III.4.31 | PointerFields, StaticField, StaticFieldToken | WrongInstanceFieldOpcode, WrongReferenceFieldReceiver, WrongStaticFieldOpcode |
-| Readonly provenance | III.2.3, III.3.62 | CovariantReadOnlyArrayAddress, ReadOnlyLoad, ReadOnlyFieldWrite | WrongCovariantArrayAddress, WrongPrefix |
+| Readonly provenance | III.1.8.1.2.2, III.2.3, III.3.62, III.4.28 | CovariantReadOnlyArrayAddress, ReadOnlyByRefArgument, ReadOnlyConstrainedCall, ReadOnlyCopyDestination, ReadOnlyCopySource, ReadOnlyFieldAddress, ReadOnlyFieldLoad, ReadOnlyFieldWrite, ReadOnlyLoad, ReadOnlyMutatingCall, ReadOnlyObjectInitialize, ReadOnlyObjectLoad, ReadOnlyObjectStore, ReadOnlyStoredPointer, ReadOnlyTypedReference, ReadOnlyVirtualCall, ReadOnlyWrite, UnboxedFieldWrite | WrongCovariantArrayAddress, WrongPrefix |
 | Correct operations outside verification | III.1.8, III.3.47 | ManagedPointerOverflowAddition, NativeValueTypeReceiver, PointerDifference, ReadOnlyWrite, StackAllocation, UnmanagedPointerAddition, UnmanagedPointerNot, UnmanagedPointerShift | WrongArithmetic, WrongAllocationHandler |
 | Numeric operand categories | III.1.5 tables III.2–III.8, III.3.27 | ManagedPointerOverflowAddition, ManagedPointerOverflowDifference, ManagedPointerOverflowSubtraction, MixedFloats, NativeAddition, UnsignedIntegerToFloat, 288 raw pairs | BadOverflowFloat, BadNotFloat, BadShift, WrongUnsignedFloatConversion |
 | Comparisons | III.1.5 table III.4 | ObjectComparison, GenericReferenceComparison | BadComparison, WrongGenericComparison |
@@ -194,11 +194,12 @@ Typed array opcodes allow covariance between reference elements. They do not box
 storage, so the value and reference element fixtures keep that covariance within reference types.
 
 The `readonly.` prefix suppresses `ldelema`'s exact runtime element check and returns a
-controlled-mutability pointer. Direct stores and ordinary byref arguments are unverifiable, but
-ECMA permits the pointer as the receiver of an instance call, so a value type can expose mutation through
-its own methods. CoreCLR and Mono execute both that call and `string[]` addressed as `object&` with
-the prefix. ILVerification accepts the call but reports `StackUnexpectedArrayType` for the
-covariant address, so the tests preserve that known difference.
+controlled-mutability pointer. `stind.*`, `stobj`, `initobj`, `mkrefany`, and ordinary byref
+arguments are unverifiable. Instance-field access and instance calls are permitted, so a value type
+can expose mutation through its fields and methods. CoreCLR and Mono execute these forms and
+`string[]` addressed as `object&` with the prefix. ILVerification reports `StackUnexpected` for
+several permitted or rejected shapes, reports `CallVirtOnValueType` for the permitted direct
+`callvirt`, and misses the invalid `cpobj` destination. The corpus pins each result independently.
 
 The library reports `ImportCalli not implemented` for the indirect calls it reaches. The native
 pointer fixture stops earlier at `ExpectedNumericType` for `conv.u`. The tests assert those exact
@@ -222,6 +223,17 @@ binder and decoded-body analyzer both reject `WrongStaticConstructorAllocation`.
 ECMA III.4.21 requires `newobj` to name an instance constructor, and III.4.1 forbids `callvirt`
 from invoking an instance initializer. `WrongMethodAllocation` and `WrongVirtualConstructorCall`
 keep both operand rules in the shared desktop and browser corpus.
+
+For a reference type, direct `call` to an instance constructor initializes only the original
+receiver of a constructor. The target must be a different constructor of that type or a constructor
+of its direct base. The receiver stays uninitialized when that initializing call exits exceptionally.
+Every normally returning path from a reference-type constructor other than `System.Object::.ctor`
+must initialize it, and an accepted filter path alone determines the paired handler's state. A
+value-type constructor instead takes a managed pointer. Explicit `.cctor` calls are verifiable:
+ECMA II.10.5.3.1 says user code can invoke one again. ILVerification accepts an exact self-call, a
+repeated base call, and an early method call although ECMA forbids them. It does not carry successful
+initialization through a filter or `finally`. The corpus pins those differences and exception rollback
+while CoreCLR and Mono execute every accepted body.
 
 ECMA II.15.2 requires `callvirt` and `ldvirtftn` for abstract instance methods, and III.4.21
 specifies the runtime exception for constructing an abstract class. ILVerification catches the

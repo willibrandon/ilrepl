@@ -182,6 +182,11 @@ public sealed partial class EditingSession
     private static StackOperandView<TypeSymbol> FlowView(BoundInstruction instruction, EditingBody body, IBindingScope scope)
     {
         var view = EditingStack.View(instruction, scope);
+        if (instruction.Operand.Method is { } called && body.Signature is { } current)
+        {
+            view = view with { MethodIsCurrentDefinition = called.Method.Definition == current.Definition };
+        }
+
         if (instruction.Op == OpCodes.Jmp && instruction.Operand.Method is { } jump)
         {
             view = view with

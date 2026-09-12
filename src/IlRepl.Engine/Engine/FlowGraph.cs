@@ -51,15 +51,30 @@ internal sealed class FlowGraph<T> where T : class
     public List<AnalysisDiagnostic> Diagnostics { get; } = [];
 
     /// <summary>
+    /// The type that declares the analyzed method, or null for the cell and session methods.
+    /// </summary>
+    public T? DeclaringType { get; }
+
+    /// <summary>
+    /// Whether verification tracks an uninitialized reference-type constructor receiver.
+    /// </summary>
+    public bool TracksConstructorInitialization { get; }
+
+    /// <summary>
     /// Builds a graph using the supplied exception-object type.
     /// </summary>
     /// <param name="nodes">The source entries.</param>
     /// <param name="objectType">The type pushed when a catch type is omitted.</param>
     /// <param name="complete">Whether undefined targets are final errors.</param>
     /// <param name="hasThis">Whether argument zero begins as the original receiver.</param>
-    public FlowGraph(IReadOnlyList<FlowNode<T>> nodes, T objectType, bool complete = false, bool hasThis = false)
+    /// <param name="declaringType">The type that declares the analyzed method, or null.</param>
+    /// <param name="tracksConstructorInitialization">Whether the method is a reference-type instance constructor.</param>
+    public FlowGraph(IReadOnlyList<FlowNode<T>> nodes, T objectType, bool complete = false, bool hasThis = false,
+        T? declaringType = null, bool tracksConstructorInitialization = false)
     {
         Nodes = nodes;
+        DeclaringType = declaringType;
+        TracksConstructorInitialization = tracksConstructorInitialization;
         Edges = Enumerable.Range(0, nodes.Count + 1).Select(_ => new List<FlowEdge>()).ToArray();
         Regions = new int[nodes.Count + 1][];
         var labels = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -67,9 +82,12 @@ internal sealed class FlowGraph<T> where T : class
         var groups = new List<int>();
         var ends = new Dictionary<int, int>();
         var groupAt = new Dictionary<int, int>();
+        var constructorState = tracksConstructorInitialization
+            ? ConstructorThisState.Uninitialized : ConstructorThisState.NotTracked;
         FlowState<T> Entry(FlowValue<T>[] values) => values.Length == 0
-            ? hasThis ? FlowState<T>.ThisEntry : FlowState<T>.Empty
-            : new FlowState<T>(values, ThisArgumentIsOriginal: hasThis);
+            ? hasThis ? FlowState<T>.ThisEntry with { ConstructorState = constructorState }
+                : FlowState<T>.Empty
+            : new FlowState<T>(values, ThisArgumentIsOriginal: hasThis, ConstructorState: constructorState);
         Seeds[0] = Entry([]);
         for (var i = 0; i < nodes.Count; i++)
         {
@@ -337,9 +355,23 @@ internal sealed class FlowGraph<T> where T : class
         return UnwindHandlersForTransfer(source, target, exceptional: true);
     }
 
-    private IEnumerable<int> UnwindHandlersForTransfer(int source, int target, bool exceptional)
+    /// <summary>
+    /// Finds the finally and fault handlers executed when an exception leaves every protected region.
+    /// </summary>
+    /// <param name="source">The instruction that throws or completes a rejecting filter.</param>
+    /// <returns>The unwind handlers ordered from the innermost protected group outward.</returns>
+    public IEnumerable<int> UnwindHandlersForExceptionExit(int source)
     {
-        var targetGroups = Regions[target].Select(id => Sections[id].Group).ToHashSet();
+        return UnwindHandlersForTransfer(source, target: null, exceptional: true);
+    }
+
+    private IEnumerable<int> UnwindHandlersForTransfer(int source, int target, bool exceptional) =>
+        UnwindHandlersForTransfer(source, (int?)target, exceptional);
+
+    private IEnumerable<int> UnwindHandlersForTransfer(int source, int? target, bool exceptional)
+    {
+        var targetGroups = target is { } position
+            ? Regions[position].Select(id => Sections[id].Group).ToHashSet() : [];
         var visited = new HashSet<int>();
         for (var index = Regions[source].Length - 1; index >= 0; index--)
         {
@@ -464,6 +496,40 @@ internal sealed class FlowGraph<T> where T : class
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Determines whether a rejected filter can leave the method without first evaluating another filter.
+    /// </summary>
+    /// <param name="instruction">An instruction inside the rejecting filter.</param>
+    /// <returns>True when no later filter or catch-all clause stops direct exception search.</returns>
+    public bool FilterContinuationCanEscape(int instruction)
+    {
+        return SearchCanEscape(FilterContinuationTargets(instruction));
+    }
+
+    /// <summary>
+    /// Determines whether an exception can leave the method without first evaluating a filter.
+    /// </summary>
+    /// <param name="instruction">The instruction that may throw.</param>
+    /// <returns>True when no filter or catch-all clause stops direct exception search.</returns>
+    public bool ExceptionSearchCanEscape(int instruction)
+    {
+        return SearchCanEscape(ExceptionSearchTargets(instruction));
+    }
+
+    private bool SearchCanEscape(IEnumerable<int> targets)
+    {
+        foreach (var target in targets)
+        {
+            var clause = Clauses.First(candidate => candidate.Entry == target);
+            if (clause.Kind == BlockKind.Filter || IsCatchAll(clause))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool IsSearchClause(FlowClause clause) => clause.Kind is BlockKind.Catch or BlockKind.Filter;

@@ -11,12 +11,14 @@ namespace IlRepl.Engine;
 /// <param name="Invalid">Whether the state is structurally invalid.</param>
 /// <param name="ThisArgumentIsOriginal">Whether argument zero is the original receiver.</param>
 /// <param name="FilterPaths">The correlated filter and receiver paths.</param>
+/// <param name="ConstructorState">The possible initialization states of a reference-type constructor receiver.</param>
 internal record FlowState<T>(
     FlowValue<T>[]? Values,
     bool HasUnknownPath = false,
     bool Invalid = false,
     bool ThisArgumentIsOriginal = false,
-    FilterPathState[]? FilterPaths = null) where T : class
+    FilterPathState[]? FilterPaths = null,
+    ConstructorThisState ConstructorState = ConstructorThisState.NotTracked) where T : class
 {
     /// <summary>
     /// The empty entry stack outside an instance member.

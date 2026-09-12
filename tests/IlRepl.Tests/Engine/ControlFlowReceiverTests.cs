@@ -1692,6 +1692,538 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
+    /// A decoded constructor seeds an otherwise unreachable catch with an uninitialized receiver.
+    /// </summary>
+    [TestMethod]
+    public void Disassembly_SeedsHandlersWithUninitializedThis()
+    {
+        var session = new Session();
+        var (_, _, fixture) = CecilFixture.Build((module, type) =>
+        {
+            var constructor = new MethodDefinition(".ctor",
+                MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+                module.TypeSystem.Void);
+            type.Methods.Add(constructor);
+            var il = constructor.Body.GetILProcessor();
+            var tryStart = il.Create(OpCodes.Nop);
+            var catchStart = il.Create(OpCodes.Pop);
+            var initialize = il.Create(OpCodes.Ldarg_0);
+            var done = il.Create(OpCodes.Ret);
+            il.Append(tryStart);
+            il.Append(il.Create(OpCodes.Leave, initialize));
+            il.Append(catchStart);
+            il.Append(il.Create(OpCodes.Ret));
+            il.Append(initialize);
+            il.Append(il.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
+            il.Append(done);
+            constructor.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch)
+            {
+                TryStart = tryStart,
+                TryEnd = catchStart,
+                CatchType = module.TypeSystem.Object,
+                HandlerStart = catchStart,
+                HandlerEnd = initialize,
+            });
+        }, session.Resolver);
+        var listing = MethodDisassembler.Disassemble(fixture.GetConstructors()[0], session);
+        var diagnostics = StackAnalysis.Diagnostics(listing);
+        Assert.Contains(diagnostic => diagnostic.Code == "FLOW007"
+            && diagnostic.Message.Contains("ret", StringComparison.Ordinal), diagnostics);
+    }
+
+    /// <summary>
+    /// A filter handler receives constructor state only from paths that accept the exception.
+    /// </summary>
+    /// <param name="initializesEveryAcceptingPath">Whether every accepted path initializes this.</param>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task FilterHandler_UsesAcceptedConstructorState(bool initializesEveryAcceptingPath)
+    {
+        var filter = initializesEveryAcceptingPath
+            ? "pop\nldarg.0\ncall instance void object::.ctor()\nldc.i4.1\nendfilter"
+            : "pop\nldarg initialize\nbrtrue INITIALIZE\nldc.i4.1\nbr FILTER_RESULT\n"
+                + "INITIALIZE: ldarg.0\ncall instance void object::.ctor()\nldc.i4.1\nFILTER_RESULT: endfilter";
+        var lines = ($$"""
+            .class public FilterHandlerConstructor {
+            .method public instance void .ctor(bool initialize) {
+            .try {
+            LOOP: br LOOP
+            } filter {
+            {{filter}}
+            } handler {
+            pop
+            ldarg.0
+            callvirt instance string object::ToString()
+            pop
+            leave DONE
+            }
+            DONE: ret
+            }
+            }
+            """).Split('\n');
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual(!initializesEveryAcceptingPath,
+            preview.Diagnostics.Any(diagnostic => diagnostic.Code == "FLOW007"),
+            string.Join("; ", preview.Diagnostics.Select(diagnostic =>
+                $"line {diagnostic.Location.Line}: {diagnostic.Message}")));
+    }
+
+    /// <summary>
+    /// A constructor state from an impossible filter-tracked edge does not contaminate a feasible join.
+    /// </summary>
+    /// <param name="constantCondition">Whether the unsafe edge is statically impossible.</param>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task FilterTracking_ExcludesImpossibleConstructorJoin(bool constantCondition)
+    {
+        var condition = constantCondition ? "ldc.i4.0" : "ldarg chooseBad";
+        var lines = ($$"""
+            .class public FilterJoinConstructor {
+            .method public instance void .ctor(bool chooseBad) {
+            .try {
+            {{condition}}
+            brtrue BAD
+            ldarg.0
+            call instance void object::.ctor()
+            leave DONE
+            BAD: leave DONE
+            } filter {
+            pop
+            ldc.i4.0
+            endfilter
+            } handler {
+            pop
+            leave DONE
+            }
+            DONE: ret
+            }
+            }
+            """).Split('\n');
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual(!constantCondition,
+            preview.Diagnostics.Any(diagnostic => diagnostic.Code == "FLOW007"),
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+    }
+
+    /// <summary>
+    /// An impossible constructor return remains harmless when later exception syntax enables path tracking.
+    /// </summary>
+    /// <param name="constantCondition">Whether the returning edge is statically impossible.</param>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task FilterTracking_IgnoresImpossibleConstructorReturn(bool constantCondition)
+    {
+        var condition = constantCondition ? "ldc.i4.0" : "ldarg returnEarly";
+        var lines = ($$"""
+            .class public FilterReturnConstructor {
+            .method public instance void .ctor(bool returnEarly) {
+            {{condition}}
+            brtrue BAD
+            ldnull
+            throw
+            BAD: ret
+            .try {
+            ldnull
+            throw
+            } filter {
+            pop
+            ldc.i4.0
+            endfilter
+            } handler {
+            pop
+            leave DONE
+            }
+            DONE: ret
+            }
+            }
+            """).Split('\n');
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual(!constantCondition,
+            preview.Diagnostics.Any(diagnostic => diagnostic.Code == "FLOW007"),
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+    }
+
+    /// <summary>
+    /// A finalizer keeps a branch condition paired with the constructor state it complements.
+    /// </summary>
+    /// <param name="complementary">Whether the finalizer initializes exactly the path skipped before the try.</param>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task Finalizer_PreservesConditionalConstructorState(bool complementary)
+    {
+        var finalizerBranch = complementary ? "brtrue SKIP" : "brfalse SKIP";
+        var lines = ($$"""
+            .class public ConditionalConstructor {
+            .method public instance void .ctor(bool first) {
+            ldarg first
+            brfalse ENTER
+            ldarg.0
+            call instance void object::.ctor()
+            ENTER: nop
+            .try {
+            leave DONE
+            } finally {
+            ldarg first
+            {{finalizerBranch}}
+            ldarg.0
+            call instance void object::.ctor()
+            SKIP: endfinally
+            }
+            DONE: ret
+            }
+            }
+            """).Split('\n');
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual(!complementary,
+            preview.Diagnostics.Any(diagnostic => diagnostic.Code == "FLOW007"),
+            string.Join("; ", preview.Diagnostics.Select(diagnostic =>
+                $"line {diagnostic.Location.Line}: {diagnostic.Message}")));
+    }
+
+    /// <summary>
+    /// An outer finalizer observes receiver changes made by every inner finalizer that must run first.
+    /// </summary>
+    /// <param name="restoresOriginal">Whether the inner finalizer restores the original receiver.</param>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task NestedFinalizer_AppliesInnerReceiverTransformation(bool restoresOriginal)
+    {
+        var replacement = restoresOriginal ? "ldloc original" : "ldarg other";
+        var lines = ($$"""
+            .class public NestedFinallyRestore {
+            .field public initonly int32 Value
+            .method public instance void .ctor(class NestedFinallyRestore other) {
+            .locals init (class NestedFinallyRestore original)
+            ldarg.0
+            call instance void object::.ctor()
+            ldarg.0
+            stloc original
+            ldarg other
+            starg.s 0
+            .try {
+            .try {
+            ldnull
+            throw
+            } finally {
+            {{replacement}}
+            starg.s 0
+            endfinally
+            }
+            } finally {
+            ldarg.0
+            ldc.i4.1
+            stfld int32 NestedFinallyRestore::Value
+            endfinally
+            }
+            ret
+            }
+            }
+            """).Split('\n');
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual(!restoresOriginal, preview.Diagnostics.Any(diagnostic =>
+            diagnostic.Kind == AnalysisDiagnosticKind.Error
+            && diagnostic.Message.Contains("through this", StringComparison.Ordinal)),
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+    }
+
+    /// <summary>
+    /// An unfinished outer finalizer observes receiver restoration from an inner finalizer.
+    /// </summary>
+    [TestMethod]
+    public async Task OpenNestedFinalizer_AppliesInnerReceiverTransformation()
+    {
+        var lines = """
+            .class public OpenNestedFinallyRestore {
+            .field public initonly int32 Value
+            .method public instance void .ctor(class OpenNestedFinallyRestore other) {
+            .locals init (class OpenNestedFinallyRestore original)
+            ldarg.0
+            call instance void object::.ctor()
+            ldarg.0
+            stloc original
+            ldarg other
+            starg.s 0
+            .try {
+            .try {
+            leave DONE_OPEN_NESTED
+            } finally {
+            ldloc original
+            starg.s 0
+            endfinally
+            }
+            } finally {
+            ldarg.0
+            ldc.i4.1
+            stfld int32 OpenNestedFinallyRestore::Value
+            """.Split('\n');
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error,
+            preview.Diagnostics, string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+    }
+
+    /// <summary>
+    /// An unfinished fault handler excludes receiver changes made only along a normal leave path.
+    /// </summary>
+    [TestMethod]
+    public async Task OpenFault_ExcludesNormalLeaveReceiverState()
+    {
+        var lines = """
+            .class public OpenFaultLeave {
+            .field public initonly int32 Value
+            .method public instance void .ctor(class OpenFaultLeave other) {
+            ldarg.0
+            call instance void object::.ctor()
+            .try {
+            ldarg other
+            starg.s 0
+            leave DONE_FAULT
+            } fault {
+            ldarg.0
+            ldc.i4.1
+            stfld int32 OpenFaultLeave::Value
+            """.Split('\n');
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error,
+            preview.Diagnostics, string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+    }
+
+    /// <summary>
+    /// A rejected filter carries its final receiver state into an enclosing finalizer.
+    /// </summary>
+    /// <param name="restoresOriginal">Whether the filter restores the original receiver before rejecting.</param>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task RejectedFilter_CarriesReceiverStateIntoFinalizer(bool restoresOriginal)
+    {
+        var restoration = restoresOriginal ? "ldloc original\nstarg.s 0" : "";
+        var lines = ($$"""
+            .class public RejectedFilterFinally {
+            .field public initonly int32 Value
+            .method public instance void .ctor(class RejectedFilterFinally other) {
+            .locals init (class RejectedFilterFinally original)
+            ldarg.0
+            call instance void object::.ctor()
+            ldarg.0
+            stloc original
+            .try {
+            .try {
+            ldnull
+            throw
+            } filter {
+            pop
+            ldarg other
+            starg.s 0
+            {{restoration}}
+            ldc.i4.0
+            endfilter
+            } handler {
+            pop
+            leave DONE_FILTER
+            }
+            } finally {
+            ldarg.0
+            ldc.i4.1
+            stfld int32 RejectedFilterFinally::Value
+            endfinally
+            }
+            DONE_FILTER: ret
+            }
+            }
+            """).Split('\n');
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual(!restoresOriginal, preview.Diagnostics.Any(diagnostic =>
+            diagnostic.Kind == AnalysisDiagnosticKind.Error
+            && diagnostic.Message.Contains("through this", StringComparison.Ordinal)),
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+    }
+
+    /// <summary>
+    /// A catch-all controls the receiver state that reaches its trailing finalizer.
+    /// </summary>
+    /// <param name="restoresOriginal">Whether the catch restores the receiver and leaves normally.</param>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task CatchBeforeFinalizer_CarriesHandlerReceiverState(bool restoresOriginal)
+    {
+        var handler = restoresOriginal
+            ? "ldloc original\nstarg.s 0\nleave DONE_CATCH"
+            : "ldnull\nthrow";
+        var lines = ($$"""
+            .class public CatchBeforeFinally {
+            .field public initonly int32 Value
+            .method public instance void .ctor(class CatchBeforeFinally other) {
+            .locals init (class CatchBeforeFinally original)
+            ldarg.0
+            call instance void object::.ctor()
+            ldarg.0
+            stloc original
+            ldarg other
+            starg.s 0
+            .try {
+            ldnull
+            throw
+            } catch object {
+            pop
+            {{handler}}
+            } finally {
+            ldarg.0
+            ldc.i4.1
+            stfld int32 CatchBeforeFinally::Value
+            endfinally
+            }
+            DONE_CATCH: ret
+            }
+            }
+            """).Split('\n');
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual(!restoresOriginal, preview.Diagnostics.Any(diagnostic =>
+            diagnostic.Kind == AnalysisDiagnosticKind.Error
+            && diagnostic.Message.Contains("through this", StringComparison.Ordinal)),
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+    }
+
+    /// <summary>
+    /// A definitely accepted filter routes receiver state through its handler before the finalizer.
+    /// </summary>
+    [TestMethod]
+    public async Task AcceptedFilterBeforeFinalizer_CarriesHandlerReceiverState()
+    {
+        var lines = """
+            .class public AcceptedFilterFinally {
+            .field public initonly int32 Value
+            .method public instance void .ctor(class AcceptedFilterFinally other) {
+            .locals init (class AcceptedFilterFinally original)
+            ldarg.0
+            call instance void object::.ctor()
+            ldarg.0
+            stloc original
+            ldarg other
+            starg.s 0
+            .try {
+            ldnull
+            throw
+            } filter {
+            pop
+            ldc.i4.1
+            endfilter
+            } handler {
+            pop
+            ldloc original
+            starg.s 0
+            leave DONE_ACCEPTED_FILTER
+            } finally {
+            ldarg.0
+            ldc.i4.1
+            stfld int32 AcceptedFilterFinally::Value
+            endfinally
+            }
+            DONE_ACCEPTED_FILTER: ret
+            }
+            }
+            """.Split('\n');
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error,
+            preview.Diagnostics, string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+    }
+
+    /// <summary>
+    /// An unresolved leave from an open catch carries the handler's receiver into its trailing finalizer.
+    /// </summary>
+    [TestMethod]
+    public async Task OpenCatchLeave_CarriesHandlerReceiverStateIntoFinalizer()
+    {
+        var lines = """
+            .class public OpenCatchFinally {
+            .field public initonly int32 Value
+            .method public instance void .ctor(class OpenCatchFinally other) {
+            .locals init (class OpenCatchFinally original)
+            ldarg.0
+            call instance void object::.ctor()
+            ldarg.0
+            stloc original
+            ldarg other
+            starg.s 0
+            .try {
+            ldnull
+            throw
+            } catch object {
+            pop
+            ldloc original
+            starg.s 0
+            leave DONE_OPEN_CATCH
+            } finally {
+            ldarg.0
+            ldc.i4.1
+            stfld int32 OpenCatchFinally::Value
+            """.Split('\n');
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error,
+            preview.Diagnostics, string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+    }
+
+    /// <summary>
+    /// A decoded constructor cannot initialize itself by directly calling its current definition.
+    /// </summary>
+    [TestMethod]
+    public void Disassembly_RejectsExactSelfConstructorCall()
+    {
+        var session = new Session();
+        var (_, _, fixture) = CecilFixture.Build((module, type) =>
+        {
+            var constructor = new MethodDefinition(".ctor",
+                MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+                module.TypeSystem.Void);
+            constructor.Parameters.Add(new ParameterDefinition("recurse", ParameterAttributes.None,
+                module.TypeSystem.Boolean));
+            type.Methods.Add(constructor);
+            var il = constructor.Body.GetILProcessor();
+            var initialize = il.Create(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Brfalse, initialize);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, constructor);
+            il.Emit(OpCodes.Ret);
+            il.Append(initialize);
+            il.Emit(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!));
+            il.Emit(OpCodes.Ret);
+        }, session.Resolver);
+        var listing = MethodDisassembler.Disassemble(fixture.GetConstructor([typeof(bool)])!, session);
+        var diagnostics = StackAnalysis.Diagnostics(listing);
+        Assert.Contains(diagnostic => diagnostic.Code == "FLOW007"
+            && diagnostic.Message.Contains("call", StringComparison.Ordinal), diagnostics);
+    }
+
+    /// <summary>
     /// Decoded argument writes invalidate this before a later readonly field store is analyzed.
     /// </summary>
     [TestMethod]

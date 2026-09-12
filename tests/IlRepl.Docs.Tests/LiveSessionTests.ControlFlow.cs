@@ -485,19 +485,23 @@ public sealed partial class LiveSessionTests
     private static async Task ResetSessionAsync(IPage page)
     {
         await PasteAsync(page, ".reset");
-        await ReadyToSubmitAsync(page);
+        await ReadyToSubmitResetAsync(page);
         await ArmSubmissionOutputAsync(page);
         await page.Keyboard.PressAsync("Enter");
         await ResetCompletedAsync(page);
     }
 
-    private static Task<IJSHandle> ReadyToSubmitAsync(IPage page) => page.WaitForFunctionAsync("""
+    private static Task<IJSHandle> ReadyToSubmitResetAsync(IPage page) => page.WaitForFunctionAsync("""
         () => {
           const terminal = window.ilreplTerminal;
           const buffer = terminal.buffer.active;
-          const status = buffer.getLine(buffer.viewportY + terminal.rows - 1)?.translateToString(true) ?? '';
-          const prompt = buffer.getLine(buffer.viewportY + terminal.rows - 2)?.translateToString(true) ?? '';
-          return prompt.includes('.reset') && !status.includes('updating') && !status.includes('sending');
+          const first = buffer.viewportY;
+          const lines = Array.from({ length: terminal.rows }, (_, row) =>
+            buffer.getLine(first + row)?.translateToString(true) ?? '');
+          const prompt = lines.findLast(line => /il\[\d+\]>/.test(line));
+          const status = lines.at(-1) ?? '';
+          return prompt?.includes('> .reset') && !status.includes('editing ')
+            && !status.includes('updating') && !status.includes('sending');
         }
         """, null, new() { PollingInterval = 16, Timeout = 30_000 });
 
@@ -528,19 +532,44 @@ public sealed partial class LiveSessionTests
         }
         """, null, new() { PollingInterval = 16, Timeout = 30_000 });
 
-    private static Task<IJSHandle> ResetCompletedAsync(IPage page) => page.WaitForFunctionAsync("""
-        () => {
-          const terminal = window.ilreplTerminal;
-          const buffer = terminal.buffer.active;
-          const status = buffer.getLine(buffer.viewportY + terminal.rows - 1)?.translateToString(true) ?? '';
-          const lines = Array.from({ length: buffer.length }, (_, row) =>
-            buffer.getLine(row)?.translateToString(true) ?? '');
-          const reset = lines.findLastIndex(line => line.includes('.reset'));
-          const cleared = lines.slice(reset + 1)
-            .some(line => line.includes('cell, declarations, methods, and types cleared'));
-          return reset >= 0 && cleared && window.ilreplControlFlowWriteCount > 0
-            && performance.now() - window.ilreplControlFlowLastWrite >= 100 && !status.includes('editing ')
-            && !status.includes('updating') && !status.includes('sending');
+    private static async Task ResetCompletedAsync(IPage page)
+    {
+        try
+        {
+            await page.WaitForFunctionAsync("""
+                () => {
+                  const terminal = window.ilreplTerminal;
+                  const buffer = terminal.buffer.active;
+                  const status = buffer.getLine(buffer.viewportY + terminal.rows - 1)?.translateToString(true) ?? '';
+                  const lines = Array.from({ length: buffer.length }, (_, row) =>
+                    buffer.getLine(row)?.translateToString(true) ?? '');
+                  const reset = lines.findLastIndex(line => line.includes('.reset'));
+                  const cleared = lines.slice(reset + 1)
+                    .some(line => line.includes('cell, declarations, methods, and types cleared'));
+                  return reset >= 0 && cleared && window.ilreplControlFlowWriteCount > 0
+                    && performance.now() - window.ilreplControlFlowLastWrite >= 100 && !status.includes('editing ')
+                    && !status.includes('updating') && !status.includes('sending');
+                }
+                """, null, new() { PollingInterval = 16, Timeout = 30_000 });
         }
-        """, null, new() { PollingInterval = 16, Timeout = 30_000 });
+        catch (TimeoutException exception)
+        {
+            var state = await page.EvaluateAsync<string>("""
+                () => {
+                  const terminal = window.ilreplTerminal;
+                  const buffer = terminal.buffer.active;
+                  const count = Math.min(buffer.length, 20);
+                  const rows = Array.from({ length: count }, (_, index) =>
+                    buffer.getLine(buffer.length - count + index)?.translateToString(true) ?? '');
+                  return JSON.stringify({
+                    output: window.ilreplControlFlowOutput,
+                    writes: window.ilreplControlFlowWriteCount,
+                    age: performance.now() - window.ilreplControlFlowLastWrite,
+                    rows
+                  });
+                }
+                """);
+            throw new InvalidOperationException("reset did not settle: " + state, exception);
+        }
+    }
 }

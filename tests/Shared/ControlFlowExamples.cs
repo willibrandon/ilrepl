@@ -142,6 +142,60 @@ public static class ControlFlowExamples
         new("WrongVirtualConstructorCall", ["newobj instance void object::.ctor()",
             "callvirt instance void object::.ctor()", "ldc.i4.s 42", "ret"], false,
             "callvirt cannot call a constructor", Verification: "CallCtor"),
+        new("InitializedReferenceConstructorCall", ["newobj instance void object::.ctor()",
+            "call instance void object::.ctor()", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "CallCtor"),
+        new("ValueTypeConstructorCall", [".locals init (valuetype [System.Runtime]System.ValueTuple`1<int32> item)",
+            "ldloca item", "ldc.i4.s 42",
+            "call instance void valuetype [System.Runtime]System.ValueTuple`1<int32>::.ctor(!0)",
+            "ldloca item", "ldfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ret"], true),
+        new("ExplicitStaticInitializerCall", ["call void FlowGeneric::.cctor()", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "T", GenericArguments: "int32", Members: ".method static void .cctor() {\nret\n}"),
+        new("DelegatingReferenceConstructorCall", ["newobj instance void DelegatingConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: DelegatingConstructorDeclarations),
+        new("UnusedThisBeforeBaseCall", ["newobj instance void PopConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: PopConstructorDeclarations),
+        new("DirectSelfConstructorCall", ["ldc.i4.1", "newobj instance void SelfConstructor::.ctor(bool)", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Declarations: SelfConstructorDeclarations),
+        new("DoubleReferenceConstructorCall", ["newobj instance void DoubleConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Declarations: DoubleConstructorDeclarations),
+        new("UninitializedConstructorReturn", ["newobj instance void UninitializedConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "ThisUninitReturn",
+            Declarations: UninitializedConstructorDeclarations),
+        new("EarlyThisCall", ["newobj instance void EarlyThisConstructor::.ctor()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Declarations: EarlyThisConstructorDeclarations),
+        new("OrdinaryMethodConstructorCall", ["newobj instance void ReinitializingMethod::.ctor()",
+            "call instance void ReinitializingMethod::Again()", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "CallCtor", Declarations: ReinitializingMethodDeclarations),
+        new("GrandparentConstructorCall", ["newobj instance void GrandchildConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "CallCtor,ThisUninitReturn",
+            Declarations: GrandparentConstructorDeclarations),
+        new("MixedConstructorInitialization", ["ldarg.0",
+            "newobj instance void MixedConstructor::.ctor(bool)", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ThisUninitReturn", Declarations: MixedConstructorDeclarations),
+        new("ConstructorRetryAfterCatch", ["newobj instance void RetryingConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: RetryingConstructorDeclarations),
+        new("DeferredInitializedConstructorHandler", ["newobj instance void DeferredConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: DeferredConstructorDeclarations),
+        new("CorrelatedFilterConstructor", ["ldc.i4.1", "newobj instance void CorrelatedFilterConstructor::.ctor(bool)",
+            "pop", "ldc.i4.0", "newobj instance void CorrelatedFilterConstructor::.ctor(bool)", "pop",
+            "ldc.i4.s 42", "ret"], true, Verification: "ThisUninitReturn",
+            Declarations: CorrelatedFilterConstructorDeclarations),
+        new("ConstructorFailureInFilter", ["newobj instance void FilterConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "ThisUninitReturn",
+            Declarations: FilterConstructorDeclarations),
+        new("ConstructorCallInFinally", ["newobj instance void FinallyConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Verification: "ThisUninitReturn",
+            Declarations: FinallyConstructorDeclarations),
+        new("ConstructorFailureInFinally", ["newobj instance void FailingFinallyConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "ThisUninitReturn",
+            Declarations: FailingFinallyConstructorDeclarations),
+        new("InitializedConstructorFinallyUse", ["newobj instance void InitializedFinallyConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: InitializedFinallyConstructorDeclarations),
+        new("ExceptionalConstructorFinallyUse", [".try {",
+            "newobj instance void ExceptionalFinallyConstructor::.ctor()", "pop", "leave DONE", "} catch object {",
+            "pop", "leave DONE", "}", "DONE: ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            Declarations: ExceptionalFinallyConstructorDeclarations),
         new("AbstractVirtualCall", [".locals init (class [System.Runtime]System.IO.Stream)",
             "newobj instance void [System.Runtime]System.IO.MemoryStream::.ctor()", "stloc.0", "ldloc.0",
             "callvirt instance void [System.Runtime]System.IO.Stream::Flush()", "ldc.i4.s 42", "ret"], true),
@@ -206,13 +260,65 @@ public static class ControlFlowExamples
         new("ReadOnlyFieldWrite", [".locals init (valuetype [System.Runtime]System.ValueTuple`1<int32>[] items)", "ldc.i4.1",
             "newarr valuetype [System.Runtime]System.ValueTuple`1<int32>", "stloc items", "ldloc items", "ldc.i4.0", "readonly.",
             "ldelema valuetype [System.Runtime]System.ValueTuple`1<int32>", "ldc.i4.s 42",
-            "stfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ldc.i4.s 42", "ret"], true,
-            Unverifiable: true, Verification: "StackUnexpected"),
+            "stfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ldloc items", "ldc.i4.0",
+            "ldelema valuetype [System.Runtime]System.ValueTuple`1<int32>",
+            "ldfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ret"], true,
+            Verification: "StackUnexpected"),
         new("ReadOnlyMutatingCall", [".locals init (valuetype MutableValue[] items)", "ldc.i4.1",
             "newarr valuetype MutableValue", "stloc items", "ldloc items", "ldc.i4.0", "readonly.",
             "ldelema valuetype MutableValue", "call instance void MutableValue::Mutate()", "ldloc items", "ldc.i4.0",
             "ldelema valuetype MutableValue", "ldfld int32 MutableValue::Value", "ret"], true,
             Declarations: MutableValueDeclarations),
+        new("ReadOnlyFieldAddress", [".locals init (valuetype MutableValue[] items)", "ldc.i4.1",
+            "newarr valuetype MutableValue", "stloc items", "ldloc items", "ldc.i4.0", "readonly.",
+            "ldelema valuetype MutableValue", "ldflda int32 MutableValue::Value", "ldind.i4", "pop",
+            "ldc.i4.s 42", "ret"], true, Verification: "StackUnexpected",
+            Declarations: MutableValueDeclarations),
+        new("ReadOnlyFieldLoad", [".locals init (valuetype MutableValue[] items)", "ldc.i4.1",
+            "newarr valuetype MutableValue", "stloc items", "ldloc items", "ldc.i4.0", "readonly.",
+            "ldelema valuetype MutableValue", "ldfld int32 MutableValue::Value", "pop", "ldc.i4.s 42", "ret"], true,
+            Declarations: MutableValueDeclarations),
+        new("ReadOnlyObjectLoad", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "readonly.", "ldelema int32",
+            "ldobj int32", "pop", "ldc.i4.s 42", "ret"], true),
+        new("ReadOnlyVirtualCall", [".locals init (valuetype MutableValue[] items)", "ldc.i4.1",
+            "newarr valuetype MutableValue", "stloc items", "ldloc items", "ldc.i4.0", "readonly.",
+            "ldelema valuetype MutableValue", "callvirt instance void MutableValue::Mutate()",
+            "ldloc items", "ldc.i4.0", "ldelema valuetype MutableValue", "ldfld int32 MutableValue::Value", "ret"],
+            true, Verification: "CallVirtOnValueType", Declarations: MutableValueDeclarations),
+        new("ReadOnlyConstrainedCall", ["ldc.i4.1", "newarr valuetype MutableValue", "ldc.i4.0", "readonly.",
+            "ldelema valuetype MutableValue", "constrained. valuetype MutableValue",
+            "callvirt instance string object::ToString()", "pop", "ldc.i4.s 42", "ret"], true,
+            Declarations: MutableValueDeclarations),
+        new("ReadOnlyCopySource", [".locals init (int32[] items, int32 destination)", "ldc.i4.1", "newarr int32",
+            "stloc items", "ldloca destination", "ldloc items", "ldc.i4.0", "readonly.", "ldelema int32",
+            "cpobj int32", "ldc.i4.s 42", "ret"], true),
+        new("ReadOnlyObjectStore", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "readonly.", "ldelema int32",
+            "ldc.i4.s 42", "stobj int32", "ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            Verification: "ReadOnlyIllegalWrite"),
+        new("ReadOnlyObjectInitialize", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "readonly.", "ldelema int32",
+            "initobj int32", "ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            Verification: "StackUnexpected"),
+        new("ReadOnlyCopyDestination", [".locals init (int32[] items, int32 source)", "ldc.i4.1", "newarr int32",
+            "stloc items", "ldloc items", "ldc.i4.0", "readonly.", "ldelema int32", "ldloca source",
+            "cpobj int32", "ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            Verification: ""),
+        new("ReadOnlyTypedReference", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "readonly.", "ldelema int32",
+            "mkrefany int32", "pop", "ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            VerificationFailure: "TypedReference not supported in .NET Core"),
+        new("ReadOnlyByRefArgument", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "readonly.", "ldelema int32",
+            "call int32 MutableValue::Read(int32&)", "pop", "ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            Verification: "StackUnexpected", Declarations: MutableValueDeclarations),
+        new("ReadOnlyStoredPointer", [".locals init (int32& address)", "ldc.i4.1", "newarr int32", "ldc.i4.0",
+            "readonly.", "ldelema int32", "stloc address", "ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            Verification: "StackUnexpected"),
+        new("UnboxedFieldWrite", [".locals init (object item)", "ldc.i4.0",
+            "newobj instance void valuetype [System.Runtime]System.ValueTuple`1<int32>::.ctor(!0)",
+            "box valuetype [System.Runtime]System.ValueTuple`1<int32>", "dup", "stloc item",
+            "unbox valuetype [System.Runtime]System.ValueTuple`1<int32>", "ldc.i4.s 42",
+            "stfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ldloc item",
+            "unbox.any valuetype [System.Runtime]System.ValueTuple`1<int32>",
+            "ldfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ret"], true,
+            Verification: "StackUnexpected"),
         new("PointerDifference", ["ldarga.s n", "dup", "sub", "pop", "ldc.i4.s 42", "ret"], true,
             Unverifiable: true, Verification: "ExpectedNumericType"),
         new("ManagedPointerOverflowAddition", ["ldarga.s n", "ldc.i4.0", "add.ovf.un", "ldind.i4", "pop",
@@ -652,6 +758,344 @@ public static class ControlFlowExamples
         ldc.i4.s 42
         stfld int32 MutableValue::Value
         ret
+        }
+        .method public static int32 Read(int32& address) {
+        ldarg address
+        ldind.i4
+        ret
+        }
+        }
+        """;
+
+    private const string DelegatingConstructorDeclarations = """
+        .class public DelegatingConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        ldc.i4.0
+        call instance void DelegatingConstructor::.ctor(int32)
+        ret
+        }
+        .method public instance void .ctor(int32) {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string DoubleConstructorDeclarations = """
+        .class public DoubleConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string PopConstructorDeclarations = """
+        .class public PopConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        pop
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string SelfConstructorDeclarations = """
+        .class public SelfConstructor {
+        .method public instance void .ctor(bool recurse) {
+        ldarg recurse
+        brfalse BASE
+        ldarg.0
+        ldc.i4.0
+        call instance void SelfConstructor::.ctor(bool)
+        ret
+        BASE: ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string UninitializedConstructorDeclarations = """
+        .class public UninitializedConstructor {
+        .method public instance void .ctor() {
+        ret
+        }
+        }
+        """;
+
+    private const string EarlyThisConstructorDeclarations = """
+        .class public EarlyThisConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        callvirt instance string object::ToString()
+        pop
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string ReinitializingMethodDeclarations = """
+        .class public ReinitializingMethod {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        .method public instance void Again() {
+        ldarg.0
+        call instance void ReinitializingMethod::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string GrandparentConstructorDeclarations = """
+        .class public GrandparentConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        .class public ParentConstructor extends GrandparentConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void GrandparentConstructor::.ctor()
+        ret
+        }
+        }
+        .class public GrandchildConstructor extends ParentConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void GrandparentConstructor::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string MixedConstructorDeclarations = """
+        .class public MixedConstructor {
+        .method public instance void .ctor(bool initialize) {
+        ldarg initialize
+        brfalse DONE
+        ldarg.0
+        call instance void object::.ctor()
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string RetryingConstructorDeclarations = """
+        .class public RetryingBaseConstructor {
+        .field private static int32 Attempts
+        .method public instance void .ctor() {
+        ldsfld int32 RetryingBaseConstructor::Attempts
+        brtrue READY
+        ldc.i4.1
+        stsfld int32 RetryingBaseConstructor::Attempts
+        ldstr "first"
+        newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)
+        throw
+        READY: ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        .class public RetryingConstructor extends RetryingBaseConstructor {
+        .method public instance void .ctor() {
+        .try {
+        ldarg.0
+        call instance void RetryingBaseConstructor::.ctor()
+        leave DONE
+        } catch [System.Runtime]System.Exception {
+        pop
+        ldarg.0
+        call instance void RetryingBaseConstructor::.ctor()
+        leave DONE
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string FinallyConstructorDeclarations = """
+        .class public FinallyConstructor {
+        .method public instance void .ctor() {
+        .try {
+        leave DONE
+        } finally {
+        ldarg.0
+        call instance void object::.ctor()
+        endfinally
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string FailingFinallyConstructorDeclarations = """
+        .class public ThrowingFinallyBase {
+        .method public instance void .ctor() {
+        ldstr "base"
+        newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)
+        throw
+        }
+        }
+        .class public FailingFinallyConstructor extends ThrowingFinallyBase {
+        .method public instance void .ctor() {
+        .try {
+        .try {
+        leave INNER
+        } finally {
+        ldarg.0
+        call instance void ThrowingFinallyBase::.ctor()
+        endfinally
+        }
+        INNER: leave DONE
+        } catch object {
+        pop
+        leave DONE
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string InitializedFinallyConstructorDeclarations = """
+        .class public InitializedFinallyConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        .try {
+        leave DONE
+        } finally {
+        ldarg.0
+        callvirt instance string object::ToString()
+        pop
+        endfinally
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string ExceptionalFinallyConstructorDeclarations = """
+        .class public ThrowingFinallyUseBase {
+        .method public instance void .ctor() {
+        ldstr "base"
+        newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)
+        throw
+        }
+        }
+        .class public ExceptionalFinallyConstructor extends ThrowingFinallyUseBase {
+        .method public instance void .ctor() {
+        .try {
+        ldarg.0
+        call instance void ThrowingFinallyUseBase::.ctor()
+        leave DONE
+        } finally {
+        ldarg.0
+        callvirt instance string object::ToString()
+        pop
+        endfinally
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string DeferredConstructorDeclarations = """
+        .class public DeferredConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        .try {
+        ldstr "ready"
+        pop
+        leave DONE
+        } catch [System.Runtime]System.Exception {
+        pop
+        ldarg.0
+        callvirt instance string object::ToString()
+        pop
+        leave DONE
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string CorrelatedFilterConstructorDeclarations = """
+        .class public CorrelatedFilterConstructor {
+        .method public instance void .ctor(bool accept) {
+        .try {
+        .try {
+        ldnull
+        throw
+        } filter {
+        pop
+        ldarg accept
+        brfalse REJECT
+        ldarg.0
+        call instance void object::.ctor()
+        ldc.i4.1
+        br RESULT
+        REJECT: ldc.i4.0
+        RESULT: endfilter
+        } handler {
+        pop
+        leave DONE
+        }
+        } catch object {
+        pop
+        ldarg.0
+        call instance void object::.ctor()
+        leave DONE
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string FilterConstructorDeclarations = """
+        .class public ThrowingFilterBase {
+        .method public instance void .ctor() {
+        ldstr "base"
+        newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)
+        throw
+        }
+        }
+        .class public FilterConstructor extends ThrowingFilterBase {
+        .method public instance void .ctor() {
+        .try {
+        .try {
+        ldnull
+        throw
+        } filter {
+        pop
+        ldarg.0
+        call instance void ThrowingFilterBase::.ctor()
+        ldc.i4.0
+        endfilter
+        } handler {
+        pop
+        leave DONE
+        }
+        } catch object {
+        pop
+        leave DONE
+        }
+        DONE: ret
         }
         }
         """;

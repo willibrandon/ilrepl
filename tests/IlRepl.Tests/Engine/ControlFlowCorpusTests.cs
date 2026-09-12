@@ -59,7 +59,8 @@ public sealed class ControlFlowCorpusTests
         var members = example.Members.Length == 0 ? ""
             : example.Members.Replace("FlowGeneric::", "Fixture::", StringComparison.Ordinal)
                 .Replace("\n", "\n    ", StringComparison.Ordinal) + "\n    ";
-        var declarations = example.Declarations.Length == 0 ? "" : example.Declarations + "\n";
+        var declarations = example.Declarations.Length == 0 ? ""
+            : example.Declarations.Replace("} handler {", "} {", StringComparison.Ordinal) + "\n";
         var body = string.Join('\n', example.Body).Replace("} handler {", "} {", StringComparison.Ordinal)
             .Replace("FlowGeneric::", "Fixture::", StringComparison.Ordinal);
         var source = $$"""

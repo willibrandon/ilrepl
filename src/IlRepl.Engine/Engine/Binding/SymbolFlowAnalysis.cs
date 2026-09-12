@@ -34,12 +34,18 @@ internal static class SymbolFlowAnalysis
     public static FlowResult<TypeSymbol> Run(EditingBody body, IBindingScope scope, CancellationToken cancellationToken = default)
     {
         var returnType = body.Signature?.ReturnType;
-        return new ControlFlowAnalysis<TypeSymbol>(Rules(scope)).Run(
-            new FlowGraph<TypeSymbol>(body.FlowNodes, TypeSymbol.Object, hasThis: body.ThisIndex == 0)
-            {
-                BodyName = body.Signature?.Name ?? "cell",
-            },
-            SymbolIdentity.Equal(returnType, TypeSymbol.Void) ? null : returnType, body.Signature is null, cancellationToken);
+        var declaringType = body.Signature?.DeclaringType;
+        var tracksConstructorInitialization = body.Signature is { Name: ".ctor", IsStatic: false }
+            && declaringType?.IsValueType == false;
+        var graph = new FlowGraph<TypeSymbol>(
+            body.FlowNodes, TypeSymbol.Object, hasThis: body.ThisIndex == 0, declaringType: declaringType,
+            tracksConstructorInitialization: tracksConstructorInitialization)
+        {
+            BodyName = body.Signature?.Name ?? "cell",
+        };
+        return new ControlFlowAnalysis<TypeSymbol>(Rules(scope)).Run(graph,
+            SymbolIdentity.Equal(returnType, TypeSymbol.Void) ? null : returnType,
+            body.Signature is null, cancellationToken);
     }
 
     /// <summary>
@@ -49,12 +55,17 @@ internal static class SymbolFlowAnalysis
         CancellationToken cancellationToken = default)
     {
         var returnType = body.Signature?.ReturnType;
-        return new ControlFlowAnalysis<TypeSymbol>(Rules(scope)).RunAsync(
-            new FlowGraph<TypeSymbol>(body.FlowNodes, TypeSymbol.Object, hasThis: body.ThisIndex == 0)
-            {
-                BodyName = body.Signature?.Name ?? "cell",
-            },
-            SymbolIdentity.Equal(returnType, TypeSymbol.Void) ? null : returnType, body.Signature is null, cancellationToken);
+        var declaringType = body.Signature?.DeclaringType;
+        var tracksConstructorInitialization = body.Signature is { Name: ".ctor", IsStatic: false }
+            && declaringType?.IsValueType == false;
+        var graph = new FlowGraph<TypeSymbol>(
+            body.FlowNodes, TypeSymbol.Object, hasThis: body.ThisIndex == 0, declaringType: declaringType,
+            tracksConstructorInitialization: tracksConstructorInitialization)
+        {
+            BodyName = body.Signature?.Name ?? "cell",
+        };
+        return new ControlFlowAnalysis<TypeSymbol>(Rules(scope)).RunAsync(graph,
+            SymbolIdentity.Equal(returnType, TypeSymbol.Void) ? null : returnType,
+            body.Signature is null, cancellationToken);
     }
-
 }

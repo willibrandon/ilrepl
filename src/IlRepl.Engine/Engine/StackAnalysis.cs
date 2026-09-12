@@ -84,15 +84,25 @@ public static class StackAnalysis
             EffectUnknown = entry.EffectUnknown,
         }).ToArray();
         var hasThis = !method.Method.IsStatic;
-        var graph = new FlowGraph<Type>(nodes, typeof(object), complete: true, hasThis: hasThis) { BodyName = method.Method.Name };
+        var declaringType = method.Method.DeclaringType;
+        var tracksConstructorInitialization = method.Method.Name == ".ctor" && hasThis
+            && declaringType?.IsValueType == false;
+        var graph = new FlowGraph<Type>(nodes, typeof(object), complete: true, hasThis: hasThis,
+            declaringType: declaringType, tracksConstructorInitialization: tracksConstructorInitialization)
+        {
+            BodyName = method.Method.Name,
+        };
+        var constructorState = graph.Seeds[0].ConstructorState;
         var offsets = entries.Select((entry, index) => (entry.Offset, index)).ToDictionary(pair => pair.Offset, pair => pair.index);
 
         void Seed(int offset, Type? type, int syntheticHandler)
         {
             if (offsets.TryGetValue(offset, out var index))
             {
-                var state = type is null ? hasThis ? FlowState<Type>.ThisEntry : FlowState<Type>.Empty
-                    : new FlowState<Type>([new FlowValue<Type>(type, [index])], ThisArgumentIsOriginal: hasThis);
+                var state = type is null
+                    ? hasThis ? FlowState<Type>.ThisEntry with { ConstructorState = constructorState } : FlowState<Type>.Empty
+                    : new FlowState<Type>([new FlowValue<Type>(type, [index])], ThisArgumentIsOriginal: hasThis,
+                        ConstructorState: constructorState);
                 graph.Seeds[index] = new ExceptionalFlowState<Type>(state, null, syntheticHandler);
             }
         }
@@ -185,6 +195,11 @@ public static class StackAnalysis
     private static StackOperandView<Type> View(Instruction instruction, DisassembledMethod method)
     {
         var view = StackSimulator.View(instruction, method.Context);
+        if (instruction.Operand is ResolvedMethod { Method: { } called })
+        {
+            view = view with { MethodIsCurrentDefinition = called.Equals(method.Method) };
+        }
+
         RuntimeBindingScope? bindingScope = null;
         RuntimeBindingScope Scope() => bindingScope ??= new RuntimeBindingScope(method.Context);
         if (instruction.Op == OpCodes.Jmp && instruction.Operand is ResolvedMethod jump)

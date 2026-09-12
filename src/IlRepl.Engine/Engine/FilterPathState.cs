@@ -11,6 +11,7 @@ namespace IlRepl.Engine;
 /// <param name="StackUnknown">Whether the stack shape is unknown.</param>
 /// <param name="ReceiverConditions">Path conditions keyed by receiver source.</param>
 /// <param name="CorrelatedAlternatives">Exact path alternatives retained in a bounded slot.</param>
+/// <param name="ConstructorState">The initialization state of a reference-type constructor receiver on this path.</param>
 internal sealed record FilterPathState(
     FilterPathValue[] Values,
     IReadOnlyDictionary<int, FilterPathValue>? Locals,
@@ -19,4 +20,5 @@ internal sealed record FilterPathState(
     PendingUnwindEffect? PendingUnwindEffect = null,
     bool StackUnknown = false,
     IReadOnlyDictionary<int, FilterPathValue>? ReceiverConditions = null,
-    FilterPathState[]? CorrelatedAlternatives = null);
+    FilterPathState[]? CorrelatedAlternatives = null,
+    ConstructorThisState ConstructorState = ConstructorThisState.NotTracked);
