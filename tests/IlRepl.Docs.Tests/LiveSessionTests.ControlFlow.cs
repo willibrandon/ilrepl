@@ -316,6 +316,10 @@ public sealed partial class LiveSessionTests
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.ArgumentSource(true, true)));
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class FlowArgument", options);
+        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.NonThrowingSizeofSource()));
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#terminal"))
+            .ToContainTextAsync("end of class NonThrowingSizeofReceiver", options);
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.FilterSource(false)));
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
         await ClearPromptAsync(page);

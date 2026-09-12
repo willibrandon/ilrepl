@@ -1111,6 +1111,34 @@ public static class ControlFlowReceiverExamples
     ];
 
     /// <summary>
+    /// Builds a constructor whose unreachable catch follows a non-throwing sizeof instruction.
+    /// </summary>
+    public static string[] NonThrowingSizeofSource() =>
+    [
+        ".class public NonThrowingSizeofReceiver {",
+        ".field public initonly int32 Value",
+        ".method public instance void .ctor(class NonThrowingSizeofReceiver other) {",
+        "ldarg.0",
+        "call instance void object::.ctor()",
+        ".try {",
+        "ldarg other",
+        "starg.s 0",
+        "sizeof int32",
+        "pop",
+        "leave DONE",
+        "} catch object {",
+        "pop",
+        "ldarg.0",
+        "ldc.i4.s 42",
+        "stfld int32 NonThrowingSizeofReceiver::Value",
+        "leave DONE",
+        "}",
+        "DONE: ret",
+        "}",
+        "}",
+    ];
+
+    /// <summary>
     /// Builds a constructor whose finally handler either preserves or replaces argument zero.
     /// </summary>
     /// <param name="originalReceiver">Whether the handler stores the original receiver.</param>

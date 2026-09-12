@@ -3145,7 +3145,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     {
         var name = view.Op.Name!;
         if (view.DecodedPrefixName is not null || view.Op.FlowControl is FlowControl.Branch or FlowControl.Cond_Branch
-            || name is "nop" or "break" or "dup" or "pop" or "ldnull" or "endfilter" or "endfinally"
+            || name is "nop" or "break" or "dup" or "pop" or "ldnull" or "endfilter" or "endfinally" or "sizeof"
             || name.StartsWith("ldarg", StringComparison.Ordinal) || name.StartsWith("starg", StringComparison.Ordinal)
             || name.StartsWith("ldloc", StringComparison.Ordinal) || name.StartsWith("stloc", StringComparison.Ordinal)
             || name.StartsWith("ldc.", StringComparison.Ordinal)

@@ -135,6 +135,27 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
+    /// A non-throwing sizeof instruction does not make its surrounding catch reachable.
+    /// </summary>
+    [TestMethod]
+    public async Task Sizeof_DoesNotReachExceptionHandler()
+    {
+        var lines = ControlFlowReceiverExamples.NonThrowingSizeofSource();
+        var session = new Session();
+        using var editing = new EditingSession(session);
+        var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error, preview.Diagnostics,
+            string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
+
+        foreach (var line in lines)
+        {
+            session.AddLine(line);
+        }
+
+        Assert.IsNull(session.OpenType);
+    }
+
+    /// <summary>
     /// A leave carries receiver changes made by its finally handler to the instruction at the target.
     /// </summary>
     [TestMethod]
