@@ -78,11 +78,19 @@ public static class AssemblyExporter
             {
                 var signature = method.Signature;
                 var exact = signature.ExactSymbol;
-                definition.ReturnType = exact is null ? writer.Import(signature.ReturnType) : writer.Import(exact.ReturnType);
+                definition.ReturnType = writer.ImportSignature(
+                    signature.ReturnType,
+                    exact?.ReturnType,
+                    signature.ReturnRequiredModifiers,
+                    signature.ReturnOptionalModifiers);
                 for (var i = 0; i < signature.Parameters.Count; i++)
                 {
                     var parameter = signature.Parameters[i];
-                    var type = exact is null ? writer.Import(parameter.Type) : writer.Import(exact.Parameters[i].Type);
+                    var type = writer.ImportSignature(
+                        parameter.Type,
+                        exact?.Parameters[i].Type,
+                        parameter.RequiredModifiers,
+                        parameter.OptionalModifiers);
                     definition.Parameters.Add(new ParameterDefinition(
                         parameter.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                         ParameterAttributes.None,

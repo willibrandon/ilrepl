@@ -17,9 +17,13 @@ public static class MethodDeclarationParser
 
     private static readonly Dictionary<string, MethodImplAttributes> ImplWords = new(StringComparer.Ordinal)
     {
-        ["cil"] = MethodImplAttributes.IL, ["il"] = MethodImplAttributes.IL, ["managed"] = MethodImplAttributes.Managed,
-        ["noinlining"] = MethodImplAttributes.NoInlining, ["aggressiveinlining"] = MethodImplAttributes.AggressiveInlining,
-        ["synchronized"] = MethodImplAttributes.Synchronized, ["nooptimization"] = MethodImplAttributes.NoOptimization,
+        ["cil"] = MethodImplAttributes.IL,
+        ["il"] = MethodImplAttributes.IL,
+        ["managed"] = MethodImplAttributes.Managed,
+        ["noinlining"] = MethodImplAttributes.NoInlining,
+        ["aggressiveinlining"] = MethodImplAttributes.AggressiveInlining,
+        ["synchronized"] = MethodImplAttributes.Synchronized,
+        ["nooptimization"] = MethodImplAttributes.NoOptimization,
         ["aggressiveoptimization"] = MethodImplAttributes.AggressiveOptimization,
     };
 
@@ -599,7 +603,7 @@ public static class MethodDeclarationParser
             throw new ReplException(Usage);
         }
 
-        var returnType = BindTypeAt(s, ref pos, context, out _);
+        var returnType = BindTypeAt(s, ref pos, context, out _, out var returnRequired, out var returnOptional);
         TypeParser.SkipWhitespace(s, ref pos);
         var name = ReadName(s, ref pos);
         TypeParser.SkipWhitespace(s, ref pos);
@@ -640,7 +644,7 @@ public static class MethodDeclarationParser
                 }
 
                 var at = 0;
-                var type = BindTypeAt(part, ref at, context, out _);
+                var type = BindTypeAt(part, ref at, context, out _, out var required, out var optional);
                 var parameterName = InstructionParser.Unquote(part[at..].Trim());
                 if (parameterName.Length > 0 && !InstructionParser.IsIdentifier(parameterName))
                 {
@@ -657,7 +661,11 @@ public static class MethodDeclarationParser
                     throw new ReplException("a parameter cannot be void");
                 }
 
-                parameters.Add(new ParameterSymbol(type, parameterName.Length == 0 ? null : parameterName));
+                parameters.Add(new ParameterSymbol(type, parameterName.Length == 0 ? null : parameterName)
+                {
+                    RequiredModifiers = required,
+                    OptionalModifiers = optional,
+                });
             }
         }
 
@@ -669,6 +677,8 @@ public static class MethodDeclarationParser
             ReturnType = returnType,
             Parameters = parameters,
             Attributes = MethodAttributes.Public | MethodAttributes.Static,
+            ReturnRequiredModifiers = returnRequired,
+            ReturnOptionalModifiers = returnOptional,
         };
     }
 

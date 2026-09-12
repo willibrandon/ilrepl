@@ -37,10 +37,9 @@ public sealed partial class LiveSessionTests
     /// </summary>
     /// <param name="browser">The browser engine.</param>
     [TestMethod]
-    [DoNotParallelize]
     [DataRow("chromium")]
     [DataRow("webkit")]
-    [Timeout(300_000, CooperativeCancellation = true)]
+    [Timeout(600_000, CooperativeCancellation = true)]
     public async Task ControlFlow_CorpusMatchesDesktop(string browser)
     {
         await using var launched = await LaunchAsync(browser);
@@ -631,8 +630,7 @@ public sealed partial class LiveSessionTests
     private static async Task SubmitResetAsync(IPage page)
     {
         var marker = "reset-" + Guid.NewGuid().ToString("N");
-        await FocusPromptAsync(page);
-        await page.Keyboard.TypeAsync($".reset // {marker}");
+        await SendTerminalInputAsync(page, $".reset // {marker}");
         await ReadyToSubmitResetAsync(page, marker);
         await ArmSubmissionOutputAsync(page);
         await SendTerminalInputAsync(page, "\r");

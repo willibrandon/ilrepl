@@ -1,7 +1,9 @@
+using System.Reflection;
 using System.Runtime.Loader;
 using IlRepl.Engine;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+using IsVolatile = System.Runtime.CompilerServices.IsVolatile;
 
 namespace IlRepl.Tests.Engine;
 
@@ -64,6 +66,38 @@ public sealed class FunctionPointerDeclarationTests
         var pointer = session.Methods.Single(method => method.Signature.Name == "Pointer");
         Assert.IsTrue(pointer.Trampoline.Method.ReturnType.IsFunctionPointer);
         Assert.IsTrue(pointer.Version.Body.ReturnType.IsFunctionPointer);
+    }
+
+    /// <summary>
+    /// A session method keeps modifiers around exact function-pointer types in its entry point, delegate, and compiled body.
+    /// </summary>
+    [TestMethod]
+    public void SessionMethod_FunctionPointerModifiers_ReachEveryLiveSignature()
+    {
+        const string marker = "[System.Runtime]System.Runtime.CompilerServices.IsVolatile";
+        var session = IlLines.Load(
+            $".method method int32 *(int32) modopt({marker}) Echo("
+                + $"method int32 *(int32) modreq({marker}) value) {{ ldarg value; ret }}");
+
+        var declaration = session.Methods.Single();
+        Assert.AreSequenceEqual([typeof(IsVolatile)], declaration.Signature.ReturnOptionalModifiers);
+        Assert.AreSequenceEqual([typeof(IsVolatile)], declaration.Signature.Parameters.Single().RequiredModifiers);
+        var method = declaration.Trampoline;
+        AssertFunctionPointerModifiers(method.Method);
+        AssertFunctionPointerModifiers(method.DelegateType.GetMethod("Invoke")!);
+        AssertFunctionPointerModifiers(declaration.Version.Body);
+
+        var context = new AssemblyLoadContext("function-pointer-modifiers", isCollectible: true);
+        try
+        {
+            var image = AssemblyExporter.Write(session, "function-pointer-modifiers");
+            var assembly = context.LoadFromStream(new MemoryStream(image));
+            AssertFunctionPointerModifiers(assembly.GetType("IlRepl.Cell")!.GetMethod("Echo")!);
+        }
+        finally
+        {
+            context.Unload();
+        }
     }
 
     /// <summary>
@@ -338,5 +372,17 @@ public sealed class FunctionPointerDeclarationTests
         Assert.IsTrue(pointer.IsFunctionPointer);
         Assert.AreSame(expected, pointer.GetFunctionPointerReturnType());
         Assert.AreSame(expected, pointer.GetFunctionPointerParameterTypes().Single());
+    }
+
+    private static void AssertFunctionPointerModifiers(MethodInfo method)
+    {
+        Assert.IsTrue(method.ReturnType.IsFunctionPointer);
+        Assert.AreSequenceEqual(
+            [typeof(IsVolatile)],
+            method.ReturnParameter.GetOptionalCustomModifiers());
+        Assert.IsTrue(method.GetParameters().Single().ParameterType.IsFunctionPointer);
+        Assert.AreSequenceEqual(
+            [typeof(IsVolatile)],
+            method.GetParameters().Single().GetRequiredCustomModifiers());
     }
 }

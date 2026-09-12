@@ -292,6 +292,13 @@ public sealed class CecilWriter
         }
     }
 
+    internal TypeReference ImportSignature(
+        Type type,
+        TypeSymbol? exact,
+        IReadOnlyList<Type> required,
+        IReadOnlyList<Type> optional) =>
+        WithModifiers(exact is null ? Import(type) : Import(exact), required, optional);
+
     private FunctionPointerType ImportFunctionPointer(MethodSignatureSymbol signature)
     {
         var pointer = new FunctionPointerType
