@@ -1,11 +1,14 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace IlRepl.Docs.Tests;
 
 public sealed partial class LiveSessionTests
 {
-    [System.Text.RegularExpressions.GeneratedRegex("retained=(-?[0-9]+)")]
-    private static partial System.Text.RegularExpressions.Regex PreviewRetainedBytes();
+    [GeneratedRegex("retained=(-?[0-9]+)")]
+    private static partial Regex PreviewRetainedBytes();
 
     /// <summary>
     /// Qualified facade and generic previews resolve on Mono without loading assemblies or invoking resolution handlers.
@@ -17,7 +20,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_RawMetadata_ResolvesWithoutCallbacks(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         page.Console += (_, message) => TestContext.WriteLine(message.Text);
@@ -61,18 +64,21 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
-    /// Repeated generic previews remain available after a thousand edits and a same-worker session restart.
+    /// Repeated generic previews survive a thousand edits and a same-worker restart in both browsers.
     /// </summary>
-    /// <param name="browser">The browser engine.</param>
     [TestMethod]
     [DoNotParallelize]
-    [DataRow("chromium")]
-    [DataRow("webkit")]
     [Timeout(1_200_000, CooperativeCancellation = true)]
-    public async Task LiveSession_ThousandGenericEdits_PreserveCompletionAndRestart(string browser)
+    public async Task LiveSession_ThousandGenericEdits_PreserveCompletionAndRestart()
     {
-        await using var launched = await LaunchAsync(browser);
-        await using var context = await NewContextAsync(launched);
+        await Task.WhenAll(
+            RunThousandGenericEditsAsync("chromium"),
+            RunThousandGenericEditsAsync("webkit"));
+    }
+
+    private async Task RunThousandGenericEditsAsync(string browser)
+    {
+        await using var context = await NewContextAsync(GetBrowser(browser));
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
         var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
@@ -81,7 +87,7 @@ public sealed partial class LiveSessionTests
         await TypeLineAsync(page, "call [Greeter]Greeter.CompletionProbe::Begin()");
         await TypeLineAsync(page, "ret");
         await ExpectCompletionAsync(page, "il[2]>");
-        var started = System.Diagnostics.Stopwatch.StartNew();
+        var started = Stopwatch.StartNew();
         var lastSource = "";
         for (var edit = 0; edit < 1000; edit++)
         {
@@ -109,7 +115,7 @@ public sealed partial class LiveSessionTests
         var measured = await BufferTextAsync(page);
         var retained = PreviewRetainedBytes().Match(measured);
         Assert.IsTrue(retained.Success, measured);
-        var bytes = long.Parse(retained.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+        var bytes = long.Parse(retained.Groups[1].Value, CultureInfo.InvariantCulture);
         Assert.IsLessThan(20_000_000L, bytes, "Preview history must remain bounded after one thousand browser edits.");
         TestContext.WriteLine($"Browser preview retained bytes in {browser}: {bytes:N0}");
         await TypeLineAsync(page, ".clear");
@@ -147,7 +153,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_LongSignature_RevealsTheLastParameter(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -161,7 +167,7 @@ public sealed partial class LiveSessionTests
         await CompletionAtCaretAsync(page, "il[2]> call CompletionLon", "PgUp/PgDn");
         var initialRows = await BufferRowsAsync(page);
         var title = initialRows.First(row => row.TrimStart().StartsWith("│detail", StringComparison.Ordinal));
-        var pages = int.Parse(title.Split('/')[1].Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture);
+        var pages = int.Parse(title.Split('/')[1].Split(' ')[0], CultureInfo.InvariantCulture);
         for (var line = 2; line <= pages; line++)
         {
             await page.Keyboard.PressAsync("PageDown");

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace IlRepl.Docs.Tests;
@@ -11,9 +13,11 @@ public sealed partial class LiveSessionTests
 {
     private static StaticSite? s_site;
     private static IPlaywright? s_playwright;
+    private static IBrowser? s_chromium;
+    private static IBrowser? s_webkit;
 
-    [System.Text.RegularExpressions.GeneratedRegex("sending [1-9][0-9]*/3002")]
-    private static partial System.Text.RegularExpressions.Regex StartedLongSubmission();
+    [GeneratedRegex("sending [1-9][0-9]*/3002")]
+    private static partial Regex StartedLongSubmission();
 
     /// <summary>
     /// The test context, for cancellation.
@@ -21,7 +25,7 @@ public sealed partial class LiveSessionTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
-    /// Serves the build output and starts a headless browser once for the class.
+    /// Serves the build output and starts both headless browsers once for the class.
     /// </summary>
     /// <param name="context">The class initialization context.</param>
     /// <returns>A task that completes when the server and browser are up.</returns>
@@ -36,15 +40,30 @@ public sealed partial class LiveSessionTests
 
         s_site = await StaticSite.StartAsync(SitePaths.Dist).ConfigureAwait(false);
         s_playwright = await Playwright.CreateAsync().ConfigureAwait(false);
+        var browsers = await Task.WhenAll(
+            s_playwright.Chromium.LaunchAsync(),
+            s_playwright.Webkit.LaunchAsync()).ConfigureAwait(false);
+        s_chromium = browsers[0];
+        s_webkit = browsers[1];
     }
 
     /// <summary>
-    /// Stops the browser and the server.
+    /// Stops both browsers and the server.
     /// </summary>
     /// <returns>A task that completes when both are gone.</returns>
     [ClassCleanup]
     public static async Task ClassCleanup()
     {
+        if (s_chromium is not null)
+        {
+            await s_chromium.DisposeAsync().ConfigureAwait(false);
+        }
+
+        if (s_webkit is not null)
+        {
+            await s_webkit.DisposeAsync().ConfigureAwait(false);
+        }
+
         s_playwright?.Dispose();
         if (s_site is not null)
         {
@@ -63,7 +82,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_RunsCellInBrowser(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await context.NewPageAsync();
         await page.GotoAsync(s_site!.BaseUrl + "/try/");
@@ -112,7 +131,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task ClickInBox_RestoresFocusToPrompt(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
 
@@ -145,7 +164,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task Drag_SelectsInTheTerminal_AndWheelScrolls(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched, clipboard: browser == "chromium");
         var page = await OpenSessionAsync(context);
         var cursor = await page.EvaluateAsync<string[]>("() => [window.ilreplTerminal.options.cursorStyle, String(window.ilreplTerminal.options.cursorBlink)]");
@@ -222,7 +241,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task Click_OnAPaletteRow_TakesIt(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await page.Keyboard.TypeAsync("ldc.i4.");
@@ -254,7 +273,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task Copy_WithoutClipboardApi_StillCopies(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         // The page script is served with the clipboard API taken away ahead of it.
         await context.RouteAsync("**/try/main.js", async route =>
@@ -303,7 +322,7 @@ public sealed partial class LiveSessionTests
     [Timeout(300_000, CooperativeCancellation = true)]
     public async Task LiveSession_RestartsAfterQuit(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await TypeLineAsync(page, "ldc.i4 6");
@@ -332,7 +351,7 @@ public sealed partial class LiveSessionTests
     [Timeout(300_000, CooperativeCancellation = true)]
     public async Task RestartButton_StartsFreshSession(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await TypeLineAsync(page, "ldc.i4 6");
@@ -363,7 +382,7 @@ public sealed partial class LiveSessionTests
     [Timeout(300_000, CooperativeCancellation = true)]
     public async Task Watchdog_RestartsHungSession(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await TypeLineAsync(page, "L: br L");
@@ -388,7 +407,7 @@ public sealed partial class LiveSessionTests
     [Timeout(60_000, CooperativeCancellation = true)]
     public async Task Home_LinksToLiveSessionAndInstall()
     {
-        await using var launched = await LaunchAsync("chromium");
+        var launched = GetBrowser("chromium");
         await using var context = await NewContextAsync(launched);
         var page = await context.NewPageAsync();
         await page.GotoAsync(s_site!.BaseUrl + "/");
@@ -452,10 +471,10 @@ public sealed partial class LiveSessionTests
         }
         """);
 
-    private static async Task<IBrowser> LaunchAsync(string browser) => browser switch
+    private static IBrowser GetBrowser(string browser) => browser switch
     {
-        "webkit" => await s_playwright!.Webkit.LaunchAsync(),
-        _ => await s_playwright!.Chromium.LaunchAsync(),
+        "webkit" => s_webkit!,
+        _ => s_chromium!,
     };
 
     private static async Task<string> BufferTextAsync(IPage page) => string.Join('\n', await BufferRowsAsync(page));
@@ -474,7 +493,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_DefinesAndCallsMethod(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -512,7 +531,7 @@ public sealed partial class LiveSessionTests
     [Timeout(300_000, CooperativeCancellation = true)]
     public async Task LiveSession_DisassemblesCorpus(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -595,7 +614,7 @@ public sealed partial class LiveSessionTests
     [Timeout(300_000, CooperativeCancellation = true)]
     public async Task LiveSession_DefinesClassAndShowsFields(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -645,7 +664,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_BadBranchInMethod_IsRejectedBeforeCreation(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -686,7 +705,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_TypesBlockInBrowser(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -730,7 +749,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_PasteWaitsForEnter(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -757,7 +776,7 @@ public sealed partial class LiveSessionTests
     [Timeout(300_000, CooperativeCancellation = true)]
     public async Task Docs_FibSource_CopiesPastesAndRuns(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var docs = await context.NewPageAsync();
         await docs.GotoAsync(s_site!.BaseUrl + "/usage/methods/");
@@ -791,7 +810,7 @@ public sealed partial class LiveSessionTests
     [Timeout(300_000, CooperativeCancellation = true)]
     public async Task LiveSession_HistorySurvivesQuitRestart(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -818,7 +837,7 @@ public sealed partial class LiveSessionTests
     [Timeout(300_000, CooperativeCancellation = true)]
     public async Task LiveSession_HistorySurvivesRestartButton(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -846,7 +865,7 @@ public sealed partial class LiveSessionTests
     [Timeout(300_000, CooperativeCancellation = true)]
     public async Task LiveSession_HistorySurvivesReload(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -874,7 +893,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_FirstVisit_NoHistoryNoMessage(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -898,7 +917,7 @@ public sealed partial class LiveSessionTests
     [Timeout(400_000, CooperativeCancellation = true)]
     public async Task LiveSession_TwoTabs_BothAppendsSurvive(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var first = await OpenSessionAsync(context);
         var second = await OpenSessionAsync(context);
@@ -942,7 +961,7 @@ public sealed partial class LiveSessionTests
     [Timeout(300_000, CooperativeCancellation = true)]
     public async Task LiveSession_History_PrunesBeyondThousand(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await context.NewPageAsync();
         await page.GotoAsync(s_site!.BaseUrl + "/");
@@ -982,7 +1001,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_StorageUnavailable_PrintsLine(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         // The worker's interop module is served with the database taken away ahead of it, so the
         // real load path is what rejects.
@@ -1023,7 +1042,7 @@ public sealed partial class LiveSessionTests
     [Timeout(400_000, CooperativeCancellation = true)]
     public async Task LiveSession_WhileSending_ShowsProgressAndRepaints(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -1059,7 +1078,7 @@ public sealed partial class LiveSessionTests
     [Timeout(400_000, CooperativeCancellation = true)]
     public async Task LiveSession_WhileSending_CtrlCStopsWithRemainderInEditor(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -1091,7 +1110,7 @@ public sealed partial class LiveSessionTests
     [Timeout(400_000, CooperativeCancellation = true)]
     public async Task LiveSession_WhileSending_ExtraEnterRunsNothing(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -1123,14 +1142,14 @@ public sealed partial class LiveSessionTests
     [Timeout(300_000, CooperativeCancellation = true)]
     public async Task LiveSession_Pastes60LineMethod_CompletesWithinTenSeconds(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
 
         await PasteAsync(page, LongMethod(60));
         await Assertions.Expect(terminal).ToContainTextAsync("Enter sends 60 lines", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
-        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var watch = Stopwatch.StartNew();
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(terminal).ToContainTextAsync("end of method Long", new LocatorAssertionsToContainTextOptions { Timeout = 60_000 });
         watch.Stop();
@@ -1151,7 +1170,7 @@ public sealed partial class LiveSessionTests
     [Timeout(300_000, CooperativeCancellation = true)]
     public async Task LiveSession_History_EntryWithNul_StaysOneEntry(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await context.NewPageAsync();
         await page.GotoAsync(s_site!.BaseUrl + "/");

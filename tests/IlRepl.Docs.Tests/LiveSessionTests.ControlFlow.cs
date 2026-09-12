@@ -15,7 +15,7 @@ public sealed partial class LiveSessionTests
     [Timeout(120_000, CooperativeCancellation = true)]
     public async Task ControlFlow_OpcodePrefixCompletesWithoutATypoSuggestion(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -42,7 +42,7 @@ public sealed partial class LiveSessionTests
     [Timeout(120_000, CooperativeCancellation = true)]
     public async Task ControlFlow_CalliSignatureChecksAccessibilityWhileEditing(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -60,19 +60,22 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
-    /// Browser Mono accepts and refuses the same source corpus checked against the desktop verifier.
+    /// Browser Mono accepts and refuses the desktop verifier corpus in Chromium and WebKit.
     /// </summary>
-    /// <param name="browser">The browser engine.</param>
     [TestMethod]
     [DoNotParallelize]
-    [DataRow("chromium")]
-    [DataRow("webkit")]
     [Timeout(600_000, CooperativeCancellation = true)]
-    public async Task ControlFlow_CorpusMatchesDesktop(string browser)
+    public async Task ControlFlow_CorpusMatchesDesktop()
     {
-        await using var launched = await LaunchAsync(browser);
-        await using var context = await NewContextAsync(launched);
-        const int Partitions = 4;
+        await Task.WhenAll(
+            RunControlFlowCorpusAsync("chromium"),
+            RunControlFlowCorpusAsync("webkit"));
+    }
+
+    private async Task RunControlFlowCorpusAsync(string browser)
+    {
+        await using var context = await NewContextAsync(GetBrowser(browser));
+        const int Partitions = 2;
         var pages = await Task.WhenAll(Enumerable.Range(0, Partitions)
             .Select(_ => OpenSessionAsync(context)));
         var indexed = ControlFlowExamples.All.Select((example, index) => (Example: example, Index: index));
@@ -135,8 +138,7 @@ public sealed partial class LiveSessionTests
                   const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
                   const found = Array.from({ length: buffer.length }, (_, row) =>
                     buffer.getLine(row)?.translateToString(true) ?? '').some(line => line.includes(committed));
-                  const lastChange = Math.max(window.ilreplControlFlowArmed, window.ilreplControlFlowLastWrite);
-                  return found && /^il\[\d+\]>$/.test(prompt) && performance.now() - lastChange >= 100
+                  return found && /^il\[\d+\]>$/.test(prompt)
                     && !status.includes('editing ') && !status.includes('updating') && !status.includes('sending')
                     && !status.includes('cancelling') && !status.includes('Ctrl+C cancels');
                 }
@@ -158,7 +160,7 @@ public sealed partial class LiveSessionTests
     [Timeout(120_000, CooperativeCancellation = true)]
     public async Task ControlFlow_ProtectedRegionBoundariesMatchDesktop(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -188,7 +190,7 @@ public sealed partial class LiveSessionTests
     [Timeout(120_000, CooperativeCancellation = true)]
     public async Task ControlFlow_FilterCannotContainTry(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -209,7 +211,7 @@ public sealed partial class LiveSessionTests
     [Timeout(120_000, CooperativeCancellation = true)]
     public async Task ControlFlow_ImplicitEndfinallyClearsStack(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -236,7 +238,7 @@ public sealed partial class LiveSessionTests
     public async Task ControlFlow_ModifiedTypeOperandsMatchDesktop(string browser)
     {
         const string Modifier = "[System.Runtime]System.Runtime.CompilerServices.IsVolatile";
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -258,7 +260,7 @@ public sealed partial class LiveSessionTests
     [Timeout(120_000, CooperativeCancellation = true)]
     public async Task ControlFlow_ImplicitReturnCompletesTailCall(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -284,7 +286,7 @@ public sealed partial class LiveSessionTests
     [Timeout(120_000, CooperativeCancellation = true)]
     public async Task ControlFlow_CellTailReturnMatchesEmission(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -320,7 +322,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task ControlFlow_CaretAndCorrectionUseWholeDocument(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         page.Console += (_, message) => TestContext.WriteLine(message.Text);
@@ -351,7 +353,7 @@ public sealed partial class LiveSessionTests
     [Timeout(120_000, CooperativeCancellation = true)]
     public async Task ControlFlow_ReadonlyReceiverMatchesDesktop(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
@@ -381,7 +383,7 @@ public sealed partial class LiveSessionTests
     [Timeout(120_000, CooperativeCancellation = true)]
     public async Task ControlFlow_ArgumentWriteMatchesDesktop(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
@@ -446,7 +448,7 @@ public sealed partial class LiveSessionTests
     [Timeout(120_000, CooperativeCancellation = true)]
     public async Task ControlFlow_FinallyWriteMatchesDesktop(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
@@ -553,8 +555,7 @@ public sealed partial class LiveSessionTests
               const buffer = terminal.buffer.active;
               const prompt = buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true).trimEnd() ?? '';
               const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
-              const lastChange = Math.max(window.ilreplControlFlowArmed, window.ilreplControlFlowLastWrite);
-              return prompt.endsWith('> }') && status.includes('Enter sends') && performance.now() - lastChange >= 100
+              return prompt.endsWith('> }') && status.includes('Enter sends')
                 && !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
                 && !status.includes('Ctrl+C cancels');
             }
@@ -576,11 +577,10 @@ public sealed partial class LiveSessionTests
                   const output = window.ilreplControlFlowOutput;
                   const plainOutput = output
                     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\s+/g, ' ');
-                  const lastChange = Math.max(window.ilreplControlFlowArmed, window.ilreplControlFlowLastWrite);
                   const completed = output.includes('0/' + args[0]) || plainOutput.includes(args[2]);
                   return completed && plainOutput.includes(args[1])
                     && window.ilreplControlFlowWriteCount > 0
-                    && performance.now() - lastChange >= 100 && status.includes('editing ')
+                    && status.includes('editing ')
                     && !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
                     && !status.includes('Ctrl+C cancels');
                 }
@@ -624,7 +624,7 @@ public sealed partial class LiveSessionTests
                     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\s+/g, ' ');
                   const completed = output.includes('0/' + args[0]) || plainOutput.includes(args[2]);
                   return completed && window.ilreplControlFlowWriteCount > 0 && plainOutput.includes(args[1])
-                    && performance.now() - window.ilreplControlFlowLastWrite >= 100 && status.includes('editing ')
+                    && status.includes('editing ')
                     && !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
                     && !status.includes('Ctrl+C cancels');
                 }
@@ -670,9 +670,8 @@ public sealed partial class LiveSessionTests
                   const buffer = terminal.buffer.active;
                   const prompt = buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true).trimEnd() ?? '';
                   const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
-                  const lastChange = Math.max(window.ilreplControlFlowArmed, window.ilreplControlFlowLastWrite);
                   return prompt.endsWith(`> .reset // ${marker}`) && window.ilreplControlFlowWriteCount > 0
-                    && performance.now() - lastChange >= 100 && !status.includes('editing ')
+                    && !status.includes('editing ')
                     && !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
                     && !status.includes('Ctrl+C cancels');
                 }
@@ -700,8 +699,7 @@ public sealed partial class LiveSessionTests
                   const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
                   const found = Array.from({ length: buffer.length }, (_, row) =>
                     buffer.getLine(row)?.translateToString(true) ?? '').some(line => line.includes(expected));
-                  const lastChange = Math.max(window.ilreplControlFlowArmed, window.ilreplControlFlowLastWrite);
-                  return found && /^il\[\d+\]>$/.test(prompt) && performance.now() - lastChange >= 100
+                  return found && /^il\[\d+\]>$/.test(prompt)
                     && !status.includes('editing ') && !status.includes('updating') && !status.includes('sending')
                     && !status.includes('cancelling') && !status.includes('Ctrl+C cancels');
                 }
@@ -738,7 +736,7 @@ public sealed partial class LiveSessionTests
                     .some(line => line.includes('cell, declarations, methods, and types cleared'));
                   return reset >= 0 && cleared && /^il\[\d+\]>$/.test(prompt)
                     && window.ilreplControlFlowWriteCount > 0
-                    && performance.now() - window.ilreplControlFlowLastWrite >= 100 && !status.includes('editing ')
+                    && !status.includes('editing ')
                     && !status.includes('updating') && !status.includes('sending') && !status.includes('cancelling')
                     && !status.includes('Ctrl+C cancels');
                 }
