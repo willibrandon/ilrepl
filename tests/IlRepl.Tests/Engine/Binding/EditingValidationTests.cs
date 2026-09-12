@@ -165,6 +165,25 @@ public sealed class EditingValidationTests
     }
 
     /// <summary>
+    /// Preview checks private types retained anywhere in an indirect call signature.
+    /// </summary>
+    /// <param name="line">The indirect call whose signature mentions the private type.</param>
+    [TestMethod]
+    [DataRow("calli void modopt(Outer/Inner)()")]
+    [DataRow("calli void(int32 modreq(Outer/Inner))")]
+    [DataRow("calli vararg void(..., int32 modopt(Outer/Inner))")]
+    [DataRow("calli unmanaged cdecl void(class Outer/Inner)")]
+    public void CalliSignatureModifier_UsesTheAcceptingAccessibilityRule(string line)
+    {
+        var session = IlLines.Load(".class public Outer {", ".class nested private Inner { }", "}");
+        var expected = Assert.ThrowsExactly<ReplException>(() => session.AddLine(line)).Message;
+        using var editing = new EditingSession(session);
+        var view = editing.Speculate([line, ""], 1, cancellationToken: TestContext.CancellationToken);
+
+        Assert.AreEqual(expected, view.SkippedLines.Single().Message);
+    }
+
+    /// <summary>
     /// Undo removes a cell instruction while preserving declarations that survived an earlier clear.
     /// </summary>
     [TestMethod]

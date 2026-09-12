@@ -33,13 +33,41 @@ public sealed partial class LiveSessionTests
     }
 
     /// <summary>
-    /// Browser Mono accepts and refuses the same source corpus checked against the desktop verifier.
+    /// Browser preview and submission reject an inaccessible type retained in an indirect call signature.
     /// </summary>
     /// <param name="browser">The browser engine.</param>
     [TestMethod]
     [DataRow("chromium")]
     [DataRow("webkit")]
-    [Timeout(900_000, CooperativeCancellation = true)]
+    [Timeout(120_000, CooperativeCancellation = true)]
+    public async Task ControlFlow_CalliSignatureChecksAccessibilityWhileEditing(string browser)
+    {
+        await using var launched = await LaunchAsync(browser);
+        await using var context = await NewContextAsync(launched);
+        var page = await OpenSessionAsync(context);
+        var terminal = page.Locator("#terminal");
+        var options = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+        await TypeLineAsync(page, ".class public Outer {");
+        await TypeLineAsync(page, ".class nested private Inner { }");
+        await TypeLineAsync(page, "}");
+        await Assertions.Expect(terminal).ToContainTextAsync("end of class Outer", options);
+        await TypeLineAsync(page, "ldc.i4.0");
+        await TypeLineAsync(page, "conv.u");
+        await page.Keyboard.TypeAsync("calli void modopt(Outer/Inner)()");
+        await Assertions.Expect(terminal).ToContainTextAsync("Outer/Inner is nested private", options);
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(terminal).ToContainTextAsync("error: Outer/Inner is nested private", options);
+    }
+
+    /// <summary>
+    /// Browser Mono accepts and refuses the same source corpus checked against the desktop verifier.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    [TestMethod]
+    [DoNotParallelize]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(600_000, CooperativeCancellation = true)]
     public async Task ControlFlow_CorpusMatchesDesktop(string browser)
     {
         await using var launched = await LaunchAsync(browser);

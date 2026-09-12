@@ -222,7 +222,8 @@ public sealed partial class EditingSession
                 : operand.Method is { } method
                     ? MemberEligibility.MethodVerdict(method.Method, scope.Access, facts,
                         exactGenericArguments: method.ExactGenericArguments,
-                        exactOptionalParameterTypes: method.ExactOptionalParameterTypes) : null;
+                        exactOptionalParameterTypes: method.ExactOptionalParameterTypes)
+                    : operand.Signature is { } signature ? CalliSignatureVerdict(signature, scope, facts) : null;
         if (problem is not null)
         {
             throw new ReplException(problem);
@@ -248,6 +249,24 @@ public sealed partial class EditingSession
         {
             throw new ReplException("endfilter is only valid inside a filter block (} filter {)");
         }
+    }
+
+    private static string? CalliSignatureVerdict(MethodSignatureSymbol signature, SnapshotBindingScope scope, AccessFacts facts)
+    {
+        if (MemberEligibility.TypeVerdict(signature.ReturnType, scope.Access, facts) is { } returnProblem)
+        {
+            return returnProblem;
+        }
+
+        foreach (var parameter in signature.Parameters)
+        {
+            if (MemberEligibility.TypeVerdict(parameter, scope.Access, facts) is { } parameterProblem)
+            {
+                return parameterProblem;
+            }
+        }
+
+        return null;
     }
 
     private static void ValidateReturn(EditingBody body, IBindingScope scope)
