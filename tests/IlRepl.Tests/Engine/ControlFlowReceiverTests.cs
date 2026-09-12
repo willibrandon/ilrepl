@@ -135,12 +135,17 @@ public sealed class ControlFlowReceiverTests
     }
 
     /// <summary>
-    /// A non-throwing sizeof instruction does not make its surrounding catch reachable.
+    /// Instructions with no specified exceptions do not make their surrounding catch reachable.
     /// </summary>
     [TestMethod]
-    public async Task Sizeof_DoesNotReachExceptionHandler()
+    [DataRow("initobj")]
+    [DataRow("ldstr")]
+    [DataRow("ldtoken")]
+    [DataRow("refanytype")]
+    [DataRow("sizeof")]
+    public async Task NonThrowingInstruction_DoesNotReachExceptionHandler(string instruction)
     {
-        var lines = ControlFlowReceiverExamples.NonThrowingSizeofSource();
+        var lines = ControlFlowReceiverExamples.NonThrowingInstructionSource(instruction);
         var session = new Session();
         using var editing = new EditingSession(session);
         var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
@@ -153,6 +158,28 @@ public sealed class ControlFlowReceiverTests
         }
 
         Assert.IsNull(session.OpenType);
+    }
+
+    /// <summary>
+    /// Appending inside an open finally recomputes the summary already applied to earlier leave edges.
+    /// </summary>
+    /// <param name="nested">Whether a nested protected region is open inside the finally.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void IncrementalFinallyChange_RechecksEarlierLeave(bool nested)
+    {
+        var lines = ControlFlowReceiverExamples.IncrementalFinallySource(nested);
+        var session = new Session();
+        foreach (var line in lines[..^1])
+        {
+            session.AddLine(line);
+        }
+
+        var mark = session.Mark();
+        var error = Assert.ThrowsExactly<ReplException>(() => session.AddLine(lines[^1]));
+        Assert.Contains("through this", error.Message);
+        Assert.AreEqual(mark, session.Mark(), "the rejected mutation must remain uncommitted");
     }
 
     /// <summary>

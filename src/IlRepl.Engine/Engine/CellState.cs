@@ -38,6 +38,11 @@ public sealed class CellState
         _entries.Count > 0 ? Analysis.After[_entries.Count - 1] : Analysis.End);
 
     /// <summary>
+    /// Reports whether the current entry is nested within an open finally or fault handler.
+    /// </summary>
+    internal bool HasOpenUnwindHandler => _frames.Any(frame => frame is BlockKind.Finally or BlockKind.Fault);
+
+    /// <summary>
     /// Refuses a proven stack or control-transfer error before emission.
     /// </summary>
     internal void RequireValidFlow()

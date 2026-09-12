@@ -314,10 +314,14 @@ public sealed partial class LiveSessionTests
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.ArgumentSource(true, true)));
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("end of class FlowArgument", options);
-        await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.NonThrowingSizeofSource()));
-        await page.Keyboard.PressAsync("Enter");
-        await Assertions.Expect(page.Locator("#terminal"))
-            .ToContainTextAsync("end of class NonThrowingSizeofReceiver", options);
+        foreach (var instruction in new[] { "initobj", "ldstr", "ldtoken", "refanytype", "sizeof" })
+        {
+            await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.NonThrowingInstructionSource(instruction)));
+            await page.Keyboard.PressAsync("Enter");
+            var type = instruction[0].ToString().ToUpperInvariant() + instruction[1..];
+            await Assertions.Expect(page.Locator("#terminal"))
+                .ToContainTextAsync($"end of class NonThrowing{type}Receiver", options);
+        }
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.FilterSource(false)));
         await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync("through this", options);
         await ClearPromptAsync(page);
@@ -383,11 +387,9 @@ public sealed partial class LiveSessionTests
         })
         {
             await PasteAsync(page, string.Join('\n', source));
-            await ArmSubmissionOutputAsync(page);
+            await ArmSubmissionOutputAsync(page, "stack underflow");
             await page.Keyboard.PressAsync("Enter");
-            await ReturnedBodyAfterOutputAsync(page);
-            var output = await page.EvaluateAsync<string>("() => window.ilreplControlFlowOutput");
-            Assert.Contains("stack underflow", output);
+            await ReturnedBodyAfterOutputAsync(page, "stack underflow");
             await ClearPromptAsync(page);
         }
         await PasteAsync(page, string.Join('\n', ControlFlowReceiverExamples.NestedNonCompletingFinallySource()));
@@ -417,15 +419,11 @@ public sealed partial class LiveSessionTests
             .ToContainTextAsync("end of class CorrelatedSwitchFinallyArgument", options);
     }
 
-    private static async Task ArmSubmissionOutputAsync(IPage page)
+    private static async Task ArmSubmissionOutputAsync(IPage page, string? expected = null)
     {
         await page.EvaluateAsync("""
-            () => {
+            expected => {
               const terminal = window.ilreplTerminal;
-              window.ilreplControlFlowWriteCount = 0;
-              window.ilreplControlFlowLastWrite = 0;
-              window.ilreplControlFlowSawBusy = false;
-              window.ilreplControlFlowOutput = '';
               if (!window.ilreplControlFlowWriteWrapped) {
                 const write = terminal.write.bind(terminal);
                 terminal.write = (data, callback) => {
@@ -433,7 +431,7 @@ public sealed partial class LiveSessionTests
                     window.ilreplControlFlowWriteCount++;
                     window.ilreplControlFlowLastWrite = performance.now();
                     const output = typeof data === 'string' ? data : new TextDecoder().decode(data);
-                    window.ilreplControlFlowOutput += output;
+                    window.ilreplControlFlowOutput = (window.ilreplControlFlowOutput ?? '') + output;
                     const buffer = terminal.buffer.active;
                     const status = buffer.getLine(buffer.viewportY + terminal.rows - 1)?.translateToString(true) ?? '';
                     window.ilreplControlFlowSawBusy ||= status.includes('updating') || status.includes('sending');
@@ -442,8 +440,20 @@ public sealed partial class LiveSessionTests
                 };
                 window.ilreplControlFlowWriteWrapped = true;
               }
+
+              return new Promise(resolve => terminal.write('', () => {
+                window.ilreplControlFlowWriteCount = 0;
+                window.ilreplControlFlowLastWrite = 0;
+                window.ilreplControlFlowSawBusy = false;
+                window.ilreplControlFlowOutput = '';
+                const buffer = terminal.buffer.active;
+                const text = Array.from({ length: buffer.length }, (_, row) =>
+                  buffer.getLine(row)?.translateToString(true) ?? '').join('\n');
+                window.ilreplControlFlowExpectedCount = expected === null ? 0 : text.split(expected).length - 1;
+                resolve();
+              }));
             }
-            """);
+            """, expected);
     }
 
     private static Task<IJSHandle> ReturnedBodyAsync(IPage page) => page.WaitForFunctionAsync("""
@@ -457,24 +467,39 @@ public sealed partial class LiveSessionTests
         }
         """, null, new() { PollingInterval = 16, Timeout = 30_000 });
 
-    private static Task<IJSHandle> ReturnedBodyAfterOutputAsync(IPage page) => page.WaitForFunctionAsync("""
+    private static Task<IJSHandle> ReturnedBodyAfterOutputAsync(IPage page, string expected) => page.WaitForFunctionAsync("""
+        expected => {
+          const terminal = window.ilreplTerminal;
+          const buffer = terminal.buffer.active;
+          const status = buffer.getLine(buffer.viewportY + terminal.rows - 1)?.translateToString(true) ?? '';
+          const text = Array.from({ length: buffer.length }, (_, row) =>
+            buffer.getLine(row)?.translateToString(true) ?? '').join('\n');
+          const count = text.split(expected).length - 1;
+          return window.ilreplControlFlowWriteCount > 0 && window.ilreplControlFlowOutput.includes('error:')
+            && count > window.ilreplControlFlowExpectedCount
+            && performance.now() - window.ilreplControlFlowLastWrite >= 100 && status.includes('editing ')
+            && !status.includes('updating') && !status.includes('sending');
+        }
+        """, expected, new() { PollingInterval = 16, Timeout = 30_000 });
+
+    private static async Task ResetSessionAsync(IPage page)
+    {
+        await PasteAsync(page, ".reset");
+        await ReadyToSubmitAsync(page);
+        await ArmSubmissionOutputAsync(page);
+        await page.Keyboard.PressAsync("Enter");
+        await ResetCompletedAsync(page);
+    }
+
+    private static Task<IJSHandle> ReadyToSubmitAsync(IPage page) => page.WaitForFunctionAsync("""
         () => {
           const terminal = window.ilreplTerminal;
           const buffer = terminal.buffer.active;
           const status = buffer.getLine(buffer.viewportY + terminal.rows - 1)?.translateToString(true) ?? '';
-          return window.ilreplControlFlowWriteCount > 0
-            && performance.now() - window.ilreplControlFlowLastWrite >= 100 && status.includes('editing ')
-            && !status.includes('updating') && !status.includes('sending');
+          const prompt = buffer.getLine(buffer.viewportY + terminal.rows - 2)?.translateToString(true) ?? '';
+          return prompt.includes('.reset') && !status.includes('updating') && !status.includes('sending');
         }
         """, null, new() { PollingInterval = 16, Timeout = 30_000 });
-
-    private static async Task ResetSessionAsync(IPage page)
-    {
-        await page.Keyboard.TypeAsync(".reset");
-        await ArmSubmissionOutputAsync(page);
-        await page.Keyboard.PressAsync("Enter");
-        await SubmissionSettledAsync(page);
-    }
 
     private static async Task RunCorpusCellAsync(IPage page, string source, int expected)
     {
@@ -498,6 +523,22 @@ public sealed partial class LiveSessionTests
           const buffer = terminal.buffer.active;
           const status = buffer.getLine(buffer.viewportY + terminal.rows - 1)?.translateToString(true) ?? '';
           return window.ilreplControlFlowSawBusy && window.ilreplControlFlowWriteCount > 0
+            && performance.now() - window.ilreplControlFlowLastWrite >= 100 && !status.includes('editing ')
+            && !status.includes('updating') && !status.includes('sending');
+        }
+        """, null, new() { PollingInterval = 16, Timeout = 30_000 });
+
+    private static Task<IJSHandle> ResetCompletedAsync(IPage page) => page.WaitForFunctionAsync("""
+        () => {
+          const terminal = window.ilreplTerminal;
+          const buffer = terminal.buffer.active;
+          const status = buffer.getLine(buffer.viewportY + terminal.rows - 1)?.translateToString(true) ?? '';
+          const lines = Array.from({ length: buffer.length }, (_, row) =>
+            buffer.getLine(row)?.translateToString(true) ?? '');
+          const reset = lines.findLastIndex(line => line.includes('.reset'));
+          const cleared = lines.slice(reset + 1)
+            .some(line => line.includes('cell, declarations, methods, and types cleared'));
+          return reset >= 0 && cleared && window.ilreplControlFlowWriteCount > 0
             && performance.now() - window.ilreplControlFlowLastWrite >= 100 && !status.includes('editing ')
             && !status.includes('updating') && !status.includes('sending');
         }

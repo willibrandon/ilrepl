@@ -15,4 +15,8 @@
     <ProjectReference Include="../IlRepl.Protocol/IlRepl.Protocol.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="IlRepl.Tests" />
+  </ItemGroup>
+
 </Project>

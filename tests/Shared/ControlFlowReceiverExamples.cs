@@ -1111,31 +1111,80 @@ public static class ControlFlowReceiverExamples
     ];
 
     /// <summary>
-    /// Builds a constructor whose unreachable catch follows a non-throwing sizeof instruction.
+    /// Builds a constructor whose unreachable catch follows an instruction that cannot throw.
     /// </summary>
-    public static string[] NonThrowingSizeofSource() =>
+    /// <param name="instruction">The non-throwing instruction shape.</param>
+    /// <returns>The complete class declaration.</returns>
+    public static string[] NonThrowingInstructionSource(string instruction) =>
     [
-        ".class public NonThrowingSizeofReceiver {",
+        $".class public NonThrowing{InstructionName(instruction)}Receiver {{",
         ".field public initonly int32 Value",
-        ".method public instance void .ctor(class NonThrowingSizeofReceiver other) {",
+        $".method public instance void .ctor(class NonThrowing{InstructionName(instruction)}Receiver other"
+            + (instruction == "refanytype" ? ", typedref reference) {" : ") {"),
+        ".locals init (int32 scratch)",
         "ldarg.0",
         "call instance void object::.ctor()",
         ".try {",
         "ldarg other",
         "starg.s 0",
-        "sizeof int32",
-        "pop",
+        .. NonThrowingInstructions(instruction),
         "leave DONE",
         "} catch object {",
         "pop",
         "ldarg.0",
         "ldc.i4.s 42",
-        "stfld int32 NonThrowingSizeofReceiver::Value",
+        $"stfld int32 NonThrowing{InstructionName(instruction)}Receiver::Value",
         "leave DONE",
         "}",
         "DONE: ret",
         "}",
         "}",
+    ];
+
+    private static string InstructionName(string instruction) => instruction switch
+    {
+        "initobj" => "Initobj",
+        "ldstr" => "Ldstr",
+        "ldtoken" => "Ldtoken",
+        "refanytype" => "Refanytype",
+        "sizeof" => "Sizeof",
+        _ => throw new ArgumentOutOfRangeException(nameof(instruction)),
+    };
+
+    private static string[] NonThrowingInstructions(string instruction) => instruction switch
+    {
+        "initobj" => ["ldloca.s scratch", "initobj int32"],
+        "ldstr" => ["ldstr \"value\"", "pop"],
+        "ldtoken" => [$"ldtoken class NonThrowing{InstructionName(instruction)}Receiver", "pop"],
+        "refanytype" => ["ldarg reference", "refanytype", "pop"],
+        "sizeof" => ["sizeof int32", "pop"],
+        _ => throw new ArgumentOutOfRangeException(nameof(instruction)),
+    };
+
+    /// <summary>
+    /// Builds a constructor whose open finally can invalidate an earlier backward leave target.
+    /// </summary>
+    /// <param name="nested">Whether the mutation is inside a nested protected region.</param>
+    /// <returns>The source through the receiver mutation.</returns>
+    public static string[] IncrementalFinallySource(bool nested) =>
+    [
+        ".class public IncrementalFinally {",
+        ".field public initonly int32 Value",
+        ".method public instance void .ctor(class IncrementalFinally other) {",
+        "ldarg.0",
+        "call instance void object::.ctor()",
+        "br START",
+        "WRITE: ldarg.0",
+        "ldc.i4.1",
+        "stfld int32 IncrementalFinally::Value",
+        "ret",
+        "START: nop",
+        ".try {",
+        "leave WRITE",
+        "} finally {",
+        .. (nested ? [".try {"] : Array.Empty<string>()),
+        "ldarg other",
+        "starg.s 0",
     ];
 
     /// <summary>

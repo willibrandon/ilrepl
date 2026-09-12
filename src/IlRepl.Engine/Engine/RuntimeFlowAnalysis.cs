@@ -77,7 +77,8 @@ internal static class RuntimeFlowAnalysis
         ArgumentNullException.ThrowIfNull(previous);
         ArgumentNullException.ThrowIfNull(entry);
         result = null!;
-        if (entry.Instruction is not { } instruction || entry.Labels.Count != 0
+        if (state.HasOpenUnwindHandler
+            || entry.Instruction is not { } instruction || entry.Labels.Count != 0
             || instruction.Kind is OperandKind.Label or OperandKind.Labels
             || instruction.Op.OpCodeType == OpCodeType.Prefix
             || instruction.Op == OpCodes.Jmp
