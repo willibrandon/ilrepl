@@ -1,4 +1,5 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 using Mono.Cecil;
 
 namespace IlRepl.Engine;
@@ -13,15 +14,61 @@ internal static class CecilMetadataSignatures
     /// </summary>
     /// <param name="method">The loaded method.</param>
     /// <returns>Whether reflection can omit details inside its signature types.</returns>
-    public static bool IsRequired(MethodBase method) => method is MethodInfo info && NeedsMetadata(info.ReturnType)
-        || method.GetParameters().Any(parameter => NeedsMetadata(parameter.ParameterType));
+    public static bool IsRequired(MethodBase method)
+    {
+        if (method is ConstructorInfo && !method.Module.Assembly.IsDynamic && HasAnnotatedConstructorReturn(method))
+        {
+            return true;
+        }
+
+        try
+        {
+            return method is MethodInfo info
+                    && (NeedsMetadata(info.ReturnType) || HasModifiers(info.ReturnParameter))
+                || method.GetParameters().Any(parameter => NeedsMetadata(parameter.ParameterType) || HasModifiers(parameter));
+        }
+        catch (Exception exception) when (exception is NotImplementedException or NotSupportedException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>
     /// Detects a field signature that Cecil cannot import through reflection.
     /// </summary>
     /// <param name="field">The loaded field.</param>
     /// <returns>Whether reflection can omit details inside its signature type.</returns>
-    public static bool IsRequired(FieldInfo field) => NeedsMetadata(field.FieldType);
+    public static bool IsRequired(FieldInfo field)
+    {
+        if (NeedsMetadata(field.FieldType))
+        {
+            return true;
+        }
+
+        try
+        {
+            return field.GetRequiredCustomModifiers().Length > 0 || field.GetOptionalCustomModifiers().Length > 0;
+        }
+        catch (Exception exception) when (exception is NotImplementedException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static bool HasModifiers(ParameterInfo parameter) => parameter.GetRequiredCustomModifiers().Length > 0
+        || parameter.GetOptionalCustomModifiers().Length > 0;
+
+    private static bool HasAnnotatedConstructorReturn(MethodBase method)
+    {
+        try
+        {
+            return RuntimeMetadataSignatures.Read(method).ReturnType.Kind == IlSignatureKind.Modified;
+        }
+        catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+        {
+            return false;
+        }
+    }
 
     private static bool NeedsMetadata(Type type) => TypeNameFormatter.IsFunctionPointer(type)
         || type.HasElementType || type.IsConstructedGenericType;

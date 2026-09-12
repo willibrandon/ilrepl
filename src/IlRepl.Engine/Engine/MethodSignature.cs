@@ -17,6 +17,11 @@ public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList
     internal MethodSymbol? ExactSymbol { get; init; }
 
     /// <summary>
+    /// The complete return type when annotations cannot be represented by <see cref="ReturnType"/>.
+    /// </summary>
+    internal TypeSymbol? ExactReturnType { get; init; }
+
+    /// <summary>
     /// The method attributes as declared: access, <c>static</c>, <c>virtual</c>, and the rest. A
     /// session method is public and static.
     /// </summary>
@@ -90,11 +95,11 @@ public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList
     /// <returns>The header form.</returns>
     public string DescribeWithNames()
     {
-        var returnType = ExactSymbol is null ? TypeNameFormatter.Pretty(ReturnType) : SymbolRenderer.Pretty(ExactSymbol.ReturnType);
+        var returnType = ExactReturnType is null ? TypeNameFormatter.Pretty(ReturnType) : SymbolRenderer.Annotated(ExactReturnType);
         var parameters = Parameters.Select((parameter, index) =>
         {
-            var type = ExactSymbol is null ? TypeNameFormatter.Pretty(parameter.Type)
-                : SymbolRenderer.Pretty(ExactSymbol.Parameters[index].Type);
+            var type = parameter.ExactType is null ? TypeNameFormatter.Pretty(parameter.Type)
+                : SymbolRenderer.Annotated(parameter.ExactType);
             return (type + " " + (parameter.Name ?? "")).TrimEnd();
         });
         return $"{returnType} {Name}({string.Join(", ", parameters)})";

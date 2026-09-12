@@ -476,7 +476,10 @@ public sealed class SnapshotBindingScope : IBindingScope
                 {
                     DeclaringType = type,
                     Type = SymbolRelations.SubstituteFor(type, property.Type),
+                    ExactType = property.ExactType is null ? null : SymbolRelations.SubstituteFor(type, property.ExactType),
                     Parameters = [.. property.Parameters.Select(parameter => SymbolRelations.SubstituteFor(type, parameter))],
+                    ExactParameters = [.. property.ExactParameters.Select(parameter => parameter is null
+                        ? null : SymbolRelations.SubstituteFor(type, parameter))],
                 });
             }
         }

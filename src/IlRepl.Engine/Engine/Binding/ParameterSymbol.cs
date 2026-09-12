@@ -12,6 +12,11 @@ namespace IlRepl.Engine.Binding;
 public sealed record ParameterSymbol(TypeSymbol Type, string? Name)
 {
     /// <summary>
+    /// The complete parameter type when annotations cannot be represented by <see cref="Type"/>.
+    /// </summary>
+    internal TypeSymbol? ExactType { get; init; }
+
+    /// <summary>
     /// The parameter's in, out and optional metadata attributes.
     /// </summary>
     public System.Reflection.ParameterAttributes Attributes { get; init; }

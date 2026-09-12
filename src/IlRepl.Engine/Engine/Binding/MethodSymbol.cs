@@ -53,6 +53,11 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
     public required TypeSymbol ReturnType { get; init; }
 
     /// <summary>
+    /// The complete return type when annotations cannot be represented by <see cref="ReturnType"/>.
+    /// </summary>
+    internal TypeSymbol? ExactReturnType { get; init; }
+
+    /// <summary>
     /// The fixed parameters, substituted the same way.
     /// </summary>
     public IReadOnlyList<ParameterSymbol> Parameters { get; init; } = [];
@@ -167,9 +172,11 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
             ImplAttributes = ImplAttributes,
             CallingConvention = CallingConvention,
             ReturnType = Map(ReturnType),
+            ExactReturnType = ExactReturnType is null ? null : Map(ExactReturnType),
             Parameters = [.. Parameters.Select(parameter => parameter with
             {
                 Type = Map(parameter.Type),
+                ExactType = parameter.ExactType is null ? null : Map(parameter.ExactType),
                 RequiredModifiers = [.. parameter.RequiredModifiers.Select(Map)],
                 OptionalModifiers = [.. parameter.OptionalModifiers.Select(Map)],
             })],
@@ -199,6 +206,33 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
         ArgumentNullException.ThrowIfNull(returnType);
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(genericArguments);
+        var mappedParameters = parameters.Select((parameter, index) => parameter with
+        {
+            ExactType = index < Parameters.Count
+                ? RuntimeSymbolTypes.RebaseExact(Parameters[index].Type, Parameters[index].ExactType, parameter.Type)
+                : parameter.ExactType,
+        }).ToArray();
+        return WithExact(
+            declaringType,
+            returnType,
+            RuntimeSymbolTypes.RebaseExact(ReturnType, ExactReturnType, returnType),
+            mappedParameters,
+            genericArguments);
+    }
+
+    /// <summary>
+    /// A copy with a different declaring construction and complete substituted signature.
+    /// </summary>
+    internal MethodSymbol WithExact(
+        TypeSymbol? declaringType,
+        TypeSymbol returnType,
+        TypeSymbol? exactReturnType,
+        IReadOnlyList<ParameterSymbol> parameters,
+        IReadOnlyList<TypeSymbol> genericArguments)
+    {
+        ArgumentNullException.ThrowIfNull(returnType);
+        ArgumentNullException.ThrowIfNull(parameters);
+        ArgumentNullException.ThrowIfNull(genericArguments);
         return new MethodSymbol
         {
             Definition = Definition,
@@ -209,6 +243,7 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
             ImplAttributes = ImplAttributes,
             CallingConvention = CallingConvention,
             ReturnType = returnType,
+            ExactReturnType = exactReturnType,
             Parameters = parameters,
             GenericParameters = GenericParameters,
             GenericArguments = genericArguments,

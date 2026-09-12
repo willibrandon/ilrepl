@@ -72,6 +72,11 @@ public sealed record ResolvedMethod
     public IReadOnlyList<TypeSymbol>? ExactGenericArguments { get; init; }
 
     /// <summary>
+    /// The declaring type when its metadata shape cannot be represented by a runtime type.
+    /// </summary>
+    internal TypeSymbol? ExactDeclaringType { get; init; }
+
+    /// <summary>
     /// The generic arguments the call instantiates the method with, whether the method is a
     /// builder of a type being written or a loaded generic method instance; empty otherwise.
     /// </summary>
@@ -101,6 +106,11 @@ public sealed record ResolvedMethod
     /// The vararg call-site types of a member reference.
     /// </summary>
     internal Type[]? OptionalParameterTypesOverride { get; init; }
+
+    /// <summary>
+    /// The complete optional call-site types, or null when the call is not vararg.
+    /// </summary>
+    internal IReadOnlyList<TypeSymbol>? ExactOptionalParameterTypes { get; init; }
 
     /// <summary>
     /// True when the reference names a method defined with <c>.method</c>.

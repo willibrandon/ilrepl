@@ -122,18 +122,10 @@ public static class SignatureIdentity
     {
         ArgumentNullException.ThrowIfNull(a);
         ArgumentNullException.ThrowIfNull(b);
-        if (a.ExactSymbol is not null || b.ExactSymbol is not null)
-        {
-            var first = a.ExactSymbol ?? RuntimeSymbolImporter.Import(
-                a, null, DefinitionId.None, MethodSymbolSource.Declared, true);
-            var second = b.ExactSymbol ?? RuntimeSymbolImporter.Import(
-                b, null, DefinitionId.None, MethodSymbolSource.Declared, true);
-            return SignatureSymbolIdentity.Equal(first, second);
-        }
-
-        return a.TypeParameters.Count == b.TypeParameters.Count
-            && Equal(a.ReturnType, b.ReturnType)
-            && a.Parameters.Count == b.Parameters.Count
-            && a.ParameterTypes.Zip(b.ParameterTypes).All(p => Equal(p.First, p.Second));
+        var first = a.ExactSymbol ?? RuntimeSymbolImporter.Import(
+            a, null, DefinitionId.None, MethodSymbolSource.Declared, true);
+        var second = b.ExactSymbol ?? RuntimeSymbolImporter.Import(
+            b, null, DefinitionId.None, MethodSymbolSource.Declared, true);
+        return SignatureSymbolIdentity.Equal(first, second);
     }
 }

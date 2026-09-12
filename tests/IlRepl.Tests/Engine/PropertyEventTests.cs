@@ -99,4 +99,17 @@ public sealed class PropertyEventTests
         Assert.AreEqual(99, max.GetValue(null));
         Assert.AreEqual("static property int32 Max { get }", session.Types[0].Declaration.Properties[0].Describe());
     }
+
+    /// <summary>
+    /// A plain indexed-property declaration without exact annotation entries retains its runtime signature.
+    /// </summary>
+    [TestMethod]
+    public void IndexedProperty_WithoutExactTypes_UsesRuntimeSignature()
+    {
+        var property = new PropertyDeclaration(
+            "Item", typeof(int), [typeof(string)], false, PropertyAttributes.None,
+            null, null, [], null, false, [], ".property int32 Item(string)", []);
+
+        Assert.AreEqual("property int32 Item(string) {  }", property.Describe());
+    }
 }

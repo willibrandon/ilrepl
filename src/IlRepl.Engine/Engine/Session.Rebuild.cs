@@ -492,6 +492,7 @@ public sealed partial class Session
     private static MethodSignature MapSignature(MethodSignature signature, EmitMap map) => signature with
     {
         ReturnType = map.Map(signature.ReturnType),
+        ExactReturnType = signature.ExactReturnType is null ? null : map.Map(signature.ExactReturnType),
         ReturnRequiredModifiers = [.. signature.ReturnRequiredModifiers.Select(map.Map)],
         ReturnOptionalModifiers = [.. signature.ReturnOptionalModifiers.Select(map.Map)],
         Parameters = [.. signature.Parameters.Select(p => p with

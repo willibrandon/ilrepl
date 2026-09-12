@@ -28,9 +28,15 @@ internal static class CecilCellBody
         foreach (var entry in state.Entries)
         {
             if (entry.Instruction?.ExactTypeOperand is not null
+                || entry.Instruction?.ExactFieldDeclaringType is not null
                 || entry.Instruction?.Operand is CalliSignature { ExactSymbol: { } exact }
                     && RuntimeSymbolTypes.RequiresExact(exact)
-                || entry.Instruction?.Operand is ResolvedMethod { ExactGenericArguments: not null })
+                || entry.Instruction?.Operand is ResolvedMethod { ExactGenericArguments: not null }
+                || entry.Instruction?.Operand is ResolvedMethod { ExactDeclaringType: not null }
+                || entry.Instruction?.Operand is ResolvedMethod { ExactOptionalParameterTypes: { } optional }
+                    && optional.Any(RuntimeSymbolTypes.RequiresExact)
+                || entry.Instruction?.Operand is ResolvedMethod methodOperand && RequiresMetadata(methodOperand)
+                || entry.Instruction?.Operand is FieldInfo fieldOperand && RequiresMetadata(fieldOperand))
             {
                 return true;
             }
@@ -62,6 +68,22 @@ internal static class CecilCellBody
 
     private static bool NeedsMetadata(Type type) => TypeNameFormatter.IsFunctionPointer(type)
         || type.HasElementType || type.IsConstructedGenericType;
+
+    private static bool RequiresMetadata(ResolvedMethod method)
+    {
+        var signature = method.Definition ?? method.Declared;
+        if (signature?.ExactReturnType is not null || signature?.Parameters.Any(parameter => parameter.ExactType is not null) == true)
+        {
+            return true;
+        }
+
+        return method.Method is { } runtime && !runtime.Module.Assembly.IsDynamic
+            && CecilMetadataSignatures.IsRequired(runtime);
+    }
+
+    private static bool RequiresMetadata(FieldInfo field) => RuntimeFieldSignatures.TypeOf(field) is { } exact
+        ? RuntimeSymbolTypes.RequiresExact(exact)
+        : !field.Module.Assembly.IsDynamic && CecilMetadataSignatures.IsRequired(field);
 
     /// <summary>
     /// Emits a callable cell body with exact metadata references and the cell's existing session bindings.

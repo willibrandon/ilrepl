@@ -163,10 +163,29 @@ public static partial class SymbolRelations
             return methodArguments.Count > 0 ? SubstituteMethodParameters(mapped, method.Definition, methodArguments) : mapped;
         }
 
-        return method.With(
+        var returnType = Map(method.ReturnType);
+        var exactReturnType = method.ExactReturnType is null ? null : Map(method.ExactReturnType);
+        if (exactReturnType is null && RuntimeSymbolTypes.RequiresExact(returnType))
+        {
+            exactReturnType = returnType;
+        }
+
+        ParameterSymbol MapParameter(ParameterSymbol parameter)
+        {
+            var type = Map(parameter.Type);
+            var exactType = parameter.ExactType is null ? null : Map(parameter.ExactType);
+            return parameter with
+            {
+                Type = type,
+                ExactType = exactType ?? (RuntimeSymbolTypes.RequiresExact(type) ? type : null),
+            };
+        }
+
+        return method.WithExact(
             declaring ?? method.DeclaringType,
-            Map(method.ReturnType),
-            [.. method.Parameters.Select(p => p with { Type = Map(p.Type) })],
+            returnType,
+            exactReturnType,
+            [.. method.Parameters.Select(MapParameter)],
             methodArguments);
     }
 
@@ -180,7 +199,10 @@ public static partial class SymbolRelations
     {
         ArgumentNullException.ThrowIfNull(field);
         ArgumentNullException.ThrowIfNull(declaring);
-        return field.With(declaring, SubstituteFor(declaring, field.FieldType));
+        var fieldType = SubstituteFor(declaring, field.FieldType);
+        var exactType = field.ExactType is null ? null : SubstituteFor(declaring, field.ExactType);
+        return field.WithExact(declaring, fieldType,
+            exactType ?? (RuntimeSymbolTypes.RequiresExact(fieldType) ? fieldType : null));
     }
 
     /// <summary>

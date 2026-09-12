@@ -149,6 +149,22 @@ public sealed class EditingValidationTests
     }
 
     /// <summary>
+    /// Preview checks a private type retained only as a modifier on a vararg call-site parameter.
+    /// </summary>
+    [TestMethod]
+    public void VarargParameterModifier_UsesTheAcceptingAccessibilityRule()
+    {
+        var session = IlLines.Load(".class public Outer {", ".class nested private Inner { }", "}");
+        session.Resolver.Load(SampleHost.Samples.GreeterDll);
+        var line = "call vararg int32 Greeter.Hello::CountArgs(..., int32 modopt(Outer/Inner))";
+        var expected = Assert.ThrowsExactly<ReplException>(() => session.AddLine(line)).Message;
+        using var editing = new EditingSession(session);
+        var view = editing.Speculate([line, ""], 1, cancellationToken: TestContext.CancellationToken);
+
+        Assert.AreEqual(expected, view.SkippedLines.Single().Message);
+    }
+
+    /// <summary>
     /// Undo removes a cell instruction while preserving declarations that survived an earlier clear.
     /// </summary>
     [TestMethod]

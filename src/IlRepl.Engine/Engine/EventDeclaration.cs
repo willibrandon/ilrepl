@@ -1,10 +1,10 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
 /// <summary>
-/// An event declared with <c>.event</c>: its handler type and the accessor methods named by
-/// <c>.addon</c>, <c>.removeon</c>, and <c>.fire</c>.
+/// An event declaration with its handler type and the accessors named by <c>.addon</c>, <c>.removeon</c>, and <c>.fire</c>.
 /// </summary>
 /// <param name="Name">The event name.</param>
 /// <param name="HandlerType">The delegate type.</param>
@@ -26,6 +26,11 @@ public sealed record EventDeclaration(
     string HeaderLine,
     IReadOnlyList<string> Lines)
 {
+    /// <summary>
+    /// The complete handler type when annotations cannot be represented by its runtime projection.
+    /// </summary>
+    internal TypeSymbol? ExactHandlerType { get; init; }
+
     /// <summary>
     /// Renders the event the way a listing shows it.
     /// </summary>

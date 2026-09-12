@@ -207,7 +207,10 @@ public static class StackAnalysis
             var jumpScope = Scope();
             var source = RuntimeSymbolImporter.Import(method.Method);
             var arguments = method.Context.Arguments.Select(argument =>
-                new VariableSymbol(jumpScope.ImportType(argument.Type), argument.Name, false)).ToArray();
+                new VariableSymbol(jumpScope.ImportType(argument.Type), argument.Name, false)
+                {
+                    ExactType = argument.ExactType,
+                }).ToArray();
             view = view with
             {
                 JumpRestriction = JumpCompatibility.Problem(RuntimeFlowAnalysis.JumpTarget(jump, jumpScope), source,

@@ -52,7 +52,7 @@ public static class FieldDeclarationParser
 
         return new FieldDeclaration(name, type, attributes, offset, constant, hasDefault, required, optional, [], source)
         {
-            ExactType = RuntimeSymbolTypes.RequiresExact(declaration.Type.Type) ? declaration.Type.Type : null,
+            ExactType = RuntimeSymbolTypes.RequiresExact(declaration.Type.ExactType) ? declaration.Type.ExactType : null,
         };
     }
 

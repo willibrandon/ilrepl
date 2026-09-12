@@ -13,4 +13,15 @@ public sealed record AccessorReferenceSymbol(
     string Name,
     TypeSymbol ReturnType,
     IReadOnlyList<TypeSymbol> ParameterTypes,
-    bool IsStatic);
+    bool IsStatic)
+{
+    /// <summary>
+    /// The complete return type when annotations cannot be represented by <see cref="ReturnType"/>.
+    /// </summary>
+    internal TypeSymbol? ExactReturnType { get; init; }
+
+    /// <summary>
+    /// The complete parameter types, with null where <see cref="ParameterTypes"/> is exact.
+    /// </summary>
+    internal IReadOnlyList<TypeSymbol?> ExactParameterTypes { get; init; } = [];
+}

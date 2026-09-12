@@ -61,7 +61,12 @@ internal sealed class SnapshotDeclarationMembers : IDeclarationMembers
             Attributes = signature.Attributes,
             CallingConvention = signature.CallingConvention,
             ReturnType = signature.ReturnType,
+            ExactReturnType = signature.ExactReturnType,
             Parameters = signature.Parameters,
+            GenericParameters = signature.GenericParameters,
+            GenericArguments = signature.GenericArguments,
+            ReturnRequiredModifiers = signature.ReturnRequiredModifiers,
+            ReturnOptionalModifiers = signature.ReturnOptionalModifiers,
             IsDeclared = false,
         };
         _declaration.AddForward(defined);

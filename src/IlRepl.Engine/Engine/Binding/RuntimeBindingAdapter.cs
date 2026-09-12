@@ -108,25 +108,31 @@ public sealed class RuntimeBindingAdapter
         switch (_scope.PayloadOf(method))
         {
             case MethodSignature session:
-                return new ResolvedMethod(session);
+                return new ResolvedMethod(session)
+                {
+                    ExactOptionalParameterTypes = bound.ExactOptionalParameterTypes,
+                };
             case RuntimeDeclaredMember declared:
             {
                 var declaringType = ToType(method.DeclaringType!);
                 var effective = declared.Signature with
                 {
                     ReturnType = ToType(method.ReturnType),
-                    ExactSymbol = declared.Signature.ExactSymbol is null ? null : method,
+                    ExactReturnType = method.ExactReturnType,
+                    ExactSymbol = RequiresExact(method) ? method : null,
                     Parameters = [.. declared.Signature.Parameters.Select((p, i)
                             => p with
                             {
                                 Type = ToType(method.Parameters[i].Type),
                                 ExactType = declared.Signature.Parameters[i].ExactType is null
-                                    ? null : method.Parameters[i].Type,
+                                    ? null : method.Parameters[i].ExactType,
                             })],
                 };
                 return new ResolvedMethod(declared.Builder, effective, declaringType)
                 {
+                    ExactDeclaringType = Exact(method.DeclaringType),
                     OptionalParameterTypesOverride = optional,
+                    ExactOptionalParameterTypes = bound.ExactOptionalParameterTypes,
                     DeclaredDefinition = bound.Definition is null ? null : declared.Signature,
                     GenericArguments = method.GenericArguments.Count > 0 ? ToTypes(method.GenericArguments) : null,
                     ExactGenericArguments = ExactGenericArguments(bound),
@@ -150,7 +156,9 @@ public sealed class RuntimeBindingAdapter
 
                 return new ResolvedMethod(mapped, ToSignature(method), declaringType)
                 {
+                    ExactDeclaringType = Exact(method.DeclaringType),
                     OptionalParameterTypesOverride = optional,
+                    ExactOptionalParameterTypes = bound.ExactOptionalParameterTypes,
                     GenericArguments = arguments,
                     ExactGenericArguments = ExactGenericArguments(bound),
                     DeclaredDefinition = ToSignature(RuntimeSymbolImporter.Import(definition.Method)),
@@ -160,6 +168,8 @@ public sealed class RuntimeBindingAdapter
             case MethodBase runtime:
                 return new ResolvedMethod(runtime, optional)
                 {
+                    ExactDeclaringType = Exact(method.DeclaringType),
+                    ExactOptionalParameterTypes = bound.ExactOptionalParameterTypes,
                     ExactGenericArguments = ExactGenericArguments(bound),
                 };
             default:
@@ -170,13 +180,14 @@ public sealed class RuntimeBindingAdapter
     private MethodSignature ToSignature(MethodSymbol method) => new(method.Name, ToType(method.ReturnType),
         [.. method.Parameters.Select(parameter => new ArgumentDeclaration(ToType(parameter.Type), parameter.Name, null, "")
         {
-            ExactType = RuntimeSymbolTypes.RequiresExact(parameter.Type) ? parameter.Type : null,
+            ExactType = parameter.ExactType,
             Attributes = parameter.Attributes,
             RequiredModifiers = ToTypes(parameter.RequiredModifiers),
             OptionalModifiers = ToTypes(parameter.OptionalModifiers),
         })])
     {
         ExactSymbol = RequiresExact(method) ? method : null,
+        ExactReturnType = method.ExactReturnType,
         Attributes = method.Attributes,
         ImplAttributes = method.ImplAttributes,
         CallingConvention = method.CallingConvention,
@@ -186,8 +197,8 @@ public sealed class RuntimeBindingAdapter
             new GenericParameterDeclaration(parameter.Name, parameter.Attributes, ToTypes(parameter.Constraints)))],
     };
 
-    private static bool RequiresExact(MethodSymbol method) => RuntimeSymbolTypes.RequiresExact(method.ReturnType)
-        || method.Parameters.Any(parameter => RuntimeSymbolTypes.RequiresExact(parameter.Type));
+    private static bool RequiresExact(MethodSymbol method) => method.ExactReturnType is not null
+        || method.Parameters.Any(parameter => parameter.ExactType is not null);
 
     private static IReadOnlyList<TypeSymbol>? ExactGenericArguments(BoundMethod method) =>
         method.ExactGenericArguments.Any(RuntimeSymbolTypes.RequiresExact) ? method.ExactGenericArguments : null;
@@ -239,10 +250,14 @@ public sealed class RuntimeBindingAdapter
             Kind = operand.Kind,
             Operand = value,
             ExactTypeOperand = operand.ExactType is { } type && RuntimeSymbolTypes.RequiresExact(type) ? type : null,
+            ExactFieldDeclaringType = operand.Field is { } field ? Exact(field.DeclaringType) : null,
             LocalIndex = bound.LocalIndex,
             ArgumentIndex = bound.ArgumentIndex,
         };
     }
+
+    private static TypeSymbol? Exact(TypeSymbol? type) => type is not null && RuntimeSymbolTypes.RequiresExact(type)
+        ? type : null;
 
     /// <summary>
     /// The field the emitter takes for a bound field.
@@ -262,7 +277,7 @@ public sealed class RuntimeBindingAdapter
                     && declared.Builder is FieldBuilder fieldBuilder
                     ? TypeBuilder.GetField(declaringType, fieldBuilder)
                     : declared.Builder;
-                RuntimeFieldSignatures.Record(runtime, field.FieldType);
+                RuntimeFieldSignatures.Record(runtime, field.ExactType ?? field.FieldType);
                 return runtime;
             }
 

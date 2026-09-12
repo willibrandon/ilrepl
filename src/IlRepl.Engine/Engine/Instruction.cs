@@ -36,6 +36,11 @@ public sealed class Instruction
     internal TypeSymbol? ExactTypeOperand { get; init; }
 
     /// <summary>
+    /// A field operand's declaring type when runtime projection would lose its metadata shape.
+    /// </summary>
+    internal TypeSymbol? ExactFieldDeclaringType { get; init; }
+
+    /// <summary>
     /// The local this instruction reads or writes, for both short forms and explicit operands.
     /// </summary>
     public int? LocalIndex { get; init; }

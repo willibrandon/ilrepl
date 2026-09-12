@@ -76,7 +76,7 @@ public sealed record FieldDeclaration(
             words.Add("literal");
         }
 
-        words.Add(ExactType is null ? TypeNameFormatter.Pretty(Type) : SymbolRenderer.Pretty(ExactType));
+        words.Add(ExactType is null ? TypeNameFormatter.Pretty(Type) : SymbolRenderer.Annotated(ExactType));
         words.Add(Name);
         var text = string.Join(" ", words);
         return HasDefault ? text + " = " + ConstantText.Describe(DefaultValue) : text;

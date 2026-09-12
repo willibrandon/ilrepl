@@ -77,10 +77,9 @@ public static class AssemblyExporter
             foreach (var (method, definition) in methods)
             {
                 var signature = method.Signature;
-                var exact = signature.ExactSymbol;
                 definition.ReturnType = writer.ImportSignature(
                     signature.ReturnType,
-                    exact?.ReturnType,
+                    signature.ExactReturnType,
                     signature.ReturnRequiredModifiers,
                     signature.ReturnOptionalModifiers);
                 for (var i = 0; i < signature.Parameters.Count; i++)
@@ -88,7 +87,7 @@ public static class AssemblyExporter
                     var parameter = signature.Parameters[i];
                     var type = writer.ImportSignature(
                         parameter.Type,
-                        exact?.Parameters[i].Type,
+                        parameter.ExactType,
                         parameter.RequiredModifiers,
                         parameter.OptionalModifiers);
                     definition.Parameters.Add(new ParameterDefinition(

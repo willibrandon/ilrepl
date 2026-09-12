@@ -217,11 +217,12 @@ public sealed partial class EditingSession
         var problem = operand.Type is { } type
             ? MemberEligibility.TypeVerdict(operand.ExactType ?? type, scope.Access, facts)
             : operand.Field is { } field
-                ? MemberEligibility.TypeVerdict(field.FieldType, scope.Access, facts)
+                ? MemberEligibility.TypeVerdict(field.ExactType ?? field.FieldType, scope.Access, facts)
                     ?? MemberEligibility.FieldVerdict(field, scope.Access, facts)
                 : operand.Method is { } method
                     ? MemberEligibility.MethodVerdict(method.Method, scope.Access, facts,
-                        exactGenericArguments: method.ExactGenericArguments) : null;
+                        exactGenericArguments: method.ExactGenericArguments,
+                        exactOptionalParameterTypes: method.ExactOptionalParameterTypes) : null;
         if (problem is not null)
         {
             throw new ReplException(problem);

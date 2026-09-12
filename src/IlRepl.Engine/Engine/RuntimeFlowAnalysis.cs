@@ -202,7 +202,10 @@ internal static class RuntimeFlowAnalysis
             var source = state.Signature is null ? null : RuntimeSymbolImporter.Import(state.Signature, sourceOwner,
                 RuntimeDefinitions.OfDeclaration(state.Signature, 0), MethodSymbolSource.Declared, true);
             var arguments = context.Arguments.Select(argument =>
-                new VariableSymbol(jumpScope.ImportType(argument.Type), argument.Name, false))
+                new VariableSymbol(jumpScope.ImportType(argument.Type), argument.Name, false)
+                {
+                    ExactType = argument.ExactType,
+                })
                 .ToArray();
             view = view with
             {

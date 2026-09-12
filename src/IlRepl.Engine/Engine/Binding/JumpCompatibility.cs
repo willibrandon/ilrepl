@@ -29,7 +29,7 @@ internal static class JumpCompatibility
 
         var convention = source?.CallingConvention ?? (isVarArg ? CallingConventions.VarArgs : CallingConventions.Standard);
         var parameters = source?.Parameters
-            ?? arguments.Select(argument => new ParameterSymbol(argument.Type, argument.Name)).ToArray();
+            ?? arguments.Select(CellParameter).ToArray();
         var isStatic = source?.IsStatic ?? true;
         var arity = source?.Arity ?? methodArguments.Count;
         if (target.IsStatic != isStatic || target.CallingConvention != convention
@@ -44,12 +44,39 @@ internal static class JumpCompatibility
             : MatchType(expected, current, target.Definition, substitutions);
         bool MatchList(IReadOnlyList<TypeSymbol> expected, IReadOnlyList<TypeSymbol> current) => expected.Count == current.Count
             && expected.Zip(current).All(pair => Match(pair.First, pair.Second));
-        if (!Match(target.ReturnType, source?.ReturnType ?? TypeSymbol.Object)
-            || !MatchList(target.ReturnRequiredModifiers, source?.ReturnRequiredModifiers ?? [])
-            || !MatchList(target.ReturnOptionalModifiers, source?.ReturnOptionalModifiers ?? [])
-            || !target.Parameters.Zip(parameters).All(pair => Match(pair.First.Type, pair.Second.Type)
-                && MatchList(pair.First.RequiredModifiers, pair.Second.RequiredModifiers)
-                && MatchList(pair.First.OptionalModifiers, pair.Second.OptionalModifiers)))
+        bool MatchAnnotated(
+            TypeSymbol expected,
+            TypeSymbol? exactExpected,
+            IReadOnlyList<TypeSymbol> requiredExpected,
+            IReadOnlyList<TypeSymbol> optionalExpected,
+            TypeSymbol current,
+            TypeSymbol? exactCurrent,
+            IReadOnlyList<TypeSymbol> requiredCurrent,
+            IReadOnlyList<TypeSymbol> optionalCurrent) => exactExpected is not null && exactCurrent is not null
+                ? Match(exactExpected, exactCurrent)
+                : Match(expected, current) && MatchList(requiredExpected, requiredCurrent)
+                    && MatchList(optionalExpected, optionalCurrent);
+        var returnMatches = source is null
+            ? MatchAnnotated(target.ReturnType, target.ExactReturnType,
+                target.ReturnRequiredModifiers, target.ReturnOptionalModifiers, TypeSymbol.Object, TypeSymbol.Object, [], [])
+            : MatchAnnotated(
+                target.ReturnType,
+                target.ExactReturnType,
+                target.ReturnRequiredModifiers,
+                target.ReturnOptionalModifiers,
+                source.ReturnType,
+                source.ExactReturnType,
+                source.ReturnRequiredModifiers,
+                source.ReturnOptionalModifiers);
+        if (!returnMatches || !target.Parameters.Zip(parameters).All(pair => MatchAnnotated(
+            pair.First.Type,
+            pair.First.ExactType,
+            pair.First.RequiredModifiers,
+            pair.First.OptionalModifiers,
+            pair.Second.Type,
+            pair.Second.ExactType,
+            pair.Second.RequiredModifiers,
+            pair.Second.OptionalModifiers)))
         {
             return Incompatible;
         }
@@ -71,6 +98,18 @@ internal static class JumpCompatibility
 
     private const string Incompatible =
         "jmp target must match the current method's calling convention, generic arity, parameters, and return type";
+
+    private static ParameterSymbol CellParameter(VariableSymbol argument)
+    {
+        var exact = argument.ExactType ?? (RuntimeSymbolTypes.RequiresExact(argument.Type) ? argument.Type : null);
+        var type = SymbolSignatureProvider.StripModifiers(exact ?? argument.Type, out var required, out var optional);
+        return new ParameterSymbol(type, argument.Name)
+        {
+            ExactType = exact,
+            RequiredModifiers = required,
+            OptionalModifiers = optional,
+        };
+    }
 
     private static bool MatchType(TypeSymbol target, TypeSymbol current, DefinitionId definition,
         Dictionary<int, TypeSymbol> substitutions)

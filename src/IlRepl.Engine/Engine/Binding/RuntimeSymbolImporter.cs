@@ -237,6 +237,9 @@ public static class RuntimeSymbolImporter
             impl = MethodImplAttributes.IL;
         }
 
+        var exactReturnType = info is null ? TypeSymbol.Void
+            : ImportSignatureType(info.ReturnType, info.ReturnParameter.GetModifiedParameterType);
+        var returnType = SymbolSignatureProvider.StripModifiers(exactReturnType, out _, out _);
         return RuntimeSignatureShapes.Restore(method, new MethodSymbol
         {
             Definition = id,
@@ -246,8 +249,8 @@ public static class RuntimeSymbolImporter
             Attributes = method.Attributes,
             ImplAttributes = impl,
             CallingConvention = method.CallingConvention,
-            ReturnType = info is null ? TypeSymbol.Void
-                : ImportSignatureType(info.ReturnType, info.ReturnParameter.GetModifiedParameterType),
+            ReturnType = returnType,
+            ExactReturnType = RuntimeSymbolTypes.RequiresExact(exactReturnType) ? exactReturnType : null,
             Parameters = [.. parameters.Select(ImportParameter)],
             GenericParameters = genericParameters,
             GenericArguments = genericArguments,
@@ -256,13 +259,18 @@ public static class RuntimeSymbolImporter
         });
     }
 
-    private static ParameterSymbol ImportParameter(ParameterInfo parameter) => new(
-        ImportSignatureType(parameter.ParameterType, parameter.GetModifiedParameterType), parameter.Name)
+    private static ParameterSymbol ImportParameter(ParameterInfo parameter)
     {
-        Attributes = parameter.Attributes,
-        RequiredModifiers = Modifiers(parameter.GetRequiredCustomModifiers),
-        OptionalModifiers = Modifiers(parameter.GetOptionalCustomModifiers),
-    };
+        var exactType = ImportSignatureType(parameter.ParameterType, parameter.GetModifiedParameterType);
+        var type = SymbolSignatureProvider.StripModifiers(exactType, out _, out _);
+        return new ParameterSymbol(type, parameter.Name)
+        {
+            ExactType = RuntimeSymbolTypes.RequiresExact(exactType) ? exactType : null,
+            Attributes = parameter.Attributes,
+            RequiredModifiers = Modifiers(parameter.GetRequiredCustomModifiers),
+            OptionalModifiers = Modifiers(parameter.GetOptionalCustomModifiers),
+        };
+    }
 
     private static IReadOnlyList<TypeSymbol> Modifiers(Func<Type[]> read)
     {
@@ -287,13 +295,16 @@ public static class RuntimeSymbolImporter
     {
         ArgumentNullException.ThrowIfNull(field);
         declaring ??= Import(field.DeclaringType!);
+        var exactType = ImportSignatureType(field.FieldType, field.GetModifiedFieldType);
+        var fieldType = SymbolSignatureProvider.StripModifiers(exactType, out _, out _);
         return RuntimeSignatureShapes.Restore(field, new FieldSymbol
         {
             Definition = RuntimeDefinitions.Of(field),
             Source = MethodSymbolSource.Loaded,
             DeclaringType = declaring,
             Name = field.Name,
-            FieldType = ImportSignatureType(field.FieldType, field.GetModifiedFieldType),
+            FieldType = fieldType,
+            ExactType = RuntimeSymbolTypes.RequiresExact(exactType) ? exactType : null,
             Attributes = field.Attributes,
             RequiredModifiers = Modifiers(field.GetRequiredCustomModifiers),
             OptionalModifiers = Modifiers(field.GetOptionalCustomModifiers),
@@ -336,8 +347,10 @@ public static class RuntimeSymbolImporter
             ImplAttributes = signature.ImplAttributes,
             CallingConvention = signature.CallingConvention,
             ReturnType = Import(signature.ReturnType),
+            ExactReturnType = signature.ExactReturnType,
             Parameters = [.. signature.Parameters.Select(parameter => new ParameterSymbol(Import(parameter.Type), parameter.Name)
             {
+                ExactType = parameter.ExactType,
                 Attributes = parameter.Attributes,
                 RequiredModifiers = [.. parameter.RequiredModifiers.Select(Import)],
                 OptionalModifiers = [.. parameter.OptionalModifiers.Select(Import)],
@@ -366,7 +379,8 @@ public static class RuntimeSymbolImporter
             Source = MethodSymbolSource.Declared,
             DeclaringType = declaring,
             Name = declaration.Name,
-            FieldType = declaration.ExactType ?? Import(declaration.Type),
+            FieldType = Import(declaration.Type),
+            ExactType = declaration.ExactType,
             Attributes = declaration.Attributes,
             RequiredModifiers = [.. declaration.RequiredModifiers.Select(Import)],
             OptionalModifiers = [.. declaration.OptionalModifiers.Select(Import)],

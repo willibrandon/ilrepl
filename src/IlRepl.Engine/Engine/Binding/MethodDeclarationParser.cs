@@ -219,7 +219,8 @@ public static class MethodDeclarationParser
             ? context
             : context.WithGenerics(new SymbolGenericContext(context.Generics.TypeArguments, typeParameters));
         var returnStart = pos;
-        var returnType = BindTypeAt(s, ref returnStart, memberContext, out _, out var returnRequired, out var returnOptional);
+        var returnType = BindTypeAt(
+            s, ref returnStart, memberContext, out _, out var returnRequired, out var returnOptional, out var exactReturnType);
         TypeParser.SkipWhitespace(s, ref returnStart);
         if (returnStart != nameStart)
         {
@@ -334,6 +335,7 @@ public static class MethodDeclarationParser
             Attributes = attributes,
             ImplAttributes = impl,
             CallingConvention = convention,
+            ExactReturnType = RuntimeSymbolTypes.RequiresExact(exactReturnType) ? exactReturnType : null,
             ReturnRequiredModifiers = returnRequired,
             ReturnOptionalModifiers = returnOptional,
             GenericParameters = constraints,
@@ -471,7 +473,7 @@ public static class MethodDeclarationParser
             }
 
             var at = 0;
-            var type = BindTypeAt(part, ref at, context, out _, out var required, out var optional);
+            var type = BindTypeAt(part, ref at, context, out _, out var required, out var optional, out var exactType);
             var parameterName = InstructionParser.Unquote(part[at..].Trim());
             if (parameterName.Length > 0 && !InstructionParser.IsIdentifier(parameterName))
             {
@@ -491,6 +493,7 @@ public static class MethodDeclarationParser
             parameters.Add(new ParameterSymbol(type, parameterName.Length == 0 ? null : parameterName)
             {
                 Attributes = parameterAttributes,
+                ExactType = RuntimeSymbolTypes.RequiresExact(exactType) ? exactType : null,
                 RequiredModifiers = required,
                 OptionalModifiers = optional,
             });
@@ -603,7 +606,8 @@ public static class MethodDeclarationParser
             throw new ReplException(Usage);
         }
 
-        var returnType = BindTypeAt(s, ref pos, context, out _, out var returnRequired, out var returnOptional);
+        var returnType = BindTypeAt(
+            s, ref pos, context, out _, out var returnRequired, out var returnOptional, out var exactReturnType);
         TypeParser.SkipWhitespace(s, ref pos);
         var name = ReadName(s, ref pos);
         TypeParser.SkipWhitespace(s, ref pos);
@@ -644,7 +648,7 @@ public static class MethodDeclarationParser
                 }
 
                 var at = 0;
-                var type = BindTypeAt(part, ref at, context, out _, out var required, out var optional);
+                var type = BindTypeAt(part, ref at, context, out _, out var required, out var optional, out var exactType);
                 var parameterName = InstructionParser.Unquote(part[at..].Trim());
                 if (parameterName.Length > 0 && !InstructionParser.IsIdentifier(parameterName))
                 {
@@ -663,6 +667,7 @@ public static class MethodDeclarationParser
 
                 parameters.Add(new ParameterSymbol(type, parameterName.Length == 0 ? null : parameterName)
                 {
+                    ExactType = RuntimeSymbolTypes.RequiresExact(exactType) ? exactType : null,
                     RequiredModifiers = required,
                     OptionalModifiers = optional,
                 });
@@ -677,6 +682,7 @@ public static class MethodDeclarationParser
             ReturnType = returnType,
             Parameters = parameters,
             Attributes = MethodAttributes.Public | MethodAttributes.Static,
+            ExactReturnType = RuntimeSymbolTypes.RequiresExact(exactReturnType) ? exactReturnType : null,
             ReturnRequiredModifiers = returnRequired,
             ReturnOptionalModifiers = returnOptional,
         };
@@ -730,21 +736,20 @@ public static class MethodDeclarationParser
         return part;
     }
 
-    private static TypeSymbol BindTypeAt(string text, ref int position, IBindingScope scope, out bool pinned) =>
-        BindTypeAt(text, ref position, scope, out pinned, out _, out _);
-
     private static TypeSymbol BindTypeAt(
         string text,
         ref int position,
         IBindingScope scope,
         out bool pinned,
         out IReadOnlyList<TypeSymbol> required,
-        out IReadOnlyList<TypeSymbol> optional)
+        out IReadOnlyList<TypeSymbol> optional,
+        out TypeSymbol exact)
     {
         var bound = SymbolBinder.BindType(CilSyntaxParser.ParseTypeAt(text, ref position), scope);
         pinned = bound.Pinned;
         required = bound.RequiredModifiers;
         optional = bound.OptionalModifiers;
+        exact = bound.ExactType;
         return bound.Type;
     }
 }

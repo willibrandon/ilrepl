@@ -17,4 +17,15 @@ public sealed record PropertySymbol(
     TypeSymbol Type,
     IReadOnlyList<TypeSymbol> Parameters,
     bool IsPublic,
-    bool IsStatic);
+    bool IsStatic)
+{
+    /// <summary>
+    /// The complete property type when annotations cannot be represented by <see cref="Type"/>.
+    /// </summary>
+    internal TypeSymbol? ExactType { get; init; }
+
+    /// <summary>
+    /// The complete index parameter types, with null where <see cref="Parameters"/> is exact.
+    /// </summary>
+    internal IReadOnlyList<TypeSymbol?> ExactParameters { get; init; } = [];
+}

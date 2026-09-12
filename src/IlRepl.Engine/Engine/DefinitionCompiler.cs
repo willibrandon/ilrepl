@@ -54,10 +54,9 @@ public static class DefinitionCompiler
         }
 
         var cell = writer.DefineType("IlRepl", "Cell", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit, writer.Object);
-        var exact = signature.ExactSymbol;
         var returnType = writer.ImportSignature(
             signature.ReturnType,
-            exact?.ReturnType,
+            signature.ExactReturnType,
             signature.ReturnRequiredModifiers,
             signature.ReturnOptionalModifiers);
         var method = new MethodDefinition(
@@ -67,7 +66,7 @@ public static class DefinitionCompiler
             var parameter = signature.Parameters[i];
             var parameterType = writer.ImportSignature(
                 parameter.Type,
-                exact?.Parameters[i].Type,
+                parameter.ExactType,
                 parameter.RequiredModifiers,
                 parameter.OptionalModifiers);
             method.Parameters.Add(new ParameterDefinition(

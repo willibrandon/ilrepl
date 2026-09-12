@@ -43,6 +43,10 @@ public static class TypeDeclarationValidator
                 .Concat(declaration.Overrides.Select(mapping => Target(mapping.Target))).ToArray());
         return TypeDeclarationBinding.Validate(input, scope).Select(mapping => new ClassOverrideDeclaration(
             adapter.ToResolvedMethod(mapping.Target).Method!, "static " + scope.Describe(mapping.Target.Method), mapping.Body.Name,
-            adapter.ToType(mapping.Body.ReturnType), adapter.ToTypes(mapping.Body.ParameterTypes), mapping.Body.IsStatic, "")).ToArray();
+            adapter.ToType(mapping.Body.ReturnType), adapter.ToTypes(mapping.Body.ParameterTypes), mapping.Body.IsStatic, "")
+        {
+            ExactBodyReturnType = mapping.Body.ExactReturnType,
+            ExactBodyParameterTypes = [.. mapping.Body.Parameters.Select(parameter => parameter.ExactType)],
+        }).ToArray();
     }
 }

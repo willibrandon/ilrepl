@@ -69,6 +69,14 @@ public static class SessionMentions
                 }
             }
 
+            if (entry.Instruction?.ExactFieldDeclaringType is { } exactFieldDeclaring)
+            {
+                foreach (var type in RuntimeSymbolTypes.Materialized(exactFieldDeclaring))
+                {
+                    yield return type;
+                }
+            }
+
             if (entry.Instruction?.Operand is CalliSignature { ExactSymbol: { } exactSignature })
             {
                 foreach (var type in RuntimeSymbolTypes.Materialized(exactSignature.ReturnType))
@@ -117,6 +125,14 @@ public static class SessionMentions
                         yield return declaring;
                     }
 
+                    if (method.ExactDeclaringType is { } exactDeclaring)
+                    {
+                        foreach (var type in RuntimeSymbolTypes.Materialized(exactDeclaring))
+                        {
+                            yield return type;
+                        }
+                    }
+
                     yield return method.ReturnType;
                     foreach (var parameter in method.ParameterTypes)
                     {
@@ -131,6 +147,14 @@ public static class SessionMentions
                     foreach (var exactArgument in method.ExactGenericArguments ?? [])
                     {
                         foreach (var type in RuntimeSymbolTypes.Materialized(exactArgument))
+                        {
+                            yield return type;
+                        }
+                    }
+
+                    foreach (var exactOptional in method.ExactOptionalParameterTypes ?? [])
+                    {
+                        foreach (var type in RuntimeSymbolTypes.Materialized(exactOptional))
                         {
                             yield return type;
                         }

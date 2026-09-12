@@ -13,4 +13,10 @@ public sealed record EventHeaderSymbol(
     string Name,
     TypeSymbol HandlerType,
     EventAttributes Attributes,
-    bool OpensBlock);
+    bool OpensBlock)
+{
+    /// <summary>
+    /// The complete handler type with its original custom modifier order.
+    /// </summary>
+    internal TypeSymbol? ExactHandlerType { get; init; }
+}

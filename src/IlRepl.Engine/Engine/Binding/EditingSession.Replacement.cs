@@ -111,7 +111,9 @@ public sealed partial class EditingSession
                     Properties = [.. declaration.Properties.Select(property => property with
                     {
                         Definition = NextDefinition(), DeclaringType = replacement, Type = Map(property.Type),
+                        ExactType = property.ExactType is null ? null : Map(property.ExactType),
                         Parameters = [.. property.Parameters.Select(Map)],
+                        ExactParameters = [.. property.ExactParameters.Select(type => type is null ? null : Map(type))],
                     })],
                 };
                 _predeclared.Add(path, shape);

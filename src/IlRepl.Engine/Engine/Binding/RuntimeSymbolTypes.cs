@@ -31,6 +31,41 @@ internal static class RuntimeSymbolTypes
     }
 
     /// <summary>
+    /// Reapplies an existing top-level annotation chain to a replacement core type.
+    /// </summary>
+    internal static TypeSymbol? RebaseExact(TypeSymbol previous, TypeSymbol? exact, TypeSymbol replacement)
+    {
+        ArgumentNullException.ThrowIfNull(previous);
+        ArgumentNullException.ThrowIfNull(replacement);
+        if (exact is null)
+        {
+            return RequiresExact(replacement) ? replacement : null;
+        }
+
+        var annotations = new List<(TypeSymbol Modifier, bool Required)>();
+        var core = exact;
+        while (core.Kind == TypeSymbolKind.Modified)
+        {
+            annotations.Add((core.Modifier!, core.IsRequired));
+            core = core.Element!;
+        }
+
+        if (!SymbolIdentity.Equal(core, previous))
+        {
+            return RequiresExact(replacement) ? replacement : null;
+        }
+
+        var result = replacement;
+        for (var index = annotations.Count - 1; index >= 0; index--)
+        {
+            var annotation = annotations[index];
+            result = TypeSymbol.Modified(result, annotation.Modifier, annotation.Required);
+        }
+
+        return RequiresExact(result) ? result : null;
+    }
+
+    /// <summary>
     /// Returns the materialized types contained in a symbolic type.
     /// </summary>
     /// <param name="type">The symbolic type.</param>

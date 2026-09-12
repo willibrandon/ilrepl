@@ -122,8 +122,12 @@ public sealed partial class EditingSession
         var block = new EditingTypeBlock
         {
             Before = before,
-            Header = header with { Attributes = attributes, Kind = kind }, HeaderLine = line, Type = type, Path = path,
-            Kind = kind, BraceSeen = header.OpensBlock,
+            Header = header with { Attributes = attributes, Kind = kind },
+            HeaderLine = line,
+            Type = type,
+            Path = path,
+            Kind = kind,
+            BraceSeen = header.OpensBlock,
         };
         _state.OpenTypes.Add(block);
         if (header.ClosesBlock)
@@ -194,9 +198,14 @@ public sealed partial class EditingSession
             var symbol = new FieldSymbol
             {
                 Definition = declaration.Fields.FirstOrDefault(existing => existing.Name == field.Name)?.Definition ?? NextDefinition(),
-                Source = MethodSymbolSource.Declared, DeclaringType = block.Type,
-                Name = field.Name, FieldType = field.Type.Type, Attributes = field.Attributes,
-                RequiredModifiers = field.Type.RequiredModifiers, OptionalModifiers = field.Type.OptionalModifiers,
+                Source = MethodSymbolSource.Declared,
+                DeclaringType = block.Type,
+                Name = field.Name,
+                FieldType = field.Type.Type,
+                ExactType = RuntimeSymbolTypes.RequiresExact(field.Type.ExactType) ? field.Type.ExactType : null,
+                Attributes = field.Attributes,
+                RequiredModifiers = field.Type.RequiredModifiers,
+                OptionalModifiers = field.Type.OptionalModifiers,
             };
             ReplaceMembers(declaration,
                 declaration.Fields.Where(existing => existing.Name != field.Name).Append(symbol), declaration.Methods);
@@ -238,12 +247,18 @@ public sealed partial class EditingSession
             var property = accessor.Property!;
             var isPublic = accessor.Accessors.Any(reference => declaration.Methods.Any(method => method.IsPublic
                 && method.Name == reference.Name && method.IsStatic == reference.IsStatic
-                && method.ParameterTypes.SequenceEqual(reference.ParameterTypes)));
+                && Same(method.ParameterTypes, method.Parameters.Select(parameter => parameter.ExactType).ToArray(),
+                    reference.ParameterTypes, reference.ExactParameterTypes)));
             var existing = declaration.Properties.FirstOrDefault(candidate => candidate.Name == property.Name
-                && SymbolIdentity.Equal(candidate.Type, property.Type)
-                && candidate.Parameters.SequenceEqual(property.ParameterTypes));
+                && Same(candidate.Type, candidate.ExactType, property.Type, property.ExactType)
+                && Same(candidate.Parameters, candidate.ExactParameters,
+                    property.ParameterTypes, property.ExactParameterTypes));
             return new PropertySymbol(existing?.Definition ?? NextDefinition(), block.Type, property.Name,
-                property.Type, property.ParameterTypes, isPublic, property.IsStatic);
+                property.Type, property.ParameterTypes, isPublic, property.IsStatic)
+            {
+                ExactType = property.ExactType,
+                ExactParameters = property.ExactParameterTypes,
+            };
         })];
         var undeclared = declaration.Methods.FirstOrDefault(method => !method.IsDeclared);
         if (undeclared is not null)
@@ -308,7 +323,8 @@ public sealed partial class EditingSession
 
         _state.Types.Add(block.Path, block.Type, new DeclarationSymbol(
             declaration.Type, declaration.BaseType, declaration.Interfaces, declaration.GenericParameters,
-            declaration.Fields, declaration.Methods, false) { Properties = declaration.Properties });
+            declaration.Fields, declaration.Methods, false)
+        { Properties = declaration.Properties });
         _state.OpenTypes.RemoveAt(_state.OpenTypes.Count - 1);
         _state.Types = _state.Types.Clone([.. _state.OpenTypes.Select(owner => owner.Path)]);
         if (_state.OpenTypes.Count == 0)

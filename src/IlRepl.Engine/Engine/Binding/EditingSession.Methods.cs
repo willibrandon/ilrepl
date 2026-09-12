@@ -70,7 +70,10 @@ public sealed partial class EditingSession
             body.ThisIndex = 0;
         }
 
-        body.Arguments.AddRange(method.Parameters.Select(parameter => new VariableSymbol(parameter.Type, parameter.Name, false)));
+        body.Arguments.AddRange(method.Parameters.Select(parameter => new VariableSymbol(parameter.Type, parameter.Name, false)
+        {
+            ExactType = parameter.ExactType,
+        }));
         _state.Method = body;
         if (closes)
         {

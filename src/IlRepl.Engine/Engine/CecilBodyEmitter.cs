@@ -196,7 +196,7 @@ public static class CecilBodyEmitter
                         : writer.Import(map.Map((Type)instruction.Operand!))));
                     break;
                 case OperandKind.Field:
-                    Append(_il.Create(op, writer.Import(map.Map((FieldInfo)instruction.Operand!))));
+                    Append(_il.Create(op, FieldOperand(instruction)));
                     break;
                 case OperandKind.Method:
                     Append(_il.Create(op, MethodOperand((ResolvedMethod)instruction.Operand!, callSite: op.Code is Code.Call or Code.Callvirt)));
@@ -207,7 +207,7 @@ public static class CecilBodyEmitter
                         Type t => _il.Create(op, instruction.ExactTypeOperand is { } exactTokenType
                             ? writer.Import(map.Map(exactTokenType))
                             : writer.Import(map.Map(t))),
-                        FieldInfo f => _il.Create(op, writer.Import(map.Map(f))),
+                        FieldInfo => _il.Create(op, FieldOperand(instruction)),
                         ResolvedMethod r => _il.Create(op, MethodOperand(r, callSite: false)),
                         _ => throw new ReplException("unsupported token operand"),
                     });
@@ -223,7 +223,22 @@ public static class CecilBodyEmitter
         private MethodReference MethodOperand(ResolvedMethod resolved, bool callSite)
         {
             var target = resolved.Definition is { } definition ? map.SessionMethod(definition) : map.Map(resolved.Method!);
-            var reference = resolved.Definition is null && resolved.Declared is not null ? writer.Import(target, resolved.DeclaringType) : writer.Import(target);
+            var reference = resolved.Definition is not null
+                ? writer.Import(target, resolved.Definition)
+                : resolved.Declared is not null ? writer.Import(target, resolved.DeclaringType) : writer.Import(target);
+            if (resolved.ExactDeclaringType is { } exactDeclaring)
+            {
+                var declaring = writer.Import(map.Map(exactDeclaring));
+                if (reference is GenericInstanceMethod generic)
+                {
+                    generic.ElementMethod.DeclaringType = declaring;
+                }
+                else
+                {
+                    reference.DeclaringType = declaring;
+                }
+            }
+
             if (resolved.ExactGenericArguments is { Count: > 0 } exactArguments)
             {
                 var instance = new GenericInstanceMethod(reference is GenericInstanceMethod generic ? generic.ElementMethod : reference);
@@ -264,11 +279,24 @@ public static class CecilBodyEmitter
 
             for (var i = 0; i < optional.Length; i++)
             {
-                var type = writer.Import(map.Map(optional[i]));
+                var type = resolved.ExactOptionalParameterTypes is { } exactOptional
+                    ? writer.Import(map.Map(exactOptional[i])) : writer.Import(map.Map(optional[i]));
                 site.Parameters.Add(new ParameterDefinition(i == 0 ? new SentinelType(type) : type));
             }
 
             return site;
+        }
+
+        private FieldReference FieldOperand(Instruction instruction)
+        {
+            var field = map.Map((FieldInfo)instruction.Operand!);
+            var reference = writer.Import(field);
+            if (instruction.ExactFieldDeclaringType is { } exactDeclaring)
+            {
+                reference.DeclaringType = writer.Import(map.Map(exactDeclaring));
+            }
+
+            return reference;
         }
 
         private CallSite CallSite(CalliSignature signature)

@@ -16,4 +16,9 @@ public sealed record BoundMethod(MethodSymbol Method, MethodSymbol? Definition, 
     /// Explicit generic arguments with metadata-only shapes retained; empty when the reference has none.
     /// </summary>
     public IReadOnlyList<TypeSymbol> ExactGenericArguments { get; init; } = [];
+
+    /// <summary>
+    /// The complete optional call-site types, or null when the call is not vararg.
+    /// </summary>
+    internal IReadOnlyList<TypeSymbol>? ExactOptionalParameterTypes { get; init; }
 }

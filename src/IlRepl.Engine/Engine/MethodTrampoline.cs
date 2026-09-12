@@ -75,15 +75,14 @@ public sealed class MethodTrampoline
         }
 
         var cell = writer.DefineType("IlRepl", "Cell", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit, writer.Object);
-        var exact = signature.ExactSymbol;
         var returnType = writer.ImportSignature(
             signature.ReturnType,
-            exact?.ReturnType,
+            signature.ExactReturnType,
             signature.ReturnRequiredModifiers,
             signature.ReturnOptionalModifiers);
         var parameterTypes = signature.Parameters.Select((parameter, index) => writer.ImportSignature(
             parameter.Type,
-            exact?.Parameters[index].Type,
+            parameter.ExactType,
             parameter.RequiredModifiers,
             parameter.OptionalModifiers)).ToArray();
 

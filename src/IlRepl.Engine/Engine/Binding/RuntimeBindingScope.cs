@@ -51,13 +51,49 @@ public sealed class RuntimeBindingScope : IBindingScope
     public IReadOnlyList<PropertySymbol> Properties(TypeSymbol declaring)
     {
         var type = TypeOf(declaring);
-        return [.. type.GetProperties(AllMembers).Select(property => new PropertySymbol(
-            DefinitionId.Loaded(RuntimeDefinitions.AssemblyInstance(property.Module.Assembly),
-                property.Module.ModuleVersionId, property.MetadataToken),
-            ImportType(property.DeclaringType!), property.Name, ImportType(property.PropertyType),
-            property.GetIndexParameters().Select(parameter => ImportType(parameter.ParameterType)).ToArray(),
+        var sources = new List<(Assembly Assembly, AssemblySymbolSource Source)>();
+        foreach (var assembly in Context.Resolver.Assemblies)
+        {
+            if (AssemblySymbolSource.For(assembly) is { } source)
+            {
+                sources.Add((assembly, source));
+            }
+        }
+
+        var catalog = new LoadedBindingCatalog(sources);
+        return [.. type.GetProperties(AllMembers).Select(property => ImportProperty(property, catalog))];
+    }
+
+    private PropertySymbol ImportProperty(PropertyInfo property, LoadedBindingCatalog catalog)
+    {
+        var declaring = ImportType(property.DeclaringType!);
+        var id = DefinitionId.Loaded(RuntimeDefinitions.AssemblyInstance(property.Module.Assembly),
+            property.Module.ModuleVersionId, property.MetadataToken);
+        if (catalog.Locate(declaring) is { } located)
+        {
+            var metadata = located.Source.Properties(located.Handle, catalog).FirstOrDefault(candidate => candidate.Definition == id);
+            if (metadata is not null)
+            {
+                return metadata with
+                {
+                    DeclaringType = declaring,
+                    Type = SymbolRelations.SubstituteFor(declaring, metadata.Type),
+                    ExactType = metadata.ExactType is null ? null : SymbolRelations.SubstituteFor(declaring, metadata.ExactType),
+                    Parameters = [.. metadata.Parameters.Select(type => SymbolRelations.SubstituteFor(declaring, type))],
+                    ExactParameters = [.. metadata.ExactParameters.Select(type => type is null
+                        ? null : SymbolRelations.SubstituteFor(declaring, type))],
+                };
+            }
+        }
+
+        var parameters = property.GetIndexParameters();
+        return new PropertySymbol(id, declaring, property.Name, ImportType(property.PropertyType),
+            [.. parameters.Select(parameter => ImportType(parameter.ParameterType))],
             property.GetAccessors(true).Any(accessor => accessor.IsPublic),
-            property.GetAccessors(true).Any(accessor => accessor.IsStatic)))];
+            property.GetAccessors(true).Any(accessor => accessor.IsStatic))
+        {
+            ExactParameters = [.. parameters.Select(_ => (TypeSymbol?)null)],
+        };
     }
 
     /// <inheritdoc/>
@@ -254,7 +290,7 @@ public sealed class RuntimeBindingScope : IBindingScope
                     new RuntimeDefinitionMember(m)))];
         }
 
-        return [.. type.GetMethods(AllMembers).Where(m => m.Name == name).Select(m => Register(RuntimeSymbolImporter.Import(m), m))];
+        return [.. type.GetMethods(AllMembers).Where(m => m.Name == name).Select(m => ImportMethod(m, declaring, type))];
     }
 
     /// <inheritdoc/>
@@ -270,7 +306,7 @@ public sealed class RuntimeBindingScope : IBindingScope
                     new RuntimeDefinitionMember(m)))];
         }
 
-        return [.. type.GetMethods(AllMembers).Select(m => Register(RuntimeSymbolImporter.Import(m), m))];
+        return [.. type.GetMethods(AllMembers).Select(m => ImportMethod(m, declaring, type))];
     }
 
     /// <inheritdoc/>
@@ -305,7 +341,7 @@ public sealed class RuntimeBindingScope : IBindingScope
                     new RuntimeDefinitionMember(c)))];
         }
 
-        return [.. type.GetConstructors(flags).Select(c => Register(RuntimeSymbolImporter.Import(c), c))];
+        return [.. type.GetConstructors(flags).Select(c => ImportConstructor(c, declaring, type))];
     }
 
     /// <inheritdoc/>
@@ -323,7 +359,7 @@ public sealed class RuntimeBindingScope : IBindingScope
         }
 
         var field = type.GetField(name, AllMembers);
-        return field is null ? null : Register(RuntimeSymbolImporter.Import(field), field);
+        return field is null ? null : ImportField(field, declaring, type);
     }
 
     /// <inheritdoc/>
@@ -336,8 +372,47 @@ public sealed class RuntimeBindingScope : IBindingScope
             type = type.GetGenericTypeDefinition();
         }
 
-        return [.. type.GetFields(AllMembers).Select(f => Register(RuntimeSymbolImporter.Import(f), f))];
+        return [.. type.GetFields(AllMembers).Select(field => ImportField(field, declaring, type))];
     }
+
+    private MethodSymbol ImportMethod(MethodInfo method, TypeSymbol declaring, Type runtimeType)
+    {
+        if (!ExactConstruction(declaring, runtimeType) || method.DeclaringType != runtimeType)
+        {
+            return Register(RuntimeSymbolImporter.Import(method), method);
+        }
+
+        var definition = runtimeType.GetGenericTypeDefinition().GetMethods(AllMembers)
+            .Single(candidate => candidate.MetadataToken == method.MetadataToken);
+        return Register(SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(definition), declaring, []), method);
+    }
+
+    private MethodSymbol ImportConstructor(ConstructorInfo constructor, TypeSymbol declaring, Type runtimeType)
+    {
+        if (!ExactConstruction(declaring, runtimeType))
+        {
+            return Register(RuntimeSymbolImporter.Import(constructor), constructor);
+        }
+
+        var definition = runtimeType.GetGenericTypeDefinition().GetConstructors(AllMembers)
+            .Single(candidate => candidate.MetadataToken == constructor.MetadataToken);
+        return Register(SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(definition), declaring, []), constructor);
+    }
+
+    private FieldSymbol ImportField(FieldInfo field, TypeSymbol declaring, Type runtimeType)
+    {
+        if (!ExactConstruction(declaring, runtimeType) || field.DeclaringType != runtimeType)
+        {
+            return Register(RuntimeSymbolImporter.Import(field), field);
+        }
+
+        var definition = runtimeType.GetGenericTypeDefinition().GetFields(AllMembers)
+            .Single(candidate => candidate.MetadataToken == field.MetadataToken);
+        return Register(SymbolRelations.Instantiate(RuntimeSymbolImporter.Import(definition), declaring), field);
+    }
+
+    private static bool ExactConstruction(TypeSymbol declaring, Type runtimeType) => runtimeType.IsConstructedGenericType
+        && RuntimeSymbolTypes.RequiresExact(declaring);
 
     /// <inheritdoc/>
     public MethodSymbol? Instantiate(MethodSymbol definition, IReadOnlyList<TypeSymbol> arguments)
@@ -457,8 +532,8 @@ public sealed class RuntimeBindingScope : IBindingScope
     {
         get
         {
-            _registry.Locals ??= [.. Context.Locals.Select(l => new VariableSymbol(l.ExactType ?? ImportType(l.Type), l.Name,
-                l.IsPinned))];
+            _registry.Locals ??= [.. Context.Locals.Select(local => new VariableSymbol(ImportType(local.Type), local.Name,
+                local.IsPinned) { ExactType = local.ExactType })];
             return _registry.Locals;
         }
     }
@@ -468,8 +543,8 @@ public sealed class RuntimeBindingScope : IBindingScope
     {
         get
         {
-            _registry.Arguments ??= [.. Context.Arguments.Select(a => new VariableSymbol(a.ExactType ?? ImportType(a.Type), a.Name,
-                false))];
+            _registry.Arguments ??= [.. Context.Arguments.Select(argument => new VariableSymbol(ImportType(argument.Type), argument.Name,
+                false) { ExactType = argument.ExactType })];
             return _registry.Arguments;
         }
     }
@@ -499,12 +574,7 @@ public sealed class RuntimeBindingScope : IBindingScope
     public string Describe(MethodSymbol method)
     {
         ArgumentNullException.ThrowIfNull(method);
-        return PayloadOf(method) switch
-        {
-            MethodBase runtime => MemberResolver.Describe(runtime),
-            RuntimeDefinitionMember definition => MemberResolver.Describe(definition.Method),
-            _ => SymbolRenderer.Describe(method, Pretty),
-        };
+        return SymbolRenderer.Describe(method, Pretty);
     }
 
     /// <summary>

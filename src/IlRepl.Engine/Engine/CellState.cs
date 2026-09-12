@@ -730,6 +730,7 @@ public sealed class CellState
     {
         var scope = Scope;
         CheckExactAccess(instruction.ExactTypeOperand, scope);
+        CheckExactAccess(instruction.ExactFieldDeclaringType, scope);
         if (instruction.Operand is CalliSignature { ExactSymbol: { } exactSignature })
         {
             CheckExactAccess(exactSignature.ReturnType, scope);
@@ -752,13 +753,15 @@ public sealed class CellState
                 MemberAccess.CheckField(field, scope, Types);
                 break;
             case ResolvedMethod { Method: not null } method:
-                if (method.Declared?.ExactSymbol is { } exact)
+                CheckExactAccess(method.ExactDeclaringType, scope);
+                foreach (var optional in method.ExactOptionalParameterTypes ?? [])
                 {
-                    CheckExactAccess(exact.ReturnType, scope);
-                    foreach (var parameter in exact.Parameters)
-                    {
-                        CheckExactAccess(parameter.Type, scope);
-                    }
+                    CheckExactAccess(optional, scope);
+                }
+
+                if (method.Declared is { } declared)
+                {
+                    CheckSignatureAccess(declared, scope);
                 }
 
                 MemberAccess.CheckMethod(method, scope, Types);
@@ -784,6 +787,15 @@ public sealed class CellState
         }
     }
 
+    private void CheckSignatureAccess(MethodSignature signature, AccessScope scope, TypeTable? types = null)
+    {
+        CheckExactAccess(signature.ExactReturnType, scope, types);
+        foreach (var parameter in signature.Parameters)
+        {
+            CheckExactAccess(parameter.ExactType, scope, types);
+        }
+    }
+
     /// <summary>
     /// Judges every member access in the body again, once the declarations it referenced ahead
     /// of their headers are complete.
@@ -798,6 +810,7 @@ public sealed class CellState
             if (entry.Instruction is { } instruction)
             {
                 CheckExactAccess(instruction.ExactTypeOperand, Scope, types);
+                CheckExactAccess(instruction.ExactFieldDeclaringType, Scope, types);
                 if (instruction.Operand is CalliSignature { ExactSymbol: { } exactSignature })
                 {
                     CheckExactAccess(exactSignature.ReturnType, Scope, types);
@@ -814,6 +827,17 @@ public sealed class CellState
                     MemberAccess.CheckField(field, Scope, types);
                     break;
                 case ResolvedMethod { Method: not null } method:
+                    CheckExactAccess(method.ExactDeclaringType, Scope, types);
+                    foreach (var optional in method.ExactOptionalParameterTypes ?? [])
+                    {
+                        CheckExactAccess(optional, Scope, types);
+                    }
+
+                    if (method.Declared is { } declared)
+                    {
+                        CheckSignatureAccess(declared, Scope, types);
+                    }
+
                     MemberAccess.CheckMethod(method, Scope, types);
                     break;
                 default:
@@ -878,7 +902,7 @@ public sealed class CellState
         return [.. VariableDeclarationParser.ParseLocals(spec, scope)
             .Select(local => new LocalDeclaration(adapter.ToType(local.Type), local.Name, local.IsPinned)
             {
-                ExactType = RuntimeSymbolTypes.RequiresExact(local.Type) ? local.Type : null,
+                ExactType = local.ExactType,
             })];
     }
 

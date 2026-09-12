@@ -18,6 +18,11 @@ internal static class SymbolReferences
         }
 
         yield return method.ReturnType;
+        if (method.ExactReturnType is not null)
+        {
+            yield return method.ExactReturnType;
+        }
+
         foreach (var type in method.ReturnRequiredModifiers.Concat(method.ReturnOptionalModifiers)
             .Concat(method.GenericArguments).Concat(method.GenericParameters.SelectMany(parameter => parameter.Constraints)))
         {
@@ -27,6 +32,11 @@ internal static class SymbolReferences
         foreach (var parameter in method.Parameters)
         {
             yield return parameter.Type;
+            if (parameter.ExactType is not null)
+            {
+                yield return parameter.ExactType;
+            }
+
             foreach (var modifier in parameter.RequiredModifiers.Concat(parameter.OptionalModifiers))
             {
                 yield return modifier;
@@ -43,6 +53,10 @@ internal static class SymbolReferences
     {
         yield return field.DeclaringType;
         yield return field.FieldType;
+        if (field.ExactType is not null)
+        {
+            yield return field.ExactType;
+        }
         foreach (var modifier in field.RequiredModifiers.Concat(field.OptionalModifiers))
         {
             yield return modifier;

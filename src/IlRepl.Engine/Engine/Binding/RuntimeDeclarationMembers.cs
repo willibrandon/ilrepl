@@ -50,16 +50,22 @@ internal sealed class RuntimeDeclarationMembers : IDeclarationMembers
     /// <inheritdoc/>
     public MethodSymbol DefineForward(MethodSymbol signature)
     {
+        var adapter = new RuntimeBindingAdapter(_scope);
         var declared = new MethodSignature(signature.Name, _scope.TypeOf(signature.ReturnType), [.. signature.Parameters.Select(p
             => new ArgumentDeclaration(_scope.TypeOf(p.Type), null, null, "")
             {
-                ExactType = RuntimeSymbolTypes.RequiresExact(p.Type) ? p.Type : null,
+                ExactType = p.ExactType,
+                RequiredModifiers = adapter.ToTypes(p.RequiredModifiers),
+                OptionalModifiers = adapter.ToTypes(p.OptionalModifiers),
             })])
         {
-            ExactSymbol = RuntimeSymbolTypes.RequiresExact(signature.ReturnType)
-                || signature.Parameters.Any(parameter => RuntimeSymbolTypes.RequiresExact(parameter.Type)) ? signature : null,
+            ExactSymbol = signature.ExactReturnType is not null
+                || signature.Parameters.Any(parameter => parameter.ExactType is not null) ? signature : null,
+            ExactReturnType = signature.ExactReturnType,
             Attributes = signature.Attributes,
             CallingConvention = signature.CallingConvention,
+            ReturnRequiredModifiers = adapter.ToTypes(signature.ReturnRequiredModifiers),
+            ReturnOptionalModifiers = adapter.ToTypes(signature.ReturnOptionalModifiers),
         };
         var builder = (_own.DefineForward ?? throw new InvalidOperationException("the type cannot take forward references"))(declared);
         return _scope.Register(

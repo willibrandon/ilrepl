@@ -19,7 +19,7 @@ internal static class RuntimeArgumentMaterializer
             : type.IsValueType ? Array.CreateInstance(type, 1).GetValue(0) : null;
         return new ArgumentDeclaration(type, declaration.Name, value, declaration.Literal ?? (type.IsValueType ? "default" : "null"))
         {
-            ExactType = RuntimeSymbolTypes.RequiresExact(declaration.Type) ? declaration.Type : null,
+            ExactType = declaration.ExactType,
         };
     }
 }

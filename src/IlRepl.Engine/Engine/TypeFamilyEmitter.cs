@@ -173,8 +173,11 @@ internal sealed class TypeFamilyEmitter(
         var (prototype, members) = prototypes[declaration.FullName];
         foreach (var field in declaration.Fields)
         {
-            var fieldType = field.ExactType is null ? writer.Import(field.Type) : writer.Import(field.ExactType);
-            var type = Modified(fieldType, field.RequiredModifiers, field.OptionalModifiers);
+            var type = writer.ImportSignature(
+                field.Type,
+                field.ExactType,
+                field.RequiredModifiers,
+                field.OptionalModifiers);
             var cecilField = new FieldDefinition(field.Name, (CecilFieldAttributes)field.Attributes, type);
             if (field.Offset is { } offset)
             {
@@ -277,11 +280,11 @@ internal sealed class TypeFamilyEmitter(
         {
             var signature = method.Signature;
             var cecilMethod = _methods[method];
-            var exact = signature.ExactSymbol;
-            var returnType = exact is not null
-                ? writer.Import(exact.ReturnType)
-                : writer.Import(signature.ReturnType);
-            cecilMethod.ReturnType = Modified(returnType, signature.ReturnRequiredModifiers, signature.ReturnOptionalModifiers);
+            cecilMethod.ReturnType = writer.ImportSignature(
+                signature.ReturnType,
+                signature.ExactReturnType,
+                signature.ReturnRequiredModifiers,
+                signature.ReturnOptionalModifiers);
             for (var i = 0; i < signature.TypeParameters.Count; i++)
             {
                 var declared = signature.TypeParameters[i];
@@ -296,8 +299,11 @@ internal sealed class TypeFamilyEmitter(
             for (var i = 0; i < signature.Parameters.Count; i++)
             {
                 var parameter = signature.Parameters[i];
-                var exactType = exact is null ? writer.Import(parameter.Type) : writer.Import(exact.Parameters[i].Type);
-                var type = Modified(exactType, parameter.RequiredModifiers, parameter.OptionalModifiers);
+                var type = writer.ImportSignature(
+                    parameter.Type,
+                    parameter.ExactType,
+                    parameter.RequiredModifiers,
+                    parameter.OptionalModifiers);
                 var cecilParameter = new ParameterDefinition(parameter.Name ?? ("arg" + i.ToString(System.Globalization
                     .CultureInfo.InvariantCulture)), (CecilParameterAttributes)parameter.Attributes, type);
                 if (parameter.HasDefault)
@@ -326,14 +332,18 @@ internal sealed class TypeFamilyEmitter(
 
         foreach (var property in declaration.Properties)
         {
-            var cecilProperty = new PropertyDefinition(property.Name, (CecilPropertyAttributes)property.Attributes, writer
-                .Import(property.Type))
+            var propertyType = property.ExactType is null
+                ? writer.Import(property.Type) : writer.Import(property.ExactType);
+            var cecilProperty = new PropertyDefinition(
+                property.Name, (CecilPropertyAttributes)property.Attributes, propertyType)
             {
                 HasThis = !property.IsStatic,
             };
-            foreach (var parameterType in property.ParameterTypes)
+            for (var index = 0; index < property.ParameterTypes.Count; index++)
             {
-                cecilProperty.Parameters.Add(new ParameterDefinition(writer.Import(parameterType)));
+                var parameterType = property.ExactParameterTypes.ElementAtOrDefault(index) is { } exact
+                    ? writer.Import(exact) : writer.Import(property.ParameterTypes[index]);
+                cecilProperty.Parameters.Add(new ParameterDefinition(parameterType));
             }
 
             if (property.HasDefault)
@@ -358,7 +368,9 @@ internal sealed class TypeFamilyEmitter(
 
         foreach (var evt in declaration.Events)
         {
-            var cecilEvent = new EventDefinition(evt.Name, (CecilEventAttributes)evt.Attributes, writer.Import(evt.HandlerType))
+            var handlerType = evt.ExactHandlerType is null
+                ? writer.Import(evt.HandlerType) : writer.Import(evt.ExactHandlerType);
+            var cecilEvent = new EventDefinition(evt.Name, (CecilEventAttributes)evt.Attributes, handlerType)
             {
                 AddMethod = _methods[evt.AddOn],
                 RemoveMethod = _methods[evt.RemoveOn],
@@ -391,10 +403,7 @@ internal sealed class TypeFamilyEmitter(
 
         foreach (var over in declaration.Overrides)
         {
-            var implementing = declaration.Methods.FirstOrDefault(m => m.Name == over.BodyName && m.IsStatic == over.BodyIsStatic
-                && TypeIdentity.Equal(m.Signature.ReturnType, over.BodyReturnType)
-                && m.Signature.Parameters.Count == over.BodyParameterTypes.Count
-                && m.Signature.ParameterTypes.Zip(over.BodyParameterTypes).All(p => TypeIdentity.Equal(p.First, p.Second)))
+            var implementing = declaration.Methods.FirstOrDefault(method => over.Matches(method.Signature))
                 ?? throw new ReplException($".override names {over.BodyName}, which {declaration.FullName} does not declare");
             _methods[implementing].Overrides.Add(writer.Import(over.Target, over.Target.DeclaringType));
         }
@@ -455,22 +464,6 @@ internal sealed class TypeFamilyEmitter(
         }
 
         return null;
-    }
-
-    private TypeReference Modified(TypeReference type, IReadOnlyList<Type> required, IReadOnlyList<Type> optional)
-    {
-        var result = type;
-        foreach (var modifier in optional)
-        {
-            result = new OptionalModifierType(writer.Import(modifier), result);
-        }
-
-        foreach (var modifier in required)
-        {
-            result = new RequiredModifierType(writer.Import(modifier), result);
-        }
-
-        return result;
     }
 
     private static object? ConstantFor(object? value) => value is Enum e ? System.Convert.ChangeType(e, Enum

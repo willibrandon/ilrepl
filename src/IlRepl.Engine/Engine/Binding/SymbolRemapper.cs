@@ -26,9 +26,11 @@ internal static class SymbolRemapper
             ImplAttributes = owned.ImplAttributes,
             CallingConvention = owned.CallingConvention,
             ReturnType = map(owned.ReturnType),
+            ExactReturnType = owned.ExactReturnType is null ? null : map(owned.ExactReturnType),
             Parameters = [.. owned.Parameters.Select(parameter => parameter with
             {
                 Type = map(parameter.Type), RequiredModifiers = [.. parameter.RequiredModifiers.Select(map)],
+                ExactType = parameter.ExactType is null ? null : map(parameter.ExactType),
                 OptionalModifiers = [.. parameter.OptionalModifiers.Select(map)],
             })],
             GenericParameters = [.. owned.GenericParameters.Select(parameter => parameter with
@@ -57,6 +59,7 @@ internal static class SymbolRemapper
         DeclaringType = map(field.DeclaringType),
         Name = field.Name,
         FieldType = map(field.FieldType),
+        ExactType = field.ExactType is null ? null : map(field.ExactType),
         Attributes = field.Attributes,
         RequiredModifiers = [.. field.RequiredModifiers.Select(map)],
         OptionalModifiers = [.. field.OptionalModifiers.Select(map)],

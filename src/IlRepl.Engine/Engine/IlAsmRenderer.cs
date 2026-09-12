@@ -86,6 +86,19 @@ public static class IlAsmRenderer
                         break;
                     case ResolvedMethod m:
                         Note(m.DeclaringType);
+                        NoteExact(m.ExactDeclaringType);
+                        if ((m.Definition ?? m.Declared) is { } signature)
+                        {
+                            NoteSignature(signature);
+                        }
+                        else if (m.Method is { } runtime)
+                        {
+                            foreach (var type in SymbolReferences.Method(RuntimeSymbolImporter.Import(DefinitionOf(runtime))))
+                            {
+                                NoteExact(type);
+                            }
+                        }
+
                         foreach (var argument in m.InstantiationArguments)
                         {
                             Note(argument);
@@ -99,9 +112,35 @@ public static class IlAsmRenderer
                         break;
                     case FieldInfo f:
                         Note(f.DeclaringType);
+                        NoteExact(e.Instruction?.ExactFieldDeclaringType);
+                        foreach (var type in SymbolReferences.Field(RuntimeSymbolImporter.Import(DefinitionOf(f))))
+                        {
+                            NoteExact(type);
+                        }
+
                         break;
                     default:
                         break;
+                }
+            }
+        }
+
+        void NoteSignature(MethodSignature signature)
+        {
+            Note(signature.ReturnType);
+            NoteExact(signature.ExactReturnType);
+            foreach (var modifier in signature.ReturnRequiredModifiers.Concat(signature.ReturnOptionalModifiers))
+            {
+                Note(modifier);
+            }
+
+            foreach (var parameter in signature.Parameters)
+            {
+                Note(parameter.Type);
+                NoteExact(parameter.ExactType);
+                foreach (var modifier in parameter.RequiredModifiers.Concat(parameter.OptionalModifiers))
+                {
+                    Note(modifier);
                 }
             }
         }
@@ -121,13 +160,7 @@ public static class IlAsmRenderer
 
         foreach (var method in session.Methods)
         {
-            Note(method.Signature.ReturnType);
-            NoteExact(method.Signature.ExactSymbol?.ReturnType);
-            foreach (var parameter in method.Signature.ExactSymbol?.Parameters ?? [])
-            {
-                NoteExact(parameter.Type);
-            }
-
+            NoteSignature(method.Signature);
             NoteState(method.State);
         }
 
@@ -162,10 +195,10 @@ public static class IlAsmRenderer
         {
             var signature = method.Signature;
             var methodParameters = string.Join(", ", signature.Parameters.Select((parameter, index) =>
-                DeclarationType(parameter.Type, parameter.ExactType) + " " + TypeNameFormatter.IlAsmIdentifier(
+                DeclarationType(parameter) + " " + TypeNameFormatter.IlAsmIdentifier(
                     parameter.Name ?? "arg" + index.ToString(CultureInfo.InvariantCulture))));
             sb.Append("    .method public static ")
-                .Append(DeclarationType(signature.ReturnType, signature.ExactSymbol?.ReturnType)).Append(' ')
+                .Append(DeclarationReturnType(signature)).Append(' ')
                 .Append(TypeNameFormatter.IlAsmIdentifier(signature.Name)).Append('(').Append(methodParameters)
                 .AppendLine(") cil managed");
             sb.AppendLine("    {");
@@ -422,12 +455,13 @@ public static class IlAsmRenderer
                 ? DeclarationType(exactType)
                 : TypeNameFormatter.IlAsm((Type)instruction.Operand!)),
             OperandKind.Method => name + " " + MethodIlAsm((ResolvedMethod)instruction.Operand!),
-            OperandKind.Field => name + " " + FieldIlAsm((FieldInfo)instruction.Operand!),
+            OperandKind.Field => name + " " + FieldIlAsm(
+                (FieldInfo)instruction.Operand!, instruction.ExactFieldDeclaringType),
             OperandKind.Token => name + " " + instruction.Operand switch
             {
                 Type t => instruction.ExactTypeOperand is { } exactType ? DeclarationType(exactType) : TypeNameFormatter.IlAsm(t),
                 ResolvedMethod m => "method " + MethodIlAsm(m),
-                FieldInfo f => "field " + FieldIlAsm(f),
+                FieldInfo f => "field " + FieldIlAsm(f, instruction.ExactFieldDeclaringType),
                 _ => "?",
             },
             OperandKind.Signature => name + " " + SignatureIlAsm((CalliSignature)instruction.Operand!),
@@ -457,9 +491,7 @@ public static class IlAsmRenderer
     {
         if (resolved.Definition is { } definition)
         {
-            var sessionParameters = definition.Parameters.Select(parameter => SignatureType(parameter.Type, parameter.ExactType));
-            return $"{SignatureType(definition.ReturnType, definition.ExactSymbol?.ReturnType)} "
-                + $"IlRepl.Cell::{TypeNameFormatter.IlAsmIdentifier(definition.Name)}({string.Join(", ", sessionParameters)})";
+            return SessionMethodIlAsm(definition, qualify: true);
         }
 
         if (resolved.Declared is { } declared)
@@ -468,11 +500,13 @@ public static class IlAsmRenderer
             // the declaring type's and the method's own parameters as !N and !!N; the owner and
             // the method's arguments carry the instantiation.
             var written = resolved.DeclaredDefinition ?? declared;
-            var declaredParameters = written.Parameters.Select(parameter => SignatureType(parameter.Type, parameter.ExactType)).ToList();
+            var declaredParameters = written.Parameters.Select(SignatureType).ToList();
             if (resolved.OptionalParameterTypes is not null)
             {
                 declaredParameters.Add("...");
-                declaredParameters.AddRange(resolved.OptionalParameterTypes.Select(TypeNameFormatter.IlAsm));
+                declaredParameters.AddRange(resolved.ExactOptionalParameterTypes is { } exactOptional
+                    ? exactOptional.Select(SignatureType)
+                    : resolved.OptionalParameterTypes.Select(TypeNameFormatter.IlAsm));
             }
 
             var declaredVarArg = written.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "";
@@ -483,8 +517,8 @@ public static class IlAsmRenderer
                 : written.TypeParameters.Count == 0 ? "" : "<[" + written.TypeParameters.Count + "]>";
             var declaredName = MemberName(written.Name) + declaredArguments;
             return $"{(written.IsStatic ? "" : "instance ")}{declaredVarArg}"
-                + $"{SignatureType(written.ReturnType, written.ExactSymbol?.ReturnType)} "
-                + $"{TypeNameFormatter.IlAsmDeclaring(resolved.DeclaringType!)}::{declaredName}"
+                + $"{SignatureReturnType(written)} "
+                + $"{DeclaringType(resolved)}::{declaredName}"
                 + $"({string.Join(", ", declaredParameters)})";
         }
 
@@ -496,7 +530,7 @@ public static class IlAsmRenderer
         var definitionMethod = DefinitionOf(method);
         var signature = RuntimeSymbolImporter.Import(definitionMethod);
         var metadata = CecilMetadataSignatures.IsRequired(definitionMethod) ? RuntimeMetadataSignatures.Read(definitionMethod) : null;
-        var returnType = SignatureType(signature.ReturnType);
+        var returnType = SignatureType(SignatureSymbolIdentity.AnnotatedReturn(signature));
         if (metadata is not null)
         {
             returnType = IlSignatureRenderer.IlAsm(metadata.ReturnType);
@@ -510,7 +544,7 @@ public static class IlAsmRenderer
                 : "<" + string.Join(", ", g.GetGenericArguments().Select(TypeNameFormatter.IlAsm)) + ">";
         }
 
-        var parameters = signature.Parameters.Select(parameter => SignatureType(parameter.Type)).ToList();
+        var parameters = signature.Parameters.Select(parameter => SignatureType(SignatureSymbolIdentity.Annotated(parameter))).ToList();
         if (metadata is not null)
         {
             parameters = metadata.Parameters.Select(IlSignatureRenderer.IlAsm).ToList();
@@ -519,23 +553,33 @@ public static class IlAsmRenderer
         if (resolved.OptionalParameterTypes is not null)
         {
             parameters.Add("...");
-            parameters.AddRange(resolved.OptionalParameterTypes.Select(TypeNameFormatter.IlAsm));
+            parameters.AddRange(resolved.ExactOptionalParameterTypes is { } exactOptional
+                ? exactOptional.Select(SignatureType)
+                : resolved.OptionalParameterTypes.Select(TypeNameFormatter.IlAsm));
         }
 
-        var declaring = method.DeclaringType is null ? "?" : TypeNameFormatter.IlAsmDeclaring(method.DeclaringType);
+        var declaring = DeclaringType(resolved);
         return $"{instance}{vararg}{returnType} {declaring}::{name}({string.Join(", ", parameters)})";
     }
 
-    private static string FieldIlAsm(FieldInfo field)
+    private static string DeclaringType(ResolvedMethod resolved) => resolved.ExactDeclaringType is { } exact
+        ? SignatureType(exact)
+        : resolved.DeclaringType is null ? "?" : TypeNameFormatter.IlAsmDeclaring(resolved.DeclaringType);
+
+    private static string FieldIlAsm(FieldInfo field, TypeSymbol? exactDeclaringType = null)
     {
-        var declaring = field.DeclaringType is null ? "?" : TypeNameFormatter.IlAsmDeclaring(field.DeclaringType);
+        var declaring = exactDeclaringType is null
+            ? field.DeclaringType is null ? "?" : TypeNameFormatter.IlAsmDeclaring(field.DeclaringType)
+            : SignatureType(exactDeclaringType);
         var definition = DefinitionOf(field);
-        var type = SignatureType(RuntimeFieldSignatures.TypeOf(field)
+        var symbol = RuntimeSymbolImporter.Import(definition);
+        var exact = RuntimeFieldSignatures.TypeOf(field)
             ?? RuntimeFieldSignatures.TypeOf(definition)
-            ?? RuntimeSymbolImporter.Import(definition).FieldType);
+            ?? symbol.ExactType;
+        var type = SignatureType(exact ?? symbol.FieldType);
         // A prototype builder has no readable metadata image. Its reflection signature is the declaration
         // supplied by the session, including the element type needed for ordinary pointer fields.
-        if (CecilMetadataSignatures.IsRequired(definition) && !definition.Module.Assembly.IsDynamic)
+        if (!definition.Module.Assembly.IsDynamic && CecilMetadataSignatures.IsRequired(definition))
         {
             var signature = IlSignatureRenderer.IlAsm(RuntimeMetadataSignatures.Read(definition));
             return $"{signature} {declaring}::{MemberName(field.Name)}";
@@ -544,7 +588,10 @@ public static class IlAsmRenderer
         try
         {
             // A loaded field carries its modifiers; a builder cannot describe them yet.
-            type = Modified(type, definition.GetRequiredCustomModifiers(), definition.GetOptionalCustomModifiers());
+            if (exact is null)
+            {
+                type = Modified(type, definition.GetRequiredCustomModifiers(), definition.GetOptionalCustomModifiers());
+            }
         }
         catch (Exception ex) when (ex is NotSupportedException or NotImplementedException)
         {
@@ -709,9 +756,37 @@ public static class IlAsmRenderer
         ? SignatureType(type)
         : SignatureType(exact);
 
+    private static string SignatureType(ArgumentDeclaration parameter) => parameter.ExactType is null
+        ? Modified(SignatureType(parameter.Type), parameter.RequiredModifiers, parameter.OptionalModifiers)
+        : SignatureType(parameter.ExactType);
+
+    private static string SignatureReturnType(MethodSignature signature) => signature.ExactReturnType is null
+        ? Modified(SignatureType(signature.ReturnType), signature.ReturnRequiredModifiers, signature.ReturnOptionalModifiers)
+        : SignatureType(signature.ExactReturnType);
+
     private static string DeclarationType(Type type, TypeSymbol? exact) => exact is null
         ? TypeNameFormatter.IlAsm(type)
         : DeclarationType(exact);
+
+    private static string DeclarationType(ArgumentDeclaration parameter) => parameter.ExactType is null
+        ? Modified(DeclarationType(parameter.Type, null), parameter.RequiredModifiers, parameter.OptionalModifiers)
+        : DeclarationType(parameter.ExactType);
+
+    private static string DeclarationReturnType(MethodSignature signature) => signature.ExactReturnType is null
+        ? Modified(DeclarationType(signature.ReturnType, null), signature.ReturnRequiredModifiers,
+            signature.ReturnOptionalModifiers)
+        : DeclarationType(signature.ExactReturnType);
+
+    /// <summary>
+    /// Renders a session method reference with its complete annotated signature.
+    /// </summary>
+    internal static string SessionMethodIlAsm(MethodSignature signature, bool qualify = false)
+    {
+        var parameters = signature.Parameters.Select(SignatureType);
+        var owner = qualify ? "IlRepl.Cell::" : "";
+        return $"{SignatureReturnType(signature)} {owner}{TypeNameFormatter.IlAsmIdentifier(signature.Name)}"
+            + $"({string.Join(", ", parameters)})";
+    }
 
     private static string SignatureIlAsm(CalliSignature signature)
     {
@@ -793,27 +868,45 @@ public static class IlAsmRenderer
         foreach (var property in declaration.Properties)
         {
             note(property.Type);
+            noteExact(property.ExactType);
             foreach (var parameterType in property.ParameterTypes)
             {
                 note(parameterType);
+            }
+
+            foreach (var parameterType in property.ExactParameterTypes)
+            {
+                noteExact(parameterType);
             }
         }
 
         foreach (var evt in declaration.Events)
         {
             note(evt.HandlerType);
+            noteExact(evt.ExactHandlerType);
         }
 
         foreach (var over in declaration.Overrides)
         {
             note(over.Target.DeclaringType);
+            note(over.BodyReturnType);
+            noteExact(over.ExactBodyReturnType);
+            foreach (var parameter in over.BodyParameterTypes)
+            {
+                note(parameter);
+            }
+
+            foreach (var parameter in over.ExactBodyParameterTypes)
+            {
+                noteExact(parameter);
+            }
         }
 
         foreach (var method in declaration.Methods)
         {
             var signature = method.Signature;
             note(signature.ReturnType);
-            noteExact(signature.ExactSymbol?.ReturnType);
+            noteExact(signature.ExactReturnType);
             foreach (var modifier in signature.ReturnRequiredModifiers.Concat(signature.ReturnOptionalModifiers))
             {
                 note(modifier);
@@ -922,8 +1015,13 @@ public static class IlAsmRenderer
         foreach (var property in declaration.Properties)
         {
             sb.AppendLine();
-            var parameters = property.ParameterTypes.Count == 0 ? "()" : "(" + string.Join(", ", property.ParameterTypes.Select(TypeNameFormatter.IlAsm)) + ")";
-            sb.Append(inner).Append(".property ").Append(property.IsStatic ? "" : "instance ").Append(TypeNameFormatter.IlAsm(property.Type)).Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(property.Name)).AppendLine(parameters);
+            var parameters = property.ParameterTypes.Count == 0 ? "()" : "(" + string.Join(", ",
+                property.ParameterTypes.Select((type, index) => property.ExactParameterTypes.ElementAtOrDefault(index) is { } exact
+                    ? SignatureType(exact) : TypeNameFormatter.IlAsm(type))) + ")";
+            var propertyType = property.ExactType is { } exact
+                ? SignatureType(exact) : TypeNameFormatter.IlAsm(property.Type);
+            sb.Append(inner).Append(".property ").Append(property.IsStatic ? "" : "instance ")
+                .Append(propertyType).Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(property.Name)).AppendLine(parameters);
             sb.Append(inner).AppendLine("{");
             foreach (var attribute in property.CustomAttributes)
             {
@@ -951,7 +1049,10 @@ public static class IlAsmRenderer
         foreach (var evt in declaration.Events)
         {
             sb.AppendLine();
-            sb.Append(inner).Append(".event ").Append(TypeNameFormatter.IlAsmDeclaring(evt.HandlerType)).Append(' ').AppendLine(TypeNameFormatter.IlAsmIdentifier(evt.Name));
+            var handlerType = evt.ExactHandlerType is null
+                ? TypeNameFormatter.IlAsmDeclaring(evt.HandlerType) : SignatureType(evt.ExactHandlerType);
+            sb.Append(inner).Append(".event ").Append(handlerType).Append(' ')
+                .AppendLine(TypeNameFormatter.IlAsmIdentifier(evt.Name));
             sb.Append(inner).AppendLine("{");
             foreach (var attribute in evt.CustomAttributes)
             {
@@ -970,7 +1071,12 @@ public static class IlAsmRenderer
 
         foreach (var over in declaration.Overrides)
         {
-            sb.Append(inner).Append(".override ").AppendLine(OverrideTargetIlAsm(over.Target) + " with method " + (over.BodyIsStatic ? "" : "instance ") + TypeNameFormatter.IlAsm(over.BodyReturnType) + " " + TypePath(declaration.FullName) + "::" + MemberName(over.BodyName) + "(" + string.Join(", ", over.BodyParameterTypes.Select(TypeNameFormatter.IlAsm)) + ")");
+            var returnType = DeclarationType(over.BodyReturnType, over.ExactBodyReturnType);
+            var parameters = over.BodyParameterTypes.Select((type, index) =>
+                DeclarationType(type, over.ExactBodyParameterType(index)));
+            sb.Append(inner).Append(".override ").AppendLine(OverrideTargetIlAsm(over.Target) + " with method "
+                + (over.BodyIsStatic ? "" : "instance ") + returnType + " " + TypePath(declaration.FullName) + "::"
+                + MemberName(over.BodyName) + "(" + string.Join(", ", parameters) + ")");
         }
 
         sb.Append(pad).AppendLine("}");
@@ -1021,7 +1127,9 @@ public static class IlAsmRenderer
         }
 
         sb.Append(IlAsmWords.Field(field.Attributes));
-        sb.Append(Modified(DeclarationType(field.Type, field.ExactType), field.RequiredModifiers, field.OptionalModifiers))
+        sb.Append(field.ExactType is null
+                ? Modified(DeclarationType(field.Type, null), field.RequiredModifiers, field.OptionalModifiers)
+                : DeclarationType(field.ExactType))
             .Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(field.Name));
         if (field.HasDefault)
         {
@@ -1054,8 +1162,7 @@ public static class IlAsmRenderer
         var parameters = string.Join(", ", signature.Parameters.Select((parameter, index) => ParameterIlAsm(parameter, index)));
         var generic = signature.TypeParameters.Count == 0 ? "" : "<" + string.Join(", ", signature.TypeParameters.Select(GenericParameterIlAsm)) + ">";
         var convention = (signature.IsStatic ? "" : "instance ") + (signature.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "");
-        var returnType = Modified(DeclarationType(signature.ReturnType, signature.ExactSymbol?.ReturnType),
-            signature.ReturnRequiredModifiers, signature.ReturnOptionalModifiers);
+        var returnType = DeclarationReturnType(signature);
         sb.Append(pad).Append(".method ").Append(IlAsmWords.Method(signature.Attributes)).Append(convention).Append(returnType).Append(' ')
             .Append(MemberName(signature.Name)).Append(generic).Append('(').Append(parameters).Append(") ").AppendLine(IlAsmWords.Implementation(signature.ImplAttributes));
         sb.Append(pad).AppendLine("{");
@@ -1124,8 +1231,7 @@ public static class IlAsmRenderer
             words.Append("[opt] ");
         }
 
-        words.Append(Modified(DeclarationType(parameter.Type, parameter.ExactType), parameter.RequiredModifiers,
-            parameter.OptionalModifiers)).Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(
+        words.Append(DeclarationType(parameter)).Append(' ').Append(TypeNameFormatter.IlAsmIdentifier(
                 parameter.Name ?? "arg" + index.ToString(CultureInfo.InvariantCulture)));
         return words.ToString();
     }
@@ -1133,9 +1239,9 @@ public static class IlAsmRenderer
     private static string AccessorIlAsm(TypeDeclaration declaration, MethodDeclaration accessor)
     {
         var signature = accessor.Signature;
-        var parameters = signature.Parameters.Select(parameter => DeclarationType(parameter.Type, parameter.ExactType));
+        var parameters = signature.Parameters.Select(DeclarationType);
         return (signature.IsStatic ? "" : "instance ")
-            + DeclarationType(signature.ReturnType, signature.ExactSymbol?.ReturnType) + " "
+            + DeclarationReturnType(signature) + " "
             + TypePath(declaration.FullName) + "::"
             + MemberName(signature.Name) + "(" + string.Join(", ", parameters) + ")";
     }
@@ -1145,8 +1251,11 @@ public static class IlAsmRenderer
         var declaring = TypeNameFormatter.IlAsmDeclaring(target.DeclaringType!);
         try
         {
-            var returnType = target is MethodInfo info ? TypeNameFormatter.IlAsm(info.ReturnType) : "void";
-            var parameters = string.Join(", ", target.GetParameters().Select(p => TypeNameFormatter.IlAsm(p.ParameterType)));
+            var signature = RuntimeSymbolImporter.Import(target);
+            var returnType = target is MethodInfo
+                ? SignatureType(SignatureSymbolIdentity.AnnotatedReturn(signature)) : "void";
+            var parameters = string.Join(", ", signature.Parameters.Select(parameter =>
+                SignatureType(SignatureSymbolIdentity.Annotated(parameter))));
             return $"method {(target.IsStatic ? "" : "instance ")}{returnType} {declaring}::{MemberName(target.Name)}({parameters})";
         }
         catch (NotSupportedException)

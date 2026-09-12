@@ -296,8 +296,10 @@ public sealed class CecilWriter
         Type type,
         TypeSymbol? exact,
         IReadOnlyList<Type> required,
-        IReadOnlyList<Type> optional) =>
-        WithModifiers(exact is null ? Import(type) : Import(exact), required, optional);
+        IReadOnlyList<Type> optional)
+    {
+        return exact is null ? WithModifiers(Import(type), required, optional) : Import(exact);
+    }
 
     private FunctionPointerType ImportFunctionPointer(MethodSignatureSymbol signature)
     {
@@ -417,15 +419,18 @@ public sealed class CecilWriter
         _externalMethod = reference;
         try
         {
-            reference.ReturnType = WithModifiers(
-                signature.ExactSymbol is null ? Import(signature.ReturnType) : Import(signature.ExactSymbol.ReturnType),
+            reference.ReturnType = ImportSignature(
+                signature.ReturnType,
+                signature.ExactReturnType,
                 signature.ReturnRequiredModifiers,
                 signature.ReturnOptionalModifiers);
             foreach (var parameter in signature.Parameters)
             {
-                var type = parameter.ExactType is null ? Import(parameter.Type) : Import(parameter.ExactType);
-                reference.Parameters.Add(new ParameterDefinition(WithModifiers(
-                    type, parameter.RequiredModifiers, parameter.OptionalModifiers)));
+                reference.Parameters.Add(new ParameterDefinition(ImportSignature(
+                    parameter.Type,
+                    parameter.ExactType,
+                    parameter.RequiredModifiers,
+                    parameter.OptionalModifiers)));
             }
         }
         finally
@@ -590,6 +595,56 @@ public sealed class CecilWriter
         }
 
         return Import(method);
+    }
+
+    /// <summary>
+    /// Imports a session entry point using the exact signature retained by its declaration.
+    /// </summary>
+    internal MethodReference Import(MethodBase method, MethodSignature signature)
+    {
+        ArgumentNullException.ThrowIfNull(method);
+        ArgumentNullException.ThrowIfNull(signature);
+        if (_definedMethods.TryGetValue(method, out var defined))
+        {
+            return defined;
+        }
+
+        var reference = new MethodReference(signature.Name, Module.TypeSystem.Void, Import(method.DeclaringType!))
+        {
+            HasThis = !signature.IsStatic,
+            ExplicitThis = signature.CallingConvention.HasFlag(CallingConventions.ExplicitThis),
+            CallingConvention = signature.CallingConvention.HasFlag(CallingConventions.VarArgs)
+                ? MethodCallingConvention.VarArg : MethodCallingConvention.Default,
+        };
+        foreach (var parameter in signature.TypeParameters)
+        {
+            reference.GenericParameters.Add(new GenericParameter(parameter.Name, reference));
+        }
+
+        var outer = _externalMethod;
+        _externalMethod = reference;
+        try
+        {
+            reference.ReturnType = ImportSignature(
+                signature.ReturnType,
+                signature.ExactReturnType,
+                signature.ReturnRequiredModifiers,
+                signature.ReturnOptionalModifiers);
+            foreach (var parameter in signature.Parameters)
+            {
+                reference.Parameters.Add(new ParameterDefinition(ImportSignature(
+                    parameter.Type,
+                    parameter.ExactType,
+                    parameter.RequiredModifiers,
+                    parameter.OptionalModifiers)));
+            }
+        }
+        finally
+        {
+            _externalMethod = outer;
+        }
+
+        return reference;
     }
 
     /// <summary>
