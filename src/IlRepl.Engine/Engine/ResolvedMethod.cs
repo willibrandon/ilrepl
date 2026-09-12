@@ -1,4 +1,5 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -64,6 +65,11 @@ public sealed record ResolvedMethod
     /// The method's generic arguments when the call instantiates a member of a type being written; null otherwise.
     /// </summary>
     public IReadOnlyList<Type>? GenericArguments { get; init; }
+
+    /// <summary>
+    /// Generic arguments whose modifiers or function-pointer signatures cannot be represented by runtime types.
+    /// </summary>
+    public IReadOnlyList<TypeSymbol>? ExactGenericArguments { get; init; }
 
     /// <summary>
     /// The generic arguments the call instantiates the method with, whether the method is a

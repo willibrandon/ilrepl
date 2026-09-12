@@ -86,6 +86,16 @@ public static class IlAsmRenderer
                         break;
                     case ResolvedMethod m:
                         Note(m.DeclaringType);
+                        foreach (var argument in m.InstantiationArguments)
+                        {
+                            Note(argument);
+                        }
+
+                        foreach (var argument in m.ExactGenericArguments ?? [])
+                        {
+                            NoteExact(argument);
+                        }
+
                         break;
                     case FieldInfo f:
                         Note(f.DeclaringType);
@@ -466,8 +476,10 @@ public static class IlAsmRenderer
             }
 
             var declaredVarArg = written.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "";
-            var declaredArguments = resolved.GenericArguments is { Count: > 0 } arguments
-                ? "<" + string.Join(", ", arguments.Select(TypeNameFormatter.IlAsm)) + ">"
+            var declaredArguments = resolved.ExactGenericArguments is { Count: > 0 } exactArguments
+                ? "<" + string.Join(", ", exactArguments.Select(SignatureType)) + ">"
+                : resolved.GenericArguments is { Count: > 0 } arguments
+                    ? "<" + string.Join(", ", arguments.Select(TypeNameFormatter.IlAsm)) + ">"
                 : written.TypeParameters.Count == 0 ? "" : "<[" + written.TypeParameters.Count + "]>";
             var declaredName = MemberName(written.Name) + declaredArguments;
             return $"{(written.IsStatic ? "" : "instance ")}{declaredVarArg}"
@@ -493,7 +505,9 @@ public static class IlAsmRenderer
         var name = method is ConstructorInfo ? (method.IsStatic ? ".cctor" : ".ctor") : MemberName(method.Name);
         if (method is MethodInfo g && g.IsGenericMethod)
         {
-            name += "<" + string.Join(", ", g.GetGenericArguments().Select(TypeNameFormatter.IlAsm)) + ">";
+            name += resolved.ExactGenericArguments is { Count: > 0 } exactArguments
+                ? "<" + string.Join(", ", exactArguments.Select(SignatureType)) + ">"
+                : "<" + string.Join(", ", g.GetGenericArguments().Select(TypeNameFormatter.IlAsm)) + ">";
         }
 
         var parameters = signature.Parameters.Select(parameter => SignatureType(parameter.Type)).ToList();

@@ -279,6 +279,59 @@ public sealed class FunctionPointerDeclarationTests
         }
     }
 
+    /// <summary>
+    /// A modified generic method argument keeps its modifier in listings, saved metadata, and execution.
+    /// </summary>
+    [TestMethod]
+    public void GenericMethodArgument_ModifiedType_RunsRendersAndExportsExactly()
+    {
+        var modifier = "[System.Runtime]System.Runtime.CompilerServices.IsLong";
+        var session = IlLines.Load(
+            ".class public GenericCalls {",
+            ".method public static void Ignore<T>() { ret }",
+            "}",
+            $"call void GenericCalls::Ignore<int32 modopt({modifier})>()",
+            "ldc.i4.s 42");
+
+        var il = session.ToIlAsm();
+        Assert.Contains("Ignore<int32 modopt(", il);
+        Assert.Contains("System.Runtime.CompilerServices.IsLong", il);
+        AssertGenericArgument<OptionalModifierType>(AssemblyExporter.Write(session, "modified-generic-argument"));
+        AssertGenericArgument<OptionalModifierType>(IlasmLocator.Assemble(il));
+        Assert.AreEqual(42, session.Run().Value);
+    }
+
+    /// <summary>
+    /// A function-pointer generic method argument stays a function pointer even when the runtime rejects the MethodSpec.
+    /// </summary>
+    [TestMethod]
+    public void GenericMethodArgument_FunctionPointer_RendersAndExportsExactly()
+    {
+        var session = IlLines.Load(
+            ".class public GenericCalls {",
+            ".method public static void Ignore<T>() { ret }",
+            "}",
+            "call void GenericCalls::Ignore<method int32 *(int32)>()",
+            "ldc.i4.s 42");
+
+        var il = session.ToIlAsm();
+        Assert.Contains("Ignore<method int32 *(int32)>()", il);
+        AssertGenericArgument<FunctionPointerType>(AssemblyExporter.Write(session, "function-pointer-generic-argument"));
+        AssertGenericArgument<FunctionPointerType>(IlasmLocator.Assemble(il));
+        var exception = Assert.ThrowsExactly<CellException>(() => session.Run());
+        Assert.IsInstanceOfType<BadImageFormatException>(exception.InnerException);
+    }
+
+    private static void AssertGenericArgument<T>(byte[] image)
+        where T : TypeReference
+    {
+        using var definition = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        var run = definition.MainModule.GetType("IlRepl.Cell").Methods.Single(method => method.Name == "Run");
+        var call = Assert.IsInstanceOfType<GenericInstanceMethod>(
+            run.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Call).Operand);
+        Assert.IsInstanceOfType<T>(call.GenericArguments.Single());
+    }
+
     private static void AssertFunctionPointerElement(Array array, Type expected)
     {
         var pointer = array.GetType().GetElementType()!;

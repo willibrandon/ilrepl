@@ -245,6 +245,18 @@ public sealed class MemberAccessTests
     }
 
     /// <summary>
+    /// A type used as a generic argument modifier has the same visibility as a direct argument.
+    /// </summary>
+    [TestMethod]
+    public void GenericArgumentModifiers_AreJudged()
+    {
+        var session = Load(".class public Outer {", ".class nested private Inner { }", "}");
+        var error = Refused(session,
+            "call !!0[] [System.Runtime]System.Array::Empty<int32 modopt(Outer/Inner)>()");
+        Assert.Contains("Outer/Inner is nested private", error);
+    }
+
+    /// <summary>
     /// Types nested in a function-pointer signature keep the same visibility as direct mentions.
     /// </summary>
     [TestMethod]

@@ -85,7 +85,7 @@ public sealed partial class LiveSessionTests
             {
                 await ReturnedBodyAsync(page);
                 await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync(example.Finding, options);
-                await ClearPromptAsync(page);
+                await ClearCorpusPromptAsync(page);
             }
 
             await ResetSessionAsync(page);
@@ -493,6 +493,13 @@ public sealed partial class LiveSessionTests
         await ArmSubmissionOutputAsync(page);
         await page.Keyboard.PressAsync("Enter");
         await ResetCompletedAsync(page);
+    }
+
+    private static async Task ClearCorpusPromptAsync(IPage page)
+    {
+        await page.Keyboard.PressAsync("Control+a");
+        await page.Keyboard.PressAsync("Backspace");
+        await EmptyPromptAsync(page);
     }
 
     private static async Task ReadyToSubmitResetAsync(IPage page)

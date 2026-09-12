@@ -530,9 +530,10 @@ public static class SymbolBinder
             return BindGenericDefinition(syntax, declaring, typeArguments, scope);
         }
 
-        var methodArguments = syntax.GenericArguments is null
+        var boundMethodArguments = syntax.GenericArguments?.Select(a => BindType(a, scope)).ToArray();
+        var methodArguments = boundMethodArguments is null
             ? scope.Generics.MethodArguments
-            : [.. syntax.GenericArguments.Select(a => BindType(a, scope).Type)];
+            : [.. boundMethodArguments.Select(argument => argument.Type)];
         var memberScope = scope.WithGenerics(new SymbolGenericContext(typeArguments, methodArguments));
         BindType(syntax.DeclaringType!, scope);
         var returnType = syntax.ReturnType is null ? null : BindType(syntax.ReturnType, memberScope).Type;
@@ -547,10 +548,13 @@ public static class SymbolBinder
         }
 
         var explicitMethodArguments = syntax.GenericArguments is null ? null : methodArguments;
+        var exactMethodArguments = boundMethodArguments is null
+            ? [] : boundMethodArguments.Select(argument => argument.ExactType).ToArray();
+        BoundMethod WithExactArguments(BoundMethod method) => method with { ExactGenericArguments = exactMethodArguments };
         if (scope.TryGetDeclaration(declaring, out var own))
         {
-            return BindOwnMethod(own, declaring, scope, syntax, parameterTypes, returnType, syntax.ExplicitInstance,
-                wantConstructor || name == ".ctor", explicitMethodArguments, optionalTypes);
+            return WithExactArguments(BindOwnMethod(own, declaring, scope, syntax, parameterTypes, returnType,
+                syntax.ExplicitInstance, wantConstructor || name == ".ctor", explicitMethodArguments, optionalTypes));
         }
 
         if (wantConstructor || name is ".ctor" or ".cctor")
@@ -560,7 +564,8 @@ public static class SymbolBinder
 
         var method = BindLoadedMethod(declaring, syntax, parameterTypes, explicitMethodArguments, returnType, syntax.ExplicitInstance,
             syntax.IsVarArg, scope);
-        return new BoundMethod(method, null, optionalTypes ?? (syntax.IsVarArg && method.IsVarArg ? [] : null));
+        return WithExactArguments(new BoundMethod(method, null,
+            optionalTypes ?? (syntax.IsVarArg && method.IsVarArg ? [] : null)));
     }
 
     /// <summary>

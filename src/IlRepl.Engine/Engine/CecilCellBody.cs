@@ -29,7 +29,8 @@ internal static class CecilCellBody
         {
             if (entry.Instruction?.ExactTypeOperand is not null
                 || entry.Instruction?.Operand is CalliSignature { ExactSymbol: { } exact }
-                    && RuntimeSymbolTypes.RequiresExact(exact))
+                    && RuntimeSymbolTypes.RequiresExact(exact)
+                || entry.Instruction?.Operand is ResolvedMethod { ExactGenericArguments: not null })
             {
                 return true;
             }

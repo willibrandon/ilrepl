@@ -129,6 +129,7 @@ public sealed class RuntimeBindingAdapter
                     OptionalParameterTypesOverride = optional,
                     DeclaredDefinition = bound.Definition is null ? null : declared.Signature,
                     GenericArguments = method.GenericArguments.Count > 0 ? ToTypes(method.GenericArguments) : null,
+                    ExactGenericArguments = ExactGenericArguments(bound),
                 };
             }
 
@@ -151,12 +152,16 @@ public sealed class RuntimeBindingAdapter
                 {
                     OptionalParameterTypesOverride = optional,
                     GenericArguments = arguments,
+                    ExactGenericArguments = ExactGenericArguments(bound),
                     DeclaredDefinition = ToSignature(RuntimeSymbolImporter.Import(definition.Method)),
                 };
             }
 
             case MethodBase runtime:
-                return new ResolvedMethod(runtime, optional);
+                return new ResolvedMethod(runtime, optional)
+                {
+                    ExactGenericArguments = ExactGenericArguments(bound),
+                };
             default:
                 throw new InvalidOperationException($"{SymbolRenderer.Describe(method)} was not bound in this scope");
         }
@@ -183,6 +188,9 @@ public sealed class RuntimeBindingAdapter
 
     private static bool RequiresExact(MethodSymbol method) => RuntimeSymbolTypes.RequiresExact(method.ReturnType)
         || method.Parameters.Any(parameter => RuntimeSymbolTypes.RequiresExact(parameter.Type));
+
+    private static IReadOnlyList<TypeSymbol>? ExactGenericArguments(BoundMethod method) =>
+        method.ExactGenericArguments.Any(RuntimeSymbolTypes.RequiresExact) ? method.ExactGenericArguments : null;
 
     /// <summary>
     /// The <c>calli</c> signature the emitter takes for a bound signature.

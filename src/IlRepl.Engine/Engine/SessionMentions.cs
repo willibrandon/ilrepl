@@ -128,6 +128,14 @@ public static class SessionMentions
                         yield return argument;
                     }
 
+                    foreach (var exactArgument in method.ExactGenericArguments ?? [])
+                    {
+                        foreach (var type in RuntimeSymbolTypes.Materialized(exactArgument))
+                        {
+                            yield return type;
+                        }
+                    }
+
                     break;
                 case CalliSignature signature:
                     yield return signature.ReturnType;

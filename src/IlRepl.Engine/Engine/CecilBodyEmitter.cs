@@ -224,7 +224,17 @@ public static class CecilBodyEmitter
         {
             var target = resolved.Definition is { } definition ? map.SessionMethod(definition) : map.Map(resolved.Method!);
             var reference = resolved.Definition is null && resolved.Declared is not null ? writer.Import(target, resolved.DeclaringType) : writer.Import(target);
-            if (resolved.GenericArguments is { Count: > 0 } arguments && reference is not GenericInstanceMethod)
+            if (resolved.ExactGenericArguments is { Count: > 0 } exactArguments)
+            {
+                var instance = new GenericInstanceMethod(reference is GenericInstanceMethod generic ? generic.ElementMethod : reference);
+                foreach (var argument in exactArguments)
+                {
+                    instance.GenericArguments.Add(writer.Import(map.Map(argument)));
+                }
+
+                reference = instance;
+            }
+            else if (resolved.GenericArguments is { Count: > 0 } arguments && reference is not GenericInstanceMethod)
             {
                 var instance = new GenericInstanceMethod(reference);
                 foreach (var argument in arguments)
