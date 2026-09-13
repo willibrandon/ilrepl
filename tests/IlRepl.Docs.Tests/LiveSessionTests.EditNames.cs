@@ -40,4 +40,60 @@ public sealed partial class LiveSessionTests
         await RunCorpusCellAsync(page, "call Existing\nret", 41);
         Assert.AreEqual(1, await page.EvaluateAsync<int>("() => window.ilreplSessionCount"));
     }
+
+    /// <summary>
+    /// A reserved type declaration cannot replace the receiver used by an edited instance method.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    /// <returns>The completed rejection, execution, and comparison assertions.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_TypeDeclarationCannotReplaceAnEditOwner(string browser)
+    {
+        await using var context = await NewContextAsync(GetBrowser(browser));
+        var page = await OpenSessionAsync(context);
+        await SubmitEditSourceAsync(page, """
+            .class public Counter {
+              .method public instance void .ctor() {
+                ldarg.0
+                call instance void Object::.ctor()
+                ret
+              }
+              .method public instance int32 Read() {
+                ldc.i4.s 41
+                ret
+              }
+            }
+            .edit instance int32 Counter::Read() as Copy {
+              .method public instance int32 Read() cil managed {
+                ldc.i4.s 42
+                ret
+              }
+            }
+            """, "edit Copy committed as revision 1");
+
+        await SubmitEditSourceAsync(page, ".class public IlRepl.Edits.Copy.Owner { }",
+            "the IlRepl namespace is reserved for the cell type");
+        await InputIdleAsync(page);
+        await EmptyPromptAsync(page);
+        await RunCorpusCellAsync(page, "newobj instance void IlRepl.Edits.Copy.Owner::.ctor()\ncall Copy\nret", 42);
+        await SubmitEditSourceAsync(page, """
+            .method int32 Scenario() {
+              newobj instance void IlRepl.Edits.Copy.Owner::.ctor()
+              call Copy
+              ret
+            }
+            """, "end of method Scenario");
+
+        await TypeLineAsync(page, ".compare Copy using Scenario");
+        await ExpectComparisonTextAsync(page, "Copy: different");
+        var text = await BufferTextAsync(page);
+        Assert.Contains("original: completed", text);
+        Assert.Contains("edited: completed", text);
+        Assert.Contains("\"41\"", text);
+        Assert.Contains("\"42\"", text);
+        Assert.AreEqual(1, await page.EvaluateAsync<int>("() => window.ilreplSessionCount"));
+    }
 }

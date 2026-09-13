@@ -27,6 +27,7 @@ until `.reset`; `.clear` abandons an open edit without removing saved revisions.
 
 `.methods` lists copies and their revisions. `.types` shows their declaring types, such as
 `IlRepl.Edits.Maximum.Owner`. Call the copy by its name: `call Maximum`.
+The `IlRepl` namespace is reserved; use another namespace for your own types.
 
 ## Replay an edit
 
