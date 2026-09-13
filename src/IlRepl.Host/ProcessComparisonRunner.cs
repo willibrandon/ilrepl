@@ -170,7 +170,14 @@ public static class ProcessComparisonRunner
 
             if (directory.Exists)
             {
-                directory.Delete(recursive: true);
+                try
+                {
+                    directory.Delete(recursive: true);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // User code can leave files or directories that cannot be deleted; retain the comparison outcome.
+                }
             }
         }
     }

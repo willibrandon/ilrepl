@@ -165,6 +165,88 @@ public sealed class MethodEditTests
     }
 
     /// <summary>
+    /// A later session method cannot take a name reserved by a draft or committed edit.
+    /// </summary>
+    /// <param name="committed">Whether the edit already has a callable revision.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void AddLine_MethodNameConflictingWithEdit_IsRejectedBeforeOpening(bool committed)
+    {
+        var session = IlLines.Load(".method int32 Existing() { ldc.i4.s 41; ret }");
+        var edit = session.PrepareEdit("Existing", "Copy");
+        if (committed)
+        {
+            session.CommitEdit(edit.Name, edit.Source.Replace("ldc.i4.s 41", "ldc.i4.s 42", StringComparison.Ordinal));
+        }
+
+        var revision = session.CompletionRevision;
+        var error = Assert.ThrowsExactly<ReplException>(() => session.AddLine(".method int32 Copy() {"));
+
+        Assert.AreEqual("'Copy' already belongs to an edit; choose another method name", error.Message);
+        Assert.IsNull(session.OpenMethod);
+        Assert.HasCount(1, session.Methods);
+        Assert.AreEqual(revision, session.CompletionRevision);
+        Assert.AreSame(edit, session.Edits.Single());
+        if (!committed)
+        {
+            session.CommitEdit(edit.Name, edit.Source.Replace("ldc.i4.s 41", "ldc.i4.s 42", StringComparison.Ordinal));
+        }
+
+        session.AddLine("call Copy");
+        Assert.AreEqual(42, session.Run().Value);
+        session.ClearCell();
+        session.AddLine("call Existing");
+        Assert.AreEqual(41, session.Run().Value);
+    }
+
+    /// <summary>
+    /// Edit names are case-sensitive and do not reserve member names inside declared types.
+    /// </summary>
+    [TestMethod]
+    public void AddLine_DistinctCaseAndQualifiedMember_DoNotConflictWithEdit()
+    {
+        var session = IlLines.Load(".method int32 Existing() { ldc.i4.s 41; ret }");
+        var edit = session.PrepareEdit("Existing", "Copy");
+        session.CommitEdit(edit.Name, edit.Source);
+        foreach (var line in IlLines.Expand(".method int32 copy() { ldc.i4.s 42; ret }", ".class public Other {",
+            ".method public static int32 Copy() { ldc.i4.s 43; ret }", "}"))
+        {
+            session.AddLine(line);
+        }
+
+        session.AddLine("call copy");
+        Assert.AreEqual(42, session.Run().Value);
+        session.ClearCell();
+        session.AddLine("call Other::Copy()");
+        Assert.AreEqual(43, session.Run().Value);
+        session.ClearCell();
+        session.AddLine("call Copy");
+        Assert.AreEqual(41, session.Run().Value);
+    }
+
+    /// <summary>
+    /// Clearing a cell retains reserved edit names while resetting the session releases them.
+    /// </summary>
+    [TestMethod]
+    public void Reset_ReleasesEditNamesForSessionMethods()
+    {
+        var session = IlLines.Load(".method int32 Existing() { ldc.i4.s 41; ret }");
+        session.PrepareEdit("Existing", "Copy");
+        session.ClearCell();
+        Assert.ThrowsExactly<ReplException>(() => session.AddLine(".method int32 Copy() {"));
+
+        session.Reset();
+        foreach (var line in IlLines.Expand(".method int32 Copy() { ldc.i4.s 42; ret }", "call Copy"))
+        {
+            session.AddLine(line);
+        }
+
+        Assert.IsEmpty(session.Edits);
+        Assert.AreEqual(42, session.Run().Value);
+    }
+
+    /// <summary>
     /// Importing a private helper keeps access and calls inside the copied declaring type.
     /// </summary>
     [TestMethod]

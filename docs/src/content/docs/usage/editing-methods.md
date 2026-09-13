@@ -19,6 +19,8 @@ With no method name, `.edit` uses the last `.dis` target. Add `as` to name the c
 .edit int32 Math::Max(int32, int32) as Maximum
 ```
 
+Session methods and edits must have different names. An edit reserves its name until `.reset`.
+
 Change the method and press Enter to save a revision. Reopen it with `.edit Maximum`. If validation fails,
 the source returns to the editor and the last working revision stays callable. The original is kept
 until `.reset`; `.clear` abandons an open edit without removing saved revisions.

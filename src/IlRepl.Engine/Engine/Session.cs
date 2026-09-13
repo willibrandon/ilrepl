@@ -601,6 +601,11 @@ public sealed partial class Session
         var signatures = Signatures();
         var headerContext = new ParseContext([], [], GenericContext.Empty, Resolver, signatures, _typeTable);
         var signature = MethodHeaderParser.Parse(spec, headerContext, out var braceOpen);
+        if (_edits.Any(edit => edit.Name == signature.Name))
+        {
+            throw new ReplException($"'{signature.Name}' already belongs to an edit; choose another method name");
+        }
+
         var replacing = _methods.FirstOrDefault(m => m.Signature.Name == signature.Name);
         var table = new List<MethodSignature>(signatures);
         var index = table.FindIndex(s => s.Name == signature.Name);
