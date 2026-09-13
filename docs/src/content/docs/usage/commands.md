@@ -24,7 +24,9 @@ Directives are part of the cell. Commands act on the session.
 | `.param [N] = constant` | A default for a parameter of the open method. |
 | `.custom instance void Attr::.ctor(...) = ...` | An attribute on the class, the field before it, the open method, or its parameter. |
 | `.pack N` and `.size N` | The layout of the open class. |
-| `.maxstack N` | Accepted and ignored. |
+| `.maxstack N` | Set a minimum stack limit from 0 to 65535. It increases if the method needs more. |
+| `.locals (T name, ...)` | Declare locals without zero initialization. The list can be empty. |
+| `.try A to B catch T handler C to D` | Declare exception ranges with exclusive ends. Also accepts filter, finally, and fault. |
 
 ## Commands
 
@@ -41,13 +43,28 @@ Directives are part of the cell. Commands act on the session.
 | `.save <path.dll>` | Write the types, the methods, and the cell to disk as an assembly. |
 | `.load <name or path>` | Load an assembly so its types resolve. |
 | `.assemblies` | List the assemblies loaded with `.load`. |
-| `.methods` | List the methods defined with `.method`. |
+| `.methods [Edit]` | List methods and edits, or inspect an edit's dependency report. |
 | `.types` | List the types defined with `.class`, with their members. |
 | `.stack` | Show the stack. |
 | `.time [on\|off]` | Print how long each run took. |
 | `.quiet [on\|off]` | Stop echoing the stack after each instruction. |
 | `.run` | Run the cell, the same as `ret` or an empty line. |
 | `.quit` | Leave. |
+
+## Method edits
+
+| Command | Meaning |
+| --- | --- |
+| `.edit [method] [as Name]` | Open an editable copy. With no method, use the last `.dis` target. |
+| `.edit Name` | Reopen an existing edit. |
+| `.edit method as Name { ... }` | Define a copy from a `.method` block. |
+| `.dis Name [--original]` | Disassemble the copy or its original. |
+| `.diff [Name] [--raw]` | Compare instructions, stack states, and metadata; `--raw` includes encoding differences. |
+| `.compare Name (literals)` | Run a closed static method and its original with the same inputs. |
+| `.compare Name using Scenario` | Use a parameterless method to set up inputs and call each version. |
+
+Comparison options are `--assert`, `--timeout duration`, `--stdin "text"`, and `--files directory`.
+See [Editing and comparing methods](/usage/editing-methods/) for examples and option details.
 
 ## Comments
 

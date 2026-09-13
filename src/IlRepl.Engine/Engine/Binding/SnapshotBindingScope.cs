@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
@@ -250,7 +251,7 @@ public sealed class SnapshotBindingScope : IBindingScope
     }
 
     /// <inheritdoc/>
-    public bool TryGetDeclaration(TypeSymbol declaring, [System.Diagnostics.CodeAnalysis.NotNullWhen(
+    public bool TryGetDeclaration(TypeSymbol declaring, [NotNullWhen(
         true)] out IDeclarationMembers? members)
     {
         ArgumentNullException.ThrowIfNull(declaring);
@@ -682,6 +683,9 @@ public sealed class SnapshotBindingScope : IBindingScope
 
     /// <inheritdoc/>
     public IReadOnlyList<MethodSymbol> SessionMethods => _snapshot.SessionMethods;
+
+    /// <inheritdoc/>
+    public IReadOnlyDictionary<string, MethodSymbol> MethodAliases => _snapshot.MethodAliases;
 
     /// <inheritdoc/>
     public IReadOnlyList<VariableSymbol> Locals => _snapshot.Locals;

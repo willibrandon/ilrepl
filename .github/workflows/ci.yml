@@ -36,7 +36,7 @@ jobs:
         run: dotnet build --no-restore
 
       - name: Test
-        run: dotnet test tests/IlRepl.Tests/IlRepl.Tests.csproj --no-build --report-trx --results-directory TestResults
+        run: dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj --no-build --report-trx --results-directory TestResults
         env:
           # The ILAsm round trips must run on CI, not be skipped when ilasm is missing.
           ILREPL_REQUIRE_ILASM: 1
@@ -100,7 +100,9 @@ jobs:
         run: pwsh tests/IlRepl.Docs.Tests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium webkit
 
       - name: Test the published runtime in both browsers
-        run: dotnet test tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj --no-build --report-trx --results-directory BrowserTestResults
+        run: >-
+          dotnet test --project tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj
+          --no-build --report-trx --results-directory BrowserTestResults
 
       - name: Upload browser test results
         if: always()

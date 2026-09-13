@@ -3,15 +3,50 @@ using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using Mono.Cecil;
 using TypeReference = Mono.Cecil.TypeReference;
+using PropertyDefinition = Mono.Cecil.PropertyDefinition;
 
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Restores array shapes that Cecil's dimension model cannot encode without adding lower bounds.
+/// Restores exact array shapes and native marshalling descriptors beyond Cecil's metadata model.
 /// </summary>
 internal sealed class CecilSignatureFixups
 {
     private readonly Dictionary<string, byte[]> _shapes = new(StringComparer.Ordinal);
+    private readonly CecilMarshalDescriptors _marshalling = new();
+    private readonly HashSet<PropertyDefinition> _properties = [];
+
+    /// <summary>
+    /// Retains a property's independent index signature without modifying its accessor methods.
+    /// </summary>
+    /// <param name="property">The emitted property.</param>
+    /// <param name="parameters">The exact imported index parameter types.</param>
+    /// <param name="size">The original signature size used to reserve space for expanded destination tokens.</param>
+    public void Property(PropertyDefinition property, IEnumerable<TypeReference> parameters, int size)
+    {
+        var signature = new FunctionPointerType { HasThis = property.HasThis, ReturnType = property.PropertyType };
+        foreach (var parameter in parameters)
+        {
+            signature.Parameters.Add(new ParameterDefinition(parameter));
+        }
+
+        for (var index = 0; index < size * 2 + 16; index++)
+        {
+            property.PropertyType = new OptionalModifierType(signature, property.PropertyType);
+        }
+
+        _properties.Add(property);
+    }
+
+    /// <summary>
+    /// Reserves enough metadata space to preserve a complete native marshalling descriptor.
+    /// </summary>
+    /// <param name="target">The field or parameter receiving the descriptor.</param>
+    /// <param name="descriptor">The exact native signature bytes.</param>
+    /// <param name="objectType">The placeholder marshaller type used only before the image is corrected.</param>
+    /// <returns>The temporary descriptor to assign before writing the image.</returns>
+    public MarshalInfo Marshal(IMarshalInfoProvider target, byte[] descriptor, TypeReference objectType) =>
+        _marshalling.Reserve(target, descriptor, objectType);
 
     /// <summary>
     /// Creates an array reference with a distinct temporary shape when its exact bounds need restoring.
@@ -49,7 +84,8 @@ internal sealed class CecilSignatureFixups
     /// <param name="image">The newly written assembly image.</param>
     public void Apply(byte[] image)
     {
-        if (_shapes.Count == 0)
+        _marshalling.Apply(image);
+        if (_shapes.Count == 0 && _properties.Count == 0)
         {
             return;
         }
@@ -57,6 +93,8 @@ internal sealed class CecilSignatureFixups
         using var stream = new MemoryStream(image, writable: false);
         using var pe = new PEReader(stream);
         var metadata = pe.GetMetadataReader();
+        var properties = _properties.Select(property => metadata.GetPropertyDefinition(
+            MetadataTokens.PropertyDefinitionHandle((int)property.MetadataToken.RID)).Signature).ToHashSet();
         var heapOffset = pe.PEHeaders.MetadataStartOffset + metadata.GetHeapMetadataOffset(HeapIndex.Blob);
         var visited = new HashSet<BlobHandle>();
         foreach (var handle in metadata.MemberReferences)
@@ -103,7 +141,26 @@ internal sealed class CecilSignatureFixups
 
             var reader = metadata.GetBlobReader(handle);
             var output = new BlobBuilder();
-            if (typeOnly)
+            byte? propertyHeader = null;
+            if (properties.Contains(handle))
+            {
+                propertyHeader = reader.ReadByte();
+                reader.ReadCompressedInteger();
+                if (reader.ReadByte() != 0x20 || reader.ReadTypeHandle() is not { Kind: HandleKind.TypeSpecification } type)
+                {
+                    throw new ReplException("the reserved property signature is malformed");
+                }
+
+                var signature = metadata.GetTypeSpecification((TypeSpecificationHandle)type).Signature;
+                var exact = metadata.GetBlobReader(signature);
+                if (exact.ReadByte() != 0x1b)
+                {
+                    throw new ReplException("the reserved property signature has no method signature");
+                }
+
+                CopySignature(ref exact, output);
+            }
+            else if (typeOnly)
             {
                 CopyType(ref reader, output);
             }
@@ -113,6 +170,10 @@ internal sealed class CecilSignatureFixups
             }
 
             var bytes = output.ToArray();
+            if (propertyHeader is { } header)
+            {
+                bytes[0] = header;
+            }
             var original = metadata.GetBlobBytes(handle);
             if (bytes.AsSpan().SequenceEqual(original))
             {

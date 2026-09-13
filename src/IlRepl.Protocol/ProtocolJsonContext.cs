@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using StreamJsonRpc.Protocol;
 
 namespace IlRepl.Protocol;
 
@@ -11,8 +12,13 @@ namespace IlRepl.Protocol;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     GenerationMode = JsonSourceGenerationMode.Default)]
 [JsonSerializable(typeof(HostHello))]
+[JsonSerializable(typeof(CommonErrorData))]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(HandleReply))]
+[JsonSerializable(typeof(ComparisonPackage))]
+[JsonSerializable(typeof(ComparisonSide))]
+[JsonSerializable(typeof(InvocationObservation))]
+[JsonSerializable(typeof(ObservedValue))]
 [JsonSerializable(typeof(TranscriptLine))]
 [JsonSerializable(typeof(TranscriptSpan))]
 [JsonSerializable(typeof(CompletionItem))]

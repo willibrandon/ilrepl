@@ -286,6 +286,9 @@ public sealed class StackAnalysisTests
         });
 
         var prefix = method.Entries.Single(entry => entry.Raw?.Op.IsSkipChecksPrefix == true);
+        Assert.IsNotNull(prefix.Instruction);
+        Assert.AreEqual("no.", prefix.Instruction.DecodedPrefixName);
+        Assert.IsFalse(prefix.EffectUnknown);
         Assert.AreEqual("[string]", DisassemblyText.StackAt(method, prefix.Offset));
         StackAnalysis.Run(method, out var diagnostics);
         Assert.Contains(diagnostic => diagnostic.Code == "FLOW007" && diagnostic.Kind == AnalysisDiagnosticKind.Unverifiable

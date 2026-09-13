@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Text;
 using IlRepl.Engine.Binding;
 
@@ -20,8 +21,59 @@ public static class IlAsmRenderer
     public static string Render(Session session)
     {
         ArgumentNullException.ThrowIfNull(session);
-        var cell = session.Cell;
+        if (session.Edits.Any(edit => edit.Method is not null))
+        {
+            return ExportIlAsmRenderer.Render(session);
+        }
+
         var sb = new StringBuilder();
+        var assemblies = AssemblyReferences(session);
+
+        foreach (var a in assemblies)
+        {
+            sb.Append(".assembly extern ").Append(a).AppendLine(" {}");
+        }
+
+        sb.AppendLine(".assembly ilrepl_cell {}");
+        sb.AppendLine(".module ilrepl_cell.dll");
+        sb.AppendLine();
+        foreach (var family in session.Types)
+        {
+            RenderType(sb, family.Declaration, 0);
+            sb.AppendLine();
+        }
+
+        sb.AppendLine(".class public abstract sealed auto ansi beforefieldinit IlRepl.Cell extends [System.Runtime]System.Object");
+        sb.AppendLine("{");
+
+        foreach (var method in session.Methods)
+        {
+            var signature = method.Signature;
+            var methodParameters = string.Join(", ", signature.Parameters.Select((parameter, index) =>
+                DeclarationType(parameter) + " " + TypeNameFormatter.IlAsmIdentifier(
+                    parameter.Name ?? "arg" + index.ToString(CultureInfo.InvariantCulture))));
+            sb.Append("    .method public static ")
+                .Append(DeclarationReturnType(signature)).Append(' ')
+                .Append(TypeNameFormatter.IlAsmIdentifier(signature.Name)).Append('(').Append(methodParameters)
+                .AppendLine(") cil managed");
+            sb.AppendLine("    {");
+            RenderBody(sb, method.State);
+            sb.AppendLine("    }");
+            sb.AppendLine();
+        }
+
+        RenderCell(sb, session);
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Finds the assembly names used by declarations and the current cell, including unfinished instructions.
+    /// </summary>
+    /// <param name="session">The session to inspect.</param>
+    /// <returns>The ordered distinct assembly names.</returns>
+    internal static IReadOnlyCollection<string> AssemblyReferences(Session session)
+    {
         var assemblies = new SortedSet<string>(StringComparer.Ordinal) { "System.Runtime" };
 
         void Note(Type? type)
@@ -172,66 +224,55 @@ public static class IlAsmRenderer
             }
         }
 
-        NoteState(cell);
+        NoteState(session.Cell);
 
-        foreach (var a in assemblies)
-        {
-            sb.Append(".assembly extern ").Append(a).AppendLine(" {}");
-        }
+        return assemblies;
+    }
 
-        sb.AppendLine(".assembly ilrepl_cell {}");
-        sb.AppendLine(".module ilrepl_cell.dll");
-        sb.AppendLine();
-        foreach (var family in session.Types)
-        {
-            RenderType(sb, family.Declaration, 0);
-            sb.AppendLine();
-        }
-
-        sb.AppendLine(".class public abstract sealed auto ansi beforefieldinit IlRepl.Cell extends [System.Runtime]System.Object");
-        sb.AppendLine("{");
-
-        foreach (var method in session.Methods)
-        {
-            var signature = method.Signature;
-            var methodParameters = string.Join(", ", signature.Parameters.Select((parameter, index) =>
-                DeclarationType(parameter) + " " + TypeNameFormatter.IlAsmIdentifier(
-                    parameter.Name ?? "arg" + index.ToString(CultureInfo.InvariantCulture))));
-            sb.Append("    .method public static ")
-                .Append(DeclarationReturnType(signature)).Append(' ')
-                .Append(TypeNameFormatter.IlAsmIdentifier(signature.Name)).Append('(').Append(methodParameters)
-                .AppendLine(") cil managed");
-            sb.AppendLine("    {");
-            RenderBody(sb, method.State);
-            sb.AppendLine("    }");
-            sb.AppendLine();
-        }
-
+    /// <summary>
+    /// Renders the current cell without requiring its pending labels or open regions to be complete.
+    /// </summary>
+    /// <param name="sb">The assembly source builder, positioned inside the cell type.</param>
+    /// <param name="session">The session containing the current cell.</param>
+    internal static void RenderCell(StringBuilder sb, Session session)
+    {
+        var cell = session.Cell;
         var generic = session.TypeParameterNames.Count > 0 ? "<" + string.Join(", ", session.TypeParameterNames) + ">" : "";
         var convention = cell.IsVarArg ? "vararg " : "";
         var parameters = string.Join(", ", cell.Arguments.Select((argument, index) =>
             DeclarationType(argument.Type, argument.ExactType) + " " + TypeNameFormatter.IlAsmIdentifier(
                 argument.Name ?? "arg" + index.ToString(CultureInfo.InvariantCulture))));
-        sb.Append("    .method public static ").Append(convention).Append("object Run").Append(generic).Append('(').Append(parameters).AppendLine(") cil managed");
+        sb.Append("    .method public static ").Append(convention).Append("object Run").Append(generic)
+            .Append('(').Append(parameters).AppendLine(") cil managed");
         sb.AppendLine("    {");
         RenderBody(sb, cell);
         sb.AppendLine("    }");
-        sb.AppendLine("}");
-        return sb.ToString();
     }
 
     private static void RenderBody(StringBuilder sb, CellState state) => RenderBody(sb, state, 2);
 
     private static void RenderBody(StringBuilder sb, CellState state, int level)
     {
+        // Microsoft ILAsm sets InitLocals to force a fat header when maxstack is below eight
+        // and no local signature exists. Preserve an explicit non-init bit with its tiny-header
+        // stack limit instead; increasing that limit does not change execution.
+        var minimumStack = state.Locals.Count == 0 && !state.InitLocals ? 8 : 1;
         sb.Append(Pad(level)).Append(".maxstack ")
-            .AppendLine(Math.Max(1, state.Analysis.MaxStack).ToString(CultureInfo.InvariantCulture));
-        if (state.Locals.Count > 0)
+            .AppendLine(Math.Max(state.DeclaredMaxStack, Math.Max(minimumStack, state.Analysis.MaxStack))
+                .ToString(CultureInfo.InvariantCulture));
+        if (state.Locals.Count == 0 && state.InitLocals)
+        {
+            // ILAsm drops .locals init () because it has no signature. .zeroinit sets the
+            // header flag independently and also keeps a no-local method in fat format.
+            sb.Append(Pad(level)).AppendLine(".zeroinit");
+        }
+        else if (state.Locals.Count > 0)
         {
             var locals = state.Locals.Select((l, i) =>
                 $"[{i}] {DeclarationType(l.Type, l.ExactType)}{(l.IsPinned ? " pinned" : "")} "
                 + TypeNameFormatter.IlAsmIdentifier(l.Name ?? "V_" + i.ToString(CultureInfo.InvariantCulture)));
-            sb.Append(Pad(level)).Append(".locals init (").Append(string.Join(", ", locals)).AppendLine(")");
+            sb.Append(Pad(level)).Append(state.InitLocals ? ".locals init (" : ".locals (")
+                .Append(string.Join(", ", locals)).AppendLine(")");
         }
 
         // A finally or fault written after catch handlers protects the try and those handlers
@@ -284,7 +325,7 @@ public static class IlAsmRenderer
             string label;
             do
             {
-                label = "IlReplEnd" + ends.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                label = "IlReplEnd" + ends.ToString(CultureInfo.InvariantCulture);
                 ends++;
             }
             while (state.DefinedLabels.Contains(label));
@@ -300,14 +341,38 @@ public static class IlAsmRenderer
             }
         }
 
+        var ranges = state.ExceptionRegions.ToArray();
+        var nextRange = 0;
+        var emittedLabels = new HashSet<string>(StringComparer.Ordinal);
+        void EmitReadyRanges()
+        {
+            while (nextRange < ranges.Length)
+            {
+                var region = ranges[nextRange];
+                if (!emittedLabels.Contains(region.TryStart) || !emittedLabels.Contains(region.TryEnd)
+                    || !emittedLabels.Contains(region.HandlerStart) || !emittedLabels.Contains(region.HandlerEnd)
+                    || region.FilterStart is { } filter && !emittedLabels.Contains(filter))
+                {
+                    break;
+                }
+
+                // ILAsm records clauses as they are declared. Emit an inner explicit range
+                // before a surrounding structured block closes, retaining explicit clause order.
+                sb.Append(Pad(indent)).AppendLine(region.Describe(TypeNameFormatter.IlAsmDeclaring));
+                nextRange++;
+            }
+        }
+
         for (var index = 0; index < state.Entries.Count; index++)
         {
             var e = state.Entries[index];
             foreach (var l in e.Labels)
             {
                 sb.Append(Pad(indent - 1)).Append(l).AppendLine(":");
+                emittedLabels.Add(l);
             }
 
+            EmitReadyRanges();
             switch (e.Kind)
             {
                 case EntryKind.Instruction:
@@ -415,10 +480,15 @@ public static class IlAsmRenderer
 
         if (state.LastInstructionEndsFlow)
         {
-            if (state.Entries.Count > 0 && state.Entries[^1].Kind is EntryKind.Block or EntryKind.Labels)
+            if (!state.ExceptionRegions.Any() && state.Entries.Count > 0 && state.Entries[^1].Kind is EntryKind.Block or EntryKind.Labels)
             {
                 sb.Append(Pad(indent)).AppendLine("ldnull");
                 sb.Append(Pad(indent)).AppendLine("throw");
+            }
+
+            foreach (var region in ranges.Skip(nextRange))
+            {
+                sb.Append(Pad(indent)).AppendLine(region.Describe(TypeNameFormatter.IlAsmDeclaring));
             }
 
             return;
@@ -437,6 +507,10 @@ public static class IlAsmRenderer
         }
 
         sb.Append(Pad(indent)).AppendLine("ret");
+        foreach (var region in ranges.Skip(nextRange))
+        {
+            sb.Append(Pad(indent)).AppendLine(region.Describe(TypeNameFormatter.IlAsmDeclaring));
+        }
     }
 
     /// <summary>
@@ -447,6 +521,12 @@ public static class IlAsmRenderer
     public static string RenderInstruction(Instruction instruction)
     {
         ArgumentNullException.ThrowIfNull(instruction);
+        if (instruction.DecodedPrefixName == "no.")
+        {
+            var mask = ((byte)instruction.Operand!).ToString(CultureInfo.InvariantCulture);
+            return ".emitbyte 0xfe\n.emitbyte 0x19\n.emitbyte " + mask + " // no. " + mask;
+        }
+
         var name = instruction.Op.Name;
         return instruction.Kind switch
         {
@@ -613,7 +693,8 @@ public static class IlAsmRenderer
             definition = generic.GetGenericMethodDefinition();
         }
 
-        if (definition.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } owner && owner.GetGenericTypeDefinition() is not System.Reflection.Emit.TypeBuilder)
+        if (definition.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } owner
+            && owner.GetGenericTypeDefinition() is not TypeBuilder)
         {
             try
             {
@@ -630,7 +711,8 @@ public static class IlAsmRenderer
 
     private static FieldInfo DefinitionOf(FieldInfo field)
     {
-        if (field.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } owner && owner.GetGenericTypeDefinition() is not System.Reflection.Emit.TypeBuilder)
+        if (field.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } owner
+            && owner.GetGenericTypeDefinition() is not TypeBuilder)
         {
             // A wrapper over a builder describes the definition already.
             try
@@ -724,7 +806,7 @@ public static class IlAsmRenderer
     {
         if (type.IsGenericParameter)
         {
-            return (type.DeclaringMethod is null ? "!" : "!!") + type.GenericParameterPosition.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return (type.DeclaringMethod is null ? "!" : "!!") + type.GenericParameterPosition.ToString(CultureInfo.InvariantCulture);
         }
 
         if (type.IsByRef)
@@ -983,12 +1065,12 @@ public static class IlAsmRenderer
 
         if (declaration.PackingSize is { } pack)
         {
-            sb.Append(inner).Append(".pack ").AppendLine(pack.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            sb.Append(inner).Append(".pack ").AppendLine(pack.ToString(CultureInfo.InvariantCulture));
         }
 
         if (declaration.ClassSize is { } size)
         {
-            sb.Append(inner).Append(".size ").AppendLine(size.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            sb.Append(inner).Append(".size ").AppendLine(size.ToString(CultureInfo.InvariantCulture));
         }
 
         foreach (var nested in declaration.NestedTypes)
@@ -1123,7 +1205,7 @@ public static class IlAsmRenderer
         var sb = new StringBuilder(".field ");
         if (field.Offset is { } offset)
         {
-            sb.Append('[').Append(offset.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append("] ");
+            sb.Append('[').Append(offset.ToString(CultureInfo.InvariantCulture)).Append("] ");
         }
 
         sb.Append(IlAsmWords.Field(field.Attributes));
@@ -1186,7 +1268,7 @@ public static class IlAsmRenderer
             var parameter = signature.Parameters[i];
             if (parameter.HasDefault || parameter.CustomAttributes.Count > 0)
             {
-                sb.Append(inner).Append(".param [").Append((i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(']');
+                sb.Append(inner).Append(".param [").Append((i + 1).ToString(CultureInfo.InvariantCulture)).Append(']');
                 if (parameter.HasDefault)
                 {
                     sb.Append(" = ").Append(ConstantText.IlAsm(parameter.DefaultValue));

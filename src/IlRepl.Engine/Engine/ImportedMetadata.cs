@@ -1,0 +1,99 @@
+using System.Collections.Immutable;
+using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
+using System.Runtime.InteropServices;
+using Mono.Cecil;
+using ModuleReference = Mono.Cecil.ModuleReference;
+using PropertySignature = System.Reflection.Metadata.MethodSignature<IlRepl.Engine.IlSignature>;
+
+namespace IlRepl.Engine;
+
+/// <summary>
+/// Reads imported metadata that reflection cannot reproduce without executing user code.
+/// </summary>
+internal static class ImportedMetadata
+{
+    internal static (PropertySignature Signature, int Size) PropertySignature(PropertyInfo property)
+    {
+        var metadata = ModuleMetadata.TryOpen(property.Module)
+            ?? throw new ReplException($"property metadata for {property.Name} is unavailable");
+        var handle = MetadataTokens.PropertyDefinitionHandle(property.MetadataToken & 0x00ffffff);
+        var provider = new MetadataSignatureProvider(token => property.Module.ResolveType(token));
+        var definition = metadata.GetPropertyDefinition(handle);
+        return (definition.DecodeSignature(provider, GenericContext.Empty), metadata.GetBlobBytes(definition.Signature).Length);
+    }
+
+    internal static IEnumerable<(MethodBase Body, MethodBase Declaration)> Overrides(Type owner)
+    {
+        var metadata = ModuleMetadata.TryOpen(owner.Module)
+            ?? throw new ReplException($"override metadata for {owner.Name} is unavailable");
+        var handle = MetadataTokens.TypeDefinitionHandle(owner.MetadataToken & 0x00ffffff);
+        foreach (var implementation in metadata.GetTypeDefinition(handle).GetMethodImplementations())
+        {
+            var row = metadata.GetMethodImplementation(implementation);
+            var arguments = owner.GetGenericArguments();
+            yield return (owner.Module.ResolveMethod(MetadataTokens.GetToken(row.MethodBody), arguments, null)!,
+                owner.Module.ResolveMethod(MetadataTokens.GetToken(row.MethodDeclaration), arguments, null)!);
+        }
+    }
+
+    internal static PInvokeInfo NativeImport(MethodBase method, CecilWriter writer)
+    {
+        var metadata = ModuleMetadata.TryOpen(method.Module)
+            ?? throw new ReplException($"native import metadata for {method.Name} is unavailable");
+        var handle = MetadataTokens.MethodDefinitionHandle(method.MetadataToken & 0x00ffffff);
+        var import = metadata.GetMethodDefinition(handle).GetImport();
+        var library = metadata.GetString(metadata.GetModuleReference(import.Module).Name);
+        var module = writer.Module.ModuleReferences.FirstOrDefault(reference => reference.Name == library);
+        if (module is null)
+        {
+            module = new ModuleReference(library);
+            writer.Module.ModuleReferences.Add(module);
+        }
+
+        return new PInvokeInfo((PInvokeAttributes)import.Attributes, metadata.GetString(import.Name), module);
+    }
+
+    internal static byte[] ReadFieldData(FieldInfo field, TypeResolver resolver)
+    {
+        byte[]? image = null;
+        if (SessionAssemblies.TryGetDefinition(field.Module.Assembly, out var definition))
+        {
+            image = definition.Image;
+        }
+
+        if (image is null && resolver.TryGetImage(field.Module.Assembly, out var retained))
+        {
+            image = retained;
+        }
+
+        if (image is null && field.Module.Assembly.Location is { Length: > 0 } path && File.Exists(path))
+        {
+            image = File.ReadAllBytes(path);
+        }
+
+        if (image is null)
+        {
+            throw new ReplException($"the retained image for RVA field {field.DeclaringType}::{field.Name} is unavailable");
+        }
+
+        using var pe = new PEReader(ImmutableArray.Create(image));
+        var reader = pe.GetMetadataReader();
+        if (reader.GetGuid(reader.GetModuleDefinition().Mvid) != field.Module.ModuleVersionId)
+        {
+            throw new ReplException($"the image for RVA field {field.Name} no longer matches its loaded module");
+        }
+
+        var handle = (FieldDefinitionHandle)MetadataTokens.EntityHandle(field.MetadataToken);
+        var data = reader.GetFieldDefinition(handle);
+        var size = field.FieldType.StructLayoutAttribute?.Size ?? 0;
+        if (size == 0)
+        {
+            size = Marshal.SizeOf(field.FieldType);
+        }
+
+        return pe.GetSectionData(data.GetRelativeVirtualAddress()).GetContent(0, size).ToArray();
+    }
+}

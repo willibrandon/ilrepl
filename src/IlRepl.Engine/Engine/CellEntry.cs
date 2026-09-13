@@ -44,6 +44,11 @@ public sealed class CellEntry
     public Type? CatchType { get; init; }
 
     /// <summary>
+    /// The ordered label-range exception clause, when this entry declares one.
+    /// </summary>
+    public ExceptionRegion<Type>? ExceptionRegion { get; init; }
+
+    /// <summary>
     /// The locals declared by this line, for <see cref="EntryKind.Locals"/> entries.
     /// </summary>
     public IReadOnlyList<LocalDeclaration> Locals { get; init; } = [];

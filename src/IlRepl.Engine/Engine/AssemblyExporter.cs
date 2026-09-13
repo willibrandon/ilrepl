@@ -1,3 +1,4 @@
+using System.Globalization;
 using Mono.Cecil;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
@@ -48,10 +49,37 @@ public static class AssemblyExporter
     /// <returns>The image.</returns>
     /// <exception cref="ReplException">A block is open, the cell is incomplete, or the writer refused it.</exception>
     public static byte[] Write(Session session, string assemblyName)
+        => WriteCore(session, assemblyName, null, false, null);
+
+    /// <summary>
+    /// Writes committed declarations for inspecting an unfinished current cell as ILAsm source.
+    /// </summary>
+    /// <param name="session">The session whose committed declarations are captured.</param>
+    /// <returns>The declaration image without a current-cell entry point.</returns>
+    internal static byte[] WriteDeclarations(Session session)
+        => WriteCore(session, "ilrepl_cell", null, false, null, includeCell: false);
+
+    /// <summary>
+    /// Writes a comparison snapshot without executing or exporting the current cell body.
+    /// </summary>
+    /// <param name="session">The session declarations to capture.</param>
+    /// <param name="edit">The selected edit.</param>
+    /// <param name="original">Whether selected calls bind to its captured original.</param>
+    /// <param name="instrument">Adds invocation observation to the selected method before the image is written.</param>
+    /// <returns>The frozen comparison assembly.</returns>
+    internal static byte[] WriteComparison(Session session, MethodEdit edit, bool original,
+        Action<CecilWriter, MethodDefinition> instrument)
+        => WriteCore(session, "IlReplComparison", edit, original, instrument);
+
+    private static byte[] WriteCore(Session session, string assemblyName, MethodEdit? comparison, bool original,
+        Action<CecilWriter, MethodDefinition>? instrument, bool includeCell = true)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentException.ThrowIfNullOrWhiteSpace(assemblyName);
-        CellCompiler.RequireComplete(session);
+        if (comparison is null && includeCell)
+        {
+            CellCompiler.RequireComplete(session);
+        }
         var writer = new CecilWriter(assemblyName);
         var trampolines = session.Methods.ToDictionary(m => m.Signature.Name, m => m.Trampoline, StringComparer.Ordinal);
         try
@@ -69,6 +97,32 @@ public static class AssemblyExporter
                 // A call to the session method binds to its trampoline; here that is the method itself.
                 writer.Define(method.Trampoline.Method, definition);
                 methods.Add((method, definition));
+            }
+
+            foreach (var edit in session.Edits)
+            {
+                if (edit == comparison && original)
+                {
+                    if (edit.Baseline.Problems.Count == 0)
+                    {
+                        var definitions = edit.Baseline.Write(writer);
+                        ImportedMethodFamily.DefineRevisionReferences(writer, edit.Current!, definitions);
+                    }
+                    else
+                    {
+                        var definitions = edit.Current!.Write(writer);
+                        CecilOriginalCall.Replace(edit, (MethodDefinition)definitions[edit.Original.Method], writer);
+                    }
+                }
+                else
+                {
+                    edit.Current?.Write(writer);
+                }
+            }
+
+            if (comparison is not null)
+            {
+                instrument!(writer, (MethodDefinition)writer.Import(IlAsmRenderer.DefinitionOf(comparison.Method!)));
             }
 
             TypeEmitter.WriteAll(writer, [.. session.Types.Select(f => (f.Declaration, f.Prototypes, (IReadOnlyDictionary<string, Type>?)f.Types))], trampolines);
@@ -91,7 +145,7 @@ public static class AssemblyExporter
                         parameter.RequiredModifiers,
                         parameter.OptionalModifiers);
                     definition.Parameters.Add(new ParameterDefinition(
-                        parameter.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                        parameter.Name ?? ("arg" + i.ToString(CultureInfo.InvariantCulture)),
                         ParameterAttributes.None,
                         type));
                 }
@@ -103,7 +157,11 @@ public static class AssemblyExporter
                 Guarded("method " + method.Signature.Name, () => CecilBodyEmitter.Emit(definition, method.State, writer, map));
             }
 
-            WriteRun(writer, cell, session, map);
+            if (comparison is null && includeCell)
+            {
+                WriteRun(writer, cell, session, map);
+            }
+
             return writer.Write();
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException or NullReferenceException)
@@ -139,7 +197,7 @@ public static class AssemblyExporter
             var argument = state.Arguments[i];
             var type = argument.ExactType is null ? writer.Import(argument.Type) : writer.Import(argument.ExactType);
             run.Parameters.Add(new ParameterDefinition(
-                argument.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                argument.Name ?? ("arg" + i.ToString(CultureInfo.InvariantCulture)),
                 ParameterAttributes.None,
                 type));
         }

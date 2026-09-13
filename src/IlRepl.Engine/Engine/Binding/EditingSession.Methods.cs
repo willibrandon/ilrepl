@@ -3,6 +3,9 @@ using System.Reflection.Emit;
 
 namespace IlRepl.Engine.Binding;
 
+/// <summary>
+/// Builds symbolic method declarations for editor analysis.
+/// </summary>
 public sealed partial class EditingSession
 {
     private void OpenMethod(string spec, string line)
@@ -101,7 +104,11 @@ public sealed partial class EditingSession
             }
         }
 
-        if (_state.OpenTypes.LastOrDefault() is { } owner)
+        if (_state.Edit is not null)
+        {
+            _state.EditMethodClosed = true;
+        }
+        else if (_state.OpenTypes.LastOrDefault() is { } owner)
         {
             owner.Bodies.Add(body);
         }

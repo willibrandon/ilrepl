@@ -1,0 +1,215 @@
+using System.Globalization;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using IlRepl.Protocol;
+
+namespace IlRepl.Engine;
+
+/// <summary>
+/// Observes instance fields without executing user getters, formatting, equality, or constructors.
+/// </summary>
+internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> typeNames)
+{
+    private const int MaximumNodes = 4096;
+    private const int MaximumDepth = 64;
+    private readonly Dictionary<object, int> _identities = new(ReferenceEqualityComparer.Instance);
+    private int _nodes;
+
+    /// <summary>
+    /// Captures one value using the shared object-identity map for all roots in this observation.
+    /// </summary>
+    /// <param name="value">The value to inspect.</param>
+    /// <returns>The structural value, or an explicit unavailable observation.</returns>
+    internal ObservedValue Capture(object? value) => Capture(value, 0);
+
+    private ObservedValue Capture(object? value, int depth)
+    {
+        if (value is null)
+        {
+            return new ObservedValue("null", "", null, null, []);
+        }
+
+        var type = value.GetType();
+        var name = TypeName(type);
+        if (++_nodes > MaximumNodes || depth > MaximumDepth)
+        {
+            return Unavailable(name, "structural observation exceeded its node or depth limit");
+        }
+
+        if (value is UnavailableObservation unavailable)
+        {
+            return Unavailable(name, unavailable.Reason);
+        }
+
+        var scalar = value switch
+        {
+            bool boolean => boolean ? "true" : "false",
+            char character => ((int)character).ToString("x4", CultureInfo.InvariantCulture),
+            byte number => number.ToString(CultureInfo.InvariantCulture),
+            sbyte number => number.ToString(CultureInfo.InvariantCulture),
+            short number => number.ToString(CultureInfo.InvariantCulture),
+            ushort number => number.ToString(CultureInfo.InvariantCulture),
+            int number => number.ToString(CultureInfo.InvariantCulture),
+            uint number => number.ToString(CultureInfo.InvariantCulture),
+            long number => number.ToString(CultureInfo.InvariantCulture),
+            ulong number => number.ToString(CultureInfo.InvariantCulture),
+            float number => BitConverter.SingleToInt32Bits(number).ToString("x8", CultureInfo.InvariantCulture),
+            double number => BitConverter.DoubleToInt64Bits(number).ToString("x16", CultureInfo.InvariantCulture),
+            Half number => BitConverter.HalfToInt16Bits(number).ToString("x4", CultureInfo.InvariantCulture),
+            decimal number => string.Join(":", decimal.GetBits(number).Select(part => part.ToString("x8", CultureInfo.InvariantCulture))),
+            string text when text.Length <= 65536 => text,
+            DateTime time => time.Ticks.ToString(CultureInfo.InvariantCulture) + ":" + (int)time.Kind,
+            DateTimeOffset time => time.Ticks.ToString(CultureInfo.InvariantCulture) + ":"
+                + time.Offset.Ticks.ToString(CultureInfo.InvariantCulture),
+            TimeSpan time => time.Ticks.ToString(CultureInfo.InvariantCulture),
+            Guid guid => Convert.ToHexString(guid.ToByteArray()),
+            Type reflected => TypeName(reflected),
+            _ => null,
+        };
+        if (scalar is not null)
+        {
+            return Scalar(value, name, scalar);
+        }
+
+        if (value is string)
+        {
+            return Unavailable(name, "string exceeds the observation limit");
+        }
+
+        if (value is IntPtr or UIntPtr or SafeHandle or Delegate || type.IsPointer || type.IsByRefLike)
+        {
+            return Unavailable(name, "return an explicit scenario observation for handles, pointers, delegates, or byref-like values");
+        }
+
+        if (type.IsEnum)
+        {
+            var underlying = Convert.ChangeType(value, Enum.GetUnderlyingType(type), CultureInfo.InvariantCulture);
+            return Scalar(value, name, Convert.ToString(underlying, CultureInfo.InvariantCulture));
+        }
+
+        if (_identities.TryGetValue(value, out var seen))
+        {
+            return new ObservedValue("reference", name, null, seen, []);
+        }
+
+        var identity = _identities.Count + 1;
+        _identities.Add(value, identity);
+
+        var members = new List<ObservedMember>();
+        if (value is Array array)
+        {
+            var bounds = string.Join(",", Enumerable.Range(0, array.Rank)
+                .Select(dimension => array.GetLowerBound(dimension).ToString(CultureInfo.InvariantCulture) + ":"
+                    + array.GetLength(dimension).ToString(CultureInfo.InvariantCulture)));
+            var index = 0;
+            foreach (var item in array)
+            {
+                if (_nodes >= MaximumNodes)
+                {
+                    members.Add(new ObservedMember("remaining", Unavailable(name, "array exceeds the observation limit")));
+                    break;
+                }
+
+                members.Add(new ObservedMember((index++).ToString(CultureInfo.InvariantCulture), Capture(item, depth + 1)));
+            }
+
+            return new ObservedValue("array", name, bounds, identity, members);
+        }
+
+        var hierarchy = new Stack<Type>();
+        for (var parent = type; parent is not null; parent = parent.BaseType)
+        {
+            hierarchy.Push(parent);
+        }
+
+        foreach (var parent in hierarchy)
+        {
+            foreach (var field in parent.GetFields(BindingFlags.Public | BindingFlags.NonPublic
+                | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .OrderBy(field => field.MetadataToken))
+            {
+                var key = TypeName(parent) + "::" + field.Name;
+                if (field.FieldType.IsPointer || field.FieldType.IsFunctionPointer || field.FieldType.IsByRefLike)
+                {
+                    members.Add(new ObservedMember(key, Unavailable(TypeName(field.FieldType), "field cannot be structurally captured")));
+                    continue;
+                }
+
+                try
+                {
+                    members.Add(new ObservedMember(key, Capture(field.GetValue(value), depth + 1)));
+                }
+                catch (Exception ex) when (ex is NotSupportedException or ArgumentException or MemberAccessException)
+                {
+                    members.Add(new ObservedMember(key, Unavailable(TypeName(field.FieldType), "runtime cannot read this field: "
+                        + ex.GetType().Name)));
+                }
+            }
+        }
+
+        return new ObservedValue("object", name, null, identity, members);
+    }
+
+    private ObservedValue Scalar(object value, string name, string? scalar)
+    {
+        if (!_identities.TryGetValue(value, out var identity))
+        {
+            identity = _identities.Count + 1;
+            _identities.Add(value, identity);
+        }
+
+        return new ObservedValue("scalar", name, scalar, identity, []);
+    }
+
+    private string TypeName(Type type)
+    {
+        if (typeNames.TryGetValue(type.FullName ?? type.Name, out var name))
+        {
+            return name;
+        }
+
+        if (type.HasElementType)
+        {
+            return TypeName(type.GetElementType()!) + (type.IsArray ? "[" + new string(',', type.GetArrayRank() - 1) + "]"
+                : type.IsPointer ? "*" : "&");
+        }
+
+        if (type.IsConstructedGenericType)
+        {
+            return TypeName(type.GetGenericTypeDefinition()) + "<" + string.Join(",", type.GetGenericArguments().Select(TypeName)) + ">";
+        }
+
+        return "[" + type.Assembly.GetName().Name + "]" + (type.FullName ?? type.Name);
+    }
+
+    private static ObservedValue Unavailable(string name, string reason) => new("unavailable", name, reason, null, []);
+
+    /// <summary>
+    /// Captures stored exception data without invoking a user-defined Message override.
+    /// </summary>
+    /// <param name="exception">The original exception after invocation wrappers are removed.</param>
+    /// <returns>The exception observation.</returns>
+    internal ObservedException Exception(Exception exception)
+        => Exception(exception, new HashSet<Exception>(ReferenceEqualityComparer.Instance));
+
+    private ObservedException Exception(Exception exception, HashSet<Exception> seen)
+    {
+        var field = typeof(Exception).GetField("_message", BindingFlags.Instance | BindingFlags.NonPublic);
+        var type = TypeName(exception.GetType());
+        if (seen.Count >= MaximumDepth || !seen.Add(exception))
+        {
+            return new ObservedException(type, null, exception.HResult, null)
+            {
+                Problem = "exception chain is cyclic or exceeds the observation depth limit",
+            };
+        }
+
+        var message = field?.GetValue(exception) as string;
+        return new ObservedException(type, message is { Length: > 65536 } ? message[..65536] : message, exception.HResult,
+            exception.InnerException is { } inner ? Exception(inner, seen) : null)
+        {
+            Problem = field is null ? "runtime does not expose the stored exception message"
+                : message is { Length: > 65536 } ? "exception message exceeds the observation limit" : null,
+        };
+    }
+}

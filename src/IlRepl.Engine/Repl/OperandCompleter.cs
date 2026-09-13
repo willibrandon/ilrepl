@@ -11,6 +11,7 @@ public sealed partial class OperandCompleter : IDisposable
 {
     private static readonly CaretClassifier Classifier = new(new CilTokenizer(CilVocabularyBuilder.Vocabulary));
     private readonly Session _session;
+    private readonly Func<EditingSeed> _captureSeed;
     private readonly Guid _identity = Guid.NewGuid();
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<string, CompletionContinuation> _continuations = new(StringComparer.Ordinal);
@@ -26,10 +27,15 @@ public sealed partial class OperandCompleter : IDisposable
     /// Initializes completion and subscribes to every semantic mutation of its owning session.
     /// </summary>
     /// <param name="session">The session, whose caller serializes real input with completion.</param>
-    public OperandCompleter(Session session)
+    public OperandCompleter(Session session) : this(session, () => session.CaptureEditingSeed())
+    {
+    }
+
+    internal OperandCompleter(Session session, Func<EditingSeed> captureSeed)
     {
         ArgumentNullException.ThrowIfNull(session);
         _session = session;
+        _captureSeed = captureSeed;
         _session.CompletionChanged += Invalidate;
     }
 
@@ -69,7 +75,7 @@ public sealed partial class OperandCompleter : IDisposable
             {
                 await Task.Yield();
                 token.ThrowIfCancellationRequested();
-                _editing = new EditingSession(_session);
+                _editing = new EditingSession(_captureSeed());
             }
 
             _activeEditing = _editing;
@@ -93,7 +99,7 @@ public sealed partial class OperandCompleter : IDisposable
                 return CompletionReply.Empty(_session.CompletionRevision, _bindingEpoch);
             }
 
-            if (site.Owner is ".dis" or ".disassemble")
+            if (site.Owner is ".dis" or ".disassemble" or ".edit")
             {
                 view = await _editing.SpeculateAsync(document.Lines, document.Line, inspecting: true,
                     cancellationToken: token).ConfigureAwait(false);
@@ -309,6 +315,8 @@ public sealed partial class OperandCompleter : IDisposable
         CompletionSiteKind.GenericParameter => CompletionKind.GenericParameters,
         CompletionSiteKind.TypeArgument => CompletionKind.TypeArguments,
         CompletionSiteKind.Signature => CompletionKind.Signatures,
+        CompletionSiteKind.EditName or CompletionSiteKind.Scenario => CompletionKind.Methods,
+        CompletionSiteKind.CommandOption => CompletionKind.Commands,
         _ => CompletionKind.None,
     };
 

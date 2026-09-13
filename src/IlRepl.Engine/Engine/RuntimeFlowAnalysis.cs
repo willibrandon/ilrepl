@@ -57,6 +57,7 @@ internal static class RuntimeFlowAnalysis
             },
             Block = entry.Block,
             CatchType = entry.CatchType,
+            ExceptionRegion = entry.ExceptionRegion,
         }).ToArray();
         var returnType = state.Signature?.ReturnType;
         var declaringType = state.Member?.Owner;
@@ -85,10 +86,11 @@ internal static class RuntimeFlowAnalysis
         ArgumentNullException.ThrowIfNull(previous);
         ArgumentNullException.ThrowIfNull(entry);
         result = null!;
-        if (state.HasOpenUnwindHandler
+        if (state.ExceptionRegions.Any() || state.HasOpenUnwindHandler
             || entry.Instruction is not { } instruction || entry.Labels.Count != 0
             || instruction.Kind is OperandKind.Label or OperandKind.Labels
             || instruction.Op.OpCodeType == OpCodeType.Prefix
+            || instruction.DecodedPrefixName is not null
             || instruction.Op == OpCodes.Jmp
             || instruction.Op == OpCodes.Localloc
             || instruction.Op.FlowControl is not (FlowControl.Next or FlowControl.Call)

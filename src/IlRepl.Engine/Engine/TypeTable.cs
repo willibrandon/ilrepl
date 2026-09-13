@@ -1,3 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
+
 namespace IlRepl.Engine;
 
 /// <summary>
@@ -8,6 +11,11 @@ namespace IlRepl.Engine;
 public sealed class TypeTable
 {
     private readonly List<(string FullName, string ShortName, Type Type)> _entries = [];
+
+    /// <summary>
+    /// Selected copied methods addressed by their edit names, with their actual declaring context.
+    /// </summary>
+    internal Dictionary<string, MethodBase> MethodAliases { get; } = new(StringComparer.Ordinal);
     // Keyed by identity: a builder's Equals may ask for an underlying type it does not have yet.
     private readonly Dictionary<Type, OwnMembers> _members = new(ReferenceEqualityComparer.Instance);
 
@@ -82,7 +90,7 @@ public sealed class TypeTable
     /// <param name="type">The type, its prototype, or an instantiation of it.</param>
     /// <param name="members">The members.</param>
     /// <returns>True when the type is being written.</returns>
-    public bool TryGetMembers(Type type, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out OwnMembers? members)
+    public bool TryGetMembers(Type type, [NotNullWhen(true)] out OwnMembers? members)
     {
         ArgumentNullException.ThrowIfNull(type);
         var definition = type.IsGenericType && !type.IsGenericTypeDefinition ? type.GetGenericTypeDefinition() : type;
@@ -97,6 +105,10 @@ public sealed class TypeTable
     {
         var copy = new TypeTable { Forward = Forward };
         copy._entries.AddRange(_entries);
+        foreach (var pair in MethodAliases)
+        {
+            copy.MethodAliases.Add(pair.Key, pair.Value);
+        }
         foreach (var pair in _members)
         {
             copy._members[pair.Key] = pair.Value;
@@ -115,7 +127,7 @@ public sealed class TypeTable
     /// <param name="type">The type found.</param>
     /// <returns>True when a session type matched.</returns>
     /// <exception cref="ReplException">A short name matched more than one type.</exception>
-    public bool TryResolve(string name, bool withArguments, bool valueType, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Type? type)
+    public bool TryResolve(string name, bool withArguments, bool valueType, [NotNullWhen(true)] out Type? type)
     {
         ArgumentNullException.ThrowIfNull(name);
         type = null;

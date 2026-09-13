@@ -11,7 +11,8 @@
     <WasmFingerprintDotnetJs>false</WasmFingerprintDotnetJs>
     <WasmInitialHeapSize>134217728</WasmInitialHeapSize>
     <EmccMaximumHeapSize>536870912</EmccMaximumHeapSize>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <WasmIncludeFullIcuData>true</WasmIncludeFullIcuData>
     <!--
       Cells resolve members by name at runtime, which trim analysis cannot follow. The engine and the
       framework assemblies cells reach for are rooted below, so trimming only drops assemblies nothing

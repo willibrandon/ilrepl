@@ -2,8 +2,16 @@ using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
+/// <summary>
+/// Publishes completion metadata for live definitions and edit drafts.
+/// </summary>
 public sealed partial class Session
 {
+    /// <summary>
+    /// Invalidates analysis and completion after accepted source changes inside an edit submission.
+    /// </summary>
+    internal void EditInputChanged() => CompletionRevision++;
+
     /// <summary>
     /// The current binding context, including a class header when no member body is open.
     /// </summary>
@@ -16,8 +24,10 @@ public sealed partial class Session
     internal EditingSeed CaptureEditingSeed()
     {
         var assemblies = _types.Where(type => type.Definition is not null).Select(type => type.Definition!.Assembly)
-            .Concat(_methods.SelectMany(method => new[] { method.Trampoline.Definition.Assembly, method.Version.Definition.Assembly }));
-        var snapshot = BindingSnapshot.Capture(InspectionContext, assemblies);
+            .Concat(_methods.SelectMany(method => new[] { method.Trampoline.Definition.Assembly, method.Version.Definition.Assembly }))
+            .Concat(_edits.Select(edit => edit.Original.Method.Module.Assembly))
+            .Concat(_edits.SelectMany(edit => edit.Baseline.SourceTypes).Select(type => type.Assembly));
+        var snapshot = BindingSnapshot.Capture(InspectionContext, assemblies, _edits.Select(edit => edit.Name));
         try
         {
             var definitions = new List<EditingDefinition>();
@@ -60,7 +70,15 @@ public sealed partial class Session
                 : _open is { } openMethod ? [openMethod.HeaderLine, .. openMethod.BodyLines] : [];
             return new EditingSeed(
                 snapshot, definitions, [.. _declarationLines], [.. _bodyLines],
-                openLines, TypeArguments?.Select(RuntimeSymbolImporter.Import).ToArray(), InBlockComment, CompletionRevision);
+                openLines, TypeArguments?.Select(RuntimeSymbolImporter.Import).ToArray(), InBlockComment, CompletionRevision)
+            {
+                Edits = _edits.Select(edit => new EditingMethodEdit(edit.Name, edit.Reference,
+                    RuntimeSymbolImporter.Import(IlAsmRenderer.DefinitionOf(edit.Original.Method)), edit.Revision)
+                {
+                    ContextTypes = edit.Baseline.SourceTypes.ToDictionary(type => type.FullName!.Replace('+', '/'),
+                        RuntimeSymbolImporter.Import, StringComparer.Ordinal),
+                }).ToArray(),
+            };
         }
         catch
         {

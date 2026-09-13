@@ -8,7 +8,7 @@ namespace IlRepl.Repl;
 /// An engine that runs <see cref="ReplCore"/> in the current process. The browser build uses it;
 /// the Native AOT tool talks to the same core through the host process instead.
 /// </summary>
-public sealed class InProcessEngine : IReplEngine
+public sealed partial class InProcessEngine : IReplEngine
 {
     private readonly ReplCore _core;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -19,6 +19,8 @@ public sealed class InProcessEngine : IReplEngine
     private readonly Lock _analysisLock = new();
     private readonly HashSet<Task> _analyses = [];
     private AnalyzedDocument? _analysisCache;
+    private readonly Func<ComparisonPackage, CancellationToken, Task<ComparisonReply>>? _comparisonRunner;
+    private (ComparisonTicket Ticket, ComparisonPackage Package, MethodEdit Edit)? _preparedComparison;
 
     /// <summary>
     /// Initializes an engine over a new session.
@@ -31,10 +33,20 @@ public sealed class InProcessEngine : IReplEngine
     /// Initializes an engine over the given core.
     /// </summary>
     /// <param name="core">The REPL core.</param>
-    public InProcessEngine(ReplCore core)
+    public InProcessEngine(ReplCore core) : this(core, null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes an engine with the host or browser coordinator that provides fresh comparison runtimes.
+    /// </summary>
+    /// <param name="core">The live REPL core.</param>
+    /// <param name="comparisonRunner">The isolated execution coordinator, or null when comparisons are unavailable.</param>
+    public InProcessEngine(ReplCore core, Func<ComparisonPackage, CancellationToken, Task<ComparisonReply>>? comparisonRunner)
     {
         ArgumentNullException.ThrowIfNull(core);
         _core = core;
+        _comparisonRunner = comparisonRunner;
         Status = core.Status;
         _core.Session.CompletionChanged += CancelWarmup;
         _warmup = WarmAsync();
@@ -91,7 +103,7 @@ public sealed class InProcessEngine : IReplEngine
                 }
             }
 
-            seed = _core.Session.CaptureEditingSeed();
+            seed = _core.CaptureEditingSeed();
         }
         finally
         {
@@ -143,7 +155,16 @@ public sealed class InProcessEngine : IReplEngine
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Reply(_core.Handle(line, location));
+            var result = _core.Handle(line, location);
+            var reply = Reply(result);
+            if (result.ComparisonPackage is { } package)
+            {
+                var ticket = new ComparisonTicket(Guid.NewGuid().ToString("N"), package.Name, package.StartingState);
+                _preparedComparison = (ticket, package, _core.Session.Edits.Single(edit => edit.Name == package.Name));
+                reply = reply with { PendingComparison = ticket };
+            }
+
+            return reply;
         }
         finally
         {
@@ -211,7 +232,12 @@ public sealed class InProcessEngine : IReplEngine
         var lines = _core.Transcript.Lines.ToArray();
         _core.Transcript.Clear();
         Status = _core.Status;
-        return new HandleReply(result.Succeeded, result.QuitRequested, lines, Status) { Diagnostics = result.Diagnostics };
+        return new HandleReply(result.Succeeded, result.QuitRequested, lines, Status)
+        {
+            Diagnostics = result.Diagnostics,
+            EditDocument = result.EditDocument,
+            Diff = result.Diff,
+        };
     }
 
     private async Task WarmAsync()

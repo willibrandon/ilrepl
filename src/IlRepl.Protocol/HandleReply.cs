@@ -13,4 +13,24 @@ public sealed record HandleReply(bool Succeeded, bool Quit, IReadOnlyList<Transc
     /// Source findings that explain a refused line, including earlier instructions affected by it.
     /// </summary>
     public IReadOnlyList<AnalysisDiagnostic> Diagnostics { get; init; } = [];
+
+    /// <summary>
+    /// A requested method draft to hydrate in the caller's editor.
+    /// </summary>
+    public EditDocument? EditDocument { get; init; }
+
+    /// <summary>
+    /// Structured instruction, metadata, and stack differences produced by .diff.
+    /// </summary>
+    public EditDiff? Diff { get; init; }
+
+    /// <summary>
+    /// The observations from an isolated original-versus-copy execution.
+    /// </summary>
+    public ComparisonReply? Comparison { get; init; }
+
+    /// <summary>
+    /// A comparison ready to execute after the caller displays its explicit starting conditions.
+    /// </summary>
+    public ComparisonTicket? PendingComparison { get; init; }
 }

@@ -121,6 +121,33 @@ internal sealed class CilLineReader
     {
         if (i >= 0 && i < _lexemes.Count)
         {
+            if (style == SpanStyle.Dim && TextAt(i).ContainsAny(' ', '\t'))
+            {
+                var end = _lexemes[i].End;
+                for (var offset = _lexemes[i].Start; offset < end;)
+                {
+                    if (char.IsWhiteSpace(_line[offset]))
+                    {
+                        offset++;
+                        continue;
+                    }
+
+                    var start = offset++;
+                    var quote = _line[start] is '\'' or '"' ? _line[start] : '\0';
+                    while (offset < end && (quote != '\0' || !char.IsWhiteSpace(_line[offset])))
+                    {
+                        if (_line[offset++] == quote)
+                        {
+                            break;
+                        }
+                    }
+
+                    _tokens.Add(new CilToken(start, offset - start, style));
+                }
+
+                return;
+            }
+
             _tokens.Add(new CilToken(_lexemes[i].Start, _lexemes[i].Length, style));
         }
     }

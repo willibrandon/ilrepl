@@ -335,6 +335,7 @@ public sealed class StackSimulator
         var view = new StackOperandView<Type>
         {
             Op = op,
+            DecodedPrefixName = instruction.DecodedPrefixName,
             ByteOperand = instruction.Kind == OperandKind.Byte && instruction.Operand is byte byteOperand ? byteOperand : null,
             IntegerOperand = instruction.Kind switch
             {
@@ -352,7 +353,7 @@ public sealed class StackSimulator
         };
         if (instruction.LocalIndex is int local && local < context.Locals.Count)
         {
-            view = view with { SlotType = context.Locals[local].Type };
+            view = view with { SlotType = context.Locals[local].Type, SlotIsPinned = context.Locals[local].IsPinned };
         }
         else if (instruction.ArgumentIndex is int argument && argument < context.Arguments.Count)
         {

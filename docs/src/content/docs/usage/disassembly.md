@@ -128,8 +128,8 @@ IL_0036:
 ```
 
 This uses the filter pattern from [Exception blocks](/usage/exception-blocks/). The listing shows
-two things the typed lines did not. The locals are `init`, because the emitter always asks for
-zeroed locals. And each `leave END` is followed by a second `leave` to the same place: the emitter
+two things about the compiled body. The locals are `init`, as explicitly declared in the source.
+Each `leave END` is followed by a second `leave` to the same place: the emitter
 closes every try and handler with a `leave` of its own, whether or not one was typed, and the
 column marks the copy `unreachable`. A filter's block opens at the filter code, and its handler
 where the handler starts.
@@ -292,6 +292,8 @@ An abstract method, a method implemented by the runtime, and a dynamic method ha
 and the message says which it is. A member of the class still being written has no compiled body
 yet. Exception clauses laid out in a way braces cannot draw stay in ildasm's offset form, printed as
 notes after the listing, and their handlers still seed the column. A `no.` prefix prints with its
-mask, `no. 1`, and is not accepted as REPL input. Instruction offsets and stack columns are annotations: copy
-the IL without them into a `.method` block. Offset-form exception clauses need structured blocks,
-and references to private loaded members remain subject to runtime access checks.
+mask, `no. 1`; acceptance by the runtime is checked when preparing executable code.
+
+Use `.edit` after `.dis` to open the complete editable method without offsets or stack columns.
+The editor includes exception ranges and checks the dependencies needed by the copy.
+Use `.dis Name --original` to see the original again. See [Editing and comparing methods](/usage/editing-methods/).

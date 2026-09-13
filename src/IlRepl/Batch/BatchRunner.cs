@@ -46,6 +46,13 @@ public sealed class BatchRunner
             var reply = await _engine.HandleAsync(line, cancellationToken).ConfigureAwait(false);
             ok &= reply.Succeeded;
             Write(reply);
+            if (reply.PendingComparison is { } comparison)
+            {
+                var compared = await _engine.CompareAsync(comparison.Identity, cancellationToken).ConfigureAwait(false);
+                ok &= compared.Succeeded;
+                Write(compared);
+            }
+
             if (reply.Quit)
             {
                 return ok ? 0 : 1;
@@ -53,6 +60,15 @@ public sealed class BatchRunner
         }
 
         var status = _engine.Status;
+        if (status.OpenEdit is { } edit)
+        {
+            var message = $"edit {edit} is still open; close it with }}";
+            AnsiWriter.Write(_output, new TranscriptLine(LineKind.Error,
+                [new TranscriptSpan("  error: ", SpanStyle.Error), new TranscriptSpan(message)]), _color);
+            _output.Flush();
+            return 1;
+        }
+
         if (status.OpenMethod is { } open)
         {
             // Input that ends inside a .method or .class block cannot be completed on the user's behalf.
@@ -90,6 +106,11 @@ public sealed class BatchRunner
             }
 
             AnsiWriter.Write(_output, line, _color);
+        }
+
+        if (reply.EditDocument is { } document)
+        {
+            _output.WriteLine(document.Source);
         }
 
         _output.Flush();

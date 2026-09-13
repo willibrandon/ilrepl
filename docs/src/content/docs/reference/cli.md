@@ -19,8 +19,11 @@ ilrepl [options] [script]
 | `--help` | Print the options. |
 
 The exit code is 0 when every line succeeded, 1 when any line failed, 2 for a bad script path,
-and 3 when the host could not be started. Input that ends inside a `.method` or `.class` block is an error;
+and 3 when the host could not be started. Input that ends inside a `.method`, `.class`, or `.edit` block is an error;
 close it with `}` first.
+
+Scripts accept `.edit method as Name { ... }` blocks. Add `--assert` to `.compare` to require a complete
+match and return exit code 1 otherwise. Without it, a difference is reported as a result.
 
 ## Examples
 

@@ -145,6 +145,11 @@ public sealed record StackOperandView<T> where T : class
     public T? SlotType { get; init; }
 
     /// <summary>
+    /// Whether the instruction accesses a pinned local slot.
+    /// </summary>
+    public bool SlotIsPinned { get; init; }
+
+    /// <summary>
     /// The local slot read or written by the instruction, or null for other instructions.
     /// </summary>
     public int? LocalIndex { get; init; }

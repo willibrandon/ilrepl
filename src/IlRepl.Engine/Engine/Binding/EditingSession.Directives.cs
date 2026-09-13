@@ -1,7 +1,11 @@
+using System.Globalization;
 using System.Reflection;
 
 namespace IlRepl.Engine.Binding;
 
+/// <summary>
+/// Validates directives without executing the current submission.
+/// </summary>
 public sealed partial class EditingSession
 {
     private void AddBodyDirective(string text)
@@ -93,7 +97,15 @@ public sealed partial class EditingSession
             case ".try":
                 if (rest is not ("" or "{"))
                 {
-                    throw new ReplException("the label form of .try is not supported; use blocks: .try { ... } catch T { ... }");
+                    var region = ExceptionRegionParser.Parse(rest, BindType);
+                    body.ReferencedLabels.UnionWith(region.Labels);
+                    if (region.CatchType is { } caught)
+                    {
+                        body.MetadataTypes.Add(caught);
+                    }
+
+                    AddFlowNode(body, new FlowNode<TypeSymbol>(FlowLocation(body, text), text) { ExceptionRegion = region }, scope);
+                    break;
                 }
 
                 body.Frames.Add(BlockKind.Try);
@@ -101,6 +113,12 @@ public sealed partial class EditingSession
                 body.RegionBracePending = true;
                 break;
             case ".maxstack":
+                if (!int.TryParse(rest, NumberStyles.None, CultureInfo.InvariantCulture,
+                    out var maximum) || maximum > ushort.MaxValue)
+                {
+                    throw new ReplException(".maxstack needs an integer from 0 to 65535");
+                }
+
                 break;
             default:
                 throw new ReplException($"unknown or misplaced directive '{directive}'");

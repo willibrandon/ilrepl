@@ -6,6 +6,8 @@
 (async () => {
   const scriptUrl = document.currentScript ? document.currentScript.src : new URL('main.js', location.href).href;
   const baseUrl = scriptUrl.substring(0, scriptUrl.lastIndexOf('/') + 1);
+  const { createComparisonSupervisor } = await import(baseUrl + 'comparison-supervisor.js');
+  const comparisons = createComparisonSupervisor(baseUrl);
   const container = document.getElementById('terminal');
   if (!container) return;
   const statusEl = document.getElementById('session-status');
@@ -81,6 +83,7 @@
 
     const stopWorker = () => {
       if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
+      comparisons.stop();
       if (worker) {
         worker.onmessage = null;
         worker.onerror = null;
@@ -129,6 +132,10 @@
         const msg = e.data;
         if (msg.type === 'output') {
           term.write(new Uint8Array(msg.data));
+        } else if (msg.type === 'comparison-run') {
+          comparisons.run(msg, worker);
+        } else if (msg.type === 'comparison-cancel') {
+          comparisons.cancel(msg.identity);
         } else if (msg.type === 'progress') {
           setStatus(`Loading runtime ${msg.loaded}/${msg.total}`);
         } else if (msg.type === 'workerReady') {

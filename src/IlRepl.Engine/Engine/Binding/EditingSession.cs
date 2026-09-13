@@ -49,7 +49,14 @@ public sealed partial class EditingSession : IDisposable
 
             foreach (var line in _seed.OpenLines)
             {
-                AddLine(line);
+                if (line.StartsWith(".edit ", StringComparison.Ordinal))
+                {
+                    OpenEdit(line[6..]);
+                }
+                else
+                {
+                    AddLine(line);
+                }
             }
 
             _state.InBlockComment = _seed.InBlockComment;

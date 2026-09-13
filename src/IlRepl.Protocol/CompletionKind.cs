@@ -52,4 +52,9 @@ public enum CompletionKind
     /// Parameter lists of a selected generic method.
     /// </summary>
     Signatures,
+
+    /// <summary>
+    /// Options accepted by the current command.
+    /// </summary>
+    Commands,
 }

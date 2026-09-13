@@ -108,6 +108,22 @@ il[2]> ret
   = 42 : int32
 ```
 
-Regions nest: a `.try {` inside a handler opens an inner region. The label form of `.try` from
-ILAsm is not offered because `ILGenerator` only exposes structured blocks; the block form
-expresses the same programs.
+Regions nest: a `.try {` inside a handler opens an inner region.
+
+## Exact ranges
+
+The label form preserves exception layouts from imported methods, including noncontiguous handlers:
+
+```cil
+.try START to END catch Exception handler CATCH to DONE
+.try START to END filter FILTER handler HANDLER to DONE
+.try START to END finally handler FINALLY to DONE
+.try START to END fault handler FAULT to DONE
+```
+
+Each line declares one clause. Start labels are inclusive and end labels are exclusive; an end label may
+name the end of the method without adding an instruction. Clauses retain declaration order because it
+can affect exception dispatch. A filter ends with `endfilter`, and a finally or fault ends with `endfinally`.
+Range clauses can also describe a catch inside a surrounding structured finally block.
+
+`.edit` supplies these ranges automatically. See [Editing and comparing methods](/usage/editing-methods/).

@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Reflection;
 using System.Reflection.Emit;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
@@ -202,6 +204,22 @@ public sealed class CellState
     public bool IsVarArg { get; private set; }
 
     /// <summary>
+    /// Whether the body requests zero-initialized locals.
+    /// </summary>
+    public bool InitLocals { get; private set; } = true;
+
+    /// <summary>
+    /// The maximum stack depth declared in source, retained as a floor.
+    /// </summary>
+    public int DeclaredMaxStack { get; private set; }
+
+    /// <summary>
+    /// The ordered clauses declared with label ranges.
+    /// </summary>
+    public IEnumerable<ExceptionRegion<Type>> ExceptionRegions => _entries
+        .Where(entry => entry.ExceptionRegion is not null).Select(entry => entry.ExceptionRegion!);
+
+    /// <summary>
     /// The labels defined so far.
     /// </summary>
     public IReadOnlySet<string> DefinedLabels => _definedLabels;
@@ -320,6 +338,14 @@ public sealed class CellState
     {
         foreach (var e in _entries)
         {
+            if (e.ExceptionRegion is { } region)
+            {
+                foreach (var label in region.Labels)
+                {
+                    yield return label;
+                }
+            }
+
             if (e.Instruction?.Kind == OperandKind.Label)
             {
                 yield return (string)e.Instruction.Operand!;
@@ -437,7 +463,7 @@ public sealed class CellState
             throw new ReplException("arglist needs a vararg cell; add the .vararg directive first");
         }
 
-        if (instruction.Op == OpCodes.Endfilter && (_frames.Count == 0 || _frames[^1] != BlockKind.Filter))
+        if (instruction.Op == OpCodes.Endfilter && !ExceptionRegions.Any() && (_frames.Count == 0 || _frames[^1] != BlockKind.Filter))
         {
             throw new ReplException("endfilter is only valid inside a filter block (} filter {)");
         }
@@ -604,6 +630,7 @@ public sealed class CellState
             case ".locals":
             {
                 var declared = ParseLocals(rest);
+                InitLocals = rest.TrimStart().StartsWith("init", StringComparison.Ordinal);
                 _locals.AddRange(declared);
                 _entries.Add(new CellEntry { Kind = EntryKind.Locals, Source = source, Locals = declared });
                 return new LineResult(LineOutcome.Locals, null, DescribeLocals());
@@ -625,7 +652,9 @@ public sealed class CellState
             case ".try":
                 if (rest is not ("" or "{"))
                 {
-                    throw new ReplException("the label form of .try is not supported; use blocks: .try { ... } catch T { ... }");
+                    var region = ExceptionRegionParser.Parse(rest, catchText => TypeParser.Parse(catchText, Context));
+                    AcceptEntry(new CellEntry { Kind = EntryKind.ExceptionRegion, Source = source, ExceptionRegion = region });
+                    return new LineResult(LineOutcome.Empty, null, null);
                 }
 
                 AcceptEntry(new CellEntry { Kind = EntryKind.Block, Source = source, Block = BlockKind.Try });
@@ -633,6 +662,15 @@ public sealed class CellState
                 return new LineResult(LineOutcome.Block, null, "try");
 
             case ".maxstack":
+                if (!int.TryParse(rest, NumberStyles.None, CultureInfo.InvariantCulture,
+                    out var maximum) || maximum > ushort.MaxValue)
+                {
+                    throw new ReplException(".maxstack needs an integer from 0 to 65535");
+                }
+
+                DeclaredMaxStack = maximum;
+                _entries.Add(new CellEntry { Kind = EntryKind.MaxStack, Source = source });
+                return new LineResult(LineOutcome.Empty, null, null);
             case ".typeparams":
             case ".typeargs":
                 return new LineResult(LineOutcome.Empty, null, null);
@@ -659,7 +697,7 @@ public sealed class CellState
         }
 
         var close = s.IndexOf(']', StringComparison.Ordinal);
-        if (close < 0 || !int.TryParse(s[1..close].Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var index))
+        if (close < 0 || !int.TryParse(s[1..close].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
         {
             throw new ReplException("usage: .param [1] = int32(5)  (1 is the first parameter, 0 the return value)");
         }
@@ -742,7 +780,7 @@ public sealed class CellState
 
         switch (instruction.Operand)
         {
-            case System.Reflection.FieldInfo field:
+            case FieldInfo field:
                 if (field.IsLiteral && instruction.Op.Name is "ldsfld" or "ldsflda" or "stsfld")
                 {
                     throw new ReplException($"{field.Name} is a literal; it has no storage, so {instruction.Op.Name} would fail with MissingFieldException at run time. Load its value instead{LiteralHint(field)}");
@@ -823,7 +861,7 @@ public sealed class CellState
 
             switch (entry.Instruction?.Operand)
             {
-                case System.Reflection.FieldInfo field:
+                case FieldInfo field:
                     MemberAccess.CheckField(field, Scope, types);
                     break;
                 case ResolvedMethod { Method: not null } method:
@@ -846,24 +884,24 @@ public sealed class CellState
         }
     }
 
-    private string LiteralHint(System.Reflection.FieldInfo field)
+    private string LiteralHint(FieldInfo field)
     {
         object? value = null;
         if (Types.TryGetMembers(field.DeclaringType!, out var own))
         {
             value = own.FindField(field.Name)?.Declaration.DefaultValue;
         }
-        else if (field.DeclaringType is not System.Reflection.Emit.TypeBuilder)
+        else if (field.DeclaringType is not TypeBuilder)
         {
             value = field.GetRawConstantValue();
         }
 
         return value switch
         {
-            int i => $": ldc.i4 {i.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
-            long l => $": ldc.i8 {l.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+            int i => $": ldc.i4 {i.ToString(CultureInfo.InvariantCulture)}",
+            long l => $": ldc.i8 {l.ToString(CultureInfo.InvariantCulture)}",
             string text => $": ldstr \"{text}\"",
-            Enum e => $": ldc.i4 {System.Convert.ToInt64(e, System.Globalization.CultureInfo.InvariantCulture).ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+            Enum e => $": ldc.i4 {Convert.ToInt64(e, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture)}",
             _ => "",
         };
     }

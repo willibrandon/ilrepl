@@ -2,6 +2,18 @@
 
 const inputChunks = [];
 let pendingResize = '';
+const comparisons = new Map();
+
+export function runComparisonSide(identity, packageJson, original) {
+  return new Promise((resolve) => {
+    comparisons.set(identity, resolve);
+    self.postMessage({ type: 'comparison-run', identity, package: packageJson, original });
+  });
+}
+
+export function cancelComparisonSide(identity) {
+  self.postMessage({ type: 'comparison-cancel', identity });
+}
 
 export function postTerminalOutput(data) {
   // Copy out of WASM memory before posting; structured cloning a view would clone the whole heap.
@@ -116,6 +128,10 @@ self.onmessage = (e) => {
   } else if (msg.type === 'resize') {
     pendingResize = msg.cols + ',' + msg.rows;
     if (self.__ilreplSignalInput) self.__ilreplSignalInput();
+  } else if (msg.type === 'comparison-result') {
+    const resolve = comparisons.get(msg.identity);
+    comparisons.delete(msg.identity);
+    resolve?.(msg.result);
   }
 };
 

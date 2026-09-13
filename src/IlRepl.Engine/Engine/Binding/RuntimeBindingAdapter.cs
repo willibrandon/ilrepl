@@ -165,6 +165,17 @@ public sealed class RuntimeBindingAdapter
                 };
             }
 
+            case MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } generic
+                when generic.GetGenericArguments().Any(RuntimeBindingScope.ContainsBuilder):
+                return new ResolvedMethod(generic, ToSignature(method), ToType(method.DeclaringType!))
+                {
+                    DeclaredDefinition = ToSignature(RuntimeSymbolImporter.Import(generic.GetGenericMethodDefinition())),
+                    GenericArguments = ToTypes(method.GenericArguments),
+                    ExactDeclaringType = Exact(method.DeclaringType),
+                    OptionalParameterTypesOverride = optional,
+                    ExactOptionalParameterTypes = bound.ExactOptionalParameterTypes,
+                    ExactGenericArguments = ExactGenericArguments(bound),
+                };
             case MethodBase runtime:
                 return new ResolvedMethod(runtime, optional)
                 {
@@ -246,6 +257,7 @@ public sealed class RuntimeBindingAdapter
         return new Instruction
         {
             Op = bound.Op,
+            DecodedPrefixName = bound.DecodedPrefixName,
             Text = bound.Text,
             Kind = operand.Kind,
             Operand = value,

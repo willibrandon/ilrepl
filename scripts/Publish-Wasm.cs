@@ -95,5 +95,8 @@ static class PageFiles
     /// <summary>
     /// The file names, copied as they are.
     /// </summary>
-    public static readonly string[] Names = ["main.js", "worker.js", "interop.js"];
+    public static readonly string[] Names =
+    [
+        "main.js", "worker.js", "interop.js", "comparison-worker.js", "comparison-interop.js", "comparison-supervisor.js",
+    ];
 }

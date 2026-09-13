@@ -251,9 +251,14 @@ internal sealed class MethodBodyReader
         var name = op.Name;
         if (op.Emit is not { } emit)
         {
-            // no. has no OpCode; its mask prints as ilasm reads it.
-            return new DisassembledEntry(DisassembledEntryKind.Raw, raw.Offset) { Text = name + " " + raw.Operand.Integer
-                .ToString(CultureInfo.InvariantCulture), Raw = raw, EffectUnknown = false };
+            return Instruction(raw, new Instruction
+            {
+                Op = OpCodes.Prefix1,
+                DecodedPrefixName = name,
+                Text = name + " " + raw.Operand.Integer.ToString(CultureInfo.InvariantCulture),
+                Kind = OperandKind.Byte,
+                Operand = (byte)raw.Operand.Integer,
+            });
         }
 
         switch (emit.OperandType)

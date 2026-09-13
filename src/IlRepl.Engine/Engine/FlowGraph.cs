@@ -8,7 +8,7 @@ namespace IlRepl.Engine;
 /// Connects source entries using the same implicit transitions as structured IL emission.
 /// </summary>
 /// <typeparam name="T">The type representation.</typeparam>
-internal sealed class FlowGraph<T> where T : class
+internal sealed partial class FlowGraph<T> where T : class
 {
     /// <summary>
     /// The method name used in explanations, independent of a submitting document's source identity.
@@ -200,6 +200,8 @@ internal sealed class FlowGraph<T> where T : class
 
             Edges[i].Add(new FlowEdge(next));
         }
+
+        AddExceptionRanges(objectType, complete, hasThis);
     }
 
     /// <summary>

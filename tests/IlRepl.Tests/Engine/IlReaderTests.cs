@@ -187,7 +187,7 @@ public sealed class IlReaderTests
     }
 
     /// <summary>
-    /// Every named opcode that can be encoded is in the by-value table and back, and no. is only there.
+    /// Every runtime opcode round trips by value, and the no. prefix also participates in the source catalog.
     /// </summary>
     [TestMethod]
     public void ByValue_RoundTripsByName_AndAddsNoPrefix()
@@ -210,6 +210,9 @@ public sealed class IlReaderTests
         Assert.IsTrue(OpcodeTable.TryGetByValue(OpcodeTable.NoPrefixValue, out var no));
         Assert.AreEqual("no.", no.Name);
         Assert.IsFalse(OpcodeTable.ByName.ContainsKey("no."));
+        Assert.AreSame(no, OpcodeTable.BySourceName["no."]);
+        Assert.Contains("no.", OpcodeTable.Names);
+        Assert.Contains("unverifiable", OpcodeTable.Describe(no));
         Assert.HasCount(OpcodeTable.ByName.Count - 8 + 1, OpcodeTable.ByValue);
     }
 

@@ -100,6 +100,7 @@ internal sealed class EditingStack
         var view = new StackOperandView<TypeSymbol>
         {
             Op = op,
+            DecodedPrefixName = instruction.DecodedPrefixName,
             ByteOperand = instruction.Operand.Kind == OperandKind.Byte && instruction.Operand.Value is byte byteOperand
                 ? byteOperand : null,
             IntegerOperand = instruction.Operand.Kind switch
@@ -118,7 +119,7 @@ internal sealed class EditingStack
         };
         if (instruction.LocalIndex is int local && local < scope.Locals.Count)
         {
-            view = view with { SlotType = scope.Locals[local].Type };
+            view = view with { SlotType = scope.Locals[local].Type, SlotIsPinned = scope.Locals[local].IsPinned };
         }
         else if (instruction.ArgumentIndex is int argument && argument < scope.Arguments.Count)
         {

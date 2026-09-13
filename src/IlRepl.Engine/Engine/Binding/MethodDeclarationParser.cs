@@ -190,7 +190,8 @@ public static class MethodDeclarationParser
         var nameStart = FindNameStart(s, pos, firstParen);
         var nameText = s[nameStart..firstParen].Trim();
         var typeParameterSpecs = (IReadOnlyList<GenericParameterSpec>)[];
-        var lt = nameText.IndexOf('<', StringComparison.Ordinal);
+        var genericStart = nameText.StartsWith('\'') ? nameText.IndexOf('\'', 1) + 1 : 0;
+        var lt = nameText.IndexOf('<', genericStart);
         if (lt >= 0)
         {
             if (!nameText.EndsWith('>'))
@@ -208,7 +209,8 @@ public static class MethodDeclarationParser
             throw new ReplException(MemberUsage);
         }
 
-        if (name is not (".ctor" or ".cctor") && !InstructionParser.IsIdentifier(name))
+        if (name is not (".ctor" or ".cctor") && !InstructionParser.IsIdentifier(name)
+            && !(nameText.StartsWith('\'') && nameText.EndsWith('\'') && !name.Contains('\0')))
         {
             throw new ReplException($"bad method name '{name}'");
         }

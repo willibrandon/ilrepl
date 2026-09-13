@@ -4,6 +4,9 @@ using IlRepl.Protocol;
 
 namespace IlRepl.Repl;
 
+/// <summary>
+/// Supplies and validates generic argument completion candidates.
+/// </summary>
 public sealed partial class OperandCompleter
 {
     private static BoundInstruction? ConfirmGenericOperand(string line, CompletionSite site, EditingView view, SnapshotBindingScope scope)
@@ -11,7 +14,7 @@ public sealed partial class OperandCompleter
         var inComment = view.InBlockComment;
         var normalized = CilLexer.StripComments(line, ref inComment).Trim();
         var (_, text) = InstructionParser.SplitLabels(normalized);
-        if (site.Owner is ".dis" or ".disassemble")
+        if (site.Owner is ".dis" or ".disassemble" or ".edit")
         {
             var end = 0;
             while (end < text.Length && !char.IsWhiteSpace(text[end]))

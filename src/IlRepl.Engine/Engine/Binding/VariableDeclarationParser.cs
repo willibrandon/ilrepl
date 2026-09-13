@@ -19,6 +19,11 @@ public static class VariableDeclarationParser
             text = text[4..].Trim();
         }
 
+        if (text.StartsWith('(') && text.EndsWith(')') && text[1..^1].Trim().Length == 0)
+        {
+            return [];
+        }
+
         text = Unwrap(text);
         if (text.Length == 0)
         {

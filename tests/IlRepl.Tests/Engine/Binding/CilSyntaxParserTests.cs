@@ -279,6 +279,30 @@ public sealed class CilSyntaxParserTests
     }
 
     /// <summary>
+    /// Session-shaped generic aliases retain their type arguments while ordinary nongeneric methods reject them during binding.
+    /// </summary>
+    [TestMethod]
+    public void ParseMethodReference_GenericSessionAlias_RetainsArgumentsAndRequiresGenericBinding()
+    {
+        const string text = "Fib<int32>()";
+        var syntax = CilSyntaxParser.ParseMethodReference(text);
+        Assert.IsTrue(syntax.IsSessionForm);
+        Assert.AreEqual("Fib", syntax.Name);
+        Assert.IsNotNull(syntax.GenericArguments);
+        Assert.HasCount(1, syntax.GenericArguments);
+        Assert.AreEqual("int32", syntax.GenericArguments[0].Keyword);
+        Assert.AreEqual("<int32>", text[syntax.GenericStart..syntax.GenericEnd]);
+        Assert.IsEmpty(syntax.Parameters!);
+        var session = IlLines.Load(".method int32 Fib() { ldc.i4.s 42; ret }");
+
+        var exception = Assert.ThrowsExactly<ReplException>(() => session.AddLine("call " + text));
+
+        Assert.Contains("not generic", exception.Message);
+        session.AddLine("call Fib()");
+        Assert.AreEqual(42, session.Run().Value);
+    }
+
+    /// <summary>
     /// Bad member text is refused with the resolver's messages.
     /// </summary>
     /// <param name="text">The bad text.</param>
@@ -292,7 +316,6 @@ public sealed class CilSyntaxParserTests
     [DataRow("Console::WriteLine<int32()", "unbalanced '<' in method name")]
     [DataRow("Hello::CountArgs(..., int32, ...)", "only one '...' is allowed in a parameter list")]
     [DataRow("string int32 Console::WriteLine()", "unexpected 'Console' in member reference")]
-    [DataRow("Fib<int32>()", "session methods are not generic")]
     [DataRow("Fib x y", "unexpected 'y' in method reference")]
     [DataRow("1Fib()", "expected 'Type::Method(...)' in method reference (or a session method name defined with .method)")]
     public void ParseMethodReference_Invalid_ReportsTheMessage(string text, string message)

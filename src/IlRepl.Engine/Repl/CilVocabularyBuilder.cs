@@ -36,7 +36,7 @@ public static class CilVocabularyBuilder
         {
             if (!OpcodeTable.IsReserved(name))
             {
-                opcodes[name] = Kind(OpcodeTable.ByName[name].OperandType);
+                opcodes[name] = Kind(OpcodeTable.BySourceName[name].OperandType);
             }
         }
 

@@ -49,4 +49,14 @@ public enum EntryKind
     /// A <c>.custom</c> line inside a member method.
     /// </summary>
     Custom,
+
+    /// <summary>
+    /// An exception clause expressed with label ranges.
+    /// </summary>
+    ExceptionRegion,
+
+    /// <summary>
+    /// A declared maximum stack floor.
+    /// </summary>
+    MaxStack,
 }

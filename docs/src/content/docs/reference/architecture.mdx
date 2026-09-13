@@ -58,9 +58,18 @@ cycles; one refusal restores the session. Instances and delegates a cell still
 holds keep the previous definitions alive until they are released.
 
 Cells and definitions skip the runtime's access checks for session assemblies, so the REPL
-enforces ECMA-335 accessibility itself at every line, and a harness in the tests proves its
-verdicts match the runtime's on ordinary assemblies. The names are unique per definition, so a
+enforces ECMA-335 accessibility as you type. The names are unique per definition, so a
 load context never binds the wrong one, and `.reset` unloads what the session held.
+
+## Method edits
+
+`.edit` keeps the original method and copies its declaring type and required helpers. Changes pass
+through the same parser, stack checks, and writer as other methods. A successful revision updates
+dependent callers; a failed one leaves the previous version in place.
+
+`.compare` runs each version in a fresh process, or a fresh worker in the browser. Both start with the
+same inputs. The report compares their arguments, results, exceptions, and console output. Previously
+run cells are not replayed, and ending a comparison leaves the session available.
 
 ## Projects
 

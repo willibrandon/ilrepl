@@ -452,7 +452,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                                 : new FlowValue<T>(pushed[pushedIndex], [index], valueIsThis,
                                     graph.Prefixes(index).Any(prefix => prefix.Op == OpCodes.Readonly)
                                         || view.Op == OpCodes.Unbox
-                                        || view.Op == OpCodes.Ldflda && popped.Any(value => value.IsReadOnly)));
+                                        || view.Op == OpCodes.Ldflda && popped.Any(value => value.IsReadOnly),
+                                    IsKnownZero: ConstantFilterValue(view, false).IntegerValue == 0
+                                        || view.Op.Name is "conv.i" or "conv.u" && popped is [{ IsKnownZero: true }]));
                         }
 
                         if (StackTransfer<T>.EndsPath(view.Op))
@@ -2038,7 +2040,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         if (op.Name is { } name
             && (name.StartsWith("stloc", StringComparison.Ordinal) || name.StartsWith("starg", StringComparison.Ordinal))
-            && count > 0 && view.SlotType is { } slot && !_types.CanAssign(top, slot))
+            && count > 0 && view.SlotType is { } slot && !_types.CanAssign(top, slot)
+            && !(StoresLocal(view) && view.SlotIsPinned && _types.Algebra.IsByRef(slot)
+                && kind == StackCategory.NativeInt && values[^1].IsKnownZero))
         {
             return $"{name} needs {_types.Name(slot)} but found {_types.Name(top)}";
         }
@@ -2222,7 +2226,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             {
                 var actual = values[first + (view.IsInstance || view.HasImplicitThis ? 1 : 0) + parameter].Type;
                 var expected = view.ParameterTypes[parameter];
-                if (!_types.CanAssign(actual, expected))
+                if (!_types.CanAssign(actual, expected) && !NativeIntegerToByRef(actual, expected))
                 {
                     return $"{op.Name} argument {parameter + 1} needs {_types.Name(expected)} but found {_types.Name(actual)}";
                 }
@@ -2549,7 +2553,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         if (name is not null && (name.StartsWith("stloc", StringComparison.Ordinal)
             || name.StartsWith("starg", StringComparison.Ordinal)))
         {
-            return Pointer(view.SlotType) && Integer(values[^1].Type);
+            return Pointer(view.SlotType) && Integer(values[^1].Type)
+                || StoresLocal(view) && view.SlotIsPinned && view.SlotType is { } slot
+                    && values[^1].IsKnownZero && NativeIntegerToByRef(values[^1].Type, slot);
         }
 
         if (name is "stfld" or "stsfld")
@@ -2588,7 +2594,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         var first = values.Length - view.ArgumentPops + (view.IsInstance || view.HasImplicitThis ? 1 : 0);
         for (var parameter = 0; parameter < view.ParameterTypes.Count; parameter++)
         {
-            if (Pointer(view.ParameterTypes[parameter]) && Integer(values[first + parameter].Type))
+            if (Pointer(view.ParameterTypes[parameter]) && Integer(values[first + parameter].Type)
+                || NativeIntegerToByRef(values[first + parameter].Type, view.ParameterTypes[parameter]))
             {
                 return true;
             }
@@ -2596,6 +2603,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         return false;
     }
+
+    private bool NativeIntegerToByRef(T? actual, T expected) => actual is not null
+        // ECMA-335 III.1.6 and III.3.20 allow this implicit coercion in correct,
+        // unverifiable CIL; the resulting managed reference is tracked by the GC.
+        && _types.Category(actual) == StackCategory.NativeInt && _types.Algebra.IsByRef(expected);
 
     private bool UsesNativePointerArrayInstruction(StackOperandView<T> view, FlowValue<T>[] values)
     {
@@ -2848,7 +2860,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
 
             values[i] = new FlowValue<T>(type, [.. a[i].Origins.Union(b[i].Origins).Order()],
-                MergeReceiverFact(a[i].IsThis, b[i].IsThis), a[i].IsReadOnly || b[i].IsReadOnly);
+                MergeReceiverFact(a[i].IsThis, b[i].IsThis), a[i].IsReadOnly || b[i].IsReadOnly,
+                a[i].IsKnownZero && b[i].IsKnownZero);
         }
 
         merged = WithExceptional(new FlowState<T>(values, unknown,
@@ -2881,7 +2894,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         for (var i = 0; i < a.Length; i++)
         {
             if (!_types.Algebra.Same(a[i].Type, b[i].Type) || a[i].IsThis != b[i].IsThis
-                || a[i].IsReadOnly != b[i].IsReadOnly || !a[i].Origins.SequenceEqual(b[i].Origins))
+                || a[i].IsReadOnly != b[i].IsReadOnly || a[i].IsKnownZero != b[i].IsKnownZero
+                || !a[i].Origins.SequenceEqual(b[i].Origins))
             {
                 return false;
             }

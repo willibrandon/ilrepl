@@ -1,3 +1,4 @@
+using System.Text;
 using IlRepl.Protocol;
 
 namespace IlRepl.Tui;
@@ -113,7 +114,7 @@ public static class BlockBalance
     // one word, and a space where each string or quoted name was.
     private static string Code(string line, IReadOnlyList<CilSegment> segments)
     {
-        var code = new System.Text.StringBuilder(line.Length);
+        var code = new StringBuilder(line.Length);
         foreach (var segment in segments)
         {
             switch (segment.Kind)
@@ -148,6 +149,11 @@ public static class BlockBalance
         }
 
         var word = text[..end];
+        if (word.SequenceEqual(".edit"))
+        {
+            return false;
+        }
+
         if (word.Length < 2 || word[0] != '.')
         {
             return false;
@@ -174,7 +180,9 @@ public static class BlockBalance
         }
 
         var word = text[..end];
-        return word.SequenceEqual(".method") || word.SequenceEqual(".class") || word.SequenceEqual(".property") || word.SequenceEqual(".event") || word.SequenceEqual(".try");
+        return word.SequenceEqual(".method") || word.SequenceEqual(".class")
+            || word.SequenceEqual(".property") || word.SequenceEqual(".event")
+            || (word.SequenceEqual(".try") && !text.Contains(" to ", StringComparison.Ordinal));
     }
 
     // catch, filter, finally, fault, or handler, either on its own or after the brace that closes

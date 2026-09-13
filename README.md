@@ -38,6 +38,10 @@ cells can be saved to disk as real assemblies with `.save`, or shown as ILAsm wi
 reads any method back, the framework's or your own, with the same stack column beside each
 instruction.
 
+Use `.edit` to change a copy of the method, `.diff` to inspect the changes, and `.compare` to run both
+versions with the same inputs. The original stays available. See
+[Editing and comparing methods](https://ilrepl.dev/usage/editing-methods/).
+
 ```ilrepl
 il[1]> .locals init (string m)
   locals: 0:string m
@@ -183,7 +187,7 @@ need Node 22 with pnpm.
 
 ```sh
 dotnet build
-dotnet test tests/IlRepl.Tests
+dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj
 dotnet run --project src/IlRepl
 ```
 
@@ -198,7 +202,7 @@ dotnet run --file scripts/Publish-Wasm.cs
 pnpm --dir docs install --frozen-lockfile
 pnpm --dir docs build
 pwsh tests/IlRepl.Docs.Tests/bin/Debug/net10.0/playwright.ps1 install chromium webkit
-dotnet test tests/IlRepl.Docs.Tests
+dotnet test --project tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj
 ```
 
 The browser tests run headlessly in Chromium and WebKit. Installing their dependencies also

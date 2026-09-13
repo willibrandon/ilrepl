@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.Reflection.Emit;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace IlRepl.Engine.Binding;
 
@@ -744,33 +746,51 @@ public static partial class CilSyntaxParser
         }
 
         var head = (firstParen < 0 ? s[pos..endOfText] : s[pos..firstParen]).Trim();
+        var angle = head.IndexOf('<', StringComparison.Ordinal);
         TypeSyntax? returnType = null;
-        if (head.Any(char.IsWhiteSpace))
+        if ((angle < 0 ? head : head[..angle]).Any(char.IsWhiteSpace))
         {
             returnType = ParseTypeAt(s, ref pos, endOfText);
             SkipWhitespace(s, ref pos);
         }
 
-        var nameEnd = pos;
-        while (nameEnd < endOfText && s[nameEnd] != '(' && !char.IsWhiteSpace(s[nameEnd]))
-        {
-            nameEnd++;
-        }
-
-        var rawName = s[pos..nameEnd];
-        var quoted = rawName.Length > 2 && rawName.StartsWith('\'') && rawName.EndsWith('\'');
-        var name = quoted ? DecodeQuoted(rawName[1..^1]) : rawName;
+        var (name, quoted, nameEnd) = ReadMemberName(s, pos, endOfText);
         var afterName = nameEnd;
         SkipWhitespace(s, ref afterName);
+        var genericStart = -1;
+        var genericEnd = -1;
+        List<TypeSyntax>? genericArguments = null;
+        int? genericArity = null;
+        if (afterName < endOfText && s[afterName] == '<')
+        {
+            genericStart = afterName;
+            genericEnd = FindMatchingAngle(s, afterName, endOfText) + 1;
+            var genericText = s[(genericStart + 1)..(genericEnd - 1)];
+            if (ArityMarker().Match(genericText) is { Success: true } marker)
+            {
+                genericArity = int.Parse(marker.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture);
+                if (genericArity < 1)
+                {
+                    throw new ReplException("a generic method arity must be positive");
+                }
+            }
+            else
+            {
+                genericArguments = [];
+                foreach (var (itemStart, itemEnd) in SplitTopLevelRanges(s, genericStart + 1, genericEnd - 1))
+                {
+                    genericArguments.Add(ParseTypeIn(s, itemStart, itemEnd));
+                }
+            }
+
+            afterName = genericEnd;
+            SkipWhitespace(s, ref afterName);
+        }
+
         var paren = afterName < endOfText && s[afterName] == '(' ? afterName : -1;
         if (paren < 0 && afterName < endOfText)
         {
             throw new ReplException($"unexpected '{s[afterName..endOfText]}' in method reference");
-        }
-
-        if (name.Contains('<', StringComparison.Ordinal))
-        {
-            throw new ReplException("session methods are not generic");
         }
 
         if (!InstructionParser.IsIdentifier(name))
@@ -807,6 +827,10 @@ public static partial class CilSyntaxParser
             NameStart = pos,
             NameEnd = nameEnd,
             NameQuoted = quoted,
+            GenericArguments = genericArguments,
+            GenericArity = genericArity,
+            GenericStart = genericStart,
+            GenericEnd = genericEnd,
             Parameters = parameters,
             SentinelIndex = sentinel,
             ParametersStart = paren,
@@ -960,7 +984,13 @@ public static partial class CilSyntaxParser
 
         if (mnemonic == "no.")
         {
-            throw new ReplException("the 'no.' prefix has no ILGenerator representation and cannot be emitted");
+            return new InstructionSyntax(OpCodes.Prefix1, text, mnemonicEnd, new OperandSyntax
+            {
+                Kind = OperandSyntaxKind.Integer,
+                Text = operandText,
+                Start = operandStart,
+                End = operandEnd,
+            }) { DecodedPrefixName = mnemonic };
         }
 
         if (!OpcodeTable.TryGet(mnemonic, out var op) || op.Name is null || OpcodeTable.IsReserved(op.Name))
@@ -973,23 +1003,23 @@ public static partial class CilSyntaxParser
         OperandSyntax operand;
         switch (op.OperandType)
         {
-            case System.Reflection.Emit.OperandType.InlineNone:
+            case OperandType.InlineNone:
                 operand = Plain(OperandSyntaxKind.None);
                 break;
-            case System.Reflection.Emit.OperandType.ShortInlineI:
-            case System.Reflection.Emit.OperandType.InlineI:
-            case System.Reflection.Emit.OperandType.InlineI8:
+            case OperandType.ShortInlineI:
+            case OperandType.InlineI:
+            case OperandType.InlineI8:
                 operand = Plain(OperandSyntaxKind.Integer);
                 break;
-            case System.Reflection.Emit.OperandType.ShortInlineR:
-            case System.Reflection.Emit.OperandType.InlineR:
+            case OperandType.ShortInlineR:
+            case OperandType.InlineR:
                 operand = Plain(OperandSyntaxKind.Float);
                 break;
-            case System.Reflection.Emit.OperandType.InlineString:
+            case OperandType.InlineString:
                 operand = Plain(OperandSyntaxKind.String);
                 break;
-            case System.Reflection.Emit.OperandType.ShortInlineBrTarget:
-            case System.Reflection.Emit.OperandType.InlineBrTarget:
+            case OperandType.ShortInlineBrTarget:
+            case OperandType.InlineBrTarget:
                 if (!InstructionParser.IsIdentifier(operandText))
                 {
                     throw new ReplException($"'{opName}' needs a label name, e.g. {opName} LOOP");
@@ -997,7 +1027,7 @@ public static partial class CilSyntaxParser
 
                 operand = Plain(OperandSyntaxKind.Label);
                 break;
-            case System.Reflection.Emit.OperandType.InlineSwitch:
+            case OperandType.InlineSwitch:
             {
                 var inner = operandText;
                 if (inner.StartsWith('(') && inner.EndsWith(')'))
@@ -1015,15 +1045,15 @@ public static partial class CilSyntaxParser
                 break;
             }
 
-            case System.Reflection.Emit.OperandType.ShortInlineVar:
-            case System.Reflection.Emit.OperandType.InlineVar:
+            case OperandType.ShortInlineVar:
+            case OperandType.InlineVar:
                 operand = Plain(OperandSyntaxKind.Variable) with
                 {
                     IsArgument = opName.StartsWith("ldarg", StringComparison.Ordinal)
                     || opName.StartsWith("starg", StringComparison.Ordinal)
                 };
                 break;
-            case System.Reflection.Emit.OperandType.InlineType:
+            case OperandType.InlineType:
                 if (operandText.Length == 0)
                 {
                     throw new ReplException($"'{opName}' needs a type operand");
@@ -1031,7 +1061,7 @@ public static partial class CilSyntaxParser
 
                 operand = Plain(OperandSyntaxKind.Type) with { Type = ParseTypeIn(text, operandStart, operandEnd) };
                 break;
-            case System.Reflection.Emit.OperandType.InlineMethod:
+            case OperandType.InlineMethod:
                 if (operandText.Length == 0)
                 {
                     throw new ReplException($"'{opName}' needs a method reference, e.g. {opName} void Console::WriteLine(string)");
@@ -1039,7 +1069,7 @@ public static partial class CilSyntaxParser
 
                 operand = Plain(OperandSyntaxKind.Member) with { Member = ParseMethodReferenceIn(text, operandStart, operandEnd) };
                 break;
-            case System.Reflection.Emit.OperandType.InlineField:
+            case OperandType.InlineField:
                 if (operandText.Length == 0)
                 {
                     throw new ReplException($"'{opName}' needs a field reference, e.g. {opName} string String::Empty");
@@ -1047,7 +1077,7 @@ public static partial class CilSyntaxParser
 
                 operand = Plain(OperandSyntaxKind.Field) with { Member = ParseFieldReferenceIn(text, operandStart, operandEnd) };
                 break;
-            case System.Reflection.Emit.OperandType.InlineTok:
+            case OperandType.InlineTok:
                 if (operandText.StartsWith("method ", StringComparison.Ordinal))
                 {
                     operand = Plain(OperandSyntaxKind.Token) with
@@ -1077,7 +1107,7 @@ public static partial class CilSyntaxParser
                 }
 
                 break;
-            case System.Reflection.Emit.OperandType.InlineSig:
+            case OperandType.InlineSig:
                 operand = Plain(OperandSyntaxKind.Signature) with { Signature = ParseCalliSignatureIn(text, operandStart, operandEnd) };
                 break;
             default:
@@ -1183,8 +1213,8 @@ public static partial class CilSyntaxParser
     /// The arity form of a generic argument list: a bracketed integer alone, <c>[1]</c>, which is
     /// not a type, unlike <c>[System.Runtime]System.String[]</c>.
     /// </remarks>
-    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*\[\s*([0-9]+)\s*\]\s*$")]
-    private static partial System.Text.RegularExpressions.Regex ArityMarker();
+    [GeneratedRegex(@"^\s*\[\s*([0-9]+)\s*\]\s*$")]
+    private static partial Regex ArityMarker();
 
     /// <summary>
     /// Finds the quote that closes a quoted name, skipping escaped characters inside it.

@@ -1,0 +1,228 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
+using IlRepl.Engine;
+using IlRepl.Protocol;
+
+namespace IlRepl.Host;
+
+/// <summary>
+/// Runs each captured version in its own disposable host process and working directory.
+/// </summary>
+public static class ProcessComparisonRunner
+{
+    /// <summary>
+    /// Executes two independent runtime snapshots and compares their typed observations.
+    /// </summary>
+    /// <param name="package">The captured versions and starting conditions.</param>
+    /// <param name="cancellationToken">Terminates workers and cancels the remaining execution.</param>
+    /// <returns>The observations and comparison outcome.</returns>
+    public static async Task<ComparisonReply> RunAsync(ComparisonPackage package, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        var original = await RunSideAsync(package, true, cancellationToken).ConfigureAwait(false);
+        var edited = await RunSideAsync(package, false, cancellationToken).ConfigureAwait(false);
+        return ComparisonResults.Compare(package, original, edited);
+    }
+
+    private static async Task<ComparisonSide> RunSideAsync(ComparisonPackage package, bool original, CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Failure("cancelled", "comparison cancelled");
+        }
+
+        var directory = Directory.CreateTempSubdirectory("ilrepl-compare-");
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var process = new Process();
+        var processStarted = false;
+        Task<string>? stdout = null;
+        Task<string>? stderr = null;
+        try
+        {
+            var work = Directory.CreateDirectory(Path.Combine(directory.FullName, "work"));
+            var packagePath = Path.Combine(directory.FullName, "package.json");
+            var readyPath = Path.Combine(directory.FullName, "ready");
+            var resultPath = Path.Combine(directory.FullName, "result.json");
+            var limitPath = Path.Combine(directory.FullName, "output-limit");
+            await File.WriteAllTextAsync(packagePath, JsonSerializer.Serialize(package, ProtocolJsonContext.Default.ComparisonPackage),
+                cancellationToken).ConfigureAwait(false);
+            var bundled = Path.Combine(AppContext.BaseDirectory, "host", "ilrepl-host.dll");
+            var host = File.Exists(bundled) ? bundled : typeof(ProcessComparisonRunner).Assembly.Location;
+            process.StartInfo = new ProcessStartInfo
+            {
+                FileName = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet",
+                WorkingDirectory = work.FullName,
+                UseShellExecute = false,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            process.StartInfo.ArgumentList.Add(host);
+            process.StartInfo.ArgumentList.Add("--comparison-worker");
+            process.StartInfo.ArgumentList.Add(packagePath);
+            process.StartInfo.ArgumentList.Add(original ? "original" : "edited");
+            process.StartInfo.ArgumentList.Add(readyPath);
+            process.StartInfo.ArgumentList.Add(resultPath);
+            process.StartInfo.ArgumentList.Add(limitPath);
+            process.StartInfo.Environment.Clear();
+            foreach (var pair in package.Environment)
+            {
+                process.StartInfo.Environment[pair.Key] = pair.Value;
+            }
+
+            processStarted = process.Start();
+            if (!processStarted)
+            {
+                return Failure("setup-failed", "could not start a comparison host");
+            }
+
+            process.StandardInput.Close();
+            var overflow = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            stdout = ReadOutputAsync(process.StandardOutput, package.OutputLimit, overflow, lifetime.Token);
+            stderr = ReadOutputAsync(process.StandardError, package.OutputLimit, overflow, lifetime.Token);
+            var exit = process.WaitForExitAsync(CancellationToken.None);
+            var ready = WaitForReadyAsync(readyPath, lifetime.Token);
+            var startup = Task.Delay(TimeSpan.FromMinutes(2), lifetime.Token);
+            var started = await Task.WhenAny(exit, ready, startup, overflow.Task).ConfigureAwait(false);
+            if (started == startup || cancellationToken.IsCancellationRequested)
+            {
+                Kill(process);
+                await exit.ConfigureAwait(false);
+                return Failure(cancellationToken.IsCancellationRequested ? "cancelled" : "setup-failed",
+                    cancellationToken.IsCancellationRequested ? "comparison cancelled" : "comparison runtime startup timed out");
+            }
+
+            if (started == ready && !ready.IsCanceled)
+            {
+                var timeout = Task.Delay(package.TimeoutMilliseconds, lifetime.Token);
+                var completed = await Task.WhenAny(exit, timeout, overflow.Task).ConfigureAwait(false);
+                if (completed != exit)
+                {
+                    Kill(process);
+                    await exit.ConfigureAwait(false);
+                    return Failure(cancellationToken.IsCancellationRequested ? "cancelled" : completed == overflow.Task ? "output-limit"
+                        : "timeout",
+                        cancellationToken.IsCancellationRequested ? "comparison cancelled" : completed == overflow.Task
+                            ? "worker output exceeded the configured limit"
+                                : $"execution exceeded {package.TimeoutMilliseconds} ms after runtime startup");
+                }
+            }
+            else if (started == overflow.Task)
+            {
+                Kill(process);
+                await exit.ConfigureAwait(false);
+            }
+
+            await exit.ConfigureAwait(false);
+            var rawOut = await stdout.ConfigureAwait(false);
+            var rawError = await stderr.ConfigureAwait(false);
+            if (File.Exists(limitPath) || overflow.Task.IsCompleted)
+            {
+                return Failure("output-limit", "worker output exceeded the configured limit", rawOut, rawError);
+            }
+
+            if (process.ExitCode != 0 || !File.Exists(resultPath))
+            {
+                return Failure("crashed", $"comparison host exited with code {process.ExitCode}", rawOut, rawError);
+            }
+
+            var result = JsonSerializer.Deserialize(await File.ReadAllTextAsync(resultPath, cancellationToken).ConfigureAwait(false),
+                ProtocolJsonContext.Default.ComparisonSide)
+                ?? throw new InvalidDataException("comparison host returned no result");
+            if (result.StandardOutput.Length + rawOut.Length > package.OutputLimit
+                || result.StandardError.Length + rawError.Length > package.OutputLimit)
+            {
+                return Failure("output-limit", "combined worker output exceeded the configured limit");
+            }
+
+            return result with { StandardOutput = result.StandardOutput + rawOut, StandardError = result.StandardError + rawError };
+        }
+        catch (OperationCanceledException)
+        {
+            return Failure("cancelled", "comparison cancelled");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
+            or Win32Exception or JsonException)
+        {
+            return Failure("setup-failed", ex.Message);
+        }
+        finally
+        {
+            await lifetime.CancelAsync().ConfigureAwait(false);
+            Kill(process);
+            if (processStarted)
+            {
+                await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+
+            if (stdout is not null)
+            {
+                await stdout.ConfigureAwait(false);
+            }
+
+            if (stderr is not null)
+            {
+                await stderr.ConfigureAwait(false);
+            }
+
+            if (directory.Exists)
+            {
+                directory.Delete(recursive: true);
+            }
+        }
+    }
+
+    private static async Task WaitForReadyAsync(string path, CancellationToken cancellationToken)
+    {
+        while (!File.Exists(path))
+        {
+            await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task<string> ReadOutputAsync(StreamReader reader, int limit, TaskCompletionSource overflow,
+        CancellationToken cancellationToken)
+    {
+        var text = new StringBuilder();
+        var buffer = new char[4096];
+        try
+        {
+            while (await reader.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false) is var count && count != 0)
+            {
+                var remaining = Math.Max(0, limit - text.Length);
+                text.Append(buffer, 0, Math.Min(count, remaining));
+                if (count > remaining)
+                {
+                    overflow.TrySetResult();
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The supervisor owns cancellation; retain bytes read before it stopped the worker.
+        }
+
+        return text.ToString();
+    }
+
+    private static void Kill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // The process either has not started or already exited.
+        }
+    }
+
+    private static ComparisonSide Failure(string outcome, string detail, string stdout = "", string stderr = "")
+        => new(outcome, [], null, null, stdout, stderr, detail);
+}

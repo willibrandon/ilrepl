@@ -19,7 +19,8 @@ internal static class CecilCellBody
     /// <returns>Whether its body requires metadata emission.</returns>
     public static bool IsRequired(CellState state)
     {
-        if (state.Locals.Any(local => local.ExactType is not null)
+        if (state.ExceptionRegions.Any() || state.DeclaredMaxStack > 0
+            || state.Locals.Any(local => local.ExactType is not null)
             || state.Arguments.Any(argument => argument.ExactType is not null))
         {
             return true;
@@ -27,7 +28,8 @@ internal static class CecilCellBody
 
         foreach (var entry in state.Entries)
         {
-            if (entry.Instruction?.ExactTypeOperand is not null
+            if (entry.Instruction?.DecodedPrefixName is not null
+                || entry.Instruction?.ExactTypeOperand is not null
                 || entry.Instruction?.ExactFieldDeclaringType is not null
                 || entry.Instruction?.Operand is CalliSignature { ExactSymbol: { } exact }
                     && RuntimeSymbolTypes.RequiresExact(exact)

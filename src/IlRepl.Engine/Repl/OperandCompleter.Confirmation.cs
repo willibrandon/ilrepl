@@ -4,6 +4,9 @@ using IlRepl.Protocol;
 
 namespace IlRepl.Repl;
 
+/// <summary>
+/// Checks that completed operands bind to the selected candidates.
+/// </summary>
 public sealed partial class OperandCompleter
 {
     private CompletionItem? Confirm(CompletionQuery query, OperandCandidate candidate)
@@ -27,7 +30,7 @@ public sealed partial class OperandCompleter
             var line = original[..site.ReplaceStart] + insertion + original[site.ReplaceEnd..];
             var declarationType = candidate.Type is not null
                 && site.Kind is CompletionSiteKind.Type or CompletionSiteKind.TypeArgument or CompletionSiteKind.GenericParameter
-                && (site.Owner.StartsWith('.') && site.Owner is not (".dis" or ".disassemble")
+                && (site.Owner.StartsWith('.') && site.Owner is not (".dis" or ".disassemble" or ".edit")
                     || site.Owner is "extends" or "implements" or "catch");
             var typeComplete = false;
             var enclosingType = declarationType
@@ -41,7 +44,7 @@ public sealed partial class OperandCompleter
                 && site.Kind == CompletionSiteKind.MemberHead && !site.NextIsDoubleColon;
             BoundInstruction? instruction = null;
             if (site.Kind == CompletionSiteKind.TypeArgument
-                && (site.Owner is ".dis" or ".disassemble"
+                && (site.Owner is ".dis" or ".disassemble" or ".edit"
                     || !site.Owner.StartsWith('.') && site.Owner is not ("extends" or "implements" or "catch")))
             {
                 instruction = ConfirmGenericOperand(line, site, query.View, scope);
@@ -102,8 +105,9 @@ public sealed partial class OperandCompleter
                 : candidate.Type is { } declared ? declared.AssemblyName : "";
             var detail = instruction is not null ? StackTransitionText.Format(instruction, query.View)
                 : candidate.Type is { } kind ? TypeDetail(kind) : "";
-            var label = candidate.Method is { } named ? MethodLabel(named) : candidate.Rank.Label;
-            if (candidate.Method is { DeclaringType: { } declaring } member && query.AmbiguousNames.Contains(member.Name))
+            var label = candidate.Alias ?? (candidate.Method is { } named ? MethodLabel(named) : candidate.Rank.Label);
+            if (candidate.Alias is null && candidate.Method is { DeclaringType: { } declaring } member
+                && query.AmbiguousNames.Contains(member.Name))
             {
                 label = SymbolRenderer.IlPath(declaring) + "::" + label;
             }
@@ -128,6 +132,11 @@ public sealed partial class OperandCompleter
 
     private static string? Insertion(CompletionQuery query, OperandCandidate candidate)
     {
+        if (candidate.Alias is { } alias)
+        {
+            return alias;
+        }
+
         var site = query.Identity.Site;
         var scope = ((SnapshotBindingScope)query.View.Scope).ForConfirmation();
         if (candidate.Slot >= 0)
@@ -195,7 +204,7 @@ public sealed partial class OperandCompleter
         else
         {
             var method = candidate.Method!;
-            var reference = query.Members.TrySpell(method, query.Identity.Site);
+            var reference = candidate.Alias ?? query.Members.TrySpell(method, query.Identity.Site);
             text = reference is null ? null : reference[..CilSyntaxParser.ParseMethodReference(reference).NameEnd] + "<";
             target = GenericCompletionBinding.ForMethod(method);
         }

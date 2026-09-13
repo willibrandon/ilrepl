@@ -8,6 +8,9 @@ are open, so a method or a class is typed in one go. Each new line copies the in
 line before it and steps in after an opening brace; a closing brace typed on a blank line steps
 out. The status bar says what Enter will do next.
 
+`.edit method as Name` opens a copy of an existing method in the editor. Use `.edit Name` to return to it.
+See [Editing and comparing methods](/usage/editing-methods/).
+
 ```ilrepl
 il[1]> .method int32 Twice(int32 n) {
   ...>   ldarg n

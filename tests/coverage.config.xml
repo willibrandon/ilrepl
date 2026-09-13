@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Configuration>
+  <IncludeTestAssembly>False</IncludeTestAssembly>
+  <CodeCoverage>
+    <CollectFromChildProcesses>True</CollectFromChildProcesses>
+    <SkipAutoProperties>False</SkipAutoProperties>
+    <ModulePaths mergeDefaults="False">
+      <Include>
+        <ModulePath>.*[/\\]([Ii]l[Rr]epl([.-].*)?)\.dll$</ModulePath>
+      </Include>
+      <Exclude>
+        <ModulePath>.*IlRepl\.Tests\.dll$</ModulePath>
+      </Exclude>
+    </ModulePaths>
+  </CodeCoverage>
+</Configuration>

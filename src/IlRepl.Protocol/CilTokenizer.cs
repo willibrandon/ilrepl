@@ -638,7 +638,7 @@ public sealed class CilTokenizer
 
     private static int ReadCommand(CilLineReader r, int i, ReadOnlySpan<char> command)
     {
-        if (command.SequenceEqual(".dis") || command.SequenceEqual(".disassemble"))
+        if (command.SequenceEqual(".dis") || command.SequenceEqual(".disassemble") || command.SequenceEqual(".edit"))
         {
             return r.ReadMemberReference(i);
         }

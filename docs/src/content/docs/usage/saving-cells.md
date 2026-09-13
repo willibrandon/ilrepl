@@ -9,6 +9,9 @@ description: Write a cell to disk as an assembly, or look at it as ILAsm.
 every method defined with `.method` beside it, and every type defined with `.class` before it.
 The cell is kept, so you can still run it.
 
+Saved edits include their types and helpers. Use the names shown by `.types` when loading the file.
+The export contains the latest saved revisions; the session keeps their originals.
+
 ```ilrepl
 il[1]> .args (int32 n = 0)
   args: 0:int32 n = 0
@@ -51,6 +54,9 @@ extension is not needed because you can copy it from the transcript. Operands ar
 qualified and each class is written out with its fields, members, and nested types, so the text
 assembles with `ilasm` after adding the assembly references it lists.
 
+For method edits, `.il` includes the copied types and assembly references needed by Microsoft ILAsm.
+It also shows unfinished cells. Complete any pending labels and exception blocks before saving or assembling them.
+
 ```ilrepl
 il[1]> .il
 .assembly extern System.Runtime {}
@@ -62,6 +68,7 @@ il[1]> .il
     .method public static object Run(int32 n) cil managed
     {
         .maxstack 2
+        .zeroinit
         ldarg n
         ldc.i4 2
         mul

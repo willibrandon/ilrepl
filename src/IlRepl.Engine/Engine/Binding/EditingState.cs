@@ -41,6 +41,21 @@ internal sealed class EditingState
     public EditingBody? Method { get; set; }
 
     /// <summary>
+    /// The original declaring context of the active edit submission.
+    /// </summary>
+    internal EditingMethodEdit? Edit { get; set; }
+
+    /// <summary>
+    /// The state restored when the outer edit submission is abandoned.
+    /// </summary>
+    internal EditingState? BeforeEdit { get; set; }
+
+    /// <summary>
+    /// Whether the complete method has closed and only the outer edit brace remains.
+    /// </summary>
+    internal bool EditMethodClosed { get; set; }
+
+    /// <summary>
     /// The open property or event block, or null outside an accessor declaration.
     /// </summary>
     public EditingAccessorBlock? Accessor { get; set; }

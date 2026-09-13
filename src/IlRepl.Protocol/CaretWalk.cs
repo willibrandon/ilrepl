@@ -309,9 +309,45 @@ internal sealed class CaretWalk
     private CompletionSite? Command(int head)
     {
         var word = _r.TextAt(head);
-        if (word.SequenceEqual(".dis") || word.SequenceEqual(".disassemble"))
+        var name = word.ToString();
+        if (name is ".diff" or ".compare" or ".methods")
         {
-            return Member(head + 1, ".dis", CompletionSiteKind.Method, complete: true) ?? CompletionSite.None;
+            if (WordSite(head + 1, CompletionSiteKind.EditName, name, -1) is { } operand)
+            {
+                return operand with { DeclarationComplete = false };
+            }
+
+            if (name == ".compare" && _r.TextAt(head + 2).SequenceEqual("using")
+                && WordSite(head + 3, CompletionSiteKind.Scenario, name, -1) is { } scenario)
+            {
+                return scenario with { DeclarationComplete = false };
+            }
+        }
+
+        if (name is ".diff" or ".compare" or ".dis" or ".disassemble")
+        {
+            var start = _caret;
+            while (start > _r.EndOf(head) && !char.IsWhiteSpace(_line[start - 1]))
+            {
+                start--;
+            }
+
+            var end = _caret;
+            while (end < _line.Length && !char.IsWhiteSpace(_line[end]))
+            {
+                end++;
+            }
+
+            if (_line.AsSpan(start, _caret - start).StartsWith("--", StringComparison.Ordinal))
+            {
+                return Site(CompletionSiteKind.CommandOption, name, start, start, end) with { DeclarationComplete = false };
+            }
+        }
+
+        if (word.SequenceEqual(".dis") || word.SequenceEqual(".disassemble") || word.SequenceEqual(".edit"))
+        {
+            return Member(head + 1, name == ".edit" ? name : ".dis", CompletionSiteKind.Method, complete: true)
+                ?? CompletionSite.None;
         }
 
         return CompletionSite.None;

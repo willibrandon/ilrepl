@@ -124,10 +124,10 @@ public sealed class InstructionParserTests
     }
 
     /// <summary>
-    /// The no. prefix has no emit API and is reported.
+    /// The no. prefix requires a numeric mask and does not accept descriptive check names.
     /// </summary>
     [TestMethod]
-    public void Parse_NoPrefix_IsReported()
+    public void Parse_NoPrefix_RejectsNonNumericMask()
     {
         Assert.ThrowsExactly<ReplException>(() => InstructionParser.Parse("no. typecheck", Empty));
     }

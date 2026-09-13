@@ -515,6 +515,20 @@ public sealed partial class Session
         }
 
         _methods.Clear();
+        foreach (var edit in _edits)
+        {
+            if (edit.Baseline.Definition is { } baseline)
+            {
+                SessionAssemblies.Release(baseline);
+            }
+
+            if (edit.Current?.Definition is { } current)
+            {
+                SessionAssemblies.Release(current);
+            }
+        }
+
+        _edits.Clear();
         _open = null;
         foreach (var type in _types)
         {

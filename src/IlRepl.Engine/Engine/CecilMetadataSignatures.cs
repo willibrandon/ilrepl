@@ -127,7 +127,7 @@ internal static class CecilMetadataSignatures
         return reference;
     }
 
-    private static TypeReference Import(IlSignature signature, MemberReference context, CecilWriter writer)
+    internal static TypeReference Import(IlSignature signature, MemberReference context, CecilWriter writer)
     {
         switch (signature.Kind)
         {

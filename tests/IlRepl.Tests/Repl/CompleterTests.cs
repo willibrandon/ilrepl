@@ -46,7 +46,7 @@ public sealed class CompleterTests
         Assert.DoesNotContain(i => i.Name.StartsWith("prefix", StringComparison.Ordinal), catalog);
         Assert.Contains(i => i.Name == ".help", catalog);
         Assert.Contains(i => i.Name == ".method" && i.TakesOperand, catalog);
-        Assert.Contains(i => i.Name == ".methods" && !i.TakesOperand, catalog);
+        Assert.Contains(i => i.Name == ".methods" && i.TakesOperand && i.Detail == "[Edit]", catalog);
         Assert.IsGreaterThan(220, catalog.Count);
     }
 

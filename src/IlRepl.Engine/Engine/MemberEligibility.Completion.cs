@@ -4,6 +4,9 @@ using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
 
+/// <summary>
+/// Selects members eligible for completion at the current command and operand.
+/// </summary>
 public static partial class MemberEligibility
 {
     /// <summary>
@@ -18,7 +21,7 @@ public static partial class MemberEligibility
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(site);
         ArgumentNullException.ThrowIfNull(view);
-        if (site.Owner is ".dis" or ".disassemble")
+        if (site.Owner is ".dis" or ".disassemble" or ".edit")
         {
             return Inspectable(method);
         }
@@ -36,6 +39,8 @@ public static partial class MemberEligibility
 
         return site.Owner switch
         {
+            ".compare" => site.Kind == CompletionSiteKind.Scenario && method.Source == MethodSymbolSource.Session
+                && method.IsStatic && method.Parameters.Count == 0 && method.Arity == 0,
             "call" => method.IsStatic ? !method.IsVirtual || HasConstrainedInterfaceReceiver(method, view) : !method.IsAbstract,
             "callvirt" => !method.IsStatic && !method.IsConstructor,
             "newobj" => method.Name == ".ctor" && method.DeclaringType is { IsAbstract: false },
@@ -101,7 +106,8 @@ public static partial class MemberEligibility
         }
 
         var scope = view.Scope;
-        if (site.Owner is not (".dis" or ".disassemble") && AccessProblem(type, scope.Access, AccessFacts.From(scope)) is not null)
+        if (site.Owner is not (".dis" or ".disassemble" or ".edit")
+            && AccessProblem(type, scope.Access, AccessFacts.From(scope)) is not null)
         {
             return false;
         }

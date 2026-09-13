@@ -50,6 +50,14 @@ public partial interface IReplHost
     Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Runs the prepared comparison in fresh host processes after its starting state is displayed.
+    /// </summary>
+    /// <param name="identity">The one-use comparison ticket.</param>
+    /// <param name="cancellationToken">Terminates comparison workers while preserving the live host.</param>
+    /// <returns>The observations, outcome, and current session status.</returns>
+    Task<HandleReply> CompareAsync(string identity, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Handles a submitted line while retaining its identity in the editor document.
     /// </summary>
     /// <param name="line">The submitted text.</param>

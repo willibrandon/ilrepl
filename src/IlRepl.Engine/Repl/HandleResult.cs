@@ -13,4 +13,19 @@ public sealed record HandleResult(bool Succeeded, bool QuitRequested)
     /// Source findings retained when the submitted line is refused.
     /// </summary>
     public IReadOnlyList<AnalysisDiagnostic> Diagnostics { get; init; } = [];
+
+    /// <summary>
+    /// The complete method document requested by .edit.
+    /// </summary>
+    public EditDocument? EditDocument { get; init; }
+
+    /// <summary>
+    /// The instruction and stack comparison requested by .diff.
+    /// </summary>
+    public EditDiff? Diff { get; init; }
+
+    /// <summary>
+    /// The immutable package awaiting execution by the frontend's isolated-runtime coordinator.
+    /// </summary>
+    internal ComparisonPackage? ComparisonPackage { get; init; }
 }

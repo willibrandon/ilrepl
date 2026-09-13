@@ -1,8 +1,12 @@
+using System.Globalization;
 using System.Reflection.Emit;
 using IlRepl.Protocol;
 
 namespace IlRepl.Engine.Binding;
 
+/// <summary>
+/// Analyzes instructions and body directives in the current editor document.
+/// </summary>
 public sealed partial class EditingSession
 {
     private void AddLine(string line)
@@ -14,7 +18,11 @@ public sealed partial class EditingSession
         }
 
         EditingTypeBlock[] enclosing = [.. _state.OpenTypes];
-        if (_state.Accessor is not null)
+        if (_state.Edit is not null && _state.Method is null)
+        {
+            AddEditLine(text);
+        }
+        else if (_state.Accessor is not null)
         {
             AddAccessorLine(text);
         }
@@ -245,7 +253,8 @@ public sealed partial class EditingSession
             throw new ReplException("arglist needs a vararg cell; add the .vararg directive first");
         }
 
-        if (instruction.Op == OpCodes.Endfilter && (body.Frames.Count == 0 || body.Frames[^1] != BlockKind.Filter))
+        if (instruction.Op == OpCodes.Endfilter && !body.FlowNodes.Any(node => node.ExceptionRegion is not null)
+            && (body.Frames.Count == 0 || body.Frames[^1] != BlockKind.Filter))
         {
             throw new ReplException("endfilter is only valid inside a filter block (} filter {)");
         }
@@ -306,7 +315,7 @@ public sealed partial class EditingSession
         }
 
         var start = _documentRaw.Length - _documentRaw.TrimStart().Length;
-        return new AnalysisLocation(body.LabelSpace.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        return new AnalysisLocation(body.LabelSpace.ToString(CultureInfo.InvariantCulture),
             _documentLine, start, _documentLine < 0 ? text.Length : _documentRaw.TrimEnd().Length - start);
     }
 

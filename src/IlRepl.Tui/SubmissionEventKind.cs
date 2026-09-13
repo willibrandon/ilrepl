@@ -51,4 +51,9 @@ public enum SubmissionEventKind
     /// A completion request settled and its query identity must be checked before showing any rows.
     /// </summary>
     Completions,
+
+    /// <summary>
+    /// The engine returned a complete method draft for the multiline editor.
+    /// </summary>
+    EditDocument,
 }

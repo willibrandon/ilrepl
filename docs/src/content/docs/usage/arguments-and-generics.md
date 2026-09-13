@@ -61,6 +61,12 @@ callvirt instance int32 class List`1<!!T>::get_Count()
 Declare `.typeparams` before the first instruction of a cell, or `.clear` first. Arguments cannot
 use the cell's type parameters because reflection needs concrete values to pass.
 
+## Editing generic methods
+
+`.edit` keeps the method's type parameters and constraints. If you supply type arguments when opening it,
+the copy uses those arguments too. An open generic copy accepts them at the call, such as `call Copy<string>`.
+See [Editing and comparing methods](/usage/editing-methods/) for examples.
+
 ## Varargs
 
 `.vararg` gives the cell the vararg calling convention so `arglist` is valid. The runtime only

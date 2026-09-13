@@ -15,6 +15,11 @@ public sealed class Instruction
     public required OpCode Op { get; init; }
 
     /// <summary>
+    /// The encoded prefix name when the body must use metadata emission instead of Reflection.Emit.
+    /// </summary>
+    public string? DecodedPrefixName { get; init; }
+
+    /// <summary>
     /// The instruction as the user typed it, without labels or comments.
     /// </summary>
     public required string Text { get; init; }

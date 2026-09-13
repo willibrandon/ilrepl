@@ -60,6 +60,15 @@ public interface IReplEngine : IAsyncDisposable
     Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Runs a prepared comparison in isolated workers after its starting-state reply has been displayed.
+    /// </summary>
+    /// <param name="identity">The one-use ticket returned by .compare.</param>
+    /// <param name="cancellationToken">Terminates comparison workers without cancelling the live session.</param>
+    /// <returns>The typed comparison observations and transcript.</returns>
+    Task<HandleReply> CompareAsync(string identity, CancellationToken cancellationToken) =>
+        Task.FromException<HandleReply>(new NotSupportedException("this engine has no isolated comparison runner"));
+
+    /// <summary>
     /// Handles a submitted line while retaining its identity in the editor document.
     /// </summary>
     /// <param name="line">The submitted text.</param>

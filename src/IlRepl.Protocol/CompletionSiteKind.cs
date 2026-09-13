@@ -67,4 +67,19 @@ public enum CompletionSiteKind
     /// The position right after a generic method's closed <c>&gt;</c>, where its parameter list goes.
     /// </summary>
     Signature,
+
+    /// <summary>
+    /// An existing edit name supplied to a comparison or diff command.
+    /// </summary>
+    EditName,
+
+    /// <summary>
+    /// A parameterless session method used to construct comparison inputs.
+    /// </summary>
+    Scenario,
+
+    /// <summary>
+    /// An option belonging to an edit, diff, or comparison command.
+    /// </summary>
+    CommandOption,
 }

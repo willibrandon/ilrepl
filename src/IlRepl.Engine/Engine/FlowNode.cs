@@ -40,6 +40,11 @@ internal sealed record FlowNode<T>(AnalysisLocation Location, string Source) whe
     public T? CatchType { get; init; }
 
     /// <summary>
+    /// An explicit exception clause associated with this source entry.
+    /// </summary>
+    public ExceptionRegion<T>? ExceptionRegion { get; init; }
+
+    /// <summary>
     /// Whether binding or decoding left this entry's effect unresolved.
     /// </summary>
     public bool EffectUnknown { get; init; }
