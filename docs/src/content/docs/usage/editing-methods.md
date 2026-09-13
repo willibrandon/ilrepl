@@ -78,8 +78,8 @@ Generic methods use the type arguments selected when you opened the edit.
 Each `ref` or `out` literal gets a separate variable. Use a scenario when arguments need to share a variable.
 
 For an instance method, object input, or repeated call, write a parameterless
-session method to set up the inputs. Run it with `.compare Name using Scenario`. Each side runs the
-same scenario, calling the original or the copy:
+session method to set up the inputs. Run it with `.compare Name using Scenario`.
+Both versions must have matching signatures to use the same scenario. Each side calls the original or the copy:
 
 ```cil
 .class public Counter {

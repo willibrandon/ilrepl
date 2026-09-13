@@ -38,6 +38,8 @@ public static partial class ComparisonCapture
             {
                 throw new ReplException("a comparison scenario must be a parameterless session method");
             }
+
+            edit.RequireScenarioSignature();
         }
         else
         {

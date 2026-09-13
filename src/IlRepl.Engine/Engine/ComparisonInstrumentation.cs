@@ -44,7 +44,7 @@ internal static class ComparisonInstrumentation
         var exception = new VariableDefinition(writer.Import(typeof(Exception)));
         wrapper.Body.Variables.Add(identity);
         wrapper.Body.Variables.Add(exception);
-        var returnsVoid = target.ReturnType.MetadataType == MetadataType.Void;
+        var returnsVoid = Unmodified(target.ReturnType).MetadataType == MetadataType.Void;
         var result = returnsVoid ? null : new VariableDefinition(target.ReturnType);
         if (result is not null)
         {
@@ -58,9 +58,10 @@ internal static class ComparisonInstrumentation
 
         void Box(TypeReference type)
         {
+            type = Unmodified(type);
             if (type is ByReferenceType reference)
             {
-                type = reference.ElementType;
+                type = Unmodified(reference.ElementType);
                 il.Emit(OpCodes.Ldobj, type);
             }
 
@@ -194,9 +195,9 @@ internal static class ComparisonInstrumentation
                 references.Add(0);
             }
 
-            references.AddRange(wrapper.Parameters.Where(parameter => parameter.ParameterType.IsByReference)
+            references.AddRange(wrapper.Parameters.Where(parameter => Unmodified(parameter.ParameterType).IsByReference)
                 .Select(parameter => parameter.Index + 1));
-            if (after && !failed && target.ReturnType.IsByReference)
+            if (after && !failed && Unmodified(target.ReturnType).IsByReference)
             {
                 references.Add(count - 1);
             }
@@ -347,11 +348,7 @@ internal static class ComparisonInstrumentation
 
     private static MethodReference? AwaitableTracker(TypeReference type, CecilWriter writer)
     {
-        while (type is IModifierType modifier)
-        {
-            type = modifier.ElementType;
-        }
-
+        type = Unmodified(type);
         var definition = type is GenericInstanceType constructed ? constructed.ElementType.FullName : type.FullName;
         var name = definition == typeof(Task).FullName || definition == typeof(Task<>).FullName
             ? nameof(ComparisonProbe.TrackTask)
@@ -377,6 +374,7 @@ internal static class ComparisonInstrumentation
 
     private static bool CannotBox(TypeReference type)
     {
+        type = Unmodified(type);
         if (type is ByReferenceType reference)
         {
             return CannotBox(reference.ElementType);
@@ -390,5 +388,15 @@ internal static class ComparisonInstrumentation
         var definition = type.GetElementType() as TypeDefinition;
         return definition?.CustomAttributes.Any(attribute =>
             attribute.AttributeType.FullName == "System.Runtime.CompilerServices.IsByRefLikeAttribute") == true;
+    }
+
+    private static TypeReference Unmodified(TypeReference type)
+    {
+        while (type is IModifierType modifier)
+        {
+            type = modifier.ElementType;
+        }
+
+        return type;
     }
 }

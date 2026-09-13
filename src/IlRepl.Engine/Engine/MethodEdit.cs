@@ -80,4 +80,32 @@ public sealed class MethodEdit
     /// The last successfully published family, or null before the first commit.
     /// </summary>
     internal ImportedMethodFamily? Current { get; set; }
+
+    /// <summary>
+    /// Requires compatible original and edited call signatures before exporting a shared scenario.
+    /// </summary>
+    /// <exception cref="ReplException">The scenario cannot call both versions with the same signature.</exception>
+    internal void RequireScenarioSignature()
+    {
+        var original = Original.Requested as MethodInfo;
+        var edited = Method as MethodInfo;
+        var before = original?.GetParameters();
+        var after = edited?.GetParameters();
+        if (original is null || edited is null || original.CallingConvention != edited.CallingConvention
+            || before!.Length != after!.Length || !SameParameter(original.ReturnParameter, edited.ReturnParameter)
+            || before.Where((parameter, index) => !SameParameter(parameter, after[index])).Any())
+        {
+            throw new ReplException("the original and edited signatures must match to compare this method through a scenario");
+        }
+
+        bool SameType(Type first, Type second) => TypeNameFormatter.IlAsm(first)
+            == Current!.NormalizeNames(TypeNameFormatter.IlAsm(second));
+
+        bool SameModifiers(Type[] first, Type[] second) => first.Length == second.Length
+            && first.Zip(second).All(pair => SameType(pair.First, pair.Second));
+
+        bool SameParameter(ParameterInfo first, ParameterInfo second) => SameType(first.ParameterType, second.ParameterType)
+            && SameModifiers(first.GetRequiredCustomModifiers(), second.GetRequiredCustomModifiers())
+            && SameModifiers(first.GetOptionalCustomModifiers(), second.GetOptionalCustomModifiers());
+    }
 }

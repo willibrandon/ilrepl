@@ -53,15 +53,7 @@ internal static class CecilOriginalCall
                 + string.Join("; ", edit.Baseline.Problems));
         }
 
-        var parameters = original.GetParameters();
-        var current = edit.Method!.GetParameters();
-        if (parameters.Length != current.Length || original is not MethodInfo info || edit.Method is not MethodInfo edited
-            || !Same(info.ReturnType, edited.ReturnType)
-            || parameters.Where((parameter, index) => !Same(parameter.ParameterType, current[index].ParameterType)).Any())
-        {
-            throw new ReplException("the original and edited signatures must match to compare this method through a scenario");
-        }
-
+        edit.RequireScenarioSignature();
         selected.Body = new MethodBody(selected);
         var il = selected.Body.GetILProcessor();
         foreach (var parameter in selected.Parameters)
@@ -83,8 +75,5 @@ internal static class CecilOriginalCall
 
         il.Emit(OpCodes.Call, call);
         il.Emit(OpCodes.Ret);
-
-        bool Same(Type before, Type after) => TypeNameFormatter.IlAsm(before)
-            == edit.Current!.NormalizeNames(TypeNameFormatter.IlAsm(after));
     }
 }
