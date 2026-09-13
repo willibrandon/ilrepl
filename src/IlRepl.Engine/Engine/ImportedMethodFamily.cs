@@ -356,6 +356,22 @@ internal sealed partial class ImportedMethodFamily
             ConsiderType(local.Type, body.Method.DeclaringType!);
         }
 
+        foreach (var entry in body.State.Entries)
+        {
+            if ((entry.ExceptionRegion?.CatchType ?? entry.CatchType) is not { } catchType)
+            {
+                continue;
+            }
+
+            // Session types follow their copied context; external catches must retain the identities external helpers throw.
+            if (TypeRelations.IsSessionType(catchType))
+            {
+                ConsiderType(catchType, body.Method.DeclaringType!);
+            }
+
+            ReportType(catchType, MemberResolver.Describe(body.Method) + ": catch " + TypeNameFormatter.Pretty(catchType));
+        }
+
         foreach (var entry in body.State.Entries.Where(entry => entry.Instruction is not null))
         {
             var instruction = entry.Instruction!;

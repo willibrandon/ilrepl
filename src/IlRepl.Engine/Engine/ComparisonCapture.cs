@@ -55,10 +55,28 @@ public static partial class ComparisonCapture
                 throw new ReplException($"{edit.Name} requires {parameters.Length} literal arguments; received {options.Arguments.Count}");
             }
 
+            var originalParameters = edit.Original.Requested.GetParameters();
+            if (originalParameters.Length != options.Arguments.Count)
+            {
+                var noun = originalParameters.Length == 1 ? "argument" : "arguments";
+                throw new ReplException($"the original {edit.Name} requires {originalParameters.Length} literal {noun}; "
+                    + $"received {options.Arguments.Count}");
+            }
+
             for (var index = 0; index < parameters.Length; index++)
             {
                 _ = ValueLiteralParser.Parse(options.Arguments[index], parameters[index].ParameterType.IsByRef
                     ? parameters[index].ParameterType.GetElementType()! : parameters[index].ParameterType);
+                var originalType = originalParameters[index].ParameterType;
+                try
+                {
+                    _ = ValueLiteralParser.Parse(options.Arguments[index], originalType.IsByRef
+                        ? originalType.GetElementType()! : originalType);
+                }
+                catch (ReplException exception)
+                {
+                    throw new ReplException($"original argument {index + 1}: {exception.Message}", exception);
+                }
             }
         }
 

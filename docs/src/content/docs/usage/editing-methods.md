@@ -73,6 +73,7 @@ and byte-offset differences. Floating-point bit patterns remain distinct.
 ## Compare execution
 
 Use `.compare Name (<literals>)` for a static method with literal arguments.
+The literals must fit the parameter count and types of both versions.
 After saving an unchanged `Maximum`, `.compare Maximum (17, 42) --assert` reports `match`.
 Generic methods use the type arguments selected when you opened the edit.
 Each `ref` or `out` literal gets a separate variable. Use a scenario when arguments need to share a variable.
@@ -157,6 +158,7 @@ Set up repeatable inputs in your scenario. The transcript describes these condit
 `.edit` copies the declaring type and the fields, constructors, and helpers the method needs.
 Signatures, generic constraints, layout, and member metadata are kept. Public external methods remain
 references to their original assemblies. Opening or saving an edit does not run its code.
+Catch types are included in the dependency list.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it
 was copied. The report updates with each saved revision.
