@@ -20,6 +20,7 @@ public sealed partial class EditingSession
             BraceSeen = original.Header?.TrimEnd().EndsWith('{') == true,
             IsVarArg = original.IsVarArg,
             LabelSpace = original.LabelSpace,
+            AnalysisIdentity = original.AnalysisIdentity,
         };
         body.Arguments.AddRange(original.Arguments);
         _state.Method = body;

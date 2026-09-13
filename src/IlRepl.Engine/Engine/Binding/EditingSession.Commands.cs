@@ -37,6 +37,8 @@ public sealed partial class EditingSession
                 Undo();
                 break;
             case SessionTransition.Load:
+                _state.BindingRefreshRequired = true;
+                break;
             case SessionTransition.Save:
                 break;
             case SessionTransition.Unknown:

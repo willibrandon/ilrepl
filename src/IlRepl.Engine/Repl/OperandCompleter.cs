@@ -74,6 +74,13 @@ public sealed partial class OperandCompleter : IDisposable
 
             _activeEditing = _editing;
             var view = await _editing.SpeculateAsync(document.Lines, document.Line, cancellationToken: token).ConfigureAwait(false);
+            if (view.BindingRefreshRequired)
+            {
+                _query = null;
+                PruneContinuations(document);
+                return CompletionReply.Empty(_session.CompletionRevision, _bindingEpoch);
+            }
+
             foreach (var source in view.Snapshot.Catalog.Sources)
             {
                 await source.WarmIndexAsync(token).ConfigureAwait(false);

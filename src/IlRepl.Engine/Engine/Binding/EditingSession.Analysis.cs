@@ -47,16 +47,38 @@ public sealed partial class EditingSession
         _skipped.Clear();
         _analysisBodies.Clear();
         _analyzingDocument = true;
+        _caretFlow = null;
         var caretBody = _state.Body;
         var caretPosition = caretBody.FlowNodes.Count;
         var hasBody = true;
-        var positions = new List<(long Body, int Node, bool HasBody)>();
+        var caretBindingsStale = false;
+        var loadLine = -1;
+        var positions = new List<(object? Body, int Node, bool HasBody, bool BindingsStale)>();
         AnalyzedDocument = null;
         try
         {
             for (var line = fromCaret ? request.Line : 0; line <= request.Lines.Count && !_state.Ended; line++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (_state.BindingRefreshRequired)
+                {
+                    var stalePosition = (Body: (object?)null, Node: 0,
+                        HasBody: _state.Method is not null || _state.OpenTypes.Count == 0, BindingsStale: true);
+                    positions.Add(stalePosition);
+                    if (line == request.Line)
+                    {
+                        hasBody = stalePosition.HasBody;
+                        caretBindingsStale = true;
+                    }
+
+                    if (line % 16 == 15)
+                    {
+                        await Task.Yield();
+                    }
+
+                    continue;
+                }
+
                 var declaration = false;
                 if (line < request.Lines.Count)
                 {
@@ -64,10 +86,10 @@ public sealed partial class EditingSession
                     var kind = CilLexer.Classify(request.Lines[line], ref comment, out var source);
                     declaration = kind == SourceLineKind.Text && IsDeclarationLine(source);
                 }
-                var bodyPosition = (_state.Body.LabelSpace, _state.Body.FlowNodes.Count,
-                    !declaration && (_state.Method is not null || _state.OpenTypes.Count == 0));
+                var bodyPosition = (Body: (object?)_state.Body.AnalysisIdentity, Node: _state.Body.FlowNodes.Count,
+                    HasBody: !declaration && (_state.Method is not null || _state.OpenTypes.Count == 0), BindingsStale: false);
                 positions.Add(bodyPosition);
-                _analysisBodies.TryAdd(_state.Body.LabelSpace, _state.Body);
+                _analysisBodies.TryAdd(_state.Body.AnalysisIdentity, _state.Body);
                 if (line == request.Line)
                 {
                     caretBody = _state.Body;
@@ -81,28 +103,39 @@ public sealed partial class EditingSession
                 }
 
                 ApplyLine(request.Lines[line], line);
+                if (_state.BindingRefreshRequired)
+                {
+                    loadLine = line;
+                }
+
                 if (line % 16 == 15)
                 {
                     await Task.Yield();
                 }
             }
 
-            if (_analysisBodies.TryGetValue(caretBody.LabelSpace, out var finalBody))
+            if (!caretBindingsStale && _analysisBodies.TryGetValue(caretBody.AnalysisIdentity, out var finalBody))
             {
                 caretBody = finalBody;
             }
 
-            _analysisBodies.TryAdd(caretBody.LabelSpace, caretBody);
+            if (!caretBindingsStale)
+            {
+                _analysisBodies.TryAdd(caretBody.AnalysisIdentity, caretBody);
+            }
+
             foreach (var body in _analysisBodies.Values)
             {
                 body.Analysis = await SymbolFlowAnalysis.RunAsync(body, Scope(body), cancellationToken).ConfigureAwait(false);
             }
 
-            var result = caretBody.Analysis!;
-            var incoming = result.Before[Math.Min(caretPosition, result.Before.Length - 1)];
+            var result = caretBindingsStale ? null : caretBody.Analysis!;
+            var incoming = result?.Before[Math.Min(caretPosition, result.Before.Length - 1)];
             _caretFlow = incoming;
-            var stack = new AnalyzedStack(incoming?.Kind ?? AnalyzedStackKind.Unreachable,
-                incoming?.Values?.Select(value => EditingStack.Name(value.Type)).ToArray() ?? [], result.Incomplete);
+            var stack = caretBindingsStale
+                ? new AnalyzedStack(AnalyzedStackKind.Unknown, [], true)
+                : new AnalyzedStack(incoming?.Kind ?? AnalyzedStackKind.Unreachable,
+                    incoming?.Values?.Select(value => EditingStack.Name(value.Type)).ToArray() ?? [], result!.Incomplete);
             var diagnostics = _analysisBodies.Values.SelectMany(body => body.Analysis?.Diagnostics ?? [])
                 .Where(diagnostic => diagnostic.Location.Line >= 0
                     && (diagnostic.Code != "FLOW004" || !_skipped.Any(line => line.Line == diagnostic.Location.Line))).ToList();
@@ -114,7 +147,16 @@ public sealed partial class EditingSession
                         refused.Text.Trim().Length), []));
             }
 
-            var instruction = caretPosition < caretBody.FlowNodes.Count
+            if (loadLine >= 0)
+            {
+                var raw = request.Lines[loadLine];
+                var start = raw.Length - raw.TrimStart().Length;
+                diagnostics.Add(new AnalysisDiagnostic("FLOW025", AnalysisDiagnosticKind.Incomplete,
+                    "submit .load before later lines can be analyzed",
+                    new AnalysisLocation("document", loadLine, start, raw.Trim().Length), []));
+            }
+
+            var instruction = !caretBindingsStale && caretPosition < caretBody.FlowNodes.Count
                 && caretBody.FlowNodes[caretPosition].Location.Line == request.Line
                 && caretBody.FlowNodes[caretPosition] is { Instruction: not null, Synthetic: false };
             var reply = new AnalysisReply(request.DocumentVersion, Revision, _identity, 0,
@@ -124,7 +166,13 @@ public sealed partial class EditingSession
             {
                 var presentations = positions.Select((position, line) =>
                 {
-                    var body = _analysisBodies[position.Body];
+                    if (position.BindingsStale)
+                    {
+                        var unknown = position.HasBody ? new AnalyzedStack(AnalyzedStackKind.Unknown, [], true) : null;
+                        return (unknown, false);
+                    }
+
+                    var body = _analysisBodies[position.Body!];
                     var analysis = body.Analysis!;
                     var state = analysis.Before[Math.Min(position.Node, analysis.Before.Length - 1)];
                     var display = position.HasBody ? new AnalyzedStack(state?.Kind ?? AnalyzedStackKind.Unreachable,

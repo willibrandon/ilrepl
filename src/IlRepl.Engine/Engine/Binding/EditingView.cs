@@ -40,6 +40,11 @@ public sealed record EditingView(
     internal string DeclarationContext { get; init; } = "";
 
     /// <summary>
+    /// Whether an unsubmitted command prevents binding source after it against this snapshot.
+    /// </summary>
+    internal bool BindingRefreshRequired { get; init; }
+
+    /// <summary>
     /// The concrete arguments assigned to the cell's generic parameters, or null before an assignment.
     /// </summary>
     public IReadOnlyList<TypeSymbol>? TypeArguments { get; init; }

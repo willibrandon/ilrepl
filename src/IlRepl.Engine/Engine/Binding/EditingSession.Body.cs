@@ -316,7 +316,7 @@ public sealed partial class EditingSession
         if (_analyzingDocument)
         {
             body.Analysis = null;
-            _analysisBodies[body.LabelSpace] = body;
+            _analysisBodies[body.AnalysisIdentity] = body;
             return;
         }
 

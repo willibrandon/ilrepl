@@ -61,6 +61,11 @@ internal sealed class EditingBody
     public long LabelSpace { get; set; }
 
     /// <summary>
+    /// Identifies transactional forms of one body during document analysis.
+    /// </summary>
+    public object AnalysisIdentity { get; init; } = new();
+
+    /// <summary>
     /// The index of the active parameter metadata target, including zero for the return value.
     /// </summary>
     public int? ParameterTarget { get; set; }

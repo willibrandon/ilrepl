@@ -51,6 +51,42 @@ public sealed class ControlFlowPreviewTests
     }
 
     /// <summary>
+    /// Undo keeps the incoming stack of the body incarnation it replaces.
+    /// </summary>
+    [TestMethod]
+    public async Task Analyze_UndoKeepsTheReplacedBodyPosition()
+    {
+        using var editing = new EditingSession(new Session());
+        string[] lines = ["ldc.i4.1", ".undo", "ldstr \"x\""];
+        var reply = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);
+        Assert.AreEqual("[int32]", reply.Stack!.Render());
+        Assert.AreEqual("[int32]", editing.AnalyzedDocument!.At(new AnalysisRequest(lines, 1, 0, 2)).Stack!.Render());
+        Assert.AreEqual("[]", editing.AnalyzedDocument.At(new AnalysisRequest(lines, 2, 0, 3)).Stack!.Render());
+        Assert.AreEqual("[string]", editing.AnalyzedDocument.At(new AnalysisRequest(lines, 3, 0, 4)).Stack!.Render());
+    }
+
+    /// <summary>
+    /// Load defers analysis that needs the assembly until the command is submitted.
+    /// </summary>
+    [TestMethod]
+    public async Task Analyze_LoadDefersLaterBinding()
+    {
+        using var editing = new EditingSession(new Session());
+        string[] lines = [".load " + SampleHost.Samples.GreeterDll,
+            "newobj instance void Greeter.Counter::.ctor()", "pop"];
+        var reply = await editing.AnalyzeAsync(new AnalysisRequest(lines, 2, 0, 1), TestContext.CancellationToken);
+        Assert.DoesNotContain(finding => finding.Kind == AnalysisDiagnosticKind.Error, reply.Diagnostics);
+        var diagnostic = reply.Diagnostics.Single(finding => finding.Location.Line == 0);
+        Assert.AreEqual("FLOW025", diagnostic.Code);
+        Assert.AreEqual(AnalysisDiagnosticKind.Incomplete, diagnostic.Kind);
+        Assert.AreEqual(AnalyzedStackKind.Unknown, reply.Stack!.Kind);
+        Assert.AreEqual(AnalyzedStackKind.Unknown,
+            editing.AnalyzedDocument!.At(new AnalysisRequest(lines, 1, 0, 2)).Stack!.Kind);
+        Assert.AreEqual(AnalyzedStackKind.Unknown,
+            editing.AnalyzedDocument.At(new AnalysisRequest(lines, 3, 0, 3)).Stack!.Kind);
+    }
+
+    /// <summary>
     /// Read-only analysis identifies an unfinished operand and continues to later source.
     /// </summary>
     [TestMethod]

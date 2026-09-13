@@ -153,7 +153,8 @@ public sealed partial class EditingSession
             string[] declarations = [.. _state.CellDeclarations];
             string[] lines = [.. _state.Cell.Lines.Where(line => !IsCellDeclaration(line))];
             var labelSpace = _state.Cell.LabelSpace;
-            _state.Cell = new EditingBody { LabelSpace = labelSpace };
+            var analysisIdentity = _state.Cell.AnalysisIdentity;
+            _state.Cell = new EditingBody { LabelSpace = labelSpace, AnalysisIdentity = analysisIdentity };
             _state.CellDeclarations.Clear();
             foreach (var line in declarations.Concat(lines))
             {

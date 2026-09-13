@@ -19,7 +19,7 @@ public sealed partial class EditingSession : IDisposable
     private bool _analyzingDocument;
     private int _documentLine = -1;
     private string _documentRaw = "";
-    private readonly Dictionary<long, EditingBody> _analysisBodies = [];
+    private readonly Dictionary<object, EditingBody> _analysisBodies = [];
 
     /// <summary>
     /// Captures a live session without compiling definitions or evaluating argument values.
@@ -135,7 +135,7 @@ public sealed partial class EditingSession : IDisposable
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            for (var i = start; i < caretLine && !_state.Ended; i++)
+            for (var i = start; i < caretLine && !_state.Ended && !_state.BindingRefreshRequired; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 ApplyLine(lines[i], i);
@@ -227,6 +227,7 @@ public sealed partial class EditingSession : IDisposable
             ThisSlots = [.. Enumerable.Range(0, body.Stack.Items.Count).Select(body.Stack.IsThisAt)],
             OwnerKind = _state.OpenTypes.LastOrDefault()?.Header.Kind,
             DeclarationContext = DeclarationContext(),
+            BindingRefreshRequired = _state.BindingRefreshRequired,
         };
     }
 
@@ -282,7 +283,7 @@ public sealed partial class EditingSession : IDisposable
             _state = checkpoint;
             if (_analyzingDocument)
             {
-                _analysisBodies[_state.Body.LabelSpace] = _state.Body;
+                _analysisBodies[_state.Body.AnalysisIdentity] = _state.Body;
             }
 
             _skipped.Add(new SkippedEditingLine(lineNumber, raw, exception.Message));

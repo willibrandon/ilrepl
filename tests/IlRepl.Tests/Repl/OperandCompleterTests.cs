@@ -135,6 +135,17 @@ public sealed class OperandCompleterTests
     }
 
     /// <summary>
+    /// Completion waits for an unsent load to refresh the binding catalog.
+    /// </summary>
+    [TestMethod]
+    public async Task UnsentLoad_SuspendsLaterCompletion()
+    {
+        using var completer = new OperandCompleter(new Session());
+        var reply = await Complete(completer, [".load " + SampleHost.Samples.GreeterDll, "call Console::Wr"]);
+        Assert.IsEmpty(reply.Items);
+    }
+
+    /// <summary>
     /// A private field is available inside its unsent owner and excluded from the cell.
     /// </summary>
     [TestMethod]
