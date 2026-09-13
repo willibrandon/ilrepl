@@ -33,6 +33,11 @@ public sealed class FieldSymbol : IEquatable<FieldSymbol>
     public required TypeSymbol FieldType { get; init; }
 
     /// <summary>
+    /// The complete field type when annotations cannot be represented by <see cref="FieldType"/>.
+    /// </summary>
+    internal TypeSymbol? ExactType { get; init; }
+
+    /// <summary>
     /// The field attributes.
     /// </summary>
     public FieldAttributes Attributes { get; init; }
@@ -74,6 +79,12 @@ public sealed class FieldSymbol : IEquatable<FieldSymbol>
     /// <param name="fieldType">The substituted field type.</param>
     /// <returns>The copy.</returns>
     public FieldSymbol With(TypeSymbol declaringType, TypeSymbol fieldType)
+        => WithExact(declaringType, fieldType, RuntimeSymbolTypes.RebaseExact(FieldType, ExactType, fieldType));
+
+    /// <summary>
+    /// A copy seen through a declaring construction with its complete substituted type.
+    /// </summary>
+    internal FieldSymbol WithExact(TypeSymbol declaringType, TypeSymbol fieldType, TypeSymbol? exactType)
     {
         ArgumentNullException.ThrowIfNull(declaringType);
         ArgumentNullException.ThrowIfNull(fieldType);
@@ -84,6 +95,7 @@ public sealed class FieldSymbol : IEquatable<FieldSymbol>
             DeclaringType = declaringType,
             Name = Name,
             FieldType = fieldType,
+            ExactType = exactType,
             Attributes = Attributes,
             RequiredModifiers = RequiredModifiers,
             OptionalModifiers = OptionalModifiers,
@@ -100,5 +112,6 @@ public sealed class FieldSymbol : IEquatable<FieldSymbol>
     public override int GetHashCode() => SymbolIdentity.Hash(this);
 
     /// <inheritdoc/>
-    public override string ToString() => SymbolRenderer.Pretty(FieldType) + " " + SymbolRenderer.Pretty(DeclaringType) + "::" + Name;
+    public override string ToString() => (ExactType is null ? SymbolRenderer.Pretty(FieldType) : SymbolRenderer.Annotated(ExactType))
+        + " " + SymbolRenderer.Pretty(DeclaringType) + "::" + Name;
 }

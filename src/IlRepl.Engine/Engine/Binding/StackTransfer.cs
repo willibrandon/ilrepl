@@ -104,6 +104,7 @@ public sealed class StackTransfer<T> where T : class
                 return [_types.MakeArray(view.Type!)];
             case "castclass":
             case "isinst":
+                return [Box(view.Type!)];
             case "unbox.any":
             case "ldobj":
             case "ldelem":
@@ -117,9 +118,11 @@ public sealed class StackTransfer<T> where T : class
             case "ldfld":
             case "ldsfld":
                 return [view.FieldType];
-            case "ldflda":
             case "ldsflda":
                 return [_types.MakeByRef(view.FieldType!)];
+            case "ldflda":
+                return [popped.Count > 0 && popped[0] is { } receiver
+                    ? FieldAddress(receiver, view.FieldType!) : _types.MakeByRef(view.FieldType!)];
             case "ldloc":
             case "ldloc.s":
             case "ldloc.0":
@@ -158,16 +161,17 @@ public sealed class StackTransfer<T> where T : class
             case "sub.ovf.un":
             case "mul.ovf":
             case "mul.ovf.un":
-                return [Binary(popped[0], popped[1])];
+                return [name is "sub" or "sub.ovf.un" && popped[0] is { } left && popped[1] is { } right
+                    && _types.IsByRef(left) && _types.IsByRef(right) ? _types.Primitive("native int") : Binary(popped[0], popped[1])];
             case "shl":
             case "shr":
             case "shr.un":
             case "neg":
             case "not":
-                return [popped[0]];
+                return [UnmanagedPointerAsNative(popped[0])];
             case "ldind.ref":
-                return [popped.Count > 0 && popped[0] is { } indirect && (_types.IsByRef(indirect) || _types.IsPointer(
-                    indirect)) ? _types.ElementOf(indirect) : _types.UnknownReference];
+                return [popped.Count > 0 && popped[0] is { } indirect && _types.IsByRef(indirect)
+                    ? _types.ElementOf(indirect) : _types.UnknownReference];
             case "ldelem.ref":
                 return [popped.Count > 1 && popped[0] is { } array && _types.IsArray(array) ? _types.ElementOf(
                     array) : _types.UnknownReference];
@@ -219,7 +223,7 @@ public sealed class StackTransfer<T> where T : class
         ArgumentNullException.ThrowIfNull(operand);
         if (_types.IsGenericParameter(operand))
         {
-            return _types.UnknownReference;
+            return _types.Boxed(operand);
         }
 
         if (!_types.IsValueType(operand))
@@ -229,6 +233,19 @@ public sealed class StackTransfer<T> where T : class
 
         return _types.Boxed(_types.NullableUnderlying(operand) ?? operand);
     }
+
+    private T FieldAddress(T receiver, T fieldType)
+    {
+        if (_types.IsPointer(receiver))
+        {
+            return _types.Primitive("native int");
+        }
+
+        return IsNativeInteger(receiver) ? _types.Primitive("native int") : _types.MakeByRef(fieldType);
+    }
+
+    private bool IsNativeInteger(T type) => _types.Same(type, _types.Primitive("native int"))
+        || _types.Same(type, _types.Primitive("native uint"));
 
     private T? NumericSuffix(string suffix) => suffix switch
     {
@@ -283,17 +300,12 @@ public sealed class StackTransfer<T> where T : class
             return b;
         }
 
-        if (a is not null && _types.IsPointer(a))
-        {
-            return a;
-        }
-
-        if (b is not null && _types.IsPointer(b))
-        {
-            return b;
-        }
-
         var nativeInt = _types.Primitive("native int");
+        if ((a is not null && _types.IsPointer(a)) || (b is not null && _types.IsPointer(b)))
+        {
+            return nativeInt;
+        }
+
         if (_types.Same(a, nativeInt) || _types.Same(b, nativeInt))
         {
             return nativeInt;
@@ -312,4 +324,7 @@ public sealed class StackTransfer<T> where T : class
 
         return _types.Primitive("int32");
     }
+
+    private T? UnmanagedPointerAsNative(T? type) => type is not null && _types.IsPointer(type)
+        ? _types.Primitive("native int") : type;
 }

@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -421,6 +422,7 @@ public sealed partial class Session
             var gp = (GenericTypeParameterBuilder)generics[i];
             gp.SetGenericParameterAttributes(parameter.Attributes);
             var constraints = parameter.Constraints.Select(map.Map).ToList();
+            RuntimeGenericConstraints.Register(gp, parameter with { Constraints = constraints });
             var baseConstraint = constraints.FirstOrDefault(c => !c.IsInterface && !c.IsGenericParameter);
             if (baseConstraint is not null)
             {
@@ -436,7 +438,13 @@ public sealed partial class Session
 
         foreach (var field in declaration.Fields)
         {
-            var mapped = field with { Type = map.Map(field.Type), RequiredModifiers = [.. field.RequiredModifiers.Select(map.Map)], OptionalModifiers = [.. field.OptionalModifiers.Select(map.Map)] };
+            var mapped = field with
+            {
+                Type = map.Map(field.Type),
+                ExactType = field.ExactType is null ? null : map.Map(field.ExactType),
+                RequiredModifiers = [.. field.RequiredModifiers.Select(map.Map)],
+                OptionalModifiers = [.. field.OptionalModifiers.Select(map.Map)],
+            };
             var fieldBuilder = builder.DefineField(mapped.Name, mapped.Type, [.. mapped.RequiredModifiers], [.. mapped.OptionalModifiers], mapped.Attributes);
             if (mapped.Offset is { } offset)
             {
@@ -484,10 +492,19 @@ public sealed partial class Session
     private static MethodSignature MapSignature(MethodSignature signature, EmitMap map) => signature with
     {
         ReturnType = map.Map(signature.ReturnType),
+        ExactReturnType = signature.ExactReturnType is null ? null : map.Map(signature.ExactReturnType),
         ReturnRequiredModifiers = [.. signature.ReturnRequiredModifiers.Select(map.Map)],
         ReturnOptionalModifiers = [.. signature.ReturnOptionalModifiers.Select(map.Map)],
-        Parameters = [.. signature.Parameters.Select(p => p with { Type = map.Map(p.Type), RequiredModifiers = [.. p.RequiredModifiers.Select(map.Map)], OptionalModifiers = [.. p.OptionalModifiers.Select(map.Map)] })],
+        Parameters = [.. signature.Parameters.Select(p => p with
+        {
+            Type = map.Map(p.Type),
+            ExactType = p.ExactType is null ? null : map.Map(p.ExactType),
+            RequiredModifiers = [.. p.RequiredModifiers.Select(map.Map)],
+            OptionalModifiers = [.. p.OptionalModifiers.Select(map.Map)],
+        })],
         TypeParameters = [.. signature.TypeParameters.Select(p => p with { Constraints = [.. p.Constraints.Select(map.Map)] })],
+        ExactSymbol = signature.ExactSymbol is null ? null : SymbolRemapper.Method(
+            signature.ExactSymbol, signature.ExactSymbol.Definition, map.Map, signature.ExactSymbol.IsDeclared),
     };
 
     private void ReplayFamilyLines(string headerLine, IReadOnlyList<string> lines)

@@ -16,19 +16,18 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_OperandCompletion_AcceptsAndRuns(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
-        await page.Keyboard.TypeAsync("call Environment::get_CurrentManagedTh");
+        const string original = "call Environment::get_CurrentManagedTh";
+        await page.Keyboard.TypeAsync(original);
         var watch = Stopwatch.StartNew();
-        // Assertion retries back off up to a second; sample actual rendering at frame cadence instead.
-        await page.WaitForFunctionAsync("() => document.querySelector('#terminal').textContent.includes('members 1/1')",
-            null, new() { PollingInterval = 16, Timeout = 30_000 });
+        await CompletionAtCaretAsync(page, "il[1]> " + original, "members 1/1");
         TestContext.WriteLine($"First framework member page in {browser}: {watch.Elapsed.TotalMilliseconds:F0} ms");
         Assert.IsLessThan(TimeSpan.FromSeconds(1), watch.Elapsed);
         await page.Keyboard.PressAsync("Tab");
-        await Assertions.Expect(terminal).Not.ToContainTextAsync("members 1/1");
+        await PromptContainsAsync(page, "il[1]> call Environment::get_CurrentManagedThreadId()");
         Assert.AreEqual("TEXTAREA", await page.EvaluateAsync<string>("() => document.activeElement.tagName"));
         await page.Keyboard.PressAsync("Enter");
         await TypeLineAsync(page, "ret");
@@ -46,7 +45,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_UnsentMethodArgument_CompletesAndRuns(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -73,7 +72,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_GenericCompletion_BindsAtTheEnd(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");

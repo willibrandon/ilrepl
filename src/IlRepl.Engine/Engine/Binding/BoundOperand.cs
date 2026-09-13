@@ -21,6 +21,11 @@ public sealed record BoundOperand
     public TypeSymbol? Type { get; init; }
 
     /// <summary>
+    /// The type operand with top-level modifiers and other exact metadata shapes retained.
+    /// </summary>
+    public TypeSymbol? ExactType { get; init; }
+
+    /// <summary>
     /// The member of a method operand or a method token.
     /// </summary>
     public BoundMethod? Method { get; init; }

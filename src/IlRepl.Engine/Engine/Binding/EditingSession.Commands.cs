@@ -1,3 +1,4 @@
+using System.Reflection.Emit;
 namespace IlRepl.Engine.Binding;
 
 public sealed partial class EditingSession
@@ -36,6 +37,8 @@ public sealed partial class EditingSession
                 Undo();
                 break;
             case SessionTransition.Load:
+                _state.BindingRefreshRequired = true;
+                break;
             case SessionTransition.Save:
                 break;
             case SessionTransition.Unknown:
@@ -54,10 +57,21 @@ public sealed partial class EditingSession
             return;
         }
 
-        RequireResolvedLabels(_state.Cell);
-        if (!_state.Cell.EndsFlow)
+        if (_analyzingDocument)
         {
-            ValidateReturn(_state.Cell, Scope());
+            AddFlowNode(_state.Cell, new FlowNode<TypeSymbol>(FlowLocation(_state.Cell, _documentRaw), _documentRaw)
+            {
+                Instruction = new StackOperandView<TypeSymbol> { Op = OpCodes.Ret },
+                Synthetic = true,
+            }, Scope());
+        }
+        else
+        {
+            RequireResolvedLabels(_state.Cell);
+            if (!_state.Cell.EndsFlow)
+            {
+                ValidateReturn(_state.Cell, Scope());
+            }
         }
 
         ClearCell();

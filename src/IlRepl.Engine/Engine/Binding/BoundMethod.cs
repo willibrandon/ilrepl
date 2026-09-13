@@ -10,4 +10,15 @@ namespace IlRepl.Engine.Binding;
 /// <param name="Method">The member, with the declaring construction's and the instantiation's arguments substituted.</param>
 /// <param name="Definition">The declaration as written, before substitution, for a member of a type being written; null otherwise.</param>
 /// <param name="OptionalParameterTypes">The types after <c>...</c> in a vararg call site, or null when the call is not vararg.</param>
-public sealed record BoundMethod(MethodSymbol Method, MethodSymbol? Definition, IReadOnlyList<TypeSymbol>? OptionalParameterTypes);
+public sealed record BoundMethod(MethodSymbol Method, MethodSymbol? Definition, IReadOnlyList<TypeSymbol>? OptionalParameterTypes)
+{
+    /// <summary>
+    /// Explicit generic arguments with metadata-only shapes retained; empty when the reference has none.
+    /// </summary>
+    public IReadOnlyList<TypeSymbol> ExactGenericArguments { get; init; } = [];
+
+    /// <summary>
+    /// The complete optional call-site types, or null when the call is not vararg.
+    /// </summary>
+    internal IReadOnlyList<TypeSymbol>? ExactOptionalParameterTypes { get; init; }
+}

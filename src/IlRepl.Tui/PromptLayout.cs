@@ -28,12 +28,15 @@ public static class PromptLayout
     /// <param name="lineCount">How many lines the buffer has.</param>
     /// <param name="candidateCount">How many completion candidates there are to show.</param>
     /// <param name="detailLines">The wrapped lines needed by the selected candidate's complete signature.</param>
+    /// <param name="diagnosticLines">The compact diagnostic's requested rows.</param>
     /// <returns>The rows each part gets.</returns>
-    public static PromptFit Fit(int terminalHeight, int lineCount, int candidateCount, int detailLines = 0)
+    public static PromptFit Fit(int terminalHeight, int lineCount, int candidateCount, int detailLines = 0, int diagnosticLines = 0)
     {
         var height = terminalHeight <= 0 ? DefaultHeight : terminalHeight;
         var editorRows = height < 8 ? 1 : Math.Clamp(lineCount, 1, Math.Max(1, height / 3));
         var remaining = Math.Max(0, height - FixedRows - editorRows);
+        var diagnosticRows = height >= 8 ? Math.Min(Math.Clamp(diagnosticLines, 0, 3), Math.Max(0, remaining - 1)) : 0;
+        remaining -= diagnosticRows;
         var paletteRows = 0;
         if (candidateCount > 0 && height >= 8)
         {
@@ -51,6 +54,10 @@ public static class PromptLayout
         }
 
         var transcriptRows = remaining - (paletteRows > 0 ? paletteRows + PaletteBorderRows + detailRows : 0);
-        return new PromptFit(editorRows, paletteRows, Math.Max(0, transcriptRows)) { DetailRows = detailRows };
+        return new PromptFit(editorRows, paletteRows, Math.Max(0, transcriptRows))
+        {
+            DetailRows = detailRows,
+            DiagnosticRows = diagnosticRows,
+        };
     }
 }

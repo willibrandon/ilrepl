@@ -72,9 +72,9 @@ method unless it says `static`, and a member with no access word is `privatescop
 its own class can reach, so write `public` when a cell needs it.
 
 The class closes without running constructors or type initializers. The family is written and
-loaded, and desktop runtime preparation checks the bodies it can prepare. A refused terminal
-submission returns the block to the editor for correction. Generic method definitions and browser
-bodies still need runtime validation when called.
+loaded after its bodies pass control-flow checks, including generic bodies and browser input.
+Desktop runtime preparation adds a check for bodies it can prepare. A refused terminal submission
+returns the block for correction; remaining runtime checks happen when called.
 The note says `end of struct Point` and the cell number advances: a class completes the cell
 the way a method does.
 

@@ -74,7 +74,7 @@ public sealed class MemberSpeller
     /// <param name="field">The field represented by a completion row.</param>
     /// <returns>The full field signature.</returns>
     public string FullSignature(FieldSymbol field) => (field.IsStatic ? "static " : "")
-        + _types.Spell(WithModifiers(field.FieldType, field.RequiredModifiers, field.OptionalModifiers)) + " "
+        + _types.Spell(SignatureSymbolIdentity.Annotated(field)) + " "
         + _types.Spell(field.DeclaringType) + "::" + TypeNameFormatter.IlAsmIdentifier(field.Name);
 
     /// <summary>
@@ -98,9 +98,7 @@ public sealed class MemberSpeller
         {
             var candidate = prefix + reference;
             var bound = SymbolBinder.BindFieldReference(CilSyntaxParser.ParseFieldReference(candidate), _scope);
-            return SymbolIdentity.Equal(bound, field) && SymbolIdentity.Equal(bound.FieldType, field.FieldType)
-                && SymbolIdentity.SequenceEqual(bound.RequiredModifiers, field.RequiredModifiers)
-                && SymbolIdentity.SequenceEqual(bound.OptionalModifiers, field.OptionalModifiers) ? candidate : null;
+            return SymbolIdentity.Equal(bound, field) && SignatureSymbolIdentity.Equal(bound, field) ? candidate : null;
         }
         catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
         {
@@ -120,14 +118,7 @@ public sealed class MemberSpeller
         ArgumentNullException.ThrowIfNull(expected);
         return SymbolIdentity.Equal(actual, expected)
             && actual.Arity == expected.Arity && actual.CallingConvention == expected.CallingConvention
-            && SymbolIdentity.Equal(actual.ReturnType, expected.ReturnType)
-            && SymbolIdentity.SequenceEqual(actual.ReturnRequiredModifiers, expected.ReturnRequiredModifiers)
-            && SymbolIdentity.SequenceEqual(actual.ReturnOptionalModifiers, expected.ReturnOptionalModifiers)
-            && actual.Parameters.Count == expected.Parameters.Count
-            && actual.Parameters.Zip(expected.Parameters).All(pair =>
-                SymbolIdentity.Equal(pair.First.Type, pair.Second.Type)
-                && SymbolIdentity.SequenceEqual(pair.First.RequiredModifiers, pair.Second.RequiredModifiers)
-                && SymbolIdentity.SequenceEqual(pair.First.OptionalModifiers, pair.Second.OptionalModifiers));
+            && SignatureSymbolIdentity.Equal(actual, expected);
     }
 
     private IEnumerable<string> MethodCandidates(MethodSymbol method, CompletionSite site)
@@ -155,7 +146,7 @@ public sealed class MemberSpeller
         }
 
         var parameters = method.Parameters.Select(parameter => signatureTypes.Spell(
-            WithModifiers(parameter.Type, parameter.RequiredModifiers, parameter.OptionalModifiers))).ToList();
+            SignatureSymbolIdentity.Annotated(parameter))).ToList();
         if (method.IsVarArg)
         {
             parameters.Add("...");
@@ -164,7 +155,7 @@ public sealed class MemberSpeller
         var reference = owner + name + "(" + string.Join(", ", parameters) + ")";
         var instance = !method.IsStatic && site.ExplicitInstance ? "instance " : "";
         var convention = method.IsVarArg ? "vararg " : "";
-        var returnType = WithModifiers(method.ReturnType, method.ReturnRequiredModifiers, method.ReturnOptionalModifiers);
+        var returnType = SignatureSymbolIdentity.AnnotatedReturn(method);
         var typedReturn = site.ReturnTypeText is { } written && MatchesType(written, method.ReturnType)
             ? written.Trim() + " " : "";
         yield return instance + convention + typedReturn + reference;
@@ -189,19 +180,4 @@ public sealed class MemberSpeller
         }
     }
 
-    private static TypeSymbol WithModifiers(
-        TypeSymbol type, IReadOnlyList<TypeSymbol> required, IReadOnlyList<TypeSymbol> optional)
-    {
-        foreach (var modifier in required)
-        {
-            type = TypeSymbol.Modified(type, modifier, true);
-        }
-
-        foreach (var modifier in optional)
-        {
-            type = TypeSymbol.Modified(type, modifier, false);
-        }
-
-        return type;
-    }
 }

@@ -243,4 +243,37 @@ public sealed class MemberAccessTests
             ".class public Host {", ".method public static int32 Touch<T>() { ldc.i4 1; ret }", ".method public static int32 Use() {");
         Assert.Contains("Outer/Inner is nested private", Refused(session, "call int32 Host::Touch<class Outer/Inner>()"));
     }
+
+    /// <summary>
+    /// A type used as a generic argument modifier has the same visibility as a direct argument.
+    /// </summary>
+    [TestMethod]
+    public void GenericArgumentModifiers_AreJudged()
+    {
+        var session = Load(".class public Outer {", ".class nested private Inner { }", "}");
+        var error = Refused(session,
+            "call !!0[] [System.Runtime]System.Array::Empty<int32 modopt(Outer/Inner)>()");
+        Assert.Contains("Outer/Inner is nested private", error);
+    }
+
+    /// <summary>
+    /// Types nested in a function-pointer signature keep the same visibility as direct mentions.
+    /// </summary>
+    [TestMethod]
+    public void FunctionPointerTypes_AreJudgedRecursively()
+    {
+        var session = Load(".class public Outer {", ".class nested private Inner { }", "}");
+        Assert.Contains("Outer/Inner is nested private",
+            Refused(session, ".locals init (method void *(class Outer/Inner) pointer)"));
+        Assert.Contains("Outer/Inner is nested private",
+            Refused(session, ".args (method void *(class Outer/Inner) pointer)"));
+        Assert.Contains("Outer/Inner is nested private",
+            Refused(session, ".locals init (method void *(class Outer/Inner)[] pointers)"));
+        Assert.Contains("Outer/Inner is nested private",
+            Refused(session, ".args (method void *(class Outer/Inner)[] pointers)"));
+        Assert.Contains("Outer/Inner is nested private",
+            Refused(session, "newarr method void *(class Outer/Inner)"));
+        Assert.Contains("Outer/Inner is nested private",
+            Refused(session, "calli void(class Outer/Inner)"));
+    }
 }

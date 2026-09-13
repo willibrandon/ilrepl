@@ -1,4 +1,5 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -27,6 +28,11 @@ public sealed record FieldDeclaration(
     IReadOnlyList<CustomAttributeDeclaration> CustomAttributes,
     string Source)
 {
+    /// <summary>
+    /// The exact type retained when its runtime projection cannot represent its complete shape.
+    /// </summary>
+    internal TypeSymbol? ExactType { get; init; }
+
     /// <summary>
     /// True for a static field.
     /// </summary>
@@ -70,7 +76,7 @@ public sealed record FieldDeclaration(
             words.Add("literal");
         }
 
-        words.Add(TypeNameFormatter.Pretty(Type));
+        words.Add(ExactType is null ? TypeNameFormatter.Pretty(Type) : SymbolRenderer.Annotated(ExactType));
         words.Add(Name);
         var text = string.Join(" ", words);
         return HasDefault ? text + " = " + ConstantText.Describe(DefaultValue) : text;

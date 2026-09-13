@@ -1,5 +1,7 @@
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using IlRepl.Engine;
+using Mono.Cecil;
 
 namespace IlRepl.Tests.Engine;
 
@@ -16,7 +18,9 @@ public sealed class TypeLifetimeTests
         ".class public Counter {",
         ".field public static int32 Count",
         ".field public int32 Id",
-        ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldsfld int32 Counter::Count; ldc.i4 1; add; dup; stsfld int32 Counter::Count; stfld int32 Counter::Id; ret }",
+        ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); "
+            + "ldarg.0; ldsfld int32 Counter::Count; ldc.i4 1; add; dup; stsfld int32 Counter::Count; "
+            + "stfld int32 Counter::Id; ret }",
         "}",
     ];
 
@@ -38,12 +42,52 @@ public sealed class TypeLifetimeTests
     }
 
     /// <summary>
+    /// Loading a collectible definition leaves the process assembly catalog on the same snapshot.
+    /// </summary>
+    [TestMethod]
+    [DoNotParallelize]
+    public void CollectibleLoad_DoesNotRebuildProcessAssemblyCatalog()
+    {
+        _ = DefineAndReset(new Session());
+        var before = ProcessAssemblyCatalog();
+        _ = DefineAndReset(new Session());
+        var after = ProcessAssemblyCatalog();
+        Assert.AreSame(before, after, "a collectible load must not make the next name search enumerate every loaded assembly");
+    }
+
+    /// <summary>
+    /// A searchable load callback never waits for the gate used to publish the first catalog snapshot.
+    /// </summary>
+    [TestMethod]
+    [DoNotParallelize]
+    public void SearchableLoad_DoesNotWaitForCatalogGate()
+    {
+        var type = typeof(TypeResolver).Assembly.GetType("IlRepl.Engine.ProcessAssemblies", throwOnError: true)!;
+        var gate = (Lock)type.GetField("Gate", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+        var bytes = SearchableAssembly();
+        var load = Task.CompletedTask;
+        gate.Enter();
+        try
+        {
+            load = Task.Run(() => Assembly.Load(bytes));
+            Assert.IsTrue(
+                load.Wait(TimeSpan.FromSeconds(5), TestContext.CancellationToken),
+                "the assembly-load callback must not wait for the catalog gate");
+        }
+        finally
+        {
+            gate.Exit();
+            load.Wait(TestContext.CancellationToken);
+        }
+    }
+
+    /// <summary>
     /// Checks reset releases definitions while concurrent threads continue resolving names.
     /// </summary>
     /// <remarks>
-    /// A definition dropped by .reset collects while other threads keep resolving names, with
-    /// and without a did-you-mean: a name search never walks the runtime's assembly list, whose
-    /// walk keeps every collectible assembly alive for its duration.
+    /// A definition dropped by .reset collects while other threads keep loading definitions and
+    /// resolving names, with and without a did-you-mean: a collectible load never makes a name
+    /// search walk the runtime's assembly list and retain every collectible assembly it sees.
     /// Other tests capture process-wide assembly snapshots, so only this test's resolver workers may run alongside its collection checks.
     /// </remarks>
     [TestMethod]
@@ -55,12 +99,13 @@ public sealed class TypeLifetimeTests
         var context = new ParseContext([], [], GenericContext.Empty, resolver, []);
         var ct = TestContext.CancellationToken;
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var searches = new int[3];
+        var searches = new int[4];
         Task[] workers =
         [
             Task.Run(() => Repeat(() => resolver.Resolve("NoSuchTypeAnywhere", null), searches, 0, stop.Token), ct),
             Task.Run(() => Repeat(() => resolver.Resolve("NoSuchTypeAnywhere", null), searches, 1, stop.Token), ct),
             Task.Run(() => Repeat(() => TypeParser.Parse("Cosnole", context), searches, 2, stop.Token), ct),
+            Task.Run(() => Repeat(() => _ = DefineAndReset(new Session()), searches, 3, stop.Token), ct),
         ];
         try
         {
@@ -72,8 +117,8 @@ public sealed class TypeLifetimeTests
             {
                 var session = new Session();
                 var weak = DefineAndReset(session);
-                // Loading the definition invalidates the process cache. Let every worker finish
-                // refreshing it before checking that their continuing cached searches retain nothing.
+                // Keep searches active after the collectible definition is loaded. Its load must
+                // neither enter nor cause a rebuild of the process assembly catalog.
                 WaitForSearches(searches, ct);
                 for (var i = 0; i < 10 && weak.IsAlive; i++)
                 {
@@ -116,6 +161,23 @@ public sealed class TypeLifetimeTests
 
             Interlocked.Increment(ref searches[index]);
         }
+    }
+
+    private static object ProcessAssemblyCatalog()
+    {
+        var type = typeof(TypeResolver).Assembly.GetType("IlRepl.Engine.ProcessAssemblies", throwOnError: true)!;
+        return type.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)!.GetValue(null)!;
+    }
+
+    private static byte[] SearchableAssembly()
+    {
+        using var definition = AssemblyDefinition.CreateAssembly(
+            new("IlRepl.ProcessAssemblyProbe." + Guid.NewGuid().ToString("N"), new(1, 0)),
+            "main",
+            ModuleKind.Dll);
+        using var stream = new MemoryStream();
+        definition.Write(stream);
+        return stream.ToArray();
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -190,7 +252,12 @@ public sealed class TypeLifetimeTests
         var session = Load(Counter);
         var before = Run(session, "newobj instance void Counter::.ctor()")!;
         var oldType = session.Types[0].RuntimeType!;
-        foreach (var line in IlLines.Expand(".class public Counter {", ".field public static int32 Count", ".field public int32 Id", ".field public int32 Extra", "}"))
+        foreach (var line in IlLines.Expand(
+            ".class public Counter {",
+            ".field public static int32 Count",
+            ".field public int32 Id",
+            ".field public int32 Extra",
+            "}"))
         {
             session.AddLine(line);
         }
@@ -212,8 +279,11 @@ public sealed class TypeLifetimeTests
     public void ConstructorlessClass_HasNoConstructor()
     {
         var session = Load(".class public Bare {", ".field public static int32 X", "}");
-        Assert.IsEmpty(session.Types[0].RuntimeType!.GetConstructors(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance));
-        Assert.Contains("class Bare declares no constructor", Assert.ThrowsExactly<ReplException>(() => session.AddLine("newobj instance void Bare::.ctor()")).Message);
+        Assert.IsEmpty(session.Types[0].RuntimeType!.GetConstructors(
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance));
+        Assert.Contains(
+            "class Bare declares no constructor",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine("newobj instance void Bare::.ctor()")).Message);
     }
 
     /// <summary>

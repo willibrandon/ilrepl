@@ -12,7 +12,7 @@ out. The status bar says what Enter will do next.
 il[1]> .method int32 Twice(int32 n) {
   ...>   ldarg n
   ...>   ldc.i4 2
-stack [] │ no locals │ 0 instructions │ editing 3 lines          Enter continues
+stack before [int32] │ no locals │ 0 instructions │ editing 3 lines          Enter continues
 ```
 
 Once the braces balance the hint changes, and Enter sends the block line by line. The transcript
@@ -25,7 +25,7 @@ il[1]> .method int32 Twice(int32 n) {
   ...>   mul
   ...>   ret
   ...> }
-stack [] │ no locals │ 0 instructions │ editing 6 lines      Enter sends 6 lines
+stack unreachable │ no locals │ 0 instructions │ editing 6 lines      Enter sends 6 lines
 ```
 
 ```ilrepl
@@ -54,6 +54,17 @@ line; Ctrl+P and Ctrl+N walk history from any line. Shift with the arrows select
 buffer, typing replaces the selection, and on the desktop Ctrl+C copies it. Ctrl+C with nothing
 selected clears the buffer, and on an empty buffer it quits.
 
+## Checking the stack
+
+The status bar shows `stack before` for the instruction at the caret. It follows the whole body,
+so a branch below the caret can change that stack. On an insertion line it shows the incoming
+stack; declarations do not claim an instruction stack.
+
+A compact diagnostic explains a conflicting join, missing target, or invalid instruction.
+F8 moves to the next finding and Shift+F8 moves back. Corrections update the stack and clear
+resolved findings. Completion uses the same incoming stack. `.show` and `.dis` retain the full
+explanations and related locations; earlier transcript echoes stay as they were when accepted.
+
 ## Pasting
 
 A paste lands in the editor and waits for Enter, so the block below, from
@@ -68,20 +79,22 @@ A paste lands in the editor and waits for Enter, so the block below, from
   ...> BASE: ldarg n
   ...>   ret
   ...> }
-stack [] │ no locals │ 0 instructions │ editing 17 lines    Enter sends 17 lines
+stack unreachable │ no locals │ 0 instructions │ editing 17 lines    Enter sends 17 lines
 ```
 
-The excerpt above shows the last rows of the pasted Fibonacci method. The editor shows the rows that fit, up to a third of the screen, and scrolls to keep the
-caret in view. Only the newline the clipboard adds at the end is dropped; every other blank line
-is yours. Inside a block a blank line is skipped, at the top level it runs the cell, as it does
+The excerpt above shows the last rows of the pasted Fibonacci method. The editor shows the rows
+that fit, up to a third of the screen, and scrolls to keep the caret in view. Only the newline
+the clipboard adds at the end is dropped; every other blank line is yours. Inside a block a
+blank line is skipped, at the top level it runs the cell, as it does
 when typed, and a line that is only a comment is echoed and ignored. Pasted text keeps its own
 indentation.
 
 ## A refused line
 
 When the engine refuses a line, the block it belongs to is withdrawn, the method or class it
-opened is abandoned, and the whole block comes back with the refused line selected. A line on
-its own is not put back: the error is in the transcript and Up recalls the line. In a paste of
+opened is abandoned, and the whole block comes back with the offending line selected. A later
+branch can expose an error on an earlier line; that earlier line is selected. A line on its
+own is not put back: the error is in the transcript and Up recalls the line. In a paste of
 separate lines, the ones after the refused line never went, and they come back.
 
 ```ilrepl
@@ -95,13 +108,14 @@ il[3]>   lcd.i4 2
 ```
 
 ```ilrepl
+error on line 3: unknown opcode 'lcd.i4' (did you mean 'ldc.i4'?)
 il[3]> .method int32 Half(int32 n) {
   ...>   ldarg n
   ...>   lcd.i4 2
   ...>   div
   ...>   ret
   ...> }
-stack [] │ no locals │ 0 instructions │ editing 6 lines      Enter sends 6 lines
+stack [int32] │ no locals │ 0 instructions │ editing 6 lines      Enter sends 6 lines
 ```
 
 Typing replaces the selected line, and the next Enter sends the block again from a clean state.
@@ -170,7 +184,7 @@ il[6]> .method int32 Half(int32 n) {
   ...>   div
   ...>   ret
   ...> }
-stack [] │ no locals │ 0 instructions │ editing 6 lines      Enter sends 6 lines
+stack unreachable │ no locals │ 0 instructions │ editing 6 lines      Enter sends 6 lines
 ```
 
 History is kept between runs in `~/.config/ilrepl/history`, or under `$XDG_CONFIG_HOME` when

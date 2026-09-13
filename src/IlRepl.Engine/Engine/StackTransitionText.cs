@@ -1,4 +1,5 @@
 using IlRepl.Engine.Binding;
+using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
 
@@ -23,7 +24,7 @@ public static class StackTransitionText
         for (var index = 0; index < count; index++)
         {
             var source = context.Stack.Count - count + index;
-            popped[index] = source >= 0 ? context.Stack[source] : null;
+            popped[index] = context.StackKind == AnalyzedStackKind.Known && source >= 0 ? context.Stack[source] : null;
         }
 
         var op = instruction.Op.Name;

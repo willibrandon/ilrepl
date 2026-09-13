@@ -39,10 +39,9 @@ public static class SymbolBinder
     {
         ArgumentNullException.ThrowIfNull(syntax);
         ArgumentNullException.ThrowIfNull(scope);
-        var type = BindCore(syntax.Unwrapped, scope, lenientGenerics);
-        var required = syntax.Modifiers(true).Select(m => BindType(m, scope, lenientGenerics).Type).ToList();
-        var optional = syntax.Modifiers(false).Select(m => BindType(m, scope, lenientGenerics).Type).ToList();
-        return new BoundType(type, syntax.IsPinned, required, optional);
+        var exactType = BindCore(syntax, scope, lenientGenerics);
+        var type = SymbolSignatureProvider.StripModifiers(exactType, out var required, out var optional);
+        return new BoundType(type, syntax.IsPinned, required, optional, exactType);
     }
 
     private static TypeSymbol BindCore(TypeSyntax syntax, IBindingScope scope, bool lenient)
@@ -66,7 +65,8 @@ public static class SymbolBinder
                     return result.Type;
                 }
 
-                var arguments = syntax.Arguments.Select(a => BindType(a, scope, lenient).Type).ToList();
+                var boundArguments = syntax.Arguments.Select(a => BindType(a, scope, lenient)).ToList();
+                var arguments = boundArguments.Select(argument => argument.Type).ToList();
                 var definition = result.Type;
                 if (!result.FromSession && !definition.IsGenericDefinition)
                 {
@@ -99,7 +99,7 @@ public static class SymbolBinder
                     }
                 }
 
-                return TypeSymbol.Construct(definition, arguments);
+                return TypeSymbol.Construct(definition, [.. boundArguments.Select(argument => argument.ExactType)]);
             }
 
             case TypeSyntaxKind.Array:
@@ -155,8 +155,8 @@ public static class SymbolBinder
         ArgumentNullException.ThrowIfNull(syntax);
         ArgumentNullException.ThrowIfNull(scope);
         var (managed, unmanaged, convention) = Conventions(syntax.ConventionWords);
-        var returnType = BindType(syntax.ReturnType, scope).Type;
-        var parameters = syntax.Parameters.Select(p => BindType(p, scope).Type).ToList();
+        var returnType = BindType(syntax.ReturnType, scope).ExactType;
+        var parameters = syntax.Parameters.Select(p => BindType(p, scope).ExactType).ToList();
         if (syntax.SentinelIndex is not null)
         {
             managed = (managed & ~CallingConventions.Standard) | CallingConventions.VarArgs;
@@ -304,12 +304,7 @@ public static class SymbolBinder
                 }
 
             case OperandSyntaxKind.Type:
-                return new BoundInstruction(op, text, new BoundOperand
-                {
-                    Kind = OperandKind.Type,
-                    Type = BindType(operand.Type!,
-                    scope).Type
-                }, null, null);
+                return new BoundInstruction(op, text, TypeOperand(OperandKind.Type), null, null);
 
             case OperandSyntaxKind.Member:
                 return new BoundInstruction(op, text, new BoundOperand
@@ -338,7 +333,7 @@ public static class SymbolBinder
                     }
                     : operand.IsFieldToken
                         ? new BoundOperand { Kind = OperandKind.Token, Field = BindFieldReference(operand.Member!, scope) }
-                        : new BoundOperand { Kind = OperandKind.Token, Type = BindType(operand.Type!, scope).Type };
+                        : TypeOperand(OperandKind.Token);
                 return new BoundInstruction(op, text, token, null, null);
             }
 
@@ -356,6 +351,12 @@ public static class SymbolBinder
 
         BoundInstruction Literal(OperandKind kind, object value) => new(op, text, new BoundOperand { Kind = kind, Value = value }, null,
             null);
+
+        BoundOperand TypeOperand(OperandKind kind)
+        {
+            var bound = BindType(operand.Type!, scope);
+            return new BoundOperand { Kind = kind, Type = bound.Type, ExactType = bound.ExactType };
+        }
     }
 
     private static void RequireNoOperand(string opName, string operandText)
@@ -530,37 +531,55 @@ public static class SymbolBinder
             return BindGenericDefinition(syntax, declaring, typeArguments, scope);
         }
 
-        var methodArguments = syntax.GenericArguments is null
+        var boundMethodArguments = syntax.GenericArguments?.Select(a => BindType(a, scope)).ToArray();
+        var methodArguments = boundMethodArguments is null
             ? scope.Generics.MethodArguments
-            : [.. syntax.GenericArguments.Select(a => BindType(a, scope).Type)];
+            : [.. boundMethodArguments.Select(argument => argument.Type)];
         var memberScope = scope.WithGenerics(new SymbolGenericContext(typeArguments, methodArguments));
         BindType(syntax.DeclaringType!, scope);
-        var returnType = syntax.ReturnType is null ? null : BindType(syntax.ReturnType, memberScope).Type;
+        var boundReturnType = syntax.ReturnType is null ? null : BindType(syntax.ReturnType, memberScope);
+        var returnType = boundReturnType?.Type;
 
         IReadOnlyList<TypeSymbol>? parameterTypes = null;
+        IReadOnlyList<BoundType>? boundParameterTypes = null;
         IReadOnlyList<TypeSymbol>? optionalTypes = null;
+        IReadOnlyList<BoundType>? boundOptionalTypes = null;
         if (syntax.Parameters is not null)
         {
-            parameterTypes = [.. syntax.FixedParameters.Select(p => BindType(p, memberScope).Type)];
-            optionalTypes = syntax.OptionalParameters is null ? null : [.. syntax.OptionalParameters.Select(p => BindType(p,
-                memberScope).Type)];
+            boundParameterTypes = [.. syntax.FixedParameters.Select(p => BindType(p, memberScope))];
+            parameterTypes = [.. boundParameterTypes.Select(parameter => parameter.Type)];
+            boundOptionalTypes = syntax.OptionalParameters is null
+                ? null : [.. syntax.OptionalParameters.Select(p => BindType(p, memberScope))];
+            optionalTypes = boundOptionalTypes?.Select(type => type.Type).ToArray();
         }
 
         var explicitMethodArguments = syntax.GenericArguments is null ? null : methodArguments;
+        var exactMethodArguments = boundMethodArguments is null
+            ? [] : boundMethodArguments.Select(argument => argument.ExactType).ToArray();
+        var exactOptionalTypes = boundOptionalTypes?.Select(type => type.ExactType).ToArray();
+        BoundMethod WithExactArguments(BoundMethod method) => method with
+        {
+            ExactGenericArguments = exactMethodArguments,
+            ExactOptionalParameterTypes = exactOptionalTypes ?? (method.OptionalParameterTypes is null ? null : []),
+        };
         if (scope.TryGetDeclaration(declaring, out var own))
         {
-            return BindOwnMethod(own, declaring, scope, syntax, parameterTypes, returnType, syntax.ExplicitInstance, wantConstructor
-                || name is ".ctor" or ".cctor", explicitMethodArguments, optionalTypes);
+            var bound = BindOwnMethod(own, declaring, scope, syntax, parameterTypes, boundParameterTypes, returnType,
+                boundReturnType, syntax.ExplicitInstance, wantConstructor || name == ".ctor", explicitMethodArguments, optionalTypes);
+            return WithExactArguments(bound);
         }
 
         if (wantConstructor || name is ".ctor" or ".cctor")
         {
-            return new BoundMethod(BindConstructor(declaring, name, parameterTypes, scope), null, optionalTypes);
+            var bound = new BoundMethod(BindConstructor(
+                declaring, name, parameterTypes, boundParameterTypes, boundReturnType, scope), null, optionalTypes);
+            return WithExactArguments(bound);
         }
 
-        var method = BindLoadedMethod(declaring, syntax, parameterTypes, explicitMethodArguments, returnType, syntax.ExplicitInstance,
-            syntax.IsVarArg, scope);
-        return new BoundMethod(method, null, optionalTypes ?? (syntax.IsVarArg && method.IsVarArg ? [] : null));
+        var method = BindLoadedMethod(declaring, syntax, parameterTypes, boundParameterTypes,
+            explicitMethodArguments, boundReturnType, syntax.ExplicitInstance, syntax.IsVarArg, scope);
+        var loaded = new BoundMethod(method, null, optionalTypes ?? (syntax.IsVarArg && method.IsVarArg ? [] : null));
+        return WithExactArguments(loaded);
     }
 
     /// <summary>
@@ -574,19 +593,18 @@ public static class SymbolBinder
     {
         ArgumentNullException.ThrowIfNull(syntax);
         ArgumentNullException.ThrowIfNull(scope);
-        if (syntax.ReturnType is not null)
-        {
-            BindType(syntax.ReturnType, scope, lenientGenerics: true);
-        }
-
         var declaring = BindType(syntax.DeclaringType!, scope, lenientGenerics: true).Type;
+        var memberScope = scope.WithGenerics(new SymbolGenericContext(
+            scope.GenericArgumentsOf(declaring), scope.Generics.MethodArguments));
+        var writtenType = syntax.ReturnType is null ? null : BindType(syntax.ReturnType, memberScope);
+        BindType(syntax.DeclaringType!, scope);
         var name = syntax.Name;
         if (scope.TryGetDeclaration(declaring, out var own))
         {
             var found = own.FindField(name);
             if (found is null && own.BaseType is { } baseType && BindInheritedField(baseType, scope, name) is { } inheritedField)
             {
-                return inheritedField;
+                return CheckFieldType(inheritedField, writtenType, scope);
             }
 
             if (found is null)
@@ -598,17 +616,19 @@ public static class SymbolBinder
                     : $"no field '{name}' on {scope.Pretty(declaring)}{suggestion}; fields: {declared}");
             }
 
-            return SymbolRelations.Instantiate(found, declaring);
+            return CheckFieldType(SymbolRelations.Instantiate(found, declaring), writtenType, scope);
         }
 
         if (scope.RequiresDefinitionLookup(declaring))
         {
-            return scope.Field(declaring, name) ?? throw new ReplException($"no field '{name}' on {scope.Pretty(declaring)}");
+            var resolved = scope.Field(declaring, name)
+                ?? throw new ReplException($"no field '{name}' on {scope.Pretty(declaring)}");
+            return CheckFieldType(resolved, writtenType, scope);
         }
 
         if (scope.Field(declaring, name) is { } field)
         {
-            return field;
+            return CheckFieldType(field, writtenType, scope);
         }
 
         var names = string.Join(", ", scope.Fields(declaring).Select(f => f.Name).Take(12));
@@ -616,6 +636,23 @@ public static class SymbolBinder
         throw new ReplException(names.Length == 0
             ? $"no field '{name}' on {scope.Pretty(declaring)}"
             : $"no field '{name}' on {scope.Pretty(declaring)}{fieldSuggestion}; fields: {names}");
+    }
+
+    private static FieldSymbol CheckFieldType(FieldSymbol field, BoundType? written, IBindingScope scope)
+    {
+        if (written is null)
+        {
+            return field;
+        }
+
+        if (!SignatureSymbolIdentity.Equal(field, written))
+        {
+            throw new ReplException($"field {scope.Pretty(field.DeclaringType)}::{field.Name} has type "
+                + $"{SymbolRenderer.Annotated(SignatureSymbolIdentity.Annotated(field))}, not "
+                + SymbolRenderer.Annotated(written.ExactType));
+        }
+
+        return field;
     }
 
     /// <summary>
@@ -755,7 +792,7 @@ public static class SymbolBinder
 
     private static BoundMethod BindSessionMethod(MemberSyntax syntax, IBindingScope scope, bool wantConstructor)
     {
-        var returnType = syntax.ReturnType is null ? null : BindType(syntax.ReturnType, scope).Type;
+        var returnType = syntax.ReturnType is null ? null : BindType(syntax.ReturnType, scope);
         var name = syntax.Name;
         if (wantConstructor)
         {
@@ -784,19 +821,21 @@ public static class SymbolBinder
                 : $"no method '{name}' in the session{suggestion}; defined: {defined}  (define one with .method)");
         }
 
-        if (returnType is not null && !SymbolIdentity.Equal(returnType, signature.ReturnType))
+        if (returnType is not null && !ReturnMatches(signature, returnType))
         {
-            throw new ReplException($"method {name} returns {scope.Pretty(signature.ReturnType)}, not {scope.Pretty(returnType)}");
+            throw new ReplException($"method {name} returns "
+                + $"{SymbolRenderer.Annotated(SignatureSymbolIdentity.AnnotatedReturn(signature))}, not "
+                + SymbolRenderer.Annotated(returnType.ExactType));
         }
 
         if (syntax.Parameters is not null)
         {
-            var types = syntax.Parameters.Select(p => BindType(p, scope).Type).ToList();
-            var expected = signature.ParameterTypes;
-            if (types.Count != expected.Count || !types.Zip(expected).All(pair => SymbolIdentity.Equal(pair.First, pair.Second)))
+            var types = syntax.Parameters.Select(parameter => BindType(parameter, scope)).ToList();
+            if (!ParametersMatch(signature, types))
             {
                 throw new ReplException(
-                    $"no method {name}({string.Join(", ", types.Select(scope.Pretty))}) in the session; "
+                    $"no method {name}({string.Join(", ", types.Select(type => SymbolRenderer.Annotated(type.ExactType)))}) "
+                    + "in the session; "
                     + $"defined: {SymbolRenderer.DescribeSignature(signature, scope.Pretty)}");
             }
         }
@@ -805,8 +844,9 @@ public static class SymbolBinder
     }
 
     private static BoundMethod BindOwnMethod(IDeclarationMembers own, TypeSymbol declaring, IBindingScope scope, MemberSyntax syntax,
-        IReadOnlyList<TypeSymbol>? parameterTypes, TypeSymbol? returnType, bool explicitInstance, bool wantConstructor,
-        IReadOnlyList<TypeSymbol>? methodArguments, IReadOnlyList<TypeSymbol>? optionalTypes)
+        IReadOnlyList<TypeSymbol>? parameterTypes, IReadOnlyList<BoundType>? boundParameterTypes, TypeSymbol? returnType,
+        BoundType? boundReturnType, bool explicitInstance, bool wantConstructor, IReadOnlyList<TypeSymbol>? methodArguments,
+        IReadOnlyList<TypeSymbol>? optionalTypes)
     {
         var name = syntax.Name;
         var instantiated = declaring.Kind == TypeSymbolKind.Constructed;
@@ -815,11 +855,11 @@ public static class SymbolBinder
             .Where(m => m.GenericParameters.Count == arity)
             .Where(method => arity == 0 || GenericConstraints.SatisfiesMethod(method, declaring, methodArguments!, scope))
             .Select(m => (Declared: m, Effective: SymbolRelations.Instantiate(m, declaring, methodArguments ?? [])))
-            .Where(m => parameterTypes is null || ParametersMatch(m.Effective, parameterTypes))
+            .Where(m => boundParameterTypes is null || ParametersMatch(m.Effective, boundParameterTypes))
             .ToList();
-        if (candidates.Count > 1 && returnType is not null)
+        if (candidates.Count > 1 && boundReturnType is not null)
         {
-            candidates = candidates.Where(c => SymbolIdentity.Equal(c.Effective.ReturnType, returnType)).ToList();
+            candidates = candidates.Where(candidate => ReturnMatches(candidate.Effective, boundReturnType)).ToList();
         }
 
         if (candidates.Count > 1 && explicitInstance)
@@ -830,10 +870,12 @@ public static class SymbolBinder
         if (candidates.Count == 1)
         {
             var (signature, effective) = candidates[0];
-            if (returnType is not null && !SymbolIdentity.Equal(effective.ReturnType, returnType))
+            if (boundReturnType is not null && !ReturnMatches(effective, boundReturnType))
             {
                 throw new ReplException(
-                    $"{scope.Pretty(declaring)}::{name} returns {scope.Pretty(effective.ReturnType)}, not {scope.Pretty(returnType)}");
+                    $"{scope.Pretty(declaring)}::{name} returns "
+                    + $"{SymbolRenderer.Annotated(SignatureSymbolIdentity.AnnotatedReturn(effective))}, not "
+                    + SymbolRenderer.Annotated(boundReturnType.ExactType));
             }
 
             if (wantConstructor && signature.Name != ".ctor")
@@ -844,8 +886,9 @@ public static class SymbolBinder
             return new BoundMethod(effective, signature, optionalTypes);
         }
 
-        if (candidates.Count == 0 && !wantConstructor && own.BaseType is { } baseType && BindInherited(baseType, scope, syntax,
-            parameterTypes, returnType, explicitInstance, methodArguments, optionalTypes) is { } inherited)
+        if (candidates.Count == 0 && !wantConstructor && own.BaseType is { } baseType && BindInherited(
+            baseType, scope, syntax, parameterTypes, boundParameterTypes, boundReturnType,
+            explicitInstance, methodArguments, optionalTypes) is { } inherited)
         {
             return inherited;
         }
@@ -866,7 +909,17 @@ public static class SymbolBinder
                     | MethodAttributes.Static,
                 CallingConvention = wantConstructor || explicitInstance ? CallingConventions.HasThis : CallingConventions.Standard,
                 ReturnType = returnType,
-                Parameters = [.. parameterTypes.Select(t => new ParameterSymbol(t, null))],
+                ExactReturnType = RuntimeSymbolTypes.RequiresExact(boundReturnType!.ExactType)
+                    ? boundReturnType.ExactType : null,
+                ReturnRequiredModifiers = boundReturnType.RequiredModifiers,
+                ReturnOptionalModifiers = boundReturnType.OptionalModifiers,
+                Parameters = [.. parameterTypes.Select((type, index) => new ParameterSymbol(type, null)
+                {
+                    ExactType = RuntimeSymbolTypes.RequiresExact(boundParameterTypes![index].ExactType)
+                        ? boundParameterTypes[index].ExactType : null,
+                    RequiredModifiers = boundParameterTypes[index].RequiredModifiers,
+                    OptionalModifiers = boundParameterTypes[index].OptionalModifiers,
+                })],
                 IsDeclared = false,
             };
             return new BoundMethod(own.DefineForward(forward), null, optionalTypes);
@@ -893,7 +946,7 @@ public static class SymbolBinder
         if (candidates.Count == 0)
         {
             throw new ReplException(
-                $"no overload {scope.Pretty(declaring)}::{name}({Signature(parameterTypes, scope)}); candidates:\n"
+                $"no overload {scope.Pretty(declaring)}::{name}({Signature(boundParameterTypes, parameterTypes, scope)}); candidates:\n"
                 + string.Join("\n", known.Select(k => "    " + SymbolRenderer.DescribeMember(k, scope.Pretty))));
         }
 
@@ -917,7 +970,8 @@ public static class SymbolBinder
     /// declarations, from a loaded base through its members.
     /// </remarks>
     private static BoundMethod? BindInherited(TypeSymbol baseType, IBindingScope scope, MemberSyntax syntax,
-        IReadOnlyList<TypeSymbol>? parameterTypes, TypeSymbol? returnType, bool explicitInstance,
+        IReadOnlyList<TypeSymbol>? parameterTypes, IReadOnlyList<BoundType>? boundParameterTypes,
+        BoundType? boundReturnType, bool explicitInstance,
         IReadOnlyList<TypeSymbol>? methodArguments, IReadOnlyList<TypeSymbol>? optionalTypes)
     {
         var name = syntax.Name;
@@ -931,8 +985,8 @@ public static class SymbolBinder
                 var found = baseOwn.FindMethods(name)
                     .Where(m => m.Name is not (".ctor" or ".cctor") && m.GenericParameters.Count == arity)
                     .Select(m => (Definition: m, Effective: SymbolRelations.Instantiate(m, current, methodArguments ?? [])))
-                    .Where(m => parameterTypes is null || ParametersMatch(m.Effective, parameterTypes))
-                    .Where(m => returnType is null || SymbolIdentity.Equal(m.Effective.ReturnType, returnType))
+                    .Where(m => boundParameterTypes is null || ParametersMatch(m.Effective, boundParameterTypes))
+                    .Where(m => boundReturnType is null || ReturnMatches(m.Effective, boundReturnType))
                     .ToList();
                 if (found.Count == 1)
                 {
@@ -949,8 +1003,8 @@ public static class SymbolBinder
 
             try
             {
-                var method = BindLoadedMethod(current, syntax, parameterTypes, methodArguments, returnType, explicitInstance,
-                    optionalTypes is not null, scope);
+                var method = BindLoadedMethod(current, syntax, parameterTypes, boundParameterTypes,
+                    methodArguments, boundReturnType, explicitInstance, optionalTypes is not null, scope);
                 return new BoundMethod(method, null, optionalTypes);
             }
             catch (ReplException)
@@ -973,15 +1027,15 @@ public static class SymbolBinder
             var candidateScope = scope.WithGenerics(new SymbolGenericContext(typeArguments,
                 [.. candidate.GenericParameters.Select(p => p.AsType)]));
             BindType(syntax.DeclaringType!, scope);
-            var returnType = syntax.ReturnType is null ? null : BindType(syntax.ReturnType, candidateScope).Type;
-            if (returnType is not null && !SymbolIdentity.Equal(candidate.ReturnType, returnType))
+            var returnType = syntax.ReturnType is null ? null : BindType(syntax.ReturnType, candidateScope);
+            if (returnType is not null && !ReturnMatches(candidate, returnType))
             {
                 continue;
             }
 
             if (syntax.Parameters is not null)
             {
-                var parameterTypes = syntax.Parameters.Select(p => BindType(p, candidateScope).Type).ToList();
+                var parameterTypes = syntax.Parameters.Select(parameter => BindType(parameter, candidateScope)).ToList();
                 if (!ParametersMatch(candidate, parameterTypes))
                 {
                     continue;
@@ -1013,14 +1067,20 @@ public static class SymbolBinder
         };
     }
 
-    private static MethodSymbol BindConstructor(TypeSymbol declaring, string name, IReadOnlyList<TypeSymbol>? parameterTypes,
+    private static MethodSymbol BindConstructor(
+        TypeSymbol declaring,
+        string name,
+        IReadOnlyList<TypeSymbol>? parameterTypes,
+        IReadOnlyList<BoundType>? boundParameterTypes,
+        BoundType? returnType,
         IBindingScope scope)
     {
         var isStatic = name == ".cctor";
         if (scope.RequiresDefinitionLookup(declaring))
         {
             var candidates = scope.Constructors(declaring, isStatic)
-                .Where(c => parameterTypes is null || ParametersMatch(c, parameterTypes))
+                .Where(candidate => boundParameterTypes is null || ParametersMatch(candidate, boundParameterTypes))
+                .Where(candidate => returnType is null || ReturnMatches(candidate, returnType))
                 .ToList();
             if (candidates.Count == 1)
             {
@@ -1028,7 +1088,7 @@ public static class SymbolBinder
             }
 
             throw new ReplException(candidates.Count == 0
-                ? $"no constructor {scope.Pretty(declaring)}({Signature(parameterTypes, scope)})"
+                ? $"no constructor {scope.Pretty(declaring)}({Signature(boundParameterTypes, parameterTypes, scope)})"
                 : $"ambiguous constructor for {scope.Pretty(declaring)}; give parameter types");
         }
 
@@ -1038,7 +1098,10 @@ public static class SymbolBinder
             throw new ReplException(NoConstructor(declaring, scope));
         }
 
-        var matched = parameterTypes is null ? constructors : [.. constructors.Where(c => ParametersMatch(c, parameterTypes))];
+        var matched = constructors
+            .Where(candidate => boundParameterTypes is null || ParametersMatch(candidate, boundParameterTypes))
+            .Where(candidate => returnType is null || ReturnMatches(candidate, returnType))
+            .ToList();
         if (matched.Count == 1)
         {
             return matched[0];
@@ -1047,7 +1110,7 @@ public static class SymbolBinder
         if (matched.Count == 0)
         {
             throw new ReplException(
-                $"no constructor {scope.Pretty(declaring)}({Signature(parameterTypes, scope)}); candidates:\n"
+                $"no constructor {scope.Pretty(declaring)}({Signature(boundParameterTypes, parameterTypes, scope)}); candidates:\n"
                 + Candidates(constructors, scope));
         }
 
@@ -1058,8 +1121,9 @@ public static class SymbolBinder
         TypeSymbol declaring,
         MemberSyntax syntax,
         IReadOnlyList<TypeSymbol>? parameterTypes,
+        IReadOnlyList<BoundType>? boundParameterTypes,
         IReadOnlyList<TypeSymbol>? methodGenericArguments,
-        TypeSymbol? returnType,
+        BoundType? boundReturnType,
         bool explicitInstance,
         bool isVarArg,
         IBindingScope scope)
@@ -1069,7 +1133,8 @@ public static class SymbolBinder
         {
             var candidates = scope.Methods(declaring, name)
                 .Where(m => !m.IsGenericDefinition)
-                .Where(m => parameterTypes is null || ParametersMatch(m, parameterTypes))
+                .Where(method => boundParameterTypes is null || ParametersMatch(method, boundParameterTypes))
+                .Where(method => boundReturnType is null || ReturnMatches(method, boundReturnType))
                 .ToList();
             if (candidates.Count == 1)
             {
@@ -1113,9 +1178,9 @@ public static class SymbolBinder
             }
         }
 
-        var candidateSet = parameterTypes is null
+        var candidateSet = boundParameterTypes is null
             ? closed
-            : closed.Where(m => ParametersMatch(m, parameterTypes)).ToList();
+            : closed.Where(method => ParametersMatch(method, boundParameterTypes)).ToList();
 
         if (isVarArg)
         {
@@ -1126,13 +1191,9 @@ public static class SymbolBinder
             }
         }
 
-        if (candidateSet.Count > 1 && returnType is not null)
+        if (boundReturnType is not null)
         {
-            var byReturn = candidateSet.Where(m => SymbolIdentity.Equal(m.ReturnType, returnType)).ToList();
-            if (byReturn.Count > 0)
-            {
-                candidateSet = byReturn;
-            }
+            candidateSet = candidateSet.Where(method => ReturnMatches(method, boundReturnType)).ToList();
         }
 
         if (candidateSet.Count > 1 && explicitInstance)
@@ -1167,7 +1228,7 @@ public static class SymbolBinder
         if (candidateSet.Count == 0)
         {
             throw new ReplException(
-                $"no overload {scope.Pretty(declaring)}::{name}({Signature(parameterTypes, scope)}); candidates:\n"
+                $"no overload {scope.Pretty(declaring)}::{name}({Signature(boundParameterTypes, parameterTypes, scope)}); candidates:\n"
                 + Candidates(methods, scope));
         }
 
@@ -1201,8 +1262,22 @@ public static class SymbolBinder
         return true;
     }
 
+    private static bool ParametersMatch(MethodSymbol method, IReadOnlyList<BoundType> wanted) =>
+        method.Parameters.Count == wanted.Count
+        && method.Parameters.Zip(wanted).All(pair => SignatureSymbolIdentity.Equal(pair.First, pair.Second));
+
+    private static bool ReturnMatches(MethodSymbol method, BoundType wanted) =>
+        SignatureSymbolIdentity.EqualReturn(method, wanted);
+
     private static string Signature(IReadOnlyList<TypeSymbol>? parameterTypes, IBindingScope scope) =>
         parameterTypes is null ? "" : string.Join(", ", parameterTypes.Select(scope.Pretty));
+
+    private static string Signature(
+        IReadOnlyList<BoundType>? boundParameterTypes,
+        IReadOnlyList<TypeSymbol>? parameterTypes,
+        IBindingScope scope) => boundParameterTypes is null
+            ? Signature(parameterTypes, scope)
+            : string.Join(", ", boundParameterTypes.Select(type => SymbolRenderer.Annotated(type.ExactType)));
 
     private static string Candidates(IEnumerable<MethodSymbol> methods, IBindingScope scope) =>
         string.Join("\n", methods.Take(12).Select(m => "    " + scope.Describe(m)));

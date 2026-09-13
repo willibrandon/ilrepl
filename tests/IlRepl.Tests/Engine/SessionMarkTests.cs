@@ -154,6 +154,7 @@ public sealed class SessionMarkTests
     {
         var session = Load(".locals init (int32 i)", "ldc.i4 1");
         var mark = session.Mark();
+        session.AddLine("pop");
         session.AddLine(".try {");
         session.AddLine("nop");
         Refuse(session, "lcd.i4 1");
@@ -191,6 +192,7 @@ public sealed class SessionMarkTests
     {
         var session = Load("ldc.i4 7");
         var mark = session.Mark();
+        session.AddLine("pop");
         session.AddLine(".try {");
         session.AddLine("nop");
         session.AddLine("leave END");
@@ -225,6 +227,7 @@ public sealed class SessionMarkTests
     {
         var session = Load("ldc.i4 1");
         var mark = session.Mark();
+        session.AddLine("pop");
         session.AddLine(".try {");
         session.AddLine("nop");
         Assert.IsTrue(session.Rollback(mark));

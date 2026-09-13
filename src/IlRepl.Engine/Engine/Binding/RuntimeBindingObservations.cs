@@ -50,11 +50,12 @@ internal static class RuntimeBindingObservations
         {
             var handle = (MethodDefinitionHandle)MetadataTokens.Handle(symbol.Definition.Token);
             var signature = source.Reader.GetMethodDefinition(handle).DecodeSignature(provider, SymbolGenericOwner.None);
-            PairAnnotated(signature.ReturnType, symbol.ReturnType, symbol.ReturnRequiredModifiers, symbol.ReturnOptionalModifiers, found);
+            PairAnnotated(signature.ReturnType, symbol.ExactReturnType ?? symbol.ReturnType, symbol.ReturnRequiredModifiers,
+                symbol.ReturnOptionalModifiers, found);
             for (var index = 0; index < Math.Min(signature.ParameterTypes.Length, symbol.Parameters.Count); index++)
             {
                 var parameter = symbol.Parameters[index];
-                PairAnnotated(signature.ParameterTypes[index], parameter.Type, parameter.RequiredModifiers,
+                PairAnnotated(signature.ParameterTypes[index], parameter.ExactType ?? parameter.Type, parameter.RequiredModifiers,
                     parameter.OptionalModifiers, found);
             }
         });
@@ -76,7 +77,7 @@ internal static class RuntimeBindingObservations
         {
             var handle = (FieldDefinitionHandle)MetadataTokens.Handle(symbol.Definition.Token);
             var type = source.Reader.GetFieldDefinition(handle).DecodeSignature(provider, SymbolGenericOwner.None);
-            PairAnnotated(type, symbol.FieldType, symbol.RequiredModifiers, symbol.OptionalModifiers, found);
+            PairAnnotated(type, symbol.ExactType ?? symbol.FieldType, symbol.RequiredModifiers, symbol.OptionalModifiers, found);
         });
     }
 
@@ -234,6 +235,12 @@ internal static class RuntimeBindingObservations
     private static void PairAnnotated(TypeSymbol metadata, TypeSymbol actual, IReadOnlyList<TypeSymbol> required,
         IReadOnlyList<TypeSymbol> optional, Dictionary<int, TypeSymbol> found)
     {
+        if (actual.Kind == TypeSymbolKind.Modified)
+        {
+            Pair(metadata, actual, found);
+            return;
+        }
+
         var core = SymbolSignatureProvider.StripModifiers(metadata, out var requiredReferences, out var optionalReferences);
         Pair(core, actual, found);
         for (var index = 0; index < Math.Min(required.Count, requiredReferences.Count); index++)

@@ -543,13 +543,20 @@ public sealed class AssemblySymbolSource
                     }
                 }
 
+                var exactReturnType = signature.ReturnType;
                 var returnType = SymbolSignatureProvider.StripModifiers(
-                    signature.ReturnType, out var returnRequired, out var returnOptional);
+                    exactReturnType, out var returnRequired, out var returnOptional);
                 var parameters = new List<ParameterSymbol>();
                 for (var i = 0; i < signature.ParameterTypes.Length; i++)
                 {
-                    var type = SymbolSignatureProvider.StripModifiers(signature.ParameterTypes[i], out var required, out var optional);
-                    parameters.Add(new ParameterSymbol(type, names[i]) { RequiredModifiers = required, OptionalModifiers = optional });
+                    var exactType = signature.ParameterTypes[i];
+                    var type = SymbolSignatureProvider.StripModifiers(exactType, out var required, out var optional);
+                    parameters.Add(new ParameterSymbol(type, names[i])
+                    {
+                        ExactType = RuntimeSymbolTypes.RequiresExact(exactType) ? exactType : null,
+                        RequiredModifiers = required,
+                        OptionalModifiers = optional,
+                    });
                 }
 
                 var convention = signature.Header.CallingConvention == SignatureCallingConvention.VarArgs
@@ -575,6 +582,7 @@ public sealed class AssemblySymbolSource
                     BodyAvailable = method.RelativeVirtualAddress != 0,
                     CallingConvention = convention,
                     ReturnType = returnType,
+                    ExactReturnType = RuntimeSymbolTypes.RequiresExact(exactReturnType) ? exactReturnType : null,
                     Parameters = parameters,
                     GenericParameters = GenericParameters(method.GetGenericParameters(), id, true, owner, catalog),
                     ReturnRequiredModifiers = returnRequired,
@@ -609,8 +617,8 @@ public sealed class AssemblySymbolSource
             try
             {
                 var field = _reader.GetFieldDefinition(fieldHandle);
-                var type = SymbolSignatureProvider.StripModifiers(
-                    field.DecodeSignature(provider, owner), out var required, out var optional);
+                var exactType = field.DecodeSignature(provider, owner);
+                var type = SymbolSignatureProvider.StripModifiers(exactType, out var required, out var optional);
                 fields.Add(new FieldSymbol
                 {
                     Definition = IdOf(fieldHandle),
@@ -618,6 +626,7 @@ public sealed class AssemblySymbolSource
                     DeclaringType = declaring,
                     Name = _reader.GetString(field.Name),
                     FieldType = type,
+                    ExactType = RuntimeSymbolTypes.RequiresExact(exactType) ? exactType : null,
                     Attributes = field.Attributes,
                     RequiredModifiers = required,
                     OptionalModifiers = optional,
@@ -654,12 +663,19 @@ public sealed class AssemblySymbolSource
                 MethodDefinitionHandle[] methods = [accessors.Getter, accessors.Setter, .. accessors.Others];
                 MethodAttributes[] flags = [.. methods.Where(method => !method.IsNil)
                     .Select(method => _reader.GetMethodDefinition(method).Attributes)];
+                var propertyType = SymbolSignatureProvider.StripModifiers(signature.ReturnType, out _, out _);
+                var parameterTypes = signature.ParameterTypes.Select(type =>
+                    SymbolSignatureProvider.StripModifiers(type, out _, out _)).ToArray();
                 properties.Add(new PropertySymbol(
                     IdOf(propertyHandle), declaring, _reader.GetString(property.Name),
-                    SymbolSignatureProvider.StripModifiers(signature.ReturnType, out _, out _),
-                    [.. signature.ParameterTypes.Select(type => SymbolSignatureProvider.StripModifiers(type, out _, out _))],
+                    propertyType, parameterTypes,
                     flags.Any(attributes => (attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public),
-                    flags.Any(attributes => attributes.HasFlag(MethodAttributes.Static))));
+                    flags.Any(attributes => attributes.HasFlag(MethodAttributes.Static)))
+                {
+                    ExactType = RuntimeSymbolTypes.RequiresExact(signature.ReturnType) ? signature.ReturnType : null,
+                    ExactParameters = [.. signature.ParameterTypes.Select(type =>
+                        RuntimeSymbolTypes.RequiresExact(type) ? type : null)],
+                });
             }
             catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
             {

@@ -281,9 +281,10 @@ own reference carries, which is what the stack column needs to pop the right num
 The column is the stack after each instruction, from the same model `.show` uses, run over the
 whole body: where two paths meet, the states merge the way the runtime merges them, so a path that
 pushed `string` and one that pushed `object` meet as `object`, and a byte and an `int32` meet as
-`int32`. Three answers are kept apart. A stack in brackets is known. `?` means the model lost the
-stack, because an operand did not resolve or the IL does something it cannot follow, and it stays
-lost until a handler starts or a `leave` empties it. `unreachable` marks a line no path reaches.
+`int32`. A bracketed stack is known. `?` means an unresolved operand or an unknown operation
+prevents an exact answer. `unreachable` marks a line no established path reaches, and `invalid`
+marks a definite stack error. Diagnostics follow the listing, with related instruction offsets.
+The editor and `.show` use these same rules; source code can also have incomplete forward targets.
 
 ## What it cannot show
 

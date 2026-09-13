@@ -475,16 +475,18 @@ public sealed class IlReplAppRecoveryTests
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
 
         await auto.WaitUntilTextAsync("il[1]>");
-        await AppTest.TypeLinesAsync(auto, [".locals init (int32 i)", "ldc.i4 5"], ct);
+        await AppTest.TypeLinesAsync(auto, [".locals init (int32 i)", "ldc.i4 5", "stloc i"], ct);
         await auto.WaitUntilTextAsync("1 local");
-        await auto.WaitUntilTextAsync("stack [int32]");
+        await auto.WaitUntilTextAsync("stack []");
         await AppTest.TypeLinesAsync(auto, [".try {", ".try {", "nop", "lcd.i4 1", "} finally {", "nop", "}", "} catch [System.Runtime]System.Exception {", "pop", "}"], ct);
         await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 10 lines") && AppTest.PromptRow(s, 3) == "  ...>     lcd.i4 1" && AppTest.CaretLine(s) == 3 && s.ContainsText("1 local") && s.ContainsText("stack [int32]") && !s.ContainsText("open block"), description: "both regions are back; the local and the value stay");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 10 lines") && AppTest.PromptRow(s, 3) == "  ...>     lcd.i4 1"
+            && AppTest.CaretLine(s) == 3 && s.ContainsText("1 local") && s.ContainsText("stack []") && !s.ContainsText("open block"),
+            description: "both regions are back; the declaration and prior instructions stay");
         Assert.AreEqual(0, engine.Status.OpenDepth);
         await auto.TypeAsync("    ldc.i4 1", ct: ct);
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Count == 16, description: "the corrected regions are sent whole");
+        await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Count == 17, description: "the corrected regions are sent whole");
         await AppTest.TypeLinesAsync(auto, [".show"], ct);
         await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.Kind != LineKind.Input && l.PlainText.Contains(".try {", StringComparison.Ordinal)) == 2, description: ".show lists both regions once");
         Assert.AreEqual(0, engine.Status.OpenDepth);
@@ -761,7 +763,8 @@ public sealed class IlReplAppRecoveryTests
         await adapter.PasteAsync("ldc.i4 1\nlcd.i4 2\nadd\n");
         await auto.WaitUntilTextAsync("Enter sends 3 lines");
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> add" && AppTest.CaretLine(s) == 0 && s.ContainsText("stack [int32]"), description: "the value that went is on the stack and only the unsent line is back");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> add" && AppTest.CaretLine(s) == 0
+            && s.ContainsText("stack before [int32]"), description: "the value that went is on the stack and only the unsent line is back");
         Assert.IsFalse(prompt!.Editor.Cursor.HasSelection, "nothing is selected");
         Assert.HasCount(2, transcript.Lines.Where(l => l.Kind == LineKind.Error).ToList(), "each refusal was reported once");
 

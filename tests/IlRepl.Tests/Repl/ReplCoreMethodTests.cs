@@ -281,15 +281,15 @@ public sealed class ReplCoreMethodTests
     }
 
     /// <summary>
-    /// A close the JIT refuses names the method and keeps the block open.
+    /// An invalid join names both incoming paths and keeps the method open.
     /// </summary>
     [TestMethod]
-    public void Handle_JitRejectedClose_ReportsMethodAndKeepsBlockOpen()
+    public void Handle_InvalidJoin_ReportsPathsAndKeepsBlockOpen()
     {
         var core = Load(".method void Bad() {", "ldc.i4 0", "brfalse SKIP", "ldc.i4 1", "ldc.i4 2", "pop", "SKIP: pop");
         Assert.IsFalse(core.Handle("}").Succeeded);
-        Assert.Contains("error: the JIT rejected method Bad", Plain(core));
-        Assert.Contains("the block is still open", Plain(core));
+        Assert.Contains("error: SKIP receives incompatible stacks", Plain(core));
+        Assert.Contains("[int32]", Plain(core));
         Assert.AreEqual("Bad", core.Status.OpenMethod);
         Assert.AreEqual(1, core.CellNumber);
     }
@@ -373,14 +373,14 @@ public sealed class ReplCoreMethodTests
     }
 
     /// <summary>
-    /// A close the runtime refuses is an error line, never an exception out of Handle.
+    /// A static target named by callvirt is an error line and the method stays editable.
     /// </summary>
     [TestMethod]
-    public void Handle_RuntimeRejectedClose_ReportsError()
+    public void Handle_StaticCallvirt_ReportsError()
     {
-        var core = Load(".method void Bad() {", "callvirt void Console::WriteLine()");
-        Assert.IsFalse(core.Handle("}").Succeeded);
-        Assert.Contains("error: the runtime rejected method Bad", Plain(core));
+        var core = Load(".method void Bad() {");
+        Assert.IsFalse(core.Handle("callvirt void Console::WriteLine()").Succeeded);
+        Assert.Contains("error: callvirt needs an instance method", Plain(core));
         Assert.AreEqual("Bad", core.Status.OpenMethod);
         Assert.AreEqual(1, core.CellNumber);
     }

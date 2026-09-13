@@ -45,6 +45,7 @@ public static class DefinitionCompiler
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(trampoline);
         ArgumentNullException.ThrowIfNull(trampolines);
+        state.ValidateMethodEnd();
         var name = signature.Name;
         var writer = new CecilWriter(SessionAssemblyKind.Methods);
         foreach (var (prototype, external) in externals ?? new Dictionary<Type, CecilWriter.ExternalPrototype>())
@@ -53,11 +54,25 @@ public static class DefinitionCompiler
         }
 
         var cell = writer.DefineType("IlRepl", "Cell", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit, writer.Object);
-        var method = new MethodDefinition(name, MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, writer.Import(signature.ReturnType));
+        var returnType = writer.ImportSignature(
+            signature.ReturnType,
+            signature.ExactReturnType,
+            signature.ReturnRequiredModifiers,
+            signature.ReturnOptionalModifiers);
+        var method = new MethodDefinition(
+            name, MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, returnType);
         for (var i = 0; i < signature.Parameters.Count; i++)
         {
             var parameter = signature.Parameters[i];
-            method.Parameters.Add(new ParameterDefinition(parameter.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)), ParameterAttributes.None, writer.Import(parameter.Type)));
+            var parameterType = writer.ImportSignature(
+                parameter.Type,
+                parameter.ExactType,
+                parameter.RequiredModifiers,
+                parameter.OptionalModifiers);
+            method.Parameters.Add(new ParameterDefinition(
+                parameter.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ParameterAttributes.None,
+                parameterType));
         }
 
         cell.Methods.Add(method);

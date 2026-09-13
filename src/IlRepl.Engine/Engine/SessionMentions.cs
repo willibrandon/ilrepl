@@ -1,4 +1,5 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -37,15 +38,61 @@ public static class SessionMentions
         foreach (var local in state.Locals)
         {
             yield return local.Type;
+            if (local.ExactType is not null)
+            {
+                foreach (var type in RuntimeSymbolTypes.Materialized(local.ExactType))
+                {
+                    yield return type;
+                }
+            }
         }
 
         foreach (var argument in state.Arguments)
         {
             yield return argument.Type;
+            if (argument.ExactType is not null)
+            {
+                foreach (var type in RuntimeSymbolTypes.Materialized(argument.ExactType))
+                {
+                    yield return type;
+                }
+            }
         }
 
         foreach (var entry in state.Entries)
         {
+            if (entry.Instruction?.ExactTypeOperand is { } exactType)
+            {
+                foreach (var type in RuntimeSymbolTypes.Materialized(exactType))
+                {
+                    yield return type;
+                }
+            }
+
+            if (entry.Instruction?.ExactFieldDeclaringType is { } exactFieldDeclaring)
+            {
+                foreach (var type in RuntimeSymbolTypes.Materialized(exactFieldDeclaring))
+                {
+                    yield return type;
+                }
+            }
+
+            if (entry.Instruction?.Operand is CalliSignature { ExactSymbol: { } exactSignature })
+            {
+                foreach (var type in RuntimeSymbolTypes.Materialized(exactSignature.ReturnType))
+                {
+                    yield return type;
+                }
+
+                foreach (var parameter in exactSignature.Parameters)
+                {
+                    foreach (var type in RuntimeSymbolTypes.Materialized(parameter))
+                    {
+                        yield return type;
+                    }
+                }
+            }
+
             if (entry.CatchType is { } catchType)
             {
                 yield return catchType;
@@ -78,6 +125,14 @@ public static class SessionMentions
                         yield return declaring;
                     }
 
+                    if (method.ExactDeclaringType is { } exactDeclaring)
+                    {
+                        foreach (var type in RuntimeSymbolTypes.Materialized(exactDeclaring))
+                        {
+                            yield return type;
+                        }
+                    }
+
                     yield return method.ReturnType;
                     foreach (var parameter in method.ParameterTypes)
                     {
@@ -89,10 +144,26 @@ public static class SessionMentions
                         yield return argument;
                     }
 
+                    foreach (var exactArgument in method.ExactGenericArguments ?? [])
+                    {
+                        foreach (var type in RuntimeSymbolTypes.Materialized(exactArgument))
+                        {
+                            yield return type;
+                        }
+                    }
+
+                    foreach (var exactOptional in method.ExactOptionalParameterTypes ?? [])
+                    {
+                        foreach (var type in RuntimeSymbolTypes.Materialized(exactOptional))
+                        {
+                            yield return type;
+                        }
+                    }
+
                     break;
                 case CalliSignature signature:
                     yield return signature.ReturnType;
-                    foreach (var parameter in signature.ParameterTypes)
+                    foreach (var parameter in signature.ParameterTypes.Concat(signature.OptionalParameterTypes ?? []))
                     {
                         yield return parameter;
                     }
@@ -127,6 +198,17 @@ public static class SessionMentions
                 }
 
                 type = type.GetGenericTypeDefinition();
+            }
+
+            if (TypeNameFormatter.IsFunctionPointer(type))
+            {
+                Note(type.GetFunctionPointerReturnType(), found);
+                foreach (var parameter in type.GetFunctionPointerParameterTypes())
+                {
+                    Note(parameter, found);
+                }
+
+                return;
             }
 
             if (SessionAssemblies.TryGetDefinition(type.Assembly, out var definition) && !found.Contains(definition))

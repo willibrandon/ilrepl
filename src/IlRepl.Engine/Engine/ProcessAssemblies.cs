@@ -9,38 +9,42 @@ namespace IlRepl.Engine;
 /// <remarks>
 /// The assemblies of the process a name search may look in: the ones that are not dynamic and
 /// sit in a load context that cannot unload. The runtime's own list is walked once, and again
-/// only after an assembly load, because each walk takes a passing reference on every collectible
-/// loader allocator, and an assembly being unloaded stays alive for as long as any thread keeps
-/// walking. A resolver miss used to walk it up to seventeen times, so a session's dropped
-/// definition never collected while another thread resolved names. An assembly in a collectible
-/// context the session did not create is left out for the same reason a cell could never bind
-/// it: it can be gone at any moment.
+/// never again. Later searchable assemblies are appended from the runtime's load notification.
+/// Each walk takes a passing reference on every collectible loader allocator, and an assembly
+/// being unloaded stays alive for as long as any thread keeps walking. An assembly in a
+/// collectible context the session did not create is left out for the same reason a cell could
+/// never bind it: it can be gone at any moment. The load notification appends atomically because
+/// it may run while another thread is enumerating assemblies under the runtime's loader lock.
 /// </remarks>
 internal static class ProcessAssemblies
 {
     private static readonly Lock Gate = new();
     private static Assembly[] s_current = [];
+    private static bool s_initialized;
     private static readonly Lock ChangeGate = new();
     private static TaskCompletionSource<long> s_changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private static long s_version;
-    private static int s_loads;
-    private static int s_builtAt = -1;
 
     static ProcessAssemblies()
     {
-        AppDomain.CurrentDomain.AssemblyLoad += (_, args) =>
+        AppDomain.CurrentDomain.AssemblyLoad += (_, args) => Loaded(args.LoadedAssembly);
+    }
+
+    private static void Loaded(Assembly assembly)
+    {
+        if (!IsSearchable(assembly))
         {
-            Interlocked.Increment(ref s_loads);
-            if (IsSearchable(args.LoadedAssembly))
-            {
-                lock (ChangeGate)
-                {
-                    var previous = s_changed;
-                    s_changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
-                    previous.TrySetResult(Interlocked.Increment(ref s_version));
-                }
-            }
-        };
+            return;
+        }
+
+        Append(assembly);
+
+        lock (ChangeGate)
+        {
+            var previous = s_changed;
+            s_changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            previous.TrySetResult(Interlocked.Increment(ref s_version));
+        }
     }
 
     /// <summary>
@@ -64,31 +68,64 @@ internal static class ProcessAssemblies
     }
 
     /// <summary>
-    /// Returns the cached runtime load order, refreshing it after an assembly load.
+    /// Returns the cached runtime load order, including searchable assemblies appended after the first read.
     /// </summary>
     /// <remarks>
-    /// The current list, in the runtime's load order. The same array comes back until an
+    /// The current list, in the runtime's load order. The same array comes back until a searchable
     /// assembly is loaded; callers never see an assembly that has been unloaded.
     /// </remarks>
     public static IReadOnlyList<Assembly> Current
     {
         get
         {
-            var loads = Volatile.Read(ref s_loads);
-            if (Volatile.Read(ref s_builtAt) == loads)
+            if (Volatile.Read(ref s_initialized))
             {
-                return s_current;
+                return Volatile.Read(ref s_current);
             }
 
+            var snapshot = AppDomain.CurrentDomain.GetAssemblies().Where(IsSearchable).ToArray();
             lock (Gate)
             {
-                if (s_builtAt != loads)
+                if (!s_initialized)
                 {
-                    s_current = [.. AppDomain.CurrentDomain.GetAssemblies().Where(IsSearchable)];
-                    Volatile.Write(ref s_builtAt, loads);
+                    Merge(snapshot);
+                    Volatile.Write(ref s_initialized, true);
                 }
 
-                return s_current;
+                return Volatile.Read(ref s_current);
+            }
+        }
+    }
+
+    private static void Append(Assembly assembly)
+    {
+        while (true)
+        {
+            var current = Volatile.Read(ref s_current);
+            if (Array.IndexOf(current, assembly) >= 0)
+            {
+                return;
+            }
+
+            var updated = new Assembly[current.Length + 1];
+            Array.Copy(current, updated, current.Length);
+            updated[^1] = assembly;
+            if (ReferenceEquals(Interlocked.CompareExchange(ref s_current, updated, current), current))
+            {
+                return;
+            }
+        }
+    }
+
+    private static void Merge(Assembly[] snapshot)
+    {
+        while (true)
+        {
+            var current = Volatile.Read(ref s_current);
+            var merged = snapshot.Concat(current.Where(assembly => !snapshot.Contains(assembly))).ToArray();
+            if (ReferenceEquals(Interlocked.CompareExchange(ref s_current, merged, current), current))
+            {
+                return;
             }
         }
     }

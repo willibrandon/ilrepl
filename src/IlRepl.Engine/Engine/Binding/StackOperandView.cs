@@ -20,6 +20,16 @@ public sealed record StackOperandView<T> where T : class
     public required OpCode Op { get; init; }
 
     /// <summary>
+    /// The byte operand of a prefix such as <c>unaligned.</c>, or null for other instructions.
+    /// </summary>
+    public byte? ByteOperand { get; init; }
+
+    /// <summary>
+    /// The signed integer operand of an integer constant, or null for other instructions.
+    /// </summary>
+    public long? IntegerOperand { get; init; }
+
+    /// <summary>
     /// For an inline <c>ret</c>: how many values it pops.
     /// </summary>
     public int RetPops { get; init; }
@@ -40,6 +50,61 @@ public sealed record StackOperandView<T> where T : class
     public int ArgumentPops { get; init; }
 
     /// <summary>
+    /// The fixed and optional parameters of a call, excluding the receiver and function pointer.
+    /// </summary>
+    public IReadOnlyList<T> ParameterTypes { get; init; } = [];
+
+    /// <summary>
+    /// Whether a method operand consumes an instance receiver.
+    /// </summary>
+    public bool IsInstance { get; init; }
+
+    /// <summary>
+    /// Whether a <c>calli</c> signature consumes an implicit <c>this</c> before its declared parameters.
+    /// </summary>
+    public bool HasImplicitThis { get; init; }
+
+    /// <summary>
+    /// Whether a method operand names a static method; null when the instruction has no method operand.
+    /// </summary>
+    public bool? MethodIsStatic { get; init; }
+
+    /// <summary>
+    /// Whether a method operand names a constructor or type initializer; null when there is no method operand.
+    /// </summary>
+    public bool? MethodIsConstructor { get; init; }
+
+    /// <summary>
+    /// Whether a method operand names the method currently being analyzed.
+    /// </summary>
+    public bool MethodIsCurrentDefinition { get; init; }
+
+    /// <summary>
+    /// Whether a method operand names an abstract method; null when there is no method operand.
+    /// </summary>
+    public bool? MethodIsAbstract { get; init; }
+
+    /// <summary>
+    /// Whether a method operand names a virtual method; null when there is no method operand.
+    /// </summary>
+    public bool? MethodIsVirtual { get; init; }
+
+    /// <summary>
+    /// Whether access to the method operand is known to pass CLI accessibility checks.
+    /// </summary>
+    public bool MethodAccessIsKnownValid { get; init; }
+
+    /// <summary>
+    /// Whether a method operand's declaring type is abstract; null when there is no method operand.
+    /// </summary>
+    public bool? DeclaringTypeIsAbstract { get; init; }
+
+    /// <summary>
+    /// The name of a decoded prefix that has no Reflection.Emit opcode; null otherwise.
+    /// </summary>
+    public string? DecodedPrefixName { get; init; }
+
+    /// <summary>
     /// The type <c>newobj</c> constructs.
     /// </summary>
     public T? DeclaringType { get; init; }
@@ -48,6 +113,26 @@ public sealed record StackOperandView<T> where T : class
     /// The type of the field a field opcode reads or writes.
     /// </summary>
     public T? FieldType { get; init; }
+
+    /// <summary>
+    /// Whether a field operand names static storage; null when the instruction has no field operand.
+    /// </summary>
+    public bool? FieldIsStatic { get; init; }
+
+    /// <summary>
+    /// Whether a field operand names init-only storage.
+    /// </summary>
+    public bool FieldIsInitOnly { get; init; }
+
+    /// <summary>
+    /// Explains why this field store is forbidden in the enclosing method.
+    /// </summary>
+    public string? StoreRestriction { get; init; }
+
+    /// <summary>
+    /// Explains why this field store requires the original instance receiver on every incoming path.
+    /// </summary>
+    public string? ReceiverRestriction { get; init; }
 
     /// <summary>
     /// What an <c>ldtoken</c> names.
@@ -60,12 +145,27 @@ public sealed record StackOperandView<T> where T : class
     public T? SlotType { get; init; }
 
     /// <summary>
-    /// True when the instruction loads <c>this</c>.
+    /// The local slot read or written by the instruction, or null for other instructions.
     /// </summary>
-    public bool LoadsThis { get; init; }
+    public int? LocalIndex { get; init; }
 
     /// <summary>
-    /// True when the instruction loads the address of <c>this</c>.
+    /// The argument slot read or written by the instruction, or null for other instructions.
     /// </summary>
-    public bool AddressOfThis { get; init; }
+    public int? ArgumentIndex { get; init; }
+
+    /// <summary>
+    /// True when the instruction loads the argument slot that originally held <c>this</c> or exposes its writable address.
+    /// </summary>
+    public bool ReadsThisArgument { get; init; }
+
+    /// <summary>
+    /// True when the instruction replaces the argument slot that originally held <c>this</c>.
+    /// </summary>
+    public bool WritesThisArgument { get; init; }
+
+    /// <summary>
+    /// Explains why a <c>jmp</c> target is incompatible with the enclosing method.
+    /// </summary>
+    public string? JumpRestriction { get; init; }
 }

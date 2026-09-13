@@ -43,6 +43,15 @@ public sealed class HostProcessEngine : IReplEngine
     public long AssemblyVersion => Interlocked.Read(ref _assemblyVersion);
 
     /// <inheritdoc/>
+    public async Task<AnalysisReply> AnalyzeAsync(AnalysisRequest request, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var reply = await _host.AnalyzeAsync(request, cancellationToken).ConfigureAwait(false);
+        ObserveAssemblies(reply.AssemblyVersion);
+        return reply;
+    }
+
+    /// <inheritdoc/>
     public async Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -139,6 +148,13 @@ public sealed class HostProcessEngine : IReplEngine
             process.Dispose();
             throw new HostProtocolException("the host did not answer: " + ex.Message + (detail.Length == 0 ? "" : "\n" + detail), ex);
         }
+    }
+
+    /// <inheritdoc/>
+    public Task<HandleReply> HandleSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        return CallAsync(() => _host.HandleSourceAsync(line, location, cancellationToken));
     }
 
     /// <inheritdoc />

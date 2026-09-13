@@ -1,3 +1,5 @@
+using IlRepl.Engine.Binding;
+
 namespace IlRepl.Engine;
 
 /// <summary>
@@ -8,4 +10,15 @@ namespace IlRepl.Engine;
 /// <param name="ReturnType">The method's return type.</param>
 /// <param name="ParameterTypes">The method's parameter types.</param>
 /// <param name="IsStatic">True for a static accessor.</param>
-public sealed record AccessorReference(string Kind, string Name, Type ReturnType, IReadOnlyList<Type> ParameterTypes, bool IsStatic);
+public sealed record AccessorReference(string Kind, string Name, Type ReturnType, IReadOnlyList<Type> ParameterTypes, bool IsStatic)
+{
+    /// <summary>
+    /// The complete return type when annotations cannot be represented by <see cref="ReturnType"/>.
+    /// </summary>
+    internal TypeSymbol? ExactReturnType { get; init; }
+
+    /// <summary>
+    /// The complete parameter types, with null where <see cref="ParameterTypes"/> is exact.
+    /// </summary>
+    internal IReadOnlyList<TypeSymbol?> ExactParameterTypes { get; init; } = [];
+}

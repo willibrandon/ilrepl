@@ -17,7 +17,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_UnfinishedDeclarationSuffix_CompletesEarlierType(string browser, bool field)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var prefix = field ? ".field public static literal int3" : ".method int32 M(List<int3";
@@ -51,7 +51,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_UnfinishedInheritance_CompletesEarlierArgument(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         const string prefix = ".class public Derived extends List<int3";
@@ -84,7 +84,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_GenericAttribute_CompletesAndBinds(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         const string prefix = ".custom instance void Mark<int3";
@@ -127,7 +127,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_NestedGenericOperand_CompletesAndRuns(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         const string prefix = "call Array::Empty<List<Nullable<int3";
@@ -163,7 +163,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_EventHandlerCompletion_RejectsArraySuffix(string browser, bool generic)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var handler = generic ? "Action<int32>" : "Action";
@@ -189,7 +189,7 @@ public sealed partial class LiveSessionTests
         await page.Keyboard.PressAsync("ArrowLeft");
         await page.Keyboard.PressAsync("ArrowLeft");
         await PromptContainsAsync(page, prefix + (generic ? ">[]" : "[]"));
-        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync(choice);
+        await PromptWithoutCompletionAsync(page, "  ...> " + prefix, choice, generic ? ">[]" : "[]");
         if (generic)
         {
             await page.Keyboard.PressAsync("ArrowRight");
@@ -202,12 +202,13 @@ public sealed partial class LiveSessionTests
             await page.Keyboard.PressAsync("ArrowLeft");
         }
 
-        await CompletionAtCaretAsync(page, "  ...> " + prefix, choice);
+        await CompletionAtCaretAsync(page, "  ...> " + prefix, choice, generic ? ">" : "");
         await page.Keyboard.PressAsync("Tab");
         if (generic)
         {
             await page.Keyboard.PressAsync("ArrowRight");
         }
+        await PromptAtCaretAsync(page, "  ...> .event " + (generic ? "System.Action<int32>" : "Action"));
 
         await PasteAsync(page, $$"""
              Changed {
@@ -238,7 +239,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_GenericArgument_RejectsTypedReference(string browser, bool method)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var prefix = method ? "call Array::Empty<" : "ldtoken List<";
@@ -278,7 +279,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_TypeOperandCompletion_RejectsVoidStorage(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await page.Keyboard.TypeAsync("sizeof vo*");
@@ -309,7 +310,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_GenericStarter_PreservesSeparatedBracket(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         const string gap = " /* < */<";

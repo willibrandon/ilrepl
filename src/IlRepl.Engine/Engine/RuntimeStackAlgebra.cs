@@ -1,3 +1,4 @@
+using System.Reflection;
 using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
@@ -30,6 +31,7 @@ public sealed class RuntimeStackAlgebra : IStackTypeAlgebra<Type>
         ArgumentNullException.ThrowIfNull(fullName);
         return fullName switch
         {
+            "System.ValueType" => typeof(ValueType),
             "System.RuntimeTypeHandle" => typeof(RuntimeTypeHandle),
             "System.RuntimeFieldHandle" => typeof(RuntimeFieldHandle),
             "System.RuntimeMethodHandle" => typeof(RuntimeMethodHandle),
@@ -54,6 +56,9 @@ public sealed class RuntimeStackAlgebra : IStackTypeAlgebra<Type>
     public Type MakeByRef(Type type) => type.MakeByRefType();
 
     /// <inheritdoc/>
+    public Type MakePointer(Type type) => type.MakePointerType();
+
+    /// <inheritdoc/>
     public Type MakeArray(Type type) => type.MakeArrayType();
 
     /// <inheritdoc/>
@@ -63,7 +68,7 @@ public sealed class RuntimeStackAlgebra : IStackTypeAlgebra<Type>
     public bool IsByRef(Type type) => type.IsByRef;
 
     /// <inheritdoc/>
-    public bool IsPointer(Type type) => type.IsPointer;
+    public bool IsPointer(Type type) => type.IsPointer || TypeNameFormatter.IsFunctionPointer(type);
 
     /// <inheritdoc/>
     public bool IsArray(Type type) => type.IsArray;
@@ -72,8 +77,12 @@ public sealed class RuntimeStackAlgebra : IStackTypeAlgebra<Type>
     public bool IsValueType(Type type) => type.IsValueType;
 
     /// <inheritdoc/>
+    public bool IsByRefLike(Type type) => type.IsByRefLike || type.IsGenericParameter
+        && type.GenericParameterAttributes.HasFlag(GenericParameterAttributes.AllowByRefLike);
+
+    /// <inheritdoc/>
     public bool IsGenericParameter(Type type) => type.IsGenericParameter;
 
     /// <inheritdoc/>
-    public bool Same(Type? a, Type? b) => a == b;
+    public bool Same(Type? a, Type? b) => ReferenceEquals(a, b) || a is not null && b is not null && TypeIdentity.Equal(a, b);
 }

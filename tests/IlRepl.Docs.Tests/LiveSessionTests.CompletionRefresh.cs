@@ -12,7 +12,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_ClosedComment_OffersTypes(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         const string line = "sizeof /* comment */";
@@ -40,7 +40,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_BackgroundLoad_RefreshesIdleCompletion(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, """

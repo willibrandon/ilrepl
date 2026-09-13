@@ -61,12 +61,18 @@ public static class CellCompiler
         }
 
         var cell = session.Cell;
+        cell.RequireValidFlow();
         var pending = cell.ReferencedLabels().Where(l => !cell.DefinedLabels.Contains(l)).Distinct().ToList();
         if (pending.Count > 0)
         {
-            throw new ReplException($"label{(pending.Count > 1 ? "s" : "")} referenced but never defined: {string.Join(", ", pending)} (define with 'NAME:')");
+            var suffix = pending.Count > 1 ? "s" : "";
+            throw new ReplException(
+                $"label{suffix} referenced but never defined: {string.Join(", ", pending)} (define with 'NAME:')");
         }
 
+        var directReturn = cell.Stack.Count == 1 && cell.Stack.Top is { } result
+            && RuntimeFlowAnalysis.Rules(cell.Types).CanAssign(result, typeof(object));
+        cell.RequireCompleteFlow(hasImplicitReturn: directReturn);
         if (cell.OpenBlockDepth > 0)
         {
             throw new ReplException("a protected region is still open; close it with }");
@@ -74,7 +80,9 @@ public static class CellCompiler
 
         if (cell.Stack.Count > 1)
         {
-            throw new ReplException($"the stack must hold 0 or 1 value at the end of the cell, but has {cell.Stack.Count}: {cell.Stack.Render()}  (pop, or stloc into a local)");
+            throw new ReplException(
+                $"the stack must hold 0 or 1 value at the end of the cell, but has {cell.Stack.Count}: "
+                + $"{cell.Stack.Render()}  (pop, or stloc into a local)");
         }
     }
 
@@ -91,7 +99,8 @@ public static class CellCompiler
         Type[] genericParameters = names.Count > 0 ? run.DefineGenericParameters([.. names]) : [];
 
         var signatures = session.Methods.Select(m => m.Signature).ToArray();
-        var state = new CellState(session.Resolver, new GenericContext([], genericParameters), signatures, null, false, session.TypeTable, null);
+        var state = new CellState(session.Resolver, new GenericContext([], genericParameters), signatures, null, false,
+            session.TypeTable, null);
         foreach (var line in session.DeclarationLines)
         {
             state.Apply(line);
@@ -111,7 +120,9 @@ public static class CellCompiler
         run.SetParameters(parameterTypes);
         for (var i = 0; i < state.Arguments.Count; i++)
         {
-            run.DefineParameter(i + 1, ParameterAttributes.None, state.Arguments[i].Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            var name = state.Arguments[i].Name
+                ?? "arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            run.DefineParameter(i + 1, ParameterAttributes.None, name);
         }
 
         var helpers = new List<DefinitionAssembly>();
@@ -124,7 +135,7 @@ public static class CellCompiler
                 return;
             }
 
-            // Reflection.Emit rebuilds generic member signatures from Type objects, losing bounds and pointer flags.
+            // Reflection.Emit rebuilds operands from Type objects, losing array bounds, modifiers, and function-pointer signatures.
             var (bodyDefinition, bodyMethod) = CecilCellBody.Compile(state, names, methods);
             helpers.Add(bodyDefinition);
             var target = names.Count == 0 ? bodyMethod : bodyMethod.MakeGenericMethod(genericParameters);
@@ -163,8 +174,9 @@ public static class CellCompiler
         };
     }
 
-    private static TypeBuilder DefineCellType(ModuleBuilder module) =>
-        module.DefineType("IlRepl.Cell", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit);
+    private static TypeBuilder DefineCellType(ModuleBuilder module) => module.DefineType("IlRepl.Cell",
+        TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class
+        | TypeAttributes.BeforeFieldInit);
 
     private static void EmitGuarded(string what, Action emit)
     {
@@ -219,6 +231,12 @@ public static class CellCompiler
 
         if (state.LastInstructionEndsFlow)
         {
+            if (state.Entries.Count > 0 && state.Entries[^1].Kind is EntryKind.Block or EntryKind.Labels)
+            {
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Throw);
+            }
+
             return;
         }
 
@@ -276,7 +294,8 @@ public static class CellCompiler
     {
         // Reflection cannot invoke a vararg method directly, so a standard-convention wrapper
         // forwards the fixed arguments and an empty variable-argument list.
-        var wrapper = type.DefineMethod("Invoke", MethodAttributes.Public | MethodAttributes.Static, CallingConventions.Standard, typeof(object), Type.EmptyTypes);
+        var wrapper = type.DefineMethod("Invoke", MethodAttributes.Public | MethodAttributes.Static,
+            CallingConventions.Standard, typeof(object), Type.EmptyTypes);
         MethodInfo target = run;
         if (names.Count > 0)
         {

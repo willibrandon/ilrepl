@@ -97,12 +97,18 @@ public sealed class CompletionRequester
             return;
         }
 
-        if (_revision != _engine.Status.Revision || _assemblyVersion != _engine.AssemblyVersion)
+        var revision = _engine.Status.Revision;
+        var assemblyVersion = _engine.AssemblyVersion;
+        var revisionChanged = _revision != revision;
+        var assemblyChanged = _assemblyVersion != assemblyVersion;
+        if (revisionChanged || assemblyChanged)
         {
+            var retained = !revisionChanged && _assemblyVersion >= 0 ? state.PendingDisplay ?? state.Completions : null;
             Cancel(state);
+            state.PendingDisplay = retained;
             state.Anchors.Clear();
-            _revision = _engine.Status.Revision;
-            _assemblyVersion = _engine.AssemblyVersion;
+            _revision = revision;
+            _assemblyVersion = assemblyVersion;
             if (state.Palette is not (PaletteMode.Dismissed or PaletteMode.Faulted) || state.DismissedRevision != _revision)
             {
                 state.Palette = PaletteMode.Closed;

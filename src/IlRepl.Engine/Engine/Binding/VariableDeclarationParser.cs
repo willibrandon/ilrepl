@@ -46,7 +46,7 @@ public static class VariableDeclarationParser
 
             var position = 0;
             var bound = SymbolBinder.BindType(CilSyntaxParser.ParseTypeAt(part, ref position), scope);
-            var problem = MemberEligibility.TypeVerdict(bound.Type, scope.Access, AccessFacts.From(scope));
+            var problem = MemberEligibility.TypeVerdict(bound.ExactType, scope.Access, AccessFacts.From(scope));
             if (problem is not null)
             {
                 throw new ReplException(problem);
@@ -63,7 +63,10 @@ public static class VariableDeclarationParser
                 throw new ReplException("a local cannot be void");
             }
 
-            declared.Add(new VariableSymbol(bound.Type, name, bound.Pinned));
+            declared.Add(new VariableSymbol(bound.Type, name, bound.Pinned)
+            {
+                ExactType = RuntimeSymbolTypes.RequiresExact(bound.ExactType) ? bound.ExactType : null,
+            });
         }
 
         return declared;
@@ -90,7 +93,14 @@ public static class VariableDeclarationParser
             var declaration = equals < 0 ? part : part[..equals].Trim();
             var literal = equals < 0 ? null : part[(equals + 1)..].Trim();
             var position = 0;
-            var type = SymbolBinder.BindType(CilSyntaxParser.ParseTypeAt(declaration, ref position), scope).Type;
+            var bound = SymbolBinder.BindType(CilSyntaxParser.ParseTypeAt(declaration, ref position), scope);
+            var type = bound.Type;
+            var problem = MemberEligibility.TypeVerdict(bound.ExactType, scope.Access, AccessFacts.From(scope));
+            if (problem is not null)
+            {
+                throw new ReplException(problem);
+            }
+
             var name = Name(declaration[position..], "argument");
             if (name is not null && (scope.Arguments.Any(v => v.Name == name) || declared.Any(v => v.Name == name)))
             {
@@ -109,7 +119,10 @@ public static class VariableDeclarationParser
 
             LiteralBindingRules.Argument(literal, type, scope);
 
-            declared.Add(new ArgumentSyntax(type, name, literal));
+            declared.Add(new ArgumentSyntax(type, name, literal)
+            {
+                ExactType = RuntimeSymbolTypes.RequiresExact(bound.ExactType) ? bound.ExactType : null,
+            });
         }
 
         return declared;

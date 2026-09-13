@@ -61,6 +61,11 @@ internal sealed class EditingBody
     public long LabelSpace { get; set; }
 
     /// <summary>
+    /// Identifies transactional forms of one body during document analysis.
+    /// </summary>
+    public object AnalysisIdentity { get; init; } = new();
+
+    /// <summary>
     /// The index of the active parameter metadata target, including zero for the return value.
     /// </summary>
     public int? ParameterTarget { get; set; }
@@ -84,6 +89,16 @@ internal sealed class EditingBody
     /// The accepted instructions, for prefixes and dependency analysis.
     /// </summary>
     public List<BoundInstruction> Instructions { get; private set; } = [];
+
+    /// <summary>
+    /// Bound source entries retained for control-flow analysis.
+    /// </summary>
+    public List<FlowNode<TypeSymbol>> FlowNodes { get; private set; } = [];
+
+    /// <summary>
+    /// The latest analysis of this body's source entries.
+    /// </summary>
+    public FlowResult<TypeSymbol>? Analysis { get; set; }
 
     /// <summary>
     /// The explicit slot mappings declared on this method.
@@ -131,6 +146,7 @@ internal sealed class EditingBody
         clone.Arguments = [.. Arguments];
         clone.Lines = [.. Lines];
         clone.Instructions = [.. Instructions];
+        clone.FlowNodes = [.. FlowNodes];
         clone.Overrides = [.. Overrides];
         clone.MetadataTypes = [.. MetadataTypes];
         clone.Labels = new HashSet<string>(Labels, StringComparer.Ordinal);

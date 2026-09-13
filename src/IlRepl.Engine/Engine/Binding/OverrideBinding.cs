@@ -54,10 +54,21 @@ internal static class OverrideBinding
             DeclaringType = scope.Access.Type,
             Name = reference.Name,
             ReturnType = reference.ReturnType,
-            Parameters = [.. reference.ParameterTypes.Select(type => new ParameterSymbol(type, null))],
+            ExactReturnType = reference.ExactReturnType,
+            Parameters = [.. reference.ParameterTypes.Select((type, index) => new ParameterSymbol(type, null)
+            {
+                ExactType = reference.ExactParameterTypes.ElementAtOrDefault(index),
+            })],
             Attributes = reference.IsStatic ? System.Reflection.MethodAttributes.Static : System.Reflection.MethodAttributes.PrivateScope,
         };
-        return new OverrideSymbol(Resolve(text[..separator].Trim(), scope, body), body);
+        var target = Resolve(text[..separator].Trim(), scope, body);
+        if (!SignatureSymbolIdentity.Equal(target.Method, body))
+        {
+            throw new ReplException($".override target {SymbolRenderer.DescribeAnnotated(target.Method)} does not match "
+                + SymbolRenderer.DescribeAnnotated(body));
+        }
+
+        return new OverrideSymbol(target, body);
     }
 
     private static BoundMethod Resolve(string text, IBindingScope scope, MethodSymbol method)

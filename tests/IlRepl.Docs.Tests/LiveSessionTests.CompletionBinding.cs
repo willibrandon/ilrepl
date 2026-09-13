@@ -14,7 +14,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_SupplementalPointerCompletion_PreservesModifiers(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await TypeLineAsync(page, ".load /samples/Greeter.dll");
@@ -41,7 +41,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_GenericSuffixCompletion_ChecksTheArray(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".class public RefSuffix<class T> { }\nldtoken RefSuffix<int3[]>");
@@ -53,7 +53,9 @@ public sealed partial class LiveSessionTests
         await CompletionAtCaretAsync(page, "  ...> ldtoken RefSuffix<int3", "❯ int32");
         await page.Keyboard.PressAsync("Delete");
         await page.Keyboard.PressAsync("Delete");
-        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ int32");
+        await page.Keyboard.PressAsync("End");
+        await PromptAtCaretAsync(page, "  ...> ldtoken RefSuffix<int3>");
+        await page.Keyboard.PressAsync("ArrowLeft");
         await page.Keyboard.TypeAsync("[]");
         await page.Keyboard.PressAsync("ArrowLeft");
         await page.Keyboard.PressAsync("ArrowLeft");
@@ -77,7 +79,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_OpenOwnerCompletion_ExecutesTheGenericMethod(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".class public GenericCaller<T> {\n.method public static int32 Check() {\n"
@@ -107,20 +109,20 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_VoidFieldCompletion_RequiresPointer(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".class public FieldHost {\n.field public static vo*");
         await page.Keyboard.PressAsync("ArrowLeft");
-        await CompletionAtCaretAsync(page, "  ...> .field public static vo", "❯ void");
+        await CompletionAtCaretAsync(page, "  ...> .field public static vo", "❯ void", "*");
         await page.Keyboard.PressAsync("Delete");
-        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ void");
+        await PromptWithoutCompletionAsync(page, "  ...> .field public static vo", "❯ void");
         await page.Keyboard.TypeAsync("*");
         await page.Keyboard.PressAsync("ArrowLeft");
-        await CompletionAtCaretAsync(page, "  ...> .field public static vo", "❯ void");
+        await CompletionAtCaretAsync(page, "  ...> .field public static vo", "❯ void", "*");
         await page.Keyboard.PressAsync("Tab");
         await page.Keyboard.PressAsync("End");
-        await CompletionAtCaretAsync(page, "  ...> .field public static void*", ".field public static void*");
+        await PromptAtCaretAsync(page, "  ...> .field public static void*");
         await PasteAsync(page, " Address\n}\nldsfld FieldHost::Address\npop\nldc.i4.7\nret");
         await page.Keyboard.PressAsync("Enter");
         await ExpectCompletionAsync(page, "= 7 : int32");
@@ -137,17 +139,17 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_VoidParameterCompletion_RequiresPointer(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".method void M(vo*");
         await page.Keyboard.PressAsync("ArrowLeft");
-        await CompletionAtCaretAsync(page, "il[1]> .method void M(vo", "❯ void");
+        await CompletionAtCaretAsync(page, "il[1]> .method void M(vo", "❯ void", "*");
         await page.Keyboard.PressAsync("Delete");
-        await Assertions.Expect(page.Locator("#terminal")).Not.ToContainTextAsync("❯ void");
+        await PromptWithoutCompletionAsync(page, "il[1]> .method void M(vo", "❯ void");
         await page.Keyboard.TypeAsync("*");
         await page.Keyboard.PressAsync("ArrowLeft");
-        await CompletionAtCaretAsync(page, "il[1]> .method void M(vo", "❯ void");
+        await CompletionAtCaretAsync(page, "il[1]> .method void M(vo", "❯ void", "*");
         await page.Keyboard.PressAsync("Tab");
         await page.Keyboard.PressAsync("End");
         await PromptAtCaretAsync(page, "il[1]> .method void M(void*");
@@ -167,7 +169,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_JumpCompletion_FiltersSignatures(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".method int32 Bridge(int32 value) {\njmp Math::Abs");
@@ -190,7 +192,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_JumpAndNestedTypeCompletions_Bind(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".method int32 Bridge() {\njmp int32 Environment::get_TickC");
@@ -223,7 +225,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_ExplicitGenericArity_Completes(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".locals init (class List`1");
@@ -248,7 +250,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_VoidPointerArrayCompletion_Binds(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await TypeLineAsync(page, "ldc.i4.0");
@@ -281,7 +283,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_ArrayAndCurrentLabelCompletions_Bind(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await TypeLineAsync(page, ".load /samples/Greeter.dll");
@@ -313,7 +315,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_FunctionPointerCompletion_AndQualifiedSuggestions_Bind(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await TypeLineAsync(page, ".load /samples/Greeter.dll");
@@ -359,7 +361,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_RemovedDependency_RefusesWithoutLosingTheAcceptedType(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".class public Outer {\n.class nested public Inner { }\n}\n"
@@ -368,11 +370,11 @@ public sealed partial class LiveSessionTests
         await ExpectCompletionAsync(page, "end of class Holder");
         await PasteAsync(page, ".class public Outer {\n}\n.dis Outer/Inn");
         await ExpectCompletionAsync(page, "❯ Inner");
-        await page.Keyboard.PressAsync("Control+c");
+        await ClearPromptAsync(page);
         await TypeLineAsync(page, ".class public Outer {");
         await TypeLineAsync(page, "}");
-        await ExpectCompletionAsync(page, "cannot redefine");
-        await page.Keyboard.PressAsync("Control+c");
+        await ExpectCompletionAsync(page, "error: cannot redefine");
+        await ClearPromptAsync(page);
         await TypeLineAsync(page, ".clear");
         await page.Keyboard.TypeAsync("ldtoken Outer/Inn");
         await ExpectCompletionAsync(page, "❯ Inner");
@@ -393,7 +395,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_PrivateCompletion_UsesTheBodyAndInspectionContext(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".class public Vault {\n.method private static int32 Secret() {\nldc.i4.7\nret\n}\n"
@@ -424,7 +426,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_FamilyCompletion_UsesTheDerivedBody(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await TypeLineAsync(page, ".load /samples/Greeter.dll");
@@ -457,7 +459,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_LoadedCompletion_QuotesAndSuggests(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await TypeLineAsync(page, ".load /samples/Greeter.dll");
@@ -490,7 +492,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_UnsentReplacement_CompletesTheNewMember(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".class public Replaced {\n.method public static int32 Old() {\nldc.i4.1\nret\n}\n}");
@@ -516,7 +518,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_CyclicReplacement_CompletesAgainstTheNewGeneration(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".class public A {\n.method public static int32 Value() {\nldc.i4.1\nret\n}\n}\n"
@@ -543,7 +545,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_LoadedCompilerName_CompletesItsQuotedReference(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         await PasteAsync(page, ".class public '<>c__DisplayClassProbe' {\n.method public static int32 Value() {\n"
@@ -562,7 +564,8 @@ public sealed partial class LiveSessionTests
         await page.WaitForFunctionAsync("""
             column => {
               const terminal = window.ilreplTerminal;
-              const line = terminal.buffer.active.getLine(terminal.rows - 2);
+              const buffer = terminal.buffer.active;
+              const line = buffer.getLine(buffer.baseY + terminal.rows - 2);
               return line?.getCell(column)?.getBgColor() === 0x61afef;
             }
             """, "il[2]> call '<>c__DisplayClassProbe'::Val".Length);
@@ -587,7 +590,7 @@ public sealed partial class LiveSessionTests
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_GenericConstraint_RejectsThenRecoversTheArgument(string browser)
     {
-        await using var launched = await LaunchAsync(browser);
+        var launched = GetBrowser(browser);
         await using var context = await NewContextAsync(launched);
         var page = await OpenSessionAsync(context);
         var terminal = page.Locator("#terminal");
@@ -610,7 +613,8 @@ public sealed partial class LiveSessionTests
         await page.WaitForFunctionAsync("""
             () => {
               const terminal = window.ilreplTerminal;
-              return terminal.buffer.active.getLine(terminal.rows - 2)?.translateToString(true).trim()
+              const buffer = terminal.buffer.active;
+              return buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true).trim()
                 === 'il[1]> call Generic::Constrained<';
             }
             """);
@@ -630,32 +634,59 @@ public sealed partial class LiveSessionTests
     private static Task<IJSHandle> PromptContainsAsync(IPage page, string text) => page.WaitForFunctionAsync("""
         text => {
           const terminal = window.ilreplTerminal;
-          return terminal.buffer.active.getLine(terminal.rows - 2)?.translateToString(true).includes(text);
+          const buffer = terminal.buffer.active;
+          return buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true).includes(text);
         }
         """, text, new() { PollingInterval = 16, Timeout = 30_000 });
 
-    private static Task<IJSHandle> PromptAtCaretAsync(IPage page, string prompt) => page.WaitForFunctionAsync("""
-        prompt => {
-          const terminal = window.ilreplTerminal;
-          const row = terminal.buffer.active.getLine(terminal.rows - 2);
-          return row?.translateToString(true).trim() === prompt && row.getCell(prompt.length)?.getBgColor() === 0x61afef;
-        }
-        """, prompt, new() { PollingInterval = 16, Timeout = 30_000 });
-
-    private static async Task<IJSHandle> CompletionAtCaretAsync(IPage page, string prompt, string choice)
+    private static async Task<IJSHandle> PromptAtCaretAsync(IPage page, string prompt)
     {
         try
         {
             return await page.WaitForFunctionAsync("""
-                ({ prompt, choice }) => {
+                prompt => {
                   const terminal = window.ilreplTerminal;
-                  const row = terminal.buffer.active.getLine(terminal.rows - 2);
+                  const buffer = terminal.buffer.active;
+                  const row = buffer.getLine(buffer.baseY + terminal.rows - 2);
+                  return row?.translateToString(true).trimEnd() === prompt
+                    && row.getCell(prompt.length)?.getBgColor() === 0x61afef;
+                }
+                """, prompt, new() { PollingInterval = 16, Timeout = 30_000 });
+        }
+        catch (TimeoutException exception)
+        {
+            var state = await page.EvaluateAsync<string>("""
+                () => JSON.stringify({
+                  active: document.activeElement.tagName,
+                    cursorX: window.ilreplTerminal.buffer.active.cursorX,
+                    cursorY: window.ilreplTerminal.buffer.active.cursorY,
+                    expectedBackground: window.ilreplTerminal.buffer.active
+                    .getLine(window.ilreplTerminal.buffer.active.baseY + window.ilreplTerminal.rows - 2)
+                    ?.getCell(prompt.length)?.getBgColor()
+                })
+                """, prompt);
+            var buffer = await BufferTextAsync(page);
+            throw new TimeoutException($"Expected prompt at caret {prompt.Length}; browser state: {state}:\n{buffer}", exception);
+        }
+    }
+
+    private static async Task<IJSHandle> CompletionAtCaretAsync(IPage page, string prompt, string choice, string? suffix = null)
+    {
+        try
+        {
+            return await page.WaitForFunctionAsync("""
+                ({ prompt, choice, suffix }) => {
+                  const terminal = window.ilreplTerminal;
+                  const buffer = terminal.buffer.active;
+                  const first = buffer.baseY;
+                  const row = buffer.getLine(first + terminal.rows - 2);
                   if (row?.getCell(prompt.length)?.getBgColor() !== 0x61afef) return false;
+                  if (suffix !== null && row.translateToString(true).trimEnd() !== prompt + suffix) return false;
                   const rows = Array.from({ length: terminal.rows }, (_, index) =>
-                    terminal.buffer.active.getLine(index)?.translateToString(true) ?? '');
+                    buffer.getLine(first + index)?.translateToString(true) ?? '');
                   return rows.some(line => line.includes(choice)) && !rows.some(line => line.includes('updating '));
                 }
-                """, new { prompt, choice }, new() { PollingInterval = 16, Timeout = 30_000 });
+                """, new { prompt, choice, suffix }, new() { PollingInterval = 16, Timeout = 30_000 });
         }
         catch (TimeoutException exception)
         {
@@ -663,12 +694,40 @@ public sealed partial class LiveSessionTests
         }
     }
 
+    private static async Task<IJSHandle> PromptWithoutCompletionAsync(
+        IPage page, string prompt, string choice, string suffix = "")
+    {
+        try
+        {
+            return await page.WaitForFunctionAsync("""
+                ({ prompt, choice, suffix }) => {
+                  const terminal = window.ilreplTerminal;
+                  const buffer = terminal.buffer.active;
+                  const first = buffer.baseY;
+                  const row = buffer.getLine(first + terminal.rows - 2);
+                  const status = buffer.getLine(first + terminal.rows - 1)?.translateToString(true) ?? '';
+                  if (row?.translateToString(true).trimEnd() !== prompt + suffix
+                    || row.getCell(prompt.length)?.getBgColor() !== 0x61afef) return false;
+                  const rows = Array.from({ length: terminal.rows }, (_, index) =>
+                    buffer.getLine(first + index)?.translateToString(true) ?? '');
+                  return !rows.some(line => line.includes(choice)) && !status.includes('updating ');
+                }
+                """, new { prompt, choice, suffix }, new() { PollingInterval = 16, Timeout = 30_000 });
+        }
+        catch (TimeoutException exception)
+        {
+            throw new TimeoutException($"Expected {prompt + suffix} without {choice}:\n{await BufferTextAsync(page)}", exception);
+        }
+    }
+
     private static Task<IJSHandle> EmptyPromptAsync(IPage page) => page.WaitForFunctionAsync("""
         () => {
           const terminal = window.ilreplTerminal;
-          const row = terminal.buffer.active.getLine(terminal.rows - 2)?.translateToString(true).trim() ?? '';
-          const status = terminal.buffer.active.getLine(terminal.rows - 1)?.translateToString(true) ?? '';
-          return /^il\[\d+\]>$/.test(row) && !status.includes('sending ');
+          const buffer = terminal.buffer.active;
+          const row = buffer.getLine(buffer.baseY + terminal.rows - 2)?.translateToString(true).trim() ?? '';
+          const status = buffer.getLine(buffer.baseY + terminal.rows - 1)?.translateToString(true) ?? '';
+          return /^il\[\d+\]>$/.test(row) && !status.includes('updating') && !status.includes('sending')
+            && !status.includes('cancelling') && !status.includes('Ctrl+C cancels');
         }
         """);
 }

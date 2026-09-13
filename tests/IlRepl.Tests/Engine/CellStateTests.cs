@@ -162,6 +162,23 @@ public sealed class CellStateTests
     }
 
     /// <summary>
+    /// Appends inside an open unwind handler use the complete control-flow analysis.
+    /// </summary>
+    /// <param name="handler">The unwind handler being edited.</param>
+    [TestMethod]
+    [DataRow("finally")]
+    [DataRow("fault")]
+    public void TryAppend_InsideOpenUnwindHandler_RequiresFullAnalysis(string handler)
+    {
+        var signature = Signature("Guarded", typeof(void));
+        var state = Body(signature, ".try {", "nop", $"}} {handler} {{");
+        var candidate = Body(signature, "nop").Entries.Single();
+        Assert.IsTrue(state.HasOpenUnwindHandler);
+        Assert.DoesNotContain(diagnostic => diagnostic.Code is "FLOW020" or "FLOW021", state.Analysis.Diagnostics);
+        Assert.IsFalse(RuntimeFlowAnalysis.TryAppend(state, state.Analysis, candidate, out _));
+    }
+
+    /// <summary>
     /// Declarations that belong to the cell are refused inside a method.
     /// </summary>
     [TestMethod]

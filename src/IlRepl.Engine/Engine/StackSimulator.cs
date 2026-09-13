@@ -167,7 +167,8 @@ public sealed class StackSimulator
         {
             // Two different parameters share only what their constraints promise; a reference
             // constraint promises object.
-            static bool IsReference(Type t) => !t.IsGenericParameter || t.GenericParameterAttributes.HasFlag(System.Reflection.GenericParameterAttributes.ReferenceTypeConstraint);
+            static bool IsReference(Type type) => !type.IsGenericParameter
+                || type.GenericParameterAttributes.HasFlag(GenericParameterAttributes.ReferenceTypeConstraint);
             return IsReference(a) && IsReference(b) ? typeof(object) : null;
         }
 
@@ -198,6 +199,21 @@ public sealed class StackSimulator
         _items.AddRange(other._items);
         _isThis.Clear();
         _isThis.AddRange(other._isThis);
+    }
+
+    /// <summary>
+    /// Copies the established stack and receiver provenance from a flow state.
+    /// </summary>
+    internal void CopyFrom(FlowState<Type>? state)
+    {
+        Clear();
+        if (state is { Invalid: false, Values: { } values })
+        {
+            foreach (var value in values)
+            {
+                Push(value.Type, value.IsThis);
+            }
+        }
     }
 
     /// <summary>
@@ -282,7 +298,9 @@ public sealed class StackSimulator
         var pops = StackTransfer<Type>.PopCount(view);
         if (pops > _items.Count)
         {
-            throw new ReplException($"stack underflow: '{op.Name}' pops {pops} value{(pops == 1 ? "" : "s")} but the stack has {_items.Count}: {Render()}");
+            var suffix = pops == 1 ? "" : "s";
+            throw new ReplException(
+                $"stack underflow: '{op.Name}' pops {pops} value{suffix} but the stack has {_items.Count}: {Render()}");
         }
 
         var popped = _items.GetRange(_items.Count - pops, pops);
@@ -299,7 +317,7 @@ public sealed class StackSimulator
 
         foreach (var t in RuntimeStackAlgebra.Transfer.PushTypes(view, popped))
         {
-            Push(t, view.LoadsThis || view.AddressOfThis || (op == OpCodes.Dup && poppedThis[0]));
+            Push(t, view.ReadsThisArgument || (op == OpCodes.Dup && poppedThis[0]));
         }
     }
 
@@ -317,9 +335,20 @@ public sealed class StackSimulator
         var view = new StackOperandView<Type>
         {
             Op = op,
+            ByteOperand = instruction.Kind == OperandKind.Byte && instruction.Operand is byte byteOperand ? byteOperand : null,
+            IntegerOperand = instruction.Kind switch
+            {
+                OperandKind.SByte when instruction.Operand is sbyte value => value,
+                OperandKind.Int32 when instruction.Operand is int value => value,
+                OperandKind.Int64 when instruction.Operand is long value => value,
+                _ => null,
+            },
             RetPops = instruction.RetPops,
-            LoadsThis = instruction.ArgumentIndex == 0 && context.ThisIndex == 0 && op.Name is "ldarg.0" or "ldarg" or "ldarg.s",
-            AddressOfThis = instruction.ArgumentIndex == 0 && context.ThisIndex == 0 && op.Name is "ldarga" or "ldarga.s",
+            LocalIndex = instruction.LocalIndex,
+            ArgumentIndex = instruction.ArgumentIndex,
+            ReadsThisArgument = instruction.ArgumentIndex == 0 && context.ThisIndex == 0
+                && op.Name is "ldarg.0" or "ldarg" or "ldarg.s" or "ldarga" or "ldarga.s",
+            WritesThisArgument = instruction.ArgumentIndex == 0 && context.ThisIndex == 0 && op.Name is "starg" or "starg.s",
         };
         if (instruction.LocalIndex is int local && local < context.Locals.Count)
         {
@@ -335,13 +364,29 @@ public sealed class StackSimulator
             case Type type:
                 return view with { Type = type, Token = StackTokenKind.Type };
             case FieldInfo field:
-                return view with { FieldType = field.FieldType, Token = StackTokenKind.Field };
+                return view with
+                {
+                    FieldType = TypeRelations.SubstituteFor(field.DeclaringType!, field.FieldType),
+                    FieldIsStatic = field.IsStatic,
+                    FieldIsInitOnly = field.IsInitOnly,
+                    DeclaringType = field.DeclaringType,
+                    Token = StackTokenKind.Field,
+                };
             case ResolvedMethod method:
                 return view with
                 {
                     ReturnType = method.ReturnType == typeof(void) ? null : method.ReturnType,
                     DeclaringType = method.DeclaringType,
                     ArgumentPops = method.ArgumentPopCount(op == OpCodes.Newobj),
+                    ParameterTypes = [.. method.ParameterTypes, .. method.OptionalParameterTypes ?? []],
+                    IsInstance = !method.IsStatic && op != OpCodes.Newobj,
+                    MethodIsStatic = method.IsStatic,
+                    MethodIsConstructor = method.IsConstructor,
+                    MethodIsAbstract = method.Declared?.Attributes.HasFlag(MethodAttributes.Abstract) ?? method.Method?.IsAbstract,
+                    MethodIsVirtual = method.Declared?.Attributes.HasFlag(MethodAttributes.Virtual) ?? method.Method?.IsVirtual,
+                    MethodAccessIsKnownValid = MemberAccess.MethodVerdict(
+                        method, context.Scope ?? AccessScope.Cell, context.Types, judgeAll: true) is null,
+                    DeclaringTypeIsAbstract = method.DeclaringType?.IsAbstract,
                     Token = StackTokenKind.Method,
                 };
             case CalliSignature signature:
@@ -349,6 +394,9 @@ public sealed class StackSimulator
                 {
                     ReturnType = signature.ReturnType == typeof(void) ? null : signature.ReturnType,
                     ArgumentPops = signature.ArgumentPopCount + 1,
+                    ParameterTypes = [.. signature.ParameterTypes, .. signature.OptionalParameterTypes ?? []],
+                    HasImplicitThis = signature.ManagedConvention.HasFlag(CallingConventions.HasThis)
+                        && !signature.ManagedConvention.HasFlag(CallingConventions.ExplicitThis),
                 };
             default:
                 return view;

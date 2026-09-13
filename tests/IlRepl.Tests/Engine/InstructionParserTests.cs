@@ -94,6 +94,16 @@ public sealed class InstructionParserTests
     }
 
     /// <summary>
+    /// Submitting an opcode prefix refuses it without proposing an unrelated instruction.
+    /// </summary>
+    [TestMethod]
+    public void Parse_OpcodePrefix_DoesNotSuggestAnotherInstruction()
+    {
+        var error = Assert.ThrowsExactly<ReplException>(() => InstructionParser.Parse("ldc", Empty));
+        Assert.AreEqual("unknown opcode 'ldc'", error.Message);
+    }
+
+    /// <summary>
     /// Range checks on short immediates.
     /// </summary>
     [TestMethod]

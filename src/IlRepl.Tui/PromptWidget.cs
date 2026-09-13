@@ -156,7 +156,18 @@ public sealed partial record PromptWidget(
                     state.Post(new SubmissionEvent(SubmissionEventKind.Paste, Note: "paste failed: " + exception.Message));
                 }
             }).FixedHeight(Math.Max(1, Fit.EditorRows));
-            return paletteVisible ? [BuildPalette(v, candidates, state, Fit, Width), pastable] : [pastable];
+            var children = new List<Hex1bWidget>();
+            var diagnosticStyle = PromptDiagnostics.Display(state)?.Style ?? SpanStyle.Dim;
+            children.AddRange(PromptDiagnostics.Lines(state, Width).Take(Fit.DiagnosticRows)
+                .Select(line => v.ThemePanel(SpanPalette.Mutator(diagnosticStyle), v.Text(line))));
+            if (paletteVisible)
+            {
+                children.Add(BuildPalette(v, candidates, state, Fit, Width));
+            }
+
+            // Keep the editor at one child position as asynchronous diagnostics and palette rows change.
+            var headerRows = Fit.DiagnosticRows + (paletteVisible ? Fit.PaletteRows + Fit.DetailRows + 2 : 0);
+            return [v.VStack(_ => [.. children]).FixedHeight(headerRows), pastable];
         });
     }
 
@@ -181,6 +192,8 @@ public sealed partial record PromptWidget(
 
     private void Bind(InputBindingsBuilder b, PromptState state)
     {
+        b.Key(Hex1bKey.F8).Action(_ => PromptDiagnostics.Move(state, false), "Next diagnostic");
+        b.Shift().Key(Hex1bKey.F8).Action(_ => PromptDiagnostics.Move(state, true), "Previous diagnostic");
         // The builder runs for every key, so what it reads here is the state that key meets.
         var candidates = Candidates(state, Catalog);
         var paletteVisible = candidates.Count > 0 && Fit.PaletteRows > 0;

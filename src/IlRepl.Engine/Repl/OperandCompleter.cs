@@ -74,6 +74,13 @@ public sealed partial class OperandCompleter : IDisposable
 
             _activeEditing = _editing;
             var view = await _editing.SpeculateAsync(document.Lines, document.Line, cancellationToken: token).ConfigureAwait(false);
+            if (view.BindingRefreshRequired)
+            {
+                _query = null;
+                PruneContinuations(document);
+                return CompletionReply.Empty(_session.CompletionRevision, _bindingEpoch);
+            }
+
             foreach (var source in view.Snapshot.Catalog.Sources)
             {
                 await source.WarmIndexAsync(token).ConfigureAwait(false);
@@ -91,6 +98,8 @@ public sealed partial class OperandCompleter : IDisposable
                 view = await _editing.SpeculateAsync(document.Lines, document.Line, inspecting: true,
                     cancellationToken: token).ConfigureAwait(false);
             }
+
+            view = await _editing.WithFlowAsync(view, document.Lines, document.Line, document.Caret, token).ConfigureAwait(false);
 
             var identity = new CompletionQueryIdentity(_identity, _editing.Revision, _bindingEpoch, document, site);
             if (_query is { } previous && previous.Identity == identity)

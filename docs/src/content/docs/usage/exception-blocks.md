@@ -35,7 +35,7 @@ il[1]> call void Console::WriteLine(string)
   ┊ []
 il[1]> }
   end of protected region
-  ┊ []
+  ┊ unreachable
 il[1]> DONE: ldloc m
   ┊ [string]
 il[1]> ret
@@ -57,6 +57,7 @@ The boundaries are:
 
 Leave a region with `leave`, not `ret` or `br`. The stack is empty at every boundary except the
 start of a catch, filter, or filter handler, where it holds the exception.
+A filter cannot contain another `.try`. If the filter throws, exception search continues with the next clause.
 
 ## A filter
 
@@ -100,7 +101,7 @@ il[2]> leave END
   ┊ []
 il[2]> }
   end of protected region
-  ┊ []
+  ┊ unreachable
 il[2]> END: ldloc n
   ┊ [int32]
 il[2]> ret

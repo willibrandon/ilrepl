@@ -53,6 +53,11 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
     public required TypeSymbol ReturnType { get; init; }
 
     /// <summary>
+    /// The complete return type when annotations cannot be represented by <see cref="ReturnType"/>.
+    /// </summary>
+    internal TypeSymbol? ExactReturnType { get; init; }
+
+    /// <summary>
     /// The fixed parameters, substituted the same way.
     /// </summary>
     public IReadOnlyList<ParameterSymbol> Parameters { get; init; } = [];
@@ -145,8 +150,14 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
     /// </summary>
     /// <param name="definition">The definition's identity.</param>
     /// <param name="owner">The declaring type, or null for a session method.</param>
+    /// <param name="source">The source to assign, or null to infer it from the owner.</param>
+    /// <param name="declared">Whether the source header was accepted, or null to retain the current state.</param>
     /// <returns>The declaration with its identity and owner.</returns>
-    internal MethodSymbol WithDefinition(DefinitionId definition, TypeSymbol? owner)
+    internal MethodSymbol WithDefinition(
+        DefinitionId definition,
+        TypeSymbol? owner,
+        MethodSymbolSource? source = null,
+        bool? declared = null)
     {
         TypeSymbol Map(TypeSymbol type) => SymbolRelations.Rewrite(type, parameter =>
             parameter.Kind == TypeSymbolKind.MethodParameter && GenericParameters.Any(generic => generic.Owner == parameter.Owner)
@@ -154,16 +165,18 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
         return new MethodSymbol
         {
             Definition = definition,
-            Source = owner is null ? MethodSymbolSource.Session : MethodSymbolSource.Declared,
+            Source = source ?? (owner is null ? MethodSymbolSource.Session : MethodSymbolSource.Declared),
             DeclaringType = owner,
             Name = Name,
             Attributes = Attributes,
             ImplAttributes = ImplAttributes,
             CallingConvention = CallingConvention,
             ReturnType = Map(ReturnType),
+            ExactReturnType = ExactReturnType is null ? null : Map(ExactReturnType),
             Parameters = [.. Parameters.Select(parameter => parameter with
             {
                 Type = Map(parameter.Type),
+                ExactType = parameter.ExactType is null ? null : Map(parameter.ExactType),
                 RequiredModifiers = [.. parameter.RequiredModifiers.Select(Map)],
                 OptionalModifiers = [.. parameter.OptionalModifiers.Select(Map)],
             })],
@@ -174,7 +187,7 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
             GenericArguments = [.. GenericArguments.Select(Map)],
             ReturnRequiredModifiers = [.. ReturnRequiredModifiers.Select(Map)],
             ReturnOptionalModifiers = [.. ReturnOptionalModifiers.Select(Map)],
-            IsDeclared = IsDeclared,
+            IsDeclared = declared ?? IsDeclared,
             BodyAvailable = BodyAvailable,
         };
     }
@@ -193,6 +206,33 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
         ArgumentNullException.ThrowIfNull(returnType);
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(genericArguments);
+        var mappedParameters = parameters.Select((parameter, index) => parameter with
+        {
+            ExactType = index < Parameters.Count
+                ? RuntimeSymbolTypes.RebaseExact(Parameters[index].Type, Parameters[index].ExactType, parameter.Type)
+                : parameter.ExactType,
+        }).ToArray();
+        return WithExact(
+            declaringType,
+            returnType,
+            RuntimeSymbolTypes.RebaseExact(ReturnType, ExactReturnType, returnType),
+            mappedParameters,
+            genericArguments);
+    }
+
+    /// <summary>
+    /// A copy with a different declaring construction and complete substituted signature.
+    /// </summary>
+    internal MethodSymbol WithExact(
+        TypeSymbol? declaringType,
+        TypeSymbol returnType,
+        TypeSymbol? exactReturnType,
+        IReadOnlyList<ParameterSymbol> parameters,
+        IReadOnlyList<TypeSymbol> genericArguments)
+    {
+        ArgumentNullException.ThrowIfNull(returnType);
+        ArgumentNullException.ThrowIfNull(parameters);
+        ArgumentNullException.ThrowIfNull(genericArguments);
         return new MethodSymbol
         {
             Definition = Definition,
@@ -203,6 +243,7 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
             ImplAttributes = ImplAttributes,
             CallingConvention = CallingConvention,
             ReturnType = returnType,
+            ExactReturnType = exactReturnType,
             Parameters = parameters,
             GenericParameters = GenericParameters,
             GenericArguments = genericArguments,

@@ -1,4 +1,5 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -35,6 +36,16 @@ public sealed record PropertyDeclaration(
     IReadOnlyList<string> Lines)
 {
     /// <summary>
+    /// The complete property type when annotations cannot be represented by <see cref="Type"/>.
+    /// </summary>
+    internal TypeSymbol? ExactType { get; init; }
+
+    /// <summary>
+    /// The complete index parameter types, with null where <see cref="ParameterTypes"/> is exact.
+    /// </summary>
+    internal IReadOnlyList<TypeSymbol?> ExactParameterTypes { get; init; } = [];
+
+    /// <summary>
     /// Renders the property the way a listing shows it, for example <c>property int32 Length { get }</c>.
     /// </summary>
     /// <returns>The description.</returns>
@@ -52,7 +63,10 @@ public sealed record PropertyDeclaration(
         }
 
         accessors.AddRange(Others.Select(o => o.Name));
-        var parameters = ParameterTypes.Count == 0 ? "" : "(" + string.Join(", ", ParameterTypes.Select(TypeNameFormatter.Pretty)) + ")";
-        return $"{(IsStatic ? "static " : "")}property {TypeNameFormatter.Pretty(Type)} {Name}{parameters} {{ {string.Join(", ", accessors)} }}";
+        var parameters = ParameterTypes.Count == 0 ? "" : "(" + string.Join(", ", ParameterTypes.Select((type, index) =>
+            ExactParameterTypes.ElementAtOrDefault(index) is { } exact
+                ? SymbolRenderer.Annotated(exact) : TypeNameFormatter.Pretty(type))) + ")";
+        var type = ExactType is { } exact ? SymbolRenderer.Annotated(exact) : TypeNameFormatter.Pretty(Type);
+        return $"{(IsStatic ? "static " : "")}property {type} {Name}{parameters} {{ {string.Join(", ", accessors)} }}";
     }
 }

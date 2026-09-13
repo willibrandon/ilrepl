@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using IlRepl.Protocol;
 using IlRepl.Repl;
 
@@ -47,6 +48,29 @@ internal sealed class CompletionEngine : IReplEngine
         previous.TrySetResult(++AssemblyVersion);
     }
 
+    /// <summary>
+    /// Whether analysis responses are controlled by the test.
+    /// </summary>
+    public bool HoldAnalysis { get; set; }
+
+    /// <summary>
+    /// The held requests in arrival order.
+    /// </summary>
+    public ConcurrentQueue<HeldAnalysis> Analyses { get; } = new();
+
+    /// <inheritdoc/>
+    public Task<AnalysisReply> AnalyzeAsync(AnalysisRequest request, CancellationToken cancellationToken)
+    {
+        if (!HoldAnalysis)
+        {
+            return _inner.AnalyzeAsync(request, cancellationToken);
+        }
+
+        var call = new HeldAnalysis(request, cancellationToken);
+        Analyses.Enqueue(call);
+        return call.Answer.Task;
+    }
+
     /// <inheritdoc/>
     public Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken)
     {
@@ -66,6 +90,11 @@ internal sealed class CompletionEngine : IReplEngine
     public async ValueTask DisposeAsync()
     {
         foreach (var call in Calls)
+        {
+            call.Answer.TrySetCanceled();
+        }
+
+        foreach (var call in Analyses)
         {
             call.Answer.TrySetCanceled();
         }

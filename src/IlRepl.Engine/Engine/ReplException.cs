@@ -1,3 +1,5 @@
+using IlRepl.Protocol;
+
 namespace IlRepl.Engine;
 
 /// <summary>
@@ -6,6 +8,11 @@ namespace IlRepl.Engine;
 /// </summary>
 public sealed class ReplException : Exception
 {
+    /// <summary>
+    /// Structured source findings retained when a candidate line is refused.
+    /// </summary>
+    public IReadOnlyList<AnalysisDiagnostic> Diagnostics { get; init; } = [];
+
     /// <summary>
     /// Initializes a new instance of the <see cref="ReplException"/> class.
     /// </summary>

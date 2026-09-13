@@ -1,4 +1,5 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -49,7 +50,10 @@ public static class FieldDeclarationParser
             attributes |= FieldAttributes.HasDefault;
         }
 
-        return new FieldDeclaration(name, type, attributes, offset, constant, hasDefault, required, optional, [], source);
+        return new FieldDeclaration(name, type, attributes, offset, constant, hasDefault, required, optional, [], source)
+        {
+            ExactType = RuntimeSymbolTypes.RequiresExact(declaration.Type.ExactType) ? declaration.Type.ExactType : null,
+        };
     }
 
 }

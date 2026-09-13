@@ -17,7 +17,8 @@ public sealed partial class EditingSession
             .Concat(declaration.Interfaces)
             .Concat(declaration.GenericParameters.SelectMany(parameter => parameter.Constraints))
             .Concat(declaration.BaseType is null ? [] : new[] { declaration.BaseType })
-            .Concat(block.Overrides.SelectMany(mapping => SymbolReferences.Method(mapping.Target.Method)))
+            .Concat(block.Overrides.SelectMany(mapping => SymbolReferences.Method(mapping.Target.Method)
+                .Concat(SymbolReferences.Method(mapping.Body))))
             .Concat(block.Accessors.SelectMany(ReferencedTypes));
     }
 
@@ -25,16 +26,16 @@ public sealed partial class EditingSession
     {
         if (block.Property is { } property)
         {
-            yield return property.Type;
-            foreach (var parameter in property.ParameterTypes)
+            yield return property.ExactType ?? property.Type;
+            for (var index = 0; index < property.ParameterTypes.Count; index++)
             {
-                yield return parameter;
+                yield return property.ExactParameterTypes.ElementAtOrDefault(index) ?? property.ParameterTypes[index];
             }
         }
 
         if (block.Event is { } @event)
         {
-            yield return @event.HandlerType;
+            yield return @event.ExactHandlerType ?? @event.HandlerType;
         }
 
         foreach (var type in block.ReferencedTypes)
@@ -53,7 +54,8 @@ public sealed partial class EditingSession
             }
         }
 
-        foreach (var type in body.MetadataTypes.Concat(body.Locals.Concat(body.Arguments).Select(variable => variable.Type))
+        foreach (var type in body.MetadataTypes.Concat(body.Locals.Concat(body.Arguments)
+            .Select(variable => variable.ExactType ?? variable.Type))
             .Concat(body.Overrides.SelectMany(mapping => SymbolReferences.Method(mapping.Target.Method))))
         {
             yield return type;
@@ -64,7 +66,7 @@ public sealed partial class EditingSession
             var operand = instruction.Operand;
             if (operand.Type is { } type)
             {
-                yield return type;
+                yield return operand.ExactType ?? type;
             }
 
             if (operand.Field is { } field)
@@ -77,7 +79,8 @@ public sealed partial class EditingSession
 
             if (operand.Method is { } bound)
             {
-                foreach (var reference in SymbolReferences.Method(bound.Method).Concat(bound.OptionalParameterTypes ?? []))
+                foreach (var reference in SymbolReferences.Method(bound.Method)
+                    .Concat(bound.ExactOptionalParameterTypes ?? bound.OptionalParameterTypes ?? []))
                 {
                     yield return reference;
                 }

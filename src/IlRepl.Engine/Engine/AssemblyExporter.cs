@@ -77,11 +77,23 @@ public static class AssemblyExporter
             foreach (var (method, definition) in methods)
             {
                 var signature = method.Signature;
-                definition.ReturnType = writer.Import(signature.ReturnType);
+                definition.ReturnType = writer.ImportSignature(
+                    signature.ReturnType,
+                    signature.ExactReturnType,
+                    signature.ReturnRequiredModifiers,
+                    signature.ReturnOptionalModifiers);
                 for (var i = 0; i < signature.Parameters.Count; i++)
                 {
                     var parameter = signature.Parameters[i];
-                    definition.Parameters.Add(new ParameterDefinition(parameter.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)), ParameterAttributes.None, writer.Import(parameter.Type)));
+                    var type = writer.ImportSignature(
+                        parameter.Type,
+                        parameter.ExactType,
+                        parameter.RequiredModifiers,
+                        parameter.OptionalModifiers);
+                    definition.Parameters.Add(new ParameterDefinition(
+                        parameter.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                        ParameterAttributes.None,
+                        type));
                 }
             }
 
@@ -125,7 +137,11 @@ public static class AssemblyExporter
         for (var i = 0; i < state.Arguments.Count; i++)
         {
             var argument = state.Arguments[i];
-            run.Parameters.Add(new ParameterDefinition(argument.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)), ParameterAttributes.None, writer.Import(argument.Type)));
+            var type = argument.ExactType is null ? writer.Import(argument.Type) : writer.Import(argument.ExactType);
+            run.Parameters.Add(new ParameterDefinition(
+                argument.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ParameterAttributes.None,
+                type));
         }
 
         Guarded("the cell", () => CecilBodyEmitter.Emit(run, state, writer, map));

@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
@@ -13,6 +15,7 @@ public sealed class SymbolStackAlgebra : IStackTypeAlgebra<TypeSymbol>
     private static readonly TypeSymbol NullableDefinition = RuntimeSymbolImporter.Import(typeof(Nullable<>));
     private static readonly Dictionary<string, TypeSymbol> CoreLibTypes = new(StringComparer.Ordinal)
     {
+        ["System.ValueType"] = RuntimeSymbolImporter.Import(typeof(ValueType)),
         ["System.RuntimeTypeHandle"] = RuntimeSymbolImporter.Import(typeof(RuntimeTypeHandle)),
         ["System.RuntimeFieldHandle"] = RuntimeSymbolImporter.Import(typeof(RuntimeFieldHandle)),
         ["System.RuntimeMethodHandle"] = RuntimeSymbolImporter.Import(typeof(RuntimeMethodHandle)),
@@ -65,6 +68,9 @@ public sealed class SymbolStackAlgebra : IStackTypeAlgebra<TypeSymbol>
     public TypeSymbol MakeByRef(TypeSymbol type) => TypeSymbol.ByRef(type);
 
     /// <inheritdoc/>
+    public TypeSymbol MakePointer(TypeSymbol type) => TypeSymbol.Pointer(type);
+
+    /// <inheritdoc/>
     public TypeSymbol MakeArray(TypeSymbol type) => TypeSymbol.SzArray(type);
 
     /// <inheritdoc/>
@@ -76,13 +82,17 @@ public sealed class SymbolStackAlgebra : IStackTypeAlgebra<TypeSymbol>
     public bool IsByRef(TypeSymbol type) => type.Kind == TypeSymbolKind.ByRef;
 
     /// <inheritdoc/>
-    public bool IsPointer(TypeSymbol type) => type.Kind == TypeSymbolKind.Pointer;
+    public bool IsPointer(TypeSymbol type) => type.Kind is TypeSymbolKind.Pointer or TypeSymbolKind.FunctionPointer;
 
     /// <inheritdoc/>
     public bool IsArray(TypeSymbol type) => type.IsArray;
 
     /// <inheritdoc/>
     public bool IsValueType(TypeSymbol type) => type.IsValueTypeShape;
+
+    /// <inheritdoc/>
+    public bool IsByRefLike(TypeSymbol type) => type.IsByRefLike || type.IsGenericParameter
+        && type.ParameterAttributes.HasFlag(GenericParameterAttributes.AllowByRefLike);
 
     /// <inheritdoc/>
     public bool IsGenericParameter(TypeSymbol type) => type.IsGenericParameter;

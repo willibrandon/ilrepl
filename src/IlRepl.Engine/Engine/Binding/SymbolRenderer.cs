@@ -65,6 +65,43 @@ public static class SymbolRenderer
     }
 
     /// <summary>
+    /// A short IL-flavored name that retains every exact signature annotation.
+    /// </summary>
+    internal static string Annotated(TypeSymbol type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        return type.Kind switch
+        {
+            TypeSymbolKind.Modified => Annotated(type.Element!)
+                + (type.IsRequired ? " modreq(" : " modopt(") + Pretty(type.Modifier) + ")",
+            TypeSymbolKind.Pinned => Annotated(type.Element!) + " pinned",
+            TypeSymbolKind.ByRef => Annotated(type.Element!) + "&",
+            TypeSymbolKind.Pointer => Annotated(type.Element!) + "*",
+            TypeSymbolKind.FunctionPointer => FunctionPointer(type.Signature!, candidate => Annotated(candidate!)),
+            TypeSymbolKind.SzArray => Annotated(type.Element!) + "[]",
+            TypeSymbolKind.Array => Annotated(type.Element!)
+                + ArraySignatureShape.Render(type.Rank, type.Sizes, type.LowerBounds),
+            TypeSymbolKind.Constructed => StripArity(type.Element!.Name) + "<"
+                + string.Join(", ", type.Arguments.Select(Annotated)) + ">",
+            _ => Pretty(type),
+        };
+    }
+
+    /// <summary>
+    /// Renders a member reference with its complete annotated return and parameter types.
+    /// </summary>
+    internal static string DescribeAnnotated(MethodSymbol method)
+    {
+        ArgumentNullException.ThrowIfNull(method);
+        var parameters = string.Join(", ", method.Parameters.Select(parameter =>
+            Annotated(SignatureSymbolIdentity.Annotated(parameter))));
+        var returnType = method.IsConstructor
+            ? "void" : Annotated(SignatureSymbolIdentity.AnnotatedReturn(method));
+        var owner = method.DeclaringType is null ? "" : Pretty(method.DeclaringType) + "::";
+        return $"{(method.IsStatic ? "" : "instance ")}{returnType} {owner}{method.Name}({parameters})";
+    }
+
+    /// <summary>
     /// The name reflection reports for a definition: <c>Namespace.Outer+Inner</c>, arity suffix included.
     /// </summary>
     /// <param name="type">A named definition or a construction.</param>
@@ -129,13 +166,15 @@ public static class SymbolRenderer
     {
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(pretty);
-        var parameters = string.Join(", ", method.Parameters.Select(p => pretty(p.Type)));
+        var parameters = string.Join(", ", method.Parameters.Select(parameter => parameter.ExactType is null
+            ? pretty(parameter.Type) : Annotated(parameter.ExactType)));
         if (method.IsVarArg)
         {
             parameters = parameters.Length == 0 ? "..." : parameters + ", ...";
         }
 
-        var returnType = method.IsConstructor ? "void" : pretty(method.ReturnType);
+        var returnType = method.ExactReturnType is { } exactReturn
+            ? Annotated(exactReturn) : method.IsConstructor ? "void" : pretty(method.ReturnType);
         var instance = method.IsStatic ? "" : "instance ";
         var name = method.Name == ".cctor" ? ".ctor" : method.Name;
         if (method.GenericArguments.Count > 0)
@@ -162,7 +201,10 @@ public static class SymbolRenderer
         ArgumentNullException.ThrowIfNull(pretty);
         var generic = method.GenericParameters.Count == 0 ? "" : "<" + string.Join(", ", method.GenericParameters.Select(p => p.Name))
             + ">";
-        return $"{pretty(method.ReturnType)} {method.Name}{generic}({string.Join(", ", method.Parameters.Select(p => pretty(p.Type)))})";
+        var returnType = method.ExactReturnType is { } exactReturn ? Annotated(exactReturn) : pretty(method.ReturnType);
+        var parameters = method.Parameters.Select(parameter => parameter.ExactType is { } exact
+            ? Annotated(exact) : pretty(parameter.Type));
+        return $"{returnType} {method.Name}{generic}({string.Join(", ", parameters)})";
     }
 
     /// <summary>

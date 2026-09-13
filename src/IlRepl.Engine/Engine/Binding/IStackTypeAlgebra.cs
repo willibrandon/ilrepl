@@ -58,6 +58,13 @@ public interface IStackTypeAlgebra<T> where T : class
     T MakeByRef(T type);
 
     /// <summary>
+    /// An unmanaged pointer to the type.
+    /// </summary>
+    /// <param name="type">The pointee.</param>
+    /// <returns>The pointer.</returns>
+    T MakePointer(T type);
+
+    /// <summary>
     /// A vector of the type.
     /// </summary>
     /// <param name="type">The element.</param>
@@ -98,6 +105,13 @@ public interface IStackTypeAlgebra<T> where T : class
     /// <param name="type">The type.</param>
     /// <returns>True for a value type.</returns>
     bool IsValueType(T type);
+
+    /// <summary>
+    /// True for a type that cannot be boxed because it may contain managed stack references.
+    /// </summary>
+    /// <param name="type">The type.</param>
+    /// <returns>True for a byref-like type or parameter.</returns>
+    bool IsByRefLike(T type);
 
     /// <summary>
     /// True for a generic parameter.

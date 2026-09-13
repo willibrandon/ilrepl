@@ -17,6 +17,9 @@ internal static class RuntimeArgumentMaterializer
         var value = declaration.Literal is not null
             ? ValueLiteralParser.Parse(declaration.Literal, type)
             : type.IsValueType ? Array.CreateInstance(type, 1).GetValue(0) : null;
-        return new ArgumentDeclaration(type, declaration.Name, value, declaration.Literal ?? (type.IsValueType ? "default" : "null"));
+        return new ArgumentDeclaration(type, declaration.Name, value, declaration.Literal ?? (type.IsValueType ? "default" : "null"))
+        {
+            ExactType = declaration.ExactType,
+        };
     }
 }

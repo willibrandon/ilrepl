@@ -1,0 +1,295 @@
+# Control-flow rule checks
+
+The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
+Each new correctness rejection needs a permitted counterpart. A verification failure alone does
+not justify refusing a correct body. The 286 method examples and the paired constructor example
+run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
+ILAsm's `} {` for the REPL's `} handler {` spelling.
+
+`ControlFlowCorpusTests` checks symbolic preview, live acceptance, ILVerification's exact codes,
+execution, `.il` reassembly, and `.save` execution. `LiveSessionTests.ControlFlow` enters the same
+source in Chromium and WebKit, checks acceptance or recovery, then executes accepted methods.
+`ControlFlowOperandTableTests` adds all 288 operand pairs in eight published numeric tables without
+using the analyzer to build its expected results. Incorrect bodies are never executed.
+Native ILAsm changes a static `callvirt` reference to an instance signature, so that one verifier
+fixture assembles a static `call` and changes only its opcode in metadata before verification.
+
+| Rule | ECMA-335 reference | Accepted reproduction | Rejected reproduction |
+| --- | --- | --- | --- |
+| Entry, conditional edges and joins | III.1.8.1.1, III.1.8.1.3 | Diamond, MixedFloats | WrongDepth, WrongType |
+| Worklist convergence and backward edges | III.1.7.5, III.1.8.1.1 | Loop | BackwardStack, UnreachableForwardBackwardStack |
+| Switch and unreachable instructions | III.3.66, III.1.8.1.1 | Switch, DeadCode | Underflow on a reachable path |
+| Return shape and parameter assignment | III.3.57, I.8.7.3 | Diamond, NativeAddition | WrongReturn, WrongCall |
+| Virtual calls, constructors, and function pointers | I.8.9.6.6, II.10.5.3.1, II.14.5, II.15.2, III.1.8.1.4, III.3.19, III.3.41, III.4.18, III.4.21 | AbstractVirtualCall, ConcreteAllocation, ConstrainedReceiver, ConstantBranchConstructorInitialization, ConstructorCallInFinally, ConstructorFailureInFilter, ConstructorFailureInFinally, ConstructorFunctionPointer, ConstructorRetryAfterCatch, CorrelatedFilterConstructor, DeferredInitializedConstructorHandler, DelegatingReferenceConstructorCall, DirectConstructorFunctionPointer, DirectSelfConstructorCall, DoubleReferenceConstructorCall, EarlyThisCall, ExceptionalConstructorFinallyUse, ExplicitStaticInitializerCall, FunctionPointerField, FunctionPointerLocal, FunctionPointerReturn, GrandparentConstructorCall, InheritedFieldsAfterBaseCall, InheritedFieldsBeforeBaseCall, InitializedConstructorFinallyUse, InitializedReferenceConstructorCall, InstanceFunctionPointer, MixedConstructorInitialization, NonVirtualFunctionPointer, OrdinaryMethodConstructorCall, OwnFieldsBeforeBaseCall, StaticInitializerFunctionPointer, UninitializedConstructorReturn, UnusedThisBeforeBaseCall, ValueTypeConstructorCall, VirtualFunctionPointer | WrongAbstractAllocation, WrongAbstractCall, WrongAbstractFunctionPointer, WrongMethodAllocation, WrongStaticConstructorAllocation, WrongStaticVirtualCall, WrongStaticVirtualFunctionPointer, WrongVirtualConstructorCall |
+| Instance receiver representation | I.12.4.1.4, II.13.3 | ValueTypeReceiver, NativeValueTypeReceiver, PointerValueTypeReceiver | WrongManagedReferenceReceiver, WrongPointerValueTypeReceiver, WrongUnboxedValueTypeReceiver |
+| Common array reference types | I.8.7.1, III.1.8.1.3 | ArrayJoin | ByrefJoin |
+| Managed-pointer verification types | I.8.7, III.1.8.1.2.3 | BooleanPointerCall, BooleanPointerJoin, CharacterPointerJoin, EnumPointerJoin, ReducedPointerJoin | ByrefJoin |
+| Managed and unmanaged pointers | III.1.8.1.2.2, III.3.42, III.3.62, III.4.4–III.4.5, III.4.8, III.4.10–III.4.11, III.4.13, III.4.27–III.4.29 | ByteIndirectLoad, ByteIndirectStore, FloatIndirectLoad, FloatIndirectStore, FunctionPointerArrayInstructions, GenericIndirectReference, IndirectReferenceStore, Int32PointerArgument, Int32PointerArrayElement, Int32PointerField, Int32PointerLocal, Int32PointerObjectStore, Int32PointerReturn, Int32PointerStoredArgument, ManagedPointer, NativeFieldAddress, NativeFieldLoad, NativeFieldStore, NativeIndirectLoad, NativeIndirectStore, NativeObjectCopy, NativeObjectInitialize, NativeObjectLoad, NativeObjectStore, NativePointerArgument, NativePointerArrayElement, NativePointerArrayInstructions, NativePointerLocal, NativePointerReturn, PointerArgumentLoad, PointerArrayLoad, PointerFieldArgument, PointerFieldArithmetic, PointerFieldReturn, PointerFields, PointerFieldToLocal, PointerLocalLoad, PointerObjectLoad, UnmanagedFieldAddress, UnmanagedReferenceLoad, UnmanagedReferenceStore | WrongFunctionPointerArrayInstructionWidth, WrongGenericIndirectLoad, WrongGenericIndirectStore, WrongIndirectReferenceStore, WrongNarrowFloatStore, WrongNarrowIndirectStore, WrongPointerArrayInstructionWidth, WrongPointerField, WrongUnmanagedReferenceStore, WrongWideFloatLoad, WrongWideIndirectLoad |
+| Field storage form | II.16.1.2, III.4.10–III.4.15, III.4.24–III.4.31 | InitOnlyFieldAddresses, PointerFields, StaticField, StaticFieldToken | WrongInstanceFieldOpcode, WrongReferenceFieldReceiver, WrongStaticFieldOpcode |
+| Readonly provenance | III.1.8.1.2.2, III.2.3, III.3.62, III.4.28 | CovariantReadOnlyArrayAddress, ReadOnlyByRefArgument, ReadOnlyConstrainedCall, ReadOnlyCopyDestination, ReadOnlyCopySource, ReadOnlyFieldAddress, ReadOnlyFieldLoad, ReadOnlyFieldWrite, ReadOnlyLoad, ReadOnlyMutatingCall, ReadOnlyObjectInitialize, ReadOnlyObjectLoad, ReadOnlyObjectStore, ReadOnlyStoredPointer, ReadOnlyTypedReference, ReadOnlyVirtualCall, ReadOnlyWrite, UnboxedFieldWrite | WrongCovariantArrayAddress, WrongPrefix |
+| Correct operations outside verification | III.1.8, III.3.47 | ManagedPointerOverflowAddition, NativeValueTypeReceiver, PointerDifference, ReadOnlyWrite, StackAllocation, UnmanagedPointerAddition, UnmanagedPointerNot, UnmanagedPointerShift | WrongArithmetic, WrongAllocationHandler |
+| Numeric operand categories | III.1.5 tables III.2–III.8, III.3.27 | ManagedPointerOverflowAddition, ManagedPointerOverflowDifference, ManagedPointerOverflowSubtraction, MixedFloats, NativeAddition, UnsignedIntegerToFloat, 288 raw pairs | BadOverflowFloat, BadNotFloat, BadShift, WrongUnsignedFloatConversion |
+| Comparisons | III.1.5 table III.4 | ObjectComparison, GenericReferenceComparison | BadComparison, WrongGenericComparison |
+| Reference and float operands | III.3.22, III.3.27, III.4.31 | Catch, MixedFloats | BadThrow, BadFinite, WrongReferenceConversion |
+| Exception entry and handler stacks | III.1.7.6, III.1.8.1.1 | Catch, Finally, CatchFinally, EndfinallyClearsStack, Fault, Filter, RethrowPreservesStack | NonemptyTry, WrongFilterStack |
+| Protected returns and transfers | II.15.2, III.3.34–III.3.35, III.3.37, III.3.46, III.3.57 | Catch, Finally, Fault, Jump, LeaveWithinCatch, LeaveWithinTry | JumpFromTry, JumpFromSynchronizedMethod, ReturnInTry, WrongAbstractJump, WrongJumpSignature, WrongLeaveWithinFilter, WrongLeaveWithinFinally, WrongLeaveWithinFault, WrongNestedFilterTry |
+| Protected-region entry | III.3.15 | Catch, Finally | BranchIntoTry |
+| Prefix boundaries, operands, and applicability | III.2 | ManagedPointerTailCall, TailCall, SynchronizedTailCall, UnalignedLoad, VolatileObjectLoad, VolatileObjectStore, ReadOnlyLoad | WrongPrefix, WrongUnalignedValue, BranchIntoPrefix |
+| Generic identity and boxing | I.8.2.4, III.1.8.1.1–III.1.8.1.3, III.4.1, III.4.23, III.4.30, III.4.33 | GenericBox, GenericReference | GenericNeedsBox, GenericDistinct, WrongManagedPointerBox, WrongManagedPointerCast, WrongManagedPointerIsInstance, WrongManagedPointerUnboxAny |
+| Generic object references | I.8.7.1, III.1.8.1.1 | GenericReferenceThrow, GenericReferenceBranch | GenericNeedsBoxThrow, GenericNeedsBoxBranch |
+| Runtime extensions to constrained calls | .NET ECMA-335 Augments | StaticAbstractCall, StaticAbstractFunction, StaticAbstract_ImplementedAndCalled | WrongStaticAbstractCall, WrongStaticAbstractImplementor, WrongStaticAbstractFunction, existing member eligibility tests |
+| Constrained receiver type | III.2.1 | ConstrainedReceiver | WrongConstrainedReceiver |
+| Readonly store receiver across paths | II.16.1.2 | FlowReceiver and FlowArgument preserving this | Another receiver at a join or in argument zero |
+| Indirect calls | III.3.20 | IndirectCall, InstanceIndirectCall, ManagedPointerInstanceIndirectCall, NativePointerInstanceIndirectCall | WrongIndirectCall, WrongIndirectTarget, WrongInstanceIndirectReceiver |
+| Block memory operands | III.3.30, III.3.36 | CopyBlock, InitializeBlock | WrongCopyBlock, WrongInitializeBlock |
+| Array element, index and pointer operands | I.8.7.1, III.4.7–III.4.9, III.4.26–III.4.27 | ArrayElement, ArrayIndex, ArrayReferenceLoad, ArrayReferenceStore, BooleanArrayElement, CharacterArrayElement, CovariantReadOnlyArrayAddress, GenericArrayReferenceLoad, GenericArrayReferenceStore, NullArrayReferenceStore, TypedArrayReferenceLoad, TypedArrayReferenceStore | WrongArrayElement, WrongArrayIndex, WrongArrayValue, WrongArrayReferenceStore, WrongCovariantArrayAddress, WrongGenericArrayReferenceLoad, WrongManagedPointerArray, WrongNullArrayReferenceStore, WrongReferenceTypedArrayStore, WrongTypedArrayReferenceStore, WrongValueArrayReferenceLoad, WrongValueArrayReferenceStore, WrongValueTypedArrayLoad |
+| Object copy operands | III.4.4 | CopyObject, CopyReferenceObject | WrongCopyObjectSource, WrongCopyObjectSourceType, WrongCopyObjectDestinationType |
+| Typed references | III.4.19, III.4.22–III.4.23 | TypedReference, UnmanagedTypedReference | WrongMakeTypedReference, WrongTypedReferenceType, WrongTypedReferenceValue |
+| Unboxing | III.4.32 | UnboxValue | WrongUnboxType |
+| Type size | III.4.25 | SizeOf | |
+| Stack allocation depth | III.3.47 | StackAllocation | WrongAllocationStack |
+| Transitive generic constraints | III.1.8.1.2.3 | TransitiveBox | GenericNeedsBox |
+| Header stack limit | III.1.7.4, II.25.4.3 | DeepStack, DeadCode through live and both exports | Raw underflow fixture |
+
+Forward labels remain incomplete while editing. `ControlFlowSessionTests` and `ControlFlowPreviewTests`
+check that a later edge revisits an earlier instruction, identifies the producers, and that correcting
+or removing the edge recomputes the stack. `EngineAnalysisTests`, `HostServerRpcTests`, and
+`AnalysisRequesterTests` cover source positions, stale replies, cancellation, disposal, navigation,
+and withdrawal of an entire refused block. Existing viewport tests check actual terminal frames.
+
+ECMA III.2.4 says a synchronized method ignores `tail.` so its lock remains held until the call
+returns. `SynchronizedTailCall` verifies and returns 42 through CoreCLR, browser Mono, ILAsm, and
+the saved assembly.
+
+The same rule permits a managed pointer argument when it does not point into the departing frame,
+but verification rejects every managed pointer because it does not track that provenance.
+ManagedPointerTailCall executes correctly and carries an unverifiable diagnostic; TailCall remains
+verifiable with an ordinary integer argument.
+
+ECMA I.12.4.1.4 gives a value-type method a pointer to its unboxed instance. A managed pointer is
+verifiable; an unmanaged pointer or native integer is correct but unverifiable. A class method
+instead requires an object reference. The receiver fixtures preserve that distinction and reject
+an unboxed value or managed pointer to a reference variable before either can reach the runtime.
+
+The same receiver distinction applies to instance fields. A managed pointer to a value type
+addresses that value, while a managed pointer to a reference type addresses a slot containing the
+reference. WrongReferenceFieldReceiver prevents the latter from being treated as the object.
+
+A native integer or `int32` can carry an unmanaged pointer for correct CIL, but assigning either
+to typed pointer storage remains unverifiable. The pointer assignment fixtures cover locals,
+arguments, returns, fields, array elements, and indirect storage and execute on both runtimes.
+
+ECMA III.4.19 permits `mkrefany` to receive a managed pointer or native integer that points to the
+named type. Only the managed-pointer form is verifiable. UnmanagedTypedReference records the
+correct, unverifiable form and executes on both runtimes.
+ILVerification reports no diagnostic for the native-integer assignments and `StackUnexpected`
+for each `int32` form.
+
+An exact `ldelem` or `ldobj` can load a typed pointer through managed storage without making the
+body unverifiable. PointerArrayLoad and PointerObjectLoad keep a later `pop` from inheriting a
+diagnostic merely because it consumes that value.
+
+CoreCLR and Mono let the native-width `ldelem.i` and `stelem.i` forms access unmanaged-pointer and
+function-pointer array elements. The analyzer accepts them as unverifiable; fixed-width forms remain
+incompatible. ILVerification reports `StackUnexpected` for both native and fixed-width forms.
+
+The same exact pointer loaded from a field can move to a pointer local, argument, or return. The
+PointerField fixtures distinguish those moves from assigning an integer stack value to the slot.
+Loading a pointer local or argument is itself unverifiable. Arithmetic, shifts, and unary numeric
+operations consume its storage signature and leave the native-integer stack type.
+
+An unmanaged receiver makes `ldflda` return a native integer, and `ldind.ref` through an unmanaged
+address returns an object reference. The field and reference-load fixtures keep the pointer's
+metadata element type from leaking into either result.
+
+ECMA III.4.18 requires a correct `ldvirtftn` target to be nonstatic and defined for the supplied
+object. It does not require the target to be virtual. CoreCLR, Mono, and ILVerification accept the
+nonvirtual `string::get_Length` fixture. A constructor target is also correct and executable, but
+unverifiable; the palette omits both shapes while explicitly entered IL retains their CLI behavior.
+Function-pointer signatures can hold an `ldftn` result and return it as a native-integer stack
+value. Loading an instance initializer's address is unverifiable; loading a type initializer's is not.
+
+ECMA III.4.25 makes `sizeof` always verifiable for a valid type token. Simple reference and value
+types use TypeDef or TypeRef tokens; II.23.2.14 admits unmanaged pointers, function pointers,
+arrays, and constructed generics as TypeSpecs, but not a managed pointer or `void`. The SizeOf
+fixtures exercise that boundary through CoreCLR and browser Mono.
+
+## Disagreements with Microsoft.ILVerification 10.0.11
+
+The numeric fixtures separately assert ECMA correctness and the library result. These are pinned
+observations, not skipped assertions. Review them when changing the verifier package.
+
+`ILImporter.Verify.cs` resolves a `sizeof` token and pushes `int32` without checking its signature.
+It consequently accepts managed-pointer and `void` operands that CoreCLR rejects as invalid IL.
+
+The library tags every later `ldarg.0` as `IsThisPtr`, even after `starg.0` replaces the receiver or
+`ldarga.0` exposes its writable address. Its `initonly` store rule does not consult the recorded
+modification, so FlowArgument retains that provenance itself and enforces II.16.1.2.
+
+`ILImporter.Verify.cs` selects the larger `StackValueKind` in `ImportBinaryOperation` and permits a
+mixed pair whenever that kind is native integer. It consequently accepts int64/native-integer
+pairs for add, sub, mul, and, and add.ovf that the corresponding ECMA operand tables exclude.
+
+The same importer reports `ExpectedIntegerType` for the managed-pointer forms of `add.ovf.un` and
+`sub.ovf.un`. ECMA table III.7 explicitly permits pointer/integer addition, pointer/integer
+subtraction, and pointer/pointer subtraction for these unsigned overflow instructions as correct
+but unverifiable IL. All three forms execute through CoreCLR, browser Mono, ILAsm, and `.save`.
+
+The library maps a typed pointer field to native integer before arithmetic and reports no diagnostic.
+ECMA III.1.1.5 still makes unmanaged-pointer arithmetic unverifiable. PointerFieldArithmetic keeps
+the analyzer's diagnostic at the arithmetic instruction without marking an unrelated consumer.
+
+`ILImporter.StackValue.cs` returns immediately for equal stack kinds and types in `IsBinaryComparable`.
+It accepts `cgt` on two null references although table III.4 limits reference comparisons. Its Int32
+case also accepts an Int64 counterpart in one operand order. Byref/native-integer equality succeeds
+without a warning although table III.4 marks that combination unverifiable.
+
+A `class T` constraint lets CoreCLR pass an unboxed generic reference to an object parameter, but
+ILVerification reports `StackUnexpected`. `GenericReference` stays executable and carries an
+unverifiable diagnostic; `GenericBox` explicitly boxes the parameter and verifies successfully.
+`GenericReferenceThrow` likewise runs with its reference constraint while the library reports
+`StackObjRef`, and `GenericReferenceBranch` reports `StackUnexpected`. An unconstrained parameter
+cannot be treated as an object reference without boxing.
+
+CoreCLR and Mono also execute `ldind.ref` and `stind.ref` through a managed pointer to a `class T`
+parameter. ECMA III.3.42 and III.3.62 exclude generic parameters from correct use of those short
+forms, and ILVerification reports `StackUnexpected`. `GenericIndirectReference` records the runtime
+extension while an unconstrained parameter remains rejected.
+
+ILVerification accepts `ceq` over an unconstrained generic parameter even though the parameter can
+be an arbitrary value type. `WrongGenericComparison` closes that gap while the class-constrained
+`GenericReferenceComparison` remains accepted.
+
+ILVerification accepts a floating-point input to `conv.r.un`, although ECMA III.3.27 requires an
+integer, and an integer value passed to `stelem.ref` when the tracked array is null, although ECMA
+III.4.27 requires a reference. The paired integer conversion and null-reference store remain valid.
+
+ILVerification ignores the operand of `unaligned.`. ECMA III.2.5 permits only 1, 2, or 4, so
+`WrongUnalignedValue` pins the analyzer's rejection while `UnalignedLoad` uses a permitted value.
+
+ECMA-335 III.3.15 forbids an ordinary branch across a protected-region boundary. The library's
+`IsValidBranchTarget` instead accepts a branch to the first instruction of a directly nested try.
+`BranchIntoTry` pins that false negative while the analyzer refuses the transfer.
+
+ECMA-335 specifies `rethrow` with an unchanged stack transition and says `endfinally` and `leave`
+empty the stack as side effects. It does not require `leave` to cross a region boundary inside a
+try or catch. RethrowPreservesStack, EndfinallyClearsStack, LeaveWithinCatch, and LeaveWithinTry
+keep those correct bodies accepted.
+
+ECMA-335 III.3.34 and III.3.35 prohibit `leave` anywhere inside a filter, finally, or fault, even
+when its target remains in the same clause. ILVerification reports no diagnostic for these bodies,
+and CoreCLR prepares them. WrongLeaveWithinFilter, WrongLeaveWithinFinally, and
+WrongLeaveWithinFault keep the analyzer aligned with the specification.
+
+ECMA-335 III.3.34 also prohibits a nested `try` inside a filter and makes an exception thrown by
+the filter continue the clause search. ILVerification reports no diagnostic for WrongNestedFilterTry,
+while CoreCLR rejects the assembled method. The analyzer refuses it before emission.
+
+The library reports `PathStackUnexpected` when merging managed pointers whose elements have the
+same CLI verification type: signed and unsigned integers, an enum and its underlying integer,
+`bool` and `int8`, or `char` and `int16`. It also reports `StackUnexpected` when passing `bool&` to
+an `int8&` parameter. ECMA I.8.7 explicitly equates these verification types. The pointer fixtures
+keep each form accepted and executable.
+
+ILVerification reports `LdftnCtor` for a constructor operand to `ldvirtftn`, matching the analyzer's
+unverifiable diagnostic. CoreCLR and browser Mono execute the body. A nonvirtual instance method
+meets the correctness rule and verifies without a diagnostic.
+
+The C# compiler uses byte and word element opcodes for `bool[]` and `char[]`. CoreCLR, Mono, and
+ILVerification accept those forms by comparing the array element's verification type. The array
+rules retain that distinction from the intermediate `int32` value placed on the evaluation stack.
+
+Typed array opcodes allow covariance between reference elements. They do not box or unbox array
+storage, so the value and reference element fixtures keep that covariance within reference types.
+
+The `readonly.` prefix suppresses `ldelema`'s exact runtime element check and returns a
+controlled-mutability pointer. `stind.*`, `stobj`, `initobj`, `mkrefany`, and ordinary byref
+arguments are unverifiable. Instance-field access and instance calls are permitted, so a value type
+can expose mutation through its fields and methods. CoreCLR and Mono execute these forms and
+`string[]` addressed as `object&` with the prefix. ILVerification reports `StackUnexpected` for
+several permitted or rejected shapes, reports `CallVirtOnValueType` for the permitted direct
+`callvirt`, and misses the invalid `cpobj` destination. The corpus pins each result independently.
+
+The library reports `ImportCalli not implemented` for the indirect calls it reaches. The native
+pointer fixture stops earlier at `ExpectedNumericType` for `conv.u`. The tests assert those exact
+outcomes; neither counts as evidence that an invalid argument is rejected. ECMA III.3.20 supplies
+the argument and implicit-receiver rules. The accepted bodies run through desktop, both exports,
+and browser Mono.
+
+The library reports only `Unverifiable` for `jmp` inside a try. ECMA III.3.37 makes that transfer
+incorrect as well as unverifiable, so `JumpFromTry` pins the analyzer's stricter rejection.
+
+The library counts an unreachable forward branch as the lower-offset predecessor required by
+ECMA III.1.7.5, so it accepts a later backward branch carrying a stack into that target.
+`UnreachableForwardBackwardStack` keeps the unreachable edge from hiding the correctness error.
+
+The library records `CallVirtOnStatic` for a static target and then dereferences its absent
+instance type, ending verification with `NullReferenceException`. `WrongStaticVirtualCall`
+pins that exact unsupported failure while both analyzers reject the source directly.
+The same importer failure occurs when raw metadata gives `newobj` a static `.cctor`; the source
+binder and decoded-body analyzer both reject `WrongStaticConstructorAllocation`.
+
+ECMA III.4.21 requires `newobj` to name an instance constructor, and III.4.1 forbids `callvirt`
+from invoking an instance initializer. `WrongMethodAllocation` and `WrongVirtualConstructorCall`
+keep both operand rules in the shared desktop and browser corpus.
+
+For a reference type, direct `call` to an instance constructor initializes only the original
+receiver of a constructor. The target must be a different constructor of that type or a constructor
+of its direct base. The receiver stays uninitialized when that initializing call exits exceptionally.
+Every normally returning path from a reference-type constructor other than `System.Object::.ctor`
+must initialize it, and an accepted filter path alone determines the paired handler's state. A
+value-type constructor instead takes a managed pointer. Explicit `.cctor` calls are verifiable:
+ECMA II.10.5.3.1 says user code can invoke one again. ILVerification accepts an exact self-call, a
+repeated base call, and an early method call although ECMA forbids them. It does not carry successful
+initialization through a filter or `finally`, and reports no diagnostic for inherited instance field
+access before the direct-base call required by I.8.9.6.6. The corpus pins those differences and
+exception rollback while CoreCLR and Mono execute every accepted body. ILVerification visits both
+successors of a conditional branch even when its operand is constant, so that edge still contributes
+its constructor state at a join.
+
+ECMA II.15.2 requires `callvirt` and `ldvirtftn` for abstract instance methods, and III.4.21
+specifies the runtime exception for constructing an abstract class. ILVerification catches the
+abstract allocation but misses the invalid `ldftn`; it reports only `Unverifiable` for `jmp`.
+
+The library reports only `Unverifiable` when `cpblk` or `initblk` receives an object reference
+where the instruction requires an address. ECMA III.3.30 and III.3.36 make those operand shapes
+incorrect. The bad size and initialization-value cases also report `ExpectedIntegerType`.
+
+The library checks that both `cpobj` operands are managed pointers but leaves their element-type
+assignment checks as a TODO. ECMA III.4.4 requires the source element to assign to the operand type
+and the operand type to assign to the destination element. The analyzer rejects both wrong directions.
+
+The library accepts `stind.i1` through an `int32&` and `stind.r4` through a `float64&`.
+ECMA III.3.62 still requires the opcode to match the pointer's storage type. The analyzer keeps
+that storage width separate from the intermediate value on the evaluation stack and rejects both.
+
+The library cannot inspect a fixture containing typed-reference instructions and reports
+`TypedReference not supported in .NET Core`. ECMA III.4.19 and III.4.22–III.4.23 define the
+accepted and rejected operand shapes, which CoreCLR and browser Mono exercise independently.
+
+The library reports `ExpectedNumericType` when `conv.u` turns a managed address into the unmanaged
+pointer used by the field and memory fixtures. ECMA III.3.27 permits that correct but unverifiable
+conversion, and the memory instructions accept a native integer address. CoreCLR and browser Mono
+execute each field, indirect, and object load, store, address, initialization, copy, and value-type
+receiver reproduction.
+
+For a native integer address made from an integer, the library instead reports `StackByRef`; it also
+reports `StackUnexpected` for `initobj`. ECMA III.3.42, III.3.62, III.4.4–III.4.5, III.4.13, and
+III.4.29 permit the address in correct but unverifiable CIL.
+
+The current runtime augments ECMA's `constrained.` prefix with static interface `call` and `ldftn`.
+The analyzer requires that prefix for a static virtual interface member and checks that its type
+implements the interface. ILVerification still reports `Constrained` for both permitted forms and
+`CallAbstract` for `call`, while missing an unprefixed `ldftn`; the runtime follows the augment.
+
+The independent verifier resolves framework metadata without running constructors or fixture bodies.
+Missing metadata and uncategorized verifier failures fail the fixture instead of counting as the
+expected rejection. Source fixture rejections assert the original verifier codes, including
+`PathStackDepth`, `PathStackUnexpected`, `StackUnderflow`, `TryNonEmptyStack`, and `ReadOnly`.
+
+Run these checks with the repository's pinned SDK and verifier package. Browser tests require
+publishing the current WASM build and rebuilding the docs before running the headless browser suite.
+
+Reference checkouts used for this audit: dotnet/runtime at
+`6b1fb3c43c8a5478c592813ee2e263fe4375af4c` and ECMA-335 at
+`f181e4696eebcbbc7c2b1e5d0a2ee289f2884d2d`. The project SDK is 10.0.302.

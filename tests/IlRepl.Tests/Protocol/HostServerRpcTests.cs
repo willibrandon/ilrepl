@@ -161,4 +161,33 @@ public sealed class HostServerRpcTests
             Assert.AreNotEqual(mark.Generation, ran.Status.Mark.Generation);
         }
     }
+    /// <summary>
+    /// Whole-document analysis and earlier source locations survive the same generated RPC contract as the native host.
+    /// </summary>
+    [TestMethod]
+    public async Task AnalysisAndSource_RecoverEarlierInstructionOverRpc()
+    {
+        var (server, client, proxy) = Connect();
+        using (server)
+        using (client)
+        {
+            var lines = new[] { ".method void F() {", "br NEXT", "EARLIER: pop", "NEXT: br EARLIER", "}" };
+            var reply = await proxy.AnalyzeAsync(new AnalysisRequest(lines, 2, 0, 17), TestContext.CancellationToken);
+            Assert.AreEqual(17, reply.DocumentVersion);
+            Assert.AreEqual(AnalyzedStackKind.Invalid, reply.Stack!.Kind);
+            Assert.Contains(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error && diagnostic.Location.Line == 2,
+                reply.Diagnostics);
+            HandleReply? handled = null;
+            for (var index = 0; index < lines.Length - 1; index++)
+            {
+                handled = await proxy.HandleSourceAsync(lines[index], new AnalysisLocation("rpc", index, 0, lines[index].Length),
+                    TestContext.CancellationToken);
+            }
+
+            Assert.IsFalse(handled!.Succeeded);
+            Assert.AreEqual(new AnalysisLocation("rpc", 2, 0, lines[2].Length), handled.Diagnostics.Single().Location);
+            Assert.AreEqual("F", handled.Status.OpenMethod);
+        }
+    }
+
 }

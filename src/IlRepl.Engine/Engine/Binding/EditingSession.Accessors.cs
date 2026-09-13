@@ -9,8 +9,9 @@ public sealed partial class EditingSession
             var property = PropertyEventBinding.ParseProperty(text[9..].Trim(), Scope());
             if (owner.Accessors.Any(accessor => accessor.Property is { } existing
                 && existing.Name == property.Name && existing.IsStatic == property.IsStatic
-                && SymbolIdentity.Equal(existing.Type, property.Type)
-                && existing.ParameterTypes.SequenceEqual(property.ParameterTypes)))
+                && Same(existing.Type, existing.ExactType, property.Type, property.ExactType)
+                && Same(existing.ParameterTypes, existing.ExactParameterTypes,
+                    property.ParameterTypes, property.ExactParameterTypes)))
             {
                 throw new ReplException($"property {property.Name} is already declared on {owner.Path}");
             }
@@ -81,8 +82,10 @@ public sealed partial class EditingSession
             foreach (var accessor in block.Accessors)
             {
                 if (!declaration.Methods.Any(method => method.IsDeclared && method.Name == accessor.Name
-                    && method.IsStatic == accessor.IsStatic && SymbolIdentity.Equal(method.ReturnType, accessor.ReturnType)
-                    && method.ParameterTypes.SequenceEqual(accessor.ParameterTypes)))
+                    && method.IsStatic == accessor.IsStatic
+                    && Same(method.ReturnType, method.ExactReturnType, accessor.ReturnType, accessor.ExactReturnType)
+                    && Same(method.ParameterTypes, method.Parameters.Select(parameter => parameter.ExactType).ToArray(),
+                        accessor.ParameterTypes, accessor.ExactParameterTypes)))
                 {
                     throw new ReplException($"{owner.Path} has no declared accessor {accessor.Name} with that signature");
                 }
@@ -95,4 +98,16 @@ public sealed partial class EditingSession
             }
         }
     }
+
+    private static bool Same(TypeSymbol first, TypeSymbol? firstExact, TypeSymbol second, TypeSymbol? secondExact) =>
+        SymbolIdentity.Equal(firstExact ?? first, secondExact ?? second);
+
+    private static bool Same(
+        IReadOnlyList<TypeSymbol> first,
+        IReadOnlyList<TypeSymbol?> firstExact,
+        IReadOnlyList<TypeSymbol> second,
+        IReadOnlyList<TypeSymbol?> secondExact) => first.Count == second.Count
+            && first.Select((type, index) => (type, index)).All(item =>
+                Same(item.type, firstExact.ElementAtOrDefault(item.index), second[item.index],
+                    secondExact.ElementAtOrDefault(item.index)));
 }

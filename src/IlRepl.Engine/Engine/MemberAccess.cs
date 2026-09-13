@@ -175,6 +175,17 @@ public static class MemberAccess
             }
         }
 
+        foreach (var exactArgument in method.ExactGenericArguments ?? [])
+        {
+            foreach (var argument in RuntimeSymbolTypes.Materialized(exactArgument))
+            {
+                if (TypeVerdict(argument, scope, types, judgeAll) is { } argumentProblem)
+                {
+                    return argumentProblem;
+                }
+            }
+        }
+
         if (!judgeAll && !TypeRelations.IsSessionType(declaring))
         {
             return null;

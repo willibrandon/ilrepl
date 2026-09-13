@@ -27,7 +27,9 @@ public static class CecilBodyEmitter
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(map);
+        state.RequireValidFlow();
         new Emitter(method, state, writer, map).Run();
+        writer.SetStackLimit(method, Math.Max(1, state.Analysis.MaxStack));
     }
 
     private sealed class Emitter(MethodDefinition method, CellState state, CecilWriter writer, EmitMap map)
@@ -49,9 +51,12 @@ public static class CecilBodyEmitter
         public void Run()
         {
             method.Body.InitLocals = true;
+            method.Body.MaxStackSize = Math.Max(1, state.Analysis.MaxStack);
             foreach (var local in state.Locals)
             {
-                var type = writer.Import(map.Map(local.Type));
+                var type = local.ExactType is null
+                    ? writer.Import(map.Map(local.Type))
+                    : writer.Import(map.Map(local.ExactType));
                 var variable = new VariableDefinition(local.IsPinned ? new PinnedType(type) : type);
                 method.Body.Variables.Add(variable);
                 _locals.Add(variable);
@@ -90,6 +95,12 @@ public static class CecilBodyEmitter
         {
             if (state.LastInstructionEndsFlow)
             {
+                if (_pending.Count > 0)
+                {
+                    Append(_il.Create(OpCodes.Ldnull));
+                    Append(_il.Create(OpCodes.Throw));
+                }
+
                 return;
             }
 
@@ -180,10 +191,12 @@ public static class CecilBodyEmitter
                     Append(_il.Create(op, Parameter((int)instruction.Operand!)));
                     break;
                 case OperandKind.Type:
-                    Append(_il.Create(op, writer.Import(map.Map((Type)instruction.Operand!))));
+                    Append(_il.Create(op, instruction.ExactTypeOperand is { } exactType
+                        ? writer.Import(map.Map(exactType))
+                        : writer.Import(map.Map((Type)instruction.Operand!))));
                     break;
                 case OperandKind.Field:
-                    Append(_il.Create(op, writer.Import(map.Map((FieldInfo)instruction.Operand!))));
+                    Append(_il.Create(op, FieldOperand(instruction)));
                     break;
                 case OperandKind.Method:
                     Append(_il.Create(op, MethodOperand((ResolvedMethod)instruction.Operand!, callSite: op.Code is Code.Call or Code.Callvirt)));
@@ -191,8 +204,10 @@ public static class CecilBodyEmitter
                 case OperandKind.Token:
                     Append(instruction.Operand switch
                     {
-                        Type t => _il.Create(op, writer.Import(map.Map(t))),
-                        FieldInfo f => _il.Create(op, writer.Import(map.Map(f))),
+                        Type t => _il.Create(op, instruction.ExactTypeOperand is { } exactTokenType
+                            ? writer.Import(map.Map(exactTokenType))
+                            : writer.Import(map.Map(t))),
+                        FieldInfo => _il.Create(op, FieldOperand(instruction)),
                         ResolvedMethod r => _il.Create(op, MethodOperand(r, callSite: false)),
                         _ => throw new ReplException("unsupported token operand"),
                     });
@@ -208,8 +223,33 @@ public static class CecilBodyEmitter
         private MethodReference MethodOperand(ResolvedMethod resolved, bool callSite)
         {
             var target = resolved.Definition is { } definition ? map.SessionMethod(definition) : map.Map(resolved.Method!);
-            var reference = resolved.Definition is null && resolved.Declared is not null ? writer.Import(target, resolved.DeclaringType) : writer.Import(target);
-            if (resolved.GenericArguments is { Count: > 0 } arguments && reference is not GenericInstanceMethod)
+            var reference = resolved.Definition is not null
+                ? writer.Import(target, resolved.Definition)
+                : resolved.Declared is not null ? writer.Import(target, resolved.DeclaringType) : writer.Import(target);
+            if (resolved.ExactDeclaringType is { } exactDeclaring)
+            {
+                var declaring = writer.Import(map.Map(exactDeclaring));
+                if (reference is GenericInstanceMethod generic)
+                {
+                    generic.ElementMethod.DeclaringType = declaring;
+                }
+                else
+                {
+                    reference.DeclaringType = declaring;
+                }
+            }
+
+            if (resolved.ExactGenericArguments is { Count: > 0 } exactArguments)
+            {
+                var instance = new GenericInstanceMethod(reference is GenericInstanceMethod generic ? generic.ElementMethod : reference);
+                foreach (var argument in exactArguments)
+                {
+                    instance.GenericArguments.Add(writer.Import(map.Map(argument)));
+                }
+
+                reference = instance;
+            }
+            else if (resolved.GenericArguments is { Count: > 0 } arguments && reference is not GenericInstanceMethod)
             {
                 var instance = new GenericInstanceMethod(reference);
                 foreach (var argument in arguments)
@@ -239,16 +279,32 @@ public static class CecilBodyEmitter
 
             for (var i = 0; i < optional.Length; i++)
             {
-                var type = writer.Import(map.Map(optional[i]));
+                var type = resolved.ExactOptionalParameterTypes is { } exactOptional
+                    ? writer.Import(map.Map(exactOptional[i])) : writer.Import(map.Map(optional[i]));
                 site.Parameters.Add(new ParameterDefinition(i == 0 ? new SentinelType(type) : type));
             }
 
             return site;
         }
 
+        private FieldReference FieldOperand(Instruction instruction)
+        {
+            var field = map.Map((FieldInfo)instruction.Operand!);
+            var reference = writer.Import(field);
+            if (instruction.ExactFieldDeclaringType is { } exactDeclaring)
+            {
+                reference.DeclaringType = writer.Import(map.Map(exactDeclaring));
+            }
+
+            return reference;
+        }
+
         private CallSite CallSite(CalliSignature signature)
         {
-            var site = new CallSite(writer.Import(map.Map(signature.ReturnType)));
+            var exact = signature.ExactSymbol;
+            var site = new CallSite(exact is null
+                ? writer.Import(map.Map(signature.ReturnType))
+                : writer.Import(map.Map(exact.ReturnType)));
             if (signature.IsUnmanaged)
             {
                 site.CallingConvention = signature.UnmanagedConvention switch
@@ -265,6 +321,17 @@ public static class CecilBodyEmitter
                 site.HasThis = signature.ManagedConvention.HasFlag(CallingConventions.HasThis);
                 site.ExplicitThis = signature.ManagedConvention.HasFlag(CallingConventions.ExplicitThis);
                 site.CallingConvention = signature.ManagedConvention.HasFlag(CallingConventions.VarArgs) ? MethodCallingConvention.VarArg : MethodCallingConvention.Default;
+            }
+
+            if (exact is not null)
+            {
+                for (var i = 0; i < exact.Parameters.Count; i++)
+                {
+                    var type = writer.Import(map.Map(exact.Parameters[i]));
+                    site.Parameters.Add(new ParameterDefinition(exact.SentinelIndex == i ? new SentinelType(type) : type));
+                }
+
+                return site;
             }
 
             foreach (var type in signature.ParameterTypes)
@@ -426,8 +493,21 @@ public static class CecilBodyEmitter
             }
         }
 
-        private static CecilOpCode Translate(System.Reflection.Emit.OpCode op) =>
-            OpCodesByName.TryGetValue(op.Name!, out var cecil) ? cecil : throw new ReplException($"opcode '{op.Name}' cannot be written by the exporter");
+        private static CecilOpCode Translate(System.Reflection.Emit.OpCode op)
+        {
+            if (op == System.Reflection.Emit.OpCodes.Ldelem)
+            {
+                return OpCodes.Ldelem_Any;
+            }
+
+            if (op == System.Reflection.Emit.OpCodes.Stelem)
+            {
+                return OpCodes.Stelem_Any;
+            }
+
+            return OpCodesByName.TryGetValue(op.Name!, out var cecil) ? cecil
+                : throw new ReplException($"opcode '{op.Name}' cannot be written by the exporter");
+        }
 
         private sealed class Marker
         {

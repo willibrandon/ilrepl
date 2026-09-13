@@ -299,15 +299,16 @@ public sealed class MemberResolverTests
     }
 
     /// <summary>
-    /// A quoted name and a return type with parentheses resolve a session method.
+    /// A quoted session name resolves, while a mismatched annotated return is rejected.
     /// </summary>
     [TestMethod]
-    public void ResolveMethod_SessionMethodQuotedOrModifiedReturn_Resolves()
+    public void ResolveMethod_SessionMethodQuotedOrMismatchedReturn_IsExact()
     {
         var context = ContextWith(Fib());
         Assert.IsTrue(MemberResolver.ResolveMethod("int32 'Fib'(int32)", context, false).IsSessionMethod);
         Assert.IsTrue(MemberResolver.ResolveMethod("'Fib'", context, false).IsSessionMethod);
-        Assert.IsTrue(MemberResolver.ResolveMethod("int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsLong) Fib(int32)", context, false).IsSessionMethod);
+        Assert.Contains("returns int32, not int32 modopt(IsLong)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod(
+            "int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsLong) Fib(int32)", context, false)).Message);
         Assert.Contains("unexpected 'extra'", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("int32 Fib extra", context, false)).Message);
     }
 

@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+    <PackageReference Include="Microsoft.ILVerification" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
@@ -40,5 +41,9 @@
   </ItemGroup>
 
   <Import Project="../../build/IlRepl.Host.targets" />
+
+  <ItemGroup>
+    <Compile Include="../Shared/*.cs" Link="Shared/%(Filename)%(Extension)" />
+  </ItemGroup>
 
 </Project>

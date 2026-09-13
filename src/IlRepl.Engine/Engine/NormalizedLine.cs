@@ -13,6 +13,11 @@ namespace IlRepl.Engine;
 public sealed record NormalizedLine(string Raw, string Text, SourceLineKind Kind, bool InBlockCommentBefore)
 {
     /// <summary>
+    /// The original editor location when the line came from a submitted document.
+    /// </summary>
+    public AnalysisLocation? Location { get; init; }
+
+    /// <summary>
     /// Wraps text that holds no comments, such as a stored line being replayed.
     /// </summary>
     /// <param name="text">The text.</param>

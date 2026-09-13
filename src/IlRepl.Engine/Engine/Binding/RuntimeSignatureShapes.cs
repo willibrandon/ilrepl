@@ -17,7 +17,7 @@ internal static class RuntimeSignatureShapes
     /// <returns>The signature with its original bounds and function-pointer flags.</returns>
     public static MethodSymbol Restore(MethodBase method, MethodSymbol symbol)
     {
-        if (!NeedsMetadata(symbol.ReturnType) && !symbol.Parameters.Any(parameter => NeedsMetadata(parameter.Type)))
+        if (!CecilMetadataSignatures.IsRequired(method))
         {
             return symbol;
         }
@@ -26,10 +26,14 @@ internal static class RuntimeSignatureShapes
         {
             var handle = (MethodDefinitionHandle)MetadataTokens.Handle(symbol.Definition.Token);
             var signature = source.Reader.GetMethodDefinition(handle).DecodeSignature(provider, SymbolGenericOwner.None);
-            return symbol.With(symbol.DeclaringType, RestoreRoot(symbol.ReturnType, signature.ReturnType),
+            return symbol.WithExact(
+                symbol.DeclaringType,
+                RestoreRoot(symbol.ReturnType, signature.ReturnType),
+                RestoreExact(symbol.ReturnType, signature.ReturnType),
                 [.. symbol.Parameters.Select((parameter, index) => parameter with
                 {
                     Type = RestoreRoot(parameter.Type, signature.ParameterTypes[index]),
+                    ExactType = RestoreExact(parameter.Type, signature.ParameterTypes[index]),
                 })], symbol.GenericArguments);
         });
     }
@@ -40,12 +44,16 @@ internal static class RuntimeSignatureShapes
     /// <param name="field">The reflected field.</param>
     /// <param name="symbol">The imported field.</param>
     /// <returns>The field with its original bounds and function-pointer flags.</returns>
-    public static FieldSymbol Restore(FieldInfo field, FieldSymbol symbol) => !NeedsMetadata(symbol.FieldType) ? symbol
+    public static FieldSymbol Restore(FieldInfo field, FieldSymbol symbol) => !NeedsMetadata(symbol.FieldType)
+        && symbol.RequiredModifiers.Count == 0 && symbol.OptionalModifiers.Count == 0 ? symbol
         : Read(field, symbol, (source, provider) =>
         {
             var handle = (FieldDefinitionHandle)MetadataTokens.Handle(symbol.Definition.Token);
             var type = source.Reader.GetFieldDefinition(handle).DecodeSignature(provider, SymbolGenericOwner.None);
-            return symbol.With(symbol.DeclaringType, RestoreRoot(symbol.FieldType, type));
+            return symbol.WithExact(
+                symbol.DeclaringType,
+                RestoreRoot(symbol.FieldType, type),
+                RuntimeSymbolTypes.RequiresExact(type) ? Restore(symbol.FieldType, type) : null);
         });
 
     private static T Read<T>(MemberInfo member, T fallback, Func<AssemblySymbolSource, SymbolSignatureProvider, T> read)
@@ -74,6 +82,9 @@ internal static class RuntimeSignatureShapes
 
     private static TypeSymbol RestoreRoot(TypeSymbol actual, TypeSymbol metadata) =>
         Restore(actual, SymbolSignatureProvider.StripModifiers(metadata, out _, out _));
+
+    private static TypeSymbol? RestoreExact(TypeSymbol actual, TypeSymbol metadata) =>
+        RuntimeSymbolTypes.RequiresExact(metadata) ? Restore(actual, metadata) : null;
 
     private static TypeSymbol Restore(TypeSymbol actual, TypeSymbol metadata)
     {

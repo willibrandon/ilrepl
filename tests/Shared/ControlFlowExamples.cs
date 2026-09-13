@@ -1,0 +1,1253 @@
+namespace IlRepl.Tests.Shared;
+
+/// <summary>
+/// Supplies matching control-flow reproductions for CoreCLR, ILVerification, and browser Mono.
+/// </summary>
+public static class ControlFlowExamples
+{
+    /// <summary>
+    /// The source cases; accepted methods return 42 when called with argument 1.
+    /// </summary>
+    public static IReadOnlyList<ControlFlowExample> All { get; } =
+    [
+        new("Diamond", ["ldarg.0", "brtrue OTHER", "ldc.i4.s 41", "br DONE", "OTHER: ldc.i4.s 42", "DONE: ret"], true),
+        new("Loop", ["AGAIN: ldarg.0", "brfalse DONE", "ldarg.0", "ldc.i4.1", "sub", "starg.s n", "br AGAIN",
+            "DONE: ldc.i4.s 42", "ret"], true),
+        new("Switch", ["ldarg.0", "switch (ZERO, ONE)", "ldc.i4.0", "ret", "ZERO: ldc.i4.1", "ret",
+            "ONE: ldc.i4.s 42", "ret"], true),
+        new("DeadCode", ["br DONE", "pop", "DONE: ldc.i4.s 42", "ret"], true),
+        new("MixedFloats", ["ldarg.0", "brtrue OTHER", "ldc.r4 1.0", "br DONE", "OTHER: ldc.r8 2.0", "DONE: pop",
+            "ldc.i4.s 42", "ret"], true),
+        new("Catch", [".locals init (int32 result)", ".try {", "ldnull", "throw", "} catch [System.Runtime]System.Exception {",
+            "pop", "ldc.i4.s 42", "stloc result", "leave DONE", "}", "DONE: ldloc result", "ret"], true),
+        new("Finally", [".locals init (int32 result)", ".try {", "leave DONE", "} finally {", "ldc.i4.s 42", "stloc result",
+            "endfinally", "}", "DONE: ldloc result", "ret"], true),
+        new("ManagedPointer", ["ldarga.s n", "ldc.i4.s 42", "stind.i4", "ldarg.0", "ret"], true),
+        new("PointerFields", [
+            ".locals init (valuetype [System.Runtime]System.ValueTuple`1<int32>* pointer)",
+            "ldarga.s n", "conv.u", "stloc pointer", "ldloc pointer",
+            "ldfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "pop", "ldloc pointer",
+            "ldflda !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ldind.i4", "pop", "ldloc pointer",
+            "ldc.i4.1", "stfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("WrongPointerField", [
+            ".locals init (valuetype [System.Runtime]System.ValueTuple`1<int64>* pointer)",
+            "ldarga.s n", "conv.u", "stloc pointer", "ldloc pointer",
+            "ldfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "pop", "ldc.i4.s 42", "ret"], false,
+            "receiver", Verification: "ExpectedNumericType"),
+        new("NativeFieldLoad", ["ldarga.s n", "conv.u",
+            "ldfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("NativeFieldAddress", ["ldarga.s n", "conv.u",
+            "ldflda !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ldind.i4", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("NativeFieldStore", ["ldarga.s n", "conv.u", "ldc.i4.1",
+            "stfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("StaticField", ["ldsfld string string::Empty", "pop", "ldc.i4.s 42", "ret"], true),
+        new("StaticFieldToken", ["ldtoken field string string::Empty", "pop", "ldc.i4.s 42", "ret"], true),
+        new("InitOnlyFieldAddresses", ["newobj instance void InitOnlyAddress::.ctor()",
+            "dup", "ldflda int32 InitOnlyAddress::Value", "pop", "pop",
+            "ldsflda int32 InitOnlyAddress::StaticValue", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "InitOnly", Declarations: InitOnlyAddressDeclarations),
+        new("WrongStaticFieldOpcode", ["ldsfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "pop",
+            "ldc.i4.s 42", "ret"], false, "cannot access an instance field", Verification: "ExpectedStaticField"),
+        new("WrongUnreachableStaticFieldOpcode", ["br DONE",
+            "ldsfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "pop", "DONE: ldc.i4.s 42", "ret"],
+            false, "cannot access an instance field"),
+        new("WrongInstanceFieldOpcode", ["ldstr \"\"", "ldfld string string::Empty", "pop", "ldc.i4.s 42", "ret"], false,
+            "cannot access a static field"),
+        new("WrongReferenceFieldReceiver", [".locals init (class FieldOwner item)", "ldloca item",
+            "ldfld int32 FieldOwner::Value", "pop", "ldc.i4.s 42", "ret"], false, "receiver",
+            Verification: "StackUnexpected",
+            Declarations: ".class public FieldOwner {\n.field public int32 Value\n}"),
+        new("ArrayJoin", ["ldarg.0", "brtrue OTHER", "ldc.i4.1", "newarr string", "br DONE", "OTHER: ldc.i4.1",
+            "newarr [System.Runtime]System.Exception", "DONE: ldlen", "pop", "ldc.i4.s 42", "ret"], true),
+        new("StackAllocation", ["ldc.i4.4", "conv.u", "localloc", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "Unverifiable"),
+        new("SizeOf", ["sizeof int32", "pop", "ldc.i4.s 42", "ret"], true),
+        new("ReferenceSizeOf", ["sizeof string", "pop", "ldc.i4.s 42", "ret"], true),
+        new("PointerSizeOf", ["sizeof int32*", "pop", "ldc.i4.s 42", "ret"], true),
+        new("FunctionPointerSizeOf", ["sizeof method int32 *(int32)", "pop", "ldc.i4.s 42", "ret"], true),
+        new("GenericSizeOf", ["sizeof !!T", "pop", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "T", GenericArguments: "int32"),
+        new("WrongManagedPointerSizeOf", ["sizeof int32&", "pop", "ldc.i4.s 42", "ret"], false,
+            "storage type"),
+        new("WrongVoidSizeOf", ["sizeof void", "pop", "ldc.i4.s 42", "ret"], false, "storage type"),
+        new("ConstantBranchStack", [".try {", "ldc.i4.0", "brtrue BAD", "leave DONE", "BAD: pop", "leave DONE",
+            "} finally {", "endfinally", "}", "DONE: ldc.i4.s 42", "ret"], false,
+            "stack underflow", Verification: "StackUnderflow"),
+        new("FunctionPointerArrayOperand", ["ldc.i4.1", "newarr method int32 *(int32)", "pop", "ldc.i4.s 42", "ret"], true),
+        new("WrongAllocationHandler", [".try {", "leave DONE", "} catch [System.Runtime]System.Exception {", "pop",
+            "ldc.i4.4", "localloc", "pop", "leave DONE", "}", "DONE: ldc.i4.s 42", "ret"], false,
+            "localloc is not allowed inside an exception handler", Verification: "Unverifiable"),
+        new("WrongDepth", ["ldarg.0", "brtrue DONE", "ldc.i4.1", "DONE: pop", "ldc.i4.s 42", "ret"], false,
+            "incompatible stacks", Verification: "PathStackDepth"),
+        new("WrongType", ["ldarg.0", "brtrue OTHER", "ldc.i4.1", "br DONE", "OTHER: ldstr \"s\"", "DONE: pop",
+            "ldc.i4.s 42", "ret"], false, "incompatible stacks", Verification: "PathStackUnexpected"),
+        new("Underflow", ["pop", "ldc.i4.s 42", "ret"], false, "stack underflow", Verification: "StackUnderflow"),
+        new("WrongReturn", ["ldstr \"s\"", "ret"], false, "ret needs int32", Verification: "StackUnexpected"),
+        new("BackwardStack", ["br LATER", "EARLIER: pop", "ldc.i4.s 42", "ret", "LATER: ldc.i4.1", "br EARLIER"], false,
+            "backward branch", Verification: "BackwardBranch"),
+        new("UnreachableForwardBackwardStack", ["br BODY", "br LOOP", "LOOP: pop", "br DONE", "BODY: ldc.i4.1", "br LOOP",
+            "DONE: ldc.i4.s 42", "ret"], false, "backward branch"),
+        new("NonemptyTry", ["ldc.i4.1", ".try {", "pop", "leave DONE", "} finally {", "endfinally", "}",
+            "DONE: ldc.i4.s 42", "ret"], false, "empty stack", Verification: "TryNonEmptyStack"),
+        new("ReturnInTry", [".try {", "ldc.i4.s 42", "ret", "} finally {", "endfinally", "}"], false,
+            "ret is not allowed", Verification: "ReturnFromTry"),
+        new("JumpFromTry", [".try {", "jmp int32 [System.Runtime]System.Math::Abs(int32)", "} finally {", "endfinally", "}"],
+            false, "jmp is not allowed", Verification: "Unverifiable"),
+        new("Jump", ["ldc.i4.s -42", "starg.s n", "jmp int32 [System.Runtime]System.Math::Abs(int32)"], true,
+            Unverifiable: true, Verification: "Unverifiable"),
+        new("WrongJumpSignature", ["jmp void [System.Console]System.Console::WriteLine(int32)"], false,
+            "jmp target must match", Verification: "Unverifiable"),
+        new("WrongJumpParameters", ["jmp int32 [System.Runtime]System.Math::Clamp(int32, int32, int32)"], false,
+            "jmp target must match", Verification: "Unverifiable"),
+        new("WrongAbstractJump", ["jmp int32 IZero::Identity(int32)"], false,
+            "jmp cannot target an abstract method", Verification: "Unverifiable", Declarations: StaticAbstractDeclarations),
+        new("RethrowPreservesStack", ["ldarg.0", "brtrue DONE", ".try {", "ldnull", "throw",
+            "} catch [System.Runtime]System.Exception {", "pop", "ldc.i4.1", "rethrow", "}",
+            "DONE: ldc.i4.s 42", "ret"], true),
+        new("WrongNestedFinalizerRethrow", [".try {", "ldnull", "throw",
+            "} catch [System.Runtime]System.Exception {", "pop", ".try {", "leave INNER", "} finally {", "rethrow", "}",
+            "INNER: leave DONE", "}", "DONE: ldc.i4.s 42", "ret"], false,
+            "rethrow is only valid inside a catch handler", Verification: "Rethrow"),
+        new("EndfinallyClearsStack", [".try {", "leave DONE", "} finally {", "ldc.i4.1", "endfinally", "}",
+            "DONE: ldc.i4.s 42", "ret"], true),
+        new("LeaveWithinTry", [".try {", "leave LOCAL", "LOCAL: leave DONE", "} finally {", "endfinally", "}",
+            "DONE: ldc.i4.s 42", "ret"], true),
+        new("LeaveWithinCatch", [".try {", "ldnull", "throw", "} catch [System.Runtime]System.Exception {", "pop",
+            "leave LOCAL", "LOCAL: leave DONE", "}", "DONE: ldc.i4.s 42", "ret"], true),
+        new("NestedTryLocalLeaveWithinFinally", [".locals init (int32 result)", ".try {", "leave DONE", "} finally {",
+            ".try {", "leave LOCAL", "LOCAL: ldc.i4.s 42", "stloc result", "leave INNER_DONE", "} catch object {",
+            "pop", "leave INNER_DONE", "}", "INNER_DONE: endfinally", "}", "DONE: ldloc result", "ret"], true),
+        new("NestedHandlerLeaveWithinFinally", [".locals init (int32 result)", ".try {", "leave DONE", "} finally {",
+            ".try {", "ldc.i4.1", "stloc result", "leave FIRST", "} catch object {", "pop", "leave FIRST", "}",
+            "FIRST:", ".try {", "ldnull", "throw", "} catch object {", "pop", "ldloc result", "ldc.i4.1", "add",
+            "stloc result", "leave SECOND", "}", "SECOND: ldloc result", "ldc.i4.s 40", "add", "stloc result",
+            "endfinally", "}", "DONE: ldloc result", "ret"], true),
+        new("WrongLeaveWithinFinally", [".try {", "leave DONE", "} finally {", "leave NEXT", "NEXT: endfinally", "}",
+            "DONE: ldc.i4.s 42", "ret"], false, "leave is not allowed inside finally, fault, or filter"),
+        new("WrongLeaveWithinFault", ["ldarg.0", "brtrue DONE", ".try {", "ldnull", "throw", "} fault {", "leave.s NEXT",
+            "NEXT: endfinally", "}", "DONE: ldc.i4.s 42", "ret"], false, "leave is not allowed inside finally, fault, or filter"),
+        new("WrongLeaveWithinFilter", ["ldarg.0", "brtrue DONE", ".try {", "ldnull", "throw", "} filter {", "pop",
+            "leave NEXT", "NEXT: ldc.i4.0", "endfilter", "} handler {", "pop", "leave DONE", "}",
+            "DONE: ldc.i4.s 42", "ret"], false, "leave is not allowed inside finally, fault, or filter"),
+        new("WrongNestedFilterTry", ["ldarg.0", "brtrue DONE", ".try {", "ldnull", "throw", "} filter {", "pop",
+            ".try {", "ldnull", "throw", "} catch object {", "pop", "leave FILTER", "}",
+            "FILTER: ldc.i4.0", "endfilter", "} handler {", "pop", "leave DONE", "}",
+            "DONE: ldc.i4.s 42", "ret"], false, "a try region is not allowed inside a filter"),
+        new("BranchIntoTry", ["br INSIDE", ".try {", "INSIDE: leave DONE", "} finally {", "endfinally", "}",
+            "DONE: ldc.i4.s 42", "ret"], false, "cannot enter"),
+        new("WrongPrefix", ["readonly.", "nop", "ldc.i4.s 42", "ret"], false, "cannot prefix", Verification: "ReadOnly"),
+        new("WrongArithmetic", ["ldstr \"s\"", "ldc.i4.1", "add", "ret"], false, "cannot combine", Verification: "ExpectedNumericType"),
+        new("WrongCall", ["ldstr \"s\"", "call int32 [System.Runtime]System.Math::Abs(int32)", "ret"], false,
+            "argument 1 needs int32", Verification: "StackUnexpected"),
+        new("ValueTypeReceiver", [".locals init (valuetype [System.Runtime]System.DateTime item)", "ldloca item",
+            "call instance int64 [System.Runtime]System.DateTime::get_Ticks()", "pop", "ldc.i4.s 42", "ret"], true),
+        new("NativeValueTypeReceiver", [".locals init (valuetype [System.Runtime]System.DateTime item)", "ldloca item",
+            "conv.u", "call instance int64 [System.Runtime]System.DateTime::get_Ticks()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("PointerValueTypeReceiver", [
+            ".locals init (valuetype [System.Runtime]System.DateTime item, valuetype [System.Runtime]System.DateTime* pointer)",
+            "ldloca item", "conv.u", "stloc pointer", "ldloc pointer",
+            "call instance int64 [System.Runtime]System.DateTime::get_Ticks()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("WrongPointerValueTypeReceiver", [
+            ".locals init (valuetype [System.Runtime]System.DateTime item, int32* pointer)",
+            "ldloca item", "conv.u", "stloc pointer", "ldloc pointer",
+            "call instance int64 [System.Runtime]System.DateTime::get_Ticks()", "pop", "ldc.i4.s 42", "ret"], false,
+            "receiver", Verification: "ExpectedNumericType"),
+        new("WrongUnboxedValueTypeReceiver", [".locals init (valuetype [System.Runtime]System.DateTime item)", "ldloc item",
+            "call instance int64 [System.Runtime]System.DateTime::get_Ticks()", "pop", "ldc.i4.s 42", "ret"], false,
+            "receiver", Verification: "StackUnexpected"),
+        new("WrongManagedReferenceReceiver", [".locals init (string text)", "ldloca text",
+            "callvirt instance int32 string::get_Length()", "pop", "ldc.i4.s 42", "ret"], false,
+            "receiver", Verification: "StackUnexpected"),
+        new("WrongStaticVirtualCall", ["ldc.i4.1", "callvirt int32 WrongStaticVirtualCall(int32)", "pop",
+            "ldc.i4.s 42", "ret"], false, "needs an instance method",
+            VerificationFailure: "Object reference not set to an instance of an object."),
+        new("WrongVirtualConstructorCall", ["newobj instance void object::.ctor()",
+            "callvirt instance void object::.ctor()", "ldc.i4.s 42", "ret"], false,
+            "callvirt cannot call a constructor", Verification: "CallCtor"),
+        new("InitializedReferenceConstructorCall", ["newobj instance void object::.ctor()",
+            "call instance void object::.ctor()", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "CallCtor"),
+        new("ValueTypeConstructorCall", [".locals init (valuetype [System.Runtime]System.ValueTuple`1<int32> item)",
+            "ldloca item", "ldc.i4.s 42",
+            "call instance void valuetype [System.Runtime]System.ValueTuple`1<int32>::.ctor(!0)",
+            "ldloca item", "ldfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ret"], true),
+        new("ExplicitStaticInitializerCall", ["call void FlowGeneric::.cctor()", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "T", GenericArguments: "int32", Members: ".method static void .cctor() {\nret\n}"),
+        new("DelegatingReferenceConstructorCall", ["newobj instance void DelegatingConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: DelegatingConstructorDeclarations),
+        new("UnusedThisBeforeBaseCall", ["newobj instance void PopConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: PopConstructorDeclarations),
+        new("OwnFieldsBeforeBaseCall", ["newobj instance void OwnFieldsConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: OwnFieldsConstructorDeclarations),
+        new("InheritedFieldsBeforeBaseCall", ["newobj instance void InheritedFieldsConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Declarations: InheritedFieldsConstructorDeclarations),
+        new("InheritedFieldsAfterBaseCall", ["newobj instance void InitializedFieldsConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: InitializedFieldsConstructorDeclarations),
+        new("DirectSelfConstructorCall", ["ldc.i4.1", "newobj instance void SelfConstructor::.ctor(bool)", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Declarations: SelfConstructorDeclarations),
+        new("DoubleReferenceConstructorCall", ["newobj instance void DoubleConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Declarations: DoubleConstructorDeclarations),
+        new("UninitializedConstructorReturn", ["newobj instance void UninitializedConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "ThisUninitReturn",
+            Declarations: UninitializedConstructorDeclarations),
+        new("EarlyThisCall", ["newobj instance void EarlyThisConstructor::.ctor()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Declarations: EarlyThisConstructorDeclarations),
+        new("OrdinaryMethodConstructorCall", ["newobj instance void ReinitializingMethod::.ctor()",
+            "call instance void ReinitializingMethod::Again()", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "CallCtor", Declarations: ReinitializingMethodDeclarations),
+        new("GrandparentConstructorCall", ["newobj instance void GrandchildConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "CallCtor,ThisUninitReturn",
+            Declarations: GrandparentConstructorDeclarations),
+        new("MixedConstructorInitialization", ["ldarg.0",
+            "newobj instance void MixedConstructor::.ctor(bool)", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ThisUninitReturn", Declarations: MixedConstructorDeclarations),
+        new("ConstantBranchConstructorInitialization", [
+            "newobj instance void ConstantBranchConstructor::.ctor()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ThisUninitReturn",
+            Declarations: ConstantBranchConstructorDeclarations),
+        new("ConstructorRetryAfterCatch", ["newobj instance void RetryingConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: RetryingConstructorDeclarations),
+        new("DeferredInitializedConstructorHandler", ["newobj instance void DeferredConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: DeferredConstructorDeclarations),
+        new("CorrelatedFilterConstructor", ["ldc.i4.1", "newobj instance void CorrelatedFilterConstructor::.ctor(bool)",
+            "pop", "ldc.i4.0", "newobj instance void CorrelatedFilterConstructor::.ctor(bool)", "pop",
+            "ldc.i4.s 42", "ret"], true, Verification: "ThisUninitReturn",
+            Declarations: CorrelatedFilterConstructorDeclarations),
+        new("ConstructorFailureInFilter", ["newobj instance void FilterConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "ThisUninitReturn",
+            Declarations: FilterConstructorDeclarations),
+        new("ConstructorCallInFinally", ["newobj instance void FinallyConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Verification: "ThisUninitReturn",
+            Declarations: FinallyConstructorDeclarations),
+        new("ConstructorFailureInFinally", ["newobj instance void FailingFinallyConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "ThisUninitReturn",
+            Declarations: FailingFinallyConstructorDeclarations),
+        new("InitializedConstructorFinallyUse", ["newobj instance void InitializedFinallyConstructor::.ctor()", "pop",
+            "ldc.i4.s 42", "ret"], true, Declarations: InitializedFinallyConstructorDeclarations),
+        new("ExceptionalConstructorFinallyUse", [".try {",
+            "newobj instance void ExceptionalFinallyConstructor::.ctor()", "pop", "leave DONE", "} catch object {",
+            "pop", "leave DONE", "}", "DONE: ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            Declarations: ExceptionalFinallyConstructorDeclarations),
+        new("AbstractVirtualCall", [".locals init (class [System.Runtime]System.IO.Stream)",
+            "newobj instance void [System.Runtime]System.IO.MemoryStream::.ctor()", "stloc.0", "ldloc.0",
+            "callvirt instance void [System.Runtime]System.IO.Stream::Flush()", "ldc.i4.s 42", "ret"], true),
+        new("WrongAbstractCall", [".locals init (class [System.Runtime]System.IO.Stream)",
+            "newobj instance void [System.Runtime]System.IO.MemoryStream::.ctor()", "stloc.0", "ldloc.0",
+            "call instance void [System.Runtime]System.IO.Stream::Flush()", "ldc.i4.s 42", "ret"], false,
+            "call cannot invoke an abstract method", Verification: "CallAbstract,ThisMismatch"),
+        new("InstanceFunctionPointer", ["ldftn instance void [System.Runtime]System.IO.MemoryStream::Flush()",
+            "pop", "ldc.i4.s 42", "ret"], true),
+        new("WrongAbstractFunctionPointer", ["ldftn instance void [System.Runtime]System.IO.Stream::Flush()",
+            "pop", "ldc.i4.s 42", "ret"], false, "ldftn cannot load an abstract method"),
+        new("VirtualFunctionPointer", ["ldstr \"\"", "ldvirtftn instance string object::ToString()", "pop", "ldc.i4.s 42", "ret"], true),
+        new("NonVirtualFunctionPointer", ["ldstr \"\"", "ldvirtftn instance int32 string::get_Length()", "pop",
+            "ldc.i4.s 42", "ret"], true),
+        new("ConstructorFunctionPointer", ["newobj instance void object::.ctor()", "ldvirtftn instance void object::.ctor()",
+            "pop", "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "LdftnCtor"),
+        new("DirectConstructorFunctionPointer", ["ldftn instance void object::.ctor()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "LdftnCtor"),
+        new("StaticInitializerFunctionPointer", ["ldftn void FlowGeneric::.cctor()", "pop", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "T", GenericArguments: "int32", Members: ".method static void .cctor() {\nret\n}"),
+        new("FunctionPointerLocal", [".locals init (method int32 *(int32) pointer)",
+            "ldftn int32 FlowGeneric::Id(int32)", "stloc pointer", "ldloc pointer", "pop", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "T", GenericArguments: "int32",
+            Members: ".method public static int32 Id(int32) {\nldarg.0\nret\n}"),
+        new("FunctionPointerField", ["ldftn int32 FlowGeneric::Id(int32)",
+            "stsfld method int32 *(int32) FlowGeneric::Pointer", "ldsfld method int32 *(int32) FlowGeneric::Pointer",
+            "pop", "ldc.i4.s 42", "ret"], true, GenericParameters: "T", GenericArguments: "int32",
+            Members: ".field public static method int32 *(int32) Pointer\n"
+                + ".method public static int32 Id(int32) {\nldarg.0\nret\n}"),
+        new("FunctionPointerReturn", ["call method int32 *(int32) FlowGeneric::Pointer()", "pop", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "T", GenericArguments: "int32", Members: ".method public static int32 Id(int32) {\n"
+                + "ldarg.0\nret\n}\n.method public static method int32 *(int32) Pointer() {\n"
+                + "ldftn int32 FlowGeneric::Id(int32)\nret\n}"),
+        new("WrongStaticVirtualFunctionPointer", ["ldnull", "ldvirtftn int32 [System.Runtime]System.Math::Abs(int32)", "pop",
+            "ldc.i4.s 42", "ret"], false, "needs an instance method", Verification: "LdvirtftnOnStatic"),
+        new("WrongStaticConstructorAllocation", ["newobj void FlowGeneric::.cctor()", "pop", "ldc.i4.s 42", "ret"], false,
+            "newobj needs a constructor; .cctor is a method", GenericParameters: "T", GenericArguments: "int32",
+            VerificationFailure: "Object reference not set to an instance of an object.",
+            Members: ".method static void .cctor() {\nret\n}"),
+        new("WrongMethodAllocation", ["newobj instance int32 string::get_Length()", "pop", "ldc.i4.s 42", "ret"], false,
+            "no constructor string()", Verification: "CtorExpected"),
+        new("ConcreteAllocation", ["newobj instance void ConcreteThing::.ctor()", "pop", "ldc.i4.s 42", "ret"], true,
+            Declarations: AbstractTypeDeclarations),
+        new("WrongAbstractAllocation", ["newobj instance void AbstractThing::.ctor()", "pop", "ldc.i4.s 42", "ret"], false,
+            "newobj cannot create abstract type AbstractThing", Verification: "NewobjAbstractClass",
+            Declarations: AbstractTypeDeclarations),
+        new("ByrefJoin", [".locals init (int32 a, string b)", "ldarg.0", "brtrue OTHER", "ldloca a", "br DONE",
+            "OTHER: ldloca b", "DONE: pop", "ldc.i4.s 42", "ret"], false, "incompatible stacks", Verification: "PathStackUnexpected"),
+        new("CatchFinally", [".locals init (int32 result)", ".try {", ".try {", "ldnull", "throw",
+            "} catch [System.Runtime]System.Exception {", "pop", "ldc.i4.s 32", "stloc result", "leave AFTER", "}",
+            "AFTER: leave DONE", "} finally {", "ldloc result", "ldc.i4.s 10", "add", "stloc result", "endfinally", "}",
+            "DONE: ldloc result", "ret"], true),
+        new("Fault", [".locals init (int32 result)", ".try {", ".try {", "ldnull", "throw", "} fault {",
+            "ldc.i4.s 42", "stloc result", "endfinally", "}", "} catch [System.Runtime]System.Exception {", "pop",
+            "leave DONE", "}", "DONE: ldloc result", "ret"], true),
+        new("ReadOnlyLoad", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "readonly.", "ldelema int32", "ldind.i4", "pop",
+            "ldc.i4.s 42", "ret"], true),
+        new("CovariantReadOnlyArrayAddress", ["ldc.i4.1", "newarr string", "ldc.i4.0", "readonly.", "ldelema object", "pop",
+            "ldc.i4.s 42", "ret"], true, Verification: "StackUnexpectedArrayType"),
+        new("ReadOnlyWrite", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "readonly.", "ldelema int32", "ldc.i4.s 42",
+            "stind.i4", "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "ReadOnlyIllegalWrite"),
+        new("ReadOnlyFieldWrite", [".locals init (valuetype [System.Runtime]System.ValueTuple`1<int32>[] items)", "ldc.i4.1",
+            "newarr valuetype [System.Runtime]System.ValueTuple`1<int32>", "stloc items", "ldloc items", "ldc.i4.0", "readonly.",
+            "ldelema valuetype [System.Runtime]System.ValueTuple`1<int32>", "ldc.i4.s 42",
+            "stfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ldloc items", "ldc.i4.0",
+            "ldelema valuetype [System.Runtime]System.ValueTuple`1<int32>",
+            "ldfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ret"], true,
+            Verification: "StackUnexpected"),
+        new("ReadOnlyMutatingCall", [".locals init (valuetype MutableValue[] items)", "ldc.i4.1",
+            "newarr valuetype MutableValue", "stloc items", "ldloc items", "ldc.i4.0", "readonly.",
+            "ldelema valuetype MutableValue", "call instance void MutableValue::Mutate()", "ldloc items", "ldc.i4.0",
+            "ldelema valuetype MutableValue", "ldfld int32 MutableValue::Value", "ret"], true,
+            Declarations: MutableValueDeclarations),
+        new("ReadOnlyFieldAddress", [".locals init (valuetype MutableValue[] items)", "ldc.i4.1",
+            "newarr valuetype MutableValue", "stloc items", "ldloc items", "ldc.i4.0", "readonly.",
+            "ldelema valuetype MutableValue", "ldflda int32 MutableValue::Value", "ldind.i4", "pop",
+            "ldc.i4.s 42", "ret"], true, Verification: "StackUnexpected",
+            Declarations: MutableValueDeclarations),
+        new("ReadOnlyFieldLoad", [".locals init (valuetype MutableValue[] items)", "ldc.i4.1",
+            "newarr valuetype MutableValue", "stloc items", "ldloc items", "ldc.i4.0", "readonly.",
+            "ldelema valuetype MutableValue", "ldfld int32 MutableValue::Value", "pop", "ldc.i4.s 42", "ret"], true,
+            Declarations: MutableValueDeclarations),
+        new("ReadOnlyObjectLoad", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "readonly.", "ldelema int32",
+            "ldobj int32", "pop", "ldc.i4.s 42", "ret"], true),
+        new("ReadOnlyVirtualCall", [".locals init (valuetype MutableValue[] items)", "ldc.i4.1",
+            "newarr valuetype MutableValue", "stloc items", "ldloc items", "ldc.i4.0", "readonly.",
+            "ldelema valuetype MutableValue", "callvirt instance void MutableValue::Mutate()",
+            "ldloc items", "ldc.i4.0", "ldelema valuetype MutableValue", "ldfld int32 MutableValue::Value", "ret"],
+            true, Verification: "CallVirtOnValueType", Declarations: MutableValueDeclarations),
+        new("ReadOnlyConstrainedCall", ["ldc.i4.1", "newarr valuetype MutableValue", "ldc.i4.0", "readonly.",
+            "ldelema valuetype MutableValue", "constrained. valuetype MutableValue",
+            "callvirt instance string object::ToString()", "pop", "ldc.i4.s 42", "ret"], true,
+            Declarations: MutableValueDeclarations),
+        new("ReadOnlyCopySource", [".locals init (int32[] items, int32 destination)", "ldc.i4.1", "newarr int32",
+            "stloc items", "ldloca destination", "ldloc items", "ldc.i4.0", "readonly.", "ldelema int32",
+            "cpobj int32", "ldc.i4.s 42", "ret"], true),
+        new("ReadOnlyObjectStore", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "readonly.", "ldelema int32",
+            "ldc.i4.s 42", "stobj int32", "ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            Verification: "ReadOnlyIllegalWrite"),
+        new("ReadOnlyObjectInitialize", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "readonly.", "ldelema int32",
+            "initobj int32", "ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            Verification: "StackUnexpected"),
+        new("ReadOnlyCopyDestination", [".locals init (int32[] items, int32 source)", "ldc.i4.1", "newarr int32",
+            "stloc items", "ldloc items", "ldc.i4.0", "readonly.", "ldelema int32", "ldloca source",
+            "cpobj int32", "ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            Verification: ""),
+        new("ReadOnlyTypedReference", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "readonly.", "ldelema int32",
+            "mkrefany int32", "pop", "ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            VerificationFailure: "TypedReference not supported in .NET Core"),
+        new("ReadOnlyByRefArgument", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "readonly.", "ldelema int32",
+            "call int32 MutableValue::Read(int32&)", "pop", "ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            Verification: "StackUnexpected", Declarations: MutableValueDeclarations),
+        new("ReadOnlyStoredPointer", [".locals init (int32& address)", "ldc.i4.1", "newarr int32", "ldc.i4.0",
+            "readonly.", "ldelema int32", "stloc address", "ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            Verification: "StackUnexpected"),
+        new("UnboxedFieldWrite", [".locals init (object item)", "ldc.i4.0",
+            "newobj instance void valuetype [System.Runtime]System.ValueTuple`1<int32>::.ctor(!0)",
+            "box valuetype [System.Runtime]System.ValueTuple`1<int32>", "dup", "stloc item",
+            "unbox valuetype [System.Runtime]System.ValueTuple`1<int32>", "ldc.i4.s 42",
+            "stfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ldloc item",
+            "unbox.any valuetype [System.Runtime]System.ValueTuple`1<int32>",
+            "ldfld !0 valuetype [System.Runtime]System.ValueTuple`1<int32>::Item1", "ret"], true,
+            Verification: "StackUnexpected"),
+        new("PointerDifference", ["ldarga.s n", "dup", "sub", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("ManagedPointerOverflowAddition", ["ldarga.s n", "ldc.i4.0", "add.ovf.un", "ldind.i4", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "ExpectedIntegerType"),
+        new("ManagedPointerOverflowSubtraction", ["ldarga.s n", "ldc.i4.0", "sub.ovf.un", "ldind.i4", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "ExpectedIntegerType"),
+        new("ManagedPointerOverflowDifference", ["ldarga.s n", "dup", "sub.ovf.un", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedIntegerType"),
+        new("UnmanagedPointerAddition", [
+            ".locals init (valuetype [System.Runtime]System.DateTime item, int32* pointer)",
+            "ldloca item", "conv.u", "stloc pointer", "ldloc pointer", "ldc.i4.0", "add",
+            "call instance int64 [System.Runtime]System.DateTime::get_Ticks()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("UnmanagedPointerShift", [
+            ".locals init (valuetype [System.Runtime]System.DateTime item, int32* pointer)",
+            "ldloca item", "conv.u", "stloc pointer", "ldloc pointer", "ldc.i4.0", "shl",
+            "call instance int64 [System.Runtime]System.DateTime::get_Ticks()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("UnmanagedPointerNot", [
+            ".locals init (valuetype [System.Runtime]System.DateTime item, int32* pointer)",
+            "ldloca item", "conv.u", "stloc pointer", "ldloc pointer", "not", "not",
+            "call instance int64 [System.Runtime]System.DateTime::get_Ticks()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("UnmanagedFieldAddress", [".locals init (valuetype Holder item, valuetype Holder* owner)",
+            "ldloca item", "conv.u", "stloc owner", "ldloc owner", "ldflda int64 Holder::Ticks",
+            "call instance int64 [System.Runtime]System.DateTime::get_Ticks()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType", Declarations: HolderDeclarations),
+        new("NativeAddition", ["ldc.i4.1", "conv.i", "ldc.i4.s 41", "add", "conv.i4", "ret"], true),
+        new("NativePointerLocal", [".locals init (int32* pointer)", "ldc.i4.0", "conv.i", "stloc pointer",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true),
+        new("NativePointerArgument", ["ldc.i4.0", "conv.i", "call int32 FlowGeneric::Accept(int32*)", "ret"], true,
+            Unverifiable: true, GenericParameters: "T", GenericArguments: "int32",
+            Members: ".method public static int32 Accept(int32*) {\nldc.i4.s 42\nret\n}"),
+        new("NativePointerReturn", ["call int32* FlowGeneric::Pointer()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, GenericParameters: "T", GenericArguments: "int32",
+            Members: ".method public static int32* Pointer() {\nldc.i4.0\nconv.i\nret\n}"),
+        new("NativePointerArrayElement", ["ldc.i4.1", "newarr int32*", "ldc.i4.0", "ldc.i4.0", "conv.i",
+            "stelem int32*", "ldc.i4.s 42", "ret"], true, Unverifiable: true),
+        new("NativePointerArrayInstructions", ["ldc.i4.1", "newarr int32*", "dup", "ldc.i4.0", "ldc.i4.0", "conv.i",
+            "stelem.i", "ldc.i4.0", "ldelem.i", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "StackUnexpected"),
+        new("FunctionPointerArrayInstructions", ["ldc.i4.1", "newarr method int32 *()", "dup", "ldc.i4.0",
+            "ldftn int32 FlowGeneric::Answer()", "stelem.i", "ldc.i4.0", "ldelem.i", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "StackUnexpected", GenericParameters: "T", GenericArguments: "int32",
+            Members: ".method public static int32 Answer() {\nldc.i4.s 42\nret\n}"),
+        new("PointerArrayLoad", ["ldc.i4.1", "newarr int32*", "ldc.i4.0", "ldelem int32*", "pop",
+            "ldc.i4.s 42", "ret"], true),
+        new("WrongPointerArrayInstructionWidth", ["ldc.i4.1", "newarr int32*", "ldc.i4.0", "ldelem.i4", "pop",
+            "ldc.i4.s 42", "ret"], false, "cannot access", Verification: "StackUnexpected"),
+        new("WrongFunctionPointerArrayInstructionWidth", ["ldc.i4.1", "newarr method int32 *()", "ldc.i4.0", "ldelem.i4",
+            "pop", "ldc.i4.s 42", "ret"], false, "cannot access", Verification: "StackUnexpected"),
+        new("PointerObjectLoad", [".locals init (int32* pointer)", "ldloca pointer", "ldobj int32*", "pop",
+            "ldc.i4.s 42", "ret"], true),
+        new("PointerFieldToLocal", [".locals init (int32* copy)", "ldsfld int32* FlowGeneric::Pointer", "stloc copy",
+            "ldc.i4.s 42", "ret"], true, GenericParameters: "T", GenericArguments: "int32",
+            Members: ".field public static int32* Pointer"),
+        new("PointerFieldArgument", ["ldsfld int32* FlowGeneric::Pointer", "call void FlowGeneric::Accept(int32*)",
+            "ldc.i4.s 42", "ret"], true, GenericParameters: "T", GenericArguments: "int32",
+            Members: ".field public static int32* Pointer\n.method public static void Accept(int32*) {\nret\n}"),
+        new("PointerFieldReturn", ["call int32* FlowGeneric::Read()", "pop", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "T", GenericArguments: "int32", Members: ".field public static int32* Pointer\n"
+                + ".method public static int32* Read() {\nldsfld int32* FlowGeneric::Pointer\nret\n}"),
+        new("PointerFieldArithmetic", ["ldsfld int32* FlowGeneric::Pointer", "ldc.i4.0", "add", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, GenericParameters: "T", GenericArguments: "int32",
+            Members: ".field public static int32* Pointer"),
+        new("PointerLocalLoad", [".locals init (int32* pointer)", "ldloc pointer", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "UnmanagedPointer"),
+        new("PointerArgumentLoad", ["ldsfld int32* FlowGeneric::Pointer", "call int32 FlowGeneric::Read(int32*)", "ret"], true,
+            Unverifiable: true, Verification: "UnmanagedPointer", GenericParameters: "T", GenericArguments: "int32",
+            Members: ".field public static int32* Pointer\n.method public static int32 Read(int32* pointer) {\n"
+                + "ldarg pointer\npop\nldc.i4.s 42\nret\n}"),
+        new("Int32PointerLocal", [".locals init (int32* pointer)", "ldc.i4.0", "stloc pointer",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "StackUnexpected"),
+        new("Int32PointerArgument", ["ldc.i4.0", "call int32 FlowGeneric::Accept(int32*)", "ret"], true,
+            Unverifiable: true, Verification: "StackUnexpected", GenericParameters: "T", GenericArguments: "int32",
+            Members: ".method public static int32 Accept(int32*) {\nldc.i4.s 42\nret\n}"),
+        new("Int32PointerReturn", ["call int32* FlowGeneric::Pointer()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "StackUnexpected", GenericParameters: "T", GenericArguments: "int32",
+            Members: ".method public static int32* Pointer() {\nldc.i4.0\nret\n}"),
+        new("Int32PointerField", ["ldc.i4.0", "stsfld int32* FlowGeneric::Pointer", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "StackUnexpected", GenericParameters: "T", GenericArguments: "int32",
+            Members: ".field public static int32* Pointer"),
+        new("Int32PointerObjectStore", [".locals init (int32* pointer)", "ldloca pointer", "ldc.i4.0",
+            "stobj int32*", "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "StackUnexpected"),
+        new("Int32PointerArrayElement", ["ldc.i4.1", "newarr int32*", "ldc.i4.0", "ldc.i4.0",
+            "stelem int32*", "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "StackUnexpected"),
+        new("Int32PointerStoredArgument", ["ldc.i4.0", "call int32 FlowGeneric::Store(int32*)", "ret"], true,
+            Unverifiable: true, Verification: "StackUnexpected", GenericParameters: "T", GenericArguments: "int32",
+            Members: ".method public static int32 Store(int32* pointer) {\nldc.i4.0\nstarg pointer\nldc.i4.s 42\nret\n}"),
+        new("UnsignedIntegerToFloat", ["ldc.i4.s 42", "conv.r.un", "conv.i4", "ret"], true),
+        new("WrongUnsignedFloatConversion", ["ldc.r8 1.0", "conv.r.un", "pop", "ldc.i4.s 42", "ret"], false,
+            "integer value"),
+        new("ObjectComparison", ["ldnull", "ldnull", "cgt.un", "pop", "ldc.i4.s 42", "ret"], true),
+        new("GenericReferenceComparison", [".locals init (!!T left, !!T right)", "ldloc left", "ldloc right", "ceq",
+            "pop", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "class T", GenericArguments: "string"),
+        new("WrongGenericComparison", [".locals init (!!T left, !!T right)", "ldloc left", "ldloc right", "ceq",
+            "pop", "ldc.i4.s 42", "ret"], false, "cannot combine", GenericParameters: "T", GenericArguments: "int32"),
+        new("TailCall", ["ldc.i4.s 42", "tail.", "call int32 [System.Runtime]System.Math::Abs(int32)", "ret"], true),
+        new("ManagedPointerTailCall", ["ldsflda int32 FlowGeneric::Value", "tail.",
+            "call int32 FlowGeneric::Consume(int32&)", "ret"], true, Unverifiable: true,
+            Verification: "TailByRef", GenericParameters: "T", GenericArguments: "int32",
+            Members: ".field public static int32 Value\n"
+                + ".method public static int32 Consume(int32&) {\nldc.i4.s 42\nret\n}"),
+        new("SynchronizedTailCall", ["ldc.i4.s -42", "tail.",
+            "call int32 [System.Runtime]System.Math::Abs(int32)", "ret"], true,
+            GenericParameters: "T", GenericArguments: "int32",
+            Implementation: "synchronized"),
+        new("UnalignedLoad", ["ldarga.s n", "unaligned. 1", "ldind.i4", "pop", "ldarga.s n", "unaligned. 2",
+            "ldind.i4", "pop", "ldarga.s n", "unaligned. 4", "ldind.i4", "pop", "ldc.i4.s 42", "ret"], true),
+        new("WrongUnalignedValue", ["ldarga.s n", "unaligned. 3", "ldind.i4", "pop", "ldc.i4.s 42", "ret"], false,
+            "alignment must be 1, 2, or 4"),
+        new("VolatileObjectLoad", ["ldarga.s n", "volatile.", "ldobj int32", "pop", "ldc.i4.s 42", "ret"], true),
+        new("VolatileObjectStore", ["ldarga.s n", "ldc.i4.s 42", "volatile.", "stobj int32", "ldarg.0", "ret"], true),
+        new("BadOverflowFloat", ["ldc.r8 1.0", "ldc.r8 2.0", "add.ovf", "pop", "ldc.i4.s 42", "ret"], false,
+            "cannot combine", Verification: "ExpectedIntegerType"),
+        new("BadNotFloat", ["ldc.r8 1.0", "not", "pop", "ldc.i4.s 42", "ret"], false,
+            "needs a numeric value", Verification: "ExpectedIntegerType"),
+        new("BadComparison", ["ldstr \"s\"", "ldc.i4.1", "ceq", "pop", "ldc.i4.s 42", "ret"], false,
+            "cannot combine", Verification: "StackUnexpected"),
+        new("BadShift", ["ldc.i4.1", "ldc.i8 1", "shl", "pop", "ldc.i4.s 42", "ret"], false,
+            "cannot combine", Verification: "StackUnexpected"),
+        new("BadThrow", ["ldc.i4.1", "throw"], false, "needs an object reference", Verification: "StackObjRef"),
+        new("BadFinite", ["ldc.i4.1", "ckfinite", "pop", "ldc.i4.s 42", "ret"], false,
+            "needs a floating-point value", Verification: "ExpectedFloatType"),
+        new("WrongReferenceConversion", ["ldnull", "conv.i8", "pop", "ldc.i4.s 42", "ret"], false,
+            "needs a numeric value", Verification: "ExpectedNumericType"),
+        new("BranchIntoPrefix", ["ldarga.s n", "br LOAD", "unaligned. 1", "LOAD: ldind.i4", "pop", "ldc.i4.s 42", "ret"], false,
+            "first prefix", Verification: "BadJumpTarget"),
+        new("GenericReference", [".locals init (!!T item)", "ldloc item", "ldnull",
+            "call bool [System.Runtime]System.Object::ReferenceEquals(object, object)", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "StackUnexpected", GenericParameters: "class T", GenericArguments: "string"),
+        new("GenericIndirectReference", [".locals init (!!T item)", "ldloca item", "ldind.ref", "pop", "ldloca item",
+            "ldnull", "stind.ref", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "StackUnexpected", GenericParameters: "class T", GenericArguments: "string"),
+        new("WrongGenericIndirectLoad", [".locals init (!!T item)", "ldloca item", "ldind.ref", "pop",
+            "ldc.i4.s 42", "ret"], false, "cannot access",
+            GenericParameters: "T", GenericArguments: "int32"),
+        new("WrongGenericIndirectStore", [".locals init (!!T item)", "ldloca item", "ldnull", "stind.ref",
+            "ldc.i4.s 42", "ret"], false, "cannot access", Verification: "StackUnexpected",
+            GenericParameters: "T", GenericArguments: "int32"),
+        new("GenericBox", [".locals init (!!T item)", "ldloc item", "box !!T", "ldnull",
+            "call bool [System.Runtime]System.Object::ReferenceEquals(object, object)", "pop", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "T", GenericArguments: "int32"),
+        new("WrongManagedPointerBox", [".locals init (int32 item)", "ldloca item", "box int32&", "pop",
+            "ldc.i4.s 42", "ret"], false, "boxable type", Verification: "BoxByRef,ExpectedValClassObjRefVariable"),
+        new("WrongManagedPointerUnboxAny", ["ldnull", "unbox.any int32&", "pop", "ldc.i4.s 42", "ret"], false,
+            "boxable type"),
+        new("WrongManagedPointerCast", ["ldnull", "castclass int32&", "pop", "ldc.i4.s 42", "ret"], false,
+            "boxable type"),
+        new("WrongManagedPointerIsInstance", ["ldnull", "isinst int32&", "pop", "ldc.i4.s 42", "ret"], false,
+            "boxable type"),
+        new("GenericNeedsBox", [".locals init (!!T item)", "ldloc item", "ldnull",
+            "call bool [System.Runtime]System.Object::ReferenceEquals(object, object)", "pop", "ldc.i4.s 42", "ret"], false,
+            "argument 1 needs object", Verification: "StackUnexpected", GenericParameters: "T", GenericArguments: "int32"),
+        new("GenericDistinct", [".locals init (!!T a, !!U b)", "ldarg.0", "brtrue OTHER", "ldloc a", "br DONE",
+            "OTHER: ldloc b", "DONE: pop", "ldc.i4.s 42", "ret"], false, "incompatible stacks",
+            Verification: "PathStackUnexpected", GenericParameters: "T, U", GenericArguments: "int32, string"),
+        new("GenericReferenceThrow", [".locals init (!!T item)", ".try {", "ldloc item", "throw",
+            "} catch [System.Runtime]System.Exception {", "pop", "leave DONE", "}", "DONE: ldc.i4.s 42", "ret"], true,
+            Verification: "StackObjRef", GenericParameters: "class T", GenericArguments: "string"),
+        new("GenericNeedsBoxThrow", [".locals init (!!T item)", "ldloc item", "throw"], false,
+            "needs an object reference", Verification: "StackObjRef", GenericParameters: "T", GenericArguments: "int32"),
+        new("GenericReferenceBranch", [".locals init (!!T item)", "ldloc item", "brfalse NULL", "ldc.i4.s 42", "ret",
+            "NULL: ldc.i4.s 42", "ret"], true, Verification: "StackUnexpected",
+            GenericParameters: "class T", GenericArguments: "string"),
+        new("GenericNeedsBoxBranch", [".locals init (!!T item)", "ldloc item", "brfalse NULL", "ldc.i4.s 42", "ret",
+            "NULL: ldc.i4.s 42", "ret"], false, "needs an integer, pointer, or reference",
+            Verification: "StackUnexpected", GenericParameters: "T", GenericArguments: "int32"),
+        new("Filter", [".locals init (int32 result)", ".try {", "ldnull", "throw", "} filter {", "pop", "ldc.i4.1",
+            "endfilter", "} handler {", "pop", "ldc.i4.s 42", "stloc result", "leave DONE", "}", "DONE: ldloc result", "ret"], true),
+        new("WrongFilterStack", [".try {", "ldnull", "throw", "} filter {", "pop", "ldnull", "endfilter", "} handler {",
+            "pop", "leave DONE", "}", "DONE: ldc.i4.s 42", "ret"], false, "endfilter needs exactly one int32",
+            Verification: "StackUnexpected"),
+        new("ReducedPointerJoin", [".locals init (int32 a, uint32 b)", "ldarg.0", "brtrue OTHER", "ldloca a", "br DONE",
+            "OTHER: ldloca b", "DONE: ldind.i4", "pop", "ldc.i4.s 42", "ret"], true, Verification: "PathStackUnexpected"),
+        new("BooleanPointerJoin", [".locals init (bool a, int8 b)", "ldarg.0", "brtrue OTHER", "ldloca a", "br DONE",
+            "OTHER: ldloca b", "DONE: pop", "ldc.i4.s 42", "ret"], true, Verification: "PathStackUnexpected"),
+        new("CharacterPointerJoin", [".locals init (char a, int16 b)", "ldarg.0", "brtrue OTHER", "ldloca a", "br DONE",
+            "OTHER: ldloca b", "DONE: pop", "ldc.i4.s 42", "ret"], true, Verification: "PathStackUnexpected"),
+        new("BooleanPointerCall", [".locals init (bool item)", "ldloca item", "call void FlowGeneric::Accept(int8&)",
+            "ldc.i4.s 42", "ret"], true, GenericParameters: "T", GenericArguments: "int32",
+            Verification: "StackUnexpected",
+            Members: ".method public static void Accept(int8&) {\nret\n}"),
+        new("ConstrainedReceiver", ["ldarga.s n", "constrained. int32", "callvirt instance string object::ToString()", "pop",
+            "ldc.i4.s 42", "ret"], true),
+        new("WrongConstrainedReceiver", ["ldarga.s n", "constrained. int64", "callvirt instance string object::ToString()", "pop",
+            "ldc.i4.s 42", "ret"], false, "receiver", Verification: "StackUnexpected"),
+        new("StaticAbstractCall", ["constrained. Num", "call int32 IZero::Zero()", "pop", "ldc.i4.s 42", "ret"], true,
+            Verification: "CallAbstract,Constrained", Declarations: StaticAbstractDeclarations),
+        new("WrongStaticAbstractCall", ["call int32 IZero::Zero()", "pop", "ldc.i4.s 42", "ret"], false,
+            "needs constrained.", Verification: "CallAbstract", Declarations: StaticAbstractDeclarations),
+        new("WrongStaticAbstractImplementor", ["constrained. object", "call int32 IZero::Zero()", "pop", "ldc.i4.s 42", "ret"],
+            false, "type that implements IZero", Verification: "CallAbstract,Constrained", Declarations: StaticAbstractDeclarations),
+        new("StaticAbstractFunction", ["constrained. Num", "ldftn int32 IZero::Zero()", "pop", "ldc.i4.s 42", "ret"], true,
+            Verification: "Constrained", Declarations: StaticAbstractDeclarations),
+        new("WrongStaticAbstractFunction", ["ldftn int32 IZero::Zero()", "pop", "ldc.i4.s 42", "ret"], false,
+            "needs constrained.", Declarations: StaticAbstractDeclarations),
+        new("EnumPointerJoin", [".locals init (valuetype [System.Runtime]System.DayOfWeek a, int32 b)", "ldarg.0", "brtrue OTHER",
+            "ldloca a", "br DONE", "OTHER: ldloca b", "DONE: ldind.i4", "pop", "ldc.i4.s 42", "ret"], true,
+            Verification: "PathStackUnexpected"),
+        new("TransitiveBox", [".locals init (!!T item)", "ldloc item", "box !!T", "ldnull",
+            "callvirt instance int32 [System.Runtime]System.IComparable::CompareTo(object)", "pop", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "(!!U) T, (class [System.Runtime]System.IComparable) U", GenericArguments: "int32, int32"),
+        new("IndirectCall", ["ldc.i4.s -42", "ldftn int32 [System.Runtime]System.Math::Abs(int32)", "calli int32(int32)", "ret"], true,
+            Unverifiable: true, VerificationFailure: "ImportCalli not implemented"),
+        new("InstanceIndirectCall", ["ldstr \"value\"", "ldftn instance int32 string::get_Length()",
+            "calli instance int32()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, VerificationFailure: "ImportCalli not implemented"),
+        new("ManagedPointerInstanceIndirectCall", [".locals init (valuetype [System.Runtime]System.DateTime item)",
+            "ldloca item", "ldftn instance int64 [System.Runtime]System.DateTime::get_Ticks()",
+            "calli instance int64()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, VerificationFailure: "ImportCalli not implemented"),
+        new("NativePointerInstanceIndirectCall", [".locals init (valuetype [System.Runtime]System.DateTime item)",
+            "ldloca item", "conv.u", "ldftn instance int64 [System.Runtime]System.DateTime::get_Ticks()",
+            "calli instance int64()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("WrongIndirectCall", ["ldnull", "ldftn int32 [System.Runtime]System.Math::Abs(int32)", "calli int32(int32)", "ret"], false,
+            "argument 1 needs int32", VerificationFailure: "ImportCalli not implemented"),
+        new("WrongInstanceIndirectReceiver", ["ldc.i4.1", "ldftn instance int32 string::get_Length()",
+            "calli instance int32()", "pop", "ldc.i4.s 42", "ret"], false,
+            "reference or pointer receiver", VerificationFailure: "ImportCalli not implemented"),
+        new("WrongIndirectTarget", [".locals init (int32 pointer)", "ldloca pointer", "calli int32()", "ret"], false,
+            "function pointer", VerificationFailure: "ImportCalli not implemented"),
+        new("WrongAllocationStack", ["ldc.i4.0", "ldc.i4.4", "localloc", "pop", "pop", "ldc.i4.s 42", "ret"], false,
+            "exactly one integer size", Verification: "Unverifiable,LocallocStackNotEmpty"),
+        new("CopyBlock", [".locals init (int32 source, int32 destination)", "ldc.i4.s 42", "stloc source",
+            "ldloca destination", "ldloca source", "ldc.i4.4", "cpblk", "ldloc destination", "ret"], true,
+            Unverifiable: true, Verification: "Unverifiable"),
+        new("WrongCopyBlock", ["ldnull", "ldnull", "ldc.i4.4", "cpblk", "ldc.i4.s 42", "ret"], false,
+            "destination and source pointers", Verification: "Unverifiable"),
+        new("WrongCopyBlockSize", ["ldarga.s n", "ldarga.s n", "ldnull", "cpblk", "ldc.i4.s 42", "ret"], false,
+            "int32 size", Verification: "ExpectedIntegerType,Unverifiable"),
+        new("InitializeBlock", [".locals init (int32 result)", "ldloca result", "ldc.i4.0", "ldc.i4.4", "initblk",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "Unverifiable"),
+        new("WrongInitializeBlock", ["ldnull", "ldc.i4.0", "ldc.i4.4", "initblk", "ldc.i4.s 42", "ret"], false,
+            "destination pointer", Verification: "Unverifiable"),
+        new("WrongInitializeValue", ["ldarga.s n", "ldnull", "ldc.i4.4", "initblk", "ldc.i4.s 42", "ret"], false,
+            "int32 value", Verification: "ExpectedIntegerType,Unverifiable"),
+        new("WrongInitializeSize", ["ldarga.s n", "ldc.i4.0", "ldnull", "initblk", "ldc.i4.s 42", "ret"], false,
+            "int32 size", Verification: "ExpectedIntegerType,Unverifiable"),
+        new("ArrayIndex", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "ldelem.i4", "pop", "ldc.i4.s 42", "ret"], true),
+        new("ArrayElement", ["ldc.i4.1", "newarr uint32", "dup", "ldc.i4.0", "ldc.i4.s 42", "stelem.i4",
+            "ldc.i4.0", "ldelem.u4", "ret"], true),
+        new("WrongManagedPointerArray", ["ldc.i4.1", "newarr int32&", "pop", "ldc.i4.s 42", "ret"], false,
+            "array element type", Verification: "ArrayByRef"),
+        new("WrongUnreachableManagedPointerArray", ["br DONE", "ldc.i4.1", "newarr int32&", "pop",
+            "DONE: ldc.i4.s 42", "ret"], false, "array element type"),
+        new("WrongArrayElement", ["ldc.i4.1", "newarr string", "ldc.i4.0", "ldelema int32", "pop",
+            "ldc.i4.s 42", "ret"], false, "cannot access string elements as int32", Verification: "StackUnexpectedArrayType"),
+        new("WrongCovariantArrayAddress", ["ldc.i4.1", "newarr string", "ldc.i4.0", "ldelema object", "pop",
+            "ldc.i4.s 42", "ret"], false, "cannot access string elements as object", Verification: "StackUnexpectedArrayType"),
+        new("WrongArrayLoad", ["ldc.i4.1", "newarr int64", "ldc.i4.0", "ldelem.i4", "pop",
+            "ldc.i4.s 42", "ret"], false, "cannot access int64 elements as int32", Verification: "StackUnexpected"),
+        new("BooleanArrayElement", ["ldc.i4.1", "newarr bool", "dup", "ldc.i4.0", "ldc.i4.1", "stelem.i1",
+            "ldc.i4.0", "ldelem.u1", "pop", "ldc.i4.s 42", "ret"], true),
+        new("CharacterArrayElement", ["ldc.i4.1", "newarr char", "dup", "ldc.i4.0", "ldc.i4.s 65", "stelem.i2",
+            "ldc.i4.0", "ldelem.u2", "pop", "ldc.i4.s 42", "ret"], true),
+        new("WrongArrayValue", ["ldc.i4.1", "newarr string", "ldc.i4.0", "ldc.i4.1", "stelem.ref",
+            "ldc.i4.s 42", "ret"], false, "stelem.ref needs an object reference", Verification: "StackUnexpected"),
+        new("ArrayReferenceStore", ["ldc.i4.1", "newarr string", "ldc.i4.0", "ldstr \"value\"", "stelem.ref",
+            "ldc.i4.s 42", "ret"], true),
+        new("NullArrayReferenceStore", ["ldarg.0", "brtrue DONE", "ldnull", "ldc.i4.0", "ldnull", "stelem.ref",
+            "DONE: ldc.i4.s 42", "ret"], true),
+        new("WrongNullArrayReferenceStore", ["ldarg.0", "brtrue DONE", "ldnull", "ldc.i4.0", "ldc.i4.1", "stelem.ref",
+            "DONE: ldc.i4.s 42", "ret"], false, "needs an object reference"),
+        new("ArrayReferenceLoad", ["ldc.i4.1", "newarr string", "ldc.i4.0", "ldelem.ref", "pop",
+            "ldc.i4.s 42", "ret"], true),
+        new("GenericArrayReferenceLoad", ["ldc.i4.1", "newarr !!T", "ldc.i4.0", "ldelem.ref", "pop",
+            "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "class T", GenericArguments: "string"),
+        new("GenericArrayReferenceStore", [".locals init (!!T item)", "ldc.i4.1", "newarr !!T", "ldc.i4.0",
+            "ldloc item", "stelem.ref", "ldc.i4.s 42", "ret"], true,
+            GenericParameters: "class T", GenericArguments: "string"),
+        new("WrongValueArrayReferenceLoad", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "ldelem.ref", "pop",
+            "ldc.i4.s 42", "ret"], false, "array with reference elements", Verification: "StackUnexpected"),
+        new("WrongValueArrayReferenceStore", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "ldnull", "stelem.ref",
+            "ldc.i4.s 42", "ret"], false, "array with reference elements", Verification: "StackUnexpected"),
+        new("WrongGenericArrayReferenceLoad", ["ldc.i4.1", "newarr !!T", "ldc.i4.0", "ldelem.ref", "pop",
+            "ldc.i4.s 42", "ret"], false, "array with reference elements",
+            GenericParameters: "T", GenericArguments: "int32"),
+        new("WrongArrayReferenceStore", ["ldc.i4.1", "newarr string", "ldc.i4.0",
+            "newobj instance void object::.ctor()", "stelem.ref", "ldc.i4.s 42", "ret"], false,
+            "stelem.ref needs string", Verification: "StackUnexpected"),
+        new("TypedArrayReferenceStore", ["ldc.i4.1", "newarr object", "ldc.i4.0", "ldstr \"value\"", "stelem string",
+            "ldc.i4.s 42", "ret"], true),
+        new("TypedArrayReferenceLoad", ["ldc.i4.1", "newarr string", "ldc.i4.0", "ldelem object", "pop",
+            "ldc.i4.s 42", "ret"], true),
+        new("WrongValueTypedArrayLoad", ["ldc.i4.1", "newarr int32", "ldc.i4.0", "ldelem object", "pop",
+            "ldc.i4.s 42", "ret"], false, "cannot access int32 elements as object", Verification: "StackUnexpected"),
+        new("WrongReferenceTypedArrayStore", ["ldc.i4.1", "newarr object", "ldc.i4.0", "ldc.i4.1", "stelem int32",
+            "ldc.i4.s 42", "ret"], false, "cannot access object elements as int32", Verification: "StackUnexpected"),
+        new("WrongTypedArrayReferenceStore", ["ldc.i4.1", "newarr string", "ldc.i4.0",
+            "newobj instance void object::.ctor()", "stelem object", "ldc.i4.s 42", "ret"], false,
+            "cannot access string elements as object", Verification: "StackUnexpected"),
+        new("WrongArrayStore", ["ldc.i4.1", "newarr int64", "ldc.i4.0", "ldc.i4.1", "stelem.i4",
+            "ldc.i4.s 42", "ret"], false, "cannot access int64 elements as int32", Verification: "StackUnexpected"),
+        new("WrongArrayIndex", ["ldc.i4.1", "newarr int32", "ldc.r8 0.0", "ldelem.i4", "pop", "ldc.i4.s 42", "ret"], false,
+            "integer index", Verification: "StackUnexpected"),
+        new("TypedReference", [".locals init (int32 result)", "ldloca result", "mkrefany int32", "dup", "refanytype",
+            "pop", "refanyval int32", "ldc.i4.s 42", "stind.i4", "ldloc result", "ret"], true,
+            VerificationFailure: "TypedReference not supported in .NET Core"),
+        new("WrongMakeTypedReference", ["ldc.i4.1", "mkrefany int32", "pop", "ldc.i4.s 42", "ret"], false,
+            "mkrefany needs a pointer", VerificationFailure: "TypedReference not supported in .NET Core"),
+        new("UnmanagedTypedReference", [".locals init (int32* pointer)", "ldloc pointer", "mkrefany int32", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true,
+            VerificationFailure: "TypedReference not supported in .NET Core"),
+        new("WrongTypedReferencePointer", ["ldarga.s n", "mkrefany int64", "pop", "ldc.i4.s 42", "ret"], false,
+            "mkrefany needs a pointer to int64", VerificationFailure: "TypedReference not supported in .NET Core"),
+        new("WrongTypedReferenceType", ["ldc.i4.1", "refanytype", "pop", "ldc.i4.s 42", "ret"], false,
+            "refanytype needs a typedref", VerificationFailure: "TypedReference not supported in .NET Core"),
+        new("WrongTypedReferenceValue", ["ldc.i4.1", "refanyval int32", "pop", "ldc.i4.s 42", "ret"], false,
+            "refanyval needs a typedref", VerificationFailure: "TypedReference not supported in .NET Core"),
+        new("WrongIndirectLoad", ["ldarga.s n", "ldind.ref", "pop", "ldc.i4.s 42", "ret"], false,
+            "cannot access int32", Verification: "StackUnexpected"),
+        new("ByteIndirectLoad", [".locals init (int8 item)", "ldloca item", "ldind.i1", "pop", "ldc.i4.s 42", "ret"], true),
+        new("ByteIndirectStore", [".locals init (int8 item)", "ldloca item", "ldc.i4.1", "stind.i1",
+            "ldc.i4.s 42", "ret"], true),
+        new("FloatIndirectLoad", [".locals init (float32 item)", "ldloca item", "ldind.r4", "pop", "ldc.i4.s 42", "ret"], true),
+        new("FloatIndirectStore", [".locals init (float32 item)", "ldloca item", "ldc.r4 1.0", "stind.r4",
+            "ldc.i4.s 42", "ret"], true),
+        new("PointerSlotIndirectLoad", [".locals init (int32* pointer)", "ldloca pointer", "ldind.i", "pop",
+            "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "StackUnexpected"),
+        new("PointerSlotIndirectStore", [".locals init (int32* pointer)", "ldloca pointer", "ldc.i4.0", "conv.u", "stind.i",
+            "ldc.i4.s 42", "ret"], true),
+        new("FunctionPointerSlotIndirectLoad", [".locals init (method int32 *(int32) pointer)", "ldloca pointer", "ldind.i",
+            "pop", "ldc.i4.s 42", "ret"], true, Unverifiable: true, Verification: "StackUnexpected"),
+        new("FunctionPointerSlotIndirectStore", [".locals init (method int32 *(int32) pointer)", "ldloca pointer",
+            "ldftn int32 [System.Runtime]System.Math::Abs(int32)", "stind.i", "ldc.i4.s 42", "ret"], true),
+        new("WrongPointerSlotIndirectLoad", [".locals init (int32* pointer)", "ldloca pointer", "ldind.i4", "pop",
+            "ldc.i4.s 42", "ret"], false, "cannot access int32*", Verification: "StackUnexpected"),
+        new("WrongPointerSlotIndirectStore", [".locals init (int32* pointer)", "ldloca pointer", "ldc.i4.0", "stind.i4",
+            "ldc.i4.s 42", "ret"], false, "cannot access int32*", Verification: "StackUnexpected"),
+        new("WrongWideIndirectLoad", [".locals init (int8 item)", "ldloca item", "ldind.i4", "pop",
+            "ldc.i4.s 42", "ret"], false, "cannot access int8", Verification: "StackUnexpected"),
+        new("WrongNarrowIndirectStore", ["ldarga.s n", "ldc.i4.1", "stind.i1", "ldc.i4.s 42", "ret"], false,
+            "cannot access int32"),
+        new("WrongWideFloatLoad", [".locals init (float32 item)", "ldloca item", "ldind.r8", "pop",
+            "ldc.i4.s 42", "ret"], false, "cannot access float32", Verification: "StackUnexpected"),
+        new("WrongNarrowFloatStore", [".locals init (float64 item)", "ldloca item", "ldc.r8 1.0", "stind.r4",
+            "ldc.i4.s 42", "ret"], false, "cannot access float64"),
+        new("IndirectReferenceStore", [".locals init (string item)", "ldloca item", "ldstr \"value\"", "stind.ref",
+            "ldc.i4.s 42", "ret"], true),
+        new("UnmanagedReferenceStore", [".locals init (object item, native int pointer)", "ldloca item", "conv.u",
+            "stloc pointer", "ldloc pointer", "ldstr \"value\"", "stind.ref", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("UnmanagedReferenceLoad", [".locals init (object item, int32* pointer)", "ldloca item", "conv.u",
+            "stloc pointer", "ldloc pointer", "ldstr \"value\"", "stind.ref", "ldloc pointer", "ldind.ref",
+            "callvirt instance int32 object::GetHashCode()", "pop", "ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "ExpectedNumericType"),
+        new("NativeIndirectLoad", ["ldarg.0", "brtrue DONE", "ldc.i4.0", "conv.i", "ldind.i4", "pop",
+            "DONE: ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "StackByRef"),
+        new("NativeIndirectStore", ["ldarg.0", "brtrue DONE", "ldc.i4.0", "conv.i", "ldc.i4.0", "stind.i4",
+            "DONE: ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "StackByRef"),
+        new("NativeObjectLoad", ["ldarg.0", "brtrue DONE", "ldc.i4.0", "conv.i", "ldobj int32", "pop",
+            "DONE: ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "StackByRef"),
+        new("NativeObjectStore", ["ldarg.0", "brtrue DONE", "ldc.i4.0", "conv.i", "ldc.i4.0", "stobj int32",
+            "DONE: ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "StackByRef"),
+        new("NativeObjectInitialize", ["ldarg.0", "brtrue DONE", "ldc.i4.0", "conv.i", "initobj int32",
+            "DONE: ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "StackByRef,StackUnexpected"),
+        new("NativeObjectCopy", ["ldarg.0", "brtrue DONE", "ldc.i4.0", "conv.i", "ldc.i4.0", "conv.i", "cpobj int32",
+            "DONE: ldc.i4.s 42", "ret"], true,
+            Unverifiable: true, Verification: "StackByRef"),
+        new("WrongUnmanagedReferenceStore", ["ldc.i4.0", "conv.i", "ldc.i4.1", "stind.ref", "ldc.i4.s 42", "ret"],
+            false, "needs an object reference", Verification: "StackByRef"),
+        new("WrongIndirectReferenceStore", [".locals init (string item)", "ldloca item",
+            "newobj instance void object::.ctor()", "stind.ref", "ldc.i4.s 42", "ret"], false,
+            "stind.ref needs string", Verification: "StackUnexpected"),
+        new("CopyObject", [".locals init (int32 source, int32 destination)", "ldc.i4.s 42", "stloc source",
+            "ldloca destination", "ldloca source", "cpobj int32", "ldloc destination", "ret"], true),
+        new("CopyReferenceObject", [".locals init (string source, object destination)", "ldloca destination", "ldloca source",
+            "cpobj object", "ldc.i4.s 42", "ret"], true),
+        new("WrongCopyObjectSource", [".locals init (int32 destination)", "ldloca destination", "ldnull", "cpobj int32",
+            "ldc.i4.s 42", "ret"], false, "source pointer", Verification: "StackByRef"),
+        new("WrongCopyObjectSourceType", [".locals init (string source, int32 destination)", "ldloca destination", "ldloca source",
+            "cpobj int32", "ldc.i4.s 42", "ret"], false, "cannot copy string as int32"),
+        new("WrongCopyObjectDestinationType", [".locals init (object source, string destination)", "ldloca destination", "ldloca source",
+            "cpobj object", "ldc.i4.s 42", "ret"], false, "cannot access string"),
+        new("UnboxValue", ["ldc.i4.s 42", "box int32", "unbox int32", "ldind.i4", "ret"], true),
+        new("WrongUnboxType", ["ldnull", "unbox string", "pop", "ldc.i4.s 42", "ret"], false,
+            "value type or generic parameter", Verification: "ValueTypeExpected"),
+        new("DeepStack", [.. Enumerable.Repeat("ldc.i4.0", 32), .. Enumerable.Repeat("pop", 32), "ldc.i4.s 42", "ret"], true),
+    ];
+
+    private const string StaticAbstractDeclarations = """
+        .class interface public abstract IZero {
+        .method public static abstract virtual int32 Zero() { }
+        .method public static abstract virtual int32 Identity(int32) { }
+        }
+        .class public Num implements IZero {
+        .method public static int32 Zero() {
+        ldc.i4.0
+        ret
+        }
+        .method public static int32 Identity(int32) {
+        ldarg.0
+        ret
+        }
+        .override method int32 IZero::Zero() with method int32 Num::Zero()
+        .override method int32 IZero::Identity(int32) with method int32 Num::Identity(int32)
+        }
+        """;
+
+    private const string AbstractTypeDeclarations = """
+        .class public abstract AbstractThing {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        .class public ConcreteThing extends AbstractThing {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void AbstractThing::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string HolderDeclarations = """
+        .class public sequential ansi sealed Holder extends [System.Runtime]System.ValueType {
+        .field public int64 Ticks
+        }
+        """;
+
+    private const string MutableValueDeclarations = """
+        .class public sequential ansi sealed MutableValue extends [System.Runtime]System.ValueType {
+        .field public int32 Value
+        .method public instance void Mutate() {
+        ldarg.0
+        ldc.i4.s 42
+        stfld int32 MutableValue::Value
+        ret
+        }
+        .method public static int32 Read(int32& address) {
+        ldarg address
+        ldind.i4
+        ret
+        }
+        }
+        """;
+
+    private const string InitOnlyAddressDeclarations = """
+        .class public InitOnlyAddress {
+        .field public initonly int32 Value
+        .field public static initonly int32 StaticValue
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string DelegatingConstructorDeclarations = """
+        .class public DelegatingConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        ldc.i4.0
+        call instance void DelegatingConstructor::.ctor(int32)
+        ret
+        }
+        .method public instance void .ctor(int32) {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string DoubleConstructorDeclarations = """
+        .class public DoubleConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string PopConstructorDeclarations = """
+        .class public PopConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        pop
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string OwnFieldsConstructorDeclarations = """
+        .class public OwnFieldsBase {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        .class public OwnFieldsConstructor extends OwnFieldsBase {
+        .field public int32 Value
+        .method public instance void .ctor() {
+        ldarg.0
+        ldfld int32 OwnFieldsConstructor::Value
+        pop
+        ldarg.0
+        ldflda int32 OwnFieldsConstructor::Value
+        pop
+        ldarg.0
+        ldc.i4.1
+        stfld int32 OwnFieldsConstructor::Value
+        ldarg.0
+        call instance void OwnFieldsBase::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string InheritedFieldsConstructorDeclarations = """
+        .class public InheritedFieldsBase {
+        .field public int32 Value
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        .class public InheritedFieldsConstructor extends InheritedFieldsBase {
+        .method public instance void .ctor() {
+        ldarg.0
+        ldfld int32 InheritedFieldsBase::Value
+        pop
+        ldarg.0
+        ldflda int32 InheritedFieldsBase::Value
+        pop
+        ldarg.0
+        ldc.i4.1
+        stfld int32 InheritedFieldsBase::Value
+        ldarg.0
+        call instance void InheritedFieldsBase::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string InitializedFieldsConstructorDeclarations = """
+        .class public InitializedFieldsBase {
+        .field public int32 Value
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        .class public InitializedFieldsConstructor extends InitializedFieldsBase {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void InitializedFieldsBase::.ctor()
+        ldarg.0
+        ldfld int32 InitializedFieldsBase::Value
+        pop
+        ldarg.0
+        ldflda int32 InitializedFieldsBase::Value
+        pop
+        ldarg.0
+        ldc.i4.1
+        stfld int32 InitializedFieldsBase::Value
+        ret
+        }
+        }
+        """;
+
+    private const string SelfConstructorDeclarations = """
+        .class public SelfConstructor {
+        .method public instance void .ctor(bool recurse) {
+        ldarg recurse
+        brfalse BASE
+        ldarg.0
+        ldc.i4.0
+        call instance void SelfConstructor::.ctor(bool)
+        ret
+        BASE: ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string UninitializedConstructorDeclarations = """
+        .class public UninitializedConstructor {
+        .method public instance void .ctor() {
+        ret
+        }
+        }
+        """;
+
+    private const string EarlyThisConstructorDeclarations = """
+        .class public EarlyThisConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        callvirt instance string object::ToString()
+        pop
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string ReinitializingMethodDeclarations = """
+        .class public ReinitializingMethod {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        .method public instance void Again() {
+        ldarg.0
+        call instance void ReinitializingMethod::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string GrandparentConstructorDeclarations = """
+        .class public GrandparentConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        .class public ParentConstructor extends GrandparentConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void GrandparentConstructor::.ctor()
+        ret
+        }
+        }
+        .class public GrandchildConstructor extends ParentConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void GrandparentConstructor::.ctor()
+        ret
+        }
+        }
+        """;
+
+    private const string MixedConstructorDeclarations = """
+        .class public MixedConstructor {
+        .method public instance void .ctor(bool initialize) {
+        ldarg initialize
+        brfalse DONE
+        ldarg.0
+        call instance void object::.ctor()
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string ConstantBranchConstructorDeclarations = """
+        .class public ConstantBranchConstructor {
+        .method public instance void .ctor() {
+        .try {
+        leave START
+        } finally {
+        endfinally
+        }
+        START: ldc.i4.0
+        brtrue BAD
+        ldarg.0
+        call instance void object::.ctor()
+        br DONE
+        BAD: nop
+        DONE: nop
+        ret
+        }
+        }
+        """;
+
+    private const string RetryingConstructorDeclarations = """
+        .class public RetryingBaseConstructor {
+        .field private static int32 Attempts
+        .method public instance void .ctor() {
+        ldsfld int32 RetryingBaseConstructor::Attempts
+        brtrue READY
+        ldc.i4.1
+        stsfld int32 RetryingBaseConstructor::Attempts
+        ldstr "first"
+        newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)
+        throw
+        READY: ldarg.0
+        call instance void object::.ctor()
+        ret
+        }
+        }
+        .class public RetryingConstructor extends RetryingBaseConstructor {
+        .method public instance void .ctor() {
+        .try {
+        ldarg.0
+        call instance void RetryingBaseConstructor::.ctor()
+        leave DONE
+        } catch [System.Runtime]System.Exception {
+        pop
+        ldarg.0
+        call instance void RetryingBaseConstructor::.ctor()
+        leave DONE
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string FinallyConstructorDeclarations = """
+        .class public FinallyConstructor {
+        .method public instance void .ctor() {
+        .try {
+        leave DONE
+        } finally {
+        ldarg.0
+        call instance void object::.ctor()
+        endfinally
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string FailingFinallyConstructorDeclarations = """
+        .class public ThrowingFinallyBase {
+        .method public instance void .ctor() {
+        ldstr "base"
+        newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)
+        throw
+        }
+        }
+        .class public FailingFinallyConstructor extends ThrowingFinallyBase {
+        .method public instance void .ctor() {
+        .try {
+        .try {
+        leave INNER
+        } finally {
+        ldarg.0
+        call instance void ThrowingFinallyBase::.ctor()
+        endfinally
+        }
+        INNER: leave DONE
+        } catch object {
+        pop
+        leave DONE
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string InitializedFinallyConstructorDeclarations = """
+        .class public InitializedFinallyConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        .try {
+        leave DONE
+        } finally {
+        ldarg.0
+        callvirt instance string object::ToString()
+        pop
+        endfinally
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string ExceptionalFinallyConstructorDeclarations = """
+        .class public ThrowingFinallyUseBase {
+        .method public instance void .ctor() {
+        ldstr "base"
+        newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)
+        throw
+        }
+        }
+        .class public ExceptionalFinallyConstructor extends ThrowingFinallyUseBase {
+        .method public instance void .ctor() {
+        .try {
+        ldarg.0
+        call instance void ThrowingFinallyUseBase::.ctor()
+        leave DONE
+        } finally {
+        ldarg.0
+        callvirt instance string object::ToString()
+        pop
+        endfinally
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string DeferredConstructorDeclarations = """
+        .class public DeferredConstructor {
+        .method public instance void .ctor() {
+        ldarg.0
+        call instance void object::.ctor()
+        .try {
+        ldstr "ready"
+        pop
+        leave DONE
+        } catch [System.Runtime]System.Exception {
+        pop
+        ldarg.0
+        callvirt instance string object::ToString()
+        pop
+        leave DONE
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string CorrelatedFilterConstructorDeclarations = """
+        .class public CorrelatedFilterConstructor {
+        .method public instance void .ctor(bool accept) {
+        .try {
+        .try {
+        ldnull
+        throw
+        } filter {
+        pop
+        ldarg accept
+        brfalse REJECT
+        ldarg.0
+        call instance void object::.ctor()
+        ldc.i4.1
+        br RESULT
+        REJECT: ldc.i4.0
+        RESULT: endfilter
+        } handler {
+        pop
+        leave DONE
+        }
+        } catch object {
+        pop
+        ldarg.0
+        call instance void object::.ctor()
+        leave DONE
+        }
+        DONE: ret
+        }
+        }
+        """;
+
+    private const string FilterConstructorDeclarations = """
+        .class public ThrowingFilterBase {
+        .method public instance void .ctor() {
+        ldstr "base"
+        newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)
+        throw
+        }
+        }
+        .class public FilterConstructor extends ThrowingFilterBase {
+        .method public instance void .ctor() {
+        .try {
+        .try {
+        ldnull
+        throw
+        } filter {
+        pop
+        ldarg.0
+        call instance void ThrowingFilterBase::.ctor()
+        ldc.i4.0
+        endfilter
+        } handler {
+        pop
+        leave DONE
+        }
+        } catch object {
+        pop
+        leave DONE
+        }
+        DONE: ret
+        }
+        }
+        """;
+}

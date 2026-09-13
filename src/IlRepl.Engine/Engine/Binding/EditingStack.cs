@@ -83,7 +83,7 @@ internal sealed class EditingStack
         foreach (var type in SymbolStackAlgebra.Transfer.PushTypes(view, popped))
         {
             _items.Add(type);
-            _receivers.Add(view.LoadsThis || view.AddressOfThis || duplicateReceiver);
+            _receivers.Add(view.ReadsThisArgument || duplicateReceiver);
         }
     }
 
@@ -100,9 +100,21 @@ internal sealed class EditingStack
         var view = new StackOperandView<TypeSymbol>
         {
             Op = op,
+            ByteOperand = instruction.Operand.Kind == OperandKind.Byte && instruction.Operand.Value is byte byteOperand
+                ? byteOperand : null,
+            IntegerOperand = instruction.Operand.Kind switch
+            {
+                OperandKind.SByte when instruction.Operand.Value is sbyte value => value,
+                OperandKind.Int32 when instruction.Operand.Value is int value => value,
+                OperandKind.Int64 when instruction.Operand.Value is long value => value,
+                _ => null,
+            },
             RetPops = retPops,
-            LoadsThis = instruction.ArgumentIndex == 0 && scope.ThisIndex == 0 && op.Name is "ldarg.0" or "ldarg" or "ldarg.s",
-            AddressOfThis = instruction.ArgumentIndex == 0 && scope.ThisIndex == 0 && op.Name is "ldarga" or "ldarga.s",
+            LocalIndex = instruction.LocalIndex,
+            ArgumentIndex = instruction.ArgumentIndex,
+            ReadsThisArgument = instruction.ArgumentIndex == 0 && scope.ThisIndex == 0
+                && op.Name is "ldarg.0" or "ldarg" or "ldarg.s" or "ldarga" or "ldarga.s",
+            WritesThisArgument = instruction.ArgumentIndex == 0 && scope.ThisIndex == 0 && op.Name is "starg" or "starg.s",
         };
         if (instruction.LocalIndex is int local && local < scope.Locals.Count)
         {
@@ -121,7 +133,14 @@ internal sealed class EditingStack
 
         if (operand.Field is { } field)
         {
-            return view with { FieldType = field.FieldType, Token = StackTokenKind.Field };
+            return view with
+            {
+                FieldType = field.FieldType,
+                FieldIsStatic = field.IsStatic,
+                FieldIsInitOnly = field.IsInitOnly,
+                DeclaringType = field.DeclaringType,
+                Token = StackTokenKind.Field,
+            };
         }
 
         if (operand.Method is { } bound)
@@ -133,6 +152,15 @@ internal sealed class EditingStack
                 DeclaringType = method.DeclaringType,
                 ArgumentPops = method.Parameters.Count + (bound.OptionalParameterTypes?.Count ?? 0)
                     + (!method.IsStatic && op != OpCodes.Newobj ? 1 : 0),
+                ParameterTypes = [.. method.Parameters.Select(parameter => parameter.Type), .. bound.OptionalParameterTypes ?? []],
+                IsInstance = !method.IsStatic && op != OpCodes.Newobj,
+                MethodIsStatic = method.IsStatic,
+                MethodIsConstructor = method.IsConstructor,
+                MethodIsAbstract = method.IsAbstract,
+                MethodIsVirtual = method.IsVirtual,
+                MethodAccessIsKnownValid = MemberEligibility.AccessProblem(
+                    method, scope.Access, AccessFacts.From(scope)) is null,
+                DeclaringTypeIsAbstract = method.DeclaringType?.IsAbstract,
                 Token = StackTokenKind.Method,
             };
         }
@@ -141,6 +169,8 @@ internal sealed class EditingStack
         {
             ReturnType = SymbolIdentity.Equal(signature.ReturnType, TypeSymbol.Void) ? null : signature.ReturnType,
             ArgumentPops = signature.ArgumentPopCount + 1,
+            ParameterTypes = signature.Parameters,
+            HasImplicitThis = signature.HasThis && !signature.ExplicitThis,
         } : view;
     }
 
@@ -150,7 +180,26 @@ internal sealed class EditingStack
     /// <returns>The bracketed stack.</returns>
     public string Render() => "[" + string.Join(", ", _items.Select(Name)) + "]";
 
-    private static string Name(TypeSymbol? type) => SymbolIdentity.Equal(type, SymbolStackAlgebra.Instance.NullReference)
+    /// <summary>
+    /// Copies the established stack and receiver provenance from a flow state.
+    /// </summary>
+    internal void CopyFrom(FlowState<TypeSymbol>? state)
+    {
+        Clear();
+        if (state is { Invalid: false, Values: { } values })
+        {
+            foreach (var value in values)
+            {
+                _items.Add(value.Type);
+                _receivers.Add(value.IsThis);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Formats a stack value while keeping boxed markers out of user-facing type names.
+    /// </summary>
+    internal static string Name(TypeSymbol? type) => SymbolIdentity.Equal(type, SymbolStackAlgebra.Instance.NullReference)
         ? "null"
         : SymbolIdentity.Equal(type, SymbolStackAlgebra.Instance.UnknownReference) || SymbolStackAlgebra.BoxedType(type) is not null
             ? "object" : SymbolRenderer.Pretty(type);

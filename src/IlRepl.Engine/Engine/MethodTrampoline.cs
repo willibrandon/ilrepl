@@ -75,8 +75,16 @@ public sealed class MethodTrampoline
         }
 
         var cell = writer.DefineType("IlRepl", "Cell", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit, writer.Object);
-        var returnType = writer.Import(signature.ReturnType);
-        var parameterTypes = signature.ParameterTypes.Select(writer.Import).ToArray();
+        var returnType = writer.ImportSignature(
+            signature.ReturnType,
+            signature.ExactReturnType,
+            signature.ReturnRequiredModifiers,
+            signature.ReturnOptionalModifiers);
+        var parameterTypes = signature.Parameters.Select((parameter, index) => writer.ImportSignature(
+            parameter.Type,
+            parameter.ExactType,
+            parameter.RequiredModifiers,
+            parameter.OptionalModifiers)).ToArray();
 
         var delegateType = new TypeDefinition("", signature.Name + "Delegate", TypeAttributes.NestedPublic | TypeAttributes.Sealed | TypeAttributes.Class, writer.Import(typeof(MulticastDelegate)));
         cell.NestedTypes.Add(delegateType);

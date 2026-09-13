@@ -69,8 +69,13 @@ public static class PropertyEventBinding
 
         var close = TypeParser.FindMatchingParen(s, paren);
         var parameters = TypeParser.SplitTopLevel(s[(paren + 1)..close])
-            .Select(text => SymbolBinder.BindType(CilSyntaxParser.ParseType(text), context).Type).ToList();
-        return new PropertyHeaderSymbol(name, type, parameters, isStatic, attributes, opens);
+            .Select(text => SymbolBinder.BindType(CilSyntaxParser.ParseType(text), context)).ToList();
+        return new PropertyHeaderSymbol(name, type.Type, [.. parameters.Select(parameter => parameter.Type)],
+            isStatic, attributes, opens)
+        {
+            ExactType = Exact(type),
+            ExactParameterTypes = [.. parameters.Select(Exact)],
+        };
     }
 
     /// <summary>
@@ -110,7 +115,8 @@ public static class PropertyEventBinding
             }
         }
 
-        var type = BindAt(s, ref pos, context);
+        var bound = BindAt(s, ref pos, context);
+        var type = bound.Type;
         TypeParser.SkipWhitespace(s, ref pos);
         var name = InstructionParser.Unquote(s[pos..].Trim());
         if (!InstructionParser.IsIdentifier(name))
@@ -123,7 +129,15 @@ public static class PropertyEventBinding
             throw new ReplException($"{context.Pretty(type)} is not a delegate type");
         }
 
-        return new EventHeaderSymbol(name, type, attributes, opens);
+        if (MemberEligibility.TypeVerdict(bound.ExactType, context.Access, AccessFacts.From(context)) is { } problem)
+        {
+            throw new ReplException(problem);
+        }
+
+        return new EventHeaderSymbol(name, type, attributes, opens)
+        {
+            ExactHandlerType = Exact(bound),
+        };
     }
 
     /// <summary>
@@ -182,9 +196,18 @@ public static class PropertyEventBinding
 
         var close = TypeParser.FindMatchingParen(s, paren);
         var parameters = TypeParser.SplitTopLevel(s[(paren + 1)..close])
-            .Select(text => SymbolBinder.BindType(CilSyntaxParser.ParseType(text), context).Type).ToList();
-        return new AccessorReferenceSymbol(kind, name, returnType, parameters, isStatic);
+            .Select(text => SymbolBinder.BindType(CilSyntaxParser.ParseType(text), context)).ToList();
+        return new AccessorReferenceSymbol(kind, name, returnType.Type,
+            [.. parameters.Select(parameter => parameter.Type)], isStatic)
+        {
+            ExactReturnType = Exact(returnType),
+            ExactParameterTypes = [.. parameters.Select(Exact)],
+        };
     }
-    private static TypeSymbol BindAt(string text, ref int position, IBindingScope scope) =>
-        SymbolBinder.BindType(CilSyntaxParser.ParseTypeAt(text, ref position), scope).Type;
+
+    private static BoundType BindAt(string text, ref int position, IBindingScope scope) =>
+        SymbolBinder.BindType(CilSyntaxParser.ParseTypeAt(text, ref position), scope);
+
+    private static TypeSymbol? Exact(BoundType type) =>
+        RuntimeSymbolTypes.RequiresExact(type.ExactType) ? type.ExactType : null;
 }

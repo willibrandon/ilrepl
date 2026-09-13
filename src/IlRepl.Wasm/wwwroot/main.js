@@ -91,6 +91,10 @@
       readyAt = 0;
     };
 
+    window.addEventListener('pagehide', (event) => {
+      if (!event.persisted) stopWorker();
+    });
+
     const scheduleRestart = (delay) => {
       if (restartTimer) clearTimeout(restartTimer);
       restartTimer = setTimeout(() => { restartTimer = null; startWorker(); }, delay);
@@ -182,6 +186,16 @@
     term.onData(send);
     term.onBinary((data) => { if (worker) worker.postMessage({ type: 'input', data: btoa(data) }); });
     term.onResize(() => sendResize());
+    container.addEventListener('keydown', (event) => {
+      const tab = event.key === 'Tab' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey;
+      const interrupt = event.key.toLowerCase() === 'c' && event.ctrlKey && !event.shiftKey && !event.altKey
+        && !event.metaKey && !term.hasSelection();
+      if (tab || interrupt) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        send(tab ? '\t' : '\x03');
+      }
+    }, true);
     let resizeTimer = null;
     window.addEventListener('resize', () => {
       if (resizeTimer) clearTimeout(resizeTimer);

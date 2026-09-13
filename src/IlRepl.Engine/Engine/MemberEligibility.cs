@@ -37,13 +37,33 @@ public static partial class MemberEligibility
             return null;
         }
 
-        while (type.HasElement)
+        if (type.Kind == TypeSymbolKind.Modified
+            && TypeVerdict(type.Modifier!, where, facts, judgeAll) is { } modifierProblem)
         {
-            type = type.Element!;
-            if (type.IsGenericParameter)
+            return modifierProblem;
+        }
+
+        if (type.HasElement)
+        {
+            return TypeVerdict(type.Element!, where, facts, judgeAll);
+        }
+
+        if (type.Kind == TypeSymbolKind.FunctionPointer)
+        {
+            if (TypeVerdict(type.Signature!.ReturnType, where, facts, judgeAll) is { } returnProblem)
             {
-                return null;
+                return returnProblem;
             }
+
+            foreach (var parameter in type.Signature.Parameters)
+            {
+                if (TypeVerdict(parameter, where, facts, judgeAll) is { } parameterProblem)
+                {
+                    return parameterProblem;
+                }
+            }
+
+            return null;
         }
 
         if (type.Kind == TypeSymbolKind.Constructed)
@@ -152,14 +172,18 @@ public static partial class MemberEligibility
         ArgumentNullException.ThrowIfNull(where);
         ArgumentNullException.ThrowIfNull(facts);
         var declaring = field.DeclaringType;
+        if (TypeVerdict(declaring, where, facts, judgeAll) is { } declaringProblem)
+        {
+            return declaringProblem;
+        }
+
         if (!judgeAll && !facts.IsSessionType(declaring))
         {
             return null;
         }
 
         var description = $"{facts.Pretty(field.FieldType)} {facts.Pretty(declaring)}::{field.Name}";
-        return TypeVerdict(declaring, where, facts, judgeAll) ?? MemberVerdict(MemberAccess.AccessWord(field.Attributes), declaring,
-            description, where, facts);
+        return MemberVerdict(MemberAccess.AccessWord(field.Attributes), declaring, description, where, facts);
     }
 
     /// <summary>
@@ -174,8 +198,11 @@ public static partial class MemberEligibility
     /// <param name="where">Where the access happens.</param>
     /// <param name="facts">The base chain, the session's types, and the spelling.</param>
     /// <param name="judgeAll">True to judge methods of any assembly by the session rules.</param>
+    /// <param name="exactGenericArguments">Generic arguments with metadata-only shapes retained.</param>
+    /// <param name="exactOptionalParameterTypes">Vararg call-site types with metadata-only shapes retained.</param>
     /// <returns>The reason, or null.</returns>
-    public static string? MethodVerdict(MethodSymbol method, AccessContext where, AccessFacts facts, bool judgeAll = false)
+    public static string? MethodVerdict(MethodSymbol method, AccessContext where, AccessFacts facts, bool judgeAll = false,
+        IReadOnlyList<TypeSymbol>? exactGenericArguments = null, IReadOnlyList<TypeSymbol>? exactOptionalParameterTypes = null)
     {
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(where);
@@ -196,6 +223,22 @@ public static partial class MemberEligibility
             if (TypeVerdict(argument, where, facts, judgeAll) is { } argumentProblem)
             {
                 return argumentProblem;
+            }
+        }
+
+        foreach (var argument in exactGenericArguments ?? [])
+        {
+            if (TypeVerdict(argument, where, facts, judgeAll) is { } argumentProblem)
+            {
+                return argumentProblem;
+            }
+        }
+
+        foreach (var parameter in exactOptionalParameterTypes ?? [])
+        {
+            if (TypeVerdict(parameter, where, facts, judgeAll) is { } parameterProblem)
+            {
+                return parameterProblem;
             }
         }
 
@@ -255,6 +298,11 @@ public static partial class MemberEligibility
         }
 
         if (type.Kind == TypeSymbolKind.Unresolved)
+        {
+            return false;
+        }
+
+        if (type.Kind == TypeSymbolKind.Modified && !IsReachable(type.Modifier!, where, facts))
         {
             return false;
         }

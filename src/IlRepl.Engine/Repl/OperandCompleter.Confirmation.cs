@@ -258,7 +258,7 @@ public sealed partial class OperandCompleter
         var found = false;
         if (instruction.Operand.Type is { } operand)
         {
-            SymbolRelations.Rewrite(operand, part =>
+            SymbolRelations.Rewrite(instruction.Operand.ExactType ?? operand, part =>
             {
                 found |= SymbolIdentity.Equal(part, candidate.Type);
                 return null;

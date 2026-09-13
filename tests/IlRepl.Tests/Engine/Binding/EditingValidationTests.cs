@@ -134,6 +134,56 @@ public sealed class EditingValidationTests
     }
 
     /// <summary>
+    /// Preview checks a private type retained only as a custom modifier on a generic method argument.
+    /// </summary>
+    [TestMethod]
+    public void GenericArgumentModifier_UsesTheAcceptingAccessibilityRule()
+    {
+        var session = IlLines.Load(".class public Outer {", ".class nested private Inner { }", "}");
+        var line = "call !!0[] [System.Runtime]System.Array::Empty<int32 modopt(Outer/Inner)>()";
+        var expected = Assert.ThrowsExactly<ReplException>(() => session.AddLine(line)).Message;
+        using var editing = new EditingSession(session);
+        var view = editing.Speculate([line, ""], 1, cancellationToken: TestContext.CancellationToken);
+
+        Assert.AreEqual(expected, view.SkippedLines.Single().Message);
+    }
+
+    /// <summary>
+    /// Preview checks a private type retained only as a modifier on a vararg call-site parameter.
+    /// </summary>
+    [TestMethod]
+    public void VarargParameterModifier_UsesTheAcceptingAccessibilityRule()
+    {
+        var session = IlLines.Load(".class public Outer {", ".class nested private Inner { }", "}");
+        session.Resolver.Load(SampleHost.Samples.GreeterDll);
+        var line = "call vararg int32 Greeter.Hello::CountArgs(..., int32 modopt(Outer/Inner))";
+        var expected = Assert.ThrowsExactly<ReplException>(() => session.AddLine(line)).Message;
+        using var editing = new EditingSession(session);
+        var view = editing.Speculate([line, ""], 1, cancellationToken: TestContext.CancellationToken);
+
+        Assert.AreEqual(expected, view.SkippedLines.Single().Message);
+    }
+
+    /// <summary>
+    /// Preview checks private types retained anywhere in an indirect call signature.
+    /// </summary>
+    /// <param name="line">The indirect call whose signature mentions the private type.</param>
+    [TestMethod]
+    [DataRow("calli void modopt(Outer/Inner)()")]
+    [DataRow("calli void(int32 modreq(Outer/Inner))")]
+    [DataRow("calli vararg void(..., int32 modopt(Outer/Inner))")]
+    [DataRow("calli unmanaged cdecl void(class Outer/Inner)")]
+    public void CalliSignatureModifier_UsesTheAcceptingAccessibilityRule(string line)
+    {
+        var session = IlLines.Load(".class public Outer {", ".class nested private Inner { }", "}");
+        var expected = Assert.ThrowsExactly<ReplException>(() => session.AddLine(line)).Message;
+        using var editing = new EditingSession(session);
+        var view = editing.Speculate([line, ""], 1, cancellationToken: TestContext.CancellationToken);
+
+        Assert.AreEqual(expected, view.SkippedLines.Single().Message);
+    }
+
+    /// <summary>
     /// Undo removes a cell instruction while preserving declarations that survived an earlier clear.
     /// </summary>
     [TestMethod]

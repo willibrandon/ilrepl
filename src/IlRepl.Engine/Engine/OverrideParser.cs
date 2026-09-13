@@ -52,7 +52,11 @@ public static class OverrideParser
         var target = adapter.ToResolvedMethod(bound.Target);
         return new ClassOverrideDeclaration(
             target.Method!, Describe(target), bound.Body.Name, adapter.ToType(bound.Body.ReturnType),
-            adapter.ToTypes(bound.Body.ParameterTypes), bound.Body.IsStatic, source);
+            adapter.ToTypes(bound.Body.ParameterTypes), bound.Body.IsStatic, source)
+        {
+            ExactBodyReturnType = bound.Body.ExactReturnType,
+            ExactBodyParameterTypes = [.. bound.Body.Parameters.Select(parameter => parameter.ExactType)],
+        };
     }
 
     /// <summary>
@@ -63,7 +67,8 @@ public static class OverrideParser
     public static string Describe(ResolvedMethod target)
     {
         ArgumentNullException.ThrowIfNull(target);
-        return target.Declared is { } declared ? $"{declared.DescribeMember()} on {TypeNameFormatter.Pretty(target.DeclaringType)}" : MemberResolver.Describe(target.Method!);
+        return target.Declared is { } declared
+            ? $"{declared.DescribeMember()} on {TypeNameFormatter.Pretty(target.DeclaringType)}"
+            : MemberResolver.Describe(target.Method!);
     }
-
 }

@@ -21,7 +21,8 @@ ships in the package and runs on your `dotnet`.
 ## What it does
 
 Every line you type is checked against a typed model of the evaluation stack before it is
-accepted, so underflows and arity mistakes show up at the prompt. `ret`, or an empty line,
+accepted. The model follows branches and reports incompatible stacks where paths meet; the
+editor shows the incoming stack at the caret. `ret`, or an empty line,
 compiles the cell with Reflection.Emit, runs it, and prints whatever single value was left on the
 stack with its runtime type.
 
@@ -60,7 +61,7 @@ il[1]> leave DONE
   ┊ []
 il[1]> }
   end of protected region
-  ┊ []
+  ┊ unreachable
 il[1]> DONE: ldloc m
   ┊ [string]
 il[1]> ret

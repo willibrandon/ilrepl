@@ -60,7 +60,10 @@ public sealed partial class EditingSession
                 break;
             case ".args":
                 body.Arguments.AddRange(VariableDeclarationParser.ParseArguments(rest, scope)
-                    .Select(argument => new VariableSymbol(argument.Type, argument.Name, false)));
+                    .Select(argument => new VariableSymbol(argument.Type, argument.Name, false)
+                    {
+                        ExactType = argument.ExactType,
+                    }));
                 break;
             case ".vararg":
                 body.IsVarArg = true;
@@ -94,8 +97,7 @@ public sealed partial class EditingSession
                 }
 
                 body.Frames.Add(BlockKind.Try);
-                body.Stack.Clear();
-                body.EndsFlow = false;
+                AddFlowNode(body, new FlowNode<TypeSymbol>(FlowLocation(body, text), text) { Block = BlockKind.Try }, scope);
                 body.RegionBracePending = true;
                 break;
             case ".maxstack":

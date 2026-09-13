@@ -61,6 +61,11 @@ internal sealed class EditingState
     public bool Ended { get; set; }
 
     /// <summary>
+    /// Whether an unsubmitted command prevents binding later source against this snapshot.
+    /// </summary>
+    public bool BindingRefreshRequired { get; set; }
+
+    /// <summary>
     /// The concrete arguments assigned to the cell's generic parameters, or null before an assignment.
     /// </summary>
     public IReadOnlyList<TypeSymbol>? TypeArguments { get; set; }

@@ -49,6 +49,10 @@ internal sealed class FaultingEngine : IReplEngine
 
 
     /// <inheritdoc/>
+    public Task<AnalysisReply> AnalyzeAsync(AnalysisRequest request, CancellationToken cancellationToken) =>
+        _inner.AnalyzeAsync(request, cancellationToken);
+
+    /// <inheritdoc/>
     public Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken) =>
         _inner.CompleteAsync(request, cancellationToken);
 

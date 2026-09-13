@@ -250,6 +250,98 @@ public sealed class CecilWriter
     }
 
     /// <summary>
+    /// Imports a symbolic type while preserving signature shapes that reflection projects to native int.
+    /// </summary>
+    /// <param name="type">The exact type symbol.</param>
+    /// <returns>The reference.</returns>
+    internal TypeReference Import(TypeSymbol type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        switch (type.Kind)
+        {
+            case TypeSymbolKind.Constructed:
+            {
+                var instance = new GenericInstanceType(Import(type.Element!));
+                foreach (var argument in type.Arguments)
+                {
+                    instance.GenericArguments.Add(Import(argument));
+                }
+
+                return instance;
+            }
+            case TypeSymbolKind.SzArray:
+                return new ArrayType(Import(type.Element!));
+            case TypeSymbolKind.Array:
+                return SignatureFixups.Array(Import(type.Element!), type.Rank, type.Sizes, type.LowerBounds);
+            case TypeSymbolKind.ByRef:
+                return new ByReferenceType(Import(type.Element!));
+            case TypeSymbolKind.Pointer:
+                return new PointerType(Import(type.Element!));
+            case TypeSymbolKind.Modified:
+                return type.IsRequired
+                    ? new RequiredModifierType(Import(type.Modifier!), Import(type.Element!))
+                    : new OptionalModifierType(Import(type.Modifier!), Import(type.Element!));
+            case TypeSymbolKind.Pinned:
+                return new PinnedType(Import(type.Element!));
+            case TypeSymbolKind.FunctionPointer:
+                return ImportFunctionPointer(type.Signature!);
+            case TypeSymbolKind.Unresolved:
+                throw new ReplException($"could not resolve {type.Name} in a member signature");
+            default:
+                return Import(RuntimeBindingAdapter.Materialize(type));
+        }
+    }
+
+    internal TypeReference ImportSignature(
+        Type type,
+        TypeSymbol? exact,
+        IReadOnlyList<Type> required,
+        IReadOnlyList<Type> optional)
+    {
+        return exact is null ? WithModifiers(Import(type), required, optional) : Import(exact);
+    }
+
+    private FunctionPointerType ImportFunctionPointer(MethodSignatureSymbol signature)
+    {
+        var pointer = new FunctionPointerType
+        {
+            CallingConvention = FunctionPointerCallingConvention(signature),
+            HasThis = signature.HasThis,
+            ExplicitThis = signature.ExplicitThis,
+            ReturnType = Import(signature.ReturnType),
+        };
+        for (var index = 0; index < signature.Parameters.Count; index++)
+        {
+            var parameter = Import(signature.Parameters[index]);
+            if (signature.SentinelIndex == index)
+            {
+                parameter = new SentinelType(parameter);
+            }
+
+            pointer.Parameters.Add(new ParameterDefinition(parameter));
+        }
+
+        return pointer;
+    }
+
+    private static MethodCallingConvention FunctionPointerCallingConvention(MethodSignatureSymbol signature)
+    {
+        if (!signature.IsUnmanaged)
+        {
+            return signature.IsVarArg ? MethodCallingConvention.VarArg : MethodCallingConvention.Default;
+        }
+
+        return signature.UnmanagedConvention switch
+        {
+            System.Runtime.InteropServices.CallingConvention.Cdecl => MethodCallingConvention.C,
+            System.Runtime.InteropServices.CallingConvention.StdCall => MethodCallingConvention.StdCall,
+            System.Runtime.InteropServices.CallingConvention.ThisCall => MethodCallingConvention.ThisCall,
+            System.Runtime.InteropServices.CallingConvention.FastCall => MethodCallingConvention.FastCall,
+            _ => MethodCallingConvention.Unmanaged,
+        };
+    }
+
+    /// <summary>
     /// Restores the metadata spelling of every name in an imported reference. Reflection escapes
     /// the characters its own name grammar reserves, a backslash as <c>\\\\</c> and a comma as
     /// <c>\\,</c>, and Cecil's importer copies that spelling, which names a type that does not exist.
@@ -327,10 +419,18 @@ public sealed class CecilWriter
         _externalMethod = reference;
         try
         {
-            reference.ReturnType = WithModifiers(Import(signature.ReturnType), signature.ReturnRequiredModifiers, signature.ReturnOptionalModifiers);
+            reference.ReturnType = ImportSignature(
+                signature.ReturnType,
+                signature.ExactReturnType,
+                signature.ReturnRequiredModifiers,
+                signature.ReturnOptionalModifiers);
             foreach (var parameter in signature.Parameters)
             {
-                reference.Parameters.Add(new ParameterDefinition(WithModifiers(Import(parameter.Type), parameter.RequiredModifiers, parameter.OptionalModifiers)));
+                reference.Parameters.Add(new ParameterDefinition(ImportSignature(
+                    parameter.Type,
+                    parameter.ExactType,
+                    parameter.RequiredModifiers,
+                    parameter.OptionalModifiers)));
             }
         }
         finally
@@ -409,8 +509,11 @@ public sealed class CecilWriter
             var declaration = external!.Members.FindField(field.Name)?.Declaration
                 ?? throw new ReplException($"{external.Name} declares no field {field.Name}");
             var externalDefinitionReference = Import(externalDefinition!);
-            var fieldType = Import(declaration.Type);
-            fieldType = WithModifiers(fieldType, declaration.RequiredModifiers, declaration.OptionalModifiers);
+            var fieldType = ImportSignature(
+                declaration.Type,
+                declaration.ExactType,
+                declaration.RequiredModifiers,
+                declaration.OptionalModifiers);
             _ = externalDefinitionReference;
             return new FieldReference(field.Name, fieldType, Import(field.DeclaringType!));
         }
@@ -492,6 +595,56 @@ public sealed class CecilWriter
         }
 
         return Import(method);
+    }
+
+    /// <summary>
+    /// Imports a session entry point using the exact signature retained by its declaration.
+    /// </summary>
+    internal MethodReference Import(MethodBase method, MethodSignature signature)
+    {
+        ArgumentNullException.ThrowIfNull(method);
+        ArgumentNullException.ThrowIfNull(signature);
+        if (_definedMethods.TryGetValue(method, out var defined))
+        {
+            return defined;
+        }
+
+        var reference = new MethodReference(signature.Name, Module.TypeSystem.Void, Import(method.DeclaringType!))
+        {
+            HasThis = !signature.IsStatic,
+            ExplicitThis = signature.CallingConvention.HasFlag(CallingConventions.ExplicitThis),
+            CallingConvention = signature.CallingConvention.HasFlag(CallingConventions.VarArgs)
+                ? MethodCallingConvention.VarArg : MethodCallingConvention.Default,
+        };
+        foreach (var parameter in signature.TypeParameters)
+        {
+            reference.GenericParameters.Add(new GenericParameter(parameter.Name, reference));
+        }
+
+        var outer = _externalMethod;
+        _externalMethod = reference;
+        try
+        {
+            reference.ReturnType = ImportSignature(
+                signature.ReturnType,
+                signature.ExactReturnType,
+                signature.ReturnRequiredModifiers,
+                signature.ReturnOptionalModifiers);
+            foreach (var parameter in signature.Parameters)
+            {
+                reference.Parameters.Add(new ParameterDefinition(ImportSignature(
+                    parameter.Type,
+                    parameter.ExactType,
+                    parameter.RequiredModifiers,
+                    parameter.OptionalModifiers)));
+            }
+        }
+        finally
+        {
+            _externalMethod = outer;
+        }
+
+        return reference;
     }
 
     /// <summary>
@@ -655,6 +808,13 @@ public sealed class CecilWriter
         return type;
     }
 
+    private readonly Dictionary<MethodDefinition, int> _stackLimits = [];
+
+    /// <summary>
+    /// Records the control-flow stack bound for the serialized method header.
+    /// </summary>
+    internal void SetStackLimit(MethodDefinition method, int limit) => _stackLimits[method] = limit;
+
     /// <summary>
     /// Writes the assembly to an image.
     /// </summary>
@@ -665,6 +825,7 @@ public sealed class CecilWriter
         Assembly.Write(stream);
         var image = stream.ToArray();
         SignatureFixups.Apply(image);
+        CecilStackHeaders.Apply(image, _stackLimits);
         return image;
     }
 

@@ -16,6 +16,9 @@ public sealed class InProcessEngine : IReplEngine
     private readonly CancellationTokenSource _warmupCancellation = new();
     private readonly Task _warmup;
     private bool _disposed;
+    private readonly Lock _analysisLock = new();
+    private readonly HashSet<Task> _analyses = [];
+    private AnalyzedDocument? _analysisCache;
 
     /// <summary>
     /// Initializes an engine over a new session.
@@ -50,6 +53,71 @@ public sealed class InProcessEngine : IReplEngine
     public long AssemblyVersion => ProcessAssemblies.Version;
 
     /// <inheritdoc/>
+    public Task<AnalysisReply> AnalyzeAsync(AnalysisRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentOutOfRangeException.ThrowIfNegative(request.Line);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(request.Line, request.Lines.Count);
+        request = request with { Lines = [.. request.Lines] };
+        Task<AnalysisReply> analysis;
+        lock (_analysisLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            analysis = AnalyzeCoreAsync(request, cancellationToken);
+            _analyses.Add(analysis);
+        }
+
+        _ = analysis.ContinueWith(RemoveAnalysis, CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return analysis;
+    }
+
+    private async Task<AnalysisReply> AnalyzeCoreAsync(AnalysisRequest request, CancellationToken cancellationToken)
+    {
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
+        await Task.Yield();
+        await _gate.WaitAsync(cancellation.Token).ConfigureAwait(false);
+        EditingSeed seed;
+        long version;
+        try
+        {
+            version = AssemblyVersion;
+            lock (_analysisLock)
+            {
+                if (_analysisCache is { } cached && cached.Reply.Revision == _core.Status.Revision
+                    && cached.Reply.AssemblyVersion == version && cached.Lines.SequenceEqual(request.Lines))
+                {
+                    return cached.At(request);
+                }
+            }
+
+            seed = _core.Session.CaptureEditingSeed();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        using var editing = new EditingSession(seed);
+        var reply = await editing.AnalyzeAsync(request, cancellation.Token).ConfigureAwait(false);
+        reply = reply with { AssemblyVersion = version };
+        lock (_analysisLock)
+        {
+            _analysisCache = !_disposed && editing.AnalyzedDocument is { } document ? document with { Reply = reply } : null;
+        }
+
+        return reply;
+    }
+
+    private void RemoveAnalysis(Task analysis)
+    {
+        lock (_analysisLock)
+        {
+            _analyses.Remove(analysis);
+        }
+    }
+
+    /// <inheritdoc/>
     public async Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -58,7 +126,14 @@ public sealed class InProcessEngine : IReplEngine
     }
 
     /// <inheritdoc />
-    public async Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
+    public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken) =>
+        HandleLineAsync(line, null, cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<HandleReply> HandleSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken) =>
+        HandleLineAsync(line, location, cancellationToken);
+
+    private async Task<HandleReply> HandleLineAsync(string line, AnalysisLocation? location, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(line);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -68,7 +143,7 @@ public sealed class InProcessEngine : IReplEngine
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Reply(_core.Handle(line));
+            return Reply(_core.Handle(line, location));
         }
         finally
         {
@@ -136,7 +211,7 @@ public sealed class InProcessEngine : IReplEngine
         var lines = _core.Transcript.Lines.ToArray();
         _core.Transcript.Clear();
         Status = _core.Status;
-        return new HandleReply(result.Succeeded, result.QuitRequested, lines, Status);
+        return new HandleReply(result.Succeeded, result.QuitRequested, lines, Status) { Diagnostics = result.Diagnostics };
     }
 
     private async Task WarmAsync()
@@ -173,14 +248,27 @@ public sealed class InProcessEngine : IReplEngine
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        if (_disposed)
+        Task[] analyses;
+        lock (_analysisLock)
         {
-            return;
-        }
+            if (_disposed)
+            {
+                return;
+            }
 
-        _disposed = true;
+            _disposed = true;
+            _analysisCache = null;
+            analyses = [.. _analyses];
+        }
         _core.Session.CompletionChanged -= CancelWarmup;
         await _shutdown.CancelAsync().ConfigureAwait(false);
+        try
+        {
+            await Task.WhenAll(analyses).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_shutdown.IsCancellationRequested)
+        {
+        }
         await _warmupCancellation.CancelAsync().ConfigureAwait(false);
         await _warmup.ConfigureAwait(false);
         await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);

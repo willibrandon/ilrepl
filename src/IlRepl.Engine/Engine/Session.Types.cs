@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Reflection.Emit;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -323,7 +324,9 @@ public sealed partial class Session
                 }
             }
 
-            parameters.Add(new GenericParameterDeclaration(parameterSpec.Name, parameterSpec.Attributes, constraints));
+            var declared = new GenericParameterDeclaration(parameterSpec.Name, parameterSpec.Attributes, constraints);
+            RuntimeGenericConstraints.Register(gp, declared);
+            parameters.Add(declared);
         }
 
         var block = new OpenTypeBlock
@@ -630,7 +633,10 @@ public sealed partial class Session
     private LineResult AddField(OpenTypeBlock block, string rest, string line)
     {
         var field = FieldDeclarationParser.Parse(rest, TypeContext(block), line);
-        MemberAccess.CheckType(field.Type, block.Scope, _typeTable);
+        foreach (var type in FieldTypes(field))
+        {
+            MemberAccess.CheckType(type, block.Scope, _typeTable);
+        }
         if (block.Fields.Any(f => f.Name == field.Name))
         {
             throw new ReplException($"field {field.Name} is already declared on {block.Path}");
@@ -731,7 +737,7 @@ public sealed partial class Session
         var context = TypeContext(block);
         var owner = block.Header with { Kind = block.Kind, Attributes = block.Header.Attributes };
         var signature = MethodHeaderParser.ParseMember(rest, context, owner, out var braceOpen, out var closes, out var throwaway);
-        foreach (var mentioned in signature.ParameterTypes.Append(signature.ReturnType))
+        foreach (var mentioned in SignatureTypes(signature))
         {
             MemberAccess.CheckType(mentioned, block.Scope, context.Types);
         }
@@ -769,11 +775,11 @@ public sealed partial class Session
             methodGenerics = generic.DefineGenericParameters([.. signature.TypeParameters.Select(p => p.Name)]);
             signature = MethodHeaderParser.ParseMember(rest, context, owner, out _, out _, out _, _ => methodGenerics);
             generic.SetSignature(signature.ReturnType, [.. signature.ReturnRequiredModifiers], [.. signature.ReturnOptionalModifiers], signature.ParameterTypes, [.. signature.Parameters.Select(p => p.RequiredModifiers.ToArray())], [.. signature.Parameters.Select(p => p.OptionalModifiers.ToArray())]);
-            generic.SetImplementationFlags(signature.ImplAttributes);
             for (var i = 0; i < methodGenerics.Length; i++)
             {
                 var gp = (GenericTypeParameterBuilder)methodGenerics[i];
                 var declared = signature.TypeParameters[i];
+                RuntimeGenericConstraints.Register(gp, declared);
                 gp.SetGenericParameterAttributes(declared.Attributes);
                 var baseConstraint = declared.Constraints.FirstOrDefault(c => !c.IsInterface && !c.IsGenericParameter);
                 if (baseConstraint is not null)
@@ -788,6 +794,7 @@ public sealed partial class Session
                 }
             }
 
+            generic.SetImplementationFlags(signature.ImplAttributes);
             builder = generic;
         }
         else
@@ -901,8 +908,13 @@ public sealed partial class Session
         if (directive == ".property")
         {
             var header = PropertyEventParser.ParseProperty(rest, context);
-            if (block.Accessors.Any(a => a.Property is { } existing && existing.Name == header.Name && existing.IsStatic == header.IsStatic && TypeIdentity.Equal(existing.Type, header.Type)
-                && existing.ParameterTypes.Count == header.ParameterTypes.Count && existing.ParameterTypes.Zip(header.ParameterTypes).All(p => TypeIdentity.Equal(p.First, p.Second))))
+            if (block.Accessors.Any(a => a.Property is { } existing && existing.Name == header.Name
+                && existing.IsStatic == header.IsStatic
+                && PropertyTypeEqual(existing.Type, existing.ExactType, header.Type, header.ExactType)
+                && existing.ParameterTypes.Count == header.ParameterTypes.Count
+                && existing.ParameterTypes.Select((type, index) => (type, index)).All(item => PropertyTypeEqual(
+                    item.type, existing.ExactParameterTypes.ElementAtOrDefault(item.index), header.ParameterTypes[item.index],
+                    header.ExactParameterTypes.ElementAtOrDefault(item.index)))))
             {
                 throw new ReplException($"property {header.Name} is already declared on {block.Path}");
             }
@@ -1025,9 +1037,12 @@ public sealed partial class Session
             MethodDeclaration Find(AccessorReference reference)
             {
                 var match = block.Methods.FirstOrDefault(m => m.Name == reference.Name && m.IsStatic == reference.IsStatic
-                    && TypeIdentity.Equal(m.Signature.ReturnType, reference.ReturnType)
+                    && PropertyTypeEqual(m.Signature.ReturnType, m.Signature.ExactReturnType,
+                        reference.ReturnType, reference.ExactReturnType)
                     && m.Signature.Parameters.Count == reference.ParameterTypes.Count
-                    && m.Signature.ParameterTypes.Zip(reference.ParameterTypes).All(p => TypeIdentity.Equal(p.First, p.Second)));
+                    && m.Signature.Parameters.Select((parameter, index) => (parameter, index)).All(item => PropertyTypeEqual(
+                        item.parameter.Type, item.parameter.ExactType, reference.ParameterTypes[item.index],
+                        reference.ExactParameterTypes.ElementAtOrDefault(item.index))));
                 return match ?? throw new ReplException($"{pending.Word} {pending.Name} names .{reference.Kind} {reference.Name}({string.Join(", ", reference.ParameterTypes.Select(TypeNameFormatter.Pretty))}), which {block.Path} does not declare");
             }
 
@@ -1036,8 +1051,13 @@ public sealed partial class Session
                 var getter = pending.Accessors.FirstOrDefault(a => a.Kind == "get");
                 var setter = pending.Accessors.FirstOrDefault(a => a.Kind == "set");
                 var others = pending.Accessors.Where(a => a.Kind == "other").Select(Find).ToList();
-                properties.Add(new PropertyDeclaration(property.Name, property.Type, property.ParameterTypes, property.IsStatic, property.Attributes,
-                    getter is null ? null : Find(getter), setter is null ? null : Find(setter), others, null, false, [.. pending.CustomAttributes], pending.HeaderLine, [.. pending.Lines]));
+                properties.Add(new PropertyDeclaration(property.Name, property.Type, property.ParameterTypes, property.IsStatic,
+                    property.Attributes, getter is null ? null : Find(getter), setter is null ? null : Find(setter), others,
+                    null, false, [.. pending.CustomAttributes], pending.HeaderLine, [.. pending.Lines])
+                {
+                    ExactType = property.ExactType,
+                    ExactParameterTypes = property.ExactParameterTypes,
+                });
             }
             else
             {
@@ -1045,19 +1065,21 @@ public sealed partial class Session
                 var add = pending.Accessors.FirstOrDefault(a => a.Kind == "addon") ?? throw new ReplException($"event {evt.Name} needs .addon and .removeon");
                 var remove = pending.Accessors.FirstOrDefault(a => a.Kind == "removeon") ?? throw new ReplException($"event {evt.Name} needs .addon and .removeon");
                 var fire = pending.Accessors.FirstOrDefault(a => a.Kind == "fire");
-                events.Add(new EventDeclaration(evt.Name, evt.HandlerType, evt.Attributes, Find(add), Find(remove), fire is null ? null : Find(fire), [.. pending.CustomAttributes], pending.HeaderLine, [.. pending.Lines]));
+                events.Add(new EventDeclaration(evt.Name, evt.HandlerType, evt.Attributes, Find(add), Find(remove),
+                    fire is null ? null : Find(fire), [.. pending.CustomAttributes], pending.HeaderLine, [.. pending.Lines])
+                {
+                    ExactHandlerType = evt.ExactHandlerType,
+                });
             }
         }
 
         foreach (var over in block.Overrides)
         {
-            var found = block.Methods.Any(m => m.Name == over.BodyName && m.IsStatic == over.BodyIsStatic
-                && TypeIdentity.Equal(m.Signature.ReturnType, over.BodyReturnType)
-                && m.Signature.Parameters.Count == over.BodyParameterTypes.Count
-                && m.Signature.ParameterTypes.Zip(over.BodyParameterTypes).All(p => TypeIdentity.Equal(p.First, p.Second)));
+            var found = block.Methods.Any(method => over.Matches(method.Signature));
             if (!found)
             {
-                throw new ReplException($".override {over.TargetDescription} names {(over.BodyIsStatic ? "static" : "instance")} {TypeNameFormatter.Pretty(over.BodyReturnType)} {over.BodyName}({string.Join(", ", over.BodyParameterTypes.Select(TypeNameFormatter.Pretty))}), which {block.Path} does not declare");
+                throw new ReplException(
+                    $".override {over.TargetDescription} names {over.DescribeBody()}, which {block.Path} does not declare");
             }
         }
 
@@ -1246,8 +1268,8 @@ public sealed partial class Session
             _methods,
             family => family.Types.Values.Concat(family.Prototypes.Values.Select(p => (Type)p.Prototype)),
             (family, types, methods) => FamilyMentions(family.Declaration, types, methods),
-            (method, types, methods) => BodyMentions(method.State, types, methods) || method.Signature.ParameterTypes.Append(
-                method.Signature.ReturnType).Any(t => Mentions(t, types)),
+            (method, types, methods) => BodyMentions(method.State, types, methods)
+                || SignatureTypes(method.Signature).Any(type => Mentions(type, types)),
             method => method.Signature.Name,
             ReferenceEqualityComparer.Instance);
         return ([.. closure.Families], [.. closure.Methods]);
@@ -1270,20 +1292,26 @@ public sealed partial class Session
 
             declared.AddRange(declaration.Interfaces);
             declared.AddRange(declaration.TypeParameters.SelectMany(p => p.Constraints));
-            declared.AddRange(declaration.Fields.Select(f => f.Type));
+            declared.AddRange(declaration.Fields.SelectMany(FieldTypes));
             declared.AddRange(declaration.Fields.SelectMany(f => f.RequiredModifiers.Concat(f.OptionalModifiers)));
             declared.AddRange(declaration.Properties.Select(p => p.Type));
+            declared.AddRange(declaration.Properties.SelectMany(p => p.ParameterTypes));
+            declared.AddRange(declaration.Properties.SelectMany(p => p.ExactType is null
+                ? [] : RuntimeSymbolTypes.Materialized(p.ExactType)));
+            declared.AddRange(declaration.Properties.SelectMany(p => p.ExactParameterTypes.Where(type => type is not null)
+                .SelectMany(type => RuntimeSymbolTypes.Materialized(type!))));
             declared.AddRange(declaration.Events.Select(e => e.HandlerType));
+            declared.AddRange(declaration.Events.SelectMany(evt => evt.ExactHandlerType is null
+                ? [] : RuntimeSymbolTypes.Materialized(evt.ExactHandlerType)));
             declared.AddRange(AttributeMentions(declaration.CustomAttributes));
             declared.AddRange(declaration.Fields.SelectMany(f => AttributeMentions(f.CustomAttributes)));
             declared.AddRange(declaration.Properties.SelectMany(p => AttributeMentions(p.CustomAttributes)));
             declared.AddRange(declaration.Events.SelectMany(e => AttributeMentions(e.CustomAttributes)));
-            declared.AddRange(declaration.Overrides.Select(o => o.Target.DeclaringType!));
+            declared.AddRange(declaration.Overrides.SelectMany(ClassOverrideTypes));
             foreach (var method in declaration.Methods)
             {
-                declared.Add(method.Signature.ReturnType);
+                declared.AddRange(SignatureTypes(method.Signature));
                 declared.AddRange(method.Signature.ReturnRequiredModifiers.Concat(method.Signature.ReturnOptionalModifiers));
-                declared.AddRange(method.Signature.ParameterTypes);
                 declared.AddRange(method.Signature.Parameters.SelectMany(p => p.RequiredModifiers.Concat(p.OptionalModifiers)));
                 declared.AddRange(method.Signature.TypeParameters.SelectMany(p => p.Constraints));
                 declared.AddRange(method.Overrides.Select(o => o.Target.DeclaringType!));
@@ -1302,6 +1330,9 @@ public sealed partial class Session
             }
         }
     }
+
+    private static bool PropertyTypeEqual(Type first, TypeSymbol? firstExact, Type second, TypeSymbol? secondExact) =>
+        SymbolIdentity.Equal(firstExact ?? RuntimeSymbolImporter.Import(first), secondExact ?? RuntimeSymbolImporter.Import(second));
 
     /// <summary>
     /// The types an attribute mentions: its own type and every Type among its arguments.
@@ -1357,6 +1388,12 @@ public sealed partial class Session
                 return false;
             }
 
+            if (TypeNameFormatter.IsFunctionPointer(type))
+            {
+                return Mentions(type.GetFunctionPointerReturnType(), types)
+                    || type.GetFunctionPointerParameterTypes().Any(parameter => Mentions(parameter, types));
+            }
+
             if (type.IsConstructedGenericType && type.GetGenericArguments().Any(a => Mentions(a, types)))
             {
                 return true;
@@ -1366,6 +1403,88 @@ public sealed partial class Session
         }
 
         return false;
+    }
+
+    private static IEnumerable<Type> FieldTypes(FieldDeclaration field)
+    {
+        yield return field.Type;
+        foreach (var modifier in field.RequiredModifiers.Concat(field.OptionalModifiers))
+        {
+            yield return modifier;
+        }
+
+        if (field.ExactType is not null)
+        {
+            foreach (var type in RuntimeSymbolTypes.Materialized(field.ExactType))
+            {
+                yield return type;
+            }
+        }
+    }
+
+    private static IEnumerable<Type> SignatureTypes(MethodSignature signature)
+    {
+        yield return signature.ReturnType;
+        foreach (var modifier in signature.ReturnRequiredModifiers.Concat(signature.ReturnOptionalModifiers))
+        {
+            yield return modifier;
+        }
+
+        if (signature.ExactReturnType is not null)
+        {
+            foreach (var type in RuntimeSymbolTypes.Materialized(signature.ExactReturnType))
+            {
+                yield return type;
+            }
+        }
+
+        foreach (var parameter in signature.Parameters)
+        {
+            yield return parameter.Type;
+            foreach (var modifier in parameter.RequiredModifiers.Concat(parameter.OptionalModifiers))
+            {
+                yield return modifier;
+            }
+
+            if (parameter.ExactType is not null)
+            {
+                foreach (var type in RuntimeSymbolTypes.Materialized(parameter.ExactType))
+                {
+                    yield return type;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<Type> ClassOverrideTypes(ClassOverrideDeclaration declaration)
+    {
+        yield return declaration.Target.DeclaringType!;
+        yield return declaration.BodyReturnType;
+        foreach (var type in declaration.BodyParameterTypes)
+        {
+            yield return type;
+        }
+
+        if (declaration.ExactBodyReturnType is not null)
+        {
+            foreach (var type in RuntimeSymbolTypes.Materialized(declaration.ExactBodyReturnType))
+            {
+                yield return type;
+            }
+        }
+
+        foreach (var exact in declaration.ExactBodyParameterTypes)
+        {
+            if (exact is null)
+            {
+                continue;
+            }
+
+            foreach (var type in RuntimeSymbolTypes.Materialized(exact))
+            {
+                yield return type;
+            }
+        }
     }
 
     private bool UndoTypeLine()

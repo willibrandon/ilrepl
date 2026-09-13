@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using IlRepl.Protocol;
 
 namespace IlRepl.Engine.Binding;
 
@@ -105,7 +106,6 @@ public sealed partial class EditingSession
         {
             var scope = Scope();
             var instruction = SymbolBinder.BindInstruction(CilSyntaxParser.ParseInstruction(rest), scope);
-            var retPops = 0;
             if (instruction.Op == OpCodes.Ret)
             {
                 if (body.Frames.Count > 0)
@@ -113,14 +113,21 @@ public sealed partial class EditingSession
                     throw new ReplException("ret is not allowed inside a protected region; use leave to a label after it");
                 }
 
-                ValidateReturn(body, scope);
-                retPops = body.Stack.Items.Count;
             }
 
             CheckInstruction(instruction, body, scope);
-            body.Stack.Apply(instruction, scope, retPops);
+            AddFlowNode(body, new FlowNode<TypeSymbol>(FlowLocation(body, text), text)
+            {
+                Instruction = FlowView(instruction, body, scope),
+                Labels = labels,
+                Targets = instruction.Operand.Kind switch
+                {
+                    OperandKind.Label => [(string)instruction.Operand.Value!],
+                    OperandKind.Labels => ((IEnumerable<string>)instruction.Operand.Value!).ToArray(),
+                    _ => [],
+                },
+            }, scope);
             body.Instructions.Add(instruction);
-            body.EndsFlow = InstructionFlow.EndsPath(instruction.Op);
             if (instruction.Operand is { Kind: OperandKind.Label, Value: string target })
             {
                 body.ReferencedLabels.Add(target);
@@ -134,7 +141,7 @@ public sealed partial class EditingSession
         }
         else
         {
-            body.EndsFlow = false;
+            AddFlowNode(body, new FlowNode<TypeSymbol>(FlowLocation(body, text), text) { Labels = labels }, Scope());
         }
 
         body.Labels.UnionWith(labels);
@@ -162,16 +169,45 @@ public sealed partial class EditingSession
             body.Frames[^1] = transition.Kind;
         }
 
-        body.Stack.Clear();
-        if (transition.Kind is BlockKind.Catch or BlockKind.Filter or BlockKind.FilterHandler)
+        AddFlowNode(body, new FlowNode<TypeSymbol>(FlowLocation(body, text), text)
         {
-            body.Stack.Push(caught ?? TypeSymbol.Object);
-        }
-
-        body.EndsFlow = false;
+            Block = transition.Kind,
+            CatchType = caught,
+        }, Scope());
         body.RegionBracePending = transition.Kind != BlockKind.End;
         body.ParameterTarget = null;
         body.Lines.Add(text);
+    }
+
+    private static StackOperandView<TypeSymbol> FlowView(BoundInstruction instruction, EditingBody body, IBindingScope scope)
+    {
+        var view = EditingStack.View(instruction, scope);
+        if (instruction.Operand.Method is { } called && body.Signature is { } current)
+        {
+            view = view with { MethodIsCurrentDefinition = called.Method.Definition == current.Definition };
+        }
+
+        if (instruction.Op == OpCodes.Jmp && instruction.Operand.Method is { } jump)
+        {
+            view = view with
+            {
+                JumpRestriction = JumpCompatibility.Problem(jump.Method, body.Signature, body.Arguments,
+                    body.Generics.MethodArguments, body.IsVarArg, scope),
+            };
+        }
+
+        if (instruction.Operand.Field is not { IsInitOnly: true } field || instruction.Op.Name is not ("stfld" or "stsfld"))
+        {
+            return view;
+        }
+
+        return view with
+        {
+            StoreRestriction = InstructionMemberRules.InitOnlyStoreProblem(field, instruction.Op.Name,
+                body.Signature, body.Access.Type, true, scope.Pretty),
+            ReceiverRestriction = InstructionMemberRules.InitOnlyStoreProblem(field, instruction.Op.Name,
+                body.Signature, body.Access.Type, false, scope.Pretty),
+        };
     }
 
     private static void CheckInstruction(BoundInstruction instruction, EditingBody body, SnapshotBindingScope scope)
@@ -179,12 +215,15 @@ public sealed partial class EditingSession
         var operand = instruction.Operand;
         var facts = AccessFacts.From(scope);
         var problem = operand.Type is { } type
-            ? MemberEligibility.TypeVerdict(type, scope.Access, facts)
+            ? MemberEligibility.TypeVerdict(operand.ExactType ?? type, scope.Access, facts)
             : operand.Field is { } field
-                ? MemberEligibility.TypeVerdict(field.FieldType, scope.Access, facts)
+                ? MemberEligibility.TypeVerdict(field.ExactType ?? field.FieldType, scope.Access, facts)
                     ?? MemberEligibility.FieldVerdict(field, scope.Access, facts)
                 : operand.Method is { } method
-                    ? MemberEligibility.MethodVerdict(method.Method, scope.Access, facts) : null;
+                    ? MemberEligibility.MethodVerdict(method.Method, scope.Access, facts,
+                        exactGenericArguments: method.ExactGenericArguments,
+                        exactOptionalParameterTypes: method.ExactOptionalParameterTypes)
+                    : operand.Signature is { } signature ? CalliSignatureVerdict(signature, scope, facts) : null;
         if (problem is not null)
         {
             throw new ReplException(problem);
@@ -201,16 +240,6 @@ public sealed partial class EditingSession
             throw new ReplException($"{literal.Name} is a literal; it has no storage, so {instruction.Op.Name} would fail");
         }
 
-        if (operand.Field is { IsInitOnly: true } readOnly && instruction.Op.Name is "stsfld" or "stfld")
-        {
-            var storeProblem = InstructionMemberRules.InitOnlyStoreProblem(readOnly, instruction.Op.Name,
-                body.Signature, body.Access.Type, body.Stack.IsThisAt(body.Stack.Items.Count - 2), scope.Pretty);
-            if (storeProblem is not null)
-            {
-                throw new ReplException(storeProblem);
-            }
-        }
-
         if (instruction.Op == OpCodes.Arglist && !body.IsVarArg)
         {
             throw new ReplException("arglist needs a vararg cell; add the .vararg directive first");
@@ -222,8 +251,31 @@ public sealed partial class EditingSession
         }
     }
 
+    private static string? CalliSignatureVerdict(MethodSignatureSymbol signature, SnapshotBindingScope scope, AccessFacts facts)
+    {
+        if (MemberEligibility.TypeVerdict(signature.ReturnType, scope.Access, facts) is { } returnProblem)
+        {
+            return returnProblem;
+        }
+
+        foreach (var parameter in signature.Parameters)
+        {
+            if (MemberEligibility.TypeVerdict(parameter, scope.Access, facts) is { } parameterProblem)
+            {
+                return parameterProblem;
+            }
+        }
+
+        return null;
+    }
+
     private static void ValidateReturn(EditingBody body, IBindingScope scope)
     {
+        if (body.Analysis?.Diagnostics.FirstOrDefault(d => d.Kind == AnalysisDiagnosticKind.Error) is { } error)
+        {
+            throw new ReplException(error.Message);
+        }
+
         var count = body.Stack.Items.Count;
         if (body.Signature is not { } signature)
         {
@@ -237,7 +289,7 @@ public sealed partial class EditingSession
 
         var returnsVoid = SymbolIdentity.Equal(signature.ReturnType, TypeSymbol.Void);
         if (count != (returnsVoid ? 0 : 1)
-            || (!returnsVoid && !SymbolStackCompatibility.CanReturn(body.Stack.Items[^1], signature.ReturnType, scope)))
+            || (!returnsVoid && !SymbolFlowAnalysis.Rules(scope).CanAssign(body.Stack.Items[^1], signature.ReturnType)))
         {
             throw new ReplException(
                 $"method {signature.Name} returns {SymbolRenderer.Pretty(signature.ReturnType)}; the stack holds {body.Stack.Render()}");
@@ -245,6 +297,40 @@ public sealed partial class EditingSession
     }
 
     private TypeSymbol BindType(string text) => SymbolBinder.BindType(CilSyntaxParser.ParseType(text), Scope()).Type;
+
+    private AnalysisLocation FlowLocation(EditingBody body, string text)
+    {
+        if (_replayLocation is { } location)
+        {
+            return location;
+        }
+
+        var start = _documentRaw.Length - _documentRaw.TrimStart().Length;
+        return new AnalysisLocation(body.LabelSpace.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            _documentLine, start, _documentLine < 0 ? text.Length : _documentRaw.TrimEnd().Length - start);
+    }
+
+    private void AddFlowNode(EditingBody body, FlowNode<TypeSymbol> node, IBindingScope scope)
+    {
+        body.FlowNodes.Add(node);
+        if (_analyzingDocument)
+        {
+            body.Analysis = null;
+            _analysisBodies[body.AnalysisIdentity] = body;
+            return;
+        }
+
+        var analysis = SymbolFlowAnalysis.Run(body, scope);
+        if (analysis.Diagnostics.FirstOrDefault(d => d.Kind == AnalysisDiagnosticKind.Error) is { } error)
+        {
+            body.FlowNodes.RemoveAt(body.FlowNodes.Count - 1);
+            throw new ReplException(error.Message);
+        }
+
+        body.Analysis = analysis;
+        body.Stack.CopyFrom(analysis.After[body.FlowNodes.Count - 1]);
+        body.EndsFlow = analysis.End is null;
+    }
 
     private static bool IsDirective(string text, string directive) => text.StartsWith(directive, StringComparison.Ordinal)
         && (text.Length == directive.Length || char.IsWhiteSpace(text[directive.Length]));

@@ -1,4 +1,5 @@
 using System.Reflection;
+using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
@@ -17,4 +18,15 @@ public sealed record PropertyHeader(
     IReadOnlyList<Type> ParameterTypes,
     bool IsStatic,
     PropertyAttributes Attributes,
-    bool OpensBlock);
+    bool OpensBlock)
+{
+    /// <summary>
+    /// The complete property type when annotations cannot be represented by <see cref="Type"/>.
+    /// </summary>
+    internal TypeSymbol? ExactType { get; init; }
+
+    /// <summary>
+    /// The complete index parameter types, with null where <see cref="ParameterTypes"/> is exact.
+    /// </summary>
+    internal IReadOnlyList<TypeSymbol?> ExactParameterTypes { get; init; } = [];
+}

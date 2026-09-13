@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Reflection.Emit;
 
 namespace IlRepl.Engine.Binding;
 
@@ -69,7 +70,10 @@ public sealed partial class EditingSession
             body.ThisIndex = 0;
         }
 
-        body.Arguments.AddRange(method.Parameters.Select(parameter => new VariableSymbol(parameter.Type, parameter.Name, false)));
+        body.Arguments.AddRange(method.Parameters.Select(parameter => new VariableSymbol(parameter.Type, parameter.Name, false)
+        {
+            ExactType = parameter.ExactType,
+        }));
         _state.Method = body;
         if (closes)
         {
@@ -80,10 +84,21 @@ public sealed partial class EditingSession
     private void CloseMethod()
     {
         var body = _state.Method!;
-        RequireResolvedLabels(body);
-        if (!body.EndsFlow && body.Signature is not { IsAbstract: true })
+        if (_analyzingDocument && body.Signature is not { IsAbstract: true })
         {
-            ValidateReturn(body, Scope());
+            AddFlowNode(body, new FlowNode<TypeSymbol>(FlowLocation(body, "}"), "}")
+            {
+                Instruction = new StackOperandView<TypeSymbol> { Op = OpCodes.Ret },
+                Synthetic = true,
+            }, Scope());
+        }
+        else if (!_analyzingDocument)
+        {
+            RequireResolvedLabels(body);
+            if (!body.EndsFlow && body.Signature is not { IsAbstract: true })
+            {
+                ValidateReturn(body, Scope());
+            }
         }
 
         if (_state.OpenTypes.LastOrDefault() is { } owner)

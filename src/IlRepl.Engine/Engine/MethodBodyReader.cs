@@ -550,8 +550,7 @@ internal sealed class MethodBodyReader
             if (sessionMethod is not null)
             {
                 var signature = sessionMethod.Signature;
-                var text = $"{TypeNameFormatter.IlAsm(signature.ReturnType)} {TypeNameFormatter.IlAsmIdentifier(signature
-                    .Name)}({string.Join(", ", signature.ParameterTypes.Select(TypeNameFormatter.IlAsm))})";
+                var text = IlAsmRenderer.SessionMethodIlAsm(signature);
                 return (new ResolvedMethod(signature), text, false);
             }
         }

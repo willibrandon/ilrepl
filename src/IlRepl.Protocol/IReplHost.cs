@@ -34,12 +34,29 @@ public partial interface IReplHost
     Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Analyzes the unsent document against an independent session snapshot.
+    /// </summary>
+    /// <param name="request">The document and caret.</param>
+    /// <param name="cancellationToken">Cancels queued and active analysis.</param>
+    /// <returns>The source diagnostics and caret stack.</returns>
+    Task<AnalysisReply> AnalyzeAsync(AnalysisRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Handles one line: an instruction, a directive, a command, or an empty line that runs the cell.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>The transcript lines produced and the new status.</returns>
     Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Handles a submitted line while retaining its identity in the editor document.
+    /// </summary>
+    /// <param name="line">The submitted text.</param>
+    /// <param name="location">Its location in the submitting document.</param>
+    /// <param name="cancellationToken">Cancels the wait.</param>
+    /// <returns>The reply, including diagnostics on earlier source lines.</returns>
+    Task<HandleReply> HandleSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken);
 
     /// <summary>
     /// Withdraws input since a mark when no run, commit or destructive command has crossed that boundary.

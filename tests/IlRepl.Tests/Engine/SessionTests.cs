@@ -307,11 +307,12 @@ public sealed class SessionTests
     /// The runtime's rejection of a stack mismatch between branches is reported as a REPL error.
     /// </summary>
     [TestMethod]
-    public void Run_BranchStackMismatch_ReportsJitRejection()
+    public void Run_BranchStackMismatch_IsRefusedBeforeExecution()
     {
-        var session = Load("ldc.i4 0", "brfalse SKIP", "ldc.i4 1", "ldc.i4 2", "pop", "SKIP: pop");
-        var ex = Assert.ThrowsExactly<ReplException>(() => session.Run());
-        Assert.Contains("JIT rejected", ex.Message);
+        var session = Load("ldc.i4 0", "brfalse SKIP", "ldc.i4 1", "ldc.i4 2", "pop");
+        var ex = Assert.ThrowsExactly<ReplException>(() => session.AddLine("SKIP: pop"));
+        Assert.Contains("SKIP receives incompatible stacks", ex.Message);
+        Assert.AreEqual(0, session.CellsRun);
     }
 
     /// <summary>

@@ -157,7 +157,7 @@ public sealed class StackSimulatorTests
     }
 
     /// <summary>
-    /// ldind.ref through a byref or pointer yields the element type rather than object.
+    /// ldind.ref through a managed byref preserves its reference element type.
     /// </summary>
     [TestMethod]
     public void Apply_LdindRefOnByRef_PushesElementType()

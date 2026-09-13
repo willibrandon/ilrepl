@@ -78,11 +78,10 @@ locals, and labels and `.try` blocks work as they do in a cell. `ret` returns fr
 never runs the cell. The stack echo, `.show`, and the status bar describe the method while it is
 open.
 
-Closing the block completes the cell, so the next line starts a new one. Nothing runs: the method
-is emitted and prepared on the JIT before it is kept, which is how a branch that leaves the stack
-uneven is caught at `}` rather than at the first call. Anything already typed into the cell stays
-there. In the browser the runtime cannot prepare a method ahead of a call, so that check waits
-for the first call.
+Closing the block completes the cell, so the next line starts a new one. Nothing runs. Stack
+analysis checks every established path before the method is kept, on desktop and in the browser.
+Desktop runtime preparation adds a check for methods it can prepare; remaining runtime checks
+happen when called. Anything already typed into the cell stays there.
 
 A call names the method with nothing in front of it: `call int32 Fib(int32)`. The return type is
 optional, as it is for any member reference. The method is static, so `ldftn`, `calli`, and
@@ -158,39 +157,10 @@ il[6]> ret
   = 42 : int32
 ```
 
-A branch can leave different stack depths on two paths even when each typed line passes the
-linear stack check. Submit this block to see close-time validation:
-
-```cil
-.method void Bad() {
-  ldc.i4 0
-  brfalse SKIP
-  ldc.i4 1
-SKIP: pop
-  ret
-}
-```
-
-```ilrepl
-il[7]> .method void Bad() {
-  method void Bad()
-il[7]> ldc.i4 0
-  ┊ [int32]
-il[7]> brfalse SKIP
-  ┊ []
-il[7]> ldc.i4 1
-  ┊ [int32]
-il[7]> SKIP: pop
-  ┊ []
-il[7]> ret
-  ┊ []
-il[7]> }
-  error: the JIT rejected method Bad: Common Language Runtime detected an invalid program. (check .show for a stack mismatch between branches; the block is still open)
-  method Bad abandoned; the block is back in the editor
-```
-
-The desktop JIT rejects it at `}` and the terminal returns the block to the editor. In the
-browser this runtime validation happens on the first call instead.
+Branches are checked together. A label receiving `[]` on one path and `[int32]` on another
+produces a diagnostic naming both paths. A forward target remains incomplete while it is being
+written; it must be defined before the method closes. The editor and `.show` use the same analysis,
+including changes caused by a later backward branch. See [Cells and the stack](/usage/cells/).
 
 `.undo` takes back the last line of the block, and taking back the header abandons it. `.clear`
 inside a block abandons the method and leaves the cell alone. Neither advances the cell number.

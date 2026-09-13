@@ -17,6 +17,55 @@ public sealed class CellState
     private readonly HashSet<string> _definedLabels = new(StringComparer.Ordinal);
     private readonly List<BlockKind> _frames = [];
     private bool _braceSeen;
+    private FlowResult<Type>? _analysis;
+    private FlowResult<Type>? _analysisBeforeLine;
+    private AnalysisLocation? _currentLocation;
+
+    /// <summary>
+    /// The converged states for the current accepted entries.
+    /// </summary>
+    internal FlowResult<Type> Analysis => _analysis ??= RuntimeFlowAnalysis.Run(this, _entries);
+
+    /// <summary>
+    /// The latest control-flow findings for the accepted body.
+    /// </summary>
+    public IReadOnlyList<AnalysisDiagnostic> Diagnostics => Analysis.Diagnostics;
+
+    /// <summary>
+    /// The current stack presentation, including unreachable and unknown source positions.
+    /// </summary>
+    public string StackText => RuntimeFlowAnalysis.Rules(Types).Render(
+        _entries.Count > 0 ? Analysis.After[_entries.Count - 1] : Analysis.End);
+
+    /// <summary>
+    /// Reports whether the current entry is nested within an open finally or fault handler.
+    /// </summary>
+    internal bool HasOpenUnwindHandler => _frames.Any(frame => frame is BlockKind.Finally or BlockKind.Fault);
+
+    /// <summary>
+    /// Refuses a proven stack or control-transfer error before emission.
+    /// </summary>
+    internal void RequireValidFlow()
+    {
+        if (Analysis.Diagnostics.FirstOrDefault(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error) is { } error)
+        {
+            throw new ReplException(error.Message) { Diagnostics = [error] };
+        }
+    }
+
+    /// <summary>
+    /// Requires valid flow with every referenced target and prefix resolved.
+    /// </summary>
+    /// <param name="hasImplicitReturn">Whether method emission adds a return after the accepted source.</param>
+    internal void RequireCompleteFlow(bool hasImplicitReturn = false)
+    {
+        RequireValidFlow();
+        if (Analysis.Diagnostics.FirstOrDefault(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Incomplete
+            && (!hasImplicitReturn || diagnostic.Code != "FLOW021")) is { } pending)
+        {
+            throw new ReplException(pending.Message) { Diagnostics = [pending] };
+        }
+    }
 
     /// <summary>
     /// For a method body: true once the opening brace has been seen, on the header line or on its own.
@@ -191,22 +240,7 @@ public sealed class CellState
     {
         get
         {
-            for (var i = _entries.Count - 1; i >= 0; i--)
-            {
-                var entry = _entries[i];
-                switch (entry.Kind)
-                {
-                    case EntryKind.Instruction:
-                        return entry.Instruction!.EndsFlow;
-                    case EntryKind.Block:
-                    case EntryKind.Labels:
-                        return false;
-                    default:
-                        continue;
-                }
-            }
-
-            return false;
+            return Analysis.End is null;
         }
     }
 
@@ -234,14 +268,19 @@ public sealed class CellState
             throw new InvalidOperationException("only a method body can close");
         }
 
+        RequireValidFlow();
+
         var pending = ReferencedLabels().Where(l => !_definedLabels.Contains(l)).Distinct().ToList();
         if (pending.Count > 0)
         {
-            throw new ReplException($"label{(pending.Count > 1 ? "s" : "")} referenced but never defined: {string.Join(", ", pending)} (define with 'NAME:')");
+            var suffix = pending.Count > 1 ? "s" : "";
+            throw new ReplException(
+                $"label{suffix} referenced but never defined: {string.Join(", ", pending)} (define with 'NAME:')");
         }
 
         if (LastInstructionEndsFlow || Member is { IsAbstract: true })
         {
+            RequireCompleteFlow();
             return;
         }
 
@@ -251,9 +290,11 @@ public sealed class CellState
         {
             if (Stack.Count > 0)
             {
-                throw new ReplException($"method {name} needs a ret before }}: the stack holds {Stack.Render()} but {name} returns void (pop it)");
+                throw new ReplException(
+                    $"method {name} needs a ret before }}: the stack holds {Stack.Render()} but {name} returns void (pop it)");
             }
 
+            RequireCompleteFlow(hasImplicitReturn: true);
             return;
         }
 
@@ -263,10 +304,12 @@ public sealed class CellState
             throw new ReplException($"method {name} needs a ret before }}: the stack is empty but {name} returns {pretty}");
         }
 
-        if (Stack.Count > 1 || !StackCompatibility.CanReturn(Stack.Top, returnType, Types))
+        if (Stack.Count > 1 || !RuntimeFlowAnalysis.Rules(Types).CanAssign(Stack.Top, returnType))
         {
             throw new ReplException($"method {name} needs a ret before }}: the stack holds {Stack.Render()} but {name} returns {pretty}");
         }
+
+        RequireCompleteFlow(hasImplicitReturn: true);
     }
 
     /// <summary>
@@ -318,6 +361,9 @@ public sealed class CellState
         }
 
         var line = normalized.Text;
+        _currentLocation = Location(normalized);
+        _analysisBeforeLine = _analysis;
+        _analysis = null;
         var text = line;
         if (text.StartsWith('.'))
         {
@@ -361,7 +407,13 @@ public sealed class CellState
                 throw new ReplException($"abstract method {Signature!.Name} has no body; close it with }}");
             }
 
-            _entries.Add(new CellEntry { Kind = EntryKind.Labels, Source = line, Labels = labels });
+            AcceptEntry(new CellEntry
+            {
+                Kind = EntryKind.Labels,
+                Source = line,
+                Labels = labels,
+                Location = Location(normalized)
+            });
             _definedLabels.UnionWith(labels);
             return new LineResult(LineOutcome.Labels, null, null);
         }
@@ -373,17 +425,11 @@ public sealed class CellState
 
         var context = Context;
         var instruction = InstructionParser.Parse(rest, context);
-        if (instruction.Op == OpCodes.Ret)
-        {
-            instruction = InlineRet(instruction.Text);
-        }
-
         if (Member?.ThisType is { IsByRef: true } && instruction.ArgumentIndex == 0 && instruction.Op.Name is "ldarga" or "ldarga.s")
         {
             throw new ReplException($"this is already a {TypeNameFormatter.Pretty(Member.ThisType)} in a struct method; use ldarg.0");
         }
 
-        CheckInitOnlyStore(instruction);
         CheckAccess(instruction);
 
         if (instruction.Op == OpCodes.Arglist && !IsVarArg)
@@ -396,13 +442,73 @@ public sealed class CellState
             throw new ReplException("endfilter is only valid inside a filter block (} filter {)");
         }
 
-        var next = Stack.Clone();
-        next.Apply(instruction, context);
-
-        _entries.Add(new CellEntry { Kind = EntryKind.Instruction, Source = line, Labels = labels, Instruction = instruction });
+        AcceptEntry(new CellEntry
+        {
+            Kind = EntryKind.Instruction,
+            Source = line,
+            Labels = labels,
+            Instruction = instruction,
+            Location = Location(normalized)
+        });
         _definedLabels.UnionWith(labels);
-        Stack.CopyFrom(next);
-        return new LineResult(LineOutcome.Instruction, instruction, null);
+        return new LineResult(LineOutcome.Instruction, _entries[^1].Instruction, null);
+    }
+
+    private AnalysisLocation Location(NormalizedLine line)
+    {
+        var start = line.Raw.Length - line.Raw.TrimStart().Length;
+        return line.Location ?? new AnalysisLocation(Signature?.Name ?? "cell", _entries.Count, start, line.Raw.Length - start);
+    }
+
+    private void AcceptEntry(CellEntry entry)
+    {
+        entry.Location ??= _currentLocation;
+        var candidate = _analysisBeforeLine is { } previous
+            && RuntimeFlowAnalysis.TryAppend(this, previous, entry, out var appended)
+            ? appended : RuntimeFlowAnalysis.Run(this, [.. _entries, entry]);
+        _analysisBeforeLine = null;
+        if (candidate.Diagnostics.FirstOrDefault(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error) is { } error)
+        {
+            throw new ReplException(error.Message) { Diagnostics = [error] };
+        }
+
+        _entries.Add(entry);
+        _analysis = candidate;
+        RefreshReturns();
+        Stack.CopyFrom(candidate.After[_entries.Count - 1]);
+    }
+
+    private void RefreshReturns()
+    {
+        for (var i = 0; i < _entries.Count; i++)
+        {
+            var entry = _entries[i];
+            if (entry.Instruction is not { Op.Name: "ret" } instruction)
+            {
+                continue;
+            }
+
+            var values = Analysis.Before[i]?.Values;
+            var count = IsMethod ? Signature!.ReturnType == typeof(void) ? 0 : 1 : values?.Length ?? 0;
+            var top = values?.LastOrDefault()?.Type;
+            var lowered = new Instruction
+            {
+                Op = instruction.Op,
+                Text = instruction.Text,
+                RetPops = count,
+                RetNull = !IsMethod && count == 0,
+                RetBox = !IsMethod && top is { } type && (type.IsValueType || type.IsGenericParameter)
+                    && type != typeof(NullReferenceMarker) && StackSimulator.BoxedType(type) is null ? type : null,
+            };
+            _entries[i] = new CellEntry
+            {
+                Kind = entry.Kind,
+                Source = entry.Source,
+                Location = entry.Location,
+                Labels = entry.Labels,
+                Instruction = lowered,
+            };
+        }
     }
 
     private static bool StartsWithHandlerKeyword(string text) =>
@@ -522,9 +628,8 @@ public sealed class CellState
                     throw new ReplException("the label form of .try is not supported; use blocks: .try { ... } catch T { ... }");
                 }
 
+                AcceptEntry(new CellEntry { Kind = EntryKind.Block, Source = source, Block = BlockKind.Try });
                 _frames.Add(BlockKind.Try);
-                _entries.Add(new CellEntry { Kind = EntryKind.Block, Source = source, Block = BlockKind.Try });
-                Stack.ApplyBlock(BlockKind.Try, null);
                 return new LineResult(LineOutcome.Block, null, "try");
 
             case ".maxstack":
@@ -624,6 +729,17 @@ public sealed class CellState
     private void CheckAccess(Instruction instruction)
     {
         var scope = Scope;
+        CheckExactAccess(instruction.ExactTypeOperand, scope);
+        CheckExactAccess(instruction.ExactFieldDeclaringType, scope);
+        if (instruction.Operand is CalliSignature { ExactSymbol: { } exactSignature })
+        {
+            CheckExactAccess(exactSignature.ReturnType, scope);
+            foreach (var parameter in exactSignature.Parameters)
+            {
+                CheckExactAccess(parameter, scope);
+            }
+        }
+
         switch (instruction.Operand)
         {
             case System.Reflection.FieldInfo field:
@@ -633,9 +749,21 @@ public sealed class CellState
                 }
 
                 MemberAccess.CheckType(field.FieldType, scope, Types);
+                CheckExactAccess(RuntimeFieldSignatures.TypeOf(field), scope);
                 MemberAccess.CheckField(field, scope, Types);
                 break;
             case ResolvedMethod { Method: not null } method:
+                CheckExactAccess(method.ExactDeclaringType, scope);
+                foreach (var optional in method.ExactOptionalParameterTypes ?? [])
+                {
+                    CheckExactAccess(optional, scope);
+                }
+
+                if (method.Declared is { } declared)
+                {
+                    CheckSignatureAccess(declared, scope);
+                }
+
                 MemberAccess.CheckMethod(method, scope, Types);
                 break;
             case Type type:
@@ -643,6 +771,28 @@ public sealed class CellState
                 break;
             default:
                 break;
+        }
+    }
+
+    private void CheckExactAccess(TypeSymbol? exact, AccessScope scope, TypeTable? types = null)
+    {
+        if (exact is null)
+        {
+            return;
+        }
+
+        foreach (var type in RuntimeSymbolTypes.Materialized(exact))
+        {
+            MemberAccess.CheckType(type, scope, types ?? Types);
+        }
+    }
+
+    private void CheckSignatureAccess(MethodSignature signature, AccessScope scope, TypeTable? types = null)
+    {
+        CheckExactAccess(signature.ExactReturnType, scope, types);
+        foreach (var parameter in signature.Parameters)
+        {
+            CheckExactAccess(parameter.ExactType, scope, types);
         }
     }
 
@@ -657,12 +807,37 @@ public sealed class CellState
         ArgumentNullException.ThrowIfNull(types);
         foreach (var entry in _entries)
         {
+            if (entry.Instruction is { } instruction)
+            {
+                CheckExactAccess(instruction.ExactTypeOperand, Scope, types);
+                CheckExactAccess(instruction.ExactFieldDeclaringType, Scope, types);
+                if (instruction.Operand is CalliSignature { ExactSymbol: { } exactSignature })
+                {
+                    CheckExactAccess(exactSignature.ReturnType, Scope, types);
+                    foreach (var parameter in exactSignature.Parameters)
+                    {
+                        CheckExactAccess(parameter, Scope, types);
+                    }
+                }
+            }
+
             switch (entry.Instruction?.Operand)
             {
                 case System.Reflection.FieldInfo field:
                     MemberAccess.CheckField(field, Scope, types);
                     break;
                 case ResolvedMethod { Method: not null } method:
+                    CheckExactAccess(method.ExactDeclaringType, Scope, types);
+                    foreach (var optional in method.ExactOptionalParameterTypes ?? [])
+                    {
+                        CheckExactAccess(optional, Scope, types);
+                    }
+
+                    if (method.Declared is { } declared)
+                    {
+                        CheckSignatureAccess(declared, Scope, types);
+                    }
+
                     MemberAccess.CheckMethod(method, Scope, types);
                     break;
                 default:
@@ -693,24 +868,6 @@ public sealed class CellState
         };
     }
 
-    private void CheckInitOnlyStore(Instruction instruction)
-    {
-        if (instruction.Operand is not System.Reflection.FieldInfo field || !field.Attributes.HasFlag(System.Reflection.FieldAttributes.InitOnly))
-        {
-            return;
-        }
-
-        var scope = new RuntimeBindingScope(Context);
-        var signature = Signature is null ? null : RuntimeSymbolImporter.Import(
-            Signature, Member is null ? null : scope.ImportType(Member.Owner), default, MethodSymbolSource.Declared, true);
-        var problem = InstructionMemberRules.InitOnlyStoreProblem(RuntimeSymbolImporter.Import(field), instruction.Op.Name,
-            signature, Member is null ? null : scope.ImportType(Member.Owner), Stack.IsThisAt(Stack.Count - 2), scope.Pretty);
-        if (problem is not null)
-        {
-            throw new ReplException(problem);
-        }
-    }
-
     private LineResult ApplyBlock(string text, string source)
     {
         if (text == "}" && _frames.Count == 0 && IsMethod)
@@ -724,6 +881,7 @@ public sealed class CellState
         var catchType = transition.CatchType is { } catchText
             ? catchText.Length == 0 ? typeof(object) : TypeParser.Parse(catchText, Context)
             : null;
+        AcceptEntry(new CellEntry { Kind = EntryKind.Block, Source = source, Block = transition.Kind, CatchType = catchType });
         if (transition.Kind == BlockKind.End)
         {
             _frames.RemoveAt(_frames.Count - 1);
@@ -733,79 +891,8 @@ public sealed class CellState
             _frames[^1] = transition.Kind;
         }
 
-        _entries.Add(new CellEntry { Kind = EntryKind.Block, Source = source, Block = transition.Kind, CatchType = catchType });
-        Stack.ApplyBlock(transition.Kind, catchType);
         var message = transition.Kind == BlockKind.Catch ? "catch " + TypeNameFormatter.Pretty(catchType) : transition.Message;
         return new LineResult(LineOutcome.Block, null, message);
-    }
-
-    private Instruction InlineRet(string text)
-    {
-        if (_frames.Count > 0)
-        {
-            throw new ReplException("ret is not allowed inside a protected region; use leave to exit it first");
-        }
-
-        if (IsMethod)
-        {
-            return MethodRet(text);
-        }
-
-        if (Stack.Count > 1)
-        {
-            throw new ReplException($"the stack must hold 0 or 1 value at ret, but has {Stack.Count}: {Stack.Render()}  (pop, or stloc into a local)");
-        }
-
-        var top = Stack.Top;
-        if (top is { IsByRef: true } || top is { IsPointer: true })
-        {
-            throw new ReplException($"cannot return a {StackSimulator.Name(top)} from the cell; load through it first (ldind/ldobj)");
-        }
-
-        return new Instruction
-        {
-            Op = OpCodes.Ret,
-            Text = text,
-            RetPops = Stack.Count,
-            RetBox = top is { IsValueType: true } && top != typeof(NullReferenceMarker) ? top : null,
-            RetNull = Stack.Count == 0,
-        };
-    }
-
-    private Instruction MethodRet(string text)
-    {
-        var name = Signature!.Name;
-        var returnType = Signature.ReturnType;
-        if (returnType == typeof(void))
-        {
-            if (Stack.Count > 0)
-            {
-                throw new ReplException($"ret in void method {name} needs an empty stack but found {Stack.Render()} (pop first)");
-            }
-
-            return new Instruction { Op = OpCodes.Ret, Text = text, RetPops = 0 };
-        }
-
-        var pretty = TypeNameFormatter.Pretty(returnType);
-        if (Stack.Count == 0)
-        {
-            throw new ReplException($"ret needs {pretty} on the stack but the stack is empty");
-        }
-
-        if (Stack.Count > 1)
-        {
-            throw new ReplException($"ret needs exactly one {pretty} on the stack but found {Stack.Render()} (pop, or stloc into a local)");
-        }
-
-        var top = Stack.Top;
-        if (!StackCompatibility.CanReturn(top, returnType, Types))
-        {
-            var boxable = top is { IsValueType: true } && top != typeof(NullReferenceMarker)
-                && !returnType.IsValueType && !returnType.IsByRef && !returnType.IsPointer;
-            throw new ReplException($"ret needs {pretty} on the stack but found {StackSimulator.Name(top)}" + (boxable ? " (box it first)" : ""));
-        }
-
-        return new Instruction { Op = OpCodes.Ret, Text = text, RetPops = 1 };
     }
 
     private List<LocalDeclaration> ParseLocals(string spec)
@@ -813,7 +900,10 @@ public sealed class CellState
         var scope = new RuntimeBindingScope(Context);
         var adapter = new RuntimeBindingAdapter(scope);
         return [.. VariableDeclarationParser.ParseLocals(spec, scope)
-            .Select(local => new LocalDeclaration(adapter.ToType(local.Type), local.Name, local.IsPinned))];
+            .Select(local => new LocalDeclaration(adapter.ToType(local.Type), local.Name, local.IsPinned)
+            {
+                ExactType = local.ExactType,
+            })];
     }
 
     private List<ArgumentDeclaration> ParseArguments(string spec)
@@ -825,8 +915,12 @@ public sealed class CellState
     }
 
     private string DescribeLocals() =>
-        string.Join(", ", _locals.Select((l, i) => $"{i}:{TypeNameFormatter.Pretty(l.Type)}{(l.IsPinned ? " pinned" : "")} {l.Name ?? ""}".TrimEnd()));
+        string.Join(", ", _locals.Select((l, i) =>
+            $"{i}:{(l.ExactType is null ? TypeNameFormatter.Pretty(l.Type) : SymbolRenderer.Pretty(l.ExactType))}"
+            + $"{(l.IsPinned ? " pinned" : "")} {l.Name ?? ""}".TrimEnd()));
 
     private string DescribeArguments() =>
-        string.Join(", ", _arguments.Select((a, i) => $"{i}:{TypeNameFormatter.Pretty(a.Type)} {a.Name ?? ""} = {a.ValueText}".Replace("  ", " ", StringComparison.Ordinal)));
+        string.Join(", ", _arguments.Select((a, i) =>
+            $"{i}:{(a.ExactType is null ? TypeNameFormatter.Pretty(a.Type) : SymbolRenderer.Pretty(a.ExactType))} "
+            + $"{a.Name ?? ""} = {a.ValueText}".Replace("  ", " ", StringComparison.Ordinal)));
 }

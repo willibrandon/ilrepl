@@ -305,4 +305,19 @@ public sealed class TypeReplacementTests
         Assert.AreSame(session.Types[0].RuntimeType, Run(session, "call class [System.Runtime]System.Type Host::Get()"));
         _ = AssemblyExporter.Write(session, "generic-argument");
     }
+
+    /// <summary>
+    /// A type used only as a generic argument modifier remains a dependency of the caller.
+    /// </summary>
+    [TestMethod]
+    public void Redefine_TypeUsedOnlyAsAGenericArgumentModifier_RebuildsTheCaller()
+    {
+        var session = Load(
+            ".class public Point { }",
+            ".method object Make() { call !!0[] [System.Runtime]System.Array::Empty<int32 modopt(Point)>(); ret }");
+
+        var message = Add(session, ".class public Point {", ".field public int32 X", "}");
+        Assert.Contains("rebuilt method Make", message);
+        _ = AssemblyExporter.Write(session, "generic-argument-modifier");
+    }
 }
