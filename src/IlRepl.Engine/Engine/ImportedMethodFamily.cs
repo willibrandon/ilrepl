@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using IlRepl.Engine.Binding;
 using Mono.Cecil;
 using GenericParameterAttributes = System.Reflection.GenericParameterAttributes;
 using MethodAttributes = System.Reflection.MethodAttributes;
@@ -431,6 +432,22 @@ internal sealed partial class ImportedMethodFamily
                     }
 
                     break;
+                case CalliSignature signature:
+                {
+                    var symbols = signature.ExactSymbol is { } exact ? exact.Parameters.Prepend(exact.ReturnType)
+                        : signature.ParameterTypes.Concat(signature.OptionalParameterTypes ?? []).Prepend(signature.ReturnType)
+                            .Select(type => RuntimeSymbolImporter.Import(type));
+                    foreach (var dependency in symbols.SelectMany(RuntimeSymbolTypes.Materialized).Distinct())
+                    {
+                        ConsiderType(dependency, body.Method.DeclaringType!);
+                        if (!dependency.IsGenericParameter)
+                        {
+                            ReportType(dependency, location);
+                        }
+                    }
+
+                    break;
+                }
                 default:
                     break;
             }

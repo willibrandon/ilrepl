@@ -174,7 +174,8 @@ public static partial class ComparisonCapture
         };
     }
 
-    private static void CaptureDependency(string identity, Session session, Dictionary<string, ComparisonAssembly> captured)
+    private static void CaptureDependency(string identity, Session session, Dictionary<string, ComparisonAssembly> captured,
+        bool required = true)
     {
         if (captured.ContainsKey(identity))
         {
@@ -186,7 +187,15 @@ public static partial class ComparisonCapture
             string.Equals(assembly.FullName, name.FullName, StringComparison.OrdinalIgnoreCase));
         if (assembly is null)
         {
-            assembly = SessionAssemblies.Resolve(name) ?? Assembly.Load(name);
+            try
+            {
+                assembly = SessionAssemblies.Resolve(name) ?? Assembly.Load(name);
+            }
+            catch (FileNotFoundException) when (!required)
+            {
+                // An unused reference can be absent; the worker resolves it if execution reaches code that needs it.
+                return;
+            }
         }
 
         // Runtime and ilrepl assemblies are supplied by the fresh host or browser bundle.
@@ -228,7 +237,7 @@ public static partial class ComparisonCapture
 
         foreach (var reference in module.AssemblyReferences)
         {
-            CaptureDependency(reference.FullName, session, captured);
+            CaptureDependency(reference.FullName, session, captured, required: false);
         }
     }
 

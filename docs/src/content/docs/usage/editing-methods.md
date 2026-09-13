@@ -158,10 +158,11 @@ Set up repeatable inputs in your scenario. The transcript describes these condit
 `.edit` copies the declaring type and the fields, constructors, and helpers the method needs.
 Signatures, generic constraints, layout, and member metadata are kept. Public external methods remain
 references to their original assemblies. Opening or saving an edit does not run its code.
-Catch types are included in the dependency list.
+Catch types and `calli` signatures are included in the dependency list.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it
 was copied. The report updates with each saved revision.
+A missing optional library only affects a comparison if the executed code needs it.
 
 Copied types are distinct .NET types. For an instance call, construct the copied type shown by `.types`,
 as the counter example does. Code that requires the original type cannot accept the copy.
