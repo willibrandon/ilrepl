@@ -160,7 +160,7 @@ public static class ComparisonWorker
                 failure = ex is TargetInvocationException { InnerException: { } inner } ? inner : ex;
             }
 
-            var invocations = ComparisonProbe.Complete();
+            var invocations = await ComparisonProbe.CompleteAsync().ConfigureAwait(false);
             var observation = new StructuralObservation(image.TypeNames);
             return new ComparisonSide(exceeded ? "output-limit" : invocations.Count == 0 ? "setup-failed" : "completed", invocations,
                 observation.Capture(result), failure is null ? null : observation.Exception(failure), stdout.Text, stderr.Text,

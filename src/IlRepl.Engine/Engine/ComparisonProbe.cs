@@ -75,11 +75,23 @@ public static partial class ComparisonProbe
     }
 
     /// <summary>
-    /// Returns snapshots taken at each completed invocation boundary.
+    /// Finishes observations for completed tasks and returns each invocation snapshot.
     /// </summary>
     /// <returns>The ordered invocation observations.</returns>
-    internal static IReadOnlyList<InvocationObservation> Complete()
+    internal static async Task<IReadOnlyList<InvocationObservation>> CompleteAsync()
     {
+        Task[] completions;
+        lock (Gate)
+        {
+            if (Invocations.Any(invocation => invocation.Awaitable is { IsCompleted: false }))
+            {
+                throw new ReplException("a selected-method invocation was still running when its scenario completed");
+            }
+
+            completions = [.. Invocations.Select(invocation => invocation.Completion).OfType<Task>()];
+        }
+
+        await Task.WhenAll(completions).ConfigureAwait(false);
         lock (Gate)
         {
             return Invocations.Select(invocation => invocation.Observation
