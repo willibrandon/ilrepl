@@ -67,18 +67,23 @@ public sealed partial class ArchitectureDiagramTests
         await page.GotoAsync(s_site!.BaseUrl + "/reference/architecture/");
 
         var caption = page.Locator("#process-diagram .il-diagram-caption");
+        var processText = page.Locator("#process-diagram").Locator("xpath=following-sibling::p[1]");
         await Assertions.Expect(caption).ToContainTextAsync("Point at a part of the diagram");
+        var processTextTop = await TopAsync(processText);
 
         await page.Locator("#process-diagram [data-part='stack']").HoverAsync();
         await Assertions.Expect(caption.Locator(".il-diagram-caption-title")).ToHaveTextAsync("stack simulation");
         await Assertions.Expect(caption).ToContainTextAsync("before it is accepted");
+        Assert.AreEqual(processTextTop, await TopAsync(processText), 0.5, "Hovering must not move the text after the process diagram.");
 
         await page.Locator("#process-diagram [data-part='channel']").HoverAsync();
         await Assertions.Expect(caption.Locator(".il-diagram-caption-title")).ToHaveTextAsync("JSON-RPC over stdio");
         await Assertions.Expect(page.Locator("#process-diagram")).ToHaveAttributeAsync("data-active", "channel");
+        Assert.AreEqual(processTextTop, await TopAsync(processText), 0.5, "Long explanations must not move the following text.");
 
         await page.Mouse.MoveAsync(5, 5);
         await Assertions.Expect(caption).ToContainTextAsync("Point at a part of the diagram");
+        Assert.AreEqual(processTextTop, await TopAsync(processText), 0.5, "Leaving must not move the text after the process diagram.");
 
         // Keyboard: focus lands on a part and explains it; Tab moves to the next one.
         await page.Locator("#process-diagram [data-part='cli']").FocusAsync();
@@ -87,9 +92,12 @@ public sealed partial class ArchitectureDiagramTests
         await Assertions.Expect(caption.Locator(".il-diagram-caption-title")).ToHaveTextAsync("terminal UI");
 
         var cell = page.Locator("#cell-diagram .il-diagram-caption");
+        var cellText = page.Locator("#cell-diagram").Locator("xpath=following-sibling::p[1]");
+        var cellTextTop = await TopAsync(cellText);
         await page.Locator("#cell-diagram [data-part='replay']").HoverAsync();
         await Assertions.Expect(cell.Locator(".il-diagram-caption-title")).ToHaveTextAsync("replay");
         await Assertions.Expect(cell).ToContainTextAsync("MethodBuilder");
+        Assert.AreEqual(cellTextTop, await TopAsync(cellText), 0.5, "Hovering must not move the text after the cell diagram.");
     }
 
     /// <summary>
@@ -118,6 +126,13 @@ public sealed partial class ArchitectureDiagramTests
         await session.ClickAsync();
         await page.Mouse.MoveAsync(5, 5);
         await Assertions.Expect(caption).ToContainTextAsync("Point at a part of the diagram");
+
+        await page.SetViewportSizeAsync(390, 844);
+        var processText = page.Locator("#process-diagram").Locator("xpath=following-sibling::p[1]");
+        var processTextTop = await TopAsync(processText);
+        await session.ClickAsync();
+        await Assertions.Expect(caption.Locator(".il-diagram-caption-title")).ToHaveTextAsync("the session");
+        Assert.AreEqual(processTextTop, await TopAsync(processText), 0.5, "Tapping must not move the text on a narrow screen.");
     }
 
     private static async Task<IBrowser> LaunchAsync(string browser) => browser switch
@@ -125,6 +140,9 @@ public sealed partial class ArchitectureDiagramTests
         "webkit" => await s_playwright!.Webkit.LaunchAsync(),
         _ => await s_playwright!.Chromium.LaunchAsync(),
     };
+
+    private static Task<double> TopAsync(ILocator locator) =>
+        locator.EvaluateAsync<double>("element => element.getBoundingClientRect().top + window.scrollY");
 
     // The class a part of the diagram wears while it is the one described.
     [GeneratedRegex("is-active")]

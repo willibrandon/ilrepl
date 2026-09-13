@@ -383,6 +383,7 @@ starlight-toc {
 /* Diagrams */
 .il-diagram {
   margin: 1.5rem 0;
+  position: relative;
 }
 
 .il-diagram svg {
@@ -547,4 +548,13 @@ starlight-toc {
 
 .il-diagram-caption.is-active .il-diagram-caption-text {
   color: var(--sl-color-gray-1);
+}
+
+.il-diagram-caption-measure {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  margin: 0;
+  visibility: hidden;
+  pointer-events: none;
 }

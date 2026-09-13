@@ -27,6 +27,42 @@ const { id, label, hint = 'Point at a part of the diagram, or tab to it, to read
     const hint = caption.dataset.hint;
     const parts = Array.from(figure.querySelectorAll('[data-part]'));
     let pinned = null;
+    let measuredWidth = 0;
+
+    const reserveCaptionHeight = () => {
+      const width = caption.getBoundingClientRect().width;
+      if (width === 0 || Math.abs(width - measuredWidth) < 0.5) {
+        return;
+      }
+
+      measuredWidth = width;
+      const measure = caption.cloneNode(true);
+      measure.classList.add('il-diagram-caption-measure');
+      measure.classList.remove('is-active');
+      measure.removeAttribute('aria-live');
+      measure.setAttribute('aria-hidden', 'true');
+      measure.style.width = `${width}px`;
+      measure.style.minHeight = '0';
+      figure.append(measure);
+
+      const measureTitle = measure.querySelector('.il-diagram-caption-title');
+      const measureText = measure.querySelector('.il-diagram-caption-text');
+      let height = 0;
+      const candidates = [
+        { title: '', text: hint },
+        ...parts.map((part) => ({ title: part.dataset.title, text: part.dataset.text })),
+      ];
+
+      for (const candidate of candidates) {
+        measureTitle.textContent = candidate.title;
+        measureText.textContent = candidate.text;
+        measure.classList.toggle('is-active', candidate.title !== '');
+        height = Math.max(height, measure.getBoundingClientRect().height);
+      }
+
+      measure.remove();
+      caption.style.minHeight = `${Math.ceil(height)}px`;
+    };
 
     const show = (part) => {
       title.textContent = part ? part.dataset.title : '';
@@ -54,5 +90,13 @@ const { id, label, hint = 'Point at a part of the diagram, or tab to it, to read
         }
       });
     }
+
+    const resizeObserver = new ResizeObserver(reserveCaptionHeight);
+    resizeObserver.observe(caption);
+    reserveCaptionHeight();
+    document.fonts?.ready.then(() => {
+      measuredWidth = 0;
+      reserveCaptionHeight();
+    });
   }
 </script>
