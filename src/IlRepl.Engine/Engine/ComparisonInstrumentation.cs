@@ -1,5 +1,6 @@
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+using CilInstruction = Mono.Cecil.Cil.Instruction;
 
 namespace IlRepl.Engine;
 
@@ -57,9 +58,9 @@ internal static class ComparisonInstrumentation
 
         void Box(TypeReference type)
         {
-            if (type.IsByReference)
+            if (type is ByReferenceType reference)
             {
-                type = type.GetElementType();
+                type = reference.ElementType;
                 il.Emit(OpCodes.Ldobj, type);
             }
 
@@ -126,16 +127,31 @@ internal static class ComparisonInstrumentation
 
         void Completed(bool failed)
         {
+            CilInstruction? complete = null;
             il.Emit(OpCodes.Ldloc, identity);
             Receiver();
             Arguments(before: false);
             if (!failed && result is not null && AwaitableTracker(target.ReturnType, writer) is { } tracker)
             {
+                var synchronous = tracker.ReturnType.IsValueType ? null : il.Create(OpCodes.Nop);
+                if (synchronous is not null)
+                {
+                    il.Emit(OpCodes.Ldloc, result);
+                    il.Emit(OpCodes.Brfalse, synchronous);
+                }
+
                 il.Emit(OpCodes.Ldloc, result);
                 Aliases(after: true, failed: false);
                 il.Emit(OpCodes.Call, tracker);
                 il.Emit(OpCodes.Stloc, result);
-                return;
+                if (synchronous is null)
+                {
+                    return;
+                }
+
+                complete = il.Create(OpCodes.Nop);
+                il.Emit(OpCodes.Br, complete);
+                il.Append(synchronous);
             }
 
             if (failed || result is null)
@@ -163,6 +179,10 @@ internal static class ComparisonInstrumentation
 
             Aliases(after: true, failed);
             il.Emit(OpCodes.Call, leave);
+            if (complete is not null)
+            {
+                il.Append(complete);
+            }
         }
 
         void Aliases(bool after, bool failed)
@@ -327,7 +347,12 @@ internal static class ComparisonInstrumentation
 
     private static MethodReference? AwaitableTracker(TypeReference type, CecilWriter writer)
     {
-        var definition = type.GetElementType().FullName;
+        while (type is IModifierType modifier)
+        {
+            type = modifier.ElementType;
+        }
+
+        var definition = type is GenericInstanceType constructed ? constructed.ElementType.FullName : type.FullName;
         var name = definition == typeof(Task).FullName || definition == typeof(Task<>).FullName
             ? nameof(ComparisonProbe.TrackTask)
             : definition == typeof(ValueTask).FullName || definition == typeof(ValueTask<>).FullName
