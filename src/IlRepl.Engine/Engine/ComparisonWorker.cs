@@ -119,14 +119,17 @@ public static class ComparisonWorker
 
             ComparisonProbe.Initialize(image.TypeNames);
             ready();
-            using var code = new MemoryStream(image.Image, writable: false);
-            var assembly = image.OriginalAssembly is { } identity
-                ? Assembly.Load(new AssemblyName(identity)) : AssemblyLoadContext.Default.LoadFromStream(code);
-            if (image.OriginalModule is { } module && assembly.ManifestModule.ModuleVersionId != module)
+            if (image.OriginalAssembly is { } identity)
             {
-                throw new ReplException("the original assembly no longer matches the captured module");
+                var originalAssembly = Assembly.Load(new AssemblyName(identity));
+                if (image.OriginalModule is { } module && originalAssembly.ManifestModule.ModuleVersionId != module)
+                {
+                    throw new ReplException("the original assembly no longer matches the captured module");
+                }
             }
 
+            using var code = new MemoryStream(image.Image, writable: false);
+            var assembly = AssemblyLoadContext.Default.LoadFromStream(code);
             var type = assembly.GetType(image.EntryType, throwOnError: true)!;
             Type Argument(string name) => Type.GetType(name, throwOnError: true)!;
             if (image.TypeArguments.Count != 0)
@@ -148,7 +151,6 @@ public static class ComparisonWorker
                 ? parameter.ParameterType.GetElementType()! : parameter.ParameterType)).ToArray();
             object? result = null;
             Exception? failure = null;
-            var direct = image.OriginalAssembly is null ? -1 : ComparisonProbe.Enter(null, arguments);
             try
             {
                 result = await AsyncObservation.AwaitAsync(method.Invoke(null, arguments)).ConfigureAwait(false);
@@ -156,11 +158,6 @@ public static class ComparisonWorker
             catch (Exception ex)
             {
                 failure = ex is TargetInvocationException { InnerException: { } inner } ? inner : ex;
-            }
-
-            if (direct >= 0)
-            {
-                ComparisonProbe.Leave(direct, null, arguments, result, failure);
             }
 
             var invocations = ComparisonProbe.Complete();

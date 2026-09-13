@@ -138,20 +138,21 @@ public static partial class ComparisonCapture
             CaptureOriginalArgument(argument, session, dependencies);
         }
 
-        return new ComparisonImage([], owner.IsConstructedGenericType ? owner.GetGenericTypeDefinition().FullName! : owner.FullName!,
-            method.Name, method.MetadataToken,
-            owner.IsConstructedGenericType ? owner.GetGenericArguments().Select(ArgumentName).ToArray() : [],
-            method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } generic
-                ? generic.GetGenericArguments().Select(ArgumentName).ToArray() : [], options.Arguments,
-            new Dictionary<string, string>())
+        var writer = new CecilWriter(SessionAssemblyKind.Cell);
+        var entry = CecilOriginalCall.Wrap(method, writer);
+        var image = writer.Write();
+        foreach (var reference in writer.Module.AssemblyReferences)
+        {
+            CaptureDependency(reference.FullName, session, dependencies);
+        }
+
+        return new ComparisonImage(image, entry.DeclaringType.FullName, entry.Name, entry.MetadataToken.ToInt32(),
+            [], [], options.Arguments, new Dictionary<string, string>())
         {
             OriginalAssembly = method.Module.Assembly.FullName,
             OriginalModule = method.Module.ModuleVersionId,
         };
     }
-
-    private static string ArgumentName(Type type) => type.AssemblyQualifiedName
-        ?? throw new ReplException($"generic argument {type.Name} has no loadable identity");
 
     private static void CaptureDependency(string identity, Session session, Dictionary<string, ComparisonAssembly> captured)
     {

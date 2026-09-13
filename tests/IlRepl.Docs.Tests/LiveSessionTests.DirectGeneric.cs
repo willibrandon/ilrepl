@@ -6,6 +6,34 @@ namespace IlRepl.Docs.Tests;
 public sealed partial class LiveSessionTests
 {
     /// <summary>
+    /// A session call with a shorthand generic return type binds and executes in the browser.
+    /// </summary>
+    /// <param name="browser">The browser engine.</param>
+    /// <returns>The completed result assertions.</returns>
+    [TestMethod]
+    [DataRow("chromium")]
+    [DataRow("webkit")]
+    [Timeout(240_000, CooperativeCancellation = true)]
+    public async Task LiveSession_GenericReturnTypeBindsTheSessionMethod(string browser)
+    {
+        await using var context = await NewContextAsync(GetBrowser(browser));
+        var page = await OpenSessionAsync(context);
+        await SubmitEditSourceAsync(page, """
+            .method List<int32> Get() {
+              newobj instance void List<int32>::.ctor()
+              dup
+              ldc.i4.s 42
+              callvirt instance void List<int32>::Add(!0)
+              ret
+            }
+            """, "end of method Get");
+
+        await RunCorpusCellAsync(page, "call List<int32> Get()\nldc.i4.0\ncallvirt instance !0 List<int32>::get_Item(int32)\nret", 42);
+
+        Assert.DoesNotContain("error:", await BufferTextAsync(page));
+    }
+
+    /// <summary>
     /// Generic constructor calls use the caller's type parameter and preserve copied field initialization in browser workers.
     /// </summary>
     /// <param name="browser">The browser engine.</param>

@@ -169,45 +169,62 @@ public sealed class DirectGenericComparisonTests
     }
 
     /// <summary>
-    /// An external original with an unavailable native helper retains the session argument image used to close its generic method.
+    /// An external original with an unavailable native helper retains the session argument used to close its method or owner.
     /// </summary>
+    /// <param name="genericOwner">Whether the type argument belongs to the declaring type.</param>
     [TestMethod]
-    public async Task Direct_ExternalOriginalCapturesTheSessionGenericArgument()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Direct_ExternalOriginalCapturesTheSessionGenericArgument(bool genericOwner)
     {
         var session = IlLines.Load(".class public sequential sealed Payload extends System.ValueType {",
             ".field public int32 Number", "}");
         var name = "ExternalGeneric" + Guid.NewGuid().ToString("N");
-        var image = IlasmLocator.Assemble(".assembly extern System.Runtime {}\n.assembly " + name + " {}\n.module " + name
-            + ".dll\n" + """
-            .class public N.Fixture extends [System.Runtime]System.Object {
-              .method private static void Native() runtime managed internalcall {}
-              .method public static int32 Size<T>() cil managed {
-                sizeof !!T
+        var source = """
+            .class private N.NativeCalls extends [System.Runtime]System.Object {
+              .method assembly static void Native() runtime managed internalcall {}
+            }
+            .class public N.Fixture`1<T> extends [System.Runtime]System.Object {
+              .method public static int32 Size() cil managed {
+                sizeof !T
                 ret
-                call void N.Fixture::Native()
+                call void N.NativeCalls::Native()
                 ldc.i4.0
                 ret
               }
             }
-            """);
+            """;
+        if (!genericOwner)
+        {
+            source = source.Replace("N.Fixture`1<T>", "N.Fixture", StringComparison.Ordinal)
+                .Replace("Size()", "Size<T>()", StringComparison.Ordinal)
+                .Replace("sizeof !T", "sizeof !!T", StringComparison.Ordinal);
+        }
+
+        var image = IlasmLocator.Assemble(".assembly extern System.Runtime {}\n.assembly " + name + " {}\n.module " + name
+            + ".dll\n" + source);
         var assembly = session.Resolver.LoadImage(image);
         var payload = session.Types.Single(type => type.RuntimeType?.Name == "Payload").RuntimeType!;
-        var requested = assembly.GetType("N.Fixture")!.GetMethod("Size")!.MakeGenericMethod(payload);
+        var requested = genericOwner ? assembly.GetType("N.Fixture`1")!.MakeGenericType(payload).GetMethod("Size")!
+            : assembly.GetType("N.Fixture")!.GetMethod("Size")!.MakeGenericMethod(payload);
         Assert.AreEqual(4, requested.Invoke(null, null));
-        var edit = session.PrepareEdit("int32 [" + name + "]N.Fixture::Size<Payload>()", "Copy");
+        var reference = genericOwner ? "]N.Fixture`1<Payload>::Size()" : "]N.Fixture::Size<Payload>()";
+        var edit = session.PrepareEdit("int32 [" + name + reference, "Copy");
         Assert.Contains(problem => problem.Contains("Native", StringComparison.Ordinal), edit.Problems,
             string.Join("\n", edit.Problems));
         Assert.IsNull(edit.Method);
         var unavailable = Assert.ThrowsExactly<ReplException>(() => _ = edit.OriginalMethod);
         Assert.Contains("original context cannot be reproduced", unavailable.Message);
-        session.CommitEdit(edit.Name, ".method public static int32 Size<T>() cil managed {\nsizeof !!0\nldc.i4.1\nadd\nret\n}");
+        session.CommitEdit(edit.Name, genericOwner
+            ? ".method public static int32 Size() cil managed {\nsizeof !0\nldc.i4.1\nadd\nret\n}"
+            : ".method public static int32 Size<T>() cil managed {\nsizeof !!0\nldc.i4.1\nadd\nret\n}");
         Assert.IsEmpty(edit.Problems);
         Assert.AreEqual(5, edit.Method!.Invoke(null, null));
         var package = ComparisonCapture.Create(session, "Copy ()");
-        Assert.IsEmpty(package.Original.Image);
+        Assert.IsNotEmpty(package.Original.Image);
         Assert.AreEqual(assembly.FullName, package.Original.OriginalAssembly);
         Assert.AreEqual(assembly.ManifestModule.ModuleVersionId, package.Original.OriginalModule);
-        Assert.AreEqual(payload.AssemblyQualifiedName, package.Original.MethodArguments.Single());
+        Assert.IsEmpty(package.Original.MethodArguments);
         Assert.Contains(dependency => dependency.Name == payload.Assembly.FullName, package.Dependencies);
         Assert.Contains(dependency => dependency.Name == assembly.FullName, package.Dependencies);
 

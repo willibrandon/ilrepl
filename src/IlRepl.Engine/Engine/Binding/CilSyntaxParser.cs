@@ -735,20 +735,18 @@ public static partial class CilSyntaxParser
 
     private static MemberSyntax ParseSessionReference(string s, int pos, int endOfText, int start, bool explicitInstance, bool isVarArg)
     {
-        // "[ret] Name(params)" with no "::" names a method defined with .method. The return type
-        // is optional, as it is for a framework method, and may contain parentheses of its own
-        // (modopt, a function pointer), so it is parsed as a type when the text before the first
-        // '(' has room for one.
-        var firstParen = s.IndexOf('(', pos);
-        if (firstParen >= endOfText)
+        // A bare name and its optional generic arguments end at the parameter list or end of text.
+        // If another token follows, the leading text is a return type, which can itself be generic.
+        var (_, _, candidateEnd) = ReadMemberName(s, pos, endOfText);
+        SkipWhitespace(s, ref candidateEnd);
+        if (candidateEnd < endOfText && s[candidateEnd] == '<')
         {
-            firstParen = -1;
+            candidateEnd = FindMatchingAngle(s, candidateEnd, endOfText) + 1;
+            SkipWhitespace(s, ref candidateEnd);
         }
 
-        var head = (firstParen < 0 ? s[pos..endOfText] : s[pos..firstParen]).Trim();
-        var angle = head.IndexOf('<', StringComparison.Ordinal);
         TypeSyntax? returnType = null;
-        if ((angle < 0 ? head : head[..angle]).Any(char.IsWhiteSpace))
+        if (candidateEnd < endOfText && s[candidateEnd] != '(')
         {
             returnType = ParseTypeAt(s, ref pos, endOfText);
             SkipWhitespace(s, ref pos);

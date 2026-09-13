@@ -72,8 +72,9 @@ and byte-offset differences. Floating-point bit patterns remain distinct.
 Use `.compare Name (<literals>)` for a static method with literal arguments.
 After saving an unchanged `Maximum`, `.compare Maximum (17, 42) --assert` reports `match`.
 Generic methods use the type arguments selected when you opened the edit.
+Each `ref` or `out` literal gets a separate variable. Use a scenario when arguments need to share a variable.
 
-For an instance method, object input, `ref` or `out` argument, or repeated call, write a parameterless
+For an instance method, object input, or repeated call, write a parameterless
 session method to set up the inputs. Run it with `.compare Name using Scenario`. Each side runs the
 same scenario, calling the original or the copy:
 
