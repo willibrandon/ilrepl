@@ -205,6 +205,9 @@ public sealed partial class LiveSessionTests
         await TypeLineAsync(page, "ldc.i4.7");
         await page.Keyboard.TypeAsync("call Math::Ma");
         await ExpectCompletionAsync(page, "❯ Max(Decimal, Decimal)");
+        var completing = await BufferTextAsync(page);
+        Assert.DoesNotContain("error on line", completing);
+        Assert.DoesNotContain("did you mean 'Tan'", completing);
         await PromptContainsAsync(page, "call Math::Max(Decimal, Decimal)");
         for (var index = 0; index < 4; index++)
         {

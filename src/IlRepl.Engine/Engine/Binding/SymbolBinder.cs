@@ -712,11 +712,11 @@ public static class SymbolBinder
     }
 
     /// <summary>
-    /// Suggests a corrected method name only when its replacement reference binds without loading dependencies.
+    /// Suggests the nearest accessible method name that fits the written reference without loading dependencies.
     /// </summary>
     /// <remarks>
-    /// The did-you-mean for a mistyped method name, when the reference with the nearest name in its
-    /// place binds in a scope that loads nothing; empty otherwise.
+    /// Each replacement is confirmed in a scope that loads nothing. Ambiguity is accepted for an
+    /// abbreviated reference because the name fits and the user has not chosen an overload yet.
     /// </remarks>
     private static string ConfirmedSuggestion(IBindingScope scope, MemberSyntax syntax, string name, IEnumerable<string> pool,
         bool wantConstructor)
@@ -724,11 +724,16 @@ public static class SymbolBinder
         var pure = scope.ForSuggestions(out var lease);
         using (lease)
         {
-            var nearest = NameSuggestions.Nearest(name, pool, candidate =>
+            var nearest = NameSuggestions.Nearest(name, pool.Distinct(StringComparer.Ordinal), candidate =>
             {
                 try
                 {
                     BindMethodReference(syntax with { Name = candidate }, pure, wantConstructor);
+                    return true;
+                }
+                catch (ReplException exception) when (syntax.Parameters is null
+                    && exception.Message.StartsWith("ambiguous:", StringComparison.Ordinal))
+                {
                     return true;
                 }
                 catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
@@ -736,6 +741,7 @@ public static class SymbolBinder
                     return false;
                 }
             });
+
             return nearest is null ? "" : NameSuggestions.Parenthetical(nearest);
         }
     }

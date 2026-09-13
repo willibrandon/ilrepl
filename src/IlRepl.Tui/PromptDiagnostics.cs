@@ -17,11 +17,27 @@ public static class PromptDiagnostics
     public static AnalysisDiagnostic? Current(PromptState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        var diagnostics = state.Analysis?.Diagnostics;
-        return diagnostics?.FirstOrDefault(d => d.Location.Line == state.CaretLine - 1 && d.Kind == AnalysisDiagnosticKind.Error)
-            ?? diagnostics?.FirstOrDefault(d => d.Location.Line == state.CaretLine - 1)
-            ?? diagnostics?.FirstOrDefault(d => d.Kind == AnalysisDiagnosticKind.Error)
-            ?? (diagnostics is { Count: > 0 } ? diagnostics[0] : null);
+        var diagnostics = Visible(state);
+        return diagnostics.FirstOrDefault(d => d.Location.Line == state.CaretLine - 1 && d.Kind == AnalysisDiagnosticKind.Error)
+            ?? diagnostics.FirstOrDefault(d => d.Location.Line == state.CaretLine - 1)
+            ?? diagnostics.FirstOrDefault(d => d.Kind == AnalysisDiagnosticKind.Error)
+            ?? (diagnostics.Count > 0 ? diagnostics[0] : null);
+    }
+
+    /// <summary>
+    /// Omits a refused current operand while its completion request has confirmed choices.
+    /// </summary>
+    internal static IReadOnlyList<AnalysisDiagnostic> Visible(PromptState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        var diagnostics = state.Analysis?.Diagnostics ?? [];
+        if (!CompletionOwnsCaret(state))
+        {
+            return diagnostics;
+        }
+
+        var line = state.CaretLine - 1;
+        return diagnostics.Where(diagnostic => diagnostic.Code != "FLOW008" || diagnostic.Location.Line != line).ToArray();
     }
 
     /// <summary>
@@ -44,7 +60,7 @@ public static class PromptDiagnostics
             AnalysisDiagnosticKind.Unknown => "unknown",
             _ => "incomplete",
         };
-        var count = state.Analysis!.Diagnostics.Count;
+        var count = Visible(state).Count;
         var suffix = count > 1 ? $" ({count} findings; F8 next)" : "";
         var text = $"{kind} on line {diagnostic.Location.Line + 1}: {diagnostic.Message}{suffix}";
         return new DiagnosticDisplay(text, diagnostic.Kind == AnalysisDiagnosticKind.Error ? SpanStyle.Error : SpanStyle.Dim);
@@ -102,8 +118,8 @@ public static class PromptDiagnostics
     public static void Move(PromptState state, bool backwards)
     {
         ArgumentNullException.ThrowIfNull(state);
-        var positions = state.Analysis?.Diagnostics.Select(d => d.Location).Where(location => location.Line >= 0)
-            .Distinct().OrderBy(location => location.Line).ThenBy(location => location.Start).ToArray() ?? [];
+        var positions = Visible(state).Select(d => d.Location).Where(location => location.Line >= 0)
+            .Distinct().OrderBy(location => location.Line).ThenBy(location => location.Start).ToArray();
         if (positions.Length == 0)
         {
             return;
@@ -118,5 +134,16 @@ public static class PromptDiagnostics
         var targetLine = Math.Clamp(location.Line + 1, 1, document.LineCount);
         var targetColumn = Math.Clamp(location.Start, 0, document.GetLineText(targetLine).Length) + 1;
         state.Editor.SetCursorPosition(document.PositionToOffset(new DocumentPosition(targetLine, targetColumn)));
+    }
+
+    private static bool CompletionOwnsCaret(PromptState state)
+    {
+        if (state.Palette == PaletteMode.Requested)
+        {
+            return state.Requester?.IsPending == true || state.MoreCompletions || state.PendingDisplay is not null;
+        }
+
+        return state.Palette == PaletteMode.Open && state.Completions is { Reply.Items.Count: > 0 } completion
+            && state.Requester?.Matches(state, completion) == true;
     }
 }

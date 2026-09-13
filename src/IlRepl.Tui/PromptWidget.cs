@@ -122,6 +122,7 @@ public sealed partial record PromptWidget(
         state.Highlighter.Caret = new DocumentPosition(state.CaretLine, state.CaretColumn + 1);
         var candidates = DisplayCandidates(state, Catalog);
         var paletteVisible = candidates.Count > 0 && Fit.PaletteRows > 0;
+        state.Highlighter.Diagnostics = PromptDiagnostics.Visible(state);
         state.SelectedIndex = paletteVisible ? Math.Clamp(state.SelectedIndex, 0, candidates.Count - 1) : 0;
         var prediction = PredictionFor(state, Catalog);
         if (prediction is null)

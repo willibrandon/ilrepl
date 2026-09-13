@@ -988,6 +988,39 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
+    /// A member prefix with confirmed overloads leaves the palette in charge until it is dismissed.
+    /// </summary>
+    [TestMethod]
+    public async Task Buffer_MemberPrefix_DoesNotCompeteWithCompletion()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        var transcript = new Transcript();
+        var recorder = new FrameRecorder();
+        await using var terminal = AppTest.Build(engine, transcript,
+            configure: builder => builder.AddPresentationFilter(recorder));
+        recorder.Terminal = terminal;
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+
+        await auto.WaitUntilTextAsync("il[1]>");
+        var start = recorder.Count;
+        await auto.TypeAsync("call Math::Ma", ct: ct);
+        await auto.WaitUntilTextAsync("members 1/");
+        await auto.WaitUntilTextAsync("Max(Decimal, Decimal)");
+        foreach (var frame in recorder.Since(start))
+        {
+            Assert.DoesNotContain("error on line", frame.ToString());
+            Assert.DoesNotContain("did you mean 'Tan'", frame.ToString());
+        }
+
+        await auto.EscapeAsync(ct: ct);
+        await auto.WaitUntilTextAsync("did you mean 'Max'");
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
     /// Ctrl+U cuts the current line from the caret back to its start and leaves the caret there;
     /// at the start of a line it joins the line to the one above, the other lines stay, and undo
     /// puts each step back.

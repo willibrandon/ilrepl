@@ -29,6 +29,30 @@ public sealed class NameSuggestionsTests
     }
 
     /// <summary>
+    /// An abbreviated reference recommends its nearest overloaded name instead of a farther unique method.
+    /// </summary>
+    [TestMethod]
+    public void MethodSuggestion_AbbreviatedOverload_KeepsNearestName()
+    {
+        var session = new Session();
+        var error = Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Math::Ma", session.State.Context, false));
+        Assert.Contains("did you mean 'Max'", error.Message);
+        Assert.DoesNotContain("'Tan'", error.Message);
+    }
+
+    /// <summary>
+    /// An abbreviated reference does not recommend a nearby name whose return type cannot bind.
+    /// </summary>
+    [TestMethod]
+    public void MethodSuggestion_AbbreviatedReturnType_RejectsIncompatibleName()
+    {
+        var session = new Session();
+        var error = Assert.ThrowsExactly<ReplException>(() =>
+            MemberResolver.ResolveMethod("string Math::Ma", session.State.Context, false));
+        Assert.DoesNotContain("did you mean 'Max'", error.Message);
+    }
+
+    /// <summary>
     /// The bounded distance agrees with the full one wherever the bound admits an answer.
     /// </summary>
     [TestMethod]
