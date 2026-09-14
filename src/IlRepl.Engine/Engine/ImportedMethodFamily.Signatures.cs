@@ -17,6 +17,11 @@ internal sealed partial class ImportedMethodFamily
 
         foreach (var type in _types.Keys.ToArray())
         {
+            foreach (var contract in ImportedMetadata.Interfaces(type))
+            {
+                ConsiderType(contract, type);
+            }
+
             foreach (var field in type.GetFields(Declared))
             {
                 ScanSignature(RuntimeMetadataSignatures.Read(field), type, field + ": field signature");

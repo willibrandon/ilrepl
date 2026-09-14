@@ -121,7 +121,8 @@ internal sealed partial class ImportedMethodFamily
             }
 
             ScanReflection();
-            if (_pending.Count == 0 && typeCount == _types.Count)
+            var changedBases = RefreshExternalBases();
+            if (_pending.Count == 0 && typeCount == _types.Count && !changedBases)
             {
                 break;
             }
@@ -137,6 +138,7 @@ internal sealed partial class ImportedMethodFamily
             ReportType(type, location);
         }
 
+        ValidateExternalInterfaces();
         ValidateBoundaries();
     }
 
@@ -267,10 +269,11 @@ internal sealed partial class ImportedMethodFamily
         ConsiderConstraints(type.GetGenericArguments(), type, TypeNameFormatter.Pretty(type));
         if (type.BaseType is { } baseType)
         {
-            ConsiderType(baseType, type);
+            if (ShouldCopyType(DefinitionOf(baseType), type)) ConsiderType(baseType, type);
+            if (!_types.ContainsKey(DefinitionOf(baseType))) PreserveExternalBase(baseType);
         }
 
-        foreach (var contract in type.GetInterfaces())
+        foreach (var contract in ImportedMetadata.Interfaces(type))
         {
             ConsiderType(contract, type);
         }
@@ -308,7 +311,7 @@ internal sealed partial class ImportedMethodFamily
             }
 
             var definition = DefinitionOf(type);
-            if (TypeRelations.IsSessionType(definition) || definition.Assembly == from.Assembly && !definition.IsVisible)
+            if (ShouldCopyType(definition, from))
             {
                 AddType(definition);
             }
@@ -447,10 +450,11 @@ internal sealed partial class ImportedMethodFamily
                     var accessible = MemberAccess.MethodVerdict(new ResolvedMethod(target, null), body.State.Member!.Scope,
                         _session.TypeTable, judgeAll: true) is null;
                     var initialization = _initializationMethods.Contains(body.Method) && target.Module == body.Method.Module;
-                    var copy = initialization || resolved.IsSessionMethod || _types.ContainsKey(owner) || TypeRelations.IsSessionType(owner)
-                        || (owner.Assembly == body.Method.Module.Assembly && ((!target.IsPublic && !((target.IsFamily
-                            || target.IsFamilyOrAssembly) && accessible))
-                            || !owner.IsVisible));
+                    var copy = initialization || resolved.IsSessionMethod || _types.ContainsKey(owner)
+                        || !_externalTypes.Contains(owner) && (TypeRelations.IsSessionType(owner)
+                            || (owner.Assembly == body.Method.Module.Assembly && ((!target.IsPublic && !((target.IsFamily
+                                || target.IsFamilyOrAssembly) && accessible))
+                                || !owner.IsVisible)));
                     if (copy)
                     {
                         try
@@ -475,8 +479,9 @@ internal sealed partial class ImportedMethodFamily
                 {
                     var owner = DefinitionOf(field.DeclaringType!);
                     var initialization = _initializationMethods.Contains(body.Method) && field.Module == body.Method.Module;
-                    var copy = initialization || _types.ContainsKey(owner) || TypeRelations.IsSessionType(owner)
-                        || (owner.Assembly == body.Method.Module.Assembly && (!field.IsPublic || !owner.IsVisible));
+                    var copy = initialization || _types.ContainsKey(owner)
+                        || !_externalTypes.Contains(owner) && (TypeRelations.IsSessionType(owner)
+                            || (owner.Assembly == body.Method.Module.Assembly && (!field.IsPublic || !owner.IsVisible)));
                     if (copy)
                     {
                         AddType(owner);
@@ -557,7 +562,8 @@ internal sealed partial class ImportedMethodFamily
                         }
 
                         // Assembly access from the source assembly is lost by a copy.
-                        if (!target.IsPublic && !target.IsFamily && !target.IsFamilyOrAssembly)
+                        if (!target.IsPublic && !target.IsFamily && !target.IsFamilyOrAssembly
+                            && !_externalTypes.Contains(DefinitionOf(target.DeclaringType!)))
                         {
                             problem ??= $"external member {MemberResolver.Describe(target)} is "
                                 + $"{MemberAccess.AccessWord(target.Attributes)} in {target.Module.Assembly.FullName}";
@@ -573,7 +579,8 @@ internal sealed partial class ImportedMethodFamily
                             problem = $"external field {field} requires an original nominal type that the copy cannot supply";
                         }
 
-                        if (!field.IsPublic && !field.IsFamily && !field.IsFamilyOrAssembly)
+                        if (!field.IsPublic && !field.IsFamily && !field.IsFamilyOrAssembly
+                            && !_externalTypes.Contains(DefinitionOf(field.DeclaringType!)))
                         {
                             problem ??= $"external field {field} is {MemberAccess.AccessWord(field.Attributes)} "
                                 + $"in {field.Module.Assembly.FullName}";

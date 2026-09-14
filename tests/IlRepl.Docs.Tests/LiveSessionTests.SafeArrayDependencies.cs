@@ -96,13 +96,15 @@ public sealed partial class LiveSessionTests
         var handle = row + "Handle";
         const string blob = "valuetype " + metadata + "BlobReader";
         return ".method class Type SavedSubtype() {\n.locals init (" + peReader + " pe, " + reader + " metadata, "
-            + row + " row, valuetype " + metadata + "BlobHandle descriptor, " + blob + " blob)\n"
+            + row + " row, valuetype " + metadata + "BlobHandle descriptor, " + blob + " blob, int32 index)\n"
             + "ldstr \"/tmp/safe-array.dll\"\ncall class FileStream File::OpenRead(string)\nnewobj instance void "
             + peReader + "::.ctor(class Stream)\ndup\nstloc.0\ncall " + reader + " " + metadata
-            + "PEReaderExtensions::GetMetadataReader(" + peReader + ")\ndup\nstloc.1\nldc.i4.1\ncall " + handle + " "
+            + "PEReaderExtensions::GetMetadataReader(" + peReader + ")\nstloc.1\nNEXT: ldloc.1\n"
+            + "ldloc.s 5\nldc.i4.1\nadd\ndup\nstloc.s 5\ncall " + handle + " "
             + metadata + "Ecma335.MetadataTokens::" + kind + "Handle(int32)\ncallvirt instance " + row + " " + reader + "::Get"
             + kind + "(" + handle + ")\nstloc.2\nldloca.s 2\ncall instance valuetype " + metadata + "BlobHandle " + row
-            + "::GetMarshallingDescriptor()\nstloc.3\nldloc.1\nldloc.3\ncallvirt instance " + blob + " " + reader
+            + "::GetMarshallingDescriptor()\nstloc.3\nldloca.s 3\ncall instance bool valuetype " + metadata
+            + "BlobHandle::get_IsNil()\nbrtrue NEXT\nldloc.1\nldloc.3\ncallvirt instance " + blob + " " + reader
             + "::GetBlobReader(valuetype " + metadata + "BlobHandle)\nstloc.s 4\nldloca.s 4\ncall instance uint8 "
             + blob + "::ReadByte()\npop\nldloca.s 4\ncall instance int32 " + blob + "::ReadCompressedInteger()\npop\n"
             + "ldloca.s 4\ncall instance string " + blob + "::ReadSerializedString()\ncall class Type Type::GetType(string)\n"

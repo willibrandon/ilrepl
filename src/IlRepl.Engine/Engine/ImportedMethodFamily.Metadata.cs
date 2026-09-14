@@ -23,6 +23,11 @@ internal sealed partial class ImportedMethodFamily
     internal Dictionary<MemberInfo, IMemberDefinition> Write(CecilWriter writer)
     {
         RequireValid();
+        foreach (var assembly in _externalTypes.Select(type => type.Assembly).Distinct())
+        {
+            writer.GrantAccessTo(assembly.GetName().Name!);
+        }
+
         var definitions = new Dictionary<MemberInfo, IMemberDefinition>();
         foreach (var (original, path) in _types)
         {
