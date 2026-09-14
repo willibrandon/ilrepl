@@ -434,10 +434,11 @@ internal sealed partial class ImportedMethodFamily
                 {
                     var target = resolved.Method ?? _pinned[resolved.Definition!.Name];
                     target = IlAsmRenderer.DefinitionOf(target);
-                    if (instruction.Op != OpCodes.Ldtoken && EnumeratesAssemblyTypes(target))
+                    var resources = InspectsAssemblyResources(target);
+                    if (instruction.Op != OpCodes.Ldtoken && (resources || EnumeratesAssemblyTypes(target)))
                     {
-                        const string reason = "assembly and module type enumeration cannot reproduce "
-                            + "the original assembly's complete type set";
+                        var reason = resources ? "manifest resource inspection cannot reproduce the original assembly's resources"
+                            : "assembly and module type enumeration cannot reproduce the original assembly's complete type set";
                         _dependencies.Add(new EditDependency(MemberResolver.Describe(target), target.Module.Assembly.FullName!, location,
                             "blocked: " + reason) { Access = MemberAccess.AccessWord(target.Attributes) });
                         throw new ReplException(location + ": " + reason);
@@ -448,7 +449,8 @@ internal sealed partial class ImportedMethodFamily
                         _reflectionLocation ??= location;
                     }
 
-                    if ((instruction.Op == OpCodes.Call || instruction.Op == OpCodes.Callvirt) && IsTypeLookup(target))
+                    if ((instruction.Op == OpCodes.Call || instruction.Op == OpCodes.Callvirt)
+                        && (IsTypeLookup(target) || IsAssemblyActivation(target)))
                     {
                         _reflectionLocation ??= location;
                         var helper = target.IsStatic ? nameof(CopiedTypeNames.Translate) : nameof(CopiedTypeNames.TranslateScoped);

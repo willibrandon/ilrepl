@@ -14,8 +14,8 @@ internal sealed partial class ImportedMethodFamily
     private MethodDefinition WriteScopedTypeLookup(CecilWriter writer, TypeDefinition owner, MethodReference target,
         OpCode call, int index)
     {
-        var wrapper = new MethodDefinition("GetType" + index, CecilMethodAttributes.Assembly | CecilMethodAttributes.Static,
-            writer.Import(typeof(Type)));
+        var wrapper = new MethodDefinition(target.Name + index, CecilMethodAttributes.Assembly | CecilMethodAttributes.Static,
+            target.ReturnType);
         owner.Methods.Add(wrapper);
         wrapper.Parameters.Add(new ParameterDefinition(target.DeclaringType));
         foreach (var parameter in target.Parameters) wrapper.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
@@ -28,7 +28,8 @@ internal sealed partial class ImportedMethodFamily
         il.Emit(OpCodes.Callvirt, writer.Import(typeof(Type).GetProperty(property)!.GetMethod!));
         il.Emit(OpCodes.Bne_Un, unmodified);
         il.Emit(OpCodes.Ldarg_1);
-        if (target.Parameters.Count == 3) il.Emit(OpCodes.Ldarg_3);
+        var ignoreCase = target.Name == nameof(Assembly.CreateInstance) ? 1 : 2;
+        if (target.Parameters.Count > ignoreCase) il.Emit(OpCodes.Ldarg, wrapper.Parameters[ignoreCase + 1]);
         else il.Emit(OpCodes.Ldc_I4_0);
         WriteTypeLookupNames(writer, il);
         il.Emit(OpCodes.Call, writer.Import(typeof(CopiedTypeNames).GetMethod(nameof(CopiedTypeNames.TranslateScoped),

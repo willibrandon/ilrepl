@@ -16,6 +16,10 @@ internal sealed partial class ImportedMethodFamily
         && (method.IsStatic ? method.DeclaringType == typeof(Type)
             : method.DeclaringType == typeof(Assembly) || method.DeclaringType == typeof(Module));
 
+    private static bool IsAssemblyActivation(MethodBase method) => !method.IsStatic && method.DeclaringType == typeof(Assembly)
+        && method.Name == nameof(Assembly.CreateInstance)
+        && method.GetParameters() is { Length: > 0 } parameters && parameters[0].ParameterType == typeof(string);
+
     private void WriteTypeLookups(CecilWriter writer, Dictionary<MemberInfo, IMemberDefinition> definitions)
     {
         TypeDefinition? owner = null;
@@ -38,7 +42,9 @@ internal sealed partial class ImportedMethodFamily
                 var activation = !target.HasThis && target.DeclaringType.FullName == typeof(Activator).FullName
                     && target.Name is nameof(Activator.CreateInstance) or nameof(Activator.CreateInstanceFrom)
                     && target.Parameters.Count >= 2 && target.Parameters[1].ParameterType.FullName == typeof(string).FullName;
-                if (!activation && (target.Name != nameof(Type.GetType)
+                var assemblyActivation = target.HasThis && target.DeclaringType.FullName == typeof(Assembly).FullName
+                    && target.Name == nameof(Assembly.CreateInstance);
+                if (!activation && !assemblyActivation && (target.Name != nameof(Type.GetType)
                     || (target.HasThis ? target.DeclaringType.FullName != typeof(Assembly).FullName
                             && target.DeclaringType.FullName != typeof(Module).FullName
                         : target.DeclaringType.FullName != typeof(Type).FullName)))

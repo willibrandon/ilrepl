@@ -71,4 +71,9 @@ internal sealed partial class ImportedMethodFamily
                     or nameof(Assembly.GetForwardedTypes) or "get_DefinedTypes" or "get_ExportedTypes"
             || typeof(Module).IsAssignableFrom(type) && method.Name is nameof(Module.GetTypes) or nameof(Module.FindTypes);
     }
+
+    private static bool InspectsAssemblyResources(MethodBase method) => method.DeclaringType is { } type
+        && type.Assembly == typeof(Assembly).Assembly && typeof(Assembly).IsAssignableFrom(type)
+        && method.Name is nameof(Assembly.GetManifestResourceStream) or nameof(Assembly.GetManifestResourceNames)
+            or nameof(Assembly.GetManifestResourceInfo);
 }

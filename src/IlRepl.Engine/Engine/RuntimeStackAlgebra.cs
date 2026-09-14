@@ -77,7 +77,7 @@ public sealed class RuntimeStackAlgebra : IStackTypeAlgebra<Type>
     public bool IsValueType(Type type) => type.IsValueType;
 
     /// <inheritdoc/>
-    public bool IsByRefLike(Type type) => type.IsByRefLike || type.IsGenericParameter
+    public bool IsByRefLike(Type type) => type.IsValueType && type.IsByRefLike || type.IsGenericParameter
         && type.GenericParameterAttributes.HasFlag(GenericParameterAttributes.AllowByRefLike);
 
     /// <inheritdoc/>

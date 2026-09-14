@@ -189,7 +189,7 @@ An external base keeps its original interface types.
 Type and module initializers keep the helpers they need. Opening or saving an edit does not run its code.
 String lookups through `Type.GetType`, `Assembly.GetType`, and `Module.GetType` recognize original names of copied types,
 including nested types and generic arguments.
-String-based `Activator.CreateInstance` and `Activator.CreateInstanceFrom` calls also recognize copied type names.
+String-based `Activator.CreateInstance`, `Activator.CreateInstanceFrom`, and `Assembly.CreateInstance` calls also recognize copied type names.
 Public methods outside this copied context remain references to their original assemblies.
 The dependency list includes local and member signatures, custom modifiers, catch types, and `calli` signatures.
 Custom attributes keep their constructors, named members, and type arguments in saved copies.
@@ -200,6 +200,7 @@ Runtime declarations needed only for reflection keep their metadata.
 Generated helpers do not change the declaring type's reflected member list.
 Assembly and module type enumeration, including `GetTypes`, `DefinedTypes`, and `GetForwardedTypes`, is rejected during preflight.
 A method copy cannot reproduce the original assembly's complete type set.
+Manifest resource inspection is also rejected because copies do not include the source assembly's resources.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it
 was copied. The report updates with each saved revision.
