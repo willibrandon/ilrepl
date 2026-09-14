@@ -204,13 +204,13 @@ Type and member custom attributes keep their constructors, named members, and ty
 Marshal descriptors keep their referenced types, including SAFEARRAY subtypes and custom marshaler implementations.
 Private delegates retain their runtime methods and copied targets. Delegate binding by name keeps the named members available.
 When code uses reflection, copied types retain their full member context, including private and nested declarations.
+Known constructor lookups and reflective invocation use the copied constructors.
 Runtime declarations needed only for reflection keep their metadata.
 Generated helpers do not change the declaring type's reflected member list.
-Assembly and module type enumeration, including `GetTypes`, `DefinedTypes`, and `GetForwardedTypes`, is rejected during preflight.
-A method copy cannot reproduce the original assembly's complete type set.
-Manifest resource inspection is also rejected because copies do not include the source assembly's resources.
-Assembly and module attribute inspection is rejected, including calls through `ICustomAttributeProvider`.
-Copies do not retain attributes from the source assembly or module. Use type or member APIs to inspect their copied attributes.
+Assembly and module inspection is rejected for type lists, resources, reference tables, and custom attributes.
+Copies do not retain this source metadata. This includes `GetTypes`, `DefinedTypes`, `GetForwardedTypes`,
+`Assembly.GetReferencedAssemblies()`, and attribute APIs such as `ICustomAttributeProvider`.
+Use type or member APIs to inspect copied attributes.
 These limits also apply to reflective invocation and delegate binding. The target must be known during preflight.
 Call type lookup and string activation APIs directly so copied names can be translated.
 

@@ -152,7 +152,8 @@ internal sealed class ReflectionValueResolver(
         var origin = origins[0];
         if (body.State.Entries[origin].Instruction?.Operand is not ResolvedMethod resolved) return null;
         var method = resolveMethod(resolved);
-        if (method.DeclaringType != typeof(Type) && method.DeclaringType != typeof(RuntimeReflectionExtensions)) return null;
+        if (method.DeclaringType != typeof(Type) && method.DeclaringType != typeof(TypeInfo)
+            && method.DeclaringType != typeof(RuntimeReflectionExtensions)) return null;
         for (var index = origin + 1; index < position; index++)
         {
             var instruction = body.State.Entries[index].Instruction;
@@ -245,6 +246,8 @@ internal sealed class ReflectionValueResolver(
         object?[]? Input(int parameter = -1) => Argument(body, position, parameter);
         if (owner == typeof(Type) && name == nameof(Type.GetTypeFromHandle)
             || owner == typeof(MethodBase) && name == nameof(MethodBase.GetMethodFromHandle)) return Input(0);
+        if (owner == typeof(IntrospectionExtensions) && name == nameof(IntrospectionExtensions.GetTypeInfo)) return Input(0);
+        if (owner == typeof(TypeInfo) && name == nameof(TypeInfo.AsType)) return Input();
         if (name == "get_MethodHandle" && owner is not null && typeof(MethodBase).IsAssignableFrom(owner)) return Input();
         if (owner == typeof(Assembly) && name == nameof(Assembly.GetExecutingAssembly)) return [body.Method.Module.Assembly];
         if (owner == typeof(object) && name == nameof(GetType))
@@ -310,6 +313,9 @@ internal sealed class ReflectionValueResolver(
             if (HasCustomBinder(body, position, method)) return null;
             var receiver = method.IsStatic ? Input(0) : Input();
             var argument = method.IsStatic ? 1 : 0;
+            if (name is nameof(Type.GetConstructor) or nameof(Type.GetConstructors) or "get_DeclaredConstructors")
+                return Members(receiver, [null], MemberTypes.Constructor);
+            if (name == "get_TypeInitializer") return Members(receiver, [ConstructorInfo.TypeConstructorName], MemberTypes.Constructor);
             if (name is "GetMethod" or "GetRuntimeMethod" or "GetProperty" or "GetRuntimeProperty" or "GetField" or "GetRuntimeField")
                 return Members(receiver, Input(argument), name.Contains("Property", StringComparison.Ordinal) ? MemberTypes.Property
                     : name.Contains("Field", StringComparison.Ordinal) ? MemberTypes.Field : MemberTypes.Method);
@@ -326,7 +332,12 @@ internal sealed class ReflectionValueResolver(
             && name is nameof(MethodInfo.MakeGenericMethod) or nameof(MethodInfo.GetGenericMethodDefinition)
                 or nameof(MethodInfo.CreateDelegate))
             return Input();
-        if (owner == typeof(MethodInvoker) && name == nameof(MethodInvoker.Create)) return Input(0);
+        if ((owner == typeof(MethodInvoker) || owner == typeof(ConstructorInvoker)) && name == nameof(MethodInvoker.Create))
+            return Input(0);
+        if (name == nameof(ConstructorInfo.Invoke) && (owner == typeof(ConstructorInvoker)
+            || owner is not null && typeof(ConstructorInfo).IsAssignableFrom(owner) && method.GetParameters().Length is 1 or 4))
+            return Map(Input(), value => value is ConstructorInfo { IsStatic: false, DeclaringType: { } type }
+                ? new ReflectedInstance(type) : null);
         if (owner == typeof(Delegate) && name == nameof(Delegate.CreateDelegate)) return DelegateTargets(body, position, method);
         if (owner == typeof(Delegate) && name == "get_Method") return Input();
         if (owner == typeof(Enumerable) && name is nameof(Enumerable.First) or nameof(Enumerable.FirstOrDefault)

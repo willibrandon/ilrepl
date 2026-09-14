@@ -20,6 +20,19 @@ internal static class RuntimeSymbolTypes
     }
 
     /// <summary>
+    /// Returns whether a type operand must retain its signature, including generic instances of its declaring type.
+    /// </summary>
+    /// <param name="type">The symbolic operand type.</param>
+    /// <returns>Whether the exact operand must be retained.</returns>
+    internal static bool RequiresExactOperand(TypeSymbol type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        // Reflection can collapse a generic instance using its owner's parameters to the generic definition.
+        return RequiresExact(type) || type.Kind == TypeSymbolKind.Constructed
+            || type.Element is not null && RequiresExactOperand(type.Element);
+    }
+
+    /// <summary>
     /// Returns whether projecting a call-site signature would lose metadata shape.
     /// </summary>
     /// <param name="signature">The symbolic signature.</param>

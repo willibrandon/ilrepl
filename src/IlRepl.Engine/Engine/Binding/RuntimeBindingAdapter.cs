@@ -266,7 +266,7 @@ public sealed class RuntimeBindingAdapter
             Text = bound.Text,
             Kind = operand.Kind,
             Operand = value,
-            ExactTypeOperand = operand.ExactType is { } type && RuntimeSymbolTypes.RequiresExact(type) ? type : null,
+            ExactTypeOperand = operand.ExactType is { } type && RuntimeSymbolTypes.RequiresExactOperand(type) ? type : null,
             ExactFieldDeclaringType = operand.Field is { } field ? Exact(field.DeclaringType) : null,
             LocalIndex = bound.LocalIndex,
             ArgumentIndex = bound.ArgumentIndex,

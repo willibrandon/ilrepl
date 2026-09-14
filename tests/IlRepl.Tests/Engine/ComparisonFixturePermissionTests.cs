@@ -254,8 +254,11 @@ public sealed class ComparisonFixturePermissionTests
     {
         var work = result.Original.StandardOutput.Trim();
         Assert.AreEqual(work, result.Edited.StandardOutput.Trim());
-        Assert.StartsWith(Path.GetTempPath(), work);
-        Assert.IsFalse(Directory.Exists(Directory.GetParent(work)!.FullName), work);
+        Assert.IsTrue(Path.IsPathFullyQualified(work), work);
+        Assert.AreEqual("work", Path.GetFileName(work));
+        var parent = Directory.GetParent(work)!;
+        Assert.StartsWith("ilrepl-compare-", parent.Name);
+        Assert.IsFalse(Directory.Exists(parent.FullName), work);
     }
 
     private static void UnlockFixture(string root)

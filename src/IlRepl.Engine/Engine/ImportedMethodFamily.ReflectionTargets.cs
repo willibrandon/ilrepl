@@ -13,7 +13,7 @@ internal sealed partial class ImportedMethodFamily
     {
         typeof(Assembly), typeof(Module), typeof(Attribute), typeof(CustomAttributeExtensions), typeof(CustomAttributeData),
         typeof(ICustomAttributeProvider), typeof(Type), typeof(Delegate), typeof(MethodBase), typeof(MethodInfo),
-        typeof(PropertyInfo), typeof(MethodInvoker), typeof(Activator), typeof(RuntimeMethodHandle),
+        typeof(PropertyInfo), typeof(MethodInvoker), typeof(ConstructorInvoker), typeof(Activator), typeof(RuntimeMethodHandle),
     }.SelectMany(type => type.GetMethods()).Where(method => AssemblyInspectionProblem(method) is not null || IsIndirectReflection(method)
         || IsTypeLookup(method) || IsActivation(method) || IsAssemblyActivation(method))
         .SelectMany(method => method.Name.StartsWith("get_", StringComparison.Ordinal) ? new[] { method.Name, method.Name[4..] }
@@ -122,7 +122,8 @@ internal sealed partial class ImportedMethodFamily
             || (typeof(Type).IsAssignableFrom(type) || type == typeof(IReflect)) && method.Name == nameof(Type.InvokeMember)
             || type == typeof(Delegate) && method.Name is nameof(Delegate.CreateDelegate) or nameof(Delegate.DynamicInvoke)
             || type == typeof(RuntimeMethodHandle) && method.Name == nameof(RuntimeMethodHandle.GetFunctionPointer)
-            || type == typeof(MethodInvoker) && method.Name is nameof(MethodInvoker.Create) or nameof(MethodInvoker.Invoke);
+            || (type == typeof(MethodInvoker) || type == typeof(ConstructorInvoker))
+                && method.Name is nameof(MethodInvoker.Create) or nameof(MethodInvoker.Invoke);
     }
 
     private void ValidateIndirectReflection()
