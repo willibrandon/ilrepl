@@ -136,8 +136,8 @@ Each side calls the original or the copy:
 Both sides start with a new counter. The original returns `1` and sets `Value` to `1`; the copy returns
 `2` and sets `Value` to `2`.
 
-The report shows the receiver and arguments before and after each call, the return value or exception,
-and console output, including direct stream writes. It tracks shared objects and `ref` aliases. Objects are compared through their fields
+The report shows receiver and argument values as `before -> after`, followed by each call's return value
+or exception, including exceptions caught by the scenario. It also shows console output, including direct stream writes. It tracks shared objects and `ref` aliases. Objects are compared through their fields
 without calling properties, `ToString`, or equality methods. `Task`, its subclasses, and `ValueTask` results are awaited.
 Tasks keep their identity and `AsyncState`; a null task remains null. A scenario must await any work it starts.
 Value tasks keep their original representation. Return a source-backed value task from the scenario to observe its completion;
@@ -178,6 +178,7 @@ The dependency list includes local and member signatures, custom modifiers, catc
 Custom attributes keep their constructors, named members, and type arguments in saved copies.
 Marshal descriptors keep their referenced types, including SAFEARRAY subtypes and custom marshaler implementations.
 Private delegates retain their runtime methods and copied targets.
+When code uses reflection, copied types retain their full member context, including private and nested declarations.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it
 was copied. The report updates with each saved revision.

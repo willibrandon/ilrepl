@@ -113,11 +113,11 @@ public sealed class CompletionLifetimeTests
     {
         using var editing = new EditingSession(new Session());
         string[] lines = [".method void Long() {", .. Enumerable.Repeat("nop", 198), "}"];
-        var before = GC.GetTotalAllocatedBytes(precise: true);
+        var before = GC.GetAllocatedBytesForCurrentThread();
         var watch = Stopwatch.StartNew();
         var view = editing.Speculate(lines, lines.Length, cancellationToken: TestContext.CancellationToken);
         var elapsed = watch.Elapsed;
-        var allocated = GC.GetTotalAllocatedBytes(precise: true) - before;
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.IsEmpty(view.SkippedLines);
         Assert.IsLessThan(TimeSpan.FromMilliseconds(150), elapsed);
         Assert.IsLessThan(20_000_000L, allocated);

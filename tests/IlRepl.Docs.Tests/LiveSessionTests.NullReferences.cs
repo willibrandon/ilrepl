@@ -49,8 +49,9 @@ public sealed partial class LiveSessionTests
             }
             """, "end of method Scenario");
         await TypeLineAsync(page, ".compare Copy using Scenario");
-        await ExpectComparisonTextAsync(page, "Copy: match");
-        var text = await BufferTextAsync(page);
+        await ExpectComparisonTextAsync(page, "edited: completed");
+        var text = await ReadComparisonTranscriptAsync(page);
+        Assert.Contains("Copy: match", text);
         Assert.Contains("original: completed", text);
         Assert.Contains("edited: completed", text);
         Assert.Contains("call 1 argument 0: null reference", text);

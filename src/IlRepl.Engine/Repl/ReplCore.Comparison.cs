@@ -21,7 +21,7 @@ public sealed partial class ReplCore
 
     private void Side(string name, ComparisonSide side)
     {
-        Note(name + ": " + side.Outcome + (side.Detail is null ? "" : " — " + side.Detail));
+        Note(name + ": " + side.Outcome + (side.Detail is null ? "" : ": " + side.Detail));
         if (side.Exception is { } exception)
         {
             Listing($"    threw {exception.Type}: {exception.Message} (HRESULT 0x{exception.HResult:x8})");
@@ -33,9 +33,21 @@ public sealed partial class ReplCore
 
         foreach (var call in side.Invocations.Select((invocation, index) => (invocation, index)))
         {
-            foreach (var member in call.invocation.Outputs)
+            foreach (var member in call.invocation.Inputs)
+            {
+                var after = call.invocation.Outputs.FirstOrDefault(output => output.Name == member.Name);
+                Listing($"    call {call.index + 1} {member.Name}: {Describe(member.Value)}"
+                    + (after is null ? " (before)" : " -> " + Describe(after.Value)));
+            }
+
+            foreach (var member in call.invocation.Outputs.Where(output => !call.invocation.Inputs.Any(input => input.Name == output.Name)))
             {
                 Listing($"    call {call.index + 1} {member.Name}: {Describe(member.Value)}");
+            }
+
+            if (call.invocation.Exception is { } failure)
+            {
+                Listing($"    call {call.index + 1} threw {failure.Type}: {failure.Message} (HRESULT 0x{failure.HResult:x8})");
             }
         }
 

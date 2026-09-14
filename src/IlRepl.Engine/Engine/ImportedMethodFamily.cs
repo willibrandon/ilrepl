@@ -118,6 +118,7 @@ internal sealed partial class ImportedMethodFamily
                 Scan(body);
             }
 
+            ScanReflection();
             if (_pending.Count == 0 && typeCount == _types.Count)
             {
                 break;
@@ -406,6 +407,11 @@ internal sealed partial class ImportedMethodFamily
                 {
                     var target = resolved.Method ?? _pinned[resolved.Definition!.Name];
                     target = IlAsmRenderer.DefinitionOf(target);
+                    if (ReflectsMembers(target))
+                    {
+                        _reflectionLocation ??= location;
+                    }
+
                     var owner = DefinitionOf(target.DeclaringType!);
                     var accessible = MemberAccess.MethodVerdict(new ResolvedMethod(target, null), body.State.Member!.Scope,
                         _session.TypeTable, judgeAll: true) is null;
@@ -449,6 +455,11 @@ internal sealed partial class ImportedMethodFamily
                 }
                 case Type type:
                     ConsiderType(type, body.Method.DeclaringType!);
+                    if (instruction.Op == OpCodes.Ldtoken && ContainsCopiedType(type))
+                    {
+                        _reflectionLocation ??= location;
+                    }
+
                     if (!type.IsGenericParameter)
                     {
                         ReportType(type, location);

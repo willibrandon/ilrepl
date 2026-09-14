@@ -74,7 +74,8 @@ public sealed partial class LiveSessionTests
             }
         }
 
-        await ExpectComparisonTextAsync(page, "Copy: different");
+        await ExpectComparisonTextAsync(page, "edited: completed");
+        Assert.Contains("Copy: different", await ReadComparisonTranscriptAsync(page));
         Assert.AreEqual(1, await page.EvaluateAsync<int>("() => window.ilreplSessionCount"));
     }
 }

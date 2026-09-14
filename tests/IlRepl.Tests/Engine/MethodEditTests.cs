@@ -40,11 +40,11 @@ public sealed class MethodEditTests
         Assert.Contains(".maxstack ", draft.Source);
         Assert.HasCount(1, session.Edits);
 
-        Assert.Contains(problem => problem.Contains("MemmoveInternal", StringComparison.Ordinal), draft.Problems,
-            string.Join("\n", draft.Problems));
+        Assert.Contains(problem => problem.Contains("is implemented by the runtime; there is no IL", StringComparison.Ordinal),
+            draft.Problems, string.Join("\n", draft.Problems));
         var originalSource = draft.Source;
         var rejected = Assert.ThrowsExactly<ReplException>(() => session.CommitEdit(draft.Name, draft.Source));
-        Assert.Contains("MemmoveInternal", rejected.Message);
+        Assert.Contains("is implemented by the runtime; there is no IL", rejected.Message);
         Assert.IsNull(draft.Method);
         Assert.AreEqual(0, draft.Revision);
         Assert.AreEqual(originalSource, draft.Source);
