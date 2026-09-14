@@ -101,10 +101,12 @@ public static partial class ComparisonCapture
         }
 
         MethodDefinition? entry = null;
+        MethodDefinition? selectedMethod = null;
         string[] typeArguments = [];
         string[] methodArguments = [];
         var image = AssemblyExporter.WriteComparison(session, edit, original, (writer, selected) =>
         {
+            selectedMethod = selected;
             entry = ComparisonInstrumentation.Wrap(writer, selected);
             writer.Define(IlAsmRenderer.DefinitionOf(edit.Method!), entry);
             if (edit.Current!.CallableEntryPoint != edit.Method)
@@ -126,7 +128,7 @@ public static partial class ComparisonCapture
                     methodArguments = generic.GetGenericArguments().Select(type => ArgumentName(writer.Import(type))).ToArray();
                 }
             }
-        });
+        }, writer => ComparisonInstrumentation.CompleteVarArgCalls(writer, selectedMethod!, entry!));
         using (var module = ModuleDefinition.ReadModule(new MemoryStream(image, writable: false)))
         {
             foreach (var reference in module.AssemblyReferences)

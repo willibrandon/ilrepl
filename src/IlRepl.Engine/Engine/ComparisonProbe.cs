@@ -10,6 +10,7 @@ public static partial class ComparisonProbe
 {
     private static readonly Lock Gate = new();
     private static readonly List<PendingInvocation> Invocations = [];
+    private static readonly NullReferenceObservation NullReferenceValue = new();
     private static IReadOnlyDictionary<string, string> s_typeNames = new Dictionary<string, string>();
 
     /// <summary>
@@ -60,6 +61,12 @@ public static partial class ComparisonProbe
     /// <param name="reason">The reason the scenario must provide an explicit observation.</param>
     /// <returns>The marker included in the observation graph.</returns>
     public static object Unavailable(string reason) => new UnavailableObservation(reason);
+
+    /// <summary>
+    /// Marks a null managed reference without attempting to read through it.
+    /// </summary>
+    /// <returns>The marker distinguishing a null reference from a reference to a null value.</returns>
+    public static object NullReference() => NullReferenceValue;
 
     /// <summary>
     /// Initializes recording in an otherwise fresh worker runtime before loading user code.

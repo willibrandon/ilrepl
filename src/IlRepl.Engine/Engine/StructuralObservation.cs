@@ -29,6 +29,11 @@ internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> 
             return new ObservedValue("null", "", null, null, []);
         }
 
+        if (value is NullReferenceObservation)
+        {
+            return new ObservedValue("null-reference", "", null, null, []);
+        }
+
         var type = value.GetType();
         var name = TypeName(type);
         if (++_nodes > MaximumNodes || depth > MaximumDepth)

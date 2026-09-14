@@ -119,6 +119,7 @@ public sealed class CellState
         Generics = generics;
         Methods = methods;
         Signature = signature;
+        IsVarArg = signature?.CallingConvention.HasFlag(CallingConventions.VarArgs) == true;
         Types = types;
         Member = member;
         _braceSeen = braceOpen;
@@ -199,7 +200,7 @@ public sealed class CellState
     public StackSimulator Stack { get; } = new();
 
     /// <summary>
-    /// True when the cell was marked <c>.vararg</c>.
+    /// True when the cell or method header declares the vararg calling convention.
     /// </summary>
     public bool IsVarArg { get; private set; }
 

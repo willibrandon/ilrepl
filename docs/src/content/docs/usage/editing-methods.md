@@ -61,6 +61,9 @@ ret
 
 The cell returns `42`. Calling `Identity` still returns the input unchanged.
 
+Vararg copies use the usual call syntax, such as `call vararg int32 Copy(int32, ..., string)`.
+Optional arguments follow `...`. Managed vararg execution requires Windows.
+
 ## Inspect the differences
 
 `.dis Incremented` shows the copy; `.dis Incremented --original` shows the original.
@@ -131,6 +134,7 @@ and console output, including direct stream writes. It tracks shared objects and
 without calling properties, `ToString`, or equality methods. `Task` and `ValueTask` results are awaited.
 Tasks keep their identity and `AsyncState`; a null task remains null. A scenario must await any work it starts.
 Spans and other byref-like values remain usable in a scenario, but their observations are unavailable.
+A null managed reference is reported as `null reference`, distinct from a variable containing `null`.
 
 `different-inputs` means the inputs or call counts differed. A comparison is incomplete if it cannot
 inspect all results or the scenario never calls the method. With `--assert`, anything other than a

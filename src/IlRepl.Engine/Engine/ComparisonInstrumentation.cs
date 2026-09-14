@@ -9,17 +9,21 @@ namespace IlRepl.Engine;
 /// <summary>
 /// Adds an observation wrapper while preserving every instruction and recursive call in the selected body.
 /// </summary>
-internal static class ComparisonInstrumentation
+internal static partial class ComparisonInstrumentation
 {
     internal static MethodDefinition Wrap(CecilWriter writer, MethodDefinition target)
+        => Wrap(writer, target, [], "__ilrepl_observe_" + target.Name);
+
+    private static MethodDefinition Wrap(CecilWriter writer, MethodDefinition target, TypeReference[] optionalParameters, string name)
     {
         var owner = target.DeclaringType;
-        var wrapper = new MethodDefinition("__ilrepl_observe_" + target.Name,
+        var wrapper = new MethodDefinition(name,
             MethodAttributes.Public | MethodAttributes.HideBySig | (target.IsStatic ? MethodAttributes.Static : 0), target.ReturnType)
         {
             HasThis = target.HasThis,
             ExplicitThis = target.ExplicitThis,
-            CallingConvention = target.CallingConvention,
+            CallingConvention = target.CallingConvention == MethodCallingConvention.VarArg
+                ? MethodCallingConvention.Default : target.CallingConvention,
         };
         owner.Methods.Add(wrapper);
         foreach (var parameter in target.GenericParameters)
@@ -30,6 +34,11 @@ internal static class ComparisonInstrumentation
         foreach (var parameter in target.Parameters)
         {
             wrapper.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, parameter.ParameterType));
+        }
+
+        foreach (var parameter in optionalParameters)
+        {
+            wrapper.Parameters.Add(new ParameterDefinition(parameter));
         }
 
         for (var index = 0; index < target.GenericParameters.Count; index++)
@@ -56,13 +65,23 @@ internal static class ComparisonInstrumentation
         var enter = writer.Import(typeof(ComparisonProbe).GetMethod(nameof(ComparisonProbe.Enter))!);
         var leave = writer.Import(typeof(ComparisonProbe).GetMethod(nameof(ComparisonProbe.Leave))!);
         var unavailable = writer.Import(typeof(ComparisonProbe).GetMethod(nameof(ComparisonProbe.Unavailable))!);
+        var nullReference = writer.Import(typeof(ComparisonProbe).GetMethod(nameof(ComparisonProbe.NullReference))!);
         var self = Self(owner);
 
         void Box(TypeReference type)
         {
             type = Unmodified(type);
+            CilInstruction? done = null;
             if (type is ByReferenceType reference)
             {
+                var read = il.Create(OpCodes.Nop);
+                done = il.Create(OpCodes.Nop);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Brtrue, read);
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Call, nullReference);
+                il.Emit(OpCodes.Br, done);
+                il.Append(read);
                 type = Unmodified(reference.ElementType);
                 il.Emit(OpCodes.Ldobj, type);
             }
@@ -70,6 +89,11 @@ internal static class ComparisonInstrumentation
             if (type.IsValueType || type.IsGenericParameter)
             {
                 il.Emit(OpCodes.Box, type);
+            }
+
+            if (done is not null)
+            {
+                il.Append(done);
             }
         }
 
@@ -94,8 +118,7 @@ internal static class ComparisonInstrumentation
                 il.Emit(OpCodes.Ldarg_0);
                 if (owner.IsValueType)
                 {
-                    il.Emit(OpCodes.Ldobj, self);
-                    il.Emit(OpCodes.Box, self);
+                    Box(new ByReferenceType(self));
                 }
             }
         }
@@ -271,7 +294,7 @@ internal static class ComparisonInstrumentation
         }
 
         MethodReference called = target;
-        if (owner.HasGenericParameters)
+        if (owner.HasGenericParameters || optionalParameters.Length > 0)
         {
             called = new MethodReference(target.Name, target.ReturnType, self)
             {
@@ -287,6 +310,12 @@ internal static class ComparisonInstrumentation
             foreach (var parameter in target.GenericParameters)
             {
                 called.GenericParameters.Add(new GenericParameter(parameter.Name, called));
+            }
+
+            for (var index = 0; index < optionalParameters.Length; index++)
+            {
+                called.Parameters.Add(new ParameterDefinition(index == 0
+                    ? new SentinelType(optionalParameters[index]) : optionalParameters[index]));
             }
         }
 

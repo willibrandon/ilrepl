@@ -821,15 +821,17 @@ public static class SymbolBinder
                 throw new ReplException($"{syntax.Name} does not name a generic method definition of arity {arity}");
             }
 
-            if (wantConstructor != alias.IsConstructor || (syntax.ExplicitInstance && alias.IsStatic))
+            if (wantConstructor != alias.IsConstructor || (syntax.ExplicitInstance && alias.IsStatic)
+                || (syntax.IsVarArg && !alias.IsVarArg))
             {
                 throw new ReplException($"{syntax.Name} names {scope.Describe(alias)}; use its declared invocation convention");
             }
 
             var definition = alias;
-            if (syntax.GenericArguments is { } arguments)
+            var arguments = syntax.GenericArguments?.Select(argument => BindType(argument, scope)).ToArray();
+            if (arguments is not null)
             {
-                alias = scope.Instantiate(alias, arguments.Select(argument => BindType(argument, scope).Type).ToArray())
+                alias = scope.Instantiate(alias, arguments.Select(argument => argument.Type).ToArray())
                     ?? throw new ReplException($"the generic arguments do not satisfy {scope.Describe(definition)}");
             }
 
@@ -838,13 +840,20 @@ public static class SymbolBinder
                 throw new ReplException($"{syntax.Name} returns {scope.Pretty(alias.ReturnType)}");
             }
 
-            if (syntax.Parameters is { } parameters
-                && !ParametersMatch(alias, parameters.Select(parameter => BindType(parameter, scope)).ToArray()))
+            if (syntax.Parameters is not null
+                && !ParametersMatch(alias, syntax.FixedParameters.Select(parameter => BindType(parameter, scope)).ToArray()))
             {
                 throw new ReplException($"the arguments do not match {scope.Describe(alias)}");
             }
 
-            return new BoundMethod(alias, alias == definition ? null : definition, null);
+            var optional = syntax.OptionalParameters?.Select(parameter => BindType(parameter, scope)).ToArray();
+            var optionalTypes = optional?.Select(parameter => parameter.Type).ToArray() ?? (syntax.IsVarArg ? [] : null);
+            return new BoundMethod(alias, alias == definition ? null : definition, optionalTypes)
+            {
+                ExactGenericArguments = arguments?.Select(argument => argument.ExactType).ToArray() ?? [],
+                ExactOptionalParameterTypes = optional?.Select(parameter => parameter.ExactType).ToArray()
+                    ?? (optionalTypes is null ? null : []),
+            };
         }
 
         if (syntax.GenericArguments is not null || syntax.GenericArity is not null)

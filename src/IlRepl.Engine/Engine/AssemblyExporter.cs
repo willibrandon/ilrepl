@@ -66,13 +66,14 @@ public static class AssemblyExporter
     /// <param name="edit">The selected edit.</param>
     /// <param name="original">Whether selected calls bind to its captured original.</param>
     /// <param name="instrument">Adds invocation observation to the selected method before the image is written.</param>
+    /// <param name="complete">Completes call-site instrumentation after all method bodies have been emitted.</param>
     /// <returns>The frozen comparison assembly.</returns>
     internal static byte[] WriteComparison(Session session, MethodEdit edit, bool original,
-        Action<CecilWriter, MethodDefinition> instrument)
-        => WriteCore(session, "IlReplComparison", edit, original, instrument);
+        Action<CecilWriter, MethodDefinition> instrument, Action<CecilWriter>? complete = null)
+        => WriteCore(session, "IlReplComparison", edit, original, instrument, complete: complete);
 
     private static byte[] WriteCore(Session session, string assemblyName, MethodEdit? comparison, bool original,
-        Action<CecilWriter, MethodDefinition>? instrument, bool includeCell = true)
+        Action<CecilWriter, MethodDefinition>? instrument, bool includeCell = true, Action<CecilWriter>? complete = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentException.ThrowIfNullOrWhiteSpace(assemblyName);
@@ -162,6 +163,7 @@ public static class AssemblyExporter
                 WriteRun(writer, cell, session, map);
             }
 
+            complete?.Invoke(writer);
             return writer.Write();
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException or NullReferenceException)

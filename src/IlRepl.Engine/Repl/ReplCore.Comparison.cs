@@ -53,6 +53,7 @@ public sealed partial class ReplCore
     private static string Describe(ObservedValue value) => value.Kind switch
     {
         "null" => "null",
+        "null-reference" => "null reference",
         "scalar" => value.Type + " " + JsonSerializer.Serialize(value.Value, ProtocolJsonContext.Default.String),
         "reference" => "reference #" + value.Identity,
         "unavailable" => "unavailable: " + value.Value,
