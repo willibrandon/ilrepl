@@ -2,6 +2,7 @@ using System.Runtime.Loader;
 using IlRepl.Engine;
 using IlRepl.Host;
 using IlRepl.Tests.Shared;
+using Mono.Cecil;
 
 namespace IlRepl.Tests.Engine;
 
@@ -65,51 +66,19 @@ public sealed partial class ActivationEditTests
     [DataRow(3, true)]
     [DataRow(8, false)]
     [DataRow(8, true)]
+    [Timeout(120_000, CooperativeCancellation = true)]
     public async Task Compare_FileActivationUsesCopiedTypes(int overload, bool nested)
     {
         var fixture = IlLines.Load(ActivationExamples.Source(overload, nested, true).Split('\n'));
         var original = fixture.PrepareEdit("int32 Activation.Owner::Read(string, string)", "Source").Original.Requested;
         Assert.IsTrue(SessionAssemblies.TryGetDefinition(original.Module.Assembly, out var definition));
-        var path = Path.Combine(Path.GetTempPath(), definition.Name + ".dll");
-        File.WriteAllBytes(path, definition.Image!);
+        using var module = ModuleDefinition.ReadModule(new MemoryStream(definition.Image!));
+        module.Assembly.Name.Name = "ActivationFixture" + Guid.NewGuid().ToString("N");
+        var path = Path.Combine(Path.GetTempPath(), module.Assembly.Name.Name + ".dll");
+        module.Write(path);
         try
         {
-            var session = new Session();
-            var assembly = session.Resolver.Load(path);
-            var name = ActivationExamples.Name(nested, overload == 8);
-            Assert.AreEqual(42, assembly.GetType("Activation.Owner")!.GetMethod("Read")!.Invoke(null, [path, name]));
-            var edit = session.PrepareEdit("int32 Activation.Owner::Read(string, string)", "Copy");
-            Assert.IsEmpty(edit.Problems, string.Join('\n', edit.Problems));
-            session.CommitEdit(edit.Name, edit.Source);
-            Assert.AreEqual(42, edit.Method!.Invoke(null, [path, name]));
-            var arguments = "(" + LiteralParser.Escape(path) + ", " + LiteralParser.Escape(name) + ")";
-            var unchanged = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy " + arguments),
-                TestContext.CancellationToken);
-            Assert.AreEqual("match", unchanged.Outcome, unchanged.Original.Detail + "; " + unchanged.Edited.Detail);
-            Assert.AreEqual("42", unchanged.Original.Result!.Value);
-            Assert.AreEqual("42", unchanged.Edited.Result!.Value);
-            session.CommitEdit(edit.Name, ActivationExamples.Method(overload, nested, true, true));
-            var changed = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy " + arguments),
-                TestContext.CancellationToken);
-            Assert.AreEqual("different", changed.Outcome, changed.Original.Detail + "; " + changed.Edited.Detail);
-            Assert.AreEqual("42", changed.Original.Result!.Value);
-            Assert.AreEqual("43", changed.Edited.Result!.Value);
-            session.AddLine("ldstr " + LiteralParser.Escape(path));
-            session.AddLine("ldstr " + LiteralParser.Escape(name));
-            session.AddLine("call Copy");
-            foreach (var image in new[] { AssemblyExporter.Write(session, "file-activation"), IlasmLocator.Assemble(session.ToIlAsm()) })
-            {
-                var context = new AssemblyLoadContext("file-activation", isCollectible: true);
-                try
-                {
-                    var saved = context.LoadFromStream(new MemoryStream(image));
-                    Assert.AreEqual(43, saved.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
-                }
-                finally
-                {
-                    context.Unload();
-                }
-            }
+            await RunFileActivationChild(path, overload, nested);
         }
         finally
         {

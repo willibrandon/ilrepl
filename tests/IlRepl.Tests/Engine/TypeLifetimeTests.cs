@@ -6,9 +6,7 @@ using Mono.Cecil;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// A session type is one runtime type for as long as the session keeps it: cells share it, its
-/// statics keep their values, instances outlive the cell that made them, and a redefinition is a
-/// new type that existing instances never move to.
+/// Session types retain their identity and state until replaced, then collect when the session releases them.
 /// </summary>
 [TestClass]
 public sealed class TypeLifetimeTests
@@ -100,12 +98,13 @@ public sealed class TypeLifetimeTests
         var ct = TestContext.CancellationToken;
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var searches = new int[4];
+        using var cycle = new Barrier(searches.Length);
         Task[] workers =
         [
-            Task.Run(() => Repeat(() => resolver.Resolve("NoSuchTypeAnywhere", null), searches, 0, stop.Token), ct),
-            Task.Run(() => Repeat(() => resolver.Resolve("NoSuchTypeAnywhere", null), searches, 1, stop.Token), ct),
-            Task.Run(() => Repeat(() => TypeParser.Parse("Cosnole", context), searches, 2, stop.Token), ct),
-            Task.Run(() => Repeat(() => _ = DefineAndReset(new Session()), searches, 3, stop.Token), ct),
+            Worker(() => resolver.Resolve("NoSuchTypeAnywhere", null), 0),
+            Worker(() => resolver.Resolve("NoSuchTypeAnywhere", null), 1),
+            Worker(() => TypeParser.Parse("Cosnole", context), 2),
+            Worker(() => _ = DefineAndReset(new Session()), 3),
         ];
         try
         {
@@ -132,8 +131,11 @@ public sealed class TypeLifetimeTests
         finally
         {
             stop.Cancel();
-            Task.WaitAll(workers, ct);
+            Task.WaitAll(workers, CancellationToken.None);
         }
+
+        Task Worker(Action action, int index) => Task.Factory.StartNew(() => Repeat(action, searches, index, cycle, stop.Token),
+            CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
     private static void WaitForSearches(int[] searches, CancellationToken cancellationToken)
@@ -146,20 +148,29 @@ public sealed class TypeLifetimeTests
         }
     }
 
-    private static void Repeat(Action miss, int[] searches, int index, CancellationToken token)
+    private static void Repeat(Action miss, int[] searches, int index, Barrier cycle, CancellationToken token)
     {
-        while (!token.IsCancellationRequested)
+        try
         {
-            try
+            while (!token.IsCancellationRequested)
             {
-                miss();
-            }
-            catch (ReplException)
-            {
-                // The name is meant to miss; the search is what matters.
-            }
+                try
+                {
+                    miss();
+                }
+                catch (ReplException)
+                {
+                    // The name is meant to miss; the search is what matters.
+                }
 
-            Interlocked.Increment(ref searches[index]);
+                Interlocked.Increment(ref searches[index]);
+                // Keep loading and searching concurrent without letting assembly creation outrun the slowest search.
+                cycle.SignalAndWait(token);
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // Cancellation releases workers that are waiting for the other operations in their cycle.
         }
     }
 
