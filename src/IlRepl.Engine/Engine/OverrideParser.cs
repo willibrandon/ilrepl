@@ -30,7 +30,10 @@ public static class OverrideParser
             Binding.RuntimeDefinitions.OfDeclaration(method, 0), Binding.MethodSymbolSource.Declared, true);
         var bound = Binding.OverrideBinding.InBody(spec, scope, implementing);
         var target = adapter.ToResolvedMethod(bound.Target);
-        return new OverrideDeclaration(target.Method!, Describe(target), source);
+        return new OverrideDeclaration(target.Method!, Describe(target), source)
+        {
+            TargetDefinition = bound.Target.Method.Definition,
+        };
     }
 
     /// <summary>
@@ -54,6 +57,7 @@ public static class OverrideParser
             target.Method!, Describe(target), bound.Body.Name, adapter.ToType(bound.Body.ReturnType),
             adapter.ToTypes(bound.Body.ParameterTypes), bound.Body.IsStatic, source)
         {
+            TargetDefinition = bound.Target.Method.Definition,
             ExactBodyReturnType = bound.Body.ExactReturnType,
             ExactBodyParameterTypes = [.. bound.Body.Parameters.Select(parameter => parameter.ExactType)],
         };

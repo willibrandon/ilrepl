@@ -118,9 +118,6 @@ internal sealed partial class ImportedMethodFamily
         {
             switch (source)
             {
-                case Type type:
-                    FillType(type, (TypeDefinition)definition, definitions, writer);
-                    break;
                 case MethodBase method:
                     FillMethod(method, (MethodDefinition)definition, writer);
                     break;
@@ -132,6 +129,12 @@ internal sealed partial class ImportedMethodFamily
             }
 
             CopyAttributes(source.GetCustomAttributesData(), definition, writer);
+        }
+
+        // Constructed override references copy method signatures, so those signatures must be complete first.
+        foreach (var type in _types.Keys)
+        {
+            FillType(type, (TypeDefinition)definitions[type], definitions, writer);
         }
 
         foreach (var pair in _methods)
@@ -235,7 +238,7 @@ internal sealed partial class ImportedMethodFamily
             FillGenerics(original.GetGenericArguments(), definition, writer);
         }
 
-        foreach (var contract in original.GetInterfaces())
+        foreach (var contract in ImportedMetadata.Interfaces(original))
         {
             definition.Interfaces.Add(new InterfaceImplementation(writer.Import(contract)));
         }

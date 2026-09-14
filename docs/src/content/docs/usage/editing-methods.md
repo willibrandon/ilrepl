@@ -179,6 +179,7 @@ Set up repeatable inputs in your scenario. The transcript describes these condit
 
 `.edit` copies the declaring type and the fields, constructors, and helpers the method needs.
 Signatures, generic constraints, layout, and member metadata are kept, including property and event accessor associations.
+Interface inheritance and explicit implementations are preserved.
 Type and module initializers keep the helpers they need. Opening or saving an edit does not run its code.
 String lookups through `Type.GetType`, `Assembly.GetType`, and `Module.GetType` recognize original names of copied types,
 including nested types and generic arguments.

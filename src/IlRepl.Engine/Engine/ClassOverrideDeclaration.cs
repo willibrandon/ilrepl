@@ -23,6 +23,11 @@ public sealed record ClassOverrideDeclaration(
     string Source)
 {
     /// <summary>
+    /// The bound target identity, including targets represented by wrappers without a runtime metadata token.
+    /// </summary>
+    internal DefinitionId? TargetDefinition { get; init; }
+
+    /// <summary>
     /// The complete implementing return type when its annotations cannot be represented by <see cref="BodyReturnType"/>.
     /// </summary>
     internal TypeSymbol? ExactBodyReturnType { get; init; }

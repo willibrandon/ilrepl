@@ -25,12 +25,13 @@ public static class TypeDeclarationValidator
         var scope = new RuntimeBindingScope(context with { Types = types });
         var adapter = new RuntimeBindingAdapter(scope);
         var symbol = scope.ImportType(type);
-        MethodSymbol Target(MethodBase target)
+        MethodSymbol Target(MethodBase target, DefinitionId? definition)
         {
             var owner = scope.ImportType(target.DeclaringType!);
             var candidates = scope.TryGetDeclaration(owner, out var members)
                 ? members.FindMethods(target.Name) : scope.Methods(owner, target.Name);
-            return candidates.Single(candidate => candidate.Definition == RuntimeDefinitions.Of(target));
+            var identity = definition ?? RuntimeDefinitions.Of(target);
+            return candidates.Single(candidate => candidate.Definition == identity);
         }
 
         var input = new TypeValidationState(
@@ -39,12 +40,13 @@ public static class TypeDeclarationValidator
             declaration.TypeParameters.Select((parameter, index) => new GenericParameterSymbol(
                 symbol.Definition, false, index, parameter.Name, parameter.Attributes,
                 parameter.Constraints.Select(scope.ImportType).ToArray())).ToArray(),
-            declaration.Methods.SelectMany(method => method.Overrides.Select(mapping => Target(mapping.Target)))
-                .Concat(declaration.Overrides.Select(mapping => Target(mapping.Target))).ToArray());
+            declaration.Methods.SelectMany(method => method.Overrides.Select(mapping => Target(mapping.Target, mapping.TargetDefinition)))
+                .Concat(declaration.Overrides.Select(mapping => Target(mapping.Target, mapping.TargetDefinition))).ToArray());
         return TypeDeclarationBinding.Validate(input, scope).Select(mapping => new ClassOverrideDeclaration(
             adapter.ToResolvedMethod(mapping.Target).Method!, "static " + scope.Describe(mapping.Target.Method), mapping.Body.Name,
             adapter.ToType(mapping.Body.ReturnType), adapter.ToTypes(mapping.Body.ParameterTypes), mapping.Body.IsStatic, "")
         {
+            TargetDefinition = mapping.Target.Method.Definition,
             ExactBodyReturnType = mapping.Body.ExactReturnType,
             ExactBodyParameterTypes = [.. mapping.Body.Parameters.Select(parameter => parameter.ExactType)],
         }).ToArray();
