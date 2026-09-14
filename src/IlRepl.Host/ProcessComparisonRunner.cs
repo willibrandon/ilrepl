@@ -35,6 +35,7 @@ public static class ProcessComparisonRunner
 
         var directory = Directory.CreateTempSubdirectory("ilrepl-compare-");
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var outputLifetime = new CancellationTokenSource();
         using var process = new Process();
         var processStarted = false;
         Task<string>? stdout = null;
@@ -81,18 +82,17 @@ public static class ProcessComparisonRunner
 
             process.StandardInput.Close();
             var overflow = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            stdout = ReadOutputAsync(process.StandardOutput, package.OutputLimit, overflow, lifetime.Token);
-            stderr = ReadOutputAsync(process.StandardError, package.OutputLimit, overflow, lifetime.Token);
+            stdout = ReadOutputAsync(process.StandardOutput, package.OutputLimit, overflow, outputLifetime.Token);
+            stderr = ReadOutputAsync(process.StandardError, package.OutputLimit, overflow, outputLifetime.Token);
             var exit = process.WaitForExitAsync(CancellationToken.None);
             var ready = WaitForReadyAsync(readyPath, lifetime.Token);
             var startup = Task.Delay(TimeSpan.FromMinutes(2), lifetime.Token);
             var started = await Task.WhenAny(exit, ready, startup, overflow.Task).ConfigureAwait(false);
             if (started == startup || cancellationToken.IsCancellationRequested)
             {
-                Kill(process);
-                await exit.ConfigureAwait(false);
-                return Failure(cancellationToken.IsCancellationRequested ? "cancelled" : "setup-failed",
-                    cancellationToken.IsCancellationRequested ? "comparison cancelled" : "comparison runtime startup timed out");
+                return await StopAsync(cancellationToken.IsCancellationRequested ? "cancelled" : "setup-failed",
+                    cancellationToken.IsCancellationRequested ? "comparison cancelled" : "comparison runtime startup timed out")
+                    .ConfigureAwait(false);
             }
 
             if (started == ready && !ready.IsCanceled)
@@ -101,13 +101,12 @@ public static class ProcessComparisonRunner
                 var completed = await Task.WhenAny(exit, timeout, overflow.Task).ConfigureAwait(false);
                 if (completed != exit)
                 {
-                    Kill(process);
-                    await exit.ConfigureAwait(false);
-                    return Failure(cancellationToken.IsCancellationRequested ? "cancelled" : completed == overflow.Task ? "output-limit"
+                    return await StopAsync(cancellationToken.IsCancellationRequested ? "cancelled"
+                        : completed == overflow.Task ? "output-limit"
                         : "timeout",
                         cancellationToken.IsCancellationRequested ? "comparison cancelled" : completed == overflow.Task
                             ? "worker output exceeded the configured limit"
-                                : $"execution exceeded {package.TimeoutMilliseconds} ms after runtime startup");
+                                : $"execution exceeded {package.TimeoutMilliseconds} ms after runtime startup").ConfigureAwait(false);
                 }
             }
             else if (started == overflow.Task)
@@ -117,6 +116,7 @@ public static class ProcessComparisonRunner
             }
 
             await exit.ConfigureAwait(false);
+            outputLifetime.CancelAfter(TimeSpan.FromSeconds(1));
             var rawOut = await stdout.ConfigureAwait(false);
             var rawError = await stderr.ConfigureAwait(false);
             if (File.Exists(limitPath) || overflow.Task.IsCompleted)
@@ -136,12 +136,12 @@ public static class ProcessComparisonRunner
         }
         catch (OperationCanceledException)
         {
-            return Failure("cancelled", "comparison cancelled");
+            return await StopAsync("cancelled", "comparison cancelled").ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
             or Win32Exception or JsonException)
         {
-            return Failure("setup-failed", ex.Message);
+            return await StopAsync("setup-failed", ex.Message).ConfigureAwait(false);
         }
         finally
         {
@@ -152,6 +152,7 @@ public static class ProcessComparisonRunner
                 await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
             }
 
+            await outputLifetime.CancelAsync().ConfigureAwait(false);
             if (stdout is not null)
             {
                 await stdout.ConfigureAwait(false);
@@ -173,6 +174,21 @@ public static class ProcessComparisonRunner
                     // User code can leave files or directories that cannot be deleted; retain the comparison outcome.
                 }
             }
+        }
+
+        async Task<ComparisonSide> StopAsync(string outcome, string detail)
+        {
+            Kill(process);
+            if (processStarted)
+            {
+                await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+
+            // Drain closed pipes without waiting indefinitely for descendants that retained inherited handles.
+            outputLifetime.CancelAfter(TimeSpan.FromSeconds(1));
+            var rawOut = stdout is null ? "" : await stdout.ConfigureAwait(false);
+            var rawError = stderr is null ? "" : await stderr.ConfigureAwait(false);
+            return Failure(outcome, detail, rawOut, rawError);
         }
     }
 
@@ -203,7 +219,7 @@ public static class ProcessComparisonRunner
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // The supervisor owns cancellation; retain bytes read before it stopped the worker.
+            // The worker has exited; retain its captured prefix if an inherited pipe stayed open.
         }
 
         return text.ToString();

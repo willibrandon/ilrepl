@@ -182,7 +182,19 @@ public static class BlockBalance
         var word = text[..end];
         return word.SequenceEqual(".method") || word.SequenceEqual(".class")
             || word.SequenceEqual(".property") || word.SequenceEqual(".event")
-            || (word.SequenceEqual(".try") && !text.Contains(" to ", StringComparison.Ordinal));
+            || (word.SequenceEqual(".try") && !IsExceptionRange(text[end..].TrimStart()));
+    }
+
+    private static bool IsExceptionRange(ReadOnlySpan<char> text)
+    {
+        var end = text.IndexOfAny(' ', '\t');
+        if (end < 0)
+        {
+            return false;
+        }
+
+        var rest = text[end..].TrimStart();
+        return rest.StartsWith("to", StringComparison.Ordinal) && rest.Length > 2 && char.IsWhiteSpace(rest[2]);
     }
 
     // catch, filter, finally, fault, or handler, either on its own or after the brace that closes

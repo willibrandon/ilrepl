@@ -90,4 +90,37 @@ public sealed class ComparisonOutputOrderTests
             }
         }
     }
+
+    /// <summary>
+    /// Host-enforced limits retain both captured prefixes after terminating a worker that writes directly to its pipe.
+    /// </summary>
+    /// <param name="error">Whether the unbounded raw writes use standard error.</param>
+    /// <returns>The completed termination, bounded output, and parent recovery assertions.</returns>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Run_RawOutputLimit_RetainsBothStreamPrefixes(bool error)
+    {
+        var session = IlLines.Load(".method void Spam() {", ".locals init (class System.IO.Stream output)",
+            "ldstr \"stdout é\"", "call void Console::Write(string)", "call class System.IO.TextWriter Console::get_Error()",
+            "ldstr \"stderr λ\"", "callvirt instance void System.IO.TextWriter::Write(string)",
+            "call class System.IO.Stream Console::OpenStandard" + (error ? "Error" : "Output") + "()", "stloc.0",
+            "AGAIN: ldloc.0", "ldc.i4.s 65", "callvirt instance void System.IO.Stream::WriteByte(uint8)", "br AGAIN", "}");
+        var edit = session.PrepareEdit("Spam", "Copy");
+        session.CommitEdit(edit.Name, edit.Source);
+        var package = ComparisonCapture.Create(session, "Copy ()") with { OutputLimit = 256 };
+
+        var result = await ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken);
+
+        Assert.AreEqual("incomplete", result.Outcome);
+        foreach (var side in new[] { result.Original, result.Edited })
+        {
+            Assert.AreEqual("output-limit", side.Outcome, side.Detail);
+            Assert.AreEqual("stdout é" + (error ? "" : new string('A', 248)), side.StandardOutput);
+            Assert.AreEqual("stderr λ" + (error ? new string('A', 248) : ""), side.StandardError);
+        }
+
+        session.AddLine("ldc.i4.s 42");
+        Assert.AreEqual(42, session.Run().Value);
+    }
 }

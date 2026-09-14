@@ -53,14 +53,14 @@ internal static class ExceptionRegionParser
         string? filter = null;
         if (kind == IlClauseKind.Catch)
         {
-            var handler = rest.LastIndexOf(" handler ", StringComparison.Ordinal);
+            var handler = LastWord(rest, "handler");
             if (handler < 0)
             {
                 throw new ReplException("a catch range needs a type followed by handler START to END");
             }
 
             catchType = resolve(rest[..handler]);
-            rest = rest[(handler + 1)..];
+            rest = rest[handler..];
         }
         else if (kind == IlClauseKind.Filter)
         {
@@ -78,5 +78,19 @@ internal static class ExceptionRegionParser
         }
 
         return region;
+    }
+
+    private static int LastWord(string text, string word)
+    {
+        for (var index = text.Length - word.Length - 1; index > 0; index--)
+        {
+            if (char.IsWhiteSpace(text[index - 1]) && char.IsWhiteSpace(text[index + word.Length])
+                && text.AsSpan(index).StartsWith(word, StringComparison.Ordinal))
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 }

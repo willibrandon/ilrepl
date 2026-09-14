@@ -150,15 +150,21 @@ public sealed class MethodComparisonIsolationTests
     [TestMethod]
     public async Task Run_TimeoutTerminatesBothWorkersAndPreservesParent()
     {
-        var session = IlLines.Load(".method int32 Spin() { AGAIN: br AGAIN }");
+        var session = IlLines.Load(".method int32 Spin() {", "ldstr \"stdout é\"", "call void Console::Write(string)",
+            "call class System.IO.TextWriter Console::get_Error()", "ldstr \"stderr λ\"",
+            "callvirt instance void System.IO.TextWriter::Write(string)", "AGAIN: br AGAIN", "}");
         Commit(session, "Spin");
 
-        var result = await Run(session, "Copy () --timeout 100ms");
+        var result = await Run(session, "Copy () --timeout 1s");
 
         Assert.AreEqual("incomplete", result.Outcome, Details(result));
         Assert.AreEqual("timeout", result.Original.Outcome);
         Assert.AreEqual("timeout", result.Edited.Outcome);
-        Assert.Contains("100 ms", result.Original.Detail!);
+        Assert.Contains("1000 ms", result.Original.Detail!);
+        Assert.AreEqual("stdout é", result.Original.StandardOutput);
+        Assert.AreEqual("stdout é", result.Edited.StandardOutput);
+        Assert.AreEqual("stderr λ", result.Original.StandardError);
+        Assert.AreEqual("stderr λ", result.Edited.StandardError);
         AssertParentUsable(session);
     }
 
@@ -212,6 +218,9 @@ public sealed class MethodComparisonIsolationTests
         {
             var path = Path.Combine(directory.FullName, "started.pid");
             var session = IlLines.Load(".method int32 Spin() {", ".locals init (int32 pid)",
+                "ldstr \"stdout é\"", "call void Console::Write(string)",
+                "call class System.IO.TextWriter Console::get_Error()", "ldstr \"stderr λ\"",
+                "callvirt instance void System.IO.TextWriter::Write(string)",
                 "call int32 Environment::get_ProcessId()", "stloc.0", "ldstr " + LiteralParser.Escape(path),
                 "ldloca 0", "call instance string Int32::ToString()", "call void System.IO.File::WriteAllText(string, string)",
                 "AGAIN: br AGAIN", "}");
@@ -236,6 +245,10 @@ public sealed class MethodComparisonIsolationTests
                 Assert.AreEqual("incomplete", result.Outcome, Details(result));
                 Assert.AreEqual("cancelled", result.Original.Outcome);
                 Assert.AreEqual("cancelled", result.Edited.Outcome);
+                Assert.AreEqual("stdout é", result.Original.StandardOutput);
+                Assert.AreEqual("stderr λ", result.Original.StandardError);
+                Assert.AreEqual("", result.Edited.StandardOutput);
+                Assert.AreEqual("", result.Edited.StandardError);
                 Assert.IsTrue(worker.HasExited);
                 AssertParentUsable(session);
             }
