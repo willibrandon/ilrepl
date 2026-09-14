@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
@@ -34,6 +35,7 @@ public sealed class VarArgEditAliasTests
     public async Task Bind_VarargAlias_PreservesOptionalSignature(bool snapshot, int optionalCount)
     {
         var session = new Session();
+        session.Resolver.Load(typeof(IsLong).Assembly.FullName!);
         var (assembly, image, owner) = CecilFixture.Build(DefineCounter, session.Resolver);
         session.TypeTable.MethodAliases.Add("Copy", owner.GetMethod("Read")!);
         session.ClearCell();

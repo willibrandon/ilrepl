@@ -133,10 +133,19 @@ internal sealed partial class ImportedMethodFamily
         var selected = (MethodDefinition)definitions[Selected.Method];
         if (!selected.IsPublic || !Selected.Method.DeclaringType!.IsVisible)
         {
-            var forwarding = CecilForwardingMethod.Create(selected, ForwardingName);
-            if (_forwardingMethod is { } runtime)
+            if (selected.CallingConvention == MethodCallingConvention.VarArg)
             {
-                DefineForwarding(writer, runtime, forwarding);
+                // Optional arguments belong to the caller's signature and cannot pass through a fixed forwarding body.
+                // Session callers already receive access grants; standalone callers need the same access to their own image.
+                writer.GrantAccessTo(writer.Name);
+            }
+            else
+            {
+                var forwarding = CecilForwardingMethod.Create(selected, ForwardingName);
+                if (_forwardingMethod is { } runtime)
+                {
+                    DefineForwarding(writer, runtime, forwarding);
+                }
             }
         }
 

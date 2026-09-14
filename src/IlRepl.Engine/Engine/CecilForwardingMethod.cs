@@ -209,11 +209,30 @@ internal static class CecilForwardingMethod
             return copy;
         }
 
+        if (type is FunctionPointerType pointer)
+        {
+            var copy = new FunctionPointerType
+            {
+                HasThis = pointer.HasThis,
+                ExplicitThis = pointer.ExplicitThis,
+                CallingConvention = pointer.CallingConvention,
+                ReturnType = Map(pointer.ReturnType),
+            };
+            foreach (var parameter in pointer.Parameters)
+            {
+                copy.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, Map(parameter.ParameterType)));
+            }
+
+            return copy;
+        }
+
         return type switch
         {
             GenericParameter parameter when map.TryGetValue(parameter, out var replacement) => replacement,
             ByReferenceType reference => new ByReferenceType(Map(reference.ElementType)),
-            PointerType pointer => new PointerType(Map(pointer.ElementType)),
+            PointerType unmanaged => new PointerType(Map(unmanaged.ElementType)),
+            PinnedType pinned => new PinnedType(Map(pinned.ElementType)),
+            SentinelType sentinel => new SentinelType(Map(sentinel.ElementType)),
             RequiredModifierType required => new RequiredModifierType(Map(required.ModifierType), Map(required.ElementType)),
             OptionalModifierType optional => new OptionalModifierType(Map(optional.ModifierType), Map(optional.ElementType)),
             _ => type,

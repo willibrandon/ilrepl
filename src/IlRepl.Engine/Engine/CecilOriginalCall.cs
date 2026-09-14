@@ -61,6 +61,7 @@ internal static class CecilOriginalCall
             il.Emit(OpCodes.Ldarg, parameter);
         }
 
+        // Cecil imports a generic declaring type as an instance over !0, !1, etc., which bind to the copied owner's parameters.
         var call = writer.Module.ImportReference(original);
         if (call.HasGenericParameters)
         {
