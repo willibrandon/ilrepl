@@ -8,7 +8,7 @@ namespace IlRepl.Engine;
 /// <summary>
 /// Observes instance fields without executing user getters, formatting, equality, or constructors.
 /// </summary>
-internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> typeNames)
+internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, string> typeNames)
 {
     private const int MaximumNodes = 4096;
     private const int MaximumDepth = 64;
@@ -100,6 +100,9 @@ internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> 
         var identity = _identities.Count + 1;
         _identities.Add(value, identity);
 
+        if (CaptureStringComparer(value, name, identity) is { } comparer) return comparer;
+        if (CaptureCollection(value, depth, identity) is { } collection) return collection;
+
         var members = new List<ObservedMember>();
         if (value is Array array)
         {
@@ -124,12 +127,12 @@ internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> 
         return new ObservedValue("object", name, null, identity, Fields(value, depth, exceptionDetails: false));
     }
 
-    private List<ObservedMember> Fields(object value, int depth, bool exceptionDetails)
+    private List<ObservedMember> Fields(object value, int depth, bool exceptionDetails, Type? stopBefore = null)
     {
         var members = new List<ObservedMember>();
         var hierarchy = new Stack<Type>();
         var type = value.GetType();
-        for (var parent = type; parent is not null; parent = parent.BaseType)
+        for (var parent = type; parent is not null && parent != stopBefore; parent = parent.BaseType)
         {
             hierarchy.Push(parent);
         }

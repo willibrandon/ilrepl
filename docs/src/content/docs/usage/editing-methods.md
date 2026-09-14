@@ -26,6 +26,7 @@ Change the method and press Enter to save a revision. Reopen it with `.edit Maxi
 the source returns to the editor and the last working revision stays callable. The original is kept
 until `.reset`; `.clear` abandons an open edit without removing saved revisions.
 
+The method name, generic parameter count, and instance/static declaration must stay the same.
 Changes to parameter names and `[in]`, `[out]`, and `[opt]` flags are saved with the copy.
 
 `.methods` lists copies and their revisions. `.types` shows their declaring types, such as
@@ -82,6 +83,7 @@ and byte-offset differences. Floating-point bit patterns remain distinct.
 ## Compare execution
 
 Use `.compare Name (<literals>)` for a static method with literal arguments.
+Both versions must be static with all generic arguments supplied.
 The literals must fit the parameter count and types of both versions.
 After saving an unchanged `Maximum`, `.compare Maximum (17, 42) --assert` reports `match`.
 Generic methods use the type arguments selected when you opened the edit.
@@ -144,7 +146,8 @@ or exception, including all aggregate children, inner exceptions, and exceptions
 Exception details include stored fields such as `ParamName`, `ActualValue`, and custom data, without reading getters or stack traces.
 If an exception cannot be captured completely, the report explains why.
 It also shows console output, including direct stream writes, and tracks shared objects and `ref` aliases.
-Objects are compared through their fields without calling properties, `ToString`, or equality methods.
+Objects are compared through their fields without calling user properties, `ToString`, or equality methods.
+Dictionaries and hash sets retain their entries, enumeration order, comparer settings, and shared references.
 `Task`, its subclasses, and `ValueTask` results are awaited.
 Tasks keep their identity and `AsyncState`; a null task remains null. A scenario must await any work it starts.
 Value tasks keep their original representation. Return a source-backed value task from the scenario to observe its completion;

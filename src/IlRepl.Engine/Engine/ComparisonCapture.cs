@@ -43,11 +43,8 @@ public static partial class ComparisonCapture
         }
         else
         {
-            if (!method.IsStatic || method.ContainsGenericParameters)
-            {
-                throw new ReplException(
-                    "use a parameterless CIL scenario to construct the receiver or supply generic arguments for this method");
-            }
+            RequireDirectMethod(edit.Original.Requested, edit.Name, "original");
+            RequireDirectMethod(method, edit.Name, "edited");
 
             var parameters = method.GetParameters();
             if (parameters.Length != options.Arguments.Count)
@@ -90,6 +87,22 @@ public static partial class ComparisonCapture
             environment,
             CultureInfo.CurrentCulture.Name, CultureInfo.CurrentUICulture.Name, options.StandardInput, Files(options.FixtureDirectory),
             options.TimeoutMilliseconds, 65536, options.Assert);
+    }
+
+    private static void RequireDirectMethod(MethodBase method, string name, string version)
+    {
+        if (!method.IsStatic)
+        {
+            throw new ReplException($"the {version} {name} is an instance method; direct comparison requires both versions to be static. "
+                + "Use a parameterless CIL scenario with matching original and edited signatures to construct the receiver");
+        }
+
+        if (method.ContainsGenericParameters)
+        {
+            throw new ReplException($"the {version} {name} has unbound generic parameters; direct comparison requires both versions "
+                + "to be closed. Select a closed generic method with .edit, or use a parameterless CIL scenario with matching "
+                + "original and edited signatures to supply generic arguments");
+        }
     }
 
     private static ComparisonImage CaptureImage(Session session, MethodEdit edit, ComparisonOptions options, bool original,

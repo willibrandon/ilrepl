@@ -86,7 +86,7 @@ public sealed partial class ReplCore
     {
         "null" => "null",
         "null-reference" => "null reference",
-        "scalar" => value.Type + " " + JsonSerializer.Serialize(value.Value, ProtocolJsonContext.Default.String),
+        "scalar" or "comparer" => value.Type + " " + JsonSerializer.Serialize(value.Value, ProtocolJsonContext.Default.String),
         "reference" => "reference #" + value.Identity,
         "unavailable" => "unavailable: " + value.Value,
         _ => value.Type + (value.Identity is { } identity ? " #" + identity : "") + " { "
