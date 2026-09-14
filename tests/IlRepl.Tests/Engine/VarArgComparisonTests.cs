@@ -15,18 +15,29 @@ public sealed class VarArgComparisonTests
     /// Exported wrappers retain optional modifiers and sentinels while exposing ordinary callable entry points.
     /// </summary>
     /// <param name="optionalCount">The number of optional arguments supplied by the scenario.</param>
+    /// <param name="external">Whether the observation must call an external original whose context cannot be copied.</param>
     [TestMethod]
-    [DataRow(0)]
-    [DataRow(1)]
-    [DataRow(2)]
-    public void Export_VarargObservation_ForwardsEveryArgument(int optionalCount)
+    [DataRow(0, false)]
+    [DataRow(1, false)]
+    [DataRow(2, false)]
+    [DataRow(0, true)]
+    [DataRow(1, true)]
+    [DataRow(2, true)]
+    public void Export_VarargObservation_ForwardsEveryArgument(int optionalCount, bool external)
     {
         var writer = new CecilWriter("VarArgObservation");
         var owner = new TypeDefinition("N", "VarArgObservation", TypeAttributes.Public, writer.Object);
         writer.Module.Types.Add(owner);
         VarArgEditAliasTests.DefineCounter(writer.Module, owner);
         var target = owner.Methods.Single();
-        var entry = ComparisonInstrumentation.Wrap(writer, target);
+        MethodReference? original = null;
+        if (external)
+        {
+            var (_, _, fixture) = CecilFixture.Build(ExternalVarArgFixture.Define);
+            original = writer.Import(fixture.GetMethod("Read")!);
+        }
+
+        var entry = ComparisonInstrumentation.Wrap(writer, target, original);
         var scenario = new MethodDefinition("Scenario", MethodAttributes.Public | MethodAttributes.Static, writer.Module.TypeSystem.Int32);
         owner.Methods.Add(scenario);
         var call = new MethodReference(entry.Name, entry.ReturnType, owner) { CallingConvention = MethodCallingConvention.VarArg };
@@ -43,7 +54,7 @@ public sealed class VarArgComparisonTests
 
         il.Emit(OpCodes.Call, call);
         il.Emit(OpCodes.Ret);
-        ComparisonInstrumentation.CompleteVarArgCalls(writer, target, entry);
+        ComparisonInstrumentation.CompleteVarArgCalls(writer, target, entry, original);
 
         using var module = ModuleDefinition.ReadModule(new MemoryStream(writer.Write()));
         var exportedOwner = module.Types.Single(type => type.Name == owner.Name);
@@ -55,6 +66,8 @@ public sealed class VarArgComparisonTests
         var forwarded = observed.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
             .Single(method => method.Name == "Read");
         Assert.AreEqual(MethodCallingConvention.VarArg, forwarded.CallingConvention);
+        Assert.AreEqual(original?.DeclaringType.FullName ?? owner.FullName, forwarded.DeclaringType.FullName);
+        Assert.AreEqual(original?.DeclaringType.Scope.Name ?? module.Name, forwarded.DeclaringType.Scope.Name);
         Assert.HasCount(1 + optionalCount, forwarded.Parameters);
         for (var index = 0; index < optionalCount; index++)
         {

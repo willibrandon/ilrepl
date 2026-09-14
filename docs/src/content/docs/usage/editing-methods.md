@@ -64,7 +64,8 @@ ret
 The cell returns `42`. Calling `Identity` still returns the input unchanged.
 
 Vararg copies use the usual call syntax, such as `call vararg int32 Copy(int32, ..., string)`.
-Optional arguments follow `...`, including calls to private copies. Managed vararg execution requires Windows.
+Optional arguments follow `...`, including calls to private copies and comparisons with external originals.
+Managed vararg execution requires Windows.
 
 ## Inspect the differences
 

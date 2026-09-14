@@ -102,12 +102,20 @@ public static partial class ComparisonCapture
 
         MethodDefinition? entry = null;
         MethodDefinition? selectedMethod = null;
+        MethodReference? externalVarArg = null;
         string[] typeArguments = [];
         string[] methodArguments = [];
         var image = AssemblyExporter.WriteComparison(session, edit, original, (writer, selected) =>
         {
             selectedMethod = selected;
-            entry = ComparisonInstrumentation.Wrap(writer, selected);
+            if (original && edit.Baseline.Problems.Count != 0 && selected.CallingConvention == MethodCallingConvention.VarArg)
+            {
+                // A typed observation wrapper can forward optional arguments directly; an intervening vararg stub cannot.
+                externalVarArg = writer.Module.ImportReference(edit.Original.Method);
+                externalVarArg.CallingConvention = MethodCallingConvention.VarArg;
+            }
+
+            entry = ComparisonInstrumentation.Wrap(writer, selected, externalVarArg);
             writer.Define(IlAsmRenderer.DefinitionOf(edit.Method!), entry);
             if (edit.Current!.CallableEntryPoint != edit.Method)
             {
@@ -128,7 +136,7 @@ public static partial class ComparisonCapture
                     methodArguments = generic.GetGenericArguments().Select(type => ArgumentName(writer.Import(type))).ToArray();
                 }
             }
-        }, writer => ComparisonInstrumentation.CompleteVarArgCalls(writer, selectedMethod!, entry!));
+        }, writer => ComparisonInstrumentation.CompleteVarArgCalls(writer, selectedMethod!, entry!, externalVarArg));
         using (var module = ModuleDefinition.ReadModule(new MemoryStream(image, writable: false)))
         {
             foreach (var reference in module.AssemblyReferences)

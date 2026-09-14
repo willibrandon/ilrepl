@@ -7,7 +7,8 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static partial class ComparisonInstrumentation
 {
-    internal static void CompleteVarArgCalls(CecilWriter writer, MethodDefinition target, MethodDefinition entry)
+    internal static void CompleteVarArgCalls(CecilWriter writer, MethodDefinition target, MethodDefinition entry,
+        MethodReference? externalVarArg = null)
     {
         if (target.CallingConvention != MethodCallingConvention.VarArg)
         {
@@ -33,7 +34,7 @@ internal static partial class ComparisonInstrumentation
             var key = string.Join(";", optional.Select(type => type.FullName + ", " + type.Scope));
             if (!wrappers.TryGetValue(key, out var wrapper))
             {
-                wrapper = Wrap(writer, target, optional, entry.Name + "_" + wrappers.Count);
+                wrapper = Wrap(writer, target, optional, entry.Name + "_" + wrappers.Count, externalVarArg);
                 wrappers.Add(key, wrapper);
             }
 

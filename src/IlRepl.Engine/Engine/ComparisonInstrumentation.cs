@@ -11,10 +11,11 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static partial class ComparisonInstrumentation
 {
-    internal static MethodDefinition Wrap(CecilWriter writer, MethodDefinition target)
-        => Wrap(writer, target, [], "__ilrepl_observe_" + target.Name);
+    internal static MethodDefinition Wrap(CecilWriter writer, MethodDefinition target, MethodReference? externalVarArg = null)
+        => Wrap(writer, target, [], "__ilrepl_observe_" + target.Name, externalVarArg);
 
-    private static MethodDefinition Wrap(CecilWriter writer, MethodDefinition target, TypeReference[] optionalParameters, string name)
+    private static MethodDefinition Wrap(CecilWriter writer, MethodDefinition target, TypeReference[] optionalParameters, string name,
+        MethodReference? externalVarArg = null)
     {
         var owner = target.DeclaringType;
         var wrapper = new MethodDefinition(name,
@@ -293,21 +294,22 @@ internal static partial class ComparisonInstrumentation
             il.Emit(OpCodes.Ldarg, parameter);
         }
 
-        MethodReference called = target;
+        var destination = externalVarArg ?? target;
+        var called = destination;
         if (owner.HasGenericParameters || optionalParameters.Length > 0)
         {
-            called = new MethodReference(target.Name, target.ReturnType, self)
+            called = new MethodReference(destination.Name, destination.ReturnType, externalVarArg?.DeclaringType ?? self)
             {
-                HasThis = target.HasThis,
-                ExplicitThis = target.ExplicitThis,
-                CallingConvention = target.CallingConvention,
+                HasThis = destination.HasThis,
+                ExplicitThis = destination.ExplicitThis,
+                CallingConvention = destination.CallingConvention,
             };
-            foreach (var parameter in target.Parameters)
+            foreach (var parameter in destination.Parameters)
             {
                 called.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
             }
 
-            foreach (var parameter in target.GenericParameters)
+            foreach (var parameter in destination.GenericParameters)
             {
                 called.GenericParameters.Add(new GenericParameter(parameter.Name, called));
             }
