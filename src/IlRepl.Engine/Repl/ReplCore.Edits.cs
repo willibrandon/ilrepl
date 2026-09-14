@@ -28,13 +28,7 @@ public sealed partial class ReplCore
     private HandleResult Edit(string argument)
     {
         var block = argument.EndsWith('{');
-        var reference = (block ? argument[..^1] : argument).Trim();
-        var asIndex = reference.LastIndexOf(" as ", StringComparison.Ordinal);
-        var name = asIndex >= 0 ? reference[(asIndex + 4)..].Trim() : null;
-        if (asIndex >= 0)
-        {
-            reference = reference[..asIndex].Trim();
-        }
+        var (reference, name) = MethodEditReference.Split(block ? argument[..^1] : argument);
 
         if (reference.Length == 0)
         {

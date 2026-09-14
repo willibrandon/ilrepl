@@ -360,7 +360,8 @@ internal sealed partial class ImportedMethodFamily
 
             if (parameter.Attributes.HasFlag(ReflectionParameterAttributes.HasFieldMarshal))
             {
-                copy.MarshalInfo = ImportedMarshalling.Read(original.Module, parameter.MetadataToken, writer, _session.Resolver, copy);
+                copy.MarshalInfo = ImportedMarshalling.Read(original.Module, ImportedMarshalling.ParameterToken(parameter),
+                    writer, _session.Resolver, copy);
             }
 
             CopyAttributes(parameter.GetCustomAttributesData(), copy, writer);
@@ -368,17 +369,17 @@ internal sealed partial class ImportedMethodFamily
 
         if (original is MethodInfo method)
         {
-            definition.MethodReturnType.Attributes = (CecilParameterAttributes)method.ReturnParameter.Attributes;
+            definition.MethodReturnType.Attributes = (CecilParameterAttributes)ImportedMarshalling.Attributes(method.ReturnParameter);
             definition.MethodReturnType.Name = method.ReturnParameter.Name;
             if (method.ReturnParameter.HasDefaultValue)
             {
                 definition.MethodReturnType.Constant = method.ReturnParameter.RawDefaultValue;
             }
 
-            if (method.ReturnParameter.Attributes.HasFlag(ReflectionParameterAttributes.HasFieldMarshal))
+            if (definition.MethodReturnType.Attributes.HasFlag(CecilParameterAttributes.HasFieldMarshal))
             {
                 definition.MethodReturnType.MarshalInfo = ImportedMarshalling.Read(original.Module,
-                    method.ReturnParameter.MetadataToken, writer, _session.Resolver, definition.MethodReturnType);
+                    ImportedMarshalling.ParameterToken(method.ReturnParameter), writer, _session.Resolver, definition.MethodReturnType);
             }
 
             CopyAttributes(method.ReturnParameter.GetCustomAttributesData(), definition.MethodReturnType, writer);

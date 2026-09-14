@@ -3,6 +3,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using Mono.Cecil;
 using FieldDefinition = Mono.Cecil.FieldDefinition;
+using ParameterAttributes = System.Reflection.ParameterAttributes;
 
 namespace IlRepl.Engine;
 
@@ -11,6 +12,59 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static class ImportedMarshalling
 {
+    /// <summary>
+    /// Finds a parameter's metadata row by sequence, including a separately declared return parameter.
+    /// </summary>
+    /// <param name="parameter">The runtime parameter.</param>
+    /// <returns>The exact Param table token.</returns>
+    internal static int ParameterToken(ParameterInfo parameter)
+    {
+        var method = parameter.Member;
+        var metadata = ModuleMetadata.TryOpen(method.Module)
+            ?? throw new ReplException($"parameter metadata for {method.Name} is unavailable");
+        var definition = metadata.GetMethodDefinition(MetadataTokens.MethodDefinitionHandle(method.MetadataToken & 0x00ffffff));
+        return MetadataTokens.GetToken(definition.GetParameters().FirstOrDefault(handle =>
+            metadata.GetParameter(handle).SequenceNumber == parameter.Position + 1));
+    }
+
+    /// <summary>
+    /// Reads parameter flags without the runtime's synthetic return-parameter projection.
+    /// </summary>
+    /// <param name="parameter">The runtime parameter.</param>
+    /// <returns>The declared flags, or no flags when the parameter has no metadata row.</returns>
+    internal static ParameterAttributes Attributes(ParameterInfo parameter)
+    {
+        var token = ParameterToken(parameter);
+        return (token & 0x00ffffff) == 0 ? ParameterAttributes.None : ModuleMetadata.TryOpen(parameter.Member.Module)!
+            .GetParameter(MetadataTokens.ParameterHandle(token & 0x00ffffff)).Attributes;
+    }
+
+    /// <summary>
+    /// Resolves a custom marshaler before the copied family assigns its destination types.
+    /// </summary>
+    /// <param name="module">The source module.</param>
+    /// <param name="token">The field or parameter metadata token.</param>
+    /// <param name="resolver">The session's loaded assemblies.</param>
+    /// <returns>The custom marshaler type, or null for another native descriptor.</returns>
+    internal static Type? CustomMarshaler(Module module, int token, TypeResolver resolver)
+    {
+        var (metadata, descriptor) = Descriptor(module, token);
+        if (descriptor.IsNil)
+        {
+            return null;
+        }
+
+        var reader = metadata.GetBlobReader(descriptor);
+        if ((NativeType)reader.ReadByte() != NativeType.CustomMarshaler)
+        {
+            return null;
+        }
+
+        reader.ReadSerializedString();
+        reader.ReadSerializedString();
+        return ResolveType(reader.ReadSerializedString()!, module, resolver);
+    }
+
     internal static MarshalInfo Read(Module module, int token, CecilWriter writer, TypeResolver resolver, IMarshalInfoProvider target)
     {
         try
@@ -31,12 +85,7 @@ internal static class ImportedMarshalling
 
     private static MarshalInfo ReadCore(Module module, int token, CecilWriter writer, TypeResolver resolver, IMarshalInfoProvider target)
     {
-        var metadata = ModuleMetadata.TryOpen(module)
-            ?? throw new ReplException($"marshalling metadata for token 0x{token:x8} is unavailable");
-        var handle = MetadataTokens.EntityHandle(token);
-        var descriptor = handle.Kind == HandleKind.FieldDefinition
-            ? metadata.GetFieldDefinition((FieldDefinitionHandle)handle).GetMarshallingDescriptor()
-            : metadata.GetParameter((ParameterHandle)handle).GetMarshallingDescriptor();
+        var (metadata, descriptor) = Descriptor(module, token);
         var reader = metadata.GetBlobReader(descriptor);
         var native = (NativeType)reader.ReadByte();
         MarshalInfo result;
@@ -73,9 +122,7 @@ internal static class ImportedMarshalling
                 var unmanaged = reader.ReadSerializedString();
                 var managed = reader.ReadSerializedString();
                 var cookie = reader.ReadSerializedString();
-                var type = Type.GetType(managed!, name => resolver.Assemblies.FirstOrDefault(assembly =>
-                    string.Equals(assembly.FullName, name.FullName, StringComparison.OrdinalIgnoreCase)) ?? Assembly.Load(name),
-                    null, throwOnError: true)!;
+                var type = ResolveType(managed!, module, resolver);
                 result = new CustomMarshalInfo
                 {
                     Guid = string.IsNullOrEmpty(guid) ? Guid.Empty : Guid.Parse(guid),
@@ -99,4 +146,21 @@ internal static class ImportedMarshalling
     }
 
     private static int OptionalInteger(ref BlobReader reader) => reader.RemainingBytes == 0 ? -1 : reader.ReadCompressedInteger();
+
+    private static (MetadataReader Metadata, BlobHandle Descriptor) Descriptor(Module module, int token)
+    {
+        var metadata = ModuleMetadata.TryOpen(module)
+            ?? throw new ReplException($"marshalling metadata for token 0x{token:x8} is unavailable");
+        var handle = MetadataTokens.EntityHandle(token);
+        var descriptor = handle.Kind == HandleKind.FieldDefinition
+            ? metadata.GetFieldDefinition((FieldDefinitionHandle)handle).GetMarshallingDescriptor()
+            : metadata.GetParameter((ParameterHandle)handle).GetMarshallingDescriptor();
+        return (metadata, descriptor);
+    }
+
+    private static Type ResolveType(string name, Module module, TypeResolver resolver) => Type.GetType(name,
+        identity => resolver.Assemblies.FirstOrDefault(assembly =>
+            string.Equals(assembly.FullName, identity.FullName, StringComparison.OrdinalIgnoreCase))
+            ?? SessionAssemblies.Resolve(identity) ?? Assembly.Load(identity),
+        (assembly, type, ignoreCase) => (assembly ?? module.Assembly).GetType(type, throwOnError: true, ignoreCase), throwOnError: true)!;
 }

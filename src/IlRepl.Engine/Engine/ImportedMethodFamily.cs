@@ -109,6 +109,7 @@ internal sealed partial class ImportedMethodFamily
             var typeCount = _types.Count;
             _dependencies.Clear();
             ScanSignatures();
+            ScanMarshalling();
             ScanAttributes();
             foreach (var body in _methods.Values.OfType<MethodEditBody>().ToArray())
             {

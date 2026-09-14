@@ -15,10 +15,8 @@ public sealed partial class EditingSession
         }
 
         RequireNoOpenBlock();
-        var reference = argument.Trim()[..^1].Trim();
-        var asIndex = reference.LastIndexOf(" as ", StringComparison.Ordinal);
-        var name = asIndex < 0 ? reference : reference[(asIndex + 4)..].Trim();
-        reference = asIndex < 0 ? reference : reference[..asIndex].Trim();
+        var (reference, alias) = MethodEditReference.Split(argument.Trim()[..^1]);
+        var name = alias ?? reference;
         var edit = _seed.Edits.FirstOrDefault(edit => edit.Name == name && (edit.Reference == reference || edit.Name == reference));
         if (edit is null)
         {

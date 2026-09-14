@@ -20,6 +20,7 @@ With no method name, `.edit` uses the last `.dis` target. Add `as` to name the c
 ```
 
 Session methods and edits must have different names. An edit reserves its name until `.reset`.
+Use single quotes around CIL names containing spaces, such as `.edit int32 Owner::'Read as Text'()`.
 
 Change the method and press Enter to save a revision. Reopen it with `.edit Maximum`. If validation fails,
 the source returns to the editor and the last working revision stays callable. The original is kept
@@ -175,6 +176,7 @@ Signatures, generic constraints, layout, and member metadata are kept, including
 Public external methods remain references to their original assemblies. Opening or saving an edit does not run its code.
 The dependency list includes local and member signatures, custom modifiers, catch types, and `calli` signatures.
 Custom attributes keep their constructors, named members, and type arguments in saved copies.
+Custom marshalers referenced by fields, parameters, or return values keep their factories and implementations.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it
 was copied. The report updates with each saved revision.
