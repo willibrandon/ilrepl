@@ -354,7 +354,16 @@ internal sealed partial class ImportedMethodFamily
     {
         foreach (var local in body.State.Locals)
         {
-            ConsiderType(local.Type, body.Method.DeclaringType!);
+            var symbol = local.ExactType ?? RuntimeSymbolImporter.Import(local.Type);
+            foreach (var dependency in RuntimeSymbolTypes.Materialized(symbol).Distinct())
+            {
+                ConsiderType(dependency, body.Method.DeclaringType!);
+                if (!dependency.IsGenericParameter)
+                {
+                    ReportType(dependency, MemberResolver.Describe(body.Method) + ": local "
+                        + (local.Name ?? TypeNameFormatter.Pretty(local.Type)));
+                }
+            }
         }
 
         foreach (var entry in body.State.Entries)

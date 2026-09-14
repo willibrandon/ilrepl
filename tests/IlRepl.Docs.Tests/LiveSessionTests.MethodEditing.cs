@@ -165,6 +165,7 @@ public sealed partial class LiveSessionTests
     {
         await using var context = await NewContextAsync(GetBrowser(browser));
         var page = await OpenSessionAsync(context);
+        var parent = await ObserveComparisonResultsAsync(page);
         var body = failure == "crashed"
             ? "ldc.i4.7\ncall void Environment::Exit(int32)\nldc.i4.0\nret"
             : "LOOP: ldstr \"unbounded output\"\ncall void Console::Write(string)\nbr LOOP";
@@ -177,9 +178,11 @@ public sealed partial class LiveSessionTests
               .method public static int32 Answer() cil managed {
             """ + "\n" + body + "\n}\n}", "edit Failure committed as revision 1");
         await TypeLineAsync(page, ".compare Failure ()");
-        await ExpectComparisonTextAsync(page, "edited: " + failure);
-        Assert.Contains("Failure: incomplete", await BufferTextAsync(page));
+        var result = await WaitForComparisonResultAsync(parent, 1);
+        Assert.AreEqual(failure, result.GetProperty("outcome").GetString());
         Assert.AreEqual(1, await page.EvaluateAsync<int>("() => window.ilreplSessionCount"));
+        await InputIdleAsync(page);
+        await EmptyPromptAsync(page);
         await RunCorpusCellAsync(page, "call Answer\nret", 42);
     }
 

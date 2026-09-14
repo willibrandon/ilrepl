@@ -154,6 +154,7 @@ Browser paths refer to its virtual filesystem.
 The timeout is 30 seconds per side, starting after runtime startup. Change it with `--timeout 500ms`,
 `--timeout 30s`, or `--timeout 2m`. Cancellation, timeouts, crashes, and output limits end the comparison
 as incomplete. Your session stays available.
+Output captured before termination stays in the report, up to the limit for each stream.
 
 Comparisons cannot reset clocks, randomness, remote services, or files outside the working directory.
 Set up repeatable inputs in your scenario. The transcript describes these conditions before running it.
@@ -163,7 +164,7 @@ Set up repeatable inputs in your scenario. The transcript describes these condit
 `.edit` copies the declaring type and the fields, constructors, and helpers the method needs.
 Signatures, generic constraints, layout, and member metadata are kept. Public external methods remain
 references to their original assemblies. Opening or saving an edit does not run its code.
-Catch types and `calli` signatures are included in the dependency list.
+Local signatures, catch types, and `calli` signatures are included in the dependency list.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it
 was copied. The report updates with each saved revision.

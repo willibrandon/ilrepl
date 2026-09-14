@@ -13,7 +13,8 @@ self.onmessage = async ({ data }) => {
     const output = (stream, text) => {
       if (exceeded) return;
       const next = streams[stream] + text;
-      streams[stream] = next.slice(0, limit);
+      const captured = text.slice(0, Math.max(0, limit - streams[stream].length));
+      streams[stream] += captured;
       if (next.length > limit) {
         exceeded = true;
         self.postMessage({ type: 'output-limit' });
@@ -22,6 +23,7 @@ self.onmessage = async ({ data }) => {
     const outputByte = (stream, value) => {
       if (exceeded) return;
       byte[0] = value;
+      self.postMessage({ type: 'output', stream, byte: byte[0] });
       output(stream, decoders[stream].decode(byte, { stream: true }));
     };
     const outputLine = (stream, text) => {
