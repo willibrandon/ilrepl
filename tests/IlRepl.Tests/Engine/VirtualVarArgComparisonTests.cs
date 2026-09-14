@@ -84,7 +84,8 @@ public sealed class VirtualVarArgComparisonTests
             var (assembly, _, _) = CecilFixture.Build(Define, session.Resolver);
             var edit = session.PrepareEdit("instance vararg int32 [" + assembly.GetName().Name + "]N.Fixture::Read(int32)", "Copy");
             session.CommitEdit(edit.Name, edit.Source.Replace("ret", "ldc.i4.1\nadd\nret", StringComparison.Ordinal));
-            foreach (var line in Scenario(constrained, behavior).Split('\n')) session.AddLine(line);
+            var copiedOwner = TypeNameFormatter.IlAsmDeclaring(edit.Method!.DeclaringType!);
+            foreach (var line in Scenario(constrained, behavior, copiedOwner).Split('\n')) session.AddLine(line);
             var result = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy using Scenario"),
                 TestContext.CancellationToken);
             var invoked = behavior != "override";
@@ -122,10 +123,9 @@ public sealed class VirtualVarArgComparisonTests
         il.Emit(OpCodes.Ret);
     }
 
-    private static string Scenario(bool constrained, string behavior)
+    private static string Scenario(bool constrained, string behavior, string owner)
     {
-        const string owner = "IlRepl.Edits.Copy.N.Fixture";
-        const string call = "instance vararg int32 " + owner + "::Read(int32, ..., int32, string)";
+        var call = "instance vararg int32 " + owner + "::Read(int32, ..., int32, string)";
         var body = behavior == "inherit" ? "" : ".method public virtual instance vararg int32 Read(int32 first) {\n"
             + (behavior == "base" ? "ldarg.0\nldarg.1\nldc.i4.s 42\nldstr \"optional\"\ncall " + call : """
                 .locals init (valuetype ArgIterator args)
