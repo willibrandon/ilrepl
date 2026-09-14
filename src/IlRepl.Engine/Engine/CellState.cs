@@ -24,6 +24,11 @@ public sealed class CellState
     private AnalysisLocation? _currentLocation;
 
     /// <summary>
+    /// Defers flow analysis until a complete imported or edited method closes.
+    /// </summary>
+    internal bool ValidateOnCompletion { get; init; }
+
+    /// <summary>
     /// The converged states for the current accepted entries.
     /// </summary>
     internal FlowResult<Type> Analysis => _analysis ??= RuntimeFlowAnalysis.Run(this, _entries);
@@ -289,6 +294,12 @@ public sealed class CellState
 
         RequireValidFlow();
 
+        if (ValidateOnCompletion)
+        {
+            RefreshReturns();
+            Stack.CopyFrom(Analysis.End);
+        }
+
         var pending = ReferencedLabels().Where(l => !_definedLabels.Contains(l)).Distinct().ToList();
         if (pending.Count > 0)
         {
@@ -490,6 +501,12 @@ public sealed class CellState
     private void AcceptEntry(CellEntry entry)
     {
         entry.Location ??= _currentLocation;
+        if (ValidateOnCompletion)
+        {
+            _entries.Add(entry);
+            return;
+        }
+
         var candidate = _analysisBeforeLine is { } previous
             && RuntimeFlowAnalysis.TryAppend(this, previous, entry, out var appended)
             ? appended : RuntimeFlowAnalysis.Run(this, [.. _entries, entry]);

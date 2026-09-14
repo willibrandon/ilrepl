@@ -37,7 +37,8 @@ public static class ComparisonResults
             && invocation.Outputs.All(member => Available(member.Value)) && CompleteException(invocation.Exception));
 
     private static bool CompleteException(ObservedException? exception) => exception is null
-        || (exception.Problem is null && CompleteException(exception.Inner));
+        || (exception.Problem is null && CompleteException(exception.Inner)
+            && exception.AdditionalInnerExceptions.All(CompleteException));
 
     private static bool Available(ObservedValue? value) => value is null || (value.Kind != "unavailable" && value.Members.All(member =>
         Available(member.Value)));

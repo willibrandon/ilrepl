@@ -12,9 +12,16 @@ internal static class ComparisonWorkerProgram
 {
     internal static async Task<int> RunAsync(string[] arguments)
     {
-        if (arguments.Length != 6)
+        if (arguments.Length != 8)
         {
             return 64;
+        }
+
+        ComparisonProcessGroup.PrepareWorker();
+        await File.WriteAllTextAsync(arguments[6], "prepared").ConfigureAwait(false);
+        while (!File.Exists(arguments[7]))
+        {
+            await Task.Delay(10).ConfigureAwait(false);
         }
 
         Console.OutputEncoding = new UTF8Encoding(false);

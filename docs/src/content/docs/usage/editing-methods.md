@@ -139,9 +139,11 @@ Both sides start with a new counter. The original returns `1` and sets `Value` t
 `2` and sets `Value` to `2`.
 
 The report shows receiver and argument values as `before -> after`, followed by each call's return value
-or exception, including inner exceptions and exceptions caught by the scenario.
-If an exception cannot be captured completely, the report explains why. It also shows console output, including direct stream writes. It tracks shared objects and `ref` aliases. Objects are compared through their fields
-without calling properties, `ToString`, or equality methods. `Task`, its subclasses, and `ValueTask` results are awaited.
+or exception, including all aggregate children, inner exceptions, and exceptions caught by the scenario.
+If an exception cannot be captured completely, the report explains why.
+It also shows console output, including direct stream writes, and tracks shared objects and `ref` aliases.
+Objects are compared through their fields without calling properties, `ToString`, or equality methods.
+`Task`, its subclasses, and `ValueTask` results are awaited.
 Tasks keep their identity and `AsyncState`; a null task remains null. A scenario must await any work it starts.
 Value tasks keep their original representation. Return a source-backed value task from the scenario to observe its completion;
 consuming it inside the scenario leaves that call's result unavailable.
@@ -159,6 +161,7 @@ complete match gives the script exit code 1.
 Each comparison starts two clean processes on desktop or two workers in the browser. Both load the
 declarations and run their initializers. Previous cells are not rerun. The original keeps the method
 and dependency versions from when you opened the edit.
+Desktop comparisons stop background child processes when each side ends.
 
 Both sides get the same culture, environment, stdin, and working path. Each run starts with fresh files.
 Use `--stdin "text\n"` for console input and `--files directory` to supply the files.

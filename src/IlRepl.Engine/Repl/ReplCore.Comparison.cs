@@ -64,15 +64,16 @@ public sealed partial class ReplCore
 
     private void ExceptionDetails(string prefix, ObservedException exception)
     {
-        for (var current = exception; current is not null; current = current.Inner)
+        Listing($"{prefix}{exception.Type}: {exception.Message} (HRESULT 0x{exception.HResult:x8})");
+        if (exception.Problem is { } problem)
         {
-            Listing($"{prefix}{current.Type}: {current.Message} (HRESULT 0x{current.HResult:x8})");
-            if (current.Problem is { } problem)
-            {
-                Listing("      unavailable: " + problem);
-            }
+            Listing("      unavailable: " + problem);
+        }
 
-            prefix = "      caused by ";
+        if (exception.Inner is { } inner) ExceptionDetails("      caused by ", inner);
+        foreach (var additional in exception.AdditionalInnerExceptions)
+        {
+            ExceptionDetails("      caused by ", additional);
         }
     }
 

@@ -12,6 +12,7 @@
     <IsPackable>false</IsPackable>
     <InvariantGlobalization>false</InvariantGlobalization>
     <TieredPGO>true</TieredPGO>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

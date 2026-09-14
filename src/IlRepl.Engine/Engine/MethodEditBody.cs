@@ -82,7 +82,10 @@ internal sealed record MethodEditBody(MethodBase Method, DisassembledMethod List
         {
             MethodParameterNames = signature.TypeParameters.Select(parameter => parameter.Name).ToArray(),
         };
-        var state = new CellState(session.Resolver, generics, signatures, signature, opens, types ?? session.TypeTable, member);
+        var state = new CellState(session.Resolver, generics, signatures, signature, opens, types ?? session.TypeTable, member)
+        {
+            ValidateOnCompletion = true,
+        };
         var ended = false;
         foreach (var line in lines.Skip(first + 1))
         {

@@ -196,12 +196,23 @@ internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> 
     /// <param name="exception">The original exception after invocation wrappers are removed.</param>
     /// <returns>The exception observation.</returns>
     internal ObservedException Exception(Exception exception)
-        => Exception(exception, new HashSet<Exception>(ReferenceEqualityComparer.Instance));
+    {
+        var nodes = 0;
+        return Exception(exception, new HashSet<Exception>(ReferenceEqualityComparer.Instance), ref nodes);
+    }
 
-    private ObservedException Exception(Exception exception, HashSet<Exception> seen)
+    private ObservedException Exception(Exception exception, HashSet<Exception> seen, ref int nodes)
     {
         var field = typeof(Exception).GetField("_message", BindingFlags.Instance | BindingFlags.NonPublic);
         var type = TypeName(exception.GetType());
+        if (++nodes > MaximumNodes)
+        {
+            return new ObservedException(type, null, exception.HResult, null)
+            {
+                Problem = "exception tree exceeds the observation node limit",
+            };
+        }
+
         if (seen.Count >= MaximumDepth || !seen.Add(exception))
         {
             return new ObservedException(type, null, exception.HResult, null)
@@ -210,12 +221,30 @@ internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> 
             };
         }
 
-        var message = field?.GetValue(exception) as string;
-        return new ObservedException(type, message is { Length: > 65536 } ? message[..65536] : message, exception.HResult,
-            exception.InnerException is { } inner ? Exception(inner, seen) : null)
+        try
         {
-            Problem = field is null ? "runtime does not expose the stored exception message"
-                : message is { Length: > 65536 } ? "exception message exceeds the observation limit" : null,
-        };
+            var message = field?.GetValue(exception) as string;
+            var inner = exception.InnerException is { } first ? Exception(first, seen, ref nodes) : null;
+            var additional = new List<ObservedException>();
+            if (exception is AggregateException aggregate)
+            {
+                for (var index = 1; index < aggregate.InnerExceptions.Count; index++)
+                {
+                    additional.Add(Exception(aggregate.InnerExceptions[index], seen, ref nodes));
+                    if (nodes > MaximumNodes) break;
+                }
+            }
+
+            return new ObservedException(type, message is { Length: > 65536 } ? message[..65536] : message, exception.HResult, inner)
+            {
+                AdditionalInnerExceptions = additional,
+                Problem = field is null ? "runtime does not expose the stored exception message"
+                    : message is { Length: > 65536 } ? "exception message exceeds the observation limit" : null,
+            };
+        }
+        finally
+        {
+            seen.Remove(exception);
+        }
     }
 }

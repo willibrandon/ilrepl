@@ -58,12 +58,12 @@ public sealed partial class LiveSessionTests
         Assert.AreEqual(1, await page.EvaluateAsync<int>("() => window.ilreplSessionCount"));
     }
 
-    private static async Task<string> ReadComparisonTranscriptAsync(IPage page)
+    private static async Task<string> ReadComparisonTranscriptAsync(IPage page, int maximumSnapshots = 24)
     {
         var screen = (await page.Locator("#terminal").BoundingBoxAsync())!;
         await page.Mouse.MoveAsync(screen.X + (screen.Width / 2), screen.Y + (screen.Height / 3));
         var snapshots = new List<string>();
-        for (var attempt = 0; attempt < 24; attempt++)
+        for (var attempt = 0; attempt < maximumSnapshots; attempt++)
         {
             var text = await BufferTextAsync(page);
             snapshots.Add(string.Join(" ", text.Replace("│", "", StringComparison.Ordinal).Replace("▉", "", StringComparison.Ordinal)

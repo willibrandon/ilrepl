@@ -40,6 +40,7 @@ public static class ProcessComparisonRunner
         using var inputLifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var outputLifetime = new CancellationTokenSource();
         using var process = new Process();
+        using var group = new ComparisonProcessGroup();
         var processStarted = false;
         Task? stdin = null;
         Task<string>? stdout = null;
@@ -53,6 +54,8 @@ public static class ProcessComparisonRunner
             var readyPath = Path.Combine(directory.FullName, "ready");
             var resultPath = Path.Combine(directory.FullName, "result.json");
             var limitPath = Path.Combine(directory.FullName, "output-limit");
+            var groupPath = Path.Combine(directory.FullName, "group-ready");
+            var startPath = Path.Combine(directory.FullName, "start");
             await File.WriteAllTextAsync(packagePath, JsonSerializer.Serialize(package, ProtocolJsonContext.Default.ComparisonPackage),
                 cancellationToken).ConfigureAwait(false);
             var bundled = Path.Combine(AppContext.BaseDirectory, "host", "ilrepl-host.dll");
@@ -76,6 +79,8 @@ public static class ProcessComparisonRunner
             process.StartInfo.ArgumentList.Add(readyPath);
             process.StartInfo.ArgumentList.Add(resultPath);
             process.StartInfo.ArgumentList.Add(limitPath);
+            process.StartInfo.ArgumentList.Add(groupPath);
+            process.StartInfo.ArgumentList.Add(startPath);
             process.StartInfo.Environment.Clear();
             foreach (var pair in package.Environment)
             {
@@ -95,6 +100,14 @@ public static class ProcessComparisonRunner
             var exit = process.WaitForExitAsync(CancellationToken.None);
             var ready = WaitForReadyAsync(readyPath, lifetime.Token);
             var startup = Task.Delay(TimeSpan.FromMinutes(2), lifetime.Token);
+            var prepared = WaitForReadyAsync(groupPath, lifetime.Token);
+            var preparation = await Task.WhenAny(exit, prepared, startup, overflow.Task).ConfigureAwait(false);
+            if (preparation == prepared && !prepared.IsCanceled)
+            {
+                group.Attach(process);
+                await File.WriteAllTextAsync(startPath, "start", cancellationToken).ConfigureAwait(false);
+            }
+
             var started = await Task.WhenAny(exit, ready, startup, overflow.Task).ConfigureAwait(false);
             if (started == startup || cancellationToken.IsCancellationRequested)
             {
@@ -119,11 +132,13 @@ public static class ProcessComparisonRunner
             }
             else if (started == overflow.Task)
             {
+                await group.StopAsync().ConfigureAwait(false);
                 Kill(process);
                 await exit.ConfigureAwait(false);
             }
 
             await exit.ConfigureAwait(false);
+            await group.StopAsync().ConfigureAwait(false);
             outputLifetime.CancelAfter(TimeSpan.FromSeconds(1));
             var rawOut = await stdout.ConfigureAwait(false);
             var rawError = await stderr.ConfigureAwait(false);
@@ -155,6 +170,7 @@ public static class ProcessComparisonRunner
         {
             await lifetime.CancelAsync().ConfigureAwait(false);
             await inputLifetime.CancelAsync().ConfigureAwait(false);
+            await group.StopAsync().ConfigureAwait(false);
             Kill(process);
             if (processStarted)
             {
@@ -189,6 +205,7 @@ public static class ProcessComparisonRunner
 
         async Task<ComparisonSide> StopAsync(string outcome, string detail)
         {
+            await group.StopAsync().ConfigureAwait(false);
             Kill(process);
             if (processStarted)
             {
