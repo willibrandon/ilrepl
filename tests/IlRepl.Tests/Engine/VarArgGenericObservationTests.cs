@@ -132,6 +132,38 @@ public sealed class VarArgGenericObservationTests
     }
 
     /// <summary>
+    /// Session syntax and both export formats retain caller-owned optional parameters before platform-specific execution.
+    /// </summary>
+    /// <param name="invokeGeneric">Whether the scenario invokes the generic caller.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void Export_ParsedGenericVarargCallerPreservesOptionalSignatures(bool invokeGeneric)
+    {
+        var session = new Session();
+        var (_, _, owner) = CecilFixture.Build(VarArgEditAliasTests.DefineCounter, session.Resolver);
+        session.TypeTable.MethodAliases.Add("Copy", owner.GetMethod("Read")!);
+        session.ClearCell();
+        AddScenario(session, invokeGeneric, declareScenario: false);
+        foreach (var image in new[] { AssemblyExporter.Write(session, "parsed-generic-varargs"),
+            IlasmLocator.Assemble(session.ToIlAsm()) })
+        {
+            using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
+            var caller = module.Types.Single(type => type.Name == "Caller`1");
+            var method = caller.Methods.Single(member => member.Name == "Run");
+            var calls = method.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>().ToArray();
+            Assert.HasCount(2, calls);
+            foreach (var (call, index) in calls.Select((call, index) => (call, index)))
+            {
+                Assert.AreEqual(MethodCallingConvention.VarArg, call.CallingConvention);
+                var parameter = (GenericParameter)((SentinelType)call.Parameters[1].ParameterType).ElementType;
+                Assert.AreEqual(0, parameter.Position);
+                Assert.AreEqual(index == 0 ? GenericParameterType.Type : GenericParameterType.Method, parameter.Type);
+            }
+        }
+    }
+
+    /// <summary>
     /// Generic vararg callers remain valid whether the selected scenario invokes them or leaves them unused.
     /// </summary>
     /// <param name="invokeGeneric">Whether the scenario invokes the generic caller.</param>
@@ -145,17 +177,7 @@ public sealed class VarArgGenericObservationTests
         var (assembly, _, _) = CecilFixture.Build(VarArgEditAliasTests.DefineCounter, session.Resolver);
         var edit = session.PrepareEdit("vararg int32 [" + assembly.GetName().Name + "]N.Fixture::Read(int32)", "Copy");
         session.CommitEdit(edit.Name, edit.Source.Replace("ret", "ldc.i4.1\nadd\nret", StringComparison.Ordinal));
-        foreach (var line in IlLines.Expand(
-            ".class public Caller`1<T> {",
-            ".method public static int32 Run<U>(!T first, !!U second) {",
-            "ldc.i4.s 41; ldarg.0; call vararg int32 Copy(int32, ..., !T); pop;",
-            "ldc.i4.s 41; ldarg.1; call vararg int32 Copy(int32, ..., !!U); ret;", "}", "}",
-            ".method int32 Scenario() {",
-            invokeGeneric ? "ldstr \"input\"; ldc.i4.7; call int32 Caller`1<string>::Run<int32>(!0, !!0); ret;"
-                : "ldc.i4.s 41; call vararg int32 Copy(int32); ret;", "}"))
-        {
-            session.AddLine(line);
-        }
+        AddScenario(session, invokeGeneric);
 
         var result = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy using Scenario"),
             TestContext.CancellationToken);
@@ -170,6 +192,35 @@ public sealed class VarArgGenericObservationTests
                 Assert.AreEqual("input", side.Invocations[0].Inputs.Single(input => input.Name == "argument 1").Value.Value);
                 Assert.AreEqual("7", side.Invocations[1].Inputs.Single(input => input.Name == "argument 1").Value.Value);
             }
+        }
+    }
+
+    private static void AddScenario(Session session, bool invokeGeneric, bool declareScenario = true)
+    {
+        const string caller = """
+            .class public Caller`1<T> {
+              .method public static int32 Run<U>(!T first, !!U second) {
+                ldc.i4.s 41
+                ldarg.0
+                call vararg int32 Copy(int32, ..., !T)
+                pop
+                ldc.i4.s 41
+                ldarg.1
+                call vararg int32 Copy(int32, ..., !!U)
+                ret
+              }
+            }
+            """;
+        var invocation = invokeGeneric ? """
+            ldstr "input"
+            ldc.i4.7
+            call int32 Caller`1<string>::Run<int32>(!0, !!0)
+            """ : "ldc.i4.s 41\ncall vararg int32 Copy(int32)";
+        var source = caller + "\n" + (declareScenario ? ".method int32 Scenario() {\n" : "") + invocation
+            + "\nret" + (declareScenario ? "\n}" : "");
+        foreach (var line in source.Split('\n'))
+        {
+            session.AddLine(line);
         }
     }
 
