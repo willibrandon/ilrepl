@@ -406,18 +406,34 @@ public sealed partial class Session
             return prototype.DefineTypeInitializer();
         }
 
-        // Reflection.Emit refuses a static virtual builder; the prototype is only a stand-in
-        // for resolution, and the written definition carries the declared attributes.
-        var prototypeAttributes = signature.IsStatic ? signature.Attributes & ~(MethodAttributes.Virtual | MethodAttributes.Abstract | MethodAttributes.NewSlot | MethodAttributes.Final) : signature.Attributes;
-        var method = prototype.DefineMethod(signature.Name, prototypeAttributes, signature.CallingConvention);
+        var method = prototype.DefineMethod(signature.Name, PrototypeAttributes(prototype, signature), signature.CallingConvention);
         if (signature.TypeParameters.Count > 0)
         {
             methodGenerics = method.DefineGenericParameters([.. signature.TypeParameters.Select(p => p.Name)]);
         }
 
-        method.SetSignature(signature.ReturnType, [.. signature.ReturnRequiredModifiers], [.. signature.ReturnOptionalModifiers], parameterTypes, required, optional);
+        method.SetSignature(signature.ReturnType, [.. signature.ReturnRequiredModifiers],
+            [.. signature.ReturnOptionalModifiers], parameterTypes, required, optional);
         method.SetImplementationFlags(signature.ImplAttributes);
         return method;
+    }
+
+    private static MethodAttributes PrototypeAttributes(TypeBuilder prototype, MethodSignature signature)
+    {
+        // Prototypes exist only for resolution. Builders reject static virtual methods, and
+        // Mono also requires abstract instance interface methods; written definitions retain their declared attributes.
+        var prototypeAttributes = signature.Attributes;
+        if (signature.IsStatic)
+        {
+            prototypeAttributes &= ~(MethodAttributes.Virtual | MethodAttributes.Abstract
+                | MethodAttributes.NewSlot | MethodAttributes.Final);
+        }
+        else if (prototype.IsInterface)
+        {
+            prototypeAttributes |= MethodAttributes.Abstract | MethodAttributes.Virtual;
+        }
+
+        return prototypeAttributes;
     }
 
     private ParseContext TypeContext(OpenTypeBlock block)
@@ -771,7 +787,8 @@ public sealed partial class Session
         {
             // A generic method's signature must name the builder's own parameters, so the builder
             // is defined first and the header is read again with those parameters in scope.
-            var generic = block.Prototype.DefineMethod(signature.Name, signature.Attributes, signature.CallingConvention);
+            var generic = block.Prototype.DefineMethod(signature.Name,
+                PrototypeAttributes(block.Prototype, signature), signature.CallingConvention);
             methodGenerics = generic.DefineGenericParameters([.. signature.TypeParameters.Select(p => p.Name)]);
             signature = MethodHeaderParser.ParseMember(rest, context, owner, out _, out _, out _, _ => methodGenerics);
             generic.SetSignature(signature.ReturnType, [.. signature.ReturnRequiredModifiers], [.. signature.ReturnOptionalModifiers], signature.ParameterTypes, [.. signature.Parameters.Select(p => p.RequiredModifiers.ToArray())], [.. signature.Parameters.Select(p => p.OptionalModifiers.ToArray())]);

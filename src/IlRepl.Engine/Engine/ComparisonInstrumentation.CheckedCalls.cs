@@ -9,8 +9,9 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static partial class ComparisonInstrumentation
 {
-    private static MethodDefinition CheckedCall(CecilWriter writer, MethodDefinition wrapper, TypeDefinition owner, bool constrained)
+    private static MethodDefinition CheckedCall(CecilWriter writer, MethodDefinition wrapper, MethodDefinition selected, bool constrained)
     {
+        var owner = selected.DeclaringType;
         var method = new MethodDefinition(wrapper.Name + (constrained ? "_constrained" : "_virtual"),
             MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, wrapper.ReturnType);
         wrapper.DeclaringType.Methods.Add(method);
@@ -68,6 +69,47 @@ internal static partial class ComparisonInstrumentation
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Throw);
             il.Append(ready);
+        }
+
+        if (CanDispatch(selected))
+        {
+            var observed = il.Create(OpCodes.Nop);
+            var original = RelocatedReference(selected, Self(owner), method);
+            var actualPointer = new VariableDefinition(writer.Module.TypeSystem.IntPtr);
+            var selectedPointer = new VariableDefinition(writer.Module.TypeSystem.IntPtr);
+            method.Body.Variables.Add(actualPointer);
+            method.Body.Variables.Add(selectedPointer);
+            // Native integer locals also give Mono's interpreter the correct stack type for pointer comparisons.
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldvirtftn, original);
+            il.Emit(OpCodes.Stloc, actualPointer);
+            il.Emit(OpCodes.Ldftn, original);
+            il.Emit(OpCodes.Stloc, selectedPointer);
+            il.Emit(OpCodes.Ldloc, actualPointer);
+            il.Emit(OpCodes.Ldloc, selectedPointer);
+            il.Emit(OpCodes.Beq, observed);
+            if (receiver is not null)
+            {
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Ldarg_0);
+            }
+
+            foreach (var parameter in method.Parameters.Skip(1))
+            {
+                il.Emit(OpCodes.Ldarg, parameter);
+            }
+
+            var destination = RelocatedReference(selected, Self(owner), method);
+            foreach (var parameter in wrapper.Parameters.Skip(selected.Parameters.Count + 1))
+            {
+                destination.Parameters.Add(new ParameterDefinition(destination.Parameters.Count == selected.Parameters.Count
+                    ? new SentinelType(parameter.ParameterType) : parameter.ParameterType));
+            }
+
+            if (receiver is not null) il.Emit(OpCodes.Constrained, receiver);
+            il.Emit(OpCodes.Callvirt, destination);
+            il.Emit(OpCodes.Ret);
+            il.Append(observed);
         }
 
         foreach (var parameter in method.Parameters.Skip(1))

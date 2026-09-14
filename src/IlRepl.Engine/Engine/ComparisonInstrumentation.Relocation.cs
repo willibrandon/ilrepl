@@ -9,16 +9,16 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static partial class ComparisonInstrumentation
 {
-    private static void Relocate(CecilWriter writer, IReadOnlyList<MethodDefinition> wrappers)
+    private static void Relocate(CecilWriter writer, IReadOnlyList<MethodDefinition> wrappers, MethodDefinition selected)
     {
         writer.GrantAccessTo(writer.Name);
         foreach (var wrapper in wrappers)
         {
-            Relocate(writer, wrapper);
+            Relocate(writer, wrapper, selected);
         }
     }
 
-    private static void Relocate(CecilWriter writer, MethodDefinition wrapper)
+    private static void Relocate(CecilWriter writer, MethodDefinition wrapper, MethodDefinition selected)
     {
         var owner = wrapper.DeclaringType;
         var sites = writer.Module.GetTypes().SelectMany(type => type.Methods).Where(method => method.HasBody)
@@ -64,6 +64,7 @@ internal static partial class ComparisonInstrumentation
         holder.Methods.Add(wrapper);
         MethodDefinition? checkedCall = null;
         MethodDefinition? constrainedCall = null;
+        MethodDefinition? virtualFunction = null;
         foreach (var (method, instruction, reference, declaring) in sites)
         {
             var target = wrapper;
@@ -81,12 +82,20 @@ internal static partial class ComparisonInstrumentation
                     }
                 }
 
-                target = constraint is null ? checkedCall ??= CheckedCall(writer, wrapper, owner, constrained: false)
-                    : constrainedCall ??= CheckedCall(writer, wrapper, owner, constrained: true);
+                target = constraint is null ? checkedCall ??= CheckedCall(writer, wrapper, selected, constrained: false)
+                    : constrainedCall ??= CheckedCall(writer, wrapper, selected, constrained: true);
                 instruction.OpCode = OpCodes.Call;
             }
             else if (instance && instruction.OpCode.Code == Code.Ldvirtftn)
             {
+                if (CanDispatch(selected))
+                {
+                    target = virtualFunction ??= VirtualFunction(writer, wrapper, selected);
+                    instruction.OpCode = OpCodes.Call;
+                    instruction.Operand = RelocatedReference(target, declaring, reference);
+                    continue;
+                }
+
                 var il = method.Body.GetILProcessor();
                 var duplicate = il.Create(OpCodes.Dup);
                 var discard = il.Create(OpCodes.Pop);
@@ -141,8 +150,9 @@ internal static partial class ComparisonInstrumentation
         }
 
         var result = new GenericInstanceMethod(reference);
-        foreach (var argument in original is GenericInstanceMethod instance
-            ? instance.GenericArguments : original.GenericParameters.Cast<TypeReference>())
+        var arguments = original is GenericInstanceMethod instance
+            ? instance.GenericArguments : original.GenericParameters.Cast<TypeReference>();
+        foreach (var argument in arguments.Take(target.GenericParameters.Count - (constraint is null ? 0 : 1)))
         {
             result.GenericArguments.Add(argument);
         }

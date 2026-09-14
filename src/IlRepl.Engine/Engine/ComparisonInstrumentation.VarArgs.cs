@@ -10,9 +10,10 @@ internal static partial class ComparisonInstrumentation
     internal static void Complete(CecilWriter writer, MethodDefinition target, MethodDefinition entry,
         MethodReference? externalVarArg = null)
     {
+        RestoreVirtualReferences(writer, target, entry);
         if (target.CallingConvention != MethodCallingConvention.VarArg)
         {
-            Relocate(writer, [entry]);
+            Relocate(writer, [entry], target);
             return;
         }
 
@@ -54,6 +55,6 @@ internal static partial class ComparisonInstrumentation
             }
         }
 
-        Relocate(writer, [entry, .. wrappers]);
+        Relocate(writer, [entry, .. wrappers], target);
     }
 }

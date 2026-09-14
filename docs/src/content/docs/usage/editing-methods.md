@@ -147,6 +147,7 @@ consuming it inside the scenario leaves that call's result unavailable.
 Spans and other byref-like values remain usable in a scenario, but their observations are unavailable.
 A null managed reference is reported as `null reference`, distinct from a variable containing `null`.
 Array observations keep their bounds and type: `T[]` is a vector, while `T[*]` is a rank-one multidimensional array.
+Virtual calls follow overrides, including through delegates. Calling an override alone does not invoke the selected base method.
 
 `different-inputs` means the inputs or call counts differed. A comparison is incomplete if it cannot
 inspect all results or the scenario never calls the method. With `--assert`, anything other than a

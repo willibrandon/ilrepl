@@ -50,9 +50,11 @@ public sealed partial class LiveSessionTests
             await ExpectCompletionAsync(page, ".edit int32 Owner::Read() as Copy {");
             if (copiedType)
             {
-                await page.Keyboard.PressAsync("Control+c");
-                await TypeLineAsync(page, ".methods Copy");
-                await ExpectCompletionAsync(page, "nominal");
+                await ClearPromptAsync(page);
+                await page.Keyboard.TypeAsync(".methods Copy");
+                await PromptContainsAsync(page, ".methods Copy");
+                await page.Keyboard.PressAsync("Enter");
+                await EmptyPromptAsync(page);
                 var transcript = (await BufferTextAsync(page)).Replace("│", "", StringComparison.Ordinal)
                     .Replace("▉", "", StringComparison.Ordinal);
                 Assert.Contains("original nominal type", string.Join(' ', transcript.Split((char[]?)null,
