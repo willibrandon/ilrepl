@@ -6,15 +6,33 @@ self.onmessage = async ({ data }) => {
   try {
     const limit = JSON.parse(data.package).outputLimit;
     const streams = { standardOutput: '', standardError: '' };
+    const decoders = { standardOutput: new TextDecoder(), standardError: new TextDecoder() };
+    const encoder = new TextEncoder();
+    const byte = new Uint8Array(1);
+    let exceeded = false;
     const output = (stream, text) => {
-      const next = streams[stream] + text + '\n';
+      if (exceeded) return;
+      const next = streams[stream] + text;
       streams[stream] = next.slice(0, limit);
-      if (next.length > limit) self.postMessage({ type: 'output-limit' });
+      if (next.length > limit) {
+        exceeded = true;
+        self.postMessage({ type: 'output-limit' });
+      }
+    };
+    const outputByte = (stream, value) => {
+      if (exceeded) return;
+      byte[0] = value;
+      output(stream, decoders[stream].decode(byte, { stream: true }));
+    };
+    const outputLine = (stream, text) => {
+      for (const value of encoder.encode(text + '\n')) outputByte(stream, value);
     };
     const runtime = await dotnet
       .withModuleConfig({
-        print: (text) => output('standardOutput', text),
-        printErr: (text) => output('standardError', text),
+        stdout: (value) => outputByte('standardOutput', value),
+        stderr: (value) => outputByte('standardError', value),
+        print: (text) => outputLine('standardOutput', text),
+        printErr: (text) => outputLine('standardError', text),
         onAbort: (reason) => self.postMessage({ type: 'failed', detail: String(reason) }),
         onExit: (code) => self.postMessage({ type: 'failed', detail: `comparison runtime exited with code ${code}` })
       })
@@ -25,12 +43,10 @@ self.onmessage = async ({ data }) => {
     const json = await exports.IlRepl.Wasm.BrowserComparisonWorker.RunAsync(data.package, data.original);
     const result = JSON.parse(json);
     for (const stream of Object.keys(streams)) {
-      result[stream] += streams[stream];
-      if (result[stream].length > limit) {
-        self.postMessage({ type: 'output-limit' });
-        return;
-      }
+      output(stream, decoders[stream].decode());
+      result[stream] = streams[stream];
     }
+    if (exceeded) return;
     self.postMessage({ type: 'result', result: JSON.stringify(result) });
   } catch (error) {
     self.postMessage({ type: 'failed', detail: String(error) });

@@ -1,6 +1,8 @@
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using CilInstruction = Mono.Cecil.Cil.Instruction;
+using Assembly = System.Reflection.Assembly;
+using RuntimeGenericAttributes = System.Reflection.GenericParameterAttributes;
 
 namespace IlRepl.Engine;
 
@@ -385,9 +387,26 @@ internal static class ComparisonInstrumentation
             return true;
         }
 
-        var definition = type.GetElementType() as TypeDefinition;
-        return definition?.CustomAttributes.Any(attribute =>
-            attribute.AttributeType.FullName == "System.Runtime.CompilerServices.IsByRefLikeAttribute") == true;
+        if (type is GenericParameter parameter)
+        {
+            return ((RuntimeGenericAttributes)parameter.Attributes).HasFlag(RuntimeGenericAttributes.AllowByRefLike);
+        }
+
+        if (!type.IsValueType)
+        {
+            return false;
+        }
+
+        var definition = type.GetElementType();
+        if (definition is TypeDefinition local)
+        {
+            return local.CustomAttributes.Any(attribute =>
+                attribute.AttributeType.FullName == "System.Runtime.CompilerServices.IsByRefLikeAttribute");
+        }
+
+        // Imported signatures already have loaded runtime types, including assemblies available only as images in the browser.
+        var assembly = (AssemblyNameReference)definition.Scope;
+        return Assembly.Load(assembly.FullName).GetType(definition.FullName.Replace('/', '+'), throwOnError: true)!.IsByRefLike;
     }
 
     private static TypeReference Unmodified(TypeReference type)

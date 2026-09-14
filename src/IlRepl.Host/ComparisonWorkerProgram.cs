@@ -29,7 +29,7 @@ internal static class ComparisonWorkerProgram
             {
                 File.WriteAllText(arguments[5], "output-limit");
                 Environment.Exit(73);
-            }).ConfigureAwait(false);
+            }, captureOutput: false).ConfigureAwait(false);
         await File.WriteAllTextAsync(arguments[4], JsonSerializer.Serialize(result,
             ProtocolJsonContext.Default.ComparisonSide)).ConfigureAwait(false);
         return 0;

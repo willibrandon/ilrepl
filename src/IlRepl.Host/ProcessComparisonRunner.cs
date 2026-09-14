@@ -132,13 +132,7 @@ public static class ProcessComparisonRunner
             var result = JsonSerializer.Deserialize(await File.ReadAllTextAsync(resultPath, cancellationToken).ConfigureAwait(false),
                 ProtocolJsonContext.Default.ComparisonSide)
                 ?? throw new InvalidDataException("comparison host returned no result");
-            if (result.StandardOutput.Length + rawOut.Length > package.OutputLimit
-                || result.StandardError.Length + rawError.Length > package.OutputLimit)
-            {
-                return Failure("output-limit", "combined worker output exceeded the configured limit");
-            }
-
-            return result with { StandardOutput = result.StandardOutput + rawOut, StandardError = result.StandardError + rawError };
+            return result with { StandardOutput = rawOut, StandardError = rawError };
         }
         catch (OperationCanceledException)
         {

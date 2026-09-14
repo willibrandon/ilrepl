@@ -17,8 +17,10 @@ public static class ComparisonWorker
     /// <param name="original">Whether to execute the captured original side.</param>
     /// <param name="ready">Signals that runtime startup completed and the execution timeout must begin.</param>
     /// <param name="outputLimit">Requests immediate termination when console output exceeds its limit.</param>
+    /// <param name="captureOutput">Whether to capture console writers in memory or let the host capture its standard streams.</param>
     /// <returns>The completed observations or setup failure.</returns>
-    public static async Task<ComparisonSide> ExecuteAsync(ComparisonPackage package, bool original, Action ready, Action outputLimit)
+    public static async Task<ComparisonSide> ExecuteAsync(ComparisonPackage package, bool original, Action ready, Action outputLimit,
+        bool captureOutput = true)
     {
         ArgumentNullException.ThrowIfNull(package);
         ArgumentNullException.ThrowIfNull(ready);
@@ -34,8 +36,8 @@ public static class ComparisonWorker
             outputLimit();
         }
 
-        using var stdout = new ComparisonOutputWriter(package.OutputLimit, Limit);
-        using var stderr = new ComparisonOutputWriter(package.OutputLimit, Limit);
+        using var stdout = captureOutput ? new ComparisonOutputWriter(package.OutputLimit, Limit) : null;
+        using var stderr = captureOutput ? new ComparisonOutputWriter(package.OutputLimit, Limit) : null;
         using var stdin = new StringReader(package.StandardInput);
         var loaded = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
         Assembly? Resolve(AssemblyLoadContext context, AssemblyName name)
@@ -61,8 +63,11 @@ public static class ComparisonWorker
         AssemblyLoadContext.Default.Resolving += Resolve;
         try
         {
-            Console.SetOut(stdout);
-            Console.SetError(stderr);
+            if (captureOutput)
+            {
+                Console.SetOut(stdout!);
+                Console.SetError(stderr!);
+            }
             Console.SetIn(stdin);
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(package.Culture);
             CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(package.UICulture);
@@ -163,14 +168,15 @@ public static class ComparisonWorker
             var invocations = await ComparisonProbe.CompleteAsync().ConfigureAwait(false);
             var observation = new StructuralObservation(image.TypeNames);
             return new ComparisonSide(exceeded ? "output-limit" : invocations.Count == 0 ? "setup-failed" : "completed", invocations,
-                observation.Capture(result), failure is null ? null : observation.Exception(failure), stdout.Text, stderr.Text,
+                observation.Capture(result), failure is null ? null : observation.Exception(failure),
+                stdout?.Text ?? "", stderr?.Text ?? "",
                 invocations.Count == 0 ? "the scenario did not invoke the selected method" : null);
         }
         catch (Exception ex)
         {
             var observation = new StructuralObservation(image.TypeNames);
-            return new ComparisonSide(exceeded ? "output-limit" : "setup-failed", [], null, observation.Exception(ex), stdout.Text,
-                stderr.Text, ex.Message);
+            return new ComparisonSide(exceeded ? "output-limit" : "setup-failed", [], null, observation.Exception(ex), stdout?.Text ?? "",
+                stderr?.Text ?? "", ex.Message);
         }
         finally
         {

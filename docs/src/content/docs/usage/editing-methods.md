@@ -127,9 +127,10 @@ Both sides start with a new counter. The original returns `1` and sets `Value` t
 `2` and sets `Value` to `2`.
 
 The report shows the receiver and arguments before and after each call, the return value or exception,
-and console output. It tracks shared objects and `ref` aliases. Objects are compared through their fields
+and console output, including direct stream writes. It tracks shared objects and `ref` aliases. Objects are compared through their fields
 without calling properties, `ToString`, or equality methods. `Task` and `ValueTask` results are awaited.
 Tasks keep their identity and `AsyncState`; a null task remains null. A scenario must await any work it starts.
+Spans and other byref-like values remain usable in a scenario, but their observations are unavailable.
 
 `different-inputs` means the inputs or call counts differed. A comparison is incomplete if it cannot
 inspect all results or the scenario never calls the method. With `--assert`, anything other than a

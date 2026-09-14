@@ -23,7 +23,7 @@ public static partial class BrowserComparisonWorker
         await JSHost.ImportAsync("comparison.js", "../comparison-interop.js").ConfigureAwait(false);
         var package = JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.ComparisonPackage)
             ?? throw new ReplException("the comparison package is missing");
-        var result = await ComparisonWorker.ExecuteAsync(package, original, Ready, OutputLimit).ConfigureAwait(false);
+        var result = await ComparisonWorker.ExecuteAsync(package, original, Ready, OutputLimit, captureOutput: false).ConfigureAwait(false);
         return JsonSerializer.Serialize(result, ProtocolJsonContext.Default.ComparisonSide);
     }
 
