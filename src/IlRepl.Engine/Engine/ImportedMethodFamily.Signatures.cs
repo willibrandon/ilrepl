@@ -68,7 +68,7 @@ internal sealed partial class ImportedMethodFamily
     private void ScanMethodSignature(MethodBase method, MethodEditBody? body)
     {
         var location = MemberResolver.Describe(method);
-        var owner = method.DeclaringType!;
+        var owner = ContextOf(method);
         if (body is null)
         {
             var metadata = RuntimeMetadataSignatures.Read(method);

@@ -104,6 +104,11 @@ internal sealed partial class ExportIlAsmRenderer
         Close();
         Line(".module " + Identifier(_assembly + ".dll"));
         Attributes(module);
+        foreach (var method in module.Types[0].Methods)
+        {
+            WriteMethod(method);
+        }
+
         foreach (var type in module.Types.Where(type => type.Name != "<Module>"))
         {
             WriteType(type);

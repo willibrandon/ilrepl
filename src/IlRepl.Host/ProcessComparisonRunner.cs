@@ -8,7 +8,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Host;
 
 /// <summary>
-/// Runs each captured version in its own disposable host process and working directory.
+/// Runs each captured version in a separate host process with a fresh fixture tree at the same working path.
 /// </summary>
 public static class ProcessComparisonRunner
 {
@@ -21,19 +21,21 @@ public static class ProcessComparisonRunner
     public static async Task<ComparisonReply> RunAsync(ComparisonPackage package, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(package);
-        var original = await RunSideAsync(package, true, cancellationToken).ConfigureAwait(false);
-        var edited = await RunSideAsync(package, false, cancellationToken).ConfigureAwait(false);
+        var path = Path.Combine(Path.GetTempPath(), "ilrepl-compare-" + Guid.NewGuid().ToString("N"));
+        var original = await RunSideAsync(package, true, path, cancellationToken).ConfigureAwait(false);
+        var edited = await RunSideAsync(package, false, path, cancellationToken).ConfigureAwait(false);
         return ComparisonResults.Compare(package, original, edited);
     }
 
-    private static async Task<ComparisonSide> RunSideAsync(ComparisonPackage package, bool original, CancellationToken cancellationToken)
+    private static async Task<ComparisonSide> RunSideAsync(ComparisonPackage package, bool original, string path,
+        CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
         {
             return Failure("cancelled", "comparison cancelled");
         }
 
-        var directory = Directory.CreateTempSubdirectory("ilrepl-compare-");
+        var directory = new DirectoryInfo(path);
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var inputLifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var outputLifetime = new CancellationTokenSource();
@@ -44,6 +46,8 @@ public static class ProcessComparisonRunner
         Task<string>? stderr = null;
         try
         {
+            // Failed cleanup must prevent the next worker from inheriting changed fixtures or stale control files.
+            ComparisonDirectory.Delete(path);
             var work = Directory.CreateDirectory(Path.Combine(directory.FullName, "work"));
             var packagePath = Path.Combine(directory.FullName, "package.json");
             var readyPath = Path.Combine(directory.FullName, "ready");
@@ -173,16 +177,13 @@ public static class ProcessComparisonRunner
                 await stderr.ConfigureAwait(false);
             }
 
-            if (directory.Exists)
+            try
             {
-                try
-                {
-                    directory.Delete(recursive: true);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    // User code can leave files or directories that cannot be deleted; retain the comparison outcome.
-                }
+                ComparisonDirectory.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // User code can leave files or directories that cannot be deleted; retain the comparison outcome.
             }
         }
 

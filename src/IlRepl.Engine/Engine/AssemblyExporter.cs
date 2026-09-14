@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reflection;
 using Mono.Cecil;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
@@ -100,6 +101,7 @@ public static class AssemblyExporter
                 methods.Add((method, definition));
             }
 
+            var revisions = new List<(ImportedMethodFamily Revision, Dictionary<MemberInfo, IMemberDefinition> Definitions)>();
             foreach (var edit in session.Edits)
             {
                 if (edit == comparison && original)
@@ -107,18 +109,28 @@ public static class AssemblyExporter
                     if (edit.Baseline.Problems.Count == 0)
                     {
                         var definitions = edit.Baseline.Write(writer);
-                        ImportedMethodFamily.DefineRevisionReferences(writer, edit.Current!, definitions);
+                        revisions.Add((edit.Current!, definitions));
                     }
                     else
                     {
                         var definitions = edit.Current!.Write(writer);
                         CecilOriginalCall.Replace(edit, (MethodDefinition)definitions[edit.Original.Method], writer);
+                        revisions.Add((edit.Current!, definitions));
                     }
                 }
                 else
                 {
-                    edit.Current?.Write(writer);
+                    if (edit.Current is { } current)
+                    {
+                        revisions.Add((current, current.Write(writer)));
+                    }
                 }
+            }
+
+            // A copy can use another edit as its source; callers still bind each committed revision to its own definitions.
+            foreach (var (revision, definitions) in revisions)
+            {
+                ImportedMethodFamily.DefineRevisionReferences(writer, revision, definitions);
             }
 
             if (comparison is not null)

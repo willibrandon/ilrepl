@@ -60,6 +60,7 @@ internal sealed partial class ImportedMethodFamily
             }
         }
 
+        var moduleOwners = DefineModuleOwners(writer);
         foreach (var original in _methods.Keys)
         {
             var definition = new MethodDefinition(original.Name, (CecilMethodAttributes)original.Attributes, writer.Module.TypeSystem.Void)
@@ -70,7 +71,9 @@ internal sealed partial class ImportedMethodFamily
                 CallingConvention = original.CallingConvention.HasFlag(CallingConventions.VarArgs) ? MethodCallingConvention.VarArg
                     : MethodCallingConvention.Default,
             };
-            ((TypeDefinition)definitions[DefinitionOf(original.DeclaringType!)]).Methods.Add(definition);
+            var owner = IsModuleInitializer(original) ? moduleOwners[original.Module]
+                : (TypeDefinition)definitions[DefinitionOf(original.DeclaringType!)];
+            owner.Methods.Add(definition);
             writer.Define(original, definition);
             definitions.Add(original, definition);
             if (original.IsGenericMethodDefinition)
@@ -139,6 +142,8 @@ internal sealed partial class ImportedMethodFamily
             }
         }
 
+        WriteTypeLookups(writer, definitions);
+        WriteModuleInitializers(writer, definitions);
         var selected = (MethodDefinition)definitions[Selected.Method];
         if (!selected.IsPublic || !Selected.Method.DeclaringType!.IsVisible)
         {

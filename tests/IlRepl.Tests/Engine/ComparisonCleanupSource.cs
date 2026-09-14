@@ -6,6 +6,17 @@ namespace IlRepl.Tests.Engine;
 public static class ComparisonCleanupSource
 {
     /// <summary>
+    /// Leaves a link to a test-owned directory outside the worker tree.
+    /// </summary>
+    /// <param name="outside">The directory whose permissions and contents must remain unchanged.</param>
+    /// <returns>The worker path to check after cleanup.</returns>
+    public static string Link(string outside)
+    {
+        Directory.CreateSymbolicLink("linked", outside);
+        return Directory.GetCurrentDirectory();
+    }
+
+    /// <summary>
     /// Records the worker directory, prevents recursive deletion, and returns a value or exits the process.
     /// </summary>
     /// <param name="record">The test-owned file that records both worker directories.</param>

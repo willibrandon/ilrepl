@@ -29,6 +29,7 @@ internal sealed partial class ImportedMethodFamily
     private readonly Queue<MethodBase> _pending = new();
     private readonly HashSet<Type> _instantiated = [];
     private readonly Dictionary<MemberInfo, MemberInfo> _runtime = [];
+    private readonly List<Type> _generatedRuntimeTypes = [];
     private readonly List<string> _problems = [];
     private MethodBase? _forwardingMethod;
 
@@ -89,7 +90,8 @@ internal sealed partial class ImportedMethodFamily
                 MethodEditBody body;
                 try
                 {
-                    body = method == Selected.Method ? Selected : MethodEditBody.Read(method, _session, _signatures, _sourceTypes);
+                    body = method == Selected.Method ? Selected
+                        : MethodEditBody.Read(method, _session, _signatures, _sourceTypes, ContextOf(method));
                 }
                 catch (ReplException ex)
                 {
@@ -193,7 +195,8 @@ internal sealed partial class ImportedMethodFamily
     /// <summary>
     /// Every compiled type that must be registered in the session type table.
     /// </summary>
-    internal IEnumerable<Type> RuntimeTypes => _runtime.Where(pair => pair.Key is Type).Select(pair => (Type)pair.Value);
+    internal IEnumerable<Type> RuntimeTypes => _runtime.Where(pair => pair.Key is Type).Select(pair => (Type)pair.Value)
+        .Concat(_generatedRuntimeTypes);
 
     /// <summary>
     /// All declaring types whose callers must rebuild, including generated alias entry types.
@@ -260,6 +263,7 @@ internal sealed partial class ImportedMethodFamily
         var name = type.DeclaringType is { } parent ? _types[DefinitionOf(parent)] + "/" + type.Name
             : "IlRepl.Edits." + Name + "." + suffix + (type.IsGenericTypeDefinition ? "`" + type.GetGenericArguments().Length : "");
         _types.Add(type, name);
+        CaptureModule(type);
         ConsiderConstraints(type.GetGenericArguments(), type, TypeNameFormatter.Pretty(type));
         if (type.BaseType is { } baseType)
         {
@@ -338,9 +342,10 @@ internal sealed partial class ImportedMethodFamily
         }
     }
 
-    private void AddMethod(MethodBase method, bool metadataOnly = false)
+    private void AddMethod(MethodBase method, bool metadataOnly = false, bool initialization = false)
     {
         method = IlAsmRenderer.DefinitionOf(method);
+        var discoveredInitialization = initialization && _initializationMethods.Add(method);
         if (!metadataOnly && _metadataOnlyMethods.Remove(method))
         {
             _pending.Enqueue(method);
@@ -348,6 +353,7 @@ internal sealed partial class ImportedMethodFamily
 
         if (!_methods.TryAdd(method, null))
         {
+            if (discoveredInitialization) _pending.Enqueue(method);
             return;
         }
 
@@ -356,7 +362,14 @@ internal sealed partial class ImportedMethodFamily
             _metadataOnlyMethods.Add(method);
         }
 
-        AddType(method.DeclaringType!);
+        if (!IsModuleInitializer(method) && method.DeclaringType is { } owner)
+        {
+            AddType(owner);
+            if (initialization && owner.TypeInitializer is { } initializer)
+            {
+                AddMethod(initializer, initialization: true);
+            }
+        }
         if (method.IsGenericMethodDefinition)
         {
             ConsiderConstraints(method.GetGenericArguments(), method.DeclaringType!, MemberResolver.Describe(method));
@@ -368,11 +381,12 @@ internal sealed partial class ImportedMethodFamily
 
     private void Scan(MethodEditBody body)
     {
+        var from = ContextOf(body.Method);
         foreach (var parameter in body.State.Signature!.TypeParameters)
         {
             foreach (var constraint in parameter.Constraints)
             {
-                ConsiderType(constraint, body.Method.DeclaringType!);
+                ConsiderType(constraint, from);
                 ReportType(constraint, MemberResolver.Describe(body.Method) + ": constraint on " + parameter.Name);
             }
         }
@@ -382,7 +396,7 @@ internal sealed partial class ImportedMethodFamily
             var symbol = local.ExactType ?? RuntimeSymbolImporter.Import(local.Type);
             foreach (var dependency in RuntimeSymbolTypes.Materialized(symbol).Distinct())
             {
-                ConsiderType(dependency, body.Method.DeclaringType!);
+                ConsiderType(dependency, from);
                 if (!dependency.IsGenericParameter)
                 {
                     ReportType(dependency, MemberResolver.Describe(body.Method) + ": local "
@@ -401,7 +415,7 @@ internal sealed partial class ImportedMethodFamily
             // Session types follow their copied context; external catches must retain the identities external helpers throw.
             if (TypeRelations.IsSessionType(catchType))
             {
-                ConsiderType(catchType, body.Method.DeclaringType!);
+                ConsiderType(catchType, from);
             }
 
             ReportType(catchType, MemberResolver.Describe(body.Method) + ": catch " + TypeNameFormatter.Pretty(catchType));
@@ -422,10 +436,17 @@ internal sealed partial class ImportedMethodFamily
                         _reflectionLocation ??= location;
                     }
 
+                    if (instruction.Op == OpCodes.Call && IsTypeLookup(target))
+                    {
+                        AddMethod(typeof(CopiedTypeNames).GetMethod(nameof(CopiedTypeNames.Translate),
+                            BindingFlags.Static | BindingFlags.NonPublic)!);
+                    }
+
                     var owner = DefinitionOf(target.DeclaringType!);
                     var accessible = MemberAccess.MethodVerdict(new ResolvedMethod(target, null), body.State.Member!.Scope,
                         _session.TypeTable, judgeAll: true) is null;
-                    var copy = resolved.IsSessionMethod || _types.ContainsKey(owner) || TypeRelations.IsSessionType(owner)
+                    var initialization = _initializationMethods.Contains(body.Method) && target.Module == body.Method.Module;
+                    var copy = initialization || resolved.IsSessionMethod || _types.ContainsKey(owner) || TypeRelations.IsSessionType(owner)
                         || (owner.Assembly == body.Method.Module.Assembly && ((!target.IsPublic && !((target.IsFamily
                             || target.IsFamilyOrAssembly) && accessible))
                             || !owner.IsVisible));
@@ -433,7 +454,7 @@ internal sealed partial class ImportedMethodFamily
                     {
                         try
                         {
-                            AddMethod(target);
+                            AddMethod(target, initialization: initialization);
                         }
                         catch (ReplException ex)
                         {
@@ -452,11 +473,16 @@ internal sealed partial class ImportedMethodFamily
                 case FieldInfo field:
                 {
                     var owner = DefinitionOf(field.DeclaringType!);
-                    var copy = _types.ContainsKey(owner) || TypeRelations.IsSessionType(owner)
+                    var initialization = _initializationMethods.Contains(body.Method) && field.Module == body.Method.Module;
+                    var copy = initialization || _types.ContainsKey(owner) || TypeRelations.IsSessionType(owner)
                         || (owner.Assembly == body.Method.Module.Assembly && (!field.IsPublic || !owner.IsVisible));
                     if (copy)
                     {
                         AddType(owner);
+                        if (initialization && owner.TypeInitializer is { } initializer)
+                        {
+                            AddMethod(initializer, initialization: true);
+                        }
                     }
 
                     _dependencies.Add(new EditDependency(field.ToString()!, field.Module.Assembly.FullName!, location, copy ? "copied"
@@ -464,7 +490,7 @@ internal sealed partial class ImportedMethodFamily
                     break;
                 }
                 case Type type:
-                    ConsiderType(type, body.Method.DeclaringType!);
+                    ConsiderType(type, from);
                     if (instruction.Op == OpCodes.Ldtoken && ContainsCopiedType(type))
                     {
                         _reflectionLocation ??= location;
@@ -483,7 +509,7 @@ internal sealed partial class ImportedMethodFamily
                             .Select(type => RuntimeSymbolImporter.Import(type));
                     foreach (var dependency in symbols.SelectMany(RuntimeSymbolTypes.Materialized).Distinct())
                     {
-                        ConsiderType(dependency, body.Method.DeclaringType!);
+                        ConsiderType(dependency, from);
                         if (!dependency.IsGenericParameter)
                         {
                             ReportType(dependency, location);
@@ -578,6 +604,17 @@ internal sealed partial class ImportedMethodFamily
         var writer = new CecilWriter(SessionAssemblyKind.Types);
         var definitions = Write(writer);
         Definition = writer.Load();
+        foreach (var initializer in _moduleInitializers.Values)
+        {
+            var owner = ((MethodDefinition)definitions[initializer]).DeclaringType;
+            _generatedRuntimeTypes.Add(Definition.Assembly.GetType(CecilSerializedTypeName.Name(owner), throwOnError: true)!);
+        }
+
+        if (Definition.Assembly.GetType("IlRepl.Edits." + Name + ".<TypeLookups>") is { } lookupOwner)
+        {
+            _generatedRuntimeTypes.Add(lookupOwner);
+        }
+
         foreach (var (original, definition) in definitions)
         {
             MemberInfo runtime = definition switch
@@ -601,7 +638,8 @@ internal sealed partial class ImportedMethodFamily
             CallableEntryPoint = CloseRequested(_forwardingMethod);
         }
 
-        if (MethodPreparation.IsSupported)
+        // Preparing a method can run its module constructor; imported bodies have already passed static flow validation.
+        if (MethodPreparation.IsSupported && _moduleInitializers.Count == 0)
         {
             foreach (var method in _runtime.Values.OfType<MethodBase>().Append(EntryPoint).Append(CallableEntryPoint)
                 .Where(method => !method.IsAbstract && !method.ContainsGenericParameters && !HasNonIlImplementation(method)).Distinct())
@@ -658,6 +696,7 @@ internal sealed partial class ImportedMethodFamily
         CallableEntryPoint = null;
         _forwardingMethod = null;
         _runtime.Clear();
+        _generatedRuntimeTypes.Clear();
         _problems.Add(problem);
     }
 

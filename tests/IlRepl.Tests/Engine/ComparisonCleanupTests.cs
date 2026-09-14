@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using IlRepl.Engine;
 using IlRepl.Host;
 
@@ -13,6 +14,45 @@ public sealed class ComparisonCleanupTests
     /// Supplies cancellation for actual comparison worker processes.
     /// </summary>
     public TestContext TestContext { get; set; } = null!;
+
+    /// <summary>
+    /// Resetting each worker removes symbolic links without changing permissions or files outside its temporary tree.
+    /// </summary>
+    [TestMethod]
+    [OSCondition(ConditionMode.Exclude, OperatingSystems.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Run_LinkedDirectory_DoesNotChangeTheTarget()
+    {
+        var outside = Directory.CreateTempSubdirectory("ilrepl-cleanup-outside-");
+        var file = Path.Combine(outside.FullName, "data.txt");
+        File.WriteAllText(file, "outside");
+        File.SetUnixFileMode(outside.FullName, UnixFileMode.None);
+        try
+        {
+            var session = new Session();
+            session.Resolver.Load(typeof(ComparisonCleanupSource).Assembly.Location);
+            foreach (var line in IlLines.Expand(".method string Work() {", "ldstr " + LiteralParser.Escape(outside.FullName),
+                "call string [IlRepl.Tests]IlRepl.Tests.Engine.ComparisonCleanupSource::Link(string)", "ret", "}"))
+            {
+                session.AddLine(line);
+            }
+
+            var edit = session.PrepareEdit("Work", "Copy");
+            session.CommitEdit(edit.Name, edit.Source);
+            var result = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy ()"),
+                TestContext.CancellationToken);
+            Assert.AreEqual("match", result.Outcome, result.Original.Detail + "; " + result.Edited.Detail);
+            Assert.AreEqual(UnixFileMode.None, File.GetUnixFileMode(outside.FullName));
+            Assert.IsFalse(Directory.Exists(result.Original.Result!.Value));
+            File.SetUnixFileMode(outside.FullName, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            Assert.AreEqual("outside", File.ReadAllText(file));
+        }
+        finally
+        {
+            File.SetUnixFileMode(outside.FullName, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            outside.Delete(recursive: true);
+        }
+    }
 
     /// <summary>
     /// Both completed and crashed workers retain their outcomes when their files cannot be deleted.
@@ -62,7 +102,8 @@ public sealed class ComparisonCleanupTests
 
             var workers = File.ReadAllLines(record);
             Assert.HasCount(2, workers);
-            Assert.AreNotEqual(workers[0], workers[1]);
+            Assert.AreEqual(workers[0], workers[1]);
+            Assert.IsFalse(Directory.Exists(Directory.GetParent(workers[0])!.FullName));
         }
         finally
         {

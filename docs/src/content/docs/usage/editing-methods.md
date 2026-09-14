@@ -159,8 +159,8 @@ Each comparison starts two clean processes on desktop or two workers in the brow
 declarations and run their initializers. Previous cells are not rerun. The original keeps the method
 and dependency versions from when you opened the edit.
 
-Both sides get the same culture, environment, and stdin, with separate working directories.
-Use `--stdin "text\n"` for console input and `--files directory` to copy files into each directory.
+Both sides get the same culture, environment, stdin, and working path. Each run starts with fresh files.
+Use `--stdin "text\n"` for console input and `--files directory` to supply the files.
 Desktop comparisons also supply that input to `Console.OpenStandardInput()` and native stdin readers.
 Files, directories, and relative symlinks keep their captured timestamps. Links outside the supplied directory are rejected.
 If the filesystem cannot restore a timestamp, the comparison reports a setup failure.
@@ -178,7 +178,9 @@ Set up repeatable inputs in your scenario. The transcript describes these condit
 
 `.edit` copies the declaring type and the fields, constructors, and helpers the method needs.
 Signatures, generic constraints, layout, and member metadata are kept, including property and event accessor associations.
-Public external methods remain references to their original assemblies. Opening or saving an edit does not run its code.
+Type and module initializers keep the helpers they need. Opening or saving an edit does not run its code.
+`Type.GetType` recognizes the original names of copied types, including nested types and generic arguments.
+Public methods outside this copied context remain references to their original assemblies.
 The dependency list includes local and member signatures, custom modifiers, catch types, and `calli` signatures.
 Custom attributes keep their constructors, named members, and type arguments in saved copies.
 Marshal descriptors keep their referenced types, including SAFEARRAY subtypes and custom marshaler implementations.

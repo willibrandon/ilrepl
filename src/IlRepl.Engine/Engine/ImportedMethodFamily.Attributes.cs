@@ -39,20 +39,21 @@ internal sealed partial class ImportedMethodFamily
         foreach (var method in _methods.Keys.ToArray())
         {
             var location = MemberResolver.Describe(method);
-            ScanAttributes(method.GetCustomAttributesData, method.DeclaringType!, location);
+            var owner = ContextOf(method);
+            ScanAttributes(method.GetCustomAttributesData, owner, location);
             foreach (var parameter in method.GetParameters())
             {
-                ScanAttributes(parameter.GetCustomAttributesData, method.DeclaringType!, location + ": parameter " + parameter.Position);
+                ScanAttributes(parameter.GetCustomAttributesData, owner, location + ": parameter " + parameter.Position);
             }
 
             if (method is MethodInfo info)
             {
-                ScanAttributes(info.ReturnParameter.GetCustomAttributesData, method.DeclaringType!, location + ": return");
+                ScanAttributes(info.ReturnParameter.GetCustomAttributesData, owner, location + ": return");
             }
 
             foreach (var parameter in method.IsGenericMethod ? method.GetGenericArguments() : Type.EmptyTypes)
             {
-                ScanAttributes(parameter.GetCustomAttributesData, method.DeclaringType!, location + ": " + parameter.Name);
+                ScanAttributes(parameter.GetCustomAttributesData, owner, location + ": " + parameter.Name);
             }
         }
     }

@@ -13,13 +13,14 @@ namespace IlRepl.Engine;
 internal sealed record MethodEditBody(MethodBase Method, DisassembledMethod Listing, string Source, CellState State)
 {
     internal static MethodEditBody Read(MethodBase method, Session session, IReadOnlyList<MethodSignature> signatures,
-        TypeTable? types = null)
+        TypeTable? types = null, Type? contextType = null)
     {
         var listing = MethodDisassembler.Disassemble(method, session);
         if (listing.Problems.Count != 0 || listing.Entries.Any(e => e.EffectUnknown || e.Kind == DisassembledEntryKind.Raw))
         {
             throw new ReplException($"cannot edit {MemberResolver.Describe(method)}: " +
-                string.Join("; ", listing.Problems.Concat(listing.Notes)));
+                string.Join("; ", listing.Problems.Concat(listing.Notes).Concat(listing.Entries
+                    .Where(entry => entry.EffectUnknown || entry.Kind == DisassembledEntryKind.Raw).Select(entry => entry.DisplayText))));
         }
 
         var lines = new List<string>
@@ -42,14 +43,14 @@ internal sealed record MethodEditBody(MethodBase Method, DisassembledMethod List
         }
 
         lines.Add("}");
-        return Parse(listing, string.Join('\n', lines), session, signatures, types);
+        return Parse(listing, string.Join('\n', lines), session, signatures, types, contextType);
     }
 
     internal static MethodEditBody Parse(DisassembledMethod listing, string source, Session session,
-        IReadOnlyList<MethodSignature> signatures, TypeTable? types = null)
+        IReadOnlyList<MethodSignature> signatures, TypeTable? types = null, Type? contextType = null)
     {
         var method = listing.Method;
-        var owner = method.DeclaringType ?? throw new ReplException("the method has no declaring type");
+        var owner = contextType ?? method.DeclaringType ?? throw new ReplException("the method has no declaring type");
         var ownerParameters = owner.IsGenericType ? owner.GetGenericArguments() : Type.EmptyTypes;
         var methodParameters = method.IsGenericMethod ? method.GetGenericArguments() : Type.EmptyTypes;
         var kind = owner.IsEnum ? TypeKind.Enum : owner.IsValueType ? TypeKind.Struct : owner.IsInterface ? TypeKind.Interface
