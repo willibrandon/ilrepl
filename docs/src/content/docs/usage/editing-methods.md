@@ -147,7 +147,9 @@ Exception details include stored fields such as `ParamName`, `ActualValue`, and 
 If an exception cannot be captured completely, the report explains why.
 It also shows console output, including direct stream writes, and tracks shared objects and `ref` aliases.
 Objects are compared through their fields without calling user properties, `ToString`, or equality methods.
-Dictionaries and hash sets retain their entries, enumeration order, comparer settings, and shared references.
+`Dictionary` and `HashSet` retain their entries, enumeration order, comparer settings, and shared references.
+Immutable hash collections and their builders use a stable structural order of keys and retain their comparer settings.
+Distinct keys with identical structural observations make the comparison incomplete.
 `Task`, its subclasses, and `ValueTask` results are awaited.
 Tasks keep their identity and `AsyncState`; a null task remains null. A scenario must await any work it starts.
 Value tasks keep their original representation. Return a source-backed value task from the scenario to observe its completion;
@@ -172,7 +174,8 @@ Both sides get the same culture, environment, stdin, and working path. Each run 
 Use `--stdin "text\n"` for console input and `--files directory` to supply the files.
 Desktop comparisons also supply that input to `Console.OpenStandardInput()` and native stdin readers.
 Files, directories, and relative symlinks keep their captured timestamps. Links outside the supplied directory are rejected.
-If the filesystem cannot restore a timestamp, the comparison reports a setup failure.
+File attributes and Unix permission modes are also kept.
+If the filesystem cannot restore the captured metadata, the comparison reports a setup failure.
 Browser paths refer to its virtual filesystem.
 
 The timeout is 30 seconds per side, starting after runtime startup. Change it with `--timeout 500ms`,

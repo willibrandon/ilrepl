@@ -18,6 +18,16 @@ public sealed record ComparisonFile(string Path, byte[] Contents)
     public string? LinkTarget { get; init; }
 
     /// <summary>
+    /// The captured filesystem attributes, or null when no attributes were supplied.
+    /// </summary>
+    public FileAttributes? Attributes { get; init; }
+
+    /// <summary>
+    /// The Unix permission and special bits for an ordinary entry, or null when no mode was supplied.
+    /// </summary>
+    public UnixFileMode? UnixMode { get; init; }
+
+    /// <summary>
     /// The captured creation time in UTC, or null when no timestamp was supplied.
     /// </summary>
     public DateTime? CreationTimeUtc { get; init; }

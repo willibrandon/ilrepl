@@ -129,7 +129,7 @@ public static partial class ComparisonWorker
                 }
             }
 
-            RestoreFixtureTimes(package.Files, restoreFileTimes);
+            RestoreFixtureMetadata(package.Files, restoreFileTimes);
             ComparisonProbe.Initialize(image.TypeNames);
             ready();
             if (image.OriginalAssembly is { } identity)

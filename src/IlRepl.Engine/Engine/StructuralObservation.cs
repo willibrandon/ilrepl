@@ -14,6 +14,9 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
     private const int MaximumDepth = 64;
     private readonly Dictionary<object, int> _identities = new(ReferenceEqualityComparer.Instance);
     private int _nodes;
+    private StructuralObservation? _orderingOwner;
+    private int _orderingNodes;
+    private int _orderingCharacters;
 
     /// <summary>
     /// Captures one value using the shared object-identity map for all roots in this observation.
@@ -24,6 +27,8 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
 
     private ObservedValue Capture(object? value, int depth)
     {
+        if (_orderingOwner is { } ordering && ++ordering._orderingNodes > MaximumNodes)
+            return Unavailable(value is null ? "" : TypeName(value.GetType()), "collection ordering exceeds the observation limit");
         if (++_nodes > MaximumNodes || depth > MaximumDepth)
         {
             return Unavailable(value is null ? "" : TypeName(value.GetType()), "structural observation exceeded its node or depth limit");
@@ -101,6 +106,7 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
         _identities.Add(value, identity);
 
         if (CaptureStringComparer(value, name, identity) is { } comparer) return comparer;
+        if (CaptureImmutableCollection(value, depth, identity) is { } immutable) return immutable;
         if (CaptureCollection(value, depth, identity) is { } collection) return collection;
 
         var members = new List<ObservedMember>();

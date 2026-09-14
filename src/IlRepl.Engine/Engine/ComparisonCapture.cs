@@ -313,6 +313,8 @@ public static partial class ComparisonCapture
             {
                 IsDirectory = isDirectory,
                 LinkTarget = linkTarget,
+                Attributes = attributes,
+                UnixMode = OperatingSystem.IsWindows() || linkTarget is not null ? null : File.GetUnixFileMode(path),
                 CreationTimeUtc = creation,
                 LastWriteTimeUtc = written,
                 LastAccessTimeUtc = accessed,
