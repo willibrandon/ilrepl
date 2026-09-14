@@ -45,6 +45,8 @@ internal sealed partial class ImportedMethodFamily
     {
         var type = method.DeclaringType;
         return type == typeof(Activator) || type == typeof(object) && method.Name == nameof(GetType)
+            || type == typeof(Delegate) && method.Name == nameof(Delegate.CreateDelegate)
+                && method.GetParameters().Any(parameter => parameter.ParameterType == typeof(string))
             || type is not null && (typeof(Type).IsAssignableFrom(type) || type == typeof(IReflect))
                 && (method.Name.StartsWith("Get", StringComparison.Ordinal) || method.Name.StartsWith("Find", StringComparison.Ordinal)
                     || method.Name.StartsWith("get_Declared", StringComparison.Ordinal)

@@ -520,8 +520,8 @@ internal sealed partial class ImportedMethodFamily
                     case ResolvedMethod { Method: { } target } resolved when !_methods.ContainsKey(IlAsmRenderer.DefinitionOf(target)):
                         problem = MemberAccess.MethodVerdict(resolved, body.State.Member!.Scope, _session.TypeTable, judgeAll: true);
                         var declaration = IlAsmRenderer.DefinitionOf(target);
-                        var boundary = declaration.GetParameters().Select(p => p.ParameterType)
-                            .Concat(declaration is MethodInfo info ? [info.ReturnType] : Type.EmptyTypes)
+                        var signature = RuntimeMetadataSignatures.Read(declaration);
+                        var boundary = signature.Parameters.Prepend(signature.ReturnType).SelectMany(SignatureTypes)
                             .FirstOrDefault(ContainsCopiedType);
                         if (boundary is not null)
                         {
@@ -539,9 +539,9 @@ internal sealed partial class ImportedMethodFamily
                         break;
                     case FieldInfo field when !_types.ContainsKey(DefinitionOf(field.DeclaringType!)):
                         problem = MemberAccess.FieldVerdict(field, body.State.Member!.Scope, _session.TypeTable, judgeAll: true);
-                        var fieldType = DefinitionOf(field.DeclaringType!).GetFields(Declared)
-                            .Single(candidate => candidate.MetadataToken == field.MetadataToken).FieldType;
-                        if (ContainsCopiedType(fieldType))
+                        var fieldDeclaration = DefinitionOf(field.DeclaringType!).GetFields(Declared)
+                            .Single(candidate => candidate.MetadataToken == field.MetadataToken);
+                        if (SignatureTypes(RuntimeMetadataSignatures.Read(fieldDeclaration)).Any(ContainsCopiedType))
                         {
                             problem = $"external field {field} requires an original nominal type that the copy cannot supply";
                         }
@@ -566,6 +566,9 @@ internal sealed partial class ImportedMethodFamily
     }
 
     private bool ContainsCopiedType(Type type) => type.HasElementType ? ContainsCopiedType(type.GetElementType()!)
+        : TypeNameFormatter.IsFunctionPointer(type) ? ContainsCopiedType(type.GetFunctionPointerReturnType())
+            || type.GetFunctionPointerParameterTypes().Any(ContainsCopiedType)
+            || type.GetFunctionPointerCallingConventions().Any(ContainsCopiedType)
         : !type.IsGenericParameter && (_types.ContainsKey(DefinitionOf(type)) || (type.IsConstructedGenericType
             && type.GetGenericArguments().Any(ContainsCopiedType)));
 

@@ -101,32 +101,40 @@ internal sealed partial class ImportedMethodFamily
 
     private void ScanSignature(IlSignature signature, Type owner, string location)
     {
-        if (signature.Resolved is { } type)
+        foreach (var type in SignatureTypes(signature))
         {
             ScanSignatureType(type, owner, location);
+        }
+    }
+
+    private static IEnumerable<Type> SignatureTypes(IlSignature signature)
+    {
+        if (signature.Resolved is { } type)
+        {
+            yield return type;
         }
 
         if (signature.Element is { } element)
         {
-            ScanSignature(element, owner, location);
+            foreach (var nested in SignatureTypes(element)) yield return nested;
         }
 
         if (signature.Modifier is { } modifier)
         {
-            ScanSignature(modifier, owner, location);
+            foreach (var nested in SignatureTypes(modifier)) yield return nested;
         }
 
         foreach (var argument in signature.Arguments)
         {
-            ScanSignature(argument, owner, location);
+            foreach (var nested in SignatureTypes(argument)) yield return nested;
         }
 
         if (signature.Method is { } method)
         {
-            ScanSignature(method.ReturnType, owner, location);
+            foreach (var nested in SignatureTypes(method.ReturnType)) yield return nested;
             foreach (var parameter in method.Parameters)
             {
-                ScanSignature(parameter, owner, location);
+                foreach (var nested in SignatureTypes(parameter)) yield return nested;
             }
         }
     }

@@ -180,7 +180,7 @@ Public external methods remain references to their original assemblies. Opening 
 The dependency list includes local and member signatures, custom modifiers, catch types, and `calli` signatures.
 Custom attributes keep their constructors, named members, and type arguments in saved copies.
 Marshal descriptors keep their referenced types, including SAFEARRAY subtypes and custom marshaler implementations.
-Private delegates retain their runtime methods and copied targets.
+Private delegates retain their runtime methods and copied targets. Delegate binding by name keeps the named members available.
 When code uses reflection, copied types retain their full member context, including private and nested declarations.
 Runtime declarations needed only for reflection keep their metadata.
 Generated helpers do not change the declaring type's reflected member list.
@@ -191,6 +191,7 @@ A missing optional library only affects a comparison if the executed code needs 
 
 Copied types are distinct .NET types. For an instance call, construct the copied type shown by `.types`,
 as the counter example does. Code that requires the original type cannot accept the copy.
+This also applies to external signatures that refer to it inside custom modifiers or function pointers.
 If a dependency cannot be copied, `.edit` explains why and leaves the source available to change.
 
 Some framework methods use runtime internals that cannot be copied. You can replace that code and
