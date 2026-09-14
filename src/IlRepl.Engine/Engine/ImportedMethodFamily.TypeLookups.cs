@@ -27,13 +27,21 @@ internal sealed partial class ImportedMethodFamily
             foreach (var instruction in method.Body.Instructions.ToArray())
             {
                 if (instruction.OpCode.Code is not (Code.Call or Code.Callvirt) || instruction.Operand is not MethodReference target
-                    || target.Name != nameof(Type.GetType) || target.Parameters.Count == 0
+                    || target.Parameters.Count == 0
                     || target.Parameters[0].ParameterType.FullName != typeof(string).FullName
                     || target.DeclaringType.Scope is not AssemblyNameReference assembly
-                    || assembly.FullName != typeof(Type).Assembly.FullName
+                    || assembly.FullName != typeof(Type).Assembly.FullName)
+                {
+                    continue;
+                }
+
+                var activation = !target.HasThis && target.DeclaringType.FullName == typeof(Activator).FullName
+                    && target.Name is nameof(Activator.CreateInstance) or nameof(Activator.CreateInstanceFrom)
+                    && target.Parameters.Count >= 2 && target.Parameters[1].ParameterType.FullName == typeof(string).FullName;
+                if (!activation && (target.Name != nameof(Type.GetType)
                     || (target.HasThis ? target.DeclaringType.FullName != typeof(Assembly).FullName
                             && target.DeclaringType.FullName != typeof(Module).FullName
-                        : target.DeclaringType.FullName != typeof(Type).FullName))
+                        : target.DeclaringType.FullName != typeof(Type).FullName)))
                 {
                     continue;
                 }
@@ -42,7 +50,8 @@ internal sealed partial class ImportedMethodFamily
                 var key = (source.Module.Assembly, target.FullName, instruction.OpCode.Code);
                 if (!wrappers.TryGetValue(key, out var wrapper))
                 {
-                    wrapper = target.HasThis ? WriteScopedTypeLookup(writer, owner, target, instruction.OpCode, wrappers.Count)
+                    wrapper = activation ? WriteActivation(writer, owner, source.Module.Assembly, target, wrappers.Count)
+                        : target.HasThis ? WriteScopedTypeLookup(writer, owner, target, instruction.OpCode, wrappers.Count)
                         : WriteTypeLookup(writer, owner, source.Module.Assembly, target, wrappers.Count);
                     wrappers.Add(key, wrapper);
                 }

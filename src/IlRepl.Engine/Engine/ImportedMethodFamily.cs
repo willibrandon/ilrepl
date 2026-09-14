@@ -442,7 +442,14 @@ internal sealed partial class ImportedMethodFamily
                     if ((instruction.Op == OpCodes.Call || instruction.Op == OpCodes.Callvirt) && IsTypeLookup(target))
                     {
                         _reflectionLocation ??= location;
-                        AddMethod(typeof(CopiedTypeNames).GetMethod(nameof(CopiedTypeNames.Translate),
+                        var helper = target.IsStatic ? nameof(CopiedTypeNames.Translate) : nameof(CopiedTypeNames.TranslateScoped);
+                        AddRuntimeHelper(typeof(CopiedTypeNames).GetMethod(helper,
+                            BindingFlags.Static | BindingFlags.NonPublic)!);
+                    }
+
+                    if (instruction.Op == OpCodes.Call && IsActivation(target))
+                    {
+                        AddRuntimeHelper(typeof(CopiedTypeNames).GetMethod(nameof(CopiedTypeNames.TranslateActivation),
                             BindingFlags.Static | BindingFlags.NonPublic)!);
                     }
 

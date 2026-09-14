@@ -7,7 +7,7 @@ namespace IlRepl.Engine;
 /// <summary>
 /// Translates reflection names at a copied lookup call while leaving the caller's strings intact.
 /// </summary>
-internal static class CopiedTypeNames
+internal static partial class CopiedTypeNames
 {
     /// <summary>
     /// Remaps copied types throughout a reflection name using the runtime's type-name grammar.

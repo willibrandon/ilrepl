@@ -184,6 +184,7 @@ An external base keeps its original interface types.
 Type and module initializers keep the helpers they need. Opening or saving an edit does not run its code.
 String lookups through `Type.GetType`, `Assembly.GetType`, and `Module.GetType` recognize original names of copied types,
 including nested types and generic arguments.
+String-based `Activator.CreateInstance` and `Activator.CreateInstanceFrom` calls also recognize copied type names.
 Public methods outside this copied context remain references to their original assemblies.
 The dependency list includes local and member signatures, custom modifiers, catch types, and `calli` signatures.
 Custom attributes keep their constructors, named members, and type arguments in saved copies.

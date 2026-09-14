@@ -5,7 +5,7 @@ namespace IlRepl.Engine;
 /// <summary>
 /// Parses comparison calls and their explicit execution conditions without running user code.
 /// </summary>
-internal static class ComparisonCommand
+internal static partial class ComparisonCommand
 {
     internal static ComparisonOptions Parse(string text)
     {
@@ -22,9 +22,7 @@ internal static class ComparisonCommand
         string? scenario = null;
         if (rest.StartsWith('('))
         {
-            var end = TypeParser.FindMatchingParen(rest, 0);
-            arguments = string.IsNullOrWhiteSpace(rest[1..end]) ? [] : TypeParser.SplitTopLevel(rest[1..end]);
-            rest = rest[(end + 1)..].Trim();
+            arguments = ReadArguments(ref rest);
         }
         else if (rest.StartsWith("using ", StringComparison.Ordinal))
         {

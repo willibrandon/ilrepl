@@ -10,6 +10,13 @@ internal sealed partial class ImportedMethodFamily
 {
     private string? _reflectionLocation;
     private readonly HashSet<MethodBase> _metadataOnlyMethods = [];
+    private readonly HashSet<Type> _runtimeHelperTypes = [];
+
+    private void AddRuntimeHelper(MethodInfo method)
+    {
+        _runtimeHelperTypes.Add(method.DeclaringType!);
+        AddMethod(method);
+    }
 
     private void ScanReflection()
     {
@@ -20,6 +27,7 @@ internal sealed partial class ImportedMethodFamily
 
         foreach (var type in _types.Keys.ToArray())
         {
+            if (_runtimeHelperTypes.Contains(type)) continue;
             foreach (var nested in type.GetNestedTypes(Declared))
             {
                 AddType(nested);
