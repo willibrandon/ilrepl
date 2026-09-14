@@ -176,7 +176,8 @@ Signatures, generic constraints, layout, and member metadata are kept, including
 Public external methods remain references to their original assemblies. Opening or saving an edit does not run its code.
 The dependency list includes local and member signatures, custom modifiers, catch types, and `calli` signatures.
 Custom attributes keep their constructors, named members, and type arguments in saved copies.
-Custom marshalers referenced by fields, parameters, or return values keep their factories and implementations.
+Marshal descriptors keep their referenced types, including SAFEARRAY subtypes and custom marshaler implementations.
+Private delegates retain their runtime methods and copied targets.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it
 was copied. The report updates with each saved revision.

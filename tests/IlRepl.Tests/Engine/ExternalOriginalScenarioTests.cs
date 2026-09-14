@@ -103,6 +103,17 @@ public sealed class ExternalOriginalScenarioTests
         il.Emit(OpCodes.Sizeof, genericMethod ? methodParameter : module.TypeSystem.Int16);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ret);
+        var nativeOwner = new TypeDefinition("N", "NativeCalls", TypeAttributes.NotPublic | TypeAttributes.Sealed,
+            module.TypeSystem.Object);
+        module.Types.Add(nativeOwner);
+        var native = new MethodDefinition("Native", MethodAttributes.Assembly | MethodAttributes.Static, module.TypeSystem.Void)
+        {
+            ImplAttributes = MethodImplAttributes.InternalCall,
+        };
+        nativeOwner.Methods.Add(native);
+        il.Emit(OpCodes.Call, native);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>

@@ -6,6 +6,7 @@ using IlRepl.Engine.Binding;
 using Mono.Cecil;
 using GenericParameterAttributes = System.Reflection.GenericParameterAttributes;
 using MethodAttributes = System.Reflection.MethodAttributes;
+using MethodImplAttributes = System.Reflection.MethodImplAttributes;
 using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
@@ -78,6 +79,7 @@ internal sealed partial class ImportedMethodFamily
             while (_pending.TryDequeue(out var method))
             {
                 if (method.IsAbstract || method.Attributes.HasFlag(MethodAttributes.PinvokeImpl)
+                    || IsRuntimeDelegateMethod(method)
                     || method.GetCustomAttributesData().Any(attribute =>
                     attribute.AttributeType == typeof(UnsafeAccessorAttribute)))
                 {
@@ -224,6 +226,14 @@ internal sealed partial class ImportedMethodFamily
     }
 
     private static Type DefinitionOf(Type type) => type.IsGenericType ? type.GetGenericTypeDefinition() : type;
+
+    private static bool IsRuntimeDelegateMethod(MethodBase method)
+    {
+        var implementation = method.GetMethodImplementationFlags();
+        return typeof(MulticastDelegate).IsAssignableFrom(method.DeclaringType)
+            && ((implementation & MethodImplAttributes.CodeTypeMask) == MethodImplAttributes.Runtime
+                || implementation.HasFlag(MethodImplAttributes.InternalCall));
+    }
 
     private void AddType(Type type)
     {
@@ -548,7 +558,7 @@ internal sealed partial class ImportedMethodFamily
         {
             MemberInfo runtime = definition switch
             {
-                TypeDefinition type => Definition.Assembly.GetType(type.FullName.Replace('/', '+'), throwOnError: true)!,
+                TypeDefinition type => Definition.Assembly.GetType(CecilSerializedTypeName.Name(type), throwOnError: true)!,
                 MethodDefinition method => Definition.Assembly.ManifestModule.ResolveMethod(method.MetadataToken.ToInt32())!,
                 FieldDefinition field => Definition.Assembly.ManifestModule.ResolveField(field.MetadataToken.ToInt32())!,
                 _ => throw new InvalidOperationException("unknown copied member"),
@@ -569,7 +579,7 @@ internal sealed partial class ImportedMethodFamily
         if (MethodPreparation.IsSupported)
         {
             foreach (var method in _runtime.Values.OfType<MethodBase>().Append(EntryPoint).Append(CallableEntryPoint)
-                .Where(method => !method.IsAbstract && !method.ContainsGenericParameters).Distinct())
+                .Where(method => !method.IsAbstract && !method.ContainsGenericParameters && !IsRuntimeDelegateMethod(method)).Distinct())
             {
                 try
                 {

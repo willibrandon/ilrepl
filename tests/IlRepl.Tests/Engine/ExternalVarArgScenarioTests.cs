@@ -32,7 +32,7 @@ public sealed class ExternalVarArgScenarioTests
         var (assembly, _, _) = CecilFixture.Build(ExternalVarArgFixture.Define, session.Resolver);
         var edit = session.PrepareEdit("vararg int32 [" + assembly.GetName().Name + "]N.Fixture::Read(int32)", "Copy");
         Assert.IsNotEmpty(edit.Baseline.Problems);
-        Assert.Contains(problem => problem.Contains("CounterCallback", StringComparison.Ordinal), edit.Baseline.Problems);
+        Assert.Contains(problem => problem.Contains("Native", StringComparison.Ordinal), edit.Baseline.Problems);
         if (!OperatingSystem.IsWindows())
         {
             return;

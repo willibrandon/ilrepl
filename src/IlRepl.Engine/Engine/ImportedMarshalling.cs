@@ -40,29 +40,39 @@ internal static class ImportedMarshalling
     }
 
     /// <summary>
-    /// Resolves a custom marshaler before the copied family assigns its destination types.
+    /// Resolves a custom marshaler or SAFEARRAY subtype before the copied family assigns its destination types.
     /// </summary>
     /// <param name="module">The source module.</param>
     /// <param name="token">The field or parameter metadata token.</param>
     /// <param name="resolver">The session's loaded assemblies.</param>
-    /// <returns>The custom marshaler type, or null for another native descriptor.</returns>
-    internal static Type? CustomMarshaler(Module module, int token, TypeResolver resolver)
+    /// <returns>The referenced type and whether it requires a custom marshaler factory.</returns>
+    internal static (Type? Type, bool CustomMarshaler) Dependency(Module module, int token, TypeResolver resolver)
     {
         var (metadata, descriptor) = Descriptor(module, token);
         if (descriptor.IsNil)
         {
-            return null;
+            return (null, false);
         }
 
         var reader = metadata.GetBlobReader(descriptor);
-        if ((NativeType)reader.ReadByte() != NativeType.CustomMarshaler)
+        var native = (NativeType)reader.ReadByte();
+        if (native == NativeType.CustomMarshaler)
         {
-            return null;
+            reader.ReadSerializedString();
+            reader.ReadSerializedString();
+            return (ResolveType(reader.ReadSerializedString()!, module, resolver), true);
         }
 
-        reader.ReadSerializedString();
-        reader.ReadSerializedString();
-        return ResolveType(reader.ReadSerializedString()!, module, resolver);
+        if (native == NativeType.SafeArray && reader.RemainingBytes != 0)
+        {
+            reader.ReadCompressedInteger();
+            if (reader.RemainingBytes != 0 && reader.ReadSerializedString() is { Length: > 0 } subtype)
+            {
+                return (ResolveType(subtype, module, resolver), false);
+            }
+        }
+
+        return (null, false);
     }
 
     internal static MarshalInfo Read(Module module, int token, CecilWriter writer, TypeResolver resolver, IMarshalInfoProvider target)
@@ -111,11 +121,34 @@ internal static class ImportedMarshalling
                 result = new FixedSysStringMarshalInfo { Size = reader.ReadCompressedInteger() };
                 break;
             case NativeType.SafeArray:
+            {
                 result = new SafeArrayMarshalInfo
                 {
-                    ElementType = reader.RemainingBytes == 0 ? VariantType.None : (VariantType)reader.ReadByte(),
+                    ElementType = reader.RemainingBytes == 0 ? VariantType.None : (VariantType)reader.ReadCompressedInteger(),
                 };
+                if (reader.RemainingBytes != 0)
+                {
+                    var prefix = reader.Offset;
+                    var subtype = reader.ReadSerializedString();
+                    var bytes = metadata.GetBlobBytes(descriptor);
+                    if (!string.IsNullOrEmpty(subtype))
+                    {
+                        var imported = writer.Import(ResolveType(subtype, module, resolver));
+                        if (CecilSerializedTypeName.References(imported, writer.Module))
+                        {
+                            var remapped = new BlobBuilder();
+                            remapped.WriteBytes(bytes, 0, prefix);
+                            remapped.WriteSerializedString(CecilSerializedTypeName.Format(imported));
+                            remapped.WriteBytes(reader.ReadBytes(reader.RemainingBytes));
+                            bytes = remapped.ToArray();
+                        }
+                    }
+
+                    return writer.SignatureFixups.Marshal(target, bytes, writer.Object);
+                }
+
                 break;
+            }
             case NativeType.CustomMarshaler:
             {
                 var guid = reader.ReadSerializedString();

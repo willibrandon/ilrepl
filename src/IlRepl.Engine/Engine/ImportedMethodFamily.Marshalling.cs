@@ -3,7 +3,7 @@ using System.Reflection;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Discovers custom marshaler types and their runtime factories before metadata emission.
+/// Discovers marshal descriptor types and custom marshaler factories before metadata emission.
 /// </summary>
 internal sealed partial class ImportedMethodFamily
 {
@@ -35,13 +35,14 @@ internal sealed partial class ImportedMethodFamily
     {
         try
         {
-            if (ImportedMarshalling.CustomMarshaler(module, token, _session.Resolver) is not { } type)
+            var (type, customMarshaler) = ImportedMarshalling.Dependency(module, token, _session.Resolver);
+            if (type is null)
             {
                 return;
             }
 
             ScanSignatureType(type, owner, location);
-            if (_types.ContainsKey(DefinitionOf(type)) && type.GetMethod("GetInstance",
+            if (customMarshaler && _types.ContainsKey(DefinitionOf(type)) && type.GetMethod("GetInstance",
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static, [typeof(string)]) is { } factory)
             {
                 AddMethod(factory);

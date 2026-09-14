@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Reflection.Metadata.Ecma335;
 using System.Runtime.InteropServices;
 using Mono.Cecil;
 using CecilFieldAttributes = Mono.Cecil.FieldAttributes;
@@ -33,7 +34,15 @@ internal sealed partial class ImportedMethodFamily
             attributes = (attributes & ~CecilTypeAttributes.VisibilityMask) |
                 (slash < 0 ? CecilTypeAttributes.Public
                     : (CecilTypeAttributes)(original.Attributes & ReflectionTypeAttributes.VisibilityMask));
-            var definition = new TypeDefinition(slash < 0 ? path[..dot] : "", path[(Math.Max(slash, dot) + 1)..], attributes);
+            var name = path[(dot + 1)..];
+            if (original.IsNested)
+            {
+                var metadata = ModuleMetadata.TryOpen(original.Module)!;
+                var handle = MetadataTokens.TypeDefinitionHandle(original.MetadataToken & 0x00ffffff);
+                name = metadata.GetString(metadata.GetTypeDefinition(handle).Name);
+            }
+
+            var definition = new TypeDefinition(original.IsNested ? "" : path[..dot], name, attributes);
             if (original.DeclaringType is { } parent)
             {
                 ((TypeDefinition)definitions[DefinitionOf(parent)]).NestedTypes.Add(definition);

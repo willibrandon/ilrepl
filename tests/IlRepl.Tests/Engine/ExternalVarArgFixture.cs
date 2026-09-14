@@ -4,12 +4,12 @@ using Mono.Cecil.Cil;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Builds a real vararg method whose private delegate helper requires the external-original comparison path.
+/// Builds a real vararg method with a native binding that requires the external-original comparison path.
 /// </summary>
 internal static class ExternalVarArgFixture
 {
     /// <summary>
-    /// Counts optional arguments and passes the result through a runtime-implemented private delegate.
+    /// Counts optional arguments through a private delegate and retains an unreachable native binding in its metadata.
     /// </summary>
     /// <param name="module">The emitted assembly module.</param>
     /// <param name="owner">The public owner of the original vararg method.</param>
@@ -39,5 +39,13 @@ internal static class ExternalVarArgFixture
         il.InsertBefore(end, il.Create(OpCodes.Newobj, constructor));
         il.InsertBefore(end, il.Create(OpCodes.Ldloc, result));
         il.InsertBefore(end, il.Create(OpCodes.Callvirt, invoke));
+        var native = new MethodDefinition("Native", MethodAttributes.Private | MethodAttributes.Static, module.TypeSystem.Void)
+        {
+            ImplAttributes = MethodImplAttributes.InternalCall,
+        };
+        owner.Methods.Add(native);
+        il.Emit(OpCodes.Call, native);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
     }
 }
