@@ -330,8 +330,17 @@ internal sealed partial class ImportedMethodFamily
         {
             var parameter = originalParameters[index];
             var copy = definition.Parameters[index];
-            copy.Name = parameter.Name ?? copy.Name;
-            copy.Attributes = (CecilParameterAttributes)parameter.Attributes;
+            if (body is null)
+            {
+                copy.Name = parameter.Name ?? copy.Name;
+                copy.Attributes = (CecilParameterAttributes)parameter.Attributes;
+            }
+            else
+            {
+                const CecilParameterAttributes editable = CecilParameterAttributes.In | CecilParameterAttributes.Out
+                    | CecilParameterAttributes.Optional;
+                copy.Attributes |= (CecilParameterAttributes)parameter.Attributes & ~editable;
+            }
             if (parameter.HasDefaultValue)
             {
                 copy.Constant = parameter.RawDefaultValue;

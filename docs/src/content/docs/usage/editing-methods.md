@@ -25,6 +25,8 @@ Change the method and press Enter to save a revision. Reopen it with `.edit Maxi
 the source returns to the editor and the last working revision stays callable. The original is kept
 until `.reset`; `.clear` abandons an open edit without removing saved revisions.
 
+Changes to parameter names and `[in]`, `[out]`, and `[opt]` flags are saved with the copy.
+
 `.methods` lists copies and their revisions. `.types` shows their declaring types, such as
 `IlRepl.Edits.Maximum.Owner`. Call the copy by its name: `call Maximum`.
 The `IlRepl` namespace is reserved; use another namespace for your own types.

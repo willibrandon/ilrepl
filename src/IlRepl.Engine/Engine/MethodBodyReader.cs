@@ -220,7 +220,8 @@ internal sealed class MethodBodyReader
             returnType = IlSignatureRenderer.IlAsmNamed(signature.ReturnType);
             for (var i = 0; i < parameters.Length; i++)
             {
-                parameterTexts.Add(IlSignatureRenderer.IlAsmNamed(signature.Parameters[i]) + " " + ParameterName(parameters[i], i));
+                parameterTexts.Add(ParameterFlags(parameters[i]) + IlSignatureRenderer.IlAsmNamed(signature.Parameters[i])
+                    + " " + ParameterName(parameters[i], i));
             }
         }
         else
@@ -232,7 +233,7 @@ internal sealed class MethodBodyReader
             for (var i = 0; i < parameters.Length; i++)
             {
                 var p = parameters[i];
-                parameterTexts.Add(IlSignatureRenderer.IlAsmNamed(IlSignature.FromType(p.ParameterType, p
+                parameterTexts.Add(ParameterFlags(p) + IlSignatureRenderer.IlAsmNamed(IlSignature.FromType(p.ParameterType, p
                     .GetRequiredCustomModifiers(), p.GetOptionalCustomModifiers())) + " " + ParameterName(p, i));
             }
         }
@@ -244,6 +245,9 @@ internal sealed class MethodBodyReader
     private static string ParameterName(ParameterInfo parameter, int index) =>
         TypeNameFormatter.IlAsmIdentifier(string.IsNullOrEmpty(parameter.Name) ? "A_" + index.ToString(CultureInfo
             .InvariantCulture) : parameter.Name);
+
+    private static string ParameterFlags(ParameterInfo parameter) => (parameter.IsIn ? "[in] " : "")
+        + (parameter.IsOut ? "[out] " : "") + (parameter.IsOptional ? "[opt] " : "");
 
     private DisassembledEntry Convert(RawInstruction raw, int localCount, HashSet<int> unresolvedLocals, int argumentCount)
     {
