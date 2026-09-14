@@ -59,6 +59,8 @@ public static class ProcessComparisonRunner
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
                 CreateNoWindow = true,
             };
             process.StartInfo.ArgumentList.Add(host);

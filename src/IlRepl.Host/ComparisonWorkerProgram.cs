@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using IlRepl.Engine;
 using IlRepl.Protocol;
@@ -16,6 +17,7 @@ internal static class ComparisonWorkerProgram
             return 64;
         }
 
+        Console.OutputEncoding = new UTF8Encoding(false);
         var package = JsonSerializer.Deserialize(await File.ReadAllTextAsync(arguments[1]).ConfigureAwait(false),
             ProtocolJsonContext.Default.ComparisonPackage);
         if (package is null)
