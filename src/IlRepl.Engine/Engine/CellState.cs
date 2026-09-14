@@ -792,7 +792,10 @@ public sealed class CellState
                 MemberAccess.CheckField(field, scope, Types);
                 break;
             case ResolvedMethod { Method: not null } method:
-                CheckExactAccess(method.ExactDeclaringType, scope);
+                if (!method.IsAlias)
+                {
+                    CheckExactAccess(method.ExactDeclaringType, scope);
+                }
                 foreach (var optional in method.ExactOptionalParameterTypes ?? [])
                 {
                     CheckExactAccess(optional, scope);

@@ -850,6 +850,7 @@ public static class SymbolBinder
             var optionalTypes = optional?.Select(parameter => parameter.Type).ToArray() ?? (syntax.IsVarArg ? [] : null);
             return new BoundMethod(alias, alias == definition ? null : definition, optionalTypes)
             {
+                IsAlias = true,
                 ExactGenericArguments = arguments?.Select(argument => argument.ExactType).ToArray() ?? [],
                 ExactOptionalParameterTypes = optional?.Select(parameter => parameter.ExactType).ToArray()
                     ?? (optionalTypes is null ? null : []),

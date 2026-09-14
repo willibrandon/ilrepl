@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.Loader;
 using IlRepl.Engine;
+using IlRepl.Engine.Binding;
 using IlRepl.Host;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
@@ -19,6 +20,53 @@ public sealed class PrivateVarArgEditTests
     /// Supplies cancellation for real comparison processes.
     /// </summary>
     public TestContext TestContext { get; set; } = null!;
+
+    /// <summary>
+    /// Runtime and snapshot binding recognize private aliases while qualified member references retain ordinary access checks.
+    /// </summary>
+    /// <param name="nested">Whether the selected method belongs to a private nested type.</param>
+    /// <param name="isPublic">Whether the selected method itself is public.</param>
+    /// <param name="snapshot">Whether the alias is bound from a metadata snapshot.</param>
+    [TestMethod]
+    [DataRow(false, false, false)]
+    [DataRow(true, false, false)]
+    [DataRow(true, true, false)]
+    [DataRow(false, false, true)]
+    [DataRow(true, false, true)]
+    [DataRow(true, true, true)]
+    public void Bind_PrivateVarargAliasRetainsAccess(bool nested, bool isPublic, bool snapshot)
+    {
+        var session = new Session();
+        var selected = DefineOriginal(session, nested, isPublic);
+        var family = ImportedMethodFamily.Capture("Copy", selected, session);
+        var writer = new CecilWriter(SessionAssemblyKind.Types);
+        var definitions = family.Write(writer);
+        var definition = writer.Load();
+        var method = definition.Assembly.ManifestModule.ResolveMethod(definitions[family.Selected.Method].MetadataToken.ToInt32())!;
+        foreach (var type in definition.Assembly.GetTypes())
+        {
+            session.TypeTable.Add(type.FullName!.Replace('+', '/'), type);
+        }
+
+        session.TypeTable.MethodAliases.Add("Copy", method);
+        session.ClearCell();
+        const string call = "vararg int32 Copy(int32, ..., int32, int64)";
+        using var captured = BindingSnapshot.Capture(session.InspectionContext);
+        IBindingScope scope = snapshot ? new SnapshotBindingScope(captured) : new RuntimeBindingScope(session.InspectionContext);
+        var bound = SymbolBinder.BindMethodReference(CilSyntaxParser.ParseMethodReference(call), scope, wantConstructor: false);
+        Assert.IsTrue(bound.IsAlias);
+        Assert.HasCount(2, bound.OptionalParameterTypes!);
+        var resolved = MemberResolver.ResolveMethod(call, session.InspectionContext, wantConstructor: false);
+        Assert.IsTrue(resolved.IsAlias);
+        Assert.IsNull(MemberAccess.MethodVerdict(resolved, new AccessScope(null, "method Scenario"), session.TypeTable));
+        Assert.IsNotNull(MemberAccess.MethodVerdict(new ResolvedMethod(method, null), AccessScope.Cell, session.TypeTable));
+        foreach (var line in new[] { "ldc.i4.s 41", "ldc.i4.7", "ldc.i8 9", "call " + call })
+        {
+            session.AddLine(line);
+        }
+
+        Assert.AreEqual(1, session.State.Stack.Count);
+    }
 
     /// <summary>
     /// Exported private vararg definitions remain direct call targets and grant access within the standalone assembly.

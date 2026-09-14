@@ -159,10 +159,9 @@ public static class MemberAccess
             return null;
         }
 
-        // The declaring type and the arguments of the instantiation are mentioned whatever
-        // assembly the method belongs to; the member's own access is a session member's.
+        // An alias grants access to its selected owner and method. Explicit generic arguments still require ordinary type access.
         var declaring = method.DeclaringType;
-        if (TypeVerdict(declaring, scope, types, judgeAll) is { } declaringProblem)
+        if (!method.IsAlias && TypeVerdict(declaring, scope, types, judgeAll) is { } declaringProblem)
         {
             return declaringProblem;
         }
@@ -186,7 +185,7 @@ public static class MemberAccess
             }
         }
 
-        if (!judgeAll && !TypeRelations.IsSessionType(declaring))
+        if (method.IsAlias || (!judgeAll && !TypeRelations.IsSessionType(declaring)))
         {
             return null;
         }

@@ -83,6 +83,7 @@ Each `ref` or `out` literal gets a separate variable. Use a scenario when argume
 
 For an instance method, object input, or repeated call, write a parameterless
 session method to set up the inputs. Run it with `.compare Name using Scenario`.
+The scenario itself must be non-generic; supply generic arguments in the calls inside it.
 Both versions must have matching signatures and generic constraints to use the same scenario.
 Renaming a generic parameter or reordering equivalent constraints keeps the scenario compatible.
 Each side calls the original or the copy:
