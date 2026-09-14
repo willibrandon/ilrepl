@@ -93,6 +93,7 @@ internal static partial class ComparisonInstrumentation
         var leave = writer.Import(typeof(ComparisonProbe).GetMethod(nameof(ComparisonProbe.Leave))!);
         var unavailable = writer.Import(typeof(ComparisonProbe).GetMethod(nameof(ComparisonProbe.Unavailable))!);
         var nullReference = writer.Import(typeof(ComparisonProbe).GetMethod(nameof(ComparisonProbe.NullReference))!);
+        var nullTask = writer.Import(typeof(ComparisonProbe).GetMethod(nameof(ComparisonProbe.NullTask))!);
         var self = Self(owner);
 
         void Box(TypeReference type)
@@ -180,7 +181,6 @@ internal static partial class ComparisonInstrumentation
 
         void Completed(bool failed)
         {
-            CilInstruction? complete = null;
             il.Emit(OpCodes.Ldloc, identity);
             Receiver();
             Arguments(before: false);
@@ -202,9 +202,15 @@ internal static partial class ComparisonInstrumentation
                     return;
                 }
 
-                complete = il.Create(OpCodes.Nop);
+                var complete = il.Create(OpCodes.Nop);
                 il.Emit(OpCodes.Br, complete);
                 il.Append(synchronous);
+                il.Emit(OpCodes.Call, nullTask);
+                il.Emit(OpCodes.Ldnull);
+                Aliases(after: true, failed: false);
+                il.Emit(OpCodes.Call, leave);
+                il.Append(complete);
+                return;
             }
 
             if (failed || result is null)
@@ -232,10 +238,6 @@ internal static partial class ComparisonInstrumentation
 
             Aliases(after: true, failed);
             il.Emit(OpCodes.Call, leave);
-            if (complete is not null)
-            {
-                il.Append(complete);
-            }
         }
 
         void Aliases(bool after, bool failed)

@@ -11,6 +11,7 @@ public static partial class ComparisonProbe
     private static readonly Lock Gate = new();
     private static readonly List<PendingInvocation> Invocations = [];
     private static readonly NullReferenceObservation NullReferenceValue = new();
+    private static readonly NullTaskObservation NullTaskValue = new();
     private static IReadOnlyDictionary<string, string> s_typeNames = new Dictionary<string, string>();
 
     /// <summary>
@@ -67,6 +68,12 @@ public static partial class ComparisonProbe
     /// </summary>
     /// <returns>The marker distinguishing a null reference from a reference to a null value.</returns>
     public static object NullReference() => NullReferenceValue;
+
+    /// <summary>
+    /// Marks a null task return without replacing the value returned to its caller.
+    /// </summary>
+    /// <returns>The marker distinguishing a null task from a completed task's result.</returns>
+    public static object NullTask() => NullTaskValue;
 
     /// <summary>
     /// Initializes recording in an otherwise fresh worker runtime before loading user code.

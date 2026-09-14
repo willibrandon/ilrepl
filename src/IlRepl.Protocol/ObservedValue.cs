@@ -3,7 +3,9 @@ namespace IlRepl.Protocol;
 /// <summary>
 /// A structural value observation that preserves typed scalar bits, cycles, and shared references.
 /// </summary>
-/// <param name="Kind">Null, scalar, object, array, dictionary, set, entry, comparer, reference, or unavailable.</param>
+/// <param name="Kind">
+/// Null, null-reference, null-task, scalar, object, array, dictionary, set, entry, comparer, reference, or unavailable.
+/// </param>
 /// <param name="Type">The logical metadata type identity.</param>
 /// <param name="Value">A scalar representation or an explanation for an unavailable observation.</param>
 /// <param name="Identity">The object identity within this observation graph, or null for a value.</param>

@@ -44,6 +44,11 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
             return new ObservedValue("null-reference", "", null, null, []);
         }
 
+        if (value is NullTaskObservation)
+        {
+            return new ObservedValue("null-task", typeof(Task).FullName!, null, null, []);
+        }
+
         var type = value.GetType();
         var name = TypeName(type);
         if (value is UnavailableObservation unavailable)

@@ -151,7 +151,8 @@ Objects are compared through their fields without calling user properties, `ToSt
 Immutable hash collections and their builders use a stable structural order of keys and retain their comparer settings.
 Distinct keys with identical structural observations make the comparison incomplete.
 `Task`, its subclasses, and `ValueTask` results are awaited.
-Tasks keep their identity and `AsyncState`; a null task remains null. A scenario must await any work it starts.
+Tasks keep their identity and `AsyncState`. A null task is reported as `null Task`, distinct from a completed task with a null result.
+A scenario must await any work it starts.
 Value tasks keep their original representation. Return a source-backed value task from the scenario to observe its completion;
 consuming it inside the scenario leaves that call's result unavailable.
 Spans and other byref-like values remain usable in a scenario, but their observations are unavailable.
@@ -207,9 +208,9 @@ When code uses reflection, copied types retain their full member context, includ
 Known constructor lookups and reflective invocation use the copied constructors.
 Runtime declarations needed only for reflection keep their metadata.
 Generated helpers do not change the declaring type's reflected member list.
-Assembly and module inspection is rejected for type lists, resources, reference tables, and custom attributes.
+Assembly and module inspection is rejected for assembly identity, type lists, resources, reference tables, and custom attributes.
 Copies do not retain this source metadata. This includes `GetTypes`, `DefinedTypes`, `GetForwardedTypes`,
-`Assembly.GetReferencedAssemblies()`, and attribute APIs such as `ICustomAttributeProvider`.
+`Assembly.GetName()`, `Assembly.FullName`, `Assembly.GetReferencedAssemblies()`, and attribute APIs such as `ICustomAttributeProvider`.
 Use type or member APIs to inspect copied attributes.
 These limits also apply to reflective invocation and delegate binding. The target must be known during preflight.
 Call type lookup and string activation APIs directly so copied names can be translated.

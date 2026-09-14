@@ -31,6 +31,9 @@ internal static class AsyncObservation
         {
             if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Task<>))
             {
+                var resultType = type.GetGenericArguments()[0];
+                if (resultType.Assembly == typeof(Task).Assembly && resultType.FullName == "System.Threading.Tasks.VoidTaskResult")
+                    return null;
                 return type.GetProperty(nameof(Task<int>.Result),
                     BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)!.GetValue(task);
             }

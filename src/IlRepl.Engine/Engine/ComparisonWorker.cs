@@ -168,7 +168,8 @@ public static partial class ComparisonWorker
             try
             {
                 returned = method.Invoke(null, arguments);
-                result = await AsyncObservation.AwaitAsync(returned).ConfigureAwait(false);
+                result = returned is null && typeof(Task).IsAssignableFrom(method.ReturnType)
+                    ? ComparisonProbe.NullTask() : await AsyncObservation.AwaitAsync(returned).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

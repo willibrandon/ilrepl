@@ -94,8 +94,13 @@ internal sealed partial class ImportedMethodFamily
     private static string? AssemblyInspectionProblem(MethodBase method)
     {
         if (method.DeclaringType is { } type && type.Assembly == typeof(Assembly).Assembly
-            && typeof(Assembly).IsAssignableFrom(type) && method.Name == nameof(Assembly.GetReferencedAssemblies))
-            return "referenced assembly inspection cannot reproduce the original reference table";
+            && typeof(Assembly).IsAssignableFrom(type))
+        {
+            if (method.Name is nameof(Assembly.GetName) or "get_FullName" or nameof(ToString))
+                return "assembly identity inspection cannot reproduce the original assembly identity";
+            if (method.Name == nameof(Assembly.GetReferencedAssemblies))
+                return "referenced assembly inspection cannot reproduce the original reference table";
+        }
         if (InspectsAssemblyAttributes(method)) return "assembly and module attribute inspection cannot reproduce the original metadata";
         if (InspectsAssemblyResources(method)) return "manifest resource inspection cannot reproduce the original assembly's resources";
         return EnumeratesAssemblyTypes(method)

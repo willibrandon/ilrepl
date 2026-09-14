@@ -115,10 +115,10 @@ public sealed class DerivedTaskComparisonTests
         {
             Assert.AreEqual("completed", side.Outcome, side.Detail);
             Assert.IsNull(side.Exception);
-            Assert.AreEqual("null", side.Result!.Kind);
+            Assert.AreEqual("null-task", side.Result!.Kind);
             var invocation = side.Invocations.Single();
             Assert.IsNull(invocation.Exception);
-            Assert.AreEqual("null", invocation.Outputs.Single(member => member.Name == "return").Value.Kind);
+            Assert.AreEqual("null-task", invocation.Outputs.Single(member => member.Name == "return").Value.Kind);
         }
     }
 

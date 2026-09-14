@@ -137,6 +137,13 @@ internal sealed partial class ImportedMethodFamily
                 var instruction = body.State.Entries[position].Instruction;
                 if (instruction?.Operand is not ResolvedMethod resolved || instruction.Op == OpCodes.Ldtoken) continue;
                 var target = resolved.Method ?? _pinned[resolved.Definition!.Name];
+                if (target.DeclaringType == typeof(object) && target.Name == nameof(ToString)
+                    && (instruction.Op == OpCodes.Callvirt || instruction.Op == OpCodes.Ldvirtftn))
+                {
+                    var dispatched = AssemblyIdentityOverride(target, values.Argument(body, position, -1));
+                    if (dispatched != target && AssemblyInspectionProblem(dispatched) is { } identityProblem)
+                        RejectReflection(body, instruction, dispatched, identityProblem);
+                }
                 if (!IsIndirectReflection(target)) continue;
                 var candidates = target.Name == nameof(Type.InvokeMember) ? values.NamedMembers(body, position, -1, 0)
                     : target.DeclaringType == typeof(Delegate) && target.Name == nameof(Delegate.CreateDelegate)
@@ -148,6 +155,16 @@ internal sealed partial class ImportedMethodFamily
                 {
                     if (candidate is ReflectedDelegateName name && !IndirectReflectionNames.Contains(name.Name)) continue;
                     var member = candidate is PropertyInfo property ? property.GetMethod : candidate as MethodBase;
+                    // A delegate's bound receiver was validated when its binding or method pointer was created.
+                    if (member?.DeclaringType == typeof(object) && member.Name == nameof(ToString)
+                        && target.Name != nameof(Delegate.DynamicInvoke))
+                    {
+                        var receivers = InvocationReceiver(values, body, position, target);
+                        if (receivers is null || target.Name == nameof(Delegate.CreateDelegate)
+                            && receivers.Any(receiver => receiver is null))
+                            reason = "indirect reflection cannot prove a supported target";
+                        member = AssemblyIdentityOverride(member, receivers);
+                    }
                     if (candidate is null) continue;
                     if (candidate is FieldInfo) continue;
                     if (member is null || IsIndirectReflection(member))
@@ -167,11 +184,38 @@ internal sealed partial class ImportedMethodFamily
                 }
 
                 if (reason is null) continue;
-                var location = MemberResolver.Describe(body.Method) + ": " + instruction.Text;
-                _dependencies.Add(new EditDependency(MemberResolver.Describe(selected), selected.Module.Assembly.FullName!, location,
-                    "blocked: " + reason) { Access = MemberAccess.AccessWord(selected.Attributes) });
-                throw new ReplException(location + ": " + MemberResolver.Describe(selected) + ": " + reason);
+                RejectReflection(body, instruction, selected, reason);
             }
         }
+    }
+
+    private static MethodBase AssemblyIdentityOverride(MethodBase method, object?[]? receivers)
+    {
+        if (method.DeclaringType != typeof(object) || method.Name != nameof(ToString)) return method;
+        return receivers?.Any(receiver => receiver is Assembly
+            || receiver is ReflectedInstance instance && typeof(Assembly).IsAssignableFrom(instance.Type)) == true
+            ? typeof(Assembly).GetMethod(nameof(ToString), Type.EmptyTypes)! : method;
+    }
+
+    private static object?[]? InvocationReceiver(ReflectionValueResolver values, MethodEditBody body, int position, MethodBase target)
+    {
+        if (target.Name == nameof(MethodBase.Invoke)
+            && (target.DeclaringType == typeof(MethodInvoker) || typeof(MethodBase).IsAssignableFrom(target.DeclaringType!)))
+            return values.Argument(body, position, 0);
+        if (target.Name == nameof(Delegate.CreateDelegate))
+        {
+            var parameters = target.GetParameters();
+            var index = Array.FindIndex(parameters, parameter => parameter.ParameterType == typeof(object));
+            if (index >= 0) return values.Argument(body, position, index);
+        }
+        return null;
+    }
+
+    private void RejectReflection(MethodEditBody body, Instruction instruction, MethodBase target, string reason)
+    {
+        var location = MemberResolver.Describe(body.Method) + ": " + instruction.Text;
+        _dependencies.Add(new EditDependency(MemberResolver.Describe(target), target.Module.Assembly.FullName!, location,
+            "blocked: " + reason) { Access = MemberAccess.AccessWord(target.Attributes) });
+        throw new ReplException(location + ": " + MemberResolver.Describe(target) + ": " + reason);
     }
 }

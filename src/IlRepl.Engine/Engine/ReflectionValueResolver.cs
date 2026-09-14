@@ -253,6 +253,8 @@ internal sealed class ReflectionValueResolver(
         if (owner == typeof(object) && name == nameof(GetType))
             return Map(Input(), value => value is ReflectedInstance instance ? instance.Type : value?.GetType());
         if (name == "get_Assembly" && owner == typeof(Type)) return Map(Input(), value => (value as Type)?.Assembly);
+        if (name == "get_Assembly" && owner is not null && typeof(Module).IsAssignableFrom(owner))
+            return Map(Input(), value => (value as Module)?.Assembly);
         if (name == "get_Module" && owner is not null && typeof(MemberInfo).IsAssignableFrom(owner))
             return Map(Input(), value => (value as MemberInfo)?.Module);
         if (name == "get_ManifestModule" && owner == typeof(Assembly))

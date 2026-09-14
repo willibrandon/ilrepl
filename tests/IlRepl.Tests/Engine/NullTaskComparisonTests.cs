@@ -32,8 +32,8 @@ public sealed class NullTaskComparisonTests
         foreach (var side in new[] { result.Original, result.Edited })
         {
             AssertCompleted(side);
-            Assert.AreEqual("null", side.Result!.Kind);
-            Assert.AreEqual("null", side.Invocations.Single().Outputs.Single(member => member.Name == "return").Value.Kind);
+            Assert.AreEqual("null-task", side.Result!.Kind);
+            Assert.AreEqual("null-task", side.Invocations.Single().Outputs.Single(member => member.Name == "return").Value.Kind);
         }
     }
 
@@ -63,7 +63,7 @@ public sealed class NullTaskComparisonTests
         AssertCompleted(result.Edited);
         Assert.AreEqual("41", result.Original.Result!.Value);
         Assert.AreEqual(change ? "42" : "41", result.Edited.Result!.Value);
-        Assert.AreEqual("null", result.Original.Invocations.Single().Outputs.Single(member => member.Name == "return").Value.Kind);
+        Assert.AreEqual("null-task", result.Original.Invocations.Single().Outputs.Single(member => member.Name == "return").Value.Kind);
     }
 
     /// <summary>
