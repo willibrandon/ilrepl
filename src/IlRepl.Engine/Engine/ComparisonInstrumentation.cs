@@ -15,7 +15,7 @@ internal static partial class ComparisonInstrumentation
         => Wrap(writer, target, [], "__ilrepl_observe_" + target.Name, externalVarArg);
 
     private static MethodDefinition Wrap(CecilWriter writer, MethodDefinition target, TypeReference[] optionalParameters, string name,
-        MethodReference? externalVarArg = null)
+        MethodReference? externalVarArg = null, GenericParameter[]? callerParameters = null)
     {
         var owner = target.DeclaringType;
         while (owner.Methods.Any(method => method.Name == name))
@@ -37,6 +37,27 @@ internal static partial class ComparisonInstrumentation
             wrapper.GenericParameters.Add(new GenericParameter(parameter.Name, wrapper) { Attributes = parameter.Attributes });
         }
 
+        var map = new Dictionary<GenericParameter, TypeReference>();
+        foreach (var parameter in callerParameters ?? [])
+        {
+            var copy = new GenericParameter(parameter.Name, wrapper)
+            {
+                Attributes = parameter.Attributes & ~GenericParameterAttributes.VarianceMask,
+            };
+            wrapper.GenericParameters.Add(copy);
+            map.Add(parameter, copy);
+        }
+
+        foreach (var parameter in callerParameters ?? [])
+        {
+            var copy = (GenericParameter)map[parameter];
+            foreach (var constraint in parameter.Constraints)
+            {
+                copy.Constraints.Add(new GenericParameterConstraint(CecilGenericSubstitution.Apply(constraint.ConstraintType, map)));
+            }
+        }
+
+        optionalParameters = optionalParameters.Select(parameter => CecilGenericSubstitution.Apply(parameter, map)).ToArray();
         foreach (var parameter in target.Parameters)
         {
             wrapper.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, parameter.ParameterType));
@@ -326,10 +347,10 @@ internal static partial class ComparisonInstrumentation
             }
         }
 
-        if (wrapper.HasGenericParameters)
+        if (target.HasGenericParameters)
         {
             var instance = new GenericInstanceMethod(called);
-            foreach (var parameter in wrapper.GenericParameters)
+            foreach (var parameter in wrapper.GenericParameters.Take(target.GenericParameters.Count))
             {
                 instance.GenericArguments.Add(parameter);
             }

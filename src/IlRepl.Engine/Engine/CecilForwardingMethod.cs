@@ -49,7 +49,7 @@ internal static class CecilForwardingMethod
         }
 
         CompleteGenerics(map);
-        method.ReturnType = Substitute(selected.ReturnType, map);
+        method.ReturnType = CecilGenericSubstitution.Apply(selected.ReturnType, map);
         if (selected.HasThis)
         {
             var receiver = Construct(selected.DeclaringType, map);
@@ -59,7 +59,8 @@ internal static class CecilForwardingMethod
 
         foreach (var parameter in selected.Parameters)
         {
-            method.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, Substitute(parameter.ParameterType, map)));
+            method.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes,
+                CecilGenericSubstitution.Apply(parameter.ParameterType, map)));
         }
 
         var ownerMap = target.DeclaringType.GenericParameters.Select((parameter, index) =>
@@ -88,7 +89,7 @@ internal static class CecilForwardingMethod
 
             foreach (var constraint in source.Constraints)
             {
-                parameter.Constraints.Add(new GenericParameterConstraint(Substitute(constraint.ConstraintType, map)));
+                parameter.Constraints.Add(new GenericParameterConstraint(CecilGenericSubstitution.Apply(constraint.ConstraintType, map)));
             }
         }
     }
@@ -139,61 +140,6 @@ internal static class CecilForwardingMethod
         }
 
         return constructed;
-    }
-
-    private static TypeReference Substitute(TypeReference type, Dictionary<GenericParameter, TypeReference> map)
-    {
-        TypeReference Map(TypeReference value) => Substitute(value, map);
-        if (type is GenericInstanceType generic)
-        {
-            var copy = new GenericInstanceType(generic.ElementType);
-            foreach (var argument in generic.GenericArguments)
-            {
-                copy.GenericArguments.Add(Map(argument));
-            }
-
-            return copy;
-        }
-
-        if (type is ArrayType array)
-        {
-            var copy = new ArrayType(Map(array.ElementType), array.Rank);
-            for (var index = 0; index < array.Dimensions.Count; index++)
-            {
-                copy.Dimensions[index] = array.Dimensions[index];
-            }
-
-            return copy;
-        }
-
-        if (type is FunctionPointerType pointer)
-        {
-            var copy = new FunctionPointerType
-            {
-                HasThis = pointer.HasThis,
-                ExplicitThis = pointer.ExplicitThis,
-                CallingConvention = pointer.CallingConvention,
-                ReturnType = Map(pointer.ReturnType),
-            };
-            foreach (var parameter in pointer.Parameters)
-            {
-                copy.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, Map(parameter.ParameterType)));
-            }
-
-            return copy;
-        }
-
-        return type switch
-        {
-            GenericParameter parameter when map.TryGetValue(parameter, out var replacement) => replacement,
-            ByReferenceType reference => new ByReferenceType(Map(reference.ElementType)),
-            PointerType unmanaged => new PointerType(Map(unmanaged.ElementType)),
-            PinnedType pinned => new PinnedType(Map(pinned.ElementType)),
-            SentinelType sentinel => new SentinelType(Map(sentinel.ElementType)),
-            RequiredModifierType required => new RequiredModifierType(Map(required.ModifierType), Map(required.ElementType)),
-            OptionalModifierType optional => new OptionalModifierType(Map(optional.ModifierType), Map(optional.ElementType)),
-            _ => type,
-        };
     }
 
     private static void Emit(MethodDefinition method, MethodReference target)

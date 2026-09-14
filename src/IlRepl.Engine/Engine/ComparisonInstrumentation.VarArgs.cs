@@ -17,10 +17,11 @@ internal static partial class ComparisonInstrumentation
         }
 
         var calls = writer.Module.GetTypes().SelectMany(type => type.Methods).Where(method => method.HasBody)
-            .SelectMany(method => method.Body.Instructions).Where(instruction => instruction.Operand is MethodReference reference
+            .SelectMany(method => method.Body.Instructions.Select(instruction => (method, instruction)))
+            .Where(site => site.instruction.Operand is MethodReference reference
                 && reference.Name == entry.Name && reference.DeclaringType.FullName == entry.DeclaringType.FullName).ToArray();
-        var wrappers = new Dictionary<string, MethodDefinition>(StringComparer.Ordinal);
-        foreach (var instruction in calls)
+        var wrappers = new List<MethodDefinition>();
+        foreach (var (caller, instruction) in calls)
         {
             var reference = (MethodReference)instruction.Operand;
             var optional = reference.Parameters.Skip(target.Parameters.Count)
@@ -32,16 +33,27 @@ internal static partial class ComparisonInstrumentation
                 continue;
             }
 
-            var key = string.Join(";", optional.Select(type => type.FullName + ", " + type.Scope));
-            if (!wrappers.TryGetValue(key, out var wrapper))
-            {
-                wrapper = Wrap(writer, target, optional, entry.Name + "_" + wrappers.Count, externalVarArg);
-                wrappers.Add(key, wrapper);
-            }
+            var context = optional.Any(type => type.ContainsGenericParameter) ? caller : null;
+            var parameters = context is null ? [] : context.DeclaringType.GenericParameters.Concat(context.GenericParameters).ToArray();
+            var wrapper = Wrap(writer, target, optional, entry.Name + "_" + wrappers.Count, externalVarArg, parameters);
+            wrappers.Add(wrapper);
 
-            instruction.Operand = wrapper;
+            if (parameters.Length == 0)
+            {
+                instruction.Operand = wrapper;
+            }
+            else
+            {
+                var constructed = new GenericInstanceMethod(wrapper);
+                foreach (var parameter in parameters)
+                {
+                    constructed.GenericArguments.Add(parameter);
+                }
+
+                instruction.Operand = constructed;
+            }
         }
 
-        Relocate(writer, [entry, .. wrappers.Values]);
+        Relocate(writer, [entry, .. wrappers]);
     }
 }
