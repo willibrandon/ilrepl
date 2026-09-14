@@ -76,4 +76,26 @@ internal sealed partial class ImportedMethodFamily
         && type.Assembly == typeof(Assembly).Assembly && typeof(Assembly).IsAssignableFrom(type)
         && method.Name is nameof(Assembly.GetManifestResourceStream) or nameof(Assembly.GetManifestResourceNames)
             or nameof(Assembly.GetManifestResourceInfo);
+
+    private static bool InspectsAssemblyAttributes(MethodBase method)
+    {
+        var type = method.DeclaringType;
+        if (type?.Assembly != typeof(Assembly).Assembly
+            || method.Name is not (nameof(Assembly.GetCustomAttributes) or nameof(Assembly.GetCustomAttributesData)
+                or nameof(Assembly.IsDefined) or nameof(Attribute.GetCustomAttribute) or "get_CustomAttributes")) return false;
+        if (typeof(Assembly).IsAssignableFrom(type) || typeof(Module).IsAssignableFrom(type)
+            || type == typeof(ICustomAttributeProvider)) return true;
+        if (type != typeof(Attribute) && type != typeof(CustomAttributeExtensions) && type != typeof(CustomAttributeData)) return false;
+        var parameters = method.GetParameters();
+        return parameters.Length != 0
+            && (parameters[0].ParameterType == typeof(Assembly) || parameters[0].ParameterType == typeof(Module));
+    }
+
+    private static string? AssemblyInspectionProblem(MethodBase method)
+    {
+        if (InspectsAssemblyAttributes(method)) return "assembly and module attribute inspection cannot reproduce the original metadata";
+        if (InspectsAssemblyResources(method)) return "manifest resource inspection cannot reproduce the original assembly's resources";
+        return EnumeratesAssemblyTypes(method)
+            ? "assembly and module type enumeration cannot reproduce the original assembly's complete type set" : null;
+    }
 }

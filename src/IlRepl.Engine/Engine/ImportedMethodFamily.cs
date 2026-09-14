@@ -434,11 +434,8 @@ internal sealed partial class ImportedMethodFamily
                 {
                     var target = resolved.Method ?? _pinned[resolved.Definition!.Name];
                     target = IlAsmRenderer.DefinitionOf(target);
-                    var resources = InspectsAssemblyResources(target);
-                    if (instruction.Op != OpCodes.Ldtoken && (resources || EnumeratesAssemblyTypes(target)))
+                    if (instruction.Op != OpCodes.Ldtoken && AssemblyInspectionProblem(target) is { } reason)
                     {
-                        var reason = resources ? "manifest resource inspection cannot reproduce the original assembly's resources"
-                            : "assembly and module type enumeration cannot reproduce the original assembly's complete type set";
                         _dependencies.Add(new EditDependency(MemberResolver.Describe(target), target.Module.Assembly.FullName!, location,
                             "blocked: " + reason) { Access = MemberAccess.AccessWord(target.Attributes) });
                         throw new ReplException(location + ": " + reason);

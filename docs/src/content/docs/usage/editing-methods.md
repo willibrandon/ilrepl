@@ -195,7 +195,7 @@ including nested types and generic arguments.
 String-based `Activator.CreateInstance`, `Activator.CreateInstanceFrom`, and `Assembly.CreateInstance` calls also recognize copied type names.
 Public methods outside this copied context remain references to their original assemblies.
 The dependency list includes local and member signatures, custom modifiers, catch types, and `calli` signatures.
-Custom attributes keep their constructors, named members, and type arguments in saved copies.
+Type and member custom attributes keep their constructors, named members, and type arguments in saved copies.
 Marshal descriptors keep their referenced types, including SAFEARRAY subtypes and custom marshaler implementations.
 Private delegates retain their runtime methods and copied targets. Delegate binding by name keeps the named members available.
 When code uses reflection, copied types retain their full member context, including private and nested declarations.
@@ -204,6 +204,8 @@ Generated helpers do not change the declaring type's reflected member list.
 Assembly and module type enumeration, including `GetTypes`, `DefinedTypes`, and `GetForwardedTypes`, is rejected during preflight.
 A method copy cannot reproduce the original assembly's complete type set.
 Manifest resource inspection is also rejected because copies do not include the source assembly's resources.
+Assembly and module attribute inspection is rejected, including calls through `ICustomAttributeProvider`.
+Copies do not retain attributes from the source assembly or module. Use type or member APIs to inspect their copied attributes.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it
 was copied. The report updates with each saved revision.
