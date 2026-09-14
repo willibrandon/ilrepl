@@ -99,8 +99,9 @@ public sealed class MethodEdit
             throw new ReplException("the original and edited signatures must match to compare this method through a scenario");
         }
 
-        bool SameType(Type first, Type second) => TypeNameFormatter.IlAsm(first)
-            == Current!.NormalizeNames(TypeNameFormatter.IlAsm(second));
+        bool SameType(Type first, Type second) => TypeKey(first) == Current!.NormalizeNames(TypeKey(second));
+
+        static string TypeKey(Type type) => IlSignatureRenderer.IlAsm(IlSignature.FromType(type));
 
         bool SameModifiers(Type[] first, Type[] second) => first.Length == second.Length
             && first.Zip(second).All(pair => SameType(pair.First, pair.Second));
@@ -115,9 +116,9 @@ public sealed class MethodEdit
             var secondParameters = Parameters(second);
             return firstParameters.Length == secondParameters.Length && firstParameters.Zip(secondParameters).All(pair =>
                 pair.First.GenericParameterAttributes == pair.Second.GenericParameterAttributes
-                && pair.First.GetGenericParameterConstraints().Select(TypeNameFormatter.IlAsm).ToHashSet(StringComparer.Ordinal)
+                && pair.First.GetGenericParameterConstraints().Select(TypeKey).ToHashSet(StringComparer.Ordinal)
                     .SetEquals(pair.Second.GetGenericParameterConstraints().Select(type =>
-                        Current!.NormalizeNames(TypeNameFormatter.IlAsm(type)))));
+                        Current!.NormalizeNames(TypeKey(type)))));
         }
 
         static Type[] Parameters(MethodInfo method) =>

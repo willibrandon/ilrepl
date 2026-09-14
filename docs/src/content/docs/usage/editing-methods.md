@@ -84,6 +84,7 @@ Each `ref` or `out` literal gets a separate variable. Use a scenario when argume
 For an instance method, object input, or repeated call, write a parameterless
 session method to set up the inputs. Run it with `.compare Name using Scenario`.
 Both versions must have matching signatures and generic constraints to use the same scenario.
+Renaming a generic parameter or reordering equivalent constraints keeps the scenario compatible.
 Each side calls the original or the copy:
 
 ```cil
@@ -167,7 +168,7 @@ Set up repeatable inputs in your scenario. The transcript describes these condit
 `.edit` copies the declaring type and the fields, constructors, and helpers the method needs.
 Signatures, generic constraints, layout, and member metadata are kept. Public external methods remain
 references to their original assemblies. Opening or saving an edit does not run its code.
-Local signatures, catch types, and `calli` signatures are included in the dependency list.
+The dependency list includes local and member signatures, custom modifiers, catch types, and `calli` signatures.
 Custom attributes keep their constructors, named members, and type arguments in saved copies.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it

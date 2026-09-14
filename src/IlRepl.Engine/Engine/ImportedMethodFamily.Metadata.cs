@@ -179,6 +179,7 @@ internal sealed partial class ImportedMethodFamily
             var declaration = declarations?[index];
             if (declaration is not null)
             {
+                owner.GenericParameters[index].Name = declaration.Name;
                 // Preserve runtime flags that the editable generic-parameter grammar cannot express.
                 const ReflectionGenericAttributes editable = ReflectionGenericAttributes.VarianceMask
                     | ReflectionGenericAttributes.SpecialConstraintMask;

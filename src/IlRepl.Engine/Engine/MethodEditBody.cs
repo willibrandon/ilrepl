@@ -77,7 +77,11 @@ internal sealed record MethodEditBody(MethodBase Method, DisassembledMethod List
 
         var member = new MemberContext(owner, header, method.IsStatic ? null : owner.IsValueType ? owner.MakeByRefType() : owner,
             false, owner.FullName ?? owner.Name, owner.IsValueType ? "struct" : "class");
-        var state = new CellState(session.Resolver, context.Generics, signatures, signature, opens, types ?? session.TypeTable, member);
+        var generics = context.Generics with
+        {
+            MethodParameterNames = signature.TypeParameters.Select(parameter => parameter.Name).ToArray(),
+        };
+        var state = new CellState(session.Resolver, generics, signatures, signature, opens, types ?? session.TypeTable, member);
         var ended = false;
         foreach (var line in lines.Skip(first + 1))
         {

@@ -108,6 +108,7 @@ internal sealed partial class ImportedMethodFamily
             // Revisit those calls until every reference to a copied owner has its required definition.
             var typeCount = _types.Count;
             _dependencies.Clear();
+            ScanSignatures();
             ScanAttributes();
             foreach (var body in _methods.Values.OfType<MethodEditBody>().ToArray())
             {
@@ -260,7 +261,7 @@ internal sealed partial class ImportedMethodFamily
 
         foreach (var field in type.GetFields(Declared))
         {
-            ConsiderType(field.FieldType, type);
+            ScanSignature(RuntimeMetadataSignatures.Read(field), type, field + ": field signature");
         }
 
         if (type.TypeInitializer is { } initializer)
@@ -340,15 +341,7 @@ internal sealed partial class ImportedMethodFamily
         }
 
         _pending.Enqueue(method);
-        foreach (var parameter in method.GetParameters())
-        {
-            ConsiderType(parameter.ParameterType, method.DeclaringType!);
-        }
-
-        if (method is MethodInfo info)
-        {
-            ConsiderType(info.ReturnType, method.DeclaringType!);
-        }
+        ScanMethodSignature(method, method == Selected.Method ? Selected : null);
     }
 
     private void Scan(MethodEditBody body)

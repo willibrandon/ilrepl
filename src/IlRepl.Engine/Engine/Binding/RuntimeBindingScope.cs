@@ -33,7 +33,12 @@ public sealed class RuntimeBindingScope : IBindingScope
         Context = context;
         _registry = new RuntimeBindingRegistry();
         _generics = new SymbolGenericContext([.. context.Generics.TypeArguments.Select(ImportType)],
-            [.. context.Generics.MethodArguments.Select(ImportType)]);
+            [.. context.Generics.MethodArguments.Select((type, index) =>
+            {
+                var symbol = ImportType(type);
+                return symbol.IsGenericParameter && context.Generics.MethodParameterNames is { } names && index < names.Count
+                    ? TypeSymbol.Parameter(symbol.Owner, true, symbol.Position, names[index], symbol.ParameterAttributes) : symbol;
+            })]);
     }
 
     private RuntimeBindingScope(ParseContext context, RuntimeBindingRegistry registry, SymbolGenericContext generics)

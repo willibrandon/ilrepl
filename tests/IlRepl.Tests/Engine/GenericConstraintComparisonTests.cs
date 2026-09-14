@@ -71,4 +71,69 @@ public sealed class GenericConstraintComparisonTests
         Assert.AreEqual("41", result.Original.Result!.Value);
         Assert.AreEqual("42", result.Edited.Result!.Value);
     }
+
+    /// <summary>
+    /// Renamed parameters retain self-referencing constraints and remain callable through the same scenario.
+    /// </summary>
+    /// <returns>The completed metadata-name and worker-result assertions.</returns>
+    [TestMethod]
+    public async Task Create_RenamedSelfConstraint_RemainsCompatible()
+    {
+        var session = IlLines.Load(".class public Choice {",
+            ".method public static int32 Read<(IComparable`1<!!T>) T>() { ldc.i4.s 41; ret }", "}");
+        var edit = session.PrepareEdit("int32 Choice::Read<[1]>()", "Copy");
+        session.CommitEdit(edit.Name, ".method public static int32 Read<(IComparable`1<!!U>) U>() cil managed {\n"
+            + ".locals init (!!U value)\nldloca 0\ninitobj !!U\nldloc.0\nbox !!U\npop\nldc.i4.s 42\nret\n}");
+        Assert.AreEqual("U", edit.Method!.GetGenericArguments().Single().Name);
+        var error = Assert.ThrowsExactly<ReplException>(() => session.CommitEdit(edit.Name,
+            edit.Source.Replace("!!U value", "!!T value", StringComparison.Ordinal)));
+        Assert.Contains("no generic parameter named '!!T'", error.Message);
+        session.CommitEdit(edit.Name, edit.Source);
+        foreach (var line in IlLines.Expand(".method int32 Scenario() { call Copy<int32>; ret }"))
+        {
+            session.AddLine(line);
+        }
+
+        var result = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy using Scenario"),
+            TestContext.CancellationToken);
+
+        Assert.AreEqual("different", result.Outcome, result.Original.Detail + "; " + result.Edited.Detail);
+        Assert.AreEqual("41", result.Original.Result!.Value);
+        Assert.AreEqual("42", result.Edited.Result!.Value);
+    }
+
+    /// <summary>
+    /// Cross-parameter constraints compare positions even when both closed arguments happen to be the same type.
+    /// </summary>
+    /// <param name="changedPosition">Whether the edited constraint refers to a different parameter position.</param>
+    /// <returns>The completed compatibility and worker assertions.</returns>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Create_RenamedCrossConstraint_UsesParameterPosition(bool changedPosition)
+    {
+        var session = IlLines.Load(".class public Choice {",
+            ".method public static int32 Read<(IComparable`1<!!U>) T, U>() { ldc.i4.s 41; ret }", "}");
+        var edit = session.PrepareEdit("int32 Choice::Read<[2]>()", "Copy");
+        session.CommitEdit(edit.Name, ".method public static int32 Read<(IComparable`1<!!" + (changedPosition ? "A" : "B")
+            + ">) A, B>() cil managed {\nldc.i4.s 42\nret\n}");
+        Assert.AreSequenceEqual(["A", "B"], edit.Method!.GetGenericArguments().Select(parameter => parameter.Name));
+        foreach (var line in IlLines.Expand(".method int32 Scenario() { call Copy<int32, int32>; ret }"))
+        {
+            session.AddLine(line);
+        }
+
+        if (changedPosition)
+        {
+            var error = Assert.ThrowsExactly<ReplException>(() => ComparisonCapture.Create(session, "Copy using Scenario"));
+            Assert.AreEqual("the original and edited signatures must match to compare this method through a scenario", error.Message);
+            return;
+        }
+
+        var result = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy using Scenario"),
+            TestContext.CancellationToken);
+        Assert.AreEqual("different", result.Outcome, result.Original.Detail + "; " + result.Edited.Detail);
+        Assert.AreEqual("41", result.Original.Result!.Value);
+        Assert.AreEqual("42", result.Edited.Result!.Value);
+    }
 }
