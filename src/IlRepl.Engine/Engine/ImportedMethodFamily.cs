@@ -436,8 +436,9 @@ internal sealed partial class ImportedMethodFamily
                         _reflectionLocation ??= location;
                     }
 
-                    if (instruction.Op == OpCodes.Call && IsTypeLookup(target))
+                    if ((instruction.Op == OpCodes.Call || instruction.Op == OpCodes.Callvirt) && IsTypeLookup(target))
                     {
+                        _reflectionLocation ??= location;
                         AddMethod(typeof(CopiedTypeNames).GetMethod(nameof(CopiedTypeNames.Translate),
                             BindingFlags.Static | BindingFlags.NonPublic)!);
                     }

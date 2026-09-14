@@ -1,5 +1,6 @@
 using System.Globalization;
 using IlRepl.Engine;
+using IlRepl.Host;
 using IlRepl.Protocol;
 using IlRepl.Repl;
 using IlRepl.Tests.Engine;
@@ -18,6 +19,39 @@ public sealed class EditCompletionTests
     /// Supplies cancellation for real completion and command requests.
     /// </summary>
     public TestContext TestContext { get; set; } = null!;
+
+    /// <summary>
+    /// Scenario completion quotes names so the accepted command resolves and executes the declared method.
+    /// </summary>
+    /// <param name="name">The scenario's metadata name.</param>
+    /// <param name="prefix">The typed prefix to complete.</param>
+    [TestMethod]
+    [DataRow("My Scenario", "My")]
+    [DataRow("Owner's Scenario", "Ow")]
+    public async Task Scenarios_InsertUsableQuotedIdentifiers(string name, string prefix)
+    {
+        var session = Value();
+        Commit(session, "Copy");
+        var identifier = TypeNameFormatter.IlAsmIdentifier(name);
+        foreach (var source in IlLines.Expand(".method int32 " + identifier + "() {", "ldc.i4.s 21", "call Copy", "ret", "}"))
+        {
+            session.AddLine(source);
+        }
+
+        await using var engine = new InProcessEngine(new ReplCore(session, new ReplOptions()));
+        var line = ".compare Copy using " + prefix + "Suffix --assert";
+        var result = await Complete(engine, line, ".compare Copy using ".Length + prefix.Length);
+        Assert.HasCount(1, result.Items);
+        Assert.AreEqual(identifier, result.Items[0].InsertText);
+        var accepted = Apply(line, result, result.Items[0]);
+        Assert.AreEqual(".compare Copy using " + identifier + " --assert", accepted);
+        var package = ComparisonCapture.Create(session, accepted[".compare ".Length..]);
+        Assert.AreEqual(name, package.Original.EntryMethod);
+        var comparison = await ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken);
+        Assert.AreEqual("match", comparison.Outcome, comparison.Original.Detail + "; " + comparison.Edited.Detail);
+        Assert.AreEqual("42", comparison.Original.Result!.Value);
+        Assert.AreEqual("42", comparison.Edited.Result!.Value);
+    }
 
     /// <summary>
     /// Edit-name completion includes committed copies and drafts while replacing the whole token and preserving its suffix.
@@ -170,8 +204,10 @@ public sealed class EditCompletionTests
     /// Every draft remains reachable across pages and preparing another draft invalidates the old continuation cursor.
     /// </summary>
     [TestMethod]
+    [DoNotParallelize]
     public async Task Names_PageAllDraftsAndRejectACursorAfterMutation()
     {
+        // Other sessions can update shared assembly bindings and invalidate a paging cursor.
         var session = Value();
         var names = Enumerable.Range(0, CompletionReply.PageSize + 5)
             .Select(index => "Edit" + index.ToString("D3", CultureInfo.InvariantCulture)).ToArray();

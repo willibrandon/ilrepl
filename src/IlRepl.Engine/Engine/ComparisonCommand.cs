@@ -29,13 +29,12 @@ internal static class ComparisonCommand
         else if (rest.StartsWith("using ", StringComparison.Ordinal))
         {
             rest = rest[6..].Trim();
-            var end = rest.IndexOf(' ');
-            scenario = end < 0 ? rest : rest[..end];
-            rest = end < 0 ? "" : rest[(end + 1)..].Trim();
-            if (scenario.Length == 0)
+            if (rest.Length == 0)
             {
                 throw new ReplException("using requires a parameterless session scenario");
             }
+
+            scenario = InstructionParser.Unquote(Word(ref rest));
         }
         else
         {
@@ -100,11 +99,13 @@ internal static class ComparisonCommand
         var quote = text[0] is '\'' or '"' ? text[0] : '\0';
         if (quote != '\0')
         {
+            var closed = false;
             end = 1;
             while (end < text.Length)
             {
                 if (text[end++] == quote)
                 {
+                    closed = true;
                     break;
                 }
 
@@ -114,7 +115,7 @@ internal static class ComparisonCommand
                 }
             }
 
-            if (text[end - 1] != quote)
+            if (!closed)
             {
                 throw new ReplException("unterminated quoted comparison option");
             }

@@ -599,6 +599,7 @@ public static class MethodDeclarationParser
         var returnType = BindTypeAt(
             s, ref pos, context, out _, out var returnRequired, out var returnOptional, out var exactReturnType);
         TypeParser.SkipWhitespace(s, ref pos);
+        var quotedName = pos < s.Length && s[pos] == '\'';
         var name = ReadName(s, ref pos);
         TypeParser.SkipWhitespace(s, ref pos);
         if (name.Length == 0 || pos >= s.Length || s[pos] != '(')
@@ -606,7 +607,7 @@ public static class MethodDeclarationParser
             throw new ReplException(Usage);
         }
 
-        if (!InstructionParser.IsIdentifier(name))
+        if (!quotedName && !InstructionParser.IsIdentifier(name))
         {
             throw new ReplException($"bad method name '{name}'");
         }

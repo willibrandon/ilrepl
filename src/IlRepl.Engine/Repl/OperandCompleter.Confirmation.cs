@@ -134,7 +134,7 @@ public sealed partial class OperandCompleter
     {
         if (candidate.Alias is { } alias)
         {
-            return alias;
+            return TypeNameFormatter.IlAsmIdentifier(alias);
         }
 
         var site = query.Identity.Site;

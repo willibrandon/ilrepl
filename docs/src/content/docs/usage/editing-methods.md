@@ -88,6 +88,7 @@ Each `ref` or `out` literal gets a separate variable. Use a scenario when argume
 
 For an instance method, object input, or repeated call, write a parameterless
 session method to set up the inputs. Run it with `.compare Name using Scenario`.
+Use CIL quotes for names with spaces: `.compare Name using 'My Scenario'`.
 The scenario itself must be non-generic; supply generic arguments in the calls inside it.
 Both versions must have matching signatures and generic constraints to use the same scenario.
 Renaming a generic parameter or reordering equivalent constraints keeps the scenario compatible.
@@ -179,7 +180,8 @@ Set up repeatable inputs in your scenario. The transcript describes these condit
 `.edit` copies the declaring type and the fields, constructors, and helpers the method needs.
 Signatures, generic constraints, layout, and member metadata are kept, including property and event accessor associations.
 Type and module initializers keep the helpers they need. Opening or saving an edit does not run its code.
-`Type.GetType` recognizes the original names of copied types, including nested types and generic arguments.
+String lookups through `Type.GetType`, `Assembly.GetType`, and `Module.GetType` recognize original names of copied types,
+including nested types and generic arguments.
 Public methods outside this copied context remain references to their original assemblies.
 The dependency list includes local and member signatures, custom modifiers, catch types, and `calli` signatures.
 Custom attributes keep their constructors, named members, and type arguments in saved copies.

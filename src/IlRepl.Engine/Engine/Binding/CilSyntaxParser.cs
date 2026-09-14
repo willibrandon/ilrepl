@@ -791,7 +791,7 @@ public static partial class CilSyntaxParser
             throw new ReplException($"unexpected '{s[afterName..endOfText]}' in method reference");
         }
 
-        if (!InstructionParser.IsIdentifier(name))
+        if (name.Length == 0 || !quoted && !InstructionParser.IsIdentifier(name))
         {
             throw new ReplException("expected 'Type::Method(...)' in method reference (or a session method name defined with .method)");
         }

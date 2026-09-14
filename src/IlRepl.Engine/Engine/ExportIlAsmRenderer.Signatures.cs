@@ -1,6 +1,7 @@
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using Mono.Cecil;
+using GenericParameter = Mono.Cecil.GenericParameter;
 using ICustomAttributeProvider = Mono.Cecil.ICustomAttributeProvider;
 using TypeReference = Mono.Cecil.TypeReference;
 using TypeSpecification = Mono.Cecil.TypeSpecification;
@@ -31,6 +32,11 @@ internal sealed partial class ExportIlAsmRenderer
 
     private string TypeText(TypeReference type)
     {
+        if (type is GenericParameter parameter)
+        {
+            return (parameter.Type == GenericParameterType.Method ? "!!" : "!") + Number(parameter.Position);
+        }
+
         var signature = MetadataSignatures.TypeOperand(_metadata, type.MetadataToken.ToInt32(), _signatures, GenericContext.Empty);
         return signature is null ? ScopedName(type)
             : IlSignatureRenderer.TypeOperand(Normalize(signature), type is TypeSpecification);

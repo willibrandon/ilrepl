@@ -24,7 +24,20 @@ internal static class CopiedTypeNames
         return TranslateType(parsed, ignoreCase, context, names, preserveAssemblies).AssemblyQualifiedName;
     }
 
-    private static TypeName TranslateType(TypeName type, bool ignoreCase, string context, string[] names, bool preserveAssemblies)
+    /// <summary>
+    /// Remaps names looked up within a copied assembly or module while preserving invalid outer assembly qualifiers.
+    /// </summary>
+    /// <param name="name">The name supplied to the instance lookup.</param>
+    /// <param name="ignoreCase">Whether the lookup ignores case.</param>
+    /// <param name="names">The original and copied type identities.</param>
+    /// <returns>The translated name without an outer assembly qualifier, or the unchanged invalid input.</returns>
+    internal static string? TranslateScoped(string? name, bool ignoreCase, string[] names)
+    {
+        if (name is null || !TypeName.TryParse(name.AsSpan(), out var parsed) || parsed.AssemblyName is not null) return name;
+        return TranslateType(parsed, ignoreCase, null, names, false).FullName;
+    }
+
+    private static TypeName TranslateType(TypeName type, bool ignoreCase, string? context, string[] names, bool preserveAssemblies)
     {
         if (type.IsArray || type.IsPointer || type.IsByRef)
         {
@@ -53,7 +66,7 @@ internal static class CopiedTypeNames
         {
             if (!string.Equals(type.FullName, names[index], comparison)) continue;
             var assembly = type.AssemblyName;
-            if (assembly is null ? names[index + 1] != context
+            if (assembly is null ? context is not null && names[index + 1] != context
                 : !AssemblyName.ReferenceMatchesDefinition(new AssemblyName(assembly.FullName), new AssemblyName(names[index + 1])))
             {
                 continue;
