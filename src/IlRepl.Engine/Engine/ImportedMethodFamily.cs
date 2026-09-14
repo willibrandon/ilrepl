@@ -79,7 +79,7 @@ internal sealed partial class ImportedMethodFamily
             while (_pending.TryDequeue(out var method))
             {
                 if (method.IsAbstract || method.Attributes.HasFlag(MethodAttributes.PinvokeImpl)
-                    || IsRuntimeDelegateMethod(method)
+                    || IsRuntimeDelegateMethod(method) || _metadataOnlyMethods.Contains(method)
                     || method.GetCustomAttributesData().Any(attribute =>
                     attribute.AttributeType == typeof(UnsafeAccessorAttribute)))
                 {
@@ -283,7 +283,7 @@ internal sealed partial class ImportedMethodFamily
 
         foreach (var method in type.GetMethods(Declared).Where(method => method.IsVirtual))
         {
-            AddMethod(method);
+            AddMethod(method, metadataOnly: true);
         }
     }
 
@@ -334,16 +334,26 @@ internal sealed partial class ImportedMethodFamily
         AddType(type);
         foreach (var constructor in type.GetConstructors(Declared))
         {
-            AddMethod(constructor);
+            AddMethod(constructor, metadataOnly: true);
         }
     }
 
-    private void AddMethod(MethodBase method)
+    private void AddMethod(MethodBase method, bool metadataOnly = false)
     {
         method = IlAsmRenderer.DefinitionOf(method);
+        if (!metadataOnly && _metadataOnlyMethods.Remove(method))
+        {
+            _pending.Enqueue(method);
+        }
+
         if (!_methods.TryAdd(method, null))
         {
             return;
+        }
+
+        if (metadataOnly && HasNonIlImplementation(method))
+        {
+            _metadataOnlyMethods.Add(method);
         }
 
         AddType(method.DeclaringType!);
@@ -590,7 +600,7 @@ internal sealed partial class ImportedMethodFamily
         if (MethodPreparation.IsSupported)
         {
             foreach (var method in _runtime.Values.OfType<MethodBase>().Append(EntryPoint).Append(CallableEntryPoint)
-                .Where(method => !method.IsAbstract && !method.ContainsGenericParameters && !IsRuntimeDelegateMethod(method)).Distinct())
+                .Where(method => !method.IsAbstract && !method.ContainsGenericParameters && !HasNonIlImplementation(method)).Distinct())
             {
                 try
                 {

@@ -38,12 +38,12 @@ internal sealed partial class ImportedMethodFamily
                     // Reflection on Mono cannot expose a property containing only Other associations.
                     if (property.GetGetMethod(true) is { } getter)
                     {
-                        AddMethod(getter);
+                        AddMethod(getter, metadataOnly: true);
                     }
 
                     if (property.GetSetMethod(true) is { } setter)
                     {
-                        AddMethod(setter);
+                        AddMethod(setter, metadataOnly: true);
                     }
                 }
             }
@@ -54,12 +54,12 @@ internal sealed partial class ImportedMethodFamily
                 // An event requires both registration methods, even when only another accessor was selected.
                 if (entry.GetAddMethod(true) is { } add)
                 {
-                    AddMethod(add);
+                    AddMethod(add, metadataOnly: true);
                 }
 
                 if (entry.GetRemoveMethod(true) is { } remove)
                 {
-                    AddMethod(remove);
+                    AddMethod(remove, metadataOnly: true);
                 }
             }
         }

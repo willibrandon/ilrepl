@@ -24,7 +24,7 @@ public sealed partial class ReplCore
         Note(name + ": " + side.Outcome + (side.Detail is null ? "" : ": " + side.Detail));
         if (side.Exception is { } exception)
         {
-            Listing($"    threw {exception.Type}: {exception.Message} (HRESULT 0x{exception.HResult:x8})");
+            ExceptionDetails("    threw ", exception);
         }
         else if (side.Result is { } result)
         {
@@ -47,7 +47,7 @@ public sealed partial class ReplCore
 
             if (call.invocation.Exception is { } failure)
             {
-                Listing($"    call {call.index + 1} threw {failure.Type}: {failure.Message} (HRESULT 0x{failure.HResult:x8})");
+                ExceptionDetails($"    call {call.index + 1} threw ", failure);
             }
         }
 
@@ -59,6 +59,20 @@ public sealed partial class ReplCore
         if (side.StandardError.Length != 0)
         {
             Listing("    stderr: " + JsonSerializer.Serialize(side.StandardError, ProtocolJsonContext.Default.String));
+        }
+    }
+
+    private void ExceptionDetails(string prefix, ObservedException exception)
+    {
+        for (var current = exception; current is not null; current = current.Inner)
+        {
+            Listing($"{prefix}{current.Type}: {current.Message} (HRESULT 0x{current.HResult:x8})");
+            if (current.Problem is { } problem)
+            {
+                Listing("      unavailable: " + problem);
+            }
+
+            prefix = "      caused by ";
         }
     }
 

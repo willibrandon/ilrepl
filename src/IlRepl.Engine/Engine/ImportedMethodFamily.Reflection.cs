@@ -9,6 +9,7 @@ namespace IlRepl.Engine;
 internal sealed partial class ImportedMethodFamily
 {
     private string? _reflectionLocation;
+    private readonly HashSet<MethodBase> _metadataOnlyMethods = [];
 
     private void ScanReflection()
     {
@@ -26,11 +27,18 @@ internal sealed partial class ImportedMethodFamily
 
             foreach (var member in type.GetMethods(Declared).Cast<MethodBase>().Concat(type.GetConstructors(Declared)))
             {
-                AddMethod(member);
+                AddMethod(member, metadataOnly: true);
                 _dependencies.Add(new EditDependency(MemberResolver.Describe(member), member.Module.Assembly.FullName!,
                     _reflectionLocation + ": reflective access", "copied") { Access = MemberAccess.AccessWord(member.Attributes) });
             }
         }
+    }
+
+    private static bool HasNonIlImplementation(MethodBase method)
+    {
+        var flags = method.GetMethodImplementationFlags();
+        return (flags & MethodImplAttributes.CodeTypeMask) != MethodImplAttributes.IL
+            || flags.HasFlag(MethodImplAttributes.InternalCall);
     }
 
     private static bool ReflectsMembers(MethodBase method)
