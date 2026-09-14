@@ -175,8 +175,9 @@ internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> 
 
         if (type.HasElementType)
         {
-            return TypeName(type.GetElementType()!) + (type.IsArray ? "[" + new string(',', type.GetArrayRank() - 1) + "]"
-                : type.IsPointer ? "*" : "&");
+            var suffix = type.IsArray ? type.GetArrayRank() == 1 && !type.IsSZArray ? "[*]"
+                : "[" + new string(',', type.GetArrayRank() - 1) + "]" : type.IsPointer ? "*" : "&";
+            return TypeName(type.GetElementType()!) + suffix;
         }
 
         if (type.IsConstructedGenericType)
