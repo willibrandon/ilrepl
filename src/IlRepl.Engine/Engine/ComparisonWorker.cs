@@ -8,7 +8,7 @@ namespace IlRepl.Engine;
 /// <summary>
 /// Executes one captured side in a process or browser worker dedicated to that single execution.
 /// </summary>
-public static class ComparisonWorker
+public static partial class ComparisonWorker
 {
     /// <summary>
     /// Initializes the captured conditions and executes the selected call or scenario in this fresh runtime.
@@ -19,9 +19,10 @@ public static class ComparisonWorker
     /// <param name="outputLimit">Requests immediate termination when console output exceeds its limit.</param>
     /// <param name="captureOutput">Whether to capture console writers in memory or let the host capture its standard streams.</param>
     /// <param name="useStandardInput">Whether the host supplies captured input through the actual standard-input stream.</param>
+    /// <param name="restoreFileTimes">An optional host implementation for restoring timestamps on its filesystem.</param>
     /// <returns>The completed observations or setup failure.</returns>
     public static async Task<ComparisonSide> ExecuteAsync(ComparisonPackage package, bool original, Action ready, Action outputLimit,
-        bool captureOutput = true, bool useStandardInput = false)
+        bool captureOutput = true, bool useStandardInput = false, Action<ComparisonFile>? restoreFileTimes = null)
     {
         ArgumentNullException.ThrowIfNull(package);
         ArgumentNullException.ThrowIfNull(ready);
@@ -92,7 +93,9 @@ public static class ComparisonWorker
             {
                 var root = Path.GetFullPath(Environment.CurrentDirectory) + Path.DirectorySeparatorChar;
                 var path = Path.GetFullPath(file.Path, root);
-                if (!path.StartsWith(root, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                var pathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                var rootEntry = file.Path == "." && file.IsDirectory && file.LinkTarget is null;
+                if (!path.StartsWith(root, pathComparison) && !(rootEntry && string.Equals(path, root[..^1], pathComparison)))
                 {
                     throw new ReplException("a comparison fixture path escapes its working directory");
                 }
@@ -126,6 +129,7 @@ public static class ComparisonWorker
                 }
             }
 
+            RestoreFixtureTimes(package.Files, restoreFileTimes);
             ComparisonProbe.Initialize(image.TypeNames);
             ready();
             if (image.OriginalAssembly is { } identity)

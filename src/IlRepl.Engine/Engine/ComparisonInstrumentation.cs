@@ -18,6 +18,11 @@ internal static partial class ComparisonInstrumentation
         MethodReference? externalVarArg = null)
     {
         var owner = target.DeclaringType;
+        while (owner.Methods.Any(method => method.Name == name))
+        {
+            name += "_";
+        }
+
         var wrapper = new MethodDefinition(name,
             MethodAttributes.Public | MethodAttributes.HideBySig | (target.IsStatic ? MethodAttributes.Static : 0), target.ReturnType)
         {

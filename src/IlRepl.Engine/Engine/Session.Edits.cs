@@ -37,6 +37,11 @@ public sealed partial class Session
 
         var resolved = MemberResolver.ResolveMethod(reference, InspectionContext, wantConstructor: false);
         var method = resolved.Method ?? _methods.First(m => m.Signature.Name == resolved.Definition!.Name).Version.Body;
+        if (_edits.FirstOrDefault(edit => edit.Current?.CallableEntryPoint == method) is { Method: { } selected })
+        {
+            method = selected;
+        }
+
         if (resolved.Declared is not null || method.DeclaringType is TypeBuilder)
         {
             throw new ReplException("the method belongs to an uncommitted declaration; close it first");

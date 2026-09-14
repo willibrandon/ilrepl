@@ -23,9 +23,21 @@ public static partial class BrowserComparisonWorker
         await JSHost.ImportAsync("comparison.js", "../comparison-interop.js").ConfigureAwait(false);
         var package = JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.ComparisonPackage)
             ?? throw new ReplException("the comparison package is missing");
-        var result = await ComparisonWorker.ExecuteAsync(package, original, Ready, OutputLimit, captureOutput: false).ConfigureAwait(false);
+        var result = await ComparisonWorker.ExecuteAsync(package, original, Ready, OutputLimit,
+            captureOutput: false, restoreFileTimes: RestoreFileTimes).ConfigureAwait(false);
         return JsonSerializer.Serialize(result, ProtocolJsonContext.Default.ComparisonSide);
     }
+
+    private static void RestoreFileTimes(ComparisonFile file)
+    {
+        if ((file.LastWriteTimeUtc ?? file.LastAccessTimeUtc ?? file.CreationTimeUtc) is { } time)
+        {
+            RestoreFileTime(file.Path, new DateTimeOffset(time).ToUnixTimeMilliseconds());
+        }
+    }
+
+    [JSImport("restoreFileTime", "comparison.js")]
+    private static partial void RestoreFileTime(string path, double milliseconds);
 
     [JSImport("ready", "comparison.js")]
     private static partial void Ready();

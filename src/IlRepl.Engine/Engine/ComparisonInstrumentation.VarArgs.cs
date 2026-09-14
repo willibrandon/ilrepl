@@ -7,11 +7,12 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static partial class ComparisonInstrumentation
 {
-    internal static void CompleteVarArgCalls(CecilWriter writer, MethodDefinition target, MethodDefinition entry,
+    internal static void Complete(CecilWriter writer, MethodDefinition target, MethodDefinition entry,
         MethodReference? externalVarArg = null)
     {
         if (target.CallingConvention != MethodCallingConvention.VarArg)
         {
+            Relocate(writer, [entry]);
             return;
         }
 
@@ -40,5 +41,7 @@ internal static partial class ComparisonInstrumentation
 
             instruction.Operand = wrapper;
         }
+
+        Relocate(writer, [entry, .. wrappers.Values]);
     }
 }

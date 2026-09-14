@@ -2067,8 +2067,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (graph.Prefixes(index).FirstOrDefault(prefix => prefix.Op == OpCodes.Constrained)?.Type is { } constrained)
             {
                 return _types.Algebra.IsByRef(type) && _types.Algebra.Same(_types.Algebra.ElementOf(type), constrained)
-                    && _types.CanAssign(_types.Algebra.IsValueType(constrained) || _types.Algebra.IsGenericParameter(constrained)
-                        ? _types.Algebra.Boxed(constrained) : constrained, owner);
+                    && (_types.Algebra.Same(constrained, owner)
+                        || _types.CanAssign(_types.Algebra.IsValueType(constrained) || _types.Algebra.IsGenericParameter(constrained)
+                            ? _types.Algebra.Boxed(constrained) : constrained, owner));
             }
 
             if (_types.Algebra.IsValueType(owner))

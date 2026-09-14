@@ -590,7 +590,8 @@ internal sealed partial class ImportedMethodFamily
         EntryPoint = CloseRequested((MethodBase)_runtime[Selected.Method]);
         CallableEntryPoint = EntryPoint;
         var selected = (MethodDefinition)definitions[Selected.Method];
-        if (selected.DeclaringType.Methods.Any(method => method.Name == ForwardingName))
+        if ((!selected.IsPublic || !Selected.Method.DeclaringType!.IsVisible)
+            && selected.CallingConvention != MethodCallingConvention.VarArg)
         {
             var forwarding = CecilForwardingMethod.Find(selected, ForwardingName);
             _forwardingMethod = Definition.Assembly.ManifestModule.ResolveMethod(forwarding.MetadataToken.ToInt32())!;

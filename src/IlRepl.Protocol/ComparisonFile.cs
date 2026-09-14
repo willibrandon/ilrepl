@@ -16,4 +16,19 @@ public sealed record ComparisonFile(string Path, byte[] Contents)
     /// The relative destination of a symbolic link within the captured fixture tree, or null for an ordinary entry.
     /// </summary>
     public string? LinkTarget { get; init; }
+
+    /// <summary>
+    /// The captured creation time in UTC, or null when no timestamp was supplied.
+    /// </summary>
+    public DateTime? CreationTimeUtc { get; init; }
+
+    /// <summary>
+    /// The captured last-write time in UTC, or null when no timestamp was supplied.
+    /// </summary>
+    public DateTime? LastWriteTimeUtc { get; init; }
+
+    /// <summary>
+    /// The captured last-access time in UTC, or null when no timestamp was supplied.
+    /// </summary>
+    public DateTime? LastAccessTimeUtc { get; init; }
 }

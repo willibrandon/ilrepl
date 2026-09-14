@@ -38,8 +38,8 @@ public sealed class ComparisonFixtureTests
             session.CommitEdit(edit.Name, edit.Source);
             var package = ComparisonCapture.Create(session, "Copy () --files " + LiteralParser.Escape(fixture.FullName));
 
-            Assert.HasCount(5, package.Files);
-            Assert.HasCount(3, package.Files.Where(file => file.IsDirectory));
+            Assert.HasCount(6, package.Files);
+            Assert.HasCount(4, package.Files.Where(file => file.IsDirectory));
             Assert.HasCount(3, package.Files.Where(file => file.LinkTarget is not null));
             var result = await ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken);
 

@@ -150,6 +150,7 @@ internal sealed partial class ImportedMethodFamily
             }
             else
             {
+                writer.GrantAccessTo(writer.Name);
                 var forwarding = CecilForwardingMethod.Create(selected, ForwardingName);
                 if (_forwardingMethod is { } runtime)
                 {

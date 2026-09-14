@@ -159,7 +159,8 @@ and dependency versions from when you opened the edit.
 Both sides get the same culture, environment, and stdin, with separate working directories.
 Use `--stdin "text\n"` for console input and `--files directory` to copy files into each directory.
 Desktop comparisons also supply that input to `Console.OpenStandardInput()` and native stdin readers.
-Empty directories and relative symlinks are kept; links outside the supplied directory are rejected.
+Files, directories, and relative symlinks keep their captured timestamps. Links outside the supplied directory are rejected.
+If the filesystem cannot restore a timestamp, the comparison reports a setup failure.
 Browser paths refer to its virtual filesystem.
 
 The timeout is 30 seconds per side, starting after runtime startup. Change it with `--timeout 500ms`,
@@ -181,6 +182,7 @@ Marshal descriptors keep their referenced types, including SAFEARRAY subtypes an
 Private delegates retain their runtime methods and copied targets.
 When code uses reflection, copied types retain their full member context, including private and nested declarations.
 Runtime declarations needed only for reflection keep their metadata.
+Generated helpers do not change the declaring type's reflected member list.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it
 was copied. The report updates with each saved revision.

@@ -54,7 +54,7 @@ public sealed class VarArgComparisonTests
 
         il.Emit(OpCodes.Call, call);
         il.Emit(OpCodes.Ret);
-        ComparisonInstrumentation.CompleteVarArgCalls(writer, target, entry, original);
+        ComparisonInstrumentation.Complete(writer, target, entry, original);
 
         using var module = ModuleDefinition.ReadModule(new MemoryStream(writer.Write()));
         var exportedOwner = module.Types.Single(type => type.Name == owner.Name);

@@ -40,8 +40,8 @@ public sealed class MethodComparisonIsolationTests
             var result = await ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken);
 
             Assert.AreEqual("match", result.Outcome, Details(result));
-            Assert.HasCount(1, package.Files);
-            Assert.AreEqual("input.txt", package.Files[0].Path);
+            Assert.HasCount(2, package.Files);
+            Assert.AreEqual("input.txt", package.Files.Single(file => !file.IsDirectory).Path);
             Assert.AreEqual("seed", result.Original.StandardOutput);
             Assert.AreEqual("seed", result.Edited.StandardOutput);
             Assert.AreEqual("typed input", result.Original.Result!.Value);

@@ -9,20 +9,7 @@ namespace IlRepl.Engine;
 internal static class CecilForwardingMethod
 {
     internal static MethodDefinition Create(MethodDefinition target, string name)
-    {
-        var entry = Forward(target, target.DeclaringType, name);
-        while (entry.DeclaringType.IsNested)
-        {
-            entry = Forward(entry, entry.DeclaringType.DeclaringType, name);
-        }
-
-        if (target.DeclaringType.GenericParameters.Count > entry.DeclaringType.GenericParameters.Count)
-        {
-            entry = Shell(target, entry, name);
-        }
-
-        return entry;
-    }
+        => Shell(target, target, name);
 
     internal static MethodDefinition Find(MethodDefinition selected, string name)
     {
@@ -36,45 +23,15 @@ internal static class CecilForwardingMethod
         return (shell ?? root).Methods.Single(method => method.Name == name);
     }
 
-    private static MethodDefinition Forward(MethodDefinition target, TypeDefinition owner, string name)
-    {
-        var sameOwner = owner == target.DeclaringType;
-        var method = new MethodDefinition(name, MethodAttributes.Public | MethodAttributes.HideBySig
-            | (sameOwner && target.HasThis ? 0 : MethodAttributes.Static), owner.Module.TypeSystem.Void);
-        owner.Methods.Add(method);
-        var map = new Dictionary<GenericParameter, TypeReference>();
-        for (var index = 0; index < target.DeclaringType.GenericParameters.Count; index++)
-        {
-            var parameter = target.DeclaringType.GenericParameters[index];
-            map.Add(parameter, index < owner.GenericParameters.Count ? owner.GenericParameters[index] : Copy(parameter, method));
-        }
-
-        foreach (var parameter in target.GenericParameters)
-        {
-            map.Add(parameter, Copy(parameter, method));
-        }
-
-        CompleteGenerics(map);
-        method.ReturnType = Substitute(target.ReturnType, map);
-        if (!sameOwner && target.HasThis)
-        {
-            var receiver = Construct(target.DeclaringType, map);
-            method.Parameters.Add(new ParameterDefinition("receiver", ParameterAttributes.None,
-                target.DeclaringType.IsValueType ? new ByReferenceType(receiver) : receiver));
-        }
-
-        foreach (var parameter in target.Parameters)
-        {
-            method.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, Substitute(parameter.ParameterType, map)));
-        }
-
-        Emit(method, Reference(target, Construct(target.DeclaringType, map), target.GenericParameters.Select(parameter => map[parameter])));
-        return method;
-    }
-
     private static MethodDefinition Shell(MethodDefinition selected, MethodDefinition target, string name)
     {
-        var owner = new TypeDefinition(target.DeclaringType.Namespace, name + "_Entry",
+        var root = target.DeclaringType;
+        while (root.IsNested)
+        {
+            root = root.DeclaringType;
+        }
+
+        var owner = new TypeDefinition(root.Namespace, name + "_Entry",
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed, target.Module.TypeSystem.Object);
         target.Module.Types.Add(owner);
         var map = new Dictionary<GenericParameter, TypeReference>();
@@ -258,7 +215,7 @@ internal static class CecilForwardingMethod
 
     internal static void Redirect(MethodDefinition selected, string name, MethodDefinition target)
     {
-        var forwarding = selected.DeclaringType.Methods.Single(method => method.Name == name);
+        var forwarding = Find(selected, name);
         foreach (var instruction in forwarding.Body.Instructions.Where(instruction => instruction.OpCode.Code == Code.Call))
         {
             var reference = (MethodReference)instruction.Operand;

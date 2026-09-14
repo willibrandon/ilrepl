@@ -136,7 +136,7 @@ public static partial class ComparisonCapture
                     methodArguments = generic.GetGenericArguments().Select(type => ArgumentName(writer.Import(type))).ToArray();
                 }
             }
-        }, writer => ComparisonInstrumentation.CompleteVarArgCalls(writer, selectedMethod!, entry!, externalVarArg));
+        }, writer => ComparisonInstrumentation.Complete(writer, selectedMethod!, entry!, externalVarArg));
         using (var module = ModuleDefinition.ReadModule(new MemoryStream(image, writable: false)))
         {
             foreach (var reference in module.AssemblyReferences)
@@ -265,14 +265,17 @@ public static partial class ComparisonCapture
         }
 
         var result = new List<ComparisonFile>();
-        foreach (var path in FixtureEntries(root).Order(StringComparer.Ordinal))
+        foreach (var entry in FixtureEntries(root))
         {
-            var attributes = File.GetAttributes(path);
+            var path = entry.FullName;
+            var attributes = entry.Attributes;
             var isDirectory = attributes.HasFlag(FileAttributes.Directory);
+            var creation = entry.CreationTimeUtc;
+            var written = entry.LastWriteTimeUtc;
+            var accessed = entry.LastAccessTimeUtc;
             string? linkTarget = null;
             if (attributes.HasFlag(FileAttributes.ReparsePoint))
             {
-                FileSystemInfo entry = isDirectory ? new DirectoryInfo(path) : new FileInfo(path);
                 if (entry.LinkTarget is not { } target)
                 {
                     throw new ReplException($"comparison fixture '{path}' is an unsupported reparse point");
@@ -294,26 +297,31 @@ public static partial class ComparisonCapture
             {
                 IsDirectory = isDirectory,
                 LinkTarget = linkTarget,
+                CreationTimeUtc = creation,
+                LastWriteTimeUtc = written,
+                LastAccessTimeUtc = accessed,
             });
         }
 
-        return result;
+        return result.OrderBy(file => file.Path, StringComparer.Ordinal).ToList();
     }
 
-    private static IEnumerable<string> FixtureEntries(string root)
+    private static IEnumerable<FileSystemInfo> FixtureEntries(string root)
     {
-        var pending = new Stack<string>();
-        pending.Push(root);
+        var directoryInfo = new DirectoryInfo(root);
+        yield return directoryInfo;
+        var pending = new Stack<DirectoryInfo>();
+        pending.Push(directoryInfo);
         var options = new EnumerationOptions { AttributesToSkip = 0, IgnoreInaccessible = false };
         while (pending.TryPop(out var directory))
         {
-            foreach (var path in Directory.EnumerateFileSystemEntries(directory, "*", options))
+            foreach (var entry in directory.EnumerateFileSystemInfos("*", options))
             {
-                yield return path;
-                var attributes = File.GetAttributes(path);
+                yield return entry;
+                var attributes = entry.Attributes;
                 if (attributes.HasFlag(FileAttributes.Directory) && !attributes.HasFlag(FileAttributes.ReparsePoint))
                 {
-                    pending.Push(path);
+                    pending.Push((DirectoryInfo)entry);
                 }
             }
         }

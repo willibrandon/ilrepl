@@ -63,6 +63,15 @@ jobs:
         run: dotnet run --file scripts/Publish-NativeAot.cs -- --rid linux-x64 --package-version 0.0.0-ci
 
   browser:
+    name: browser (${{ matrix.suite }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: editing
+            filter: 'FullyQualifiedName~Compar|FullyQualifiedName~LiveSession_Edit'
+          - suite: session
+            filter: 'FullyQualifiedName!~Compar&FullyQualifiedName!~LiveSession_Edit'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -103,10 +112,11 @@ jobs:
         run: >-
           dotnet test --project tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj
           --no-build --report-trx --results-directory BrowserTestResults
+          --filter '${{ matrix.filter }}'
 
       - name: Upload browser test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: browser-test-results
+          name: browser-test-results-${{ matrix.suite }}
           path: BrowserTestResults/
