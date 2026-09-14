@@ -239,7 +239,9 @@ internal sealed partial class ImportedMethodFamily
             var set = property.GetSetMethod(true);
             var copiedGet = get is not null && definitions.TryGetValue(get, out var g) ? (MethodDefinition)g : null;
             var copiedSet = set is not null && definitions.TryGetValue(set, out var s) ? (MethodDefinition)s : null;
-            if (copiedGet is null && copiedSet is null)
+            var others = ImportedMetadata.Accessors(property, otherOnly: true).Where(definitions.ContainsKey)
+                .Select(method => (MethodDefinition)definitions[method]).ToArray();
+            if (copiedGet is null && copiedSet is null && others.Length == 0)
             {
                 continue;
             }
@@ -254,6 +256,11 @@ internal sealed partial class ImportedMethodFamily
             };
 
             definition.Properties.Add(copy);
+            foreach (var other in others)
+            {
+                copy.OtherMethods.Add(other);
+            }
+
             copy.PropertyType = CecilMetadataSignatures.Import(signature.ReturnType, copy, writer);
             writer.SignatureFixups.Property(copy,
                 signature.ParameterTypes.Select(parameter => CecilMetadataSignatures.Import(parameter, copy, writer)), size);
@@ -272,20 +279,25 @@ internal sealed partial class ImportedMethodFamily
             var remove = @event.GetRemoveMethod(true);
             var copiedAdd = add is not null && definitions.TryGetValue(add, out var a) ? (MethodDefinition)a : null;
             var copiedRemove = remove is not null && definitions.TryGetValue(remove, out var r) ? (MethodDefinition)r : null;
-            if (copiedAdd is null && copiedRemove is null)
+            var raise = @event.GetRaiseMethod(true);
+            var copiedRaise = raise is not null && definitions.TryGetValue(raise, out var fire) ? (MethodDefinition)fire : null;
+            var others = ImportedMetadata.Accessors(@event, otherOnly: true).Where(definitions.ContainsKey)
+                .Select(method => (MethodDefinition)definitions[method]).ToArray();
+            if (copiedAdd is null && copiedRemove is null && copiedRaise is null && others.Length == 0)
             {
                 continue;
             }
 
             var copy = new EventDefinition(@event.Name, (Mono.Cecil.EventAttributes)@event.Attributes,
-                writer.Import(@event.EventHandlerType!))
+                CecilMetadataSignatures.Import(ImportedMetadata.EventSignature(@event), definition, writer))
             {
                 AddMethod = copiedAdd,
                 RemoveMethod = copiedRemove,
+                InvokeMethod = copiedRaise,
             };
-            if (@event.GetRaiseMethod(true) is { } raise && definitions.TryGetValue(raise, out var fire))
+            foreach (var other in others)
             {
-                copy.InvokeMethod = (MethodDefinition)fire;
+                copy.OtherMethods.Add(other);
             }
 
             CopyAttributes(@event.GetCustomAttributesData(), copy, writer);

@@ -171,8 +171,8 @@ Set up repeatable inputs in your scenario. The transcript describes these condit
 ## Types and dependencies
 
 `.edit` copies the declaring type and the fields, constructors, and helpers the method needs.
-Signatures, generic constraints, layout, and member metadata are kept. Public external methods remain
-references to their original assemblies. Opening or saving an edit does not run its code.
+Signatures, generic constraints, layout, and member metadata are kept, including property and event accessor associations.
+Public external methods remain references to their original assemblies. Opening or saving an edit does not run its code.
 The dependency list includes local and member signatures, custom modifiers, catch types, and `calli` signatures.
 Custom attributes keep their constructors, named members, and type arguments in saved copies.
 

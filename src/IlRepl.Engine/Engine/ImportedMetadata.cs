@@ -13,7 +13,7 @@ namespace IlRepl.Engine;
 /// <summary>
 /// Reads imported metadata that reflection cannot reproduce without executing user code.
 /// </summary>
-internal static class ImportedMetadata
+internal static partial class ImportedMetadata
 {
     internal static (PropertySignature Signature, int Size) PropertySignature(PropertyInfo property)
     {

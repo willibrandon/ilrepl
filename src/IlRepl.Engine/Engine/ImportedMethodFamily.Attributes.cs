@@ -24,16 +24,15 @@ internal sealed partial class ImportedMethodFamily
                 ScanAttributes(field.GetCustomAttributesData, type, field.ToString()!);
             }
 
-            foreach (var property in type.GetProperties(Declared).Where(property => property.GetAccessors(true).Any(_methods.ContainsKey)))
+            foreach (var property in type.GetProperties(Declared).Where(property => ImportedMetadata.Accessors(property)
+                .Any(_methods.ContainsKey)))
             {
-                ScanAttributes(property.GetCustomAttributesData, type, property.ToString()!);
+                ScanAttributes(property.GetCustomAttributesData, type, TypeNameFormatter.Pretty(type) + "::" + property.Name);
             }
 
-            foreach (var entry in type.GetEvents(Declared).Where(entry =>
-                entry.GetAddMethod(true) is { } add && _methods.ContainsKey(add)
-                || entry.GetRemoveMethod(true) is { } remove && _methods.ContainsKey(remove)))
+            foreach (var entry in type.GetEvents(Declared).Where(entry => ImportedMetadata.Accessors(entry).Any(_methods.ContainsKey)))
             {
-                ScanAttributes(entry.GetCustomAttributesData, type, entry.ToString()!);
+                ScanAttributes(entry.GetCustomAttributesData, type, TypeNameFormatter.Pretty(type) + "::" + entry.Name);
             }
         }
 
@@ -101,7 +100,7 @@ internal sealed partial class ImportedMethodFamily
                 ScanAttributeArgument(argument.TypedValue, owner, origin);
                 if (copied && argument.MemberInfo is PropertyInfo property)
                 {
-                    foreach (var accessor in property.GetAccessors(true))
+                    foreach (var accessor in ImportedMetadata.Accessors(property))
                     {
                         if (_types.ContainsKey(DefinitionOf(accessor.DeclaringType!)))
                         {

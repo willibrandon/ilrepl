@@ -22,13 +22,44 @@ internal sealed partial class ImportedMethodFamily
                 ScanSignature(RuntimeMetadataSignatures.Read(field), type, field + ": field signature");
             }
 
-            foreach (var property in type.GetProperties(Declared).Where(property => property.GetAccessors(true).Any(_methods.ContainsKey)))
+            foreach (var property in type.GetProperties(Declared).Where(property => ImportedMetadata.Accessors(property)
+                .Any(_methods.ContainsKey)))
             {
                 var (signature, _) = ImportedMetadata.PropertySignature(property);
-                ScanSignature(signature.ReturnType, type, property + ": property signature");
+                var location = TypeNameFormatter.Pretty(type) + "::" + property.Name;
+                ScanSignature(signature.ReturnType, type, location + ": property signature");
                 foreach (var parameter in signature.ParameterTypes)
                 {
-                    ScanSignature(parameter, type, property + ": index parameter");
+                    ScanSignature(parameter, type, location + ": index parameter");
+                }
+
+                if (ImportedMetadata.Accessors(property, otherOnly: true).Any(_methods.ContainsKey))
+                {
+                    // Reflection on Mono cannot expose a property containing only Other associations.
+                    if (property.GetGetMethod(true) is { } getter)
+                    {
+                        AddMethod(getter);
+                    }
+
+                    if (property.GetSetMethod(true) is { } setter)
+                    {
+                        AddMethod(setter);
+                    }
+                }
+            }
+
+            foreach (var entry in type.GetEvents(Declared).Where(entry => ImportedMetadata.Accessors(entry).Any(_methods.ContainsKey)))
+            {
+                ScanSignature(ImportedMetadata.EventSignature(entry), type, TypeNameFormatter.Pretty(type) + "::" + entry.Name);
+                // An event requires both registration methods, even when only another accessor was selected.
+                if (entry.GetAddMethod(true) is { } add)
+                {
+                    AddMethod(add);
+                }
+
+                if (entry.GetRemoveMethod(true) is { } remove)
+                {
+                    AddMethod(remove);
                 }
             }
         }
