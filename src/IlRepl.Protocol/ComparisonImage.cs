@@ -16,12 +16,12 @@ public sealed record ComparisonImage(byte[] Image, string EntryType, string Entr
     IReadOnlyDictionary<string, string> TypeNames)
 {
     /// <summary>
-    /// The original external assembly for a direct invocation when its declaring context cannot be copied.
+    /// The original external assembly when its declaring context cannot be copied.
     /// </summary>
     public string? OriginalAssembly { get; init; }
 
     /// <summary>
-    /// The required module identity for a direct original invocation.
+    /// The required module identity for an original invocation.
     /// </summary>
     public Guid? OriginalModule { get; init; }
 }

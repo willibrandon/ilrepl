@@ -42,6 +42,9 @@ public static partial class ComparisonWorker
         using var stderr = captureOutput ? new ComparisonOutputWriter(package.OutputLimit, Limit) : null;
         using var stdin = useStandardInput ? null : new StringReader(package.StandardInput);
         var loaded = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
+        var preserveContext = package.Original.OriginalAssembly is not null;
+        var executionContext = preserveContext && package.Dependencies.Any(dependency => dependency.IsCollectible)
+            ? new AssemblyLoadContext("ilrepl-comparison", isCollectible: true) : AssemblyLoadContext.Default;
         Assembly? Resolve(AssemblyLoadContext context, AssemblyName name)
         {
             if (loaded.TryGetValue(name.FullName, out var assembly))
@@ -56,13 +59,14 @@ public static partial class ComparisonWorker
                 return null;
             }
 
-            using var stream = new MemoryStream(dependency.Image, writable: false);
-            assembly = context.LoadFromStream(stream);
+            assembly = LoadDependency(preserveContext ? executionContext : context, dependency, preserveContext);
             loaded.Add(name.FullName, assembly);
             return assembly;
         }
 
+        using var reflection = executionContext.EnterContextualReflection();
         AssemblyLoadContext.Default.Resolving += Resolve;
+        if (executionContext != AssemblyLoadContext.Default) executionContext.Resolving += Resolve;
         try
         {
             if (captureOutput)
@@ -134,7 +138,10 @@ public static partial class ComparisonWorker
             ready();
             if (image.OriginalAssembly is { } identity)
             {
-                var originalAssembly = Assembly.Load(new AssemblyName(identity));
+                var dependency = package.Dependencies.FirstOrDefault(dependency =>
+                    string.Equals(dependency.Name, identity, StringComparison.OrdinalIgnoreCase));
+                if (dependency?.OriginalLocation is { } location) VerifyOriginalFile(dependency, location);
+                var originalAssembly = executionContext.LoadFromAssemblyName(new AssemblyName(identity));
                 if (image.OriginalModule is { } module && originalAssembly.ManifestModule.ModuleVersionId != module)
                 {
                     throw new ReplException("the original assembly no longer matches the captured module");
@@ -142,7 +149,7 @@ public static partial class ComparisonWorker
             }
 
             using var code = new MemoryStream(image.Image, writable: false);
-            var assembly = AssemblyLoadContext.Default.LoadFromStream(code);
+            var assembly = executionContext.LoadFromStream(code);
             var type = assembly.GetType(image.EntryType, throwOnError: true)!;
             Type Argument(string name) => Type.GetType(name, throwOnError: true)!;
             if (image.TypeArguments.Count != 0)
@@ -193,6 +200,11 @@ public static partial class ComparisonWorker
         finally
         {
             AssemblyLoadContext.Default.Resolving -= Resolve;
+            if (executionContext != AssemblyLoadContext.Default)
+            {
+                executionContext.Resolving -= Resolve;
+                executionContext.Unload();
+            }
             Console.SetOut(previousOut);
             Console.SetError(previousError);
             Console.SetIn(previousInput);

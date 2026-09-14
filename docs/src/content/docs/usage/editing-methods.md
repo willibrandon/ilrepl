@@ -28,6 +28,7 @@ until `.reset`; `.clear` abandons an open edit without removing saved revisions.
 
 The method name, generic parameter count, and instance/static declaration must stay the same.
 Changes to parameter names and `[in]`, `[out]`, and `[opt]` flags are saved with the copy.
+Use `.param [1] = int32(8)` to change a parameter's default. Unmentioned defaults are kept; `[opt]` controls whether it is optional.
 
 `.methods` lists copies and their revisions. `.types` shows their declaring types, such as
 `IlRepl.Edits.Maximum.Owner`. Call the copy by its name: `call Maximum`.
@@ -149,6 +150,7 @@ It also shows console output, including direct stream writes, and tracks shared 
 Objects are compared through their fields without calling user properties, `ToString`, or equality methods.
 `Dictionary` and `HashSet` retain their entries, enumeration order, comparer settings, and shared references.
 Immutable hash collections and their builders use a stable structural order of keys and retain their comparer settings.
+Concurrent dictionaries use their logical entries and comparer settings, independent of bucket layout and insertion order.
 Distinct keys with identical structural observations make the comparison incomplete.
 `Task`, its subclasses, and `ValueTask` results are awaited.
 Tasks keep their identity and `AsyncState`. A null task is reported as `null Task`, distinct from a completed task with a null result.
@@ -208,9 +210,9 @@ When code uses reflection, copied types retain their full member context, includ
 Known constructor lookups and reflective invocation use the copied constructors.
 Runtime declarations needed only for reflection keep their metadata.
 Generated helpers do not change the declaring type's reflected member list.
-Assembly and module inspection is rejected for assembly identity, type lists, resources, reference tables, and custom attributes.
+Assembly and module inspection is rejected for identity, file paths, image metadata, type lists, resources, and custom attributes.
 Copies do not retain this source metadata. This includes `GetTypes`, `DefinedTypes`, `GetForwardedTypes`,
-`Assembly.GetName()`, `Assembly.FullName`, `Assembly.GetReferencedAssemblies()`, and attribute APIs such as `ICustomAttributeProvider`.
+`Assembly.GetName()`, `Assembly.Location`, `Assembly.GetReferencedAssemblies()`, `Module.ModuleVersionId`, and attribute APIs.
 Use type or member APIs to inspect copied attributes.
 These limits also apply to reflective invocation and delegate binding. The target must be known during preflight.
 Call type lookup and string activation APIs directly so copied names can be translated.
@@ -226,6 +228,7 @@ If a dependency cannot be copied, `.edit` explains why and leaves the source ava
 
 Some framework methods use runtime internals that cannot be copied. You can replace that code and
 compare the result with the actual original. Scenario calls need compatible signatures.
+When the original needs its assembly file context, that file must still match the captured image or comparison reports a setup failure.
 
 Methods without an IL body cannot be opened. Instructions and native calls still need support from
 the runtime where you run them.

@@ -96,11 +96,22 @@ internal sealed partial class ImportedMethodFamily
         if (method.DeclaringType is { } type && type.Assembly == typeof(Assembly).Assembly
             && typeof(Assembly).IsAssignableFrom(type))
         {
-            if (method.Name is nameof(Assembly.GetName) or "get_FullName" or nameof(ToString))
+            if (method.Name is "get_Location" or "get_CodeBase" or "get_EscapedCodeBase" or nameof(Assembly.GetFile)
+                or nameof(Assembly.GetFiles))
+                return "assembly file inspection cannot reproduce the original assembly file context";
+            if (method.Name is nameof(Assembly.GetName) or "get_FullName" or nameof(ToString) or "get_ImageRuntimeVersion"
+                or "get_IsDynamic" or "get_IsCollectible" or "get_EntryPoint")
                 return "assembly identity inspection cannot reproduce the original assembly identity";
             if (method.Name == nameof(Assembly.GetReferencedAssemblies))
                 return "referenced assembly inspection cannot reproduce the original reference table";
         }
+        if (method.DeclaringType == typeof(ModuleHandle) && method.Name == "get_MDStreamVersion")
+            return "module identity inspection cannot reproduce the original module metadata";
+        if (method.DeclaringType is { } moduleType && moduleType.Assembly == typeof(Module).Assembly
+            && typeof(Module).IsAssignableFrom(moduleType)
+            && method.Name is "get_Name" or "get_ScopeName" or "get_FullyQualifiedName" or "get_ModuleVersionId"
+                or "get_MDStreamVersion" or nameof(Module.GetPEKind) or nameof(ToString))
+            return "module identity inspection cannot reproduce the original module metadata";
         if (InspectsAssemblyAttributes(method)) return "assembly and module attribute inspection cannot reproduce the original metadata";
         if (InspectsAssemblyResources(method)) return "manifest resource inspection cannot reproduce the original assembly's resources";
         return EnumeratesAssemblyTypes(method)

@@ -60,7 +60,9 @@ internal static partial class ComparisonInstrumentation
         optionalParameters = optionalParameters.Select(parameter => CecilGenericSubstitution.Apply(parameter, map)).ToArray();
         foreach (var parameter in target.Parameters)
         {
-            wrapper.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, parameter.ParameterType));
+            var copy = new ParameterDefinition(parameter.Name, parameter.Attributes, parameter.ParameterType);
+            if (parameter.HasConstant) copy.Constant = parameter.Constant;
+            wrapper.Parameters.Add(copy);
         }
 
         foreach (var parameter in optionalParameters)

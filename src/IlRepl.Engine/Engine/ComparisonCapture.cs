@@ -168,7 +168,11 @@ public static partial class ComparisonCapture
         }, StringComparer.Ordinal);
         return new ComparisonImage(image, options.Scenario is null ? entry!.DeclaringType.FullName.Replace('/', '+') : "IlRepl.Cell",
             options.Scenario ?? entry!.Name, options.Scenario is null ? entry!.MetadataToken.ToInt32() : 0,
-            typeArguments, methodArguments, options.Arguments, names);
+            typeArguments, methodArguments, options.Arguments, names)
+        {
+            OriginalAssembly = original && edit.Baseline.Problems.Count != 0 ? edit.Original.Method.Module.Assembly.FullName : null,
+            OriginalModule = original && edit.Baseline.Problems.Count != 0 ? edit.Original.Method.Module.ModuleVersionId : null,
+        };
     }
 
     private static ComparisonImage CaptureExternalOriginal(Session session, MethodEdit edit, ComparisonOptions options,
@@ -254,7 +258,11 @@ public static partial class ComparisonCapture
             throw new ReplException($"comparison cannot capture dependency image {identity}");
         }
 
-        captured.Add(identity, new ComparisonAssembly(identity, image));
+        captured.Add(identity, new ComparisonAssembly(identity, image)
+        {
+            OriginalLocation = string.IsNullOrEmpty(location) ? null : location,
+            IsCollectible = assembly.IsCollectible,
+        });
         using var module = ModuleDefinition.ReadModule(new MemoryStream(image, writable: false));
         if (module.Mvid != assembly.ManifestModule.ModuleVersionId)
         {

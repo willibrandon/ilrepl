@@ -11,6 +11,7 @@ internal sealed partial class StructuralObservation
 {
     private ObservedValue? CaptureCollection(object value, int depth, int identity)
     {
+        if (CaptureConcurrentCollection(value, depth, identity) is { } concurrent) return concurrent;
         var type = value.GetType();
         var collection = type;
         while (collection is not null && (!collection.IsConstructedGenericType

@@ -394,6 +394,16 @@ internal sealed partial class ImportedMethodFamily
             CopyAttributes(parameter.GetCustomAttributesData(), copy, writer);
         }
 
+        foreach (var entry in body?.State.Entries ?? [])
+        {
+            if (entry.Kind == EntryKind.Param && entry.ParamIndex is > 0 and { } index && entry.ParamHasDefault)
+            {
+                var parameter = definition.Parameters[index - 1];
+                parameter.Constant = entry.ParamDefault;
+                parameter.HasDefault = true;
+            }
+        }
+
         if (original is MethodInfo method)
         {
             definition.MethodReturnType.Attributes = (CecilParameterAttributes)ImportedMarshalling.Attributes(method.ReturnParameter);

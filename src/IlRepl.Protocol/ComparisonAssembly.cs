@@ -5,4 +5,15 @@ namespace IlRepl.Protocol;
 /// </summary>
 /// <param name="Name">The full assembly identity.</param>
 /// <param name="Image">The retained PE image.</param>
-public sealed record ComparisonAssembly(string Name, byte[] Image);
+public sealed record ComparisonAssembly(string Name, byte[] Image)
+{
+    /// <summary>
+    /// The original file path, verified before loading when a comparison needs the original assembly context.
+    /// </summary>
+    public string? OriginalLocation { get; init; }
+
+    /// <summary>
+    /// Whether the original assembly belongs to a collectible load context.
+    /// </summary>
+    public bool IsCollectible { get; init; }
+}

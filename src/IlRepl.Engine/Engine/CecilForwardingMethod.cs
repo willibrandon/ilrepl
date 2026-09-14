@@ -59,8 +59,10 @@ internal static class CecilForwardingMethod
 
         foreach (var parameter in selected.Parameters)
         {
-            method.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes,
-                CecilGenericSubstitution.Apply(parameter.ParameterType, map)));
+            var copy = new ParameterDefinition(parameter.Name, parameter.Attributes,
+                CecilGenericSubstitution.Apply(parameter.ParameterType, map));
+            if (parameter.HasConstant) copy.Constant = parameter.Constant;
+            method.Parameters.Add(copy);
         }
 
         var ownerMap = target.DeclaringType.GenericParameters.Select((parameter, index) =>

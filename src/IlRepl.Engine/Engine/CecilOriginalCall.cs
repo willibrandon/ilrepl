@@ -28,8 +28,10 @@ internal static class CecilOriginalCall
         owner.Methods.Add(target);
         foreach (var parameter in original.GetParameters())
         {
-            target.Parameters.Add(new ParameterDefinition(parameter.Name, (ParameterAttributes)parameter.Attributes,
-                writer.Import(parameter.ParameterType)));
+            var copy = new ParameterDefinition(parameter.Name, (ParameterAttributes)parameter.Attributes,
+                writer.Import(parameter.ParameterType));
+            if (parameter.HasDefaultValue) copy.Constant = parameter.RawDefaultValue;
+            target.Parameters.Add(copy);
         }
 
         var il = target.Body.GetILProcessor();
