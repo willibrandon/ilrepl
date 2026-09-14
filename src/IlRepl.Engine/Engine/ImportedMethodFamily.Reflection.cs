@@ -61,4 +61,14 @@ internal sealed partial class ImportedMethodFamily
                     || method.Name == nameof(Type.InvokeMember))
             || type?.FullName == "System.Reflection.RuntimeReflectionExtensions";
     }
+
+    private static bool EnumeratesAssemblyTypes(MethodBase method)
+    {
+        var type = method.DeclaringType;
+        if (type?.Assembly != typeof(Assembly).Assembly) return false;
+        return typeof(Assembly).IsAssignableFrom(type)
+                && method.Name is nameof(Assembly.GetTypes) or nameof(Assembly.GetExportedTypes)
+                    or "get_DefinedTypes" or "get_ExportedTypes"
+            || typeof(Module).IsAssignableFrom(type) && method.Name is nameof(Module.GetTypes) or nameof(Module.FindTypes);
+    }
 }

@@ -24,6 +24,11 @@ internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> 
 
     private ObservedValue Capture(object? value, int depth)
     {
+        if (++_nodes > MaximumNodes || depth > MaximumDepth)
+        {
+            return Unavailable(value is null ? "" : TypeName(value.GetType()), "structural observation exceeded its node or depth limit");
+        }
+
         if (value is null)
         {
             return new ObservedValue("null", "", null, null, []);
@@ -36,11 +41,6 @@ internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> 
 
         var type = value.GetType();
         var name = TypeName(type);
-        if (++_nodes > MaximumNodes || depth > MaximumDepth)
-        {
-            return Unavailable(name, "structural observation exceeded its node or depth limit");
-        }
-
         if (value is UnavailableObservation unavailable)
         {
             return Unavailable(name, unavailable.Reason);
@@ -121,7 +121,14 @@ internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> 
             return new ObservedValue("array", name, bounds, identity, members);
         }
 
+        return new ObservedValue("object", name, null, identity, Fields(value, depth, exceptionDetails: false));
+    }
+
+    private List<ObservedMember> Fields(object value, int depth, bool exceptionDetails)
+    {
+        var members = new List<ObservedMember>();
         var hierarchy = new Stack<Type>();
+        var type = value.GetType();
         for (var parent = type; parent is not null; parent = parent.BaseType)
         {
             hierarchy.Push(parent);
@@ -133,7 +140,22 @@ internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> 
                 | BindingFlags.Instance | BindingFlags.DeclaredOnly)
                 .OrderBy(field => field.MetadataToken))
             {
+                if (parent == typeof(Exception) && (exceptionDetails
+                    ? field.Name is not ("_data" or "_helpURL" or "_source")
+                    : field.Name is not ("_message" or "_innerException" or "_HResult" or "_data" or "_helpURL" or "_source")))
+                {
+                    continue;
+                }
+
+                if (parent == typeof(AggregateException)
+                    && (field.Name == "_rocView" || exceptionDetails && field.Name == "_innerExceptions")) continue;
                 var key = TypeName(parent) + "::" + field.Name;
+                if (_nodes >= MaximumNodes)
+                {
+                    members.Add(new ObservedMember(key, Unavailable(TypeName(type), "fields exceed the observation limit")));
+                    return members;
+                }
+
                 if (field.FieldType.IsPointer || field.FieldType.IsFunctionPointer || field.FieldType.IsByRefLike)
                 {
                     members.Add(new ObservedMember(key, Unavailable(TypeName(field.FieldType), "field cannot be structurally captured")));
@@ -152,7 +174,7 @@ internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> 
             }
         }
 
-        return new ObservedValue("object", name, null, identity, members);
+        return members;
     }
 
     private ObservedValue Scalar(object value, string name, string? scalar)
@@ -223,7 +245,14 @@ internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> 
 
         try
         {
+            if (!_identities.TryGetValue(exception, out var identity))
+            {
+                identity = _identities.Count + 1;
+                _identities.Add(exception, identity);
+            }
+
             var message = field?.GetValue(exception) as string;
+            var fields = Fields(exception, seen.Count - 1, exceptionDetails: true);
             var inner = exception.InnerException is { } first ? Exception(first, seen, ref nodes) : null;
             var additional = new List<ObservedException>();
             if (exception is AggregateException aggregate)
@@ -237,6 +266,8 @@ internal sealed class StructuralObservation(IReadOnlyDictionary<string, string> 
 
             return new ObservedException(type, message is { Length: > 65536 } ? message[..65536] : message, exception.HResult, inner)
             {
+                Identity = identity,
+                Fields = fields,
                 AdditionalInnerExceptions = additional,
                 Problem = field is null ? "runtime does not expose the stored exception message"
                     : message is { Length: > 65536 } ? "exception message exceeds the observation limit" : null,

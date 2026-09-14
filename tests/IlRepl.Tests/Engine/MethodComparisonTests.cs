@@ -275,7 +275,12 @@ public sealed class MethodComparisonTests
                 Assert.IsNotNull(side.Exception.Inner);
                 Assert.EndsWith("System.InvalidOperationException", side.Exception.Inner.Type);
                 Assert.AreEqual("channel failed", side.Exception.Inner.Message);
-                Assert.AreEqual(side.Exception, invocation.Exception);
+                Assert.IsNotNull(invocation.Exception);
+                Assert.IsNotNull(invocation.Exception.Inner);
+                // The task is another root in the invocation snapshot, so exception identities differ.
+                Assert.AreEqual(side.Exception.Inner with { Identity = invocation.Exception.Inner.Identity }, invocation.Exception.Inner);
+                Assert.AreEqual(side.Exception with { Identity = invocation.Exception.Identity, Inner = invocation.Exception.Inner },
+                    invocation.Exception);
             }
             else
             {

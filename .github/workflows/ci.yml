@@ -69,7 +69,9 @@ jobs:
       matrix:
         include:
           - suite: editing
-            filter: 'FullyQualifiedName~Compar|FullyQualifiedName~LiveSession_Edit'
+            filter: 'FullyQualifiedName~LiveSession_Edit&FullyQualifiedName!~Compar'
+          - suite: comparisons
+            filter: 'FullyQualifiedName~Compar'
           - suite: session
             filter: 'FullyQualifiedName!~Compar&FullyQualifiedName!~LiveSession_Edit'
     runs-on: ubuntu-latest

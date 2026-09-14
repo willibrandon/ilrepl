@@ -76,20 +76,24 @@ internal sealed partial class ComparisonProcessGroup : IDisposable
         }
         else if (_group != 0)
         {
-            if (SignalGroup(-_group, 9) != 0 && Marshal.GetLastPInvokeError() != 3)
+            var signalled = SignalGroup(-_group, 9);
+            var error = signalled == 0 ? 0 : Marshal.GetLastPInvokeError();
+            if (error != 0 && error != 3 && !(OperatingSystem.IsMacOS() && error == 1))
             {
-                throw new Win32Exception(Marshal.GetLastPInvokeError());
+                throw new Win32Exception(error);
             }
 
             var wait = Stopwatch.StartNew();
-            while (SignalGroup(-_group, 0) == 0)
+            while (true)
             {
+                var exists = SignalGroup(-_group, 0);
+                error = exists == 0 ? 0 : Marshal.GetLastPInvokeError();
+                if (error == 3) break; // ESRCH confirms that the group is empty.
+                // Darwin can return EPERM while an exited group's zombies await reaping.
+                if (error != 0 && !(OperatingSystem.IsMacOS() && error == 1)) throw new Win32Exception(error);
                 if (wait.Elapsed > TimeSpan.FromSeconds(10)) throw new IOException("comparison descendants did not terminate");
                 await Task.Delay(10, CancellationToken.None).ConfigureAwait(false);
             }
-
-            // ESRCH confirms that no process remains in the group.
-            if (Marshal.GetLastPInvokeError() != 3) throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
 
         _stopped = true;

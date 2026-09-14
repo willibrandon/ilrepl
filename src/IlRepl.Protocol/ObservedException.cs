@@ -10,6 +10,16 @@ namespace IlRepl.Protocol;
 public sealed record ObservedException(string Type, string? Message, int HResult, ObservedException? Inner)
 {
     /// <summary>
+    /// The exception's object identity within the surrounding observation graph.
+    /// </summary>
+    public int? Identity { get; init; }
+
+    /// <summary>
+    /// Stored subtype fields and optional base data, excluding runtime stack and dispatch bookkeeping.
+    /// </summary>
+    public IReadOnlyList<ObservedMember> Fields { get; init; } = [];
+
+    /// <summary>
     /// The remaining aggregate children in order, after the first child stored in Inner.
     /// </summary>
     public IReadOnlyList<ObservedException> AdditionalInnerExceptions { get; init; } = [];
@@ -26,7 +36,7 @@ public sealed record ObservedException(string Type, string? Message, int HResult
     /// <returns>Whether both observations contain the same exception data.</returns>
     public bool Equals(ObservedException? other) => ReferenceEquals(this, other)
         || other is not null && Type == other.Type && Message == other.Message && HResult == other.HResult
-            && Inner == other.Inner && Problem == other.Problem
+            && Inner == other.Inner && Problem == other.Problem && Identity == other.Identity && Fields.SequenceEqual(other.Fields)
             && AdditionalInnerExceptions.SequenceEqual(other.AdditionalInnerExceptions);
 
     /// <summary>
@@ -41,6 +51,8 @@ public sealed record ObservedException(string Type, string? Message, int HResult
         hash.Add(HResult);
         hash.Add(Inner);
         hash.Add(Problem, StringComparer.Ordinal);
+        hash.Add(Identity);
+        foreach (var member in Fields) hash.Add(member);
         foreach (var child in AdditionalInnerExceptions) hash.Add(child);
         return hash.ToHashCode();
     }

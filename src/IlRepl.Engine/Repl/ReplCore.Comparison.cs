@@ -70,6 +70,11 @@ public sealed partial class ReplCore
             Listing("      unavailable: " + problem);
         }
 
+        foreach (var member in exception.Fields.Where(member => member.Value.Kind != "null"))
+        {
+            Listing("      " + member.Name + " = " + Describe(member.Value));
+        }
+
         if (exception.Inner is { } inner) ExceptionDetails("      caused by ", inner);
         foreach (var additional in exception.AdditionalInnerExceptions)
         {

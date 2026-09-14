@@ -46,7 +46,9 @@ public sealed class DerivedTaskComparisonTests
                 Assert.IsNotNull(side.Exception);
                 Assert.EndsWith("InvalidOperationException", side.Exception.Type);
                 Assert.AreEqual("derived failure", side.Exception.Message);
-                Assert.AreEqual(side.Exception, invocation.Exception);
+                Assert.IsNotNull(invocation.Exception);
+                // Each snapshot numbers its own roots, including the invocation's arguments and task.
+                Assert.AreEqual(side.Exception with { Identity = invocation.Exception.Identity }, invocation.Exception);
             }
             else
             {

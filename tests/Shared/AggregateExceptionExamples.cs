@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace IlRepl.Tests.Shared;
 
 /// <summary>
@@ -13,16 +11,30 @@ public static class AggregateExceptionExamples
     /// <returns>The complete throwing method declaration.</returns>
     public static string DeepMethod()
     {
-        var lines = new List<string> { "newobj instance void ArgumentException::.ctor(string)" };
-        for (var index = 0; index < 80; index++)
-        {
-            lines.AddRange(["stloc.0", "ldstr \"deeper failure " + index.ToString(CultureInfo.InvariantCulture) + "\"", "ldloc.0",
-                "newobj instance void Exception::.ctor(string, class Exception)"]);
-        }
-
         return Method(false, false)
-            .Replace("Read() {", "Read() {\n.locals init (class Exception leaf)", StringComparison.Ordinal)
-            .Replace("newobj instance void ArgumentException::.ctor(string)", string.Join('\n', lines), StringComparison.Ordinal);
+            .Replace("Read() {", "Read() {\n.locals init (class Exception leaf, int32 depth)", StringComparison.Ordinal)
+            .Replace("newobj instance void ArgumentException::.ctor(string)", """
+                newobj instance void ArgumentException::.ctor(string)
+                stloc.0
+                ldc.i4.0
+                stloc.1
+                deepen:
+                ldstr "deeper failure "
+                ldloca.s 1
+                call instance string int32::ToString()
+                call string string::Concat(string, string)
+                ldloc.0
+                newobj instance void Exception::.ctor(string, class Exception)
+                stloc.0
+                ldloc.1
+                ldc.i4.1
+                add
+                stloc.1
+                ldloc.1
+                ldc.i4.s 80
+                blt deepen
+                ldloc.0
+                """, StringComparison.Ordinal);
     }
 
     /// <summary>

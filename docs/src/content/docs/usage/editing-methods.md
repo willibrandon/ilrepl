@@ -140,6 +140,7 @@ Both sides start with a new counter. The original returns `1` and sets `Value` t
 
 The report shows receiver and argument values as `before -> after`, followed by each call's return value
 or exception, including all aggregate children, inner exceptions, and exceptions caught by the scenario.
+Exception details include stored fields such as `ParamName`, `ActualValue`, and custom data, without reading getters or stack traces.
 If an exception cannot be captured completely, the report explains why.
 It also shows console output, including direct stream writes, and tracks shared objects and `ref` aliases.
 Objects are compared through their fields without calling properties, `ToString`, or equality methods.
@@ -196,6 +197,8 @@ Private delegates retain their runtime methods and copied targets. Delegate bind
 When code uses reflection, copied types retain their full member context, including private and nested declarations.
 Runtime declarations needed only for reflection keep their metadata.
 Generated helpers do not change the declaring type's reflected member list.
+Assembly and module type enumeration, such as `GetTypes` and `DefinedTypes`, is rejected during preflight.
+A method copy cannot reproduce the original assembly's complete type set.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it
 was copied. The report updates with each saved revision.

@@ -32,9 +32,28 @@ public sealed partial class LiveSessionTests
             + ".edit Work as Copy {\n.method public static int32 Work() cil managed {\n"
             + "call int32 [OptionalLibrary]N.Library::" + target + "()\nldc.i4.1\nadd\nret\n}\n}",
             "edit Copy committed as revision 1");
+        var parent = await ObserveComparisonResultsAsync(page);
         await TypeLineAsync(page, ".compare Copy ()");
-        await ExpectComparisonTextAsync(page, useMissing ? "Copy: match" : "Copy: different");
-        var text = await BufferTextAsync(page);
+        foreach (var index in new[] { 0, 1 })
+        {
+            var side = await WaitForComparisonResultAsync(parent, index);
+            Assert.AreEqual("completed", side.GetProperty("outcome").GetString(), side.GetRawText());
+            if (useMissing)
+            {
+                var exception = side.GetProperty("invocations")[0].GetProperty("exception");
+                Assert.EndsWith("FileNotFoundException", exception.GetProperty("type").GetString());
+                var file = exception.GetProperty("fields").EnumerateArray()
+                    .Single(member => member.GetProperty("name").GetString()!.Contains("FileName", StringComparison.Ordinal));
+                var fileName = file.GetProperty("value").GetProperty("value").GetString();
+                Assert.IsNotNull(fileName);
+                Assert.Contains("MissingOptionalLibrary", fileName);
+            }
+        }
+
+        await ExpectComparisonTextAsync(page, useMissing ? "FileNotFoundException" : "Copy: different");
+        await InputIdleAsync(page);
+        var text = await ReadComparisonTranscriptAsync(page);
+        Assert.Contains(useMissing ? "Copy: match" : "Copy: different", text);
         Assert.Contains("original: completed", text);
         Assert.Contains("edited: completed", text);
         if (useMissing)

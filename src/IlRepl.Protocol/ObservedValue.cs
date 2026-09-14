@@ -8,4 +8,29 @@ namespace IlRepl.Protocol;
 /// <param name="Value">A scalar representation or an explanation for an unavailable observation.</param>
 /// <param name="Identity">The object identity within this observation graph, or null for a value.</param>
 /// <param name="Members">The observed fields or array elements in deterministic order.</param>
-public sealed record ObservedValue(string Kind, string Type, string? Value, int? Identity, IReadOnlyList<ObservedMember> Members);
+public sealed record ObservedValue(string Kind, string Type, string? Value, int? Identity, IReadOnlyList<ObservedMember> Members)
+{
+    /// <summary>
+    /// Compares the captured fields and references without invoking equality on the original objects.
+    /// </summary>
+    /// <param name="other">The observation to compare.</param>
+    /// <returns>Whether both observations contain the same structural data.</returns>
+    public bool Equals(ObservedValue? other) => ReferenceEquals(this, other)
+        || other is not null && Kind == other.Kind && Type == other.Type && Value == other.Value && Identity == other.Identity
+            && Members.SequenceEqual(other.Members);
+
+    /// <summary>
+    /// Computes a hash from the same ordered structural data used by equality.
+    /// </summary>
+    /// <returns>The structural hash code.</returns>
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Kind, StringComparer.Ordinal);
+        hash.Add(Type, StringComparer.Ordinal);
+        hash.Add(Value, StringComparer.Ordinal);
+        hash.Add(Identity);
+        foreach (var member in Members) hash.Add(member);
+        return hash.ToHashCode();
+    }
+}
