@@ -64,6 +64,7 @@ ret
 
 The cell returns `42`. Calling `Identity` still returns the input unchanged.
 
+Changing `vararg` in the method header changes the copy's calling convention.
 Vararg copies use the usual call syntax, such as `call vararg int32 Copy(int32, ..., string)`.
 Optional arguments follow `...`, including calls to private copies and comparisons with external originals.
 Their types can use the caller's generic parameters.
@@ -197,7 +198,7 @@ Private delegates retain their runtime methods and copied targets. Delegate bind
 When code uses reflection, copied types retain their full member context, including private and nested declarations.
 Runtime declarations needed only for reflection keep their metadata.
 Generated helpers do not change the declaring type's reflected member list.
-Assembly and module type enumeration, such as `GetTypes` and `DefinedTypes`, is rejected during preflight.
+Assembly and module type enumeration, including `GetTypes`, `DefinedTypes`, and `GetForwardedTypes`, is rejected during preflight.
 A method copy cannot reproduce the original assembly's complete type set.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it

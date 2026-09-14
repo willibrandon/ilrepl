@@ -81,8 +81,9 @@ public static partial class ComparisonCapture
         }
 
         var dependencies = new Dictionary<string, ComparisonAssembly>(StringComparer.OrdinalIgnoreCase);
-        var original = CaptureImage(session, edit, options, original: true, dependencies);
-        var edited = CaptureImage(session, edit, options, original: false, dependencies);
+        var moduleId = Guid.NewGuid();
+        var original = CaptureImage(session, edit, options, original: true, dependencies, moduleId);
+        var edited = CaptureImage(session, edit, options, original: false, dependencies, moduleId);
         var environment = Environment.GetEnvironmentVariables().Cast<DictionaryEntry>()
             .ToDictionary(pair => (string)pair.Key, pair => (string)pair.Value!, StringComparer.Ordinal);
         return new ComparisonPackage(edit.Name, edit.Fingerprint, edit.Revision, original, edited, dependencies.Values.ToArray(),
@@ -92,12 +93,12 @@ public static partial class ComparisonCapture
     }
 
     private static ComparisonImage CaptureImage(Session session, MethodEdit edit, ComparisonOptions options, bool original,
-        Dictionary<string, ComparisonAssembly> dependencies)
+        Dictionary<string, ComparisonAssembly> dependencies, Guid moduleId)
     {
         if (original && edit.Baseline.Problems.Count != 0 && options.Scenario is null
             && !SessionAssemblies.TryGetDefinition(edit.Original.Method.Module.Assembly, out _))
         {
-            return CaptureExternalOriginal(session, edit, options, dependencies);
+            return CaptureExternalOriginal(session, edit, options, dependencies, moduleId);
         }
 
         MethodDefinition? entry = null;
@@ -107,6 +108,7 @@ public static partial class ComparisonCapture
         string[] methodArguments = [];
         var image = AssemblyExporter.WriteComparison(session, edit, original, (writer, selected) =>
         {
+            writer.Module.Mvid = moduleId;
             selectedMethod = selected;
             if (original && edit.Baseline.Problems.Count != 0 && selected.CallingConvention == MethodCallingConvention.VarArg)
             {
@@ -157,7 +159,7 @@ public static partial class ComparisonCapture
     }
 
     private static ComparisonImage CaptureExternalOriginal(Session session, MethodEdit edit, ComparisonOptions options,
-        Dictionary<string, ComparisonAssembly> dependencies)
+        Dictionary<string, ComparisonAssembly> dependencies, Guid moduleId)
     {
         var method = edit.Original.Requested;
         var owner = method.DeclaringType!;
@@ -169,6 +171,7 @@ public static partial class ComparisonCapture
         }
 
         var writer = new CecilWriter(SessionAssemblyKind.Cell);
+        writer.Module.Mvid = moduleId;
         var entry = CecilOriginalCall.Wrap(method, writer);
         var image = writer.Write();
         foreach (var reference in writer.Module.AssemblyReferences)

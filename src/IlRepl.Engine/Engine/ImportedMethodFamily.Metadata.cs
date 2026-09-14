@@ -341,6 +341,10 @@ internal sealed partial class ImportedMethodFamily
             var signature = body.State.Signature!;
             definition.Attributes = (CecilMethodAttributes)signature.Attributes;
             definition.ImplAttributes = (Mono.Cecil.MethodImplAttributes)signature.ImplAttributes;
+            definition.HasThis = !signature.IsStatic;
+            definition.ExplicitThis = signature.CallingConvention.HasFlag(CallingConventions.ExplicitThis);
+            definition.CallingConvention = signature.CallingConvention.HasFlag(CallingConventions.VarArgs)
+                ? MethodCallingConvention.VarArg : MethodCallingConvention.Default;
             definition.ReturnType = writer.ImportSignature(signature.ReturnType, signature.ExactReturnType,
                 signature.ReturnRequiredModifiers, signature.ReturnOptionalModifiers);
             for (var index = 0; index < signature.Parameters.Count; index++)
