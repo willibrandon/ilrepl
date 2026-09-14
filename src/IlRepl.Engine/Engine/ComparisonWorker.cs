@@ -18,9 +18,10 @@ public static class ComparisonWorker
     /// <param name="ready">Signals that runtime startup completed and the execution timeout must begin.</param>
     /// <param name="outputLimit">Requests immediate termination when console output exceeds its limit.</param>
     /// <param name="captureOutput">Whether to capture console writers in memory or let the host capture its standard streams.</param>
+    /// <param name="useStandardInput">Whether the host supplies captured input through the actual standard-input stream.</param>
     /// <returns>The completed observations or setup failure.</returns>
     public static async Task<ComparisonSide> ExecuteAsync(ComparisonPackage package, bool original, Action ready, Action outputLimit,
-        bool captureOutput = true)
+        bool captureOutput = true, bool useStandardInput = false)
     {
         ArgumentNullException.ThrowIfNull(package);
         ArgumentNullException.ThrowIfNull(ready);
@@ -38,7 +39,7 @@ public static class ComparisonWorker
 
         using var stdout = captureOutput ? new ComparisonOutputWriter(package.OutputLimit, Limit) : null;
         using var stderr = captureOutput ? new ComparisonOutputWriter(package.OutputLimit, Limit) : null;
-        using var stdin = new StringReader(package.StandardInput);
+        using var stdin = useStandardInput ? null : new StringReader(package.StandardInput);
         var loaded = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
         Assembly? Resolve(AssemblyLoadContext context, AssemblyName name)
         {
@@ -68,7 +69,10 @@ public static class ComparisonWorker
                 Console.SetOut(stdout!);
                 Console.SetError(stderr!);
             }
-            Console.SetIn(stdin);
+            if (stdin is not null)
+            {
+                Console.SetIn(stdin);
+            }
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(package.Culture);
             CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(package.UICulture);
             foreach (var key in Environment.GetEnvironmentVariables().Keys.Cast<string>().ToArray())

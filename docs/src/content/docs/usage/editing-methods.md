@@ -137,7 +137,7 @@ Both sides start with a new counter. The original returns `1` and sets `Value` t
 
 The report shows the receiver and arguments before and after each call, the return value or exception,
 and console output, including direct stream writes. It tracks shared objects and `ref` aliases. Objects are compared through their fields
-without calling properties, `ToString`, or equality methods. `Task` and `ValueTask` results are awaited.
+without calling properties, `ToString`, or equality methods. `Task`, its subclasses, and `ValueTask` results are awaited.
 Tasks keep their identity and `AsyncState`; a null task remains null. A scenario must await any work it starts.
 Value tasks keep their original representation. Return a source-backed value task from the scenario to observe its completion;
 consuming it inside the scenario leaves that call's result unavailable.
@@ -156,6 +156,7 @@ and dependency versions from when you opened the edit.
 
 Both sides get the same culture, environment, and stdin, with separate working directories.
 Use `--stdin "text\n"` for console input and `--files directory` to copy files into each directory.
+Desktop comparisons also supply that input to `Console.OpenStandardInput()` and native stdin readers.
 Empty directories and relative symlinks are kept; links outside the supplied directory are rejected.
 Browser paths refer to its virtual filesystem.
 

@@ -35,9 +35,11 @@ public static class ProcessComparisonRunner
 
         var directory = Directory.CreateTempSubdirectory("ilrepl-compare-");
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var inputLifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var outputLifetime = new CancellationTokenSource();
         using var process = new Process();
         var processStarted = false;
+        Task? stdin = null;
         Task<string>? stdout = null;
         Task<string>? stderr = null;
         try
@@ -82,7 +84,7 @@ public static class ProcessComparisonRunner
                 return Failure("setup-failed", "could not start a comparison host");
             }
 
-            process.StandardInput.Close();
+            stdin = WriteInputAsync(process.StandardInput.BaseStream, package.StandardInput, inputLifetime.Token);
             var overflow = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             stdout = ReadOutputAsync(process.StandardOutput, package.OutputLimit, overflow, outputLifetime.Token);
             stderr = ReadOutputAsync(process.StandardError, package.OutputLimit, overflow, outputLifetime.Token);
@@ -148,10 +150,16 @@ public static class ProcessComparisonRunner
         finally
         {
             await lifetime.CancelAsync().ConfigureAwait(false);
+            await inputLifetime.CancelAsync().ConfigureAwait(false);
             Kill(process);
             if (processStarted)
             {
                 await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+
+            if (stdin is not null)
+            {
+                await stdin.ConfigureAwait(false);
             }
 
             await outputLifetime.CancelAsync().ConfigureAwait(false);
@@ -199,6 +207,25 @@ public static class ProcessComparisonRunner
         while (!File.Exists(path))
         {
             await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task WriteInputAsync(Stream stream, string input, CancellationToken cancellationToken)
+    {
+        await using (stream.ConfigureAwait(false))
+        {
+            try
+            {
+                await stream.WriteAsync(Encoding.UTF8.GetBytes(input), cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The comparison ended before the worker consumed all input.
+            }
+            catch (IOException)
+            {
+                // The worker may exit or close stdin without consuming the remaining input.
+            }
         }
     }
 

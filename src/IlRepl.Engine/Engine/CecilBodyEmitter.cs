@@ -232,6 +232,26 @@ public static class CecilBodyEmitter
             var reference = resolved.Definition is not null
                 ? writer.Import(target, resolved.Definition)
                 : resolved.Declared is not null ? writer.Import(target, resolved.DeclaringType) : writer.Import(target);
+            if (reference is MethodDefinition { DeclaringType.HasGenericParameters: true } member)
+            {
+                // A copied self-call or delegate target must carry its owner's generic arguments.
+                reference = new MethodReference(member.Name, member.ReturnType, GenericSelf(member.DeclaringType))
+                {
+                    HasThis = member.HasThis,
+                    ExplicitThis = member.ExplicitThis,
+                    CallingConvention = member.CallingConvention,
+                };
+                foreach (var parameter in member.Parameters)
+                {
+                    reference.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
+                }
+
+                foreach (var parameter in member.GenericParameters)
+                {
+                    reference.GenericParameters.Add(new GenericParameter(parameter.Name, reference));
+                }
+            }
+
             if (resolved.ExactDeclaringType is { } exactDeclaring)
             {
                 var declaring = writer.Import(map.Map(exactDeclaring));
@@ -297,12 +317,28 @@ public static class CecilBodyEmitter
         {
             var field = map.Map((FieldInfo)instruction.Operand!);
             var reference = writer.Import(field);
+            if (reference is FieldDefinition { DeclaringType.HasGenericParameters: true } member)
+            {
+                reference = new FieldReference(member.Name, member.FieldType, GenericSelf(member.DeclaringType));
+            }
+
             if (instruction.ExactFieldDeclaringType is { } exactDeclaring)
             {
                 reference.DeclaringType = writer.Import(map.Map(exactDeclaring));
             }
 
             return reference;
+        }
+
+        private static GenericInstanceType GenericSelf(TypeDefinition type)
+        {
+            var instance = new GenericInstanceType(type);
+            foreach (var parameter in type.GenericParameters)
+            {
+                instance.GenericArguments.Add(parameter);
+            }
+
+            return instance;
         }
 
         private CallSite CallSite(CalliSignature signature)

@@ -6,6 +6,37 @@ namespace IlRepl.Engine;
 public static partial class ComparisonProbe
 {
     /// <summary>
+    /// Records completion and the framework task result while preserving a derived task's exact return type and identity.
+    /// </summary>
+    /// <typeparam name="TTask">The declared Task-derived return type.</typeparam>
+    /// <param name="identity">The invocation identity.</param>
+    /// <param name="receiver">The selected method's receiver.</param>
+    /// <param name="arguments">The selected method's arguments.</param>
+    /// <param name="task">The returned task.</param>
+    /// <param name="aliases">Canonical alias groups for the receiver and arguments.</param>
+    /// <returns>The original derived task.</returns>
+    public static TTask TrackDerivedTask<TTask>(int identity, object? receiver, object?[] arguments, TTask task, int[] aliases)
+        where TTask : Task
+    {
+        TrackCompletion(identity, task, () =>
+        {
+            object? result = null;
+            Exception? failure = null;
+            try
+            {
+                result = AsyncObservation.AwaitAsync(task).GetAwaiter().GetResult();
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+
+            Leave(identity, receiver, arguments, result, failure, aliases);
+        });
+        return task;
+    }
+
+    /// <summary>
     /// Records a task's completion without replacing the task returned to its caller.
     /// </summary>
     /// <param name="identity">The invocation identity.</param>

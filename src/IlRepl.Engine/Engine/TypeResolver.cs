@@ -230,7 +230,8 @@ public sealed class TypeResolver
 
         if (assemblyHint is not null)
         {
-            var hinted = FindAssembly(assemblyHint);
+            var hinted = context?.Types.Entries.Select(entry => entry.Type.Assembly).FirstOrDefault(assembly =>
+                string.Equals(assembly.GetName().Name, assemblyHint, StringComparison.OrdinalIgnoreCase)) ?? FindAssembly(assemblyHint);
             if (hinted is not null)
             {
                 var t = hinted.GetType(clrName, throwOnError: false);

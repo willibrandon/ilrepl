@@ -389,7 +389,15 @@ internal static partial class ComparisonInstrumentation
                 ? nameof(ComparisonProbe.TrackValueTask) : null;
         if (name is null)
         {
-            return null;
+            if (!IsTask(type, []))
+            {
+                return null;
+            }
+
+            var derivedMethod = typeof(ComparisonProbe).GetMethod(nameof(ComparisonProbe.TrackDerivedTask))!;
+            var derived = new GenericInstanceMethod(writer.Import(derivedMethod));
+            derived.GenericArguments.Add(type);
+            return derived;
         }
 
         var generic = type is GenericInstanceType;
@@ -403,6 +411,34 @@ internal static partial class ComparisonInstrumentation
         }
 
         return reference;
+    }
+
+    private static bool IsTask(TypeReference type, HashSet<TypeReference> visited)
+    {
+        type = Unmodified(type);
+        if (type is TypeSpecification and not GenericInstanceType || type.IsValueType || !visited.Add(type))
+        {
+            return false;
+        }
+
+        if (type is GenericParameter parameter)
+        {
+            return parameter.Constraints.Any(constraint => IsTask(constraint.ConstraintType, visited));
+        }
+
+        var definition = type.GetElementType();
+        if (definition is TypeDefinition local)
+        {
+            return local.BaseType is { } parent && IsTask(parent, visited);
+        }
+
+        if (definition.Scope is not AssemblyNameReference assembly)
+        {
+            return false;
+        }
+
+        var runtime = Assembly.Load(assembly.FullName).GetType(definition.FullName.Replace('/', '+'), throwOnError: true)!;
+        return typeof(Task).IsAssignableFrom(runtime);
     }
 
     private static bool CannotBox(TypeReference type)
