@@ -121,6 +121,7 @@ internal sealed partial class ImportedMethodFamily
             }
 
             ScanReflection();
+            if (_pending.Count == 0) DiscoverTypeLookupTargets();
             var changedBases = RefreshExternalBases();
             if (_pending.Count == 0 && typeCount == _types.Count && !changedBases)
             {
@@ -140,6 +141,7 @@ internal sealed partial class ImportedMethodFamily
 
         ValidateExternalInterfaces();
         ValidateBoundaries();
+        ValidateIndirectReflection();
     }
 
     /// <summary>

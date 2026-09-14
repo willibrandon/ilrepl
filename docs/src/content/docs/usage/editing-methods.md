@@ -193,6 +193,8 @@ Type and module initializers keep the helpers they need. Opening or saving an ed
 String lookups through `Type.GetType`, `Assembly.GetType`, and `Module.GetType` recognize original names of copied types,
 including nested types and generic arguments.
 String-based `Activator.CreateInstance`, `Activator.CreateInstanceFrom`, and `Assembly.CreateInstance` calls also recognize copied type names.
+Types reached only by name are included, even when declared separately in the source assembly.
+If the name is supplied at runtime, the source assembly's types must all be copyable.
 Public methods outside this copied context remain references to their original assemblies.
 The dependency list includes local and member signatures, custom modifiers, catch types, and `calli` signatures.
 Type and member custom attributes keep their constructors, named members, and type arguments in saved copies.
@@ -206,6 +208,8 @@ A method copy cannot reproduce the original assembly's complete type set.
 Manifest resource inspection is also rejected because copies do not include the source assembly's resources.
 Assembly and module attribute inspection is rejected, including calls through `ICustomAttributeProvider`.
 Copies do not retain attributes from the source assembly or module. Use type or member APIs to inspect their copied attributes.
+These limits also apply to reflective invocation and delegate binding. The target must be known during preflight.
+Call type lookup and string activation APIs directly so copied names can be translated.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it
 was copied. The report updates with each saved revision.
