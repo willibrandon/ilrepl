@@ -26,4 +26,14 @@ internal sealed class PendingInvocation(IReadOnlyList<ObservedMember> inputs)
     /// The observation callback to finish after the original task completes.
     /// </summary>
     internal Task? Completion { get; set; }
+
+    /// <summary>
+    /// The source-backed value task that only its caller may consume.
+    /// </summary>
+    internal object? ReturnedValueTask { get; set; }
+
+    /// <summary>
+    /// Records the result if the worker awaits this value task as its entry point's return value.
+    /// </summary>
+    internal Action<object?, Exception?>? ValueTaskCompletion { get; set; }
 }

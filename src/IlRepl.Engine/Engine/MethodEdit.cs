@@ -93,7 +93,8 @@ public sealed class MethodEdit
         var after = edited?.GetParameters();
         if (original is null || edited is null || original.CallingConvention != edited.CallingConvention
             || before!.Length != after!.Length || !SameParameter(original.ReturnParameter, edited.ReturnParameter)
-            || before.Where((parameter, index) => !SameParameter(parameter, after[index])).Any())
+            || before.Where((parameter, index) => !SameParameter(parameter, after[index])).Any()
+            || !SameGenerics(original, edited))
         {
             throw new ReplException("the original and edited signatures must match to compare this method through a scenario");
         }
@@ -107,5 +108,21 @@ public sealed class MethodEdit
         bool SameParameter(ParameterInfo first, ParameterInfo second) => SameType(first.ParameterType, second.ParameterType)
             && SameModifiers(first.GetRequiredCustomModifiers(), second.GetRequiredCustomModifiers())
             && SameModifiers(first.GetOptionalCustomModifiers(), second.GetOptionalCustomModifiers());
+
+        bool SameGenerics(MethodInfo first, MethodInfo second)
+        {
+            var firstParameters = Parameters(first);
+            var secondParameters = Parameters(second);
+            return firstParameters.Length == secondParameters.Length && firstParameters.Zip(secondParameters).All(pair =>
+                pair.First.GenericParameterAttributes == pair.Second.GenericParameterAttributes
+                && pair.First.GetGenericParameterConstraints().Select(TypeNameFormatter.IlAsm).ToHashSet(StringComparer.Ordinal)
+                    .SetEquals(pair.Second.GetGenericParameterConstraints().Select(type =>
+                        Current!.NormalizeNames(TypeNameFormatter.IlAsm(type)))));
+        }
+
+        static Type[] Parameters(MethodInfo method) =>
+            (method.DeclaringType is { IsGenericType: true } owner
+                ? owner.GetGenericTypeDefinition().GetGenericArguments() : Type.EmptyTypes)
+            .Concat(method.IsGenericMethod ? method.GetGenericMethodDefinition().GetGenericArguments() : Type.EmptyTypes).ToArray();
     }
 }

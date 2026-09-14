@@ -155,16 +155,19 @@ public static class ComparisonWorker
                 parameter.ParameterType.IsByRef
                 ? parameter.ParameterType.GetElementType()! : parameter.ParameterType)).ToArray();
             object? result = null;
+            object? returned = null;
             Exception? failure = null;
             try
             {
-                result = await AsyncObservation.AwaitAsync(method.Invoke(null, arguments)).ConfigureAwait(false);
+                returned = method.Invoke(null, arguments);
+                result = await AsyncObservation.AwaitAsync(returned).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 failure = ex is TargetInvocationException { InnerException: { } inner } ? inner : ex;
             }
 
+            ComparisonProbe.CompleteValueTask(returned, result, failure);
             var invocations = await ComparisonProbe.CompleteAsync().ConfigureAwait(false);
             var observation = new StructuralObservation(image.TypeNames);
             return new ComparisonSide(exceeded ? "output-limit" : invocations.Count == 0 ? "setup-failed" : "completed", invocations,

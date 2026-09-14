@@ -2,10 +2,12 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using Mono.Cecil;
 using CecilFieldAttributes = Mono.Cecil.FieldAttributes;
+using CecilGenericAttributes = Mono.Cecil.GenericParameterAttributes;
 using CecilMethodAttributes = Mono.Cecil.MethodAttributes;
 using CecilParameterAttributes = Mono.Cecil.ParameterAttributes;
 using CecilTypeAttributes = Mono.Cecil.TypeAttributes;
 using ReflectionFieldAttributes = System.Reflection.FieldAttributes;
+using ReflectionGenericAttributes = System.Reflection.GenericParameterAttributes;
 using ReflectionMethodAttributes = System.Reflection.MethodAttributes;
 using ReflectionParameterAttributes = System.Reflection.ParameterAttributes;
 using ReflectionTypeAttributes = System.Reflection.TypeAttributes;
@@ -162,18 +164,29 @@ internal sealed partial class ImportedMethodFamily
         {
             var definition = new GenericParameter(parameter.Name, owner)
             {
-                Attributes = (Mono.Cecil.GenericParameterAttributes)parameter.GenericParameterAttributes,
+                Attributes = (CecilGenericAttributes)parameter.GenericParameterAttributes,
             };
             owner.GenericParameters.Add(definition);
             writer.Define(parameter, definition);
         }
     }
 
-    private static void FillGenerics(Type[] parameters, IGenericParameterProvider owner, CecilWriter writer)
+    private static void FillGenerics(Type[] parameters, IGenericParameterProvider owner, CecilWriter writer,
+        IReadOnlyList<GenericParameterDeclaration>? declarations = null)
     {
         for (var index = 0; index < parameters.Length; index++)
         {
-            foreach (var constraint in parameters[index].GetGenericParameterConstraints())
+            var declaration = declarations?[index];
+            if (declaration is not null)
+            {
+                // Preserve runtime flags that the editable generic-parameter grammar cannot express.
+                const ReflectionGenericAttributes editable = ReflectionGenericAttributes.VarianceMask
+                    | ReflectionGenericAttributes.SpecialConstraintMask;
+                owner.GenericParameters[index].Attributes = (CecilGenericAttributes)
+                    ((parameters[index].GenericParameterAttributes & ~editable) | declaration.Attributes);
+            }
+
+            foreach (var constraint in declaration?.Constraints ?? parameters[index].GetGenericParameterConstraints())
             {
                 owner.GenericParameters[index].Constraints.Add(new GenericParameterConstraint(writer.Import(constraint)));
             }
@@ -342,7 +355,7 @@ internal sealed partial class ImportedMethodFamily
 
         if (original.IsGenericMethodDefinition)
         {
-            FillGenerics(original.GetGenericArguments(), definition, writer);
+            FillGenerics(original.GetGenericArguments(), definition, writer, body?.State.Signature!.TypeParameters);
         }
     }
 
@@ -379,24 +392,21 @@ internal sealed partial class ImportedMethodFamily
         foreach (var attribute in attributes)
         {
             // These are projections of metadata flags/tables and are emitted in those tables.
-            if (attribute.AttributeType == typeof(FieldOffsetAttribute) || attribute.AttributeType == typeof(StructLayoutAttribute)
-                || attribute.AttributeType == typeof(InAttribute) || attribute.AttributeType == typeof(OutAttribute)
-                || attribute.AttributeType == typeof(OptionalAttribute) || attribute.AttributeType == typeof(MarshalAsAttribute)
-                || attribute.AttributeType == typeof(DllImportAttribute) || attribute.AttributeType == typeof(PreserveSigAttribute))
+            if (IsProjectedAttribute(attribute.AttributeType))
             {
                 continue;
             }
 
             var copy = new CustomAttribute(writer.Import(attribute.Constructor));
-            foreach (var argument in attribute.ConstructorArguments)
+            foreach (var (argument, parameter) in attribute.ConstructorArguments.Zip(attribute.Constructor.GetParameters()))
             {
-                copy.ConstructorArguments.Add(AttributeArgument(argument, writer));
+                copy.ConstructorArguments.Add(AttributeArgument(argument, writer, parameter.ParameterType));
             }
 
             foreach (var argument in attribute.NamedArguments)
             {
                 var named = new Mono.Cecil.CustomAttributeNamedArgument(argument.MemberName, AttributeArgument(argument.TypedValue,
-                    writer));
+                    writer, argument.MemberInfo is FieldInfo field ? field.FieldType : ((PropertyInfo)argument.MemberInfo).PropertyType));
                 if (argument.IsField)
                 {
                     copy.Fields.Add(named);
@@ -411,12 +421,19 @@ internal sealed partial class ImportedMethodFamily
         }
     }
 
-    private static CustomAttributeArgument AttributeArgument(CustomAttributeTypedArgument argument, CecilWriter writer) => new(
-        writer.Import(argument.ArgumentType), argument.Value switch
+    private static CustomAttributeArgument AttributeArgument(CustomAttributeTypedArgument argument, CecilWriter writer,
+        Type? declared = null)
+    {
+        var argumentType = argument.Value is Type ? typeof(Type) : argument.ArgumentType;
+        var value = new CustomAttributeArgument(writer.Import(argumentType), argument.Value switch
         {
             Type type => writer.Import(type),
-            IList<CustomAttributeTypedArgument> array => array.Select(item => AttributeArgument(item, writer)).ToArray(),
+            IList<CustomAttributeTypedArgument> array => array.Select(item =>
+                AttributeArgument(item, writer, argument.ArgumentType.GetElementType())).ToArray(),
             CustomAttributeTypedArgument nested => AttributeArgument(nested, writer),
             _ => argument.Value,
         });
+        return declared == typeof(object) && argumentType != typeof(object)
+            ? new CustomAttributeArgument(writer.Object, value) : value;
+    }
 }

@@ -108,6 +108,7 @@ internal sealed partial class ImportedMethodFamily
             // Revisit those calls until every reference to a copied owner has its required definition.
             var typeCount = _types.Count;
             _dependencies.Clear();
+            ScanAttributes();
             foreach (var body in _methods.Values.OfType<MethodEditBody>().ToArray())
             {
                 Scan(body);
@@ -352,6 +353,15 @@ internal sealed partial class ImportedMethodFamily
 
     private void Scan(MethodEditBody body)
     {
+        foreach (var parameter in body.State.Signature!.TypeParameters)
+        {
+            foreach (var constraint in parameter.Constraints)
+            {
+                ConsiderType(constraint, body.Method.DeclaringType!);
+                ReportType(constraint, MemberResolver.Describe(body.Method) + ": constraint on " + parameter.Name);
+            }
+        }
+
         foreach (var local in body.State.Locals)
         {
             var symbol = local.ExactType ?? RuntimeSymbolImporter.Import(local.Type);

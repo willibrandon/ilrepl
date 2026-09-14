@@ -83,7 +83,8 @@ Each `ref` or `out` literal gets a separate variable. Use a scenario when argume
 
 For an instance method, object input, or repeated call, write a parameterless
 session method to set up the inputs. Run it with `.compare Name using Scenario`.
-Both versions must have matching signatures to use the same scenario. Each side calls the original or the copy:
+Both versions must have matching signatures and generic constraints to use the same scenario.
+Each side calls the original or the copy:
 
 ```cil
 .class public Counter {
@@ -133,6 +134,8 @@ The report shows the receiver and arguments before and after each call, the retu
 and console output, including direct stream writes. It tracks shared objects and `ref` aliases. Objects are compared through their fields
 without calling properties, `ToString`, or equality methods. `Task` and `ValueTask` results are awaited.
 Tasks keep their identity and `AsyncState`; a null task remains null. A scenario must await any work it starts.
+Value tasks keep their original representation. Return a source-backed value task from the scenario to observe its completion;
+consuming it inside the scenario leaves that call's result unavailable.
 Spans and other byref-like values remain usable in a scenario, but their observations are unavailable.
 A null managed reference is reported as `null reference`, distinct from a variable containing `null`.
 
@@ -165,6 +168,7 @@ Set up repeatable inputs in your scenario. The transcript describes these condit
 Signatures, generic constraints, layout, and member metadata are kept. Public external methods remain
 references to their original assemblies. Opening or saving an edit does not run its code.
 Local signatures, catch types, and `calli` signatures are included in the dependency list.
+Custom attributes keep their constructors, named members, and type arguments in saved copies.
 
 Use `.methods Name` to see each dependency's source location, member, assembly, access, and whether it
 was copied. The report updates with each saved revision.
