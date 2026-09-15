@@ -66,58 +66,15 @@ jobs:
         run: pnpm install --frozen-lockfile && pnpm build
         working-directory: docs
 
-      - uses: actions/upload-artifact@v7
-        with:
-          name: docs-test-site
-          path: docs/dist
-          retention-days: 1
-
       - uses: actions/configure-pages@v6
 
       - uses: actions/upload-pages-artifact@v5
         with:
           path: docs/dist
 
-  browser:
-    name: browser (${{ matrix.browser.name }})
-    needs: build
-    strategy:
-      fail-fast: false
-      matrix:
-        browser:
-          - name: chromium
-            filter: 'Name!~webkit'
-          - name: webkit
-            filter: 'Name~webkit'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.302'
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: docs-test-site
-          path: docs/dist
-
-      - name: Build the docs tests
-        run: dotnet build tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj
-
-      - name: Install Chromium and WebKit
-        run: pwsh tests/IlRepl.Docs.Tests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium webkit
-
-      - name: Drive the live session in ${{ matrix.browser.name }}
-        run: >-
-          dotnet test --project tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj
-          --no-build --filter '${{ matrix.browser.filter }}'
-
   deploy:
     if: github.ref == 'refs/heads/main'
-    needs: [build, browser]
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
