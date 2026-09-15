@@ -11,53 +11,7 @@ permissions:
 
 jobs:
   test:
-    name: test (${{ matrix.suite.name }})
-    strategy:
-      fail-fast: false
-      matrix:
-        suite:
-          - name: engine-a-b
-            filter: >-
-              FullyQualifiedName~IlRepl.Tests.Engine.A|FullyQualifiedName~IlRepl.Tests.Engine.B
-          - name: engine-comparison
-            filter: FullyQualifiedName~IlRepl.Tests.Engine.Comparison
-          - name: engine-c
-            filter: >-
-              FullyQualifiedName~IlRepl.Tests.Engine.C&FullyQualifiedName!~IlRepl.Tests.Engine.Comparison
-          - name: engine-d-h
-            filter: >-
-              FullyQualifiedName~IlRepl.Tests.Engine.D|FullyQualifiedName~IlRepl.Tests.Engine.E|
-              FullyQualifiedName~IlRepl.Tests.Engine.F|FullyQualifiedName~IlRepl.Tests.Engine.G|
-              FullyQualifiedName~IlRepl.Tests.Engine.H
-          - name: engine-i-l
-            filter: >-
-              FullyQualifiedName~IlRepl.Tests.Engine.I|FullyQualifiedName~IlRepl.Tests.Engine.J|
-              FullyQualifiedName~IlRepl.Tests.Engine.K|FullyQualifiedName~IlRepl.Tests.Engine.L
-          - name: engine-m
-            filter: FullyQualifiedName~IlRepl.Tests.Engine.M
-          - name: engine-n-r
-            filter: >-
-              FullyQualifiedName~IlRepl.Tests.Engine.N|FullyQualifiedName~IlRepl.Tests.Engine.O|
-              FullyQualifiedName~IlRepl.Tests.Engine.P|FullyQualifiedName~IlRepl.Tests.Engine.Q|
-              FullyQualifiedName~IlRepl.Tests.Engine.R
-          - name: engine-s
-            filter: FullyQualifiedName~IlRepl.Tests.Engine.S
-          - name: engine-t-z
-            filter: >-
-              FullyQualifiedName~IlRepl.Tests.Engine.T|FullyQualifiedName~IlRepl.Tests.Engine.U|
-              FullyQualifiedName~IlRepl.Tests.Engine.V|FullyQualifiedName~IlRepl.Tests.Engine.W|
-              FullyQualifiedName~IlRepl.Tests.Engine.X|FullyQualifiedName~IlRepl.Tests.Engine.Y|
-              FullyQualifiedName~IlRepl.Tests.Engine.Z
-          - name: repl-c
-            filter: FullyQualifiedName~IlRepl.Tests.Repl.C
-          - name: repl-other
-            filter: >-
-              FullyQualifiedName~IlRepl.Tests.Repl&FullyQualifiedName!~IlRepl.Tests.Repl.C
-          - name: terminal
-            filter: >-
-              FullyQualifiedName~IlRepl.Tests.Tui|FullyQualifiedName~IlRepl.Tests.EndToEnd|
-              FullyQualifiedName~IlRepl.Tests.Protocol|FullyQualifiedName~IlRepl.Tests.Samples|
-              FullyQualifiedName~IlRepl.Tests.Batch
+    name: test (ubuntu-latest)
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -78,7 +32,7 @@ jobs:
       - name: Test
         run: >-
           dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj --no-build
-          --report-trx --results-directory TestResults --filter '${{ matrix.suite.filter }}'
+          --report-trx --results-directory TestResults
         env:
           # The ILAsm round trips must run on CI, not be skipped when ilasm is missing.
           ILREPL_REQUIRE_ILASM: 1
@@ -87,7 +41,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test-results-${{ matrix.suite.name }}
+          name: test-results-ubuntu-latest
           path: TestResults/
 
   platform:
