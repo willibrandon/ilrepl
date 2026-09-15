@@ -137,4 +137,7 @@ internal sealed partial class ImportedMethodFamily
         return EnumeratesAssemblyTypes(method)
             ? "assembly and module type enumeration cannot reproduce the original assembly's complete type set" : null;
     }
+
+    private string? AssemblyInspectionProblem(MethodBase method, object?[]? receivers) => IsMemberTokenInspection(method)
+        ? MemberTokenProblem(receivers) : AssemblyInspectionProblem(method);
 }

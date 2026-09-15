@@ -157,7 +157,9 @@ internal sealed partial class ReflectionValueResolver(
         if (body.State.Entries[origin].Instruction?.Operand is not ResolvedMethod resolved) return null;
         var method = resolveMethod(resolved);
         if (method.DeclaringType != typeof(Type) && method.DeclaringType != typeof(TypeInfo)
-            && method.DeclaringType != typeof(RuntimeReflectionExtensions)) return null;
+            && method.DeclaringType != typeof(RuntimeReflectionExtensions)
+            && !(typeof(MethodBase).IsAssignableFrom(method.DeclaringType!)
+                && method.Name is nameof(MethodBase.GetParameters) or nameof(MethodBase.GetGenericArguments))) return null;
         for (var index = origin + 1; index < position; index++)
         {
             var instruction = body.State.Entries[index].Instruction;
@@ -251,7 +253,22 @@ internal sealed partial class ReflectionValueResolver(
         var name = method.Name;
         object?[]? Input(int parameter = -1) => Argument(body, position, parameter);
         if (owner == typeof(Type) && name == nameof(Type.GetTypeFromHandle)
-            || owner == typeof(MethodBase) && name == nameof(MethodBase.GetMethodFromHandle)) return Input(0);
+            || owner == typeof(MethodBase) && name == nameof(MethodBase.GetMethodFromHandle)
+            || owner == typeof(FieldInfo) && name == nameof(FieldInfo.GetFieldFromHandle)) return Input(0);
+        if (owner is not null && typeof(MethodBase).IsAssignableFrom(owner) && name == nameof(MethodBase.GetParameters))
+        {
+            var methods = Input();
+            return methods is null ? null : Merge(methods.Select(value => value is MethodBase member
+                ? member.GetParameters().Cast<object?>().ToArray() : null));
+        }
+        if (owner is not null && (typeof(MethodBase).IsAssignableFrom(owner) || typeof(Type).IsAssignableFrom(owner))
+            && name == nameof(Type.GetGenericArguments))
+        {
+            var receivers = Input();
+            return receivers is null ? null : Merge(receivers.Select(value => value is Type type
+                ? type.GetGenericArguments().Cast<object?>().ToArray()
+                : value is MethodBase member ? member.GetGenericArguments().Cast<object?>().ToArray() : null));
+        }
         if (owner == typeof(IntrospectionExtensions) && name == nameof(IntrospectionExtensions.GetTypeInfo)) return Input(0);
         if (owner == typeof(TypeInfo) && name == nameof(TypeInfo.AsType)) return Input();
         if (name == "get_MethodHandle" && owner is not null && typeof(MethodBase).IsAssignableFrom(owner)) return Input();
@@ -324,6 +341,7 @@ internal sealed partial class ReflectionValueResolver(
             if (name is nameof(Type.GetConstructor) or nameof(Type.GetConstructors) or "get_DeclaredConstructors")
                 return Members(receiver, [null], MemberTypes.Constructor);
             if (name == "get_TypeInitializer") return Members(receiver, [ConstructorInfo.TypeConstructorName], MemberTypes.Constructor);
+            if (name == nameof(Type.GetEvent)) return Members(receiver, Input(argument), MemberTypes.Event);
             if (name is "GetMethod" or "GetRuntimeMethod" or "GetProperty" or "GetRuntimeProperty" or "GetField" or "GetRuntimeField")
                 return Members(receiver, Input(argument), name.Contains("Property", StringComparison.Ordinal) ? MemberTypes.Property
                     : name.Contains("Field", StringComparison.Ordinal) ? MemberTypes.Field : MemberTypes.Method);
@@ -383,7 +401,7 @@ internal sealed partial class ReflectionValueResolver(
         var member = Array.FindIndex(parameters, parameter => parameter.ParameterType == typeof(MethodInfo));
         if (member >= 0) return Argument(body, position, member);
         var names = Argument(body, position, 2);
-        return Members(Argument(body, position, 1), names, MemberTypes.Method, boundInstance: true)
+        return Members(Argument(body, position, 1), names, MemberTypes.Method, boundInstance: parameters[1].ParameterType != typeof(Type))
             ?? Map(names, value => value is string name ? new ReflectedDelegateName(name) : null);
     }
 
@@ -393,9 +411,7 @@ internal sealed partial class ReflectionValueResolver(
         var members = new List<object?>();
         foreach (var receiver in receivers)
         {
-            var type = receiver as Type;
-            if (type is null && boundInstance)
-                type = receiver is ReflectedInstance instance ? instance.Type : receiver?.GetType();
+            var type = boundInstance ? receiver is ReflectedInstance instance ? instance.Type : receiver?.GetType() : receiver as Type;
             if (type is null) return null;
             foreach (var name in names)
                 members.AddRange(type.GetMembers(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance)

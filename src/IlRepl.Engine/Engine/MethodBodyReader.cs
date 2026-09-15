@@ -38,7 +38,7 @@ internal sealed class MethodBodyReader
         _methodArguments = definition.IsGenericMethod ? definition.GetGenericArguments() : [];
         _generics = new GenericContext(_typeArguments, _methodArguments);
         _metadata = body.Metadata;
-        _provider = new MetadataSignatureProvider(token => Try(() => _module.ResolveType(token, _typeArguments, _methodArguments), null));
+        _provider = new MetadataSignatureProvider(token => Try(() => ResolveType(token), null));
     }
 
     /// <summary>
@@ -159,8 +159,8 @@ internal sealed class MethodBodyReader
             {
                 signature = _metadata is null ? null : Try(() => MetadataSignatures.TypeOperand(_metadata, region.CatchToken,
                     _provider, _generics), $"the catch type at {IlReader.LabelFor(region.HandlerOffset)}");
-                catchType ??= signature?.ToClrType() ?? Try(() => _module.ResolveType(region.CatchToken, _typeArguments,
-                    _methodArguments), $"the catch type at {IlReader.LabelFor(region.HandlerOffset)}");
+                catchType ??= signature?.ToClrType() ?? Try(() => ResolveType(region.CatchToken),
+                    $"the catch type at {IlReader.LabelFor(region.HandlerOffset)}");
             }
             else if (region.Kind == IlClauseKind.Catch && catchType is not null)
             {
@@ -381,7 +381,7 @@ internal sealed class MethodBodyReader
         var token = raw.Operand.Token;
         var signature = _metadata is null ? null : Try(() => MetadataSignatures.TypeOperand(_metadata, token, _provider,
             _generics), $"the type at {raw.Label}");
-        var type = signature?.ToClrType() ?? Try(() => _module.ResolveType(token, _typeArguments, _methodArguments),
+        var type = signature?.ToClrType() ?? Try(() => ResolveType(token),
             signature is null ? $"the type at {raw.Label}" : null);
         var text = signature is not null ? IlSignatureRenderer.TypeOperand(signature, IsTypeSpecification(token))
             : type is not null ? TypeOperandText(type) : $"0x{token:x8}";
@@ -430,7 +430,8 @@ internal sealed class MethodBodyReader
         var token = raw.Operand.Token;
         var kind = TokenKind(token, raw.Label);
 
-        var member = Try(() => _module.ResolveMember(token, _typeArguments, _methodArguments), $"the token at {raw.Label}");
+        var member = Try(() => token >> 24 is 0x01 or 0x02 or 0x1B ? ResolveType(token)
+            : _module.ResolveMember(token, _typeArguments, _methodArguments), $"the token at {raw.Label}");
         switch (member)
         {
             case Type type:
@@ -510,6 +511,12 @@ internal sealed class MethodBodyReader
     }
 
     private static bool IsTypeSpecification(int token) => (token >> 24) == 0x1B;
+
+    /// <summary>
+    /// Resolves named type definitions without inflating them through the caller's generic arguments.
+    /// </summary>
+    private Type ResolveType(int token) => IsTypeSpecification(token)
+        ? _module.ResolveType(token, _typeArguments, _methodArguments) : _module.ResolveType(token);
 
     /// <summary>
     /// Spells a runtime type operand when metadata is unavailable, keeping plain type definitions bare.

@@ -17,7 +17,8 @@ internal sealed partial class ImportedMethodFamily
         typeof(PropertyInfo), typeof(MethodInvoker), typeof(ConstructorInvoker), typeof(Activator), typeof(RuntimeMethodHandle),
         typeof(ModuleHandle), typeof(object), typeof(RuntimeHelpers),
     }.SelectMany(type => type.GetMethods()).Where(method => AssemblyInspectionProblem(method) is not null || IsIndirectReflection(method)
-        || IsTypeLookup(method) || IsActivation(method) || IsAssemblyActivation(method) || IsObjectReferenceInspection(method))
+        || IsTypeLookup(method) || IsActivation(method) || IsAssemblyActivation(method) || IsObjectReferenceInspection(method)
+        || IsMemberTokenInspection(method))
         .SelectMany(method => method.Name.StartsWith("get_", StringComparison.Ordinal) ? new[] { method.Name, method.Name[4..] }
             : new[] { method.Name }).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -138,6 +139,7 @@ internal sealed partial class ImportedMethodFamily
             {
                 var instruction = body.State.Entries[position].Instruction;
                 if (instruction is not null) ValidateMetadataReference(values, body, position, instruction);
+                if (instruction is not null) ValidateMemberTokenReference(values, body, position, instruction);
                 if (instruction?.Operand is not ResolvedMethod resolved || instruction.Op == OpCodes.Ldtoken) continue;
                 var target = resolved.Method ?? _pinned[resolved.Definition!.Name];
                 if (target.DeclaringType == typeof(object) && target.Name is nameof(ToString) or nameof(Equals) or nameof(GetHashCode)
@@ -175,7 +177,8 @@ internal sealed partial class ImportedMethodFamily
                     if (candidate is FieldInfo) continue;
                     if (member is null || IsIndirectReflection(member))
                         reason = "indirect reflection cannot prove a supported target";
-                    else if (AssemblyInspectionProblem(member) is { } problem)
+                    else if (IsMemberTokenInspection(member) && target.Name == nameof(Delegate.DynamicInvoke)) continue;
+                    else if (AssemblyInspectionProblem(member, MemberTokenReceiver(values, body, position, target)) is { } problem)
                     {
                         reason = problem;
                         selected = member;

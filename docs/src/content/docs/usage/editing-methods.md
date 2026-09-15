@@ -206,7 +206,8 @@ including nested types and generic arguments.
 String-based `Activator.CreateInstance`, `Activator.CreateInstanceFrom`, and `Assembly.CreateInstance` calls also recognize copied type names.
 Types reached only by name are included, even when declared separately in the source assembly.
 If the name is supplied at runtime, the source assembly's types must all be copyable.
-Public methods outside this copied context remain references to their original assemblies.
+Public helpers in the same assembly are included when they use copied state or types.
+Other public methods remain references to their original assemblies.
 The dependency list includes local and member signatures, custom modifiers, catch types, and `calli` signatures.
 Type and member custom attributes keep their constructors, named members, and type arguments in saved copies.
 Marshal descriptors keep their referenced types, including SAFEARRAY subtypes and custom marshaler implementations.
@@ -220,6 +221,7 @@ file paths, image metadata, type lists, resources, satellite assemblies, and cus
 Copies do not retain this source metadata. This includes `GetTypes`, `DefinedTypes`, `GetForwardedTypes`,
 `Assembly.GetName()`, `Assembly.Location`, `Assembly.GetReferencedAssemblies()`, `Module.ModuleVersionId`, and attribute APIs.
 Use type or member APIs to inspect copied attributes.
+Copied members receive new metadata tokens, so reading their `MetadataToken` is rejected.
 These limits also apply to reflective invocation and delegate binding. The target must be known during preflight.
 Call type lookup and string activation APIs directly so copied names can be translated.
 
