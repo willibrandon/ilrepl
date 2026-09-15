@@ -143,6 +143,7 @@ internal sealed partial class ImportedMethodFamily
         ValidateExternalInterfaces();
         ValidateBoundaries();
         ValidateIndirectReflection();
+        ValidateMetadataBoundaries();
     }
 
     /// <summary>

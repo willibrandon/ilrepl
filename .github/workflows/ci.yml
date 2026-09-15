@@ -75,8 +75,21 @@ jobs:
         suite:
           - name: editing
             filter: 'FullyQualifiedName~LiveSession_Edit&FullyQualifiedName!~Compar'
-          - name: comparisons
-            filter: 'FullyQualifiedName~Compar'
+          - name: comparison-metadata
+            filter: >-
+              FullyQualifiedName~Compar&
+              (FullyQualifiedName~Metadata|FullyQualifiedName~Assembly|FullyQualifiedName~Module|FullyQualifiedName~ReferencePolicy)
+          - name: comparison-members
+            filter: >-
+              FullyQualifiedName~Compar&FullyQualifiedName!~Metadata&FullyQualifiedName!~Assembly&
+              FullyQualifiedName!~Module&FullyQualifiedName!~ReferencePolicy&
+              (FullyQualifiedName~Member|FullyQualifiedName~Reflect|FullyQualifiedName~Type|
+              FullyQualifiedName~Boundar|FullyQualifiedName~Exact)
+          - name: comparison-values
+            filter: >-
+              FullyQualifiedName~Compar&FullyQualifiedName!~Metadata&FullyQualifiedName!~Assembly&
+              FullyQualifiedName!~Module&FullyQualifiedName!~ReferencePolicy&FullyQualifiedName!~Member&
+              FullyQualifiedName!~Reflect&FullyQualifiedName!~Type&FullyQualifiedName!~Boundar&FullyQualifiedName!~Exact
           - name: session
             filter: 'FullyQualifiedName!~Compar&FullyQualifiedName!~LiveSession_Edit'
     runs-on: ubuntu-latest
@@ -116,10 +129,11 @@ jobs:
         run: pwsh tests/IlRepl.Docs.Tests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium webkit
 
       - name: Test the published runtime
-        run: >-
-          dotnet test --project tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj
-          --no-build --report-trx --results-directory BrowserTestResults
-          --filter '(${{ matrix.suite.filter }})&(${{ matrix.browser.filter }})'
+        run: |
+          filter='(${{ matrix.suite.filter }})&(${{ matrix.browser.filter }})'
+          dotnet test --project tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj \
+            --no-build --report-trx --results-directory BrowserTestResults \
+            --filter "${filter// /}"
 
       - name: Upload browser test results
         if: always()
