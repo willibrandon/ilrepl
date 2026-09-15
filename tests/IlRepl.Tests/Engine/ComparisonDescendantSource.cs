@@ -19,7 +19,7 @@ public static class ComparisonDescendantSource
     public static int Run(string executable, string records, bool grandchild, string mode)
     {
         var record = Path.Combine(records, "processes");
-        if (File.Exists(record) && File.ReadAllLines(record).Any(line => IsRunning(int.Parse(line, CultureInfo.InvariantCulture))))
+        if (File.Exists(record) && File.ReadAllLines(record).Any(IsRunning))
         {
             return -1;
         }
@@ -62,18 +62,41 @@ public static class ComparisonDescendantSource
     /// <summary>
     /// Checks a recorded process without relying on its original parent remaining alive.
     /// </summary>
-    /// <param name="pid">The process identifier.</param>
+    /// <param name="record">The process identifier and UTC creation ticks.</param>
     /// <returns>Whether the process is still running.</returns>
-    public static bool IsRunning(int pid)
+    public static bool IsRunning(string record)
+    {
+        using var process = Open(record);
+        return process is not null && !process.HasExited;
+    }
+
+    /// <summary>
+    /// Opens the recorded process only when its creation time still matches, excluding reused process identifiers.
+    /// </summary>
+    /// <param name="record">The process identifier and UTC creation ticks.</param>
+    /// <returns>The matching process, or null when it has exited and its identifier is no longer assigned to it.</returns>
+    public static Process? Open(string record)
     {
         try
         {
-            using var process = Process.GetProcessById(pid);
-            return !process.HasExited;
+            var parts = record.Split(' ');
+            var process = Process.GetProcessById(int.Parse(parts[0], CultureInfo.InvariantCulture));
+            try
+            {
+                if (process.StartTime.ToUniversalTime().Ticks == long.Parse(parts[1], CultureInfo.InvariantCulture)) return process;
+            }
+            catch
+            {
+                process.Dispose();
+                throw;
+            }
+
+            process.Dispose();
+            return null;
         }
-        catch (ArgumentException)
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
-            return false;
+            return null;
         }
     }
 }

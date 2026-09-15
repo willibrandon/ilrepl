@@ -30,6 +30,14 @@ public static class MetadataBoundaryFixture
         ("Assembly", "address", "copied"), ("Assembly", "helper-store", "copied"),
         ("Assembly", "external-address", "copied"), ("Assembly", "external-array", "copied"),
         ("Assembly", "get-assembly", "copied"),
+        ("Assembly", "callback-ctor", "copied"), ("Module", "callback-ctor", "copied"),
+        ("ModuleHandle", "callback-ctor", "copied"), ("Assembly", "callback-methodinfo", "copied"),
+        ("Assembly", "callback-factory", "copied"), ("Assembly", "callback-helper", "copied"),
+        ("Module", "callback-return-array", "copied"), ("Assembly", "callback-return-wrapper", "copied"),
+        ("Assembly", "callback-ref", "copied"), ("Assembly", "callback-carrier-array", "copied"),
+        ("Assembly", "callback-instance", "copied"), ("Assembly", "callback-pointer", "copied"),
+        ("Assembly", "callback-handle-pointer", "copied"),
+        ("CurrentMethod", "callback-ctor", "copied"),
     ];
 
     /// <summary>
@@ -48,7 +56,23 @@ public static class MetadataBoundaryFixture
         ("Object", "address", "object"), ("Object", "helper-store", "object"),
         ("Object", "external-address", "object"), ("Object", "external-array", "object"),
         ("Assembly", "get-assembly", "sibling"),
+        ("Assembly", "callback-ctor", "bcl"), ("Module", "callback-ctor", "sibling"),
+        ("ModuleHandle", "callback-ctor", "bcl"), ("Assembly", "callback-methodinfo", "bcl"),
+        ("Assembly", "callback-factory", "sibling"), ("Object", "callback-helper", "object"),
+        ("Object", "callback-return-array", "object"), ("Object", "callback-return-wrapper", "object"),
+        ("Object", "callback-ref", "object"), ("Object", "callback-carrier-array", "object"),
+        ("Object", "callback-instance", "object"), ("Assembly", "callback-pointer", "bcl"),
+        ("Object", "callback-handle-pointer", "object"), ("Assembly", "callback-local", "copied"),
+        ("Method", "callback-ctor", "bcl"), ("Method", "callback-ctor", "sibling"),
     ];
+
+    /// <summary>
+    /// Distinguishes unchanged external values and metadata consumed solely by a local copied callback invocation.
+    /// </summary>
+    /// <param name="flow">The transport or callback route.</param>
+    /// <param name="origin">The original metadata or ordinary value producer.</param>
+    /// <returns>Whether the fixture retains compatible behavior after copying.</returns>
+    public static bool IsSupported(string flow, string origin) => origin != "copied" || flow == "callback-local";
 
     /// <summary>
     /// Names the actual call, constructor, field, or reflection transport responsible for the external boundary.
@@ -144,6 +168,11 @@ public static class MetadataBoundaryFixture
         }
         var counterpart = metadata.AddAssemblyReference(metadata.GetOrAddString(otherName), new Version(1, 2, 3, 4),
             default, default, 0, default);
+        var callback = flow.StartsWith("callback-", StringComparison.Ordinal);
+        var callbackPointer = flow is "callback-pointer" or "callback-handle-pointer";
+        var callbackResult = flow == "callback-ref" ? typeof(void) : typeof(object);
+        var callbackArguments = flow == "callback-ref" ? new[] { typeof(object).MakeByRefType() } : Type.EmptyTypes;
+        var callbackSignature = Signature(callbackResult, callbackArguments, true);
         metadata.AddTypeDefinition(0, default, metadata.GetOrAddString("<Module>"), default,
             MetadataTokens.FieldDefinitionHandle(1), MetadataTokens.MethodDefinitionHandle(1));
         var owner = metadata.AddTypeDefinition(TypeAttributes.Public, metadata.GetOrAddString("MetadataBoundary"),
@@ -164,6 +193,12 @@ public static class MetadataBoundaryFixture
             if (flow == "external-array") metadata.AddFieldDefinition(FieldAttributes.Public | FieldAttributes.Static,
                 metadata.GetOrAddString("Items"), metadata.GetOrAddBlob(ObjectArrayFieldSignature));
         }
+        else if (inspector && callback)
+        {
+            metadata.AddTypeDefinition(TypeAttributes.Public | TypeAttributes.Sealed, metadata.GetOrAddString("MetadataBoundary"),
+                metadata.GetOrAddString("Probe"), TypeReference(typeof(MulticastDelegate)),
+                MetadataTokens.FieldDefinitionHandle(1), MetadataTokens.MethodDefinitionHandle(2));
+        }
         EntityHandle nominal;
         EntityHandle read;
         if (inspector)
@@ -177,11 +212,20 @@ public static class MetadataBoundaryFixture
         {
             var sibling = metadata.AddTypeDefinition(TypeAttributes.Public, metadata.GetOrAddString("MetadataBoundary"),
                 metadata.GetOrAddString("Sibling"), TypeReference(typeof(object)),
-                MetadataTokens.FieldDefinitionHandle(2), MetadataTokens.MethodDefinitionHandle(3));
+                MetadataTokens.FieldDefinitionHandle(callback ? 3 : 2), MetadataTokens.MethodDefinitionHandle(callback ? 5 : 3));
             metadata.AddFieldDefinition(FieldAttributes.Private | FieldAttributes.Static, metadata.GetOrAddString("Saved"),
                 metadata.GetOrAddBlob(ObjectFieldSignature));
+            if (callback) metadata.AddFieldDefinition(FieldAttributes.Public | FieldAttributes.Static,
+                metadata.GetOrAddString("Calls"), metadata.GetOrAddBlob(Int32FieldSignature));
             nominal = origin == "sibling" ? sibling : owner;
-            read = MetadataTokens.MethodDefinitionHandle(origin == "sibling" ? 3 : 1);
+            read = MetadataTokens.MethodDefinitionHandle(origin == "sibling" ? callback ? 5 : 3 : 1);
+            if (flow == "callback-return-wrapper")
+            {
+                metadata.AddTypeDefinition(TypeAttributes.NotPublic, metadata.GetOrAddString("MetadataBoundary"),
+                    metadata.GetOrAddString("Holder"), TypeReference(typeof(object)),
+                    MetadataTokens.FieldDefinitionHandle(3), MetadataTokens.MethodDefinitionHandle(6));
+                metadata.AddFieldDefinition(FieldAttributes.Public, metadata.GetOrAddString("Value"), fieldSignature);
+            }
         }
         void Value(InstructionEncoder code, bool source)
         {
@@ -190,6 +234,19 @@ public static class MetadataBoundaryFixture
             {
                 code.OpCode(ILOpCode.Newobj);
                 code.Token(MethodReference(typeof(object).GetConstructor(Type.EmptyTypes)!));
+            }
+            else if (target == "CurrentMethod")
+            {
+                if (source) Call(code, typeof(MethodBase).GetMethod(nameof(MethodBase.GetCurrentMethod))!);
+                else
+                {
+                    code.OpCode(ILOpCode.Ldtoken);
+                    code.Token(nominal);
+                    Call(code, typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle))!);
+                    code.LoadString(metadata.GetOrAddUserString("Metadata"));
+                    code.LoadConstantI4((int)(BindingFlags.Static | BindingFlags.NonPublic));
+                    Call(code, typeof(Type).GetMethod(nameof(Type.GetMethod), [typeof(string), typeof(BindingFlags)])!);
+                }
             }
             else if (target == "Method")
             {
@@ -218,7 +275,8 @@ public static class MetadataBoundaryFixture
                 }
             }
         }
-        var argumentType = flow == "array" ? typeof(object[]) : flow != "direct" ? typeof(object) : target switch
+        var argumentType = callbackPointer ? typeof(nint) : flow == "array" ? typeof(object[])
+            : flow != "direct" ? typeof(object) : target switch
         {
             "Assembly" => typeof(Assembly), "Module" => typeof(Module),
             "Type" or "Method" => typeof(MemberInfo), _ => typeof(object),
@@ -229,12 +287,55 @@ public static class MetadataBoundaryFixture
         if (inspector)
         {
             code.LoadArgument(0);
+            if (callback && flow != "callback-local")
+            {
+                if (callbackPointer)
+                {
+                    code.OpCode(ILOpCode.Calli);
+                    code.Token(metadata.AddStandaloneSignature(Signature(typeof(object), Type.EmptyTypes)));
+                }
+                else
+                {
+                    if (flow == "callback-carrier-array")
+                    {
+                        code.OpCode(ILOpCode.Castclass);
+                        code.Token(TypeReference(typeof(Array)));
+                        code.LoadConstantI4(1);
+                        Call(code, typeof(Array).GetMethod(nameof(Array.GetValue), [typeof(int)])!);
+                    }
+                    code.OpCode(ILOpCode.Castclass);
+                    code.Token(MetadataTokens.TypeDefinitionHandle(3));
+                    if (flow == "callback-ref") code.LoadLocalAddress(0);
+                    code.OpCode(ILOpCode.Callvirt);
+                    code.Token(metadata.AddMemberReference(MetadataTokens.TypeDefinitionHandle(3),
+                        metadata.GetOrAddString("Invoke"), callbackSignature));
+                    if (flow == "callback-ref") code.LoadLocal(0);
+                }
+                if (flow == "callback-return-array")
+                {
+                    code.OpCode(ILOpCode.Castclass);
+                    code.Token(TypeReference(typeof(Array)));
+                    code.LoadConstantI4(1);
+                    Call(code, typeof(Array).GetMethod(nameof(Array.GetValue), [typeof(int)])!);
+                }
+                else if (flow == "callback-return-wrapper")
+                {
+                    code.StoreLocal(0);
+                    code.LoadLocal(0);
+                    Call(code, typeof(object).GetMethod(nameof(GetType))!);
+                    code.LoadString(metadata.GetOrAddUserString("Value"));
+                    Call(code, typeof(Type).GetMethod(nameof(Type.GetField), [typeof(string)])!);
+                    code.LoadLocal(0);
+                    Call(code, typeof(FieldInfo).GetMethod(nameof(FieldInfo.GetValue), [typeof(object)])!);
+                }
+            }
             if (flow == "array")
             {
                 code.LoadConstantI4(1);
                 code.OpCode(ILOpCode.Ldelem_ref);
             }
-            if (origin == "object")
+            if (flow == "callback-local") code.OpCode(ILOpCode.Ldnull);
+            else if (origin == "object")
             {
                 Call(code, typeof(object).GetMethod(nameof(GetType))!);
                 code.OpCode(ILOpCode.Ldtoken);
@@ -246,8 +347,10 @@ public static class MetadataBoundaryFixture
             code.LoadConstantI4(42);
             code.OpCode(ILOpCode.Mul);
             code.OpCode(ILOpCode.Ret);
+            var inspectorLocals = callback ? metadata.AddStandaloneSignature(metadata.GetOrAddBlob(ObjectLocalSignature)) : default;
             metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.Static, MethodImplAttributes.IL,
-                metadata.GetOrAddString("Inspect"), inspectSignature, bodies.AddMethodBody(code), MetadataTokens.ParameterHandle(1));
+                metadata.GetOrAddString("Inspect"), inspectSignature, bodies.AddMethodBody(code, localVariablesSignature: inspectorLocals),
+                MetadataTokens.ParameterHandle(1));
             if (sink)
             {
                 var constructor = new InstructionEncoder(new BlobBuilder());
@@ -302,6 +405,15 @@ public static class MetadataBoundaryFixture
                     MethodImplAttributes.Runtime, metadata.GetOrAddString("Invoke"), Signature(typeof(int), Type.EmptyTypes, true),
                     -1, MetadataTokens.ParameterHandle(1));
             }
+            else if (callback)
+            {
+                metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+                    MethodImplAttributes.Runtime, metadata.GetOrAddString(".ctor"),
+                    Signature(typeof(void), [typeof(object), typeof(nint)], true), -1, MetadataTokens.ParameterHandle(1));
+                metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.NewSlot,
+                    MethodImplAttributes.Runtime, metadata.GetOrAddString("Invoke"), callbackSignature,
+                    -1, MetadataTokens.ParameterHandle(1));
+            }
         }
         else
         {
@@ -337,6 +449,85 @@ public static class MetadataBoundaryFixture
                 code.OpCode(ILOpCode.Callvirt);
                 code.Token(metadata.AddMemberReference(external, metadata.GetOrAddString("ReadValue"),
                     Signature(typeof(int), Type.EmptyTypes, true)));
+            }
+            void LoadCallbackMethod()
+            {
+                code.OpCode(ILOpCode.Ldtoken);
+                code.Token(MetadataTokens.MethodDefinitionHandle(2));
+                Call(code, typeof(MethodBase).GetMethod(nameof(MethodBase.GetMethodFromHandle), [typeof(RuntimeMethodHandle)])!);
+                code.OpCode(ILOpCode.Castclass);
+                code.Token(TypeReference(typeof(MethodInfo)));
+            }
+            void EmitCallback()
+            {
+                var probe = metadata.AddTypeReference(counterpart, metadata.GetOrAddString("MetadataBoundary"),
+                    metadata.GetOrAddString("Probe"));
+                if (callbackPointer)
+                {
+                    if (flow == "callback-handle-pointer")
+                    {
+                        LoadCallbackMethod();
+                        Call(code, typeof(MethodBase).GetProperty(nameof(MethodBase.MethodHandle))!.GetMethod!);
+                        code.StoreLocal(0);
+                        code.LoadLocalAddress(0);
+                        code.Call(MethodReference(typeof(RuntimeMethodHandle).GetMethod(nameof(RuntimeMethodHandle.GetFunctionPointer))!));
+                    }
+                    else
+                    {
+                        code.OpCode(ILOpCode.Ldftn);
+                        code.Token(MetadataTokens.MethodDefinitionHandle(2));
+                    }
+                }
+                else
+                {
+                    if (flow == "callback-carrier-array")
+                    {
+                        code.LoadConstantI4(2);
+                        code.OpCode(ILOpCode.Newarr);
+                        code.Token(TypeReference(typeof(object)));
+                        code.OpCode(ILOpCode.Dup);
+                        code.LoadConstantI4(1);
+                    }
+                    if (flow == "callback-methodinfo")
+                    {
+                        LoadCallbackMethod();
+                        LoadType(probe);
+                        Call(code, typeof(MethodInfo).GetMethod(nameof(MethodInfo.CreateDelegate), [typeof(Type)])!);
+                        code.OpCode(ILOpCode.Castclass);
+                        code.Token(probe);
+                    }
+                    else if (flow == "callback-factory")
+                    {
+                        LoadType(probe);
+                        LoadCallbackMethod();
+                        Call(code, typeof(Delegate).GetMethod(nameof(Delegate.CreateDelegate), [typeof(Type), typeof(MethodInfo)])!);
+                        code.OpCode(ILOpCode.Castclass);
+                        code.Token(probe);
+                    }
+                    else
+                    {
+                        if (flow == "callback-instance")
+                        {
+                            code.OpCode(ILOpCode.Newobj);
+                            code.Token(MetadataTokens.MethodDefinitionHandle(4));
+                        }
+                        else code.OpCode(ILOpCode.Ldnull);
+                        code.OpCode(ILOpCode.Ldftn);
+                        code.Token(MetadataTokens.MethodDefinitionHandle(2));
+                        code.OpCode(ILOpCode.Newobj);
+                        code.Token(metadata.AddMemberReference(probe, metadata.GetOrAddString(".ctor"),
+                            Signature(typeof(void), [typeof(object), typeof(nint)], true)));
+                    }
+                    if (flow == "callback-carrier-array") code.OpCode(ILOpCode.Stelem_ref);
+                    if (flow == "callback-local")
+                    {
+                        code.OpCode(ILOpCode.Callvirt);
+                        code.Token(metadata.AddMemberReference(probe, metadata.GetOrAddString("Invoke"), callbackSignature));
+                        code.OpCode(ILOpCode.Pop);
+                        code.OpCode(ILOpCode.Ldnull);
+                    }
+                }
+                code.Call(inspect);
             }
             void EmitSink()
             {
@@ -425,7 +616,8 @@ public static class MetadataBoundaryFixture
                     ReadValue();
                 }
             }
-            if (sink) EmitSink();
+            if (callback) EmitCallback();
+            else if (sink) EmitSink();
             else
             {
                 if (flow == "array")
@@ -466,31 +658,96 @@ public static class MetadataBoundaryFixture
                 code.Call(inspect);
             }
             code.OpCode(ILOpCode.Ret);
-            var local = metadata.AddStandaloneSignature(metadata.GetOrAddBlob(ObjectLocalSignature));
+            var localSignature = metadata.GetOrAddBlob(ObjectLocalSignature);
+            if (flow == "callback-handle-pointer")
+            {
+                var locals = new BlobBuilder();
+                new BlobEncoder(locals).LocalVariableSignature(1).AddVariable().Type()
+                    .Type(TypeReference(typeof(RuntimeMethodHandle)), true);
+                localSignature = metadata.GetOrAddBlob(locals);
+            }
+            var local = metadata.AddStandaloneSignature(localSignature);
             metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.Static, MethodImplAttributes.IL,
                 metadata.GetOrAddString("Read"), Signature(typeof(int), Type.EmptyTypes),
                 bodies.AddMethodBody(code, localVariablesSignature: local), MetadataTokens.ParameterHandle(1));
             var relay = new InstructionEncoder(new BlobBuilder());
-            if (flow == "helper-store")
+            if (callback)
+            {
+                relay.OpCode(ILOpCode.Ldsfld);
+                relay.Token(MetadataTokens.FieldDefinitionHandle(2));
+                relay.LoadConstantI4(1);
+                relay.OpCode(ILOpCode.Add);
+                relay.OpCode(ILOpCode.Stsfld);
+                relay.Token(MetadataTokens.FieldDefinitionHandle(2));
+            }
+            if (flow == "callback-return-array")
+            {
+                relay.LoadConstantI4(2);
+                relay.OpCode(ILOpCode.Newarr);
+                relay.Token(TypeReference(typeof(object)));
+                relay.OpCode(ILOpCode.Dup);
+                relay.LoadConstantI4(1);
+                Value(relay, true);
+                relay.OpCode(ILOpCode.Stelem_ref);
+            }
+            else if (flow == "callback-return-wrapper")
+            {
+                relay.OpCode(ILOpCode.Newobj);
+                relay.Token(MetadataTokens.MethodDefinitionHandle(6));
+                relay.OpCode(ILOpCode.Dup);
+                Value(relay, true);
+                relay.OpCode(ILOpCode.Stfld);
+                relay.Token(MetadataTokens.FieldDefinitionHandle(3));
+            }
+            else if (flow is "helper-store" or "callback-ref")
             {
                 relay.LoadArgument(0);
                 Value(relay, true);
                 relay.OpCode(ILOpCode.Stind_ref);
             }
-            else if (flow == "helper") Value(relay, true);
+            else if (flow == "callback-helper") relay.Call(MetadataTokens.MethodDefinitionHandle(3));
+            else if (flow == "helper" || callback) Value(relay, true);
             else relay.OpCode(ILOpCode.Ldnull);
             relay.OpCode(ILOpCode.Ret);
-            metadata.AddMethodDefinition(MethodAttributes.Private | MethodAttributes.Static, MethodImplAttributes.IL,
-                metadata.GetOrAddString("Metadata"), flow == "helper-store"
-                    ? Signature(typeof(void), [typeof(object).MakeByRefType()]) : Signature(typeof(object), Type.EmptyTypes),
+            metadata.AddMethodDefinition(MethodAttributes.Private | (flow == "callback-instance" ? 0 : MethodAttributes.Static),
+                MethodImplAttributes.IL, metadata.GetOrAddString("Metadata"), flow is "helper-store" or "callback-ref"
+                    ? Signature(typeof(void), [typeof(object).MakeByRefType()])
+                    : Signature(typeof(object), Type.EmptyTypes, flow == "callback-instance"),
                 bodies.AddMethodBody(relay),
                 MetadataTokens.ParameterHandle(1));
+            if (callback)
+            {
+                var helper = new InstructionEncoder(new BlobBuilder());
+                if (flow == "callback-helper") Value(helper, true);
+                else helper.OpCode(ILOpCode.Ldnull);
+                helper.OpCode(ILOpCode.Ret);
+                metadata.AddMethodDefinition(MethodAttributes.Private | MethodAttributes.Static, MethodImplAttributes.IL,
+                    metadata.GetOrAddString("ValueHelper"), Signature(typeof(object), Type.EmptyTypes), bodies.AddMethodBody(helper),
+                    MetadataTokens.ParameterHandle(1));
+                var constructor = new InstructionEncoder(new BlobBuilder());
+                constructor.LoadArgument(0);
+                constructor.Call(MethodReference(typeof(object).GetConstructor(Type.EmptyTypes)!));
+                constructor.OpCode(ILOpCode.Ret);
+                metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+                    MethodImplAttributes.IL, metadata.GetOrAddString(".ctor"), Signature(typeof(void), Type.EmptyTypes, true),
+                    bodies.AddMethodBody(constructor), MetadataTokens.ParameterHandle(1));
+            }
             var ping = new InstructionEncoder(new BlobBuilder());
             ping.LoadConstantI4(42);
             ping.OpCode(ILOpCode.Ret);
             metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.Static, MethodImplAttributes.IL,
                 metadata.GetOrAddString("Ping"), Signature(typeof(int), Type.EmptyTypes), bodies.AddMethodBody(ping),
                 MetadataTokens.ParameterHandle(1));
+            if (flow == "callback-return-wrapper")
+            {
+                var constructor = new InstructionEncoder(new BlobBuilder());
+                constructor.LoadArgument(0);
+                constructor.Call(MethodReference(typeof(object).GetConstructor(Type.EmptyTypes)!));
+                constructor.OpCode(ILOpCode.Ret);
+                metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+                    MethodImplAttributes.IL, metadata.GetOrAddString(".ctor"), Signature(typeof(void), Type.EmptyTypes, true),
+                    bodies.AddMethodBody(constructor), MetadataTokens.ParameterHandle(1));
+            }
         }
         var pe = new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
             new MetadataRootBuilder(metadata), bodies.Builder, flags: CorFlags.ILOnly);

@@ -47,7 +47,7 @@ public sealed partial class LiveSessionTests
         await TypeLineAsync(page, ".edit " + original + " as Copy");
         await ExpectCompletionAsync(page, "Enter sends");
         await page.Keyboard.PressAsync("Enter");
-        var supported = origin != "copied";
+        var supported = MetadataBoundaryFixture.IsSupported(flow, origin);
         var parent = await ObserveComparisonResultsAsync(page);
         var nextResult = 0;
         var replacement = ".edit Copy {\n.method public static int32 Read() {\nldc.i4.s 43\nret\n}\n}";
@@ -90,6 +90,9 @@ public sealed partial class LiveSessionTests
         }
         await SubmitEditSourceAsync(page, replacement, "edit Copy committed as revision " + (supported ? "2" : "1"));
         await RunCorpusCellAsync(page, "call Copy\nldc.i4 300\nadd\nret", 343);
+        if (flow.StartsWith("callback-", StringComparison.Ordinal))
+            await RunCorpusCellAsync(page, "ldsfld int32 [" + images.SourceName
+                + "]MetadataBoundary.Owner::Calls\nldc.i4 600\nadd\nret", 601);
         await RunCorpusCellAsync(page, "call " + original + "\nldc.i4 400\nadd\nret", 442);
         await TypeLineAsync(page, ".compare Copy ()");
         AssertMetadataBoundarySide(await WaitForComparisonResultAsync(parent, nextResult++), "42");

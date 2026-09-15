@@ -53,6 +53,10 @@ internal sealed partial class ImportedMethodFamily
                     || instruction.Op != OpCodes.Call && instruction.Op != OpCodes.Callvirt && instruction.Op != OpCodes.Newobj) continue;
                 var target = resolved.Method ?? _pinned[resolved.Definition!.Name];
                 if (_methods.ContainsKey(IlAsmRenderer.DefinitionOf(target))) continue;
+                if (target.Name == "Invoke" && typeof(Delegate).IsAssignableFrom(target.DeclaringType)
+                    && values.Argument(body, position, -1) is { Length: > 0 } callbacks
+                    && callbacks.All(callback => callback is MethodBase method && _methods.ContainsKey(IlAsmRenderer.DefinitionOf(method))))
+                    continue;
                 if (IsReflectiveMetadataPayload(target))
                 {
                     ValidateMetadataPayload(values, body, position, instruction, target, target);
@@ -125,6 +129,7 @@ internal sealed partial class ImportedMethodFamily
     {
         var type = method.DeclaringType;
         if (type is null) return false;
+        if (method.IsConstructor && typeof(Delegate).IsAssignableFrom(type)) return true;
         if (type == typeof(Enumerable))
             return method.Name is nameof(Enumerable.First) or nameof(Enumerable.FirstOrDefault) or nameof(Enumerable.Single)
                 or nameof(Enumerable.SingleOrDefault) or nameof(Enumerable.ElementAt) or nameof(Enumerable.ElementAtOrDefault)

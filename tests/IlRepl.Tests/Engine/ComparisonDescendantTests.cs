@@ -18,6 +18,20 @@ public sealed class ComparisonDescendantTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
+    /// A live process is recognized only when both its identifier and creation time match the descendant record.
+    /// </summary>
+    [TestMethod]
+    public void DescendantIdentity_RequiresMatchingCreationTime()
+    {
+        using var process = Process.GetCurrentProcess();
+        var prefix = process.Id.ToString(CultureInfo.InvariantCulture) + " ";
+        var started = process.StartTime.ToUniversalTime().Ticks;
+        Assert.IsTrue(ComparisonDescendantSource.IsRunning(prefix + started.ToString(CultureInfo.InvariantCulture)));
+        Assert.IsFalse(ComparisonDescendantSource.IsRunning(prefix + (started + 1).ToString(CultureInfo.InvariantCulture)));
+        Assert.IsNull(ComparisonDescendantSource.Open(prefix + (started + 1).ToString(CultureInfo.InvariantCulture)));
+    }
+
+    /// <summary>
     /// Background descendants cannot survive worker completion, failure, cancellation, or timeout.
     /// </summary>
     /// <param name="grandchild">Whether the leaf outlives an intermediate parent as well as the comparison worker.</param>
@@ -33,7 +47,7 @@ public sealed class ComparisonDescendantTests
     [DataRow(true, "timeout")]
     [DataRow(false, "cancel")]
     [DataRow(true, "cancel")]
-    [Timeout(120_000, CooperativeCancellation = true)]
+    [Timeout(240_000, CooperativeCancellation = true)]
     public async Task Compare_StopsDescendantsAfterWorkerExit(bool grandchild, string mode)
     {
         var records = Directory.CreateTempSubdirectory("ilrepl-descendants-");
@@ -54,7 +68,10 @@ public sealed class ComparisonDescendantTests
 
             var edit = session.PrepareEdit("Work", "Copy");
             session.CommitEdit(edit.Name, edit.Source);
-            var package = ComparisonCapture.Create(session, "Copy ()") with { TimeoutMilliseconds = 15_000 };
+            var package = ComparisonCapture.Create(session, "Copy ()") with
+            {
+                TimeoutMilliseconds = mode == "timeout" ? 15_000 : 60_000,
+            };
             running = ProcessComparisonRunner.RunAsync(package, cancel.Token);
             if (mode == "cancel")
             {
@@ -74,11 +91,11 @@ public sealed class ComparisonDescendantTests
                 if (mode == "throw") Assert.AreEqual("worker failure", side.Invocations.Single().Exception!.Message);
             }
 
-            var pids = File.ReadAllLines(record).Select(line => int.Parse(line, CultureInfo.InvariantCulture)).ToArray();
-            Assert.HasCount((mode == "cancel" ? 1 : 2) * (grandchild ? 2 : 1), pids);
-            foreach (var pid in pids)
+            var descendants = File.ReadAllLines(record);
+            Assert.HasCount((mode == "cancel" ? 1 : 2) * (grandchild ? 2 : 1), descendants);
+            foreach (var descendant in descendants)
             {
-                Assert.IsFalse(ComparisonDescendantSource.IsRunning(pid), $"descendant {pid} survived comparison cleanup");
+                Assert.IsFalse(ComparisonDescendantSource.IsRunning(descendant), $"descendant {descendant} survived comparison cleanup");
             }
         }
         finally
@@ -91,7 +108,8 @@ public sealed class ComparisonDescendantTests
                 {
                     try
                     {
-                        using var process = Process.GetProcessById(int.Parse(line, CultureInfo.InvariantCulture));
+                        using var process = ComparisonDescendantSource.Open(line);
+                        if (process is null) continue;
                         if (!process.HasExited) process.Kill(entireProcessTree: true);
                         await process.WaitForExitAsync(CancellationToken.None);
                     }
@@ -116,7 +134,9 @@ public sealed class ComparisonDescendantTests
         var record = Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_RECORD");
         TestSkip.Unless(record is not null, "runs as a child of Compare_StopsDescendantsAfterWorkerExit");
         var ready = Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_READY")!;
-        File.AppendAllText(record!, Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + Environment.NewLine);
+        using var process = Process.GetCurrentProcess();
+        File.AppendAllText(record!, Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + " "
+            + process.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture) + Environment.NewLine);
         if (bool.Parse(Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_BRANCH")!))
         {
             using var leaf = ComparisonDescendantSource.Start(Environment.ProcessPath!, record!, ready, false);

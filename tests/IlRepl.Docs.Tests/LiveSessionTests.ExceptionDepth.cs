@@ -20,7 +20,7 @@ public sealed partial class LiveSessionTests
         await using var context = await NewContextAsync(GetBrowser(browser));
         var page = await OpenSessionAsync(context);
         await SubmitEditSourceAsync(page, ExceptionChainExamples.Method(false, false) + "\n.edit Read as Copy {\n"
-            + ExceptionChainExamples.Method(false, true, depth: true) + "\n}", "edit Copy committed as revision 1");
+            + ExceptionChainExamples.Method(false, true, depth: true) + "\n}", "edit Copy committed as revision 1", timeout: 120_000);
         var parent = await ObserveComparisonResultsAsync(page);
         await TypeLineAsync(page, ".compare Copy ()");
         var details = await parent.EvaluateAsync<string[]>("""

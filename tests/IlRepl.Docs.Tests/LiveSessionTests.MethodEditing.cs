@@ -254,11 +254,11 @@ public sealed partial class LiveSessionTests
         await RunCorpusCellAsync(page, "ldc.i4.s 42\nret", 42);
     }
 
-    private static async Task SubmitEditSourceAsync(IPage page, string source, string expected)
+    private static async Task SubmitEditSourceAsync(IPage page, string source, string expected, float timeout = 30_000)
     {
         await PasteAsync(page, source);
         await page.Keyboard.PressAsync("Enter");
-        await ExpectCompletionAsync(page, expected);
+        await Assertions.Expect(page.Locator("#terminal")).ToContainTextAsync(expected, new() { Timeout = timeout });
     }
 
     private static async Task ExpectComparisonTextAsync(IPage page, string expected)

@@ -47,6 +47,7 @@ public sealed class MetadataBoundaryTests
         Assert.AreEqual(42, original.Invoke(null, null));
         var edit = session.PrepareEdit("int32 [" + images.SourceName + "]MetadataBoundary.Owner::Read()", "Copy");
         AssertProblem(edit, flow);
+        AssertCallbackCount(source, flow, 1);
         var initial = edit.Source;
         var completion = session.CompletionRevision;
         var failure = Assert.ThrowsExactly<ReplException>(() => session.CommitEdit(edit.Name, initial));
@@ -56,6 +57,7 @@ public sealed class MetadataBoundaryTests
         Assert.AreEqual(0, edit.Revision);
         Assert.AreEqual(initial, edit.Source);
         Assert.AreEqual(completion, session.CompletionRevision);
+        AssertCallbackCount(source, flow, 1);
         session.CommitEdit(edit.Name, ".method public static int32 Read() {\nldc.i4.s 43\nret\n}");
         Assert.IsEmpty(edit.Problems);
         var corrected = edit.Source;
@@ -69,7 +71,9 @@ public sealed class MetadataBoundaryTests
         Assert.AreEqual(1, edit.Revision);
         Assert.AreEqual(completion, session.CompletionRevision);
         Assert.AreEqual(43, edit.Method!.Invoke(null, null));
+        AssertCallbackCount(source, flow, 1);
         Assert.AreEqual(42, original.Invoke(null, null));
+        AssertCallbackCount(source, flow, 2);
         await AssertComparison(session, 43);
         AssertExports(session, source, inspector, 43, retained: false);
     }
@@ -93,8 +97,13 @@ public sealed class MetadataBoundaryTests
         Assert.AreEqual(42, original.Invoke(null, null));
         var edit = session.PrepareEdit("int32 [" + images.SourceName + "]MetadataBoundary.Owner::Read()", "Copy");
         Assert.IsEmpty(edit.Problems, string.Join("; ", edit.Problems));
+        AssertCallbackCount(source, flow, 1);
         session.CommitEdit(edit.Name, edit.Source);
+        AssertCallbackCount(source, flow, 1);
         Assert.AreEqual(42, edit.Method!.Invoke(null, null));
+        AssertCallbackCount(source, flow, 1);
+        if (flow.StartsWith("callback-", StringComparison.Ordinal))
+            Assert.AreEqual(1, edit.Method.DeclaringType!.GetField("Calls")!.GetValue(null));
         var external = MethodDisassembler.Disassemble(edit.Method, session).Entries
             .Select(entry => entry.Instruction?.Operand).OfType<ResolvedMethod>()
             .Select(method => method.Method!).Single(method => method.Name == MetadataBoundaryFixture.CalledMethod(flow));
@@ -108,7 +117,9 @@ public sealed class MetadataBoundaryTests
         Assert.IsGreaterThan(0, position);
         session.CommitEdit(edit.Name, edit.Source.Insert(position, "ldc.i4.1\nadd\n"));
         Assert.AreEqual(43, edit.Method!.Invoke(null, null));
+        AssertCallbackCount(source, flow, 1);
         Assert.AreEqual(42, original.Invoke(null, null));
+        AssertCallbackCount(source, flow, 2);
         Assert.AreEqual(42, edit.OriginalMethod.Invoke(null, null));
         await AssertComparison(session, 43);
         AssertExports(session, source, inspector, 43, retained: true);
@@ -125,6 +136,12 @@ public sealed class MetadataBoundaryTests
         Assert.IsTrue(sibling.IsPublic);
         Assert.AreSame(owner.Assembly, sibling.Assembly);
         Assert.AreSame(owner.Module, sibling.Module);
+    }
+
+    private static void AssertCallbackCount(Assembly source, string flow, int expected)
+    {
+        if (flow.StartsWith("callback-", StringComparison.Ordinal))
+            Assert.AreEqual(expected, source.GetType("MetadataBoundary.Owner")!.GetField("Calls")!.GetValue(null));
     }
 
     private static void AssertProblem(MethodEdit edit, string flow)

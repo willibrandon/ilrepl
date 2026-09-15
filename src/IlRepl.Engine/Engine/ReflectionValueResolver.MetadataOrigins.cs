@@ -8,11 +8,13 @@ namespace IlRepl.Engine;
 /// </summary>
 internal sealed partial class ReflectionValueResolver
 {
-    private readonly HashSet<(MethodBase Method, int Origin)> _copiedMetadataActive = [];
     private readonly HashSet<(MethodBase Method, int Origin)> _copiedMetadataVisited = [];
+    private readonly HashSet<(MethodBase Method, int Origin, Func<object, bool> Predicate)> _ordinaryMetadataOrigins = [];
+    private readonly Queue<(MethodEditBody Body, int Origin)> _copiedMetadataPending = [];
     private readonly Dictionary<(MethodBase Method, int Position, int FromTop, Func<object, bool> Predicate), bool>
         _copiedMetadataQueries = [];
-    private int _copiedMetadataQueryDepth;
+    private bool _copiedMetadataRunning;
+    private bool _copiedMetadataFound;
 
     /// <summary>
     /// Finds copied metadata in a stack value or its stored contents using the completed family's member ownership predicate.
@@ -20,74 +22,86 @@ internal sealed partial class ReflectionValueResolver
     internal bool HasCopiedMetadata(MethodEditBody body, int position, int fromTop, Func<object, bool> isCopiedMember)
     {
         var key = (body.Method, position, fromTop, isCopiedMember);
+        if (_copiedMetadataRunning)
+        {
+            if (_copiedMetadataQueries.TryGetValue(key, out var cached)) _copiedMetadataFound |= cached;
+            else EnqueueCopiedMetadata(body, position, fromTop, isCopiedMember);
+            return false;
+        }
         if (_copiedMetadataQueries.TryGetValue(key, out var known)) return known;
-        var root = _copiedMetadataQueryDepth == 0;
-        if (root) _copiedMetadataVisited.Clear();
-        _copiedMetadataQueryDepth++;
+        _copiedMetadataVisited.Clear();
+        _copiedMetadataFound = false;
+        _copiedMetadataRunning = true;
         try
         {
-            var values = body.State.Analysis.Before[position]?.Values;
-            var copied = values is not null && values.Length >= fromTop
-                && values[^fromTop].Origins.Any(origin => CopiedMetadataOrigin(body, origin, isCopiedMember));
-            // A nested false result may have skipped an active ancestor; only complete queries can cache that result.
-            if (root) _copiedMetadataQueries.Add(key, copied);
-            return copied;
+            EnqueueCopiedMetadata(body, position, fromTop, isCopiedMember);
+            while (!_copiedMetadataFound && _copiedMetadataPending.TryDequeue(out var next))
+                if (CopiedMetadataOrigin(next.Body, next.Origin, isCopiedMember)) _copiedMetadataFound = true;
+            if (!_copiedMetadataFound)
+                foreach (var visited in _copiedMetadataVisited)
+                    _ordinaryMetadataOrigins.Add((visited.Method, visited.Origin, isCopiedMember));
+            // Nested queries only schedule alternatives; only the outer traversal has a complete answer to cache.
+            _copiedMetadataQueries.Add(key, _copiedMetadataFound);
+            return _copiedMetadataFound;
         }
         finally
         {
-            _copiedMetadataQueryDepth--;
+            _copiedMetadataRunning = false;
+            _copiedMetadataPending.Clear();
         }
+    }
+
+    private void EnqueueCopiedMetadata(MethodEditBody body, int position, int fromTop, Func<object, bool> isCopiedMember)
+    {
+        var values = body.State.Analysis.Before[position]?.Values;
+        if (values is null || values.Length < fromTop) return;
+        foreach (var origin in values[^fromTop].Origins)
+            if (!_ordinaryMetadataOrigins.Contains((body.Method, origin, isCopiedMember))
+                && _copiedMetadataVisited.Add((body.Method, origin))) _copiedMetadataPending.Enqueue((body, origin));
     }
 
     private bool CopiedMetadataOrigin(MethodEditBody body, int position, Func<object, bool> isCopiedMember)
     {
-        if (!_copiedMetadataVisited.Add((body.Method, position))) return false;
-        if (_copiedMetadataActive.Count >= Limit) return true;
-        if (!_copiedMetadataActive.Add((body.Method, position))) return false;
-        try
+        var instruction = body.State.Entries[position].Instruction;
+        if (instruction is null) return false;
+        var op = instruction.Op;
+        if (op == OpCodes.Ldnull || op == OpCodes.Ldstr) return false;
+        if (op == OpCodes.Ldftn || op == OpCodes.Ldvirtftn)
+            return instruction.Operand is ResolvedMethod pointer && CopiedCallbackMetadata(resolveMethod(pointer), isCopiedMember);
+        if (op == OpCodes.Ldtoken)
+            return instruction.Operand is ResolvedMethod token ? isCopiedMember(resolveMethod(token))
+                : instruction.Operand is { } operand && isCopiedMember(operand);
+        if (op == OpCodes.Castclass || op == OpCodes.Isinst || op == OpCodes.Ldind_Ref || op == OpCodes.Ldobj
+            || op == OpCodes.Box || op == OpCodes.Unbox_Any || op == OpCodes.Unbox || op == OpCodes.Conv_I || op == OpCodes.Conv_U)
+            return HasCopiedMetadata(body, position, 1, isCopiedMember);
+        if (op == OpCodes.Newarr) return CopiedArrayContents(body, position, null, isCopiedMember);
+        if (op.Name?.StartsWith("ldelem", StringComparison.Ordinal) == true || op == OpCodes.Ldelema)
+            return CopiedArrayContents(body, position, 2, isCopiedMember)
+                || CopiedResolvedMember(body, position, isCopiedMember);
+        if (instruction.LocalIndex is { } local && op.Name?.StartsWith("ldloc", StringComparison.Ordinal) == true)
+            return body.State.Entries.Select((entry, index) => (entry.Instruction, index)).Any(entry =>
+                entry.Instruction?.LocalIndex == local
+                    && entry.Instruction.Op.Name?.StartsWith("stloc", StringComparison.Ordinal) == true
+                    && HasCopiedMetadata(body, entry.index, 1, isCopiedMember))
+                || CopiedAddressWrites((body.Method, local, false), isCopiedMember);
+        if (instruction.Operand is FieldInfo field && (op == OpCodes.Ldfld || op == OpCodes.Ldsfld
+            || op == OpCodes.Ldflda || op == OpCodes.Ldsflda))
+            return CopiedFieldContents(field, isCopiedMember);
+        if (instruction.ArgumentIndex is { } argument && op.Name?.StartsWith("ldarg", StringComparison.Ordinal) == true)
+            return CopiedMetadataParameter(body, argument, isCopiedMember);
+        if (instruction.Operand is not ResolvedMethod resolved) return false;
+        var method = resolveMethod(resolved);
+        if (op == OpCodes.Newobj)
         {
-            var instruction = body.State.Entries[position].Instruction;
-            if (instruction is null) return false;
-            var op = instruction.Op;
-            if (op == OpCodes.Ldftn || op == OpCodes.Ldvirtftn || op == OpCodes.Ldnull || op == OpCodes.Ldstr) return false;
-            if (op == OpCodes.Ldtoken)
-                return instruction.Operand is ResolvedMethod token ? isCopiedMember(resolveMethod(token))
-                    : instruction.Operand is { } operand && isCopiedMember(operand);
-            if (op == OpCodes.Castclass || op == OpCodes.Isinst || op == OpCodes.Ldind_Ref || op == OpCodes.Ldobj
-                || op == OpCodes.Box || op == OpCodes.Unbox_Any || op == OpCodes.Unbox || op == OpCodes.Conv_I || op == OpCodes.Conv_U)
-                return HasCopiedMetadata(body, position, 1, isCopiedMember);
-            if (op == OpCodes.Newarr) return CopiedArrayContents(body, position, null, isCopiedMember);
-            if (op.Name?.StartsWith("ldelem", StringComparison.Ordinal) == true || op == OpCodes.Ldelema)
-                return CopiedArrayContents(body, position, 2, isCopiedMember)
-                    || CopiedResolvedMember(body, position, isCopiedMember);
-            if (instruction.LocalIndex is { } local && op.Name?.StartsWith("ldloc", StringComparison.Ordinal) == true)
-                return body.State.Entries.Select((entry, index) => (entry.Instruction, index)).Any(entry =>
-                    entry.Instruction?.LocalIndex == local
-                        && entry.Instruction.Op.Name?.StartsWith("stloc", StringComparison.Ordinal) == true
-                        && HasCopiedMetadata(body, entry.index, 1, isCopiedMember))
-                    || CopiedAddressWrites((body.Method, local, false), isCopiedMember);
-            if (instruction.Operand is FieldInfo field && (op == OpCodes.Ldfld || op == OpCodes.Ldsfld
-                || op == OpCodes.Ldflda || op == OpCodes.Ldsflda))
-                return CopiedFieldContents(field, isCopiedMember);
-            if (instruction.ArgumentIndex is { } argument && op.Name?.StartsWith("ldarg", StringComparison.Ordinal) == true)
-                return CopiedMetadataParameter(body, argument, isCopiedMember);
-            if (instruction.Operand is not ResolvedMethod resolved) return false;
-            var method = resolveMethod(resolved);
-            if (op == OpCodes.Newobj)
-            {
-                if (typeof(Delegate).IsAssignableFrom(method.DeclaringType))
-                    return HasCopiedMetadata(body, position, 2, isCopiedMember);
-                return Enumerable.Range(1, method.GetParameters().Length)
-                        .Any(index => HasCopiedMetadata(body, position, index, isCopiedMember))
-                    || method.DeclaringType!.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                        .Any(memberField => CopiedFieldContents(memberField, isCopiedMember));
-            }
-            return (op == OpCodes.Call || op == OpCodes.Callvirt) && CopiedMetadataCall(body, position, method, isCopiedMember);
+            if (typeof(Delegate).IsAssignableFrom(method.DeclaringType))
+                return HasCopiedMetadata(body, position, 2, isCopiedMember)
+                    || HasCopiedMetadata(body, position, 1, isCopiedMember);
+            return Enumerable.Range(1, method.GetParameters().Length)
+                    .Any(index => HasCopiedMetadata(body, position, index, isCopiedMember))
+                || method.DeclaringType!.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Any(memberField => CopiedFieldContents(memberField, isCopiedMember));
         }
-        finally
-        {
-            _copiedMetadataActive.Remove((body.Method, position));
-        }
+        return (op == OpCodes.Call || op == OpCodes.Callvirt) && CopiedMetadataCall(body, position, method, isCopiedMember);
     }
 
     private bool CopiedResolvedMember(MethodEditBody body, int position, Func<object, bool> isCopiedMember)
@@ -107,6 +121,7 @@ internal sealed partial class ReflectionValueResolver
         var name = method.Name;
         var framework = owner?.Assembly == typeof(Type).Assembly;
         if (owner == typeof(Assembly) && name == nameof(Assembly.GetExecutingAssembly)) return true;
+        if (owner == typeof(MethodBase) && name == nameof(MethodBase.GetCurrentMethod)) return true;
         if (owner == typeof(Assembly) && name == nameof(Assembly.GetAssembly))
             return HasCopiedMetadata(body, position, 1, isCopiedMember);
         if (framework && (owner == typeof(Type) && name == nameof(Type.GetTypeFromHandle)
@@ -133,9 +148,14 @@ internal sealed partial class ReflectionValueResolver
                     argument.parameter.Name == "defaultValue"
                         && HasCopiedMetadata(body, position, method.GetParameters().Length - argument.index, isCopiedMember));
         if (name == nameof(MethodInfo.CreateDelegate) && framework)
-            return Enumerable.Range(0, method.GetParameters().Length).Any(index =>
-                method.GetParameters()[index].ParameterType == typeof(object)
-                    && HasCopiedMetadata(body, position, method.GetParameters().Length - index, isCopiedMember));
+            return (owner == typeof(Delegate) ? DelegateTargets(body, position, method) : Argument(body, position, -1))
+                    ?.OfType<MethodBase>().Any(target => CopiedCallbackMetadata(target, isCopiedMember)) == true
+                || Enumerable.Range(0, method.GetParameters().Length).Any(index =>
+                    method.GetParameters()[index].ParameterType == typeof(object)
+                        && HasCopiedMetadata(body, position, method.GetParameters().Length - index, isCopiedMember));
+        if (owner == typeof(RuntimeMethodHandle) && name == nameof(RuntimeMethodHandle.GetFunctionPointer))
+            return Argument(body, position, -1)?.OfType<MethodBase>()
+                .Any(target => CopiedCallbackMetadata(target, isCopiedMember)) == true;
         var known = name == "get_ReflectedType" && framework
             ? Map(Argument(body, position, -1), value => (value as MemberInfo)?.ReflectedType)
             : name == "get_Member" && framework ? Map(Argument(body, position, -1), value => (value as ParameterInfo)?.Member)
@@ -197,7 +217,9 @@ internal sealed partial class ReflectionValueResolver
     {
         var owner = method.DeclaringType;
         object?[]? values;
-        if (owner is not null && typeof(Delegate).IsAssignableFrom(owner) && method.Name is "Invoke" or "DynamicInvoke")
+        if (owner is not null && typeof(Delegate).IsAssignableFrom(owner) && method.IsConstructor)
+            values = Stack(body, position, 1);
+        else if (owner is not null && typeof(Delegate).IsAssignableFrom(owner) && method.Name is "Invoke" or "DynamicInvoke")
             values = Argument(body, position, -1);
         else if (owner?.Assembly != typeof(Type).Assembly) return null;
         else if (owner == typeof(Delegate) && method.Name == nameof(Delegate.CreateDelegate))
