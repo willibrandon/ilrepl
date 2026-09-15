@@ -116,6 +116,7 @@ jobs:
           --no-build --filter '${{ matrix.browser.filter }}'
 
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: [build, browser]
     runs-on: ubuntu-latest
     environment:
