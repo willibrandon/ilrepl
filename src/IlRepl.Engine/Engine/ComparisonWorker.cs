@@ -138,6 +138,12 @@ public static partial class ComparisonWorker
             ready();
             if (image.OriginalAssembly is { } identity)
             {
+                foreach (var satellite in package.Dependencies)
+                {
+                    var name = new AssemblyName(satellite.Name);
+                    if (!string.IsNullOrEmpty(name.CultureName) && name.Name?.EndsWith(".resources", StringComparison.Ordinal) == true)
+                        Resolve(executionContext, name);
+                }
                 var dependency = package.Dependencies.FirstOrDefault(dependency =>
                     string.Equals(dependency.Name, identity, StringComparison.OrdinalIgnoreCase));
                 if (dependency?.OriginalLocation is { } location) VerifyOriginalFile(dependency, location);

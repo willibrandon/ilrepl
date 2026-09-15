@@ -107,6 +107,8 @@ internal sealed partial class ImportedMethodFamily
         if (method.DeclaringType is { } type && type.Assembly == typeof(Assembly).Assembly
             && typeof(Assembly).IsAssignableFrom(type))
         {
+            if (method.Name == nameof(Assembly.GetSatelliteAssembly))
+                return "satellite assembly lookup cannot reproduce the original satellite context";
             if (method.Name is nameof(Assembly.GetModule) or nameof(Assembly.GetModules) or nameof(Assembly.GetLoadedModules)
                 or "get_Modules")
                 return "assembly module inspection cannot reproduce the original module table";
@@ -121,6 +123,10 @@ internal sealed partial class ImportedMethodFamily
         }
         if (method.DeclaringType == typeof(ModuleHandle) && method.Name == "get_MDStreamVersion")
             return "module identity inspection cannot reproduce the original module metadata";
+        if (method.DeclaringType is { } globalType && globalType.Assembly == typeof(Module).Assembly
+            && typeof(Module).IsAssignableFrom(globalType)
+            && method.Name is nameof(Module.GetMethods) or nameof(Module.GetMethod) or nameof(Module.GetFields) or nameof(Module.GetField))
+            return "module global inspection cannot reproduce the original global members";
         if (method.DeclaringType is { } moduleType && moduleType.Assembly == typeof(Module).Assembly
             && typeof(Module).IsAssignableFrom(moduleType)
             && method.Name is "get_Name" or "get_ScopeName" or "get_FullyQualifiedName" or "get_ModuleVersionId"

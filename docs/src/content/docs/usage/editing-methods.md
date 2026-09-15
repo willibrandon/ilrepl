@@ -211,8 +211,8 @@ When code uses reflection, copied types retain their full member context, includ
 Known constructor lookups and reflective invocation use the copied constructors.
 Runtime declarations needed only for reflection keep their metadata.
 Generated helpers do not change the declaring type's reflected member list.
-Assembly and module inspection is rejected for identity, reference comparisons, module lists, token resolution, file paths,
-image metadata, type lists, resources, and custom attributes.
+Assembly and module inspection is rejected for identity, reference comparisons, module lists, global members, token resolution,
+file paths, image metadata, type lists, resources, satellite assemblies, and custom attributes.
 Copies do not retain this source metadata. This includes `GetTypes`, `DefinedTypes`, `GetForwardedTypes`,
 `Assembly.GetName()`, `Assembly.Location`, `Assembly.GetReferencedAssemblies()`, `Module.ModuleVersionId`, and attribute APIs.
 Use type or member APIs to inspect copied attributes.
