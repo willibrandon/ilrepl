@@ -138,6 +138,9 @@ internal sealed partial class ImportedMethodFamily
             ? "assembly and module type enumeration cannot reproduce the original assembly's complete type set" : null;
     }
 
-    private string? AssemblyInspectionProblem(MethodBase method, object?[]? receivers) => IsMemberTokenInspection(method)
-        ? MemberTokenProblem(receivers) : AssemblyInspectionProblem(method);
+    private string? AssemblyInspectionProblem(MethodBase method, object?[]? receivers)
+    {
+        if (IsMemberTokenInspection(method)) return MemberTokenProblem(receivers);
+        return TypeNameProblem(method, receivers) ?? AssemblyInspectionProblem(method);
+    }
 }

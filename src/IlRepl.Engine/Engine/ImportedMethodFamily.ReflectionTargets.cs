@@ -18,7 +18,7 @@ internal sealed partial class ImportedMethodFamily
         typeof(ModuleHandle), typeof(object), typeof(RuntimeHelpers),
     }.SelectMany(type => type.GetMethods()).Where(method => AssemblyInspectionProblem(method) is not null || IsIndirectReflection(method)
         || IsTypeLookup(method) || IsActivation(method) || IsAssemblyActivation(method) || IsObjectReferenceInspection(method)
-        || IsMemberTokenInspection(method))
+        || IsMemberTokenInspection(method) || IsTypeNameInspection(method))
         .SelectMany(method => method.Name.StartsWith("get_", StringComparison.Ordinal) ? new[] { method.Name, method.Name[4..] }
             : new[] { method.Name }).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -140,13 +140,15 @@ internal sealed partial class ImportedMethodFamily
                 var instruction = body.State.Entries[position].Instruction;
                 if (instruction is not null) ValidateMetadataReference(values, body, position, instruction);
                 if (instruction is not null) ValidateMemberTokenReference(values, body, position, instruction);
+                if (instruction is not null) ValidateTypeNameReference(values, body, position, instruction);
                 if (instruction?.Operand is not ResolvedMethod resolved || instruction.Op == OpCodes.Ldtoken) continue;
                 var target = resolved.Method ?? _pinned[resolved.Definition!.Name];
                 if (target.DeclaringType == typeof(object) && target.Name is nameof(ToString) or nameof(Equals) or nameof(GetHashCode)
                     && (instruction.Op == OpCodes.Callvirt || instruction.Op == OpCodes.Ldvirtftn))
                 {
                     var dispatched = MetadataIdentityOverride(target, values.Argument(body, position, -1));
-                    if (dispatched != target && AssemblyInspectionProblem(dispatched) is { } identityProblem)
+                    if (dispatched != target && AssemblyInspectionProblem(dispatched,
+                            values.Argument(body, position, -1)) is { } identityProblem)
                         RejectReflection(body, instruction, dispatched, identityProblem);
                 }
                 if (!IsIndirectReflection(target)) continue;
@@ -202,7 +204,7 @@ internal sealed partial class ImportedMethodFamily
     {
         if (method.DeclaringType != typeof(object) || method.IsStatic
             || method.Name is not (nameof(ToString) or nameof(Equals) or nameof(GetHashCode))) return method;
-        foreach (var type in new[] { typeof(Assembly), typeof(Module), typeof(ModuleHandle) })
+        foreach (var type in new[] { typeof(Assembly), typeof(Module), typeof(ModuleHandle), typeof(Type) })
         {
             if (receivers?.Any(receiver => type.IsInstanceOfType(receiver)
                 || receiver is ReflectedInstance instance && type.IsAssignableFrom(instance.Type)) == true)
@@ -216,7 +218,8 @@ internal sealed partial class ImportedMethodFamily
         if (target.Name == nameof(MethodBase.Invoke)
             && (target.DeclaringType == typeof(MethodInvoker) || typeof(MethodBase).IsAssignableFrom(target.DeclaringType!)))
             return values.Argument(body, position, 0);
-        if (target.Name == nameof(Delegate.CreateDelegate))
+        if (target.Name == nameof(Delegate.CreateDelegate)
+            && (target.DeclaringType == typeof(Delegate) || typeof(MethodInfo).IsAssignableFrom(target.DeclaringType!)))
         {
             var parameters = target.GetParameters();
             var index = Array.FindIndex(parameters, parameter => parameter.ParameterType == typeof(object));

@@ -222,6 +222,7 @@ Copies do not retain this source metadata. This includes `GetTypes`, `DefinedTyp
 `Assembly.GetName()`, `Assembly.Location`, `Assembly.GetReferencedAssemblies()`, `Module.ModuleVersionId`, and attribute APIs.
 Use type or member APIs to inspect copied attributes.
 Copied members receive new metadata tokens, so reading their `MetadataToken` is rejected.
+Type names that change when their type is copied are rejected.
 External helpers cannot receive copied metadata, including callback results, because its identity changes.
 These limits also apply to reflective invocation and delegate binding. The target must be known during preflight.
 Call type lookup and string activation APIs directly so copied names can be translated.
