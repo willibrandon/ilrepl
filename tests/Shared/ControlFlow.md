@@ -57,7 +57,7 @@ or removing the edge recomputes the stack. `EngineAnalysisTests`, `HostServerRpc
 and withdrawal of an entire refused block. Existing viewport tests check actual terminal frames.
 
 ECMA III.2.4 says a synchronized method ignores `tail.` so its lock remains held until the call
-returns. `SynchronizedTailCall` verifies and returns 42 through CoreCLR, browser Mono, ILAsm, and
+returns. `SynchronizedTailCall` verifies and returns 42 through CoreCLR, ILAsm, and
 the saved assembly.
 
 The same rule permits a managed pointer argument when it does not point into the departing frame,
@@ -88,7 +88,7 @@ An exact `ldelem` or `ldobj` can load a typed pointer through managed storage wi
 body unverifiable. PointerArrayLoad and PointerObjectLoad keep a later `pop` from inheriting a
 diagnostic merely because it consumes that value.
 
-CoreCLR and Mono let the native-width `ldelem.i` and `stelem.i` forms access unmanaged-pointer and
+CoreCLR lets the native-width `ldelem.i` and `stelem.i` forms access unmanaged-pointer and
 function-pointer array elements. The analyzer accepts them as unverifiable; fixed-width forms remain
 incompatible. ILVerification reports `StackUnexpected` for both native and fixed-width forms.
 
@@ -102,7 +102,7 @@ address returns an object reference. The field and reference-load fixtures keep 
 metadata element type from leaking into either result.
 
 ECMA III.4.18 requires a correct `ldvirtftn` target to be nonstatic and defined for the supplied
-object. It does not require the target to be virtual. CoreCLR, Mono, and ILVerification accept the
+object. It does not require the target to be virtual. CoreCLR and ILVerification accept the
 nonvirtual `string::get_Length` fixture. A constructor target is also correct and executable, but
 unverifiable; the palette omits both shapes while explicitly entered IL retains their CLI behavior.
 Function-pointer signatures can hold an `ldftn` result and return it as a native-integer stack
@@ -111,7 +111,7 @@ value. Loading an instance initializer's address is unverifiable; loading a type
 ECMA III.4.25 makes `sizeof` always verifiable for a valid type token. Simple reference and value
 types use TypeDef or TypeRef tokens; II.23.2.14 admits unmanaged pointers, function pointers,
 arrays, and constructed generics as TypeSpecs, but not a managed pointer or `void`. The SizeOf
-fixtures exercise that boundary through CoreCLR and browser Mono.
+fixtures exercise that boundary through CoreCLR.
 
 ## Disagreements with Microsoft.ILVerification 10.0.11
 
@@ -132,7 +132,7 @@ pairs for add, sub, mul, and, and add.ovf that the corresponding ECMA operand ta
 The same importer reports `ExpectedIntegerType` for the managed-pointer forms of `add.ovf.un` and
 `sub.ovf.un`. ECMA table III.7 explicitly permits pointer/integer addition, pointer/integer
 subtraction, and pointer/pointer subtraction for these unsigned overflow instructions as correct
-but unverifiable IL. All three forms execute through CoreCLR, browser Mono, ILAsm, and `.save`.
+but unverifiable IL. All three forms execute through CoreCLR, ILAsm, and `.save`.
 
 The library maps a typed pointer field to native integer before arithmetic and reports no diagnostic.
 ECMA III.1.1.5 still makes unmanaged-pointer arithmetic unverifiable. PointerFieldArithmetic keeps
@@ -150,7 +150,7 @@ unverifiable diagnostic; `GenericBox` explicitly boxes the parameter and verifie
 `StackObjRef`, and `GenericReferenceBranch` reports `StackUnexpected`. An unconstrained parameter
 cannot be treated as an object reference without boxing.
 
-CoreCLR and Mono also execute `ldind.ref` and `stind.ref` through a managed pointer to a `class T`
+CoreCLR also executes `ldind.ref` and `stind.ref` through a managed pointer to a `class T`
 parameter. ECMA III.3.42 and III.3.62 exclude generic parameters from correct use of those short
 forms, and ILVerification reports `StackUnexpected`. `GenericIndirectReference` records the runtime
 extension while an unconstrained parameter remains rejected.
@@ -191,10 +191,10 @@ an `int8&` parameter. ECMA I.8.7 explicitly equates these verification types. Th
 keep each form accepted and executable.
 
 ILVerification reports `LdftnCtor` for a constructor operand to `ldvirtftn`, matching the analyzer's
-unverifiable diagnostic. CoreCLR and browser Mono execute the body. A nonvirtual instance method
+unverifiable diagnostic. CoreCLR executes the body. A nonvirtual instance method
 meets the correctness rule and verifies without a diagnostic.
 
-The C# compiler uses byte and word element opcodes for `bool[]` and `char[]`. CoreCLR, Mono, and
+The C# compiler uses byte and word element opcodes for `bool[]` and `char[]`. CoreCLR and
 ILVerification accept those forms by comparing the array element's verification type. The array
 rules retain that distinction from the intermediate `int32` value placed on the evaluation stack.
 
@@ -204,7 +204,7 @@ storage, so the value and reference element fixtures keep that covariance within
 The `readonly.` prefix suppresses `ldelema`'s exact runtime element check and returns a
 controlled-mutability pointer. `stind.*`, `stobj`, `initobj`, `mkrefany`, and ordinary byref
 arguments are unverifiable. Instance-field access and instance calls are permitted, so a value type
-can expose mutation through its fields and methods. CoreCLR and Mono execute these forms and
+can expose mutation through its fields and methods. CoreCLR executes these forms and
 `string[]` addressed as `object&` with the prefix. ILVerification reports `StackUnexpected` for
 several permitted or rejected shapes, reports `CallVirtOnValueType` for the permitted direct
 `callvirt`, and misses the invalid `cpobj` destination. The corpus pins each result independently.
@@ -212,8 +212,7 @@ several permitted or rejected shapes, reports `CallVirtOnValueType` for the perm
 The library reports `ImportCalli not implemented` for the indirect calls it reaches. The native
 pointer fixture stops earlier at `ExpectedNumericType` for `conv.u`. The tests assert those exact
 outcomes; neither counts as evidence that an invalid argument is rejected. ECMA III.3.20 supplies
-the argument and implicit-receiver rules. The accepted bodies run through desktop, both exports,
-and browser Mono.
+the argument and implicit-receiver rules. The accepted bodies run through the live session and both exports.
 
 The library reports only `Unverifiable` for `jmp` inside a try. ECMA III.3.37 makes that transfer
 incorrect as well as unverifiable, so `JumpFromTry` pins the analyzer's stricter rejection.
@@ -230,7 +229,7 @@ binder and decoded-body analyzer both reject `WrongStaticConstructorAllocation`.
 
 ECMA III.4.21 requires `newobj` to name an instance constructor, and III.4.1 forbids `callvirt`
 from invoking an instance initializer. `WrongMethodAllocation` and `WrongVirtualConstructorCall`
-keep both operand rules in the shared desktop and browser corpus.
+keep both operand rules in the shared corpus.
 
 For a reference type, direct `call` to an instance constructor initializes only the original
 receiver of a constructor. The target must be a different constructor of that type or a constructor
@@ -242,7 +241,7 @@ ECMA II.10.5.3.1 says user code can invoke one again. ILVerification accepts an 
 repeated base call, and an early method call although ECMA forbids them. It does not carry successful
 initialization through a filter or `finally`, and reports no diagnostic for inherited instance field
 access before the direct-base call required by I.8.9.6.6. The corpus pins those differences and
-exception rollback while CoreCLR and Mono execute every accepted body. ILVerification visits both
+exception rollback while CoreCLR executes every accepted body. ILVerification visits both
 successors of a conditional branch even when its operand is constant, so that edge still contributes
 its constructor state at a join.
 
@@ -264,11 +263,11 @@ that storage width separate from the intermediate value on the evaluation stack 
 
 The library cannot inspect a fixture containing typed-reference instructions and reports
 `TypedReference not supported in .NET Core`. ECMA III.4.19 and III.4.22–III.4.23 define the
-accepted and rejected operand shapes, which CoreCLR and browser Mono exercise independently.
+accepted and rejected operand shapes, which CoreCLR exercises independently.
 
 The library reports `ExpectedNumericType` when `conv.u` turns a managed address into the unmanaged
 pointer used by the field and memory fixtures. ECMA III.3.27 permits that correct but unverifiable
-conversion, and the memory instructions accept a native integer address. CoreCLR and browser Mono
+conversion, and the memory instructions accept a native integer address. CoreCLR
 execute each field, indirect, and object load, store, address, initialization, copy, and value-type
 receiver reproduction.
 

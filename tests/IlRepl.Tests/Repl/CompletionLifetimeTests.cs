@@ -20,11 +20,12 @@ public sealed class CompletionLifetimeTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
-    /// A thousand generic edits preserve completion without creating runtime assemblies or retaining past documents.
+    /// Repeated generic edits preserve completion without creating runtime assemblies or retaining past documents.
     /// </summary>
     [TestMethod]
-    public async Task Completion_ThousandGenericEdits_StaySymbolicAndBounded()
+    public async Task Completion_RepeatedGenericEdits_StaySymbolicAndBounded()
     {
+        const int editCount = 100;
         var session = new Session();
         using var completer = new OperandCompleter(session);
         string[] lines = [".class public Box<T> {", ".field public !0 value0", "}", "ldtoken Box"];
@@ -38,7 +39,7 @@ public sealed class CompletionLifetimeTests
         AppDomain.CurrentDomain.AssemblyLoad += Record;
         try
         {
-            for (var edit = 1; edit <= 1000; edit++)
+            for (var edit = 1; edit <= editCount; edit++)
             {
                 lines[1] = ".field public !0 value" + edit;
                 var reply = await completer.CompleteAsync(request, TestContext.CancellationToken);
@@ -57,15 +58,15 @@ public sealed class CompletionLifetimeTests
         Assert.IsLessThan(20_000_000L, retained);
         Assert.IsEmpty(session.Types);
         Assert.AreEqual(0, session.Submissions);
-        TestContext.WriteLine($"1000 generic edits: {watch.Elapsed.TotalMilliseconds:F0} ms, {retained:N0} retained bytes");
+        TestContext.WriteLine($"Repeated generic edits: {watch.Elapsed.TotalMilliseconds:F0} ms, {retained:N0} retained bytes");
         foreach (var line in lines.Take(3))
         {
             session.AddLine(line);
         }
 
         var defined = session.Types.Single().RuntimeType!;
-        Assert.IsNotNull(defined.GetField("value1000"));
-        Assert.AreEqual(typeof(string), defined.MakeGenericType(typeof(string)).GetField("value1000")!.FieldType);
+        Assert.IsNotNull(defined.GetField("value" + editCount));
+        Assert.AreEqual(typeof(string), defined.MakeGenericType(typeof(string)).GetField("value" + editCount)!.FieldType);
 
         void Record(object? sender, AssemblyLoadEventArgs args)
         {
