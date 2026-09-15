@@ -35,7 +35,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/IlRepl/IlRepl.csproj" />
+    <ProjectReference Include="../../src/IlRepl/IlRepl.csproj"
+                      AdditionalProperties="IncludeIlReplHostInOutput=false" />
     <ProjectReference Include="../../src/IlRepl.Engine/IlRepl.Engine.csproj"
                       AdditionalProperties="IncludeIlReplHostInOutput=false" />
     <ProjectReference Include="../../src/IlRepl.Host/IlRepl.Host.csproj"
