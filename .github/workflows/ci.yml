@@ -28,9 +28,6 @@ jobs:
           - name: Windows Arm64
             os: windows-11-arm
             artifact: windows-arm64
-          - name: macOS x64
-            os: macos-26-intel
-            artifact: macos-x64
           - name: macOS Arm64
             os: macos-26
             artifact: macos-arm64
