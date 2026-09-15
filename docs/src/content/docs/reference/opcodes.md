@@ -174,6 +174,7 @@ when the count depends on the operand.
 | `neg` | `1     → 1` | none | negate |
 | `newarr` | `i     → ref` | type | allocate array |
 | `newobj` | `…     → ref` | method | allocate object and call constructor |
+| `no.` | `→` | mask | omits the selected type, range, or null checks (unverifiable) |
 | `nop` | `→` | none | do nothing |
 | `not` | `1     → 1` | none | bitwise complement |
 | `or` | `1 1    → 1` | none | bitwise or |
@@ -229,5 +230,5 @@ when the count depends on the operand.
 | `volatile.` | `→` | none | prefix: volatile access |
 | `xor` | `1 1    → 1` | none | bitwise xor |
 
-218 opcodes. `calli` takes a signature, `switch` takes a label list, and the prefixes
-`constrained.`, `unaligned.`, `volatile.`, `tail.`, and `readonly.` apply to the next instruction.
+219 opcodes. `calli` takes a signature, `switch` takes a label list, and the prefixes
+`constrained.`, `no.`, `readonly.`, `tail.`, `unaligned.`, and `volatile.` apply to the next instruction.
