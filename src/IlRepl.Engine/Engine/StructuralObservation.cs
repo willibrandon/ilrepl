@@ -104,6 +104,7 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
 
         if (_identities.TryGetValue(value, out var seen))
         {
+            name = TypeName(FrozenCollectionBase(type) ?? type);
             return new ObservedValue("reference", name, null, seen, []);
         }
 
@@ -154,11 +155,11 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
                 | BindingFlags.Instance | BindingFlags.DeclaredOnly)
                 .OrderBy(field => field.MetadataToken))
             {
-                if (parent == typeof(Exception) && (exceptionDetails
-                    ? field.Name is not ("_data" or "_helpURL" or "_source")
-                    : field.Name is not ("_message" or "_innerException" or "_HResult" or "_data" or "_helpURL" or "_source")))
+                if (parent == typeof(Exception))
                 {
-                    continue;
+                    var storedDetail = field.Name is "_data" or "_helpURL" or "_source";
+                    var commonDetail = field.Name is "_message" or "_innerException" or "_HResult";
+                    if (!storedDetail && (exceptionDetails || !commonDetail)) continue;
                 }
 
                 if (parent == typeof(AggregateException)

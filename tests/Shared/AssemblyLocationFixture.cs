@@ -105,8 +105,10 @@ public static class AssemblyLocationFixture
     /// <param name="dispatch">The direct, reflected, delegate, token, or lookalike form.</param>
     /// <param name="path">The actual source filename that the desktop loader will map.</param>
     /// <param name="stream">Whether the browser's actual source loader reads bytes rather than mapping that file.</param>
+    /// <param name="machine">The desktop process architecture, or I386 for portable browser IL.</param>
     /// <returns>The real portable image and its independently specified observation.</returns>
-    public static (byte[] Image, string Expected) Create(string target, string api, string dispatch, string path, bool stream = false)
+    public static (byte[] Image, string Expected) Create(string target, string api, string dispatch, string path,
+        bool stream = false, Machine machine = Machine.I386)
     {
         var metadata = new MetadataBuilder();
         var name = "LocationSource" + Guid.NewGuid().ToString("N");
@@ -225,7 +227,7 @@ public static class AssemblyLocationFixture
             "ModuleVersionId" => mvid.ToString(),
             // Mono reports the metadata root version (1.1); CoreCLR reports the tables stream version (2.0).
             "MDStreamVersion" => stream ? "65537" : "131072",
-            "GetPEKind" => "1700332",
+            "GetPEKind" => machine switch { Machine.Amd64 => "534404", Machine.Arm64 => "543620", _ => "100332" },
             "IsDynamic" or "IsCollectible" or "ReflectionOnly" or "GlobalAssemblyCache" => "False",
             "IsFullyTrusted" => "True",
             "HostContext" => "0",
@@ -440,9 +442,9 @@ public static class AssemblyLocationFixture
         }
 
         var image = new BlobBuilder();
-        new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage),
+        new ManagedPEBuilder(new PEHeaderBuilder(machine: machine, imageCharacteristics: Characteristics.ExecutableImage),
             new MetadataRootBuilder(metadata, metadataVersion: ImageVersion), bodies, entryPoint: entry,
-            flags: CorFlags.ILOnly | CorFlags.Requires32Bit | CorFlags.Prefers32Bit).Serialize(image);
+            flags: CorFlags.ILOnly).Serialize(image);
         return (image.ToArray(), expected);
     }
 }

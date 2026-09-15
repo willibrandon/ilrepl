@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 using System.Text.Json;
 using IlRepl.Engine;
@@ -109,7 +110,11 @@ public sealed class AssemblyLocationTests
     {
         TestContext.WriteLine(target + "." + api + ": " + dispatch);
         var path = Path.Combine(directory, "actual-source-" + Guid.NewGuid().ToString("N") + ".exe");
-        var fixture = AssemblyLocationFixture.Create(target, api, dispatch, path);
+        var imageMachine = RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X64 => Machine.Amd64, Architecture.Arm64 => Machine.Arm64, _ => Machine.I386,
+        };
+        var fixture = AssemblyLocationFixture.Create(target, api, dispatch, path, machine: imageMachine);
         File.WriteAllBytes(path, fixture.Image);
         var session = new Session();
         var assembly = session.Resolver.Load(path);
@@ -135,16 +140,18 @@ public sealed class AssemblyLocationTests
         {
             var metadata = reader.GetMetadataReader();
             Assert.AreEqual(metadata.GetGuid(metadata.GetModuleDefinition().Mvid), assembly.ManifestModule.ModuleVersionId);
-            Assert.AreEqual(CorFlags.ILOnly | CorFlags.Requires32Bit | CorFlags.Prefers32Bit, reader.PEHeaders.CorHeader!.Flags);
+            Assert.AreEqual(CorFlags.ILOnly, reader.PEHeaders.CorHeader!.Flags);
             Assert.AreEqual(Characteristics.ExecutableImage, reader.PEHeaders.CoffHeader.Characteristics);
-            Assert.AreEqual(Machine.I386, reader.PEHeaders.CoffHeader.Machine);
+            Assert.AreEqual(imageMachine, reader.PEHeaders.CoffHeader.Machine);
         }
         if (api == "GetPEKind")
         {
             assembly.ManifestModule.GetPEKind(out var kind, out var machine);
             var observation = "runtime PE kind " + kind + " (" + (int)kind + "), machine " + machine + " (" + (int)machine + ")";
-            Assert.AreEqual(PortableExecutableKinds.ILOnly | PortableExecutableKinds.Preferred32Bit, kind, observation);
-            Assert.AreEqual(ImageFileMachine.I386, machine, observation);
+            var expectedKind = PortableExecutableKinds.ILOnly;
+            if (imageMachine != Machine.I386) expectedKind |= PortableExecutableKinds.PE32Plus;
+            Assert.AreEqual(expectedKind, kind, observation);
+            Assert.AreEqual((ImageFileMachine)imageMachine, machine, observation);
         }
         var edit = session.PrepareEdit("int32 [" + assembly.GetName().Name + "]SourceInspection.Owner::Read(string)", "Copy");
         Assert.AreEqual(42, edit.Original.Requested.Invoke(null, [fixture.Expected]), target + "." + api);

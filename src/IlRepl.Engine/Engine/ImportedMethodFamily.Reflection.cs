@@ -94,6 +94,16 @@ internal sealed partial class ImportedMethodFamily
     private static string? AssemblyInspectionProblem(MethodBase method)
     {
         if (MetadataReferenceProblem(method) is { } referenceProblem) return referenceProblem;
+        if (method.DeclaringType is { } tokenType && tokenType.Assembly == typeof(Module).Assembly
+            && (typeof(Module).IsAssignableFrom(tokenType) && method.Name is nameof(Module.ResolveMethod) or nameof(Module.ResolveField)
+                or nameof(Module.ResolveType) or nameof(Module.ResolveMember) or nameof(Module.ResolveString)
+                or nameof(Module.ResolveSignature)
+                || tokenType == typeof(ModuleHandle) && method.Name is nameof(ModuleHandle.ResolveMethodHandle)
+                    or nameof(ModuleHandle.ResolveFieldHandle) or nameof(ModuleHandle.ResolveTypeHandle)
+                    or nameof(ModuleHandle.GetRuntimeMethodHandleFromMetadataToken)
+                    or nameof(ModuleHandle.GetRuntimeFieldHandleFromMetadataToken)
+                    or nameof(ModuleHandle.GetRuntimeTypeHandleFromMetadataToken)))
+            return "module token resolution cannot reproduce the original metadata tokens";
         if (method.DeclaringType is { } type && type.Assembly == typeof(Assembly).Assembly
             && typeof(Assembly).IsAssignableFrom(type))
         {
