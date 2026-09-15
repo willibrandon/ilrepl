@@ -93,7 +93,8 @@ internal sealed partial class StructuralObservation
     private string? CollectionOrder(object? key, int depth)
     {
         var owner = _orderingOwner ?? this;
-        var observer = new StructuralObservation(typeNames) { _orderingOwner = owner, _nodes = _nodes };
+        var observer = new StructuralObservation(typeNames, new ObservationIdentityMap(Identities))
+            { _orderingOwner = owner, _nodes = _nodes };
         foreach (var pair in _identities) observer._identities.Add(pair.Key, pair.Value);
         var observation = observer.Capture(key, depth);
         var text = new StringBuilder();

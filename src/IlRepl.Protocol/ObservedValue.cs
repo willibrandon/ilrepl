@@ -8,7 +8,7 @@ namespace IlRepl.Protocol;
 /// </param>
 /// <param name="Type">The logical metadata type identity.</param>
 /// <param name="Value">A scalar representation or an explanation for an unavailable observation.</param>
-/// <param name="Identity">The object identity within this observation graph, or null for a value.</param>
+/// <param name="Identity">The reference identity within a graph and linked before/after snapshots, or null when unavailable.</param>
 /// <param name="Members">The observed fields, array elements, or collection entries in traversal order.</param>
 public sealed record ObservedValue(string Kind, string Type, string? Value, int? Identity, IReadOnlyList<ObservedMember> Members)
 {

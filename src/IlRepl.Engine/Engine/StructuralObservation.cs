@@ -8,7 +8,8 @@ namespace IlRepl.Engine;
 /// <summary>
 /// Observes instance fields without executing user getters, formatting, equality, or constructors.
 /// </summary>
-internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, string> typeNames)
+internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, string> typeNames,
+    ObservationIdentityMap? identities = null)
 {
     private const int MaximumNodes = 4096;
     private const int MaximumDepth = 64;
@@ -17,6 +18,11 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
     private StructuralObservation? _orderingOwner;
     private int _orderingNodes;
     private int _orderingCharacters;
+
+    /// <summary>
+    /// The weak reference identities that a later snapshot can reuse while capturing all fields again.
+    /// </summary>
+    internal ObservationIdentityMap Identities { get; } = identities ?? new ObservationIdentityMap();
 
     /// <summary>
     /// Captures one value using the shared object-identity map for all roots in this observation.
@@ -108,7 +114,7 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
             return new ObservedValue("reference", name, null, seen, []);
         }
 
-        var identity = _identities.Count + 1;
+        var identity = Identities.Get(value);
         _identities.Add(value, identity);
 
         if (CaptureStringComparer(value, name, identity) is { } comparer) return comparer;
@@ -196,7 +202,7 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
     {
         if (!_identities.TryGetValue(value, out var identity))
         {
-            identity = _identities.Count + 1;
+            identity = Identities.Get(value);
             _identities.Add(value, identity);
         }
 
@@ -262,7 +268,7 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
         {
             if (!_identities.TryGetValue(exception, out var identity))
             {
-                identity = _identities.Count + 1;
+                identity = Identities.Get(exception);
                 _identities.Add(exception, identity);
             }
 

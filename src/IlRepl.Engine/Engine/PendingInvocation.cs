@@ -5,12 +5,19 @@ namespace IlRepl.Engine;
 /// <summary>
 /// The inputs and live completion values of one invocation inside an isolated comparison runtime.
 /// </summary>
-internal sealed class PendingInvocation(IReadOnlyList<ObservedMember> inputs)
+/// <param name="inputs">The captured input graph.</param>
+/// <param name="identities">The weak identities that link later snapshots to those inputs.</param>
+internal sealed class PendingInvocation(IReadOnlyList<ObservedMember> inputs, ObservationIdentityMap identities)
 {
     /// <summary>
     /// The captured input graph before the selected method began.
     /// </summary>
     internal IReadOnlyList<ObservedMember> Inputs { get; } = inputs;
+
+    /// <summary>
+    /// The input reference identities retained weakly until the method completes.
+    /// </summary>
+    internal ObservationIdentityMap InputIdentities { get; } = identities;
 
     /// <summary>
     /// The completed observation, or null while the selected invocation is still running.

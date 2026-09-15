@@ -151,6 +151,7 @@ Exception details include stored fields such as `ParamName`, `ActualValue`, and 
 If an exception cannot be captured completely, the report explains why.
 It also shows console output, including direct stream writes, and tracks shared objects and `ref` aliases.
 Objects are compared through their fields without calling user properties, `ToString`, or equality methods.
+Comparisons detect reference replacement even when the new object has the same field values.
 `Dictionary` and `HashSet` retain their entries, enumeration order, comparer settings, and shared references.
 Immutable hash collections, their builders, and frozen collections use a stable structural order and retain their comparer settings.
 Concurrent dictionaries and hashtables use their logical entries and comparer settings, independent of bucket layout and insertion order.

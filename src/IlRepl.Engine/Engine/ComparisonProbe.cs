@@ -28,7 +28,7 @@ public static partial class ComparisonProbe
             var observation = new StructuralObservation(s_typeNames);
             var roots = Roots(observation, receiver, arguments, aliases);
             var identity = Invocations.Count;
-            Invocations.Add(new PendingInvocation(roots));
+            Invocations.Add(new PendingInvocation(roots, observation.Identities));
             return identity;
         }
     }
@@ -48,7 +48,7 @@ public static partial class ComparisonProbe
         lock (Gate)
         {
             var invocation = Invocations[identity];
-            var observation = new StructuralObservation(s_typeNames);
+            var observation = new StructuralObservation(s_typeNames, new ObservationIdentityMap(invocation.InputIdentities));
             var outputs = Roots(observation, receiver, arguments, aliases);
             outputs.Add(new ObservedMember("return", observation.Capture(result)));
             invocation.Observation = new InvocationObservation(invocation.Inputs, outputs,
