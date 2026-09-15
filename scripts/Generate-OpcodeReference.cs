@@ -3,6 +3,7 @@
 #:project ../src/IlRepl.Engine/IlRepl.Engine.csproj
 
 using System.Globalization;
+using System.Reflection.Emit;
 using System.Text;
 using IlRepl.Engine;
 
@@ -32,38 +33,41 @@ foreach (var name in OpcodeTable.Names)
         continue;
     }
 
-    var op = OpcodeTable.ByName[name];
+    var op = OpcodeTable.BySourceName[name];
     var stack = OpcodeTable.StackTransition(op).Replace("  ", " ", StringComparison.Ordinal).Trim();
     sb.Append("| `").Append(name).Append("` | `").Append(stack).Append("` | ")
-      .Append(Operand(op.OperandType)).Append(" | ").Append(OpcodeTable.Describe(op)).AppendLine(" |");
+      .Append(Operand(op)).Append(" | ").Append(OpcodeTable.Describe(op)).AppendLine(" |");
     count++;
 }
 
 sb.AppendLine();
-sb.Append(count.ToString(CultureInfo.InvariantCulture)).AppendLine(" opcodes. `calli` takes a signature, `switch` takes a label list, and the prefixes");
-sb.AppendLine("`constrained.`, `unaligned.`, `volatile.`, `tail.`, and `readonly.` apply to the next instruction.");
+sb.Append(count.ToString(CultureInfo.InvariantCulture))
+  .AppendLine(" opcodes. `calli` takes a signature, `switch` takes a label list, and the prefixes");
+sb.AppendLine("`constrained.`, `no.`, `readonly.`, `tail.`, `unaligned.`, and `volatile.` apply to the next instruction.");
 
 File.WriteAllText(output, sb.ToString());
 Console.WriteLine($"wrote {output} ({count} opcodes)");
 return 0;
 
-static string Operand(System.Reflection.Emit.OperandType type) => type switch
+static string Operand(IlOpcode opcode) => opcode.IsSkipChecksPrefix ? "mask" : OperandName(opcode.OperandType);
+
+static string OperandName(OperandType type) => type switch
 {
-    System.Reflection.Emit.OperandType.InlineNone => "none",
-    System.Reflection.Emit.OperandType.ShortInlineI => "int8",
-    System.Reflection.Emit.OperandType.InlineI => "int32",
-    System.Reflection.Emit.OperandType.InlineI8 => "int64",
-    System.Reflection.Emit.OperandType.ShortInlineR => "float32",
-    System.Reflection.Emit.OperandType.InlineR => "float64",
-    System.Reflection.Emit.OperandType.InlineString => "string",
-    System.Reflection.Emit.OperandType.ShortInlineBrTarget or System.Reflection.Emit.OperandType.InlineBrTarget => "label",
-    System.Reflection.Emit.OperandType.InlineSwitch => "labels",
-    System.Reflection.Emit.OperandType.ShortInlineVar or System.Reflection.Emit.OperandType.InlineVar => "local or argument",
-    System.Reflection.Emit.OperandType.InlineType => "type",
-    System.Reflection.Emit.OperandType.InlineMethod => "method",
-    System.Reflection.Emit.OperandType.InlineField => "field",
-    System.Reflection.Emit.OperandType.InlineTok => "token",
-    System.Reflection.Emit.OperandType.InlineSig => "signature",
+    OperandType.InlineNone => "none",
+    OperandType.ShortInlineI => "int8",
+    OperandType.InlineI => "int32",
+    OperandType.InlineI8 => "int64",
+    OperandType.ShortInlineR => "float32",
+    OperandType.InlineR => "float64",
+    OperandType.InlineString => "string",
+    OperandType.ShortInlineBrTarget or OperandType.InlineBrTarget => "label",
+    OperandType.InlineSwitch => "labels",
+    OperandType.ShortInlineVar or OperandType.InlineVar => "local or argument",
+    OperandType.InlineType => "type",
+    OperandType.InlineMethod => "method",
+    OperandType.InlineField => "field",
+    OperandType.InlineTok => "token",
+    OperandType.InlineSig => "signature",
     _ => type.ToString(),
 };
 

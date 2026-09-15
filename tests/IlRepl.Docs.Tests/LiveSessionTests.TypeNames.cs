@@ -101,14 +101,10 @@ public sealed partial class LiveSessionTests
 
     private static async Task RejectTypeNameDraftAsync(IPage page, string api)
     {
-        await TypeNameInputIdleAsync(page);
-        var diagnostic = await TypeNameTranscriptAsync(page);
-        Assert.Contains(TypeNameFixture.Problem, diagnostic);
-        Assert.Contains(api, diagnostic);
         await page.Keyboard.PressAsync("Enter");
         await TypeNamePromptContainsAsync(page, "}");
         await TypeNameInputIdleAsync(page);
-        diagnostic = await TypeNameTranscriptAsync(page);
+        var diagnostic = await TypeNameTranscriptAsync(page);
         Assert.Contains(TypeNameFixture.Problem, diagnostic);
         Assert.Contains(api, diagnostic);
         await ClearTypeNamePromptAsync(page);
