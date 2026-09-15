@@ -25,6 +25,7 @@ public sealed partial class LiveSessionTests
     [DataRow("webkit", null, true, true)]
     [DataRow("chromium", null, false, false)]
     [DataRow("webkit", null, false, false)]
+    [DoNotParallelize]
     [Timeout(240_000, CooperativeCancellation = true)]
     public async Task LiveSession_ParameterDefaultComparisonPreservesExplicitConstants(string browser, int? originalDefault,
         bool isPrivate, bool optional)
