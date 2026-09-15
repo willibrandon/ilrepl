@@ -10,7 +10,6 @@ namespace IlRepl.Tests.Tui;
 /// An idle prompt refreshes ambiguous type spellings after background loads through either engine transport.
 /// </summary>
 [TestClass]
-[DoNotParallelize]
 public sealed class AssemblyCompletionTests
 {
     /// <summary>

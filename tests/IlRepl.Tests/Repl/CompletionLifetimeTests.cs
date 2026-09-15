@@ -11,7 +11,6 @@ namespace IlRepl.Tests.Repl;
 /// Verifies bounded preview ownership and allocation while repeatedly replacing unsent generic declarations.
 /// </summary>
 [TestClass]
-[DoNotParallelize]
 public sealed class CompletionLifetimeTests
 {
     /// <summary>

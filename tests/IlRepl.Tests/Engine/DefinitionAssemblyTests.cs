@@ -63,7 +63,6 @@ public sealed partial class DefinitionAssemblyTests
     /// while it does, which would keep these alive through the collection rounds.
     /// </summary>
     [TestMethod]
-    [DoNotParallelize]
     public void Release_RetainedType_KeepsDependencyThenCollects()
     {
         TestSkip.Unless(!OperatingSystem.IsBrowser(), "unloading needs CoreCLR");

@@ -7,7 +7,6 @@ namespace IlRepl.Tests.Protocol;
 /// Both engine transports complete read-only snapshots and remain usable after cancellation and mutation.
 /// </summary>
 [TestClass]
-[DoNotParallelize]
 public sealed class EngineCompletionTests
 {
     /// <summary>

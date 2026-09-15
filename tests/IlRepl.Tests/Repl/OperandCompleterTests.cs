@@ -11,7 +11,6 @@ namespace IlRepl.Tests.Repl;
 /// Operand pages preserve the identities, syntax and editing context accepted by real input.
 /// </summary>
 [TestClass]
-[DoNotParallelize]
 public sealed class OperandCompleterTests
 {
     /// <summary>

@@ -149,7 +149,6 @@ public sealed class MethodValidationTests
     /// trampoline and the current version stay.
     /// </summary>
     [TestMethod]
-    [DoNotParallelize]
     public void Redefinitions_ReleaseSupersededVersions()
     {
         TestSkip.Unless(!OperatingSystem.IsBrowser(), "unloading needs CoreCLR");

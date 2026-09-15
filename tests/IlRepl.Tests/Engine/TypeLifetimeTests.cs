@@ -43,7 +43,6 @@ public sealed class TypeLifetimeTests
     /// Loading a collectible definition leaves the process assembly catalog on the same snapshot.
     /// </summary>
     [TestMethod]
-    [DoNotParallelize]
     public void CollectibleLoad_DoesNotRebuildProcessAssemblyCatalog()
     {
         _ = DefineAndReset(new Session());
@@ -57,7 +56,6 @@ public sealed class TypeLifetimeTests
     /// A searchable load callback never waits for the gate used to publish the first catalog snapshot.
     /// </summary>
     [TestMethod]
-    [DoNotParallelize]
     public void SearchableLoad_DoesNotWaitForCatalogGate()
     {
         var type = typeof(TypeResolver).Assembly.GetType("IlRepl.Engine.ProcessAssemblies", throwOnError: true)!;
@@ -89,7 +87,6 @@ public sealed class TypeLifetimeTests
     /// Other tests capture process-wide assembly snapshots, so only this test's resolver workers may run alongside its collection checks.
     /// </remarks>
     [TestMethod]
-    [DoNotParallelize]
     [Timeout(30_000, CooperativeCancellation = true)]
     public void Reset_CollectsWhileOtherThreadsResolveNames()
     {
@@ -301,7 +298,6 @@ public sealed class TypeLifetimeTests
     /// Clearing the cell keeps the types; resetting drops them and their assemblies can be collected.
     /// </summary>
     [TestMethod]
-    [DoNotParallelize]
     public void Reset_DropsTypes_AndTheirAssembliesCollect()
     {
         var session = Load(Counter);
@@ -328,7 +324,6 @@ public sealed class TypeLifetimeTests
     /// An instance retained by the user keeps the old type alive after a reset.
     /// </summary>
     [TestMethod]
-    [DoNotParallelize]
     public void Reset_RetainedInstance_KeepsItsTypeUsable()
     {
         var session = Load(Counter);

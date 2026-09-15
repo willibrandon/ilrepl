@@ -23,7 +23,6 @@ public sealed class IlReplAppCompletionTests
     /// Consecutive terminal Backspace bytes remove an invalid argument while preserving its selected generic owner.
     /// </summary>
     [TestMethod]
-    [DoNotParallelize]
     public async Task Operand_InvalidGenericArgument_CanBeDeleted()
     {
         var ct = TestContext.CancellationToken;
@@ -66,7 +65,6 @@ public sealed class IlReplAppCompletionTests
     /// <param name="remote">Whether the real host process serves completion.</param>
     [TestMethod]
     // Concurrent assembly loads intentionally withdraw rows; AssemblyCompletionTests exercises that separate transition.
-    [DoNotParallelize]
     [DataRow("tab", false)]
     [DataRow("enter", false)]
     [DataRow("right", false)]
@@ -294,7 +292,6 @@ public sealed class IlReplAppCompletionTests
     /// A typed operand reaches the real host and returns as visible, current rows within the input budget.
     /// </summary>
     [TestMethod]
-    [DoNotParallelize]
     public async Task Operand_HostKeystroke_RoundTripsWithinBudget()
     {
         var ct = TestContext.CancellationToken;
