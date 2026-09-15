@@ -25,8 +25,6 @@ These instructions apply to the entire repository.
 - A plain `dotnet test` must work without manually configured environment variables.
 - Keep real coverage. Do not delete tests to improve runtime, and do not use mocks.
 - Use condition based synchronization instead of fixed sleeps.
-- The full local suite must finish within one minute on the primary development machine.
-- The complete CI workflow must finish within five minutes.
 - Run the complete suite on every supported operating system and architecture. Do not shard the suite.
 - Do not add browser or documentation site tests to the regular test suite.
 - Do not publish test counts in documentation or pull request descriptions.
@@ -39,10 +37,4 @@ These instructions apply to the entire repository.
 
 ## Git and GitHub
 
-- Never modify `.gitignore`.
-- Never commit `plan.md`.
-- Preserve user changes. Inspect the worktree before editing, committing, resetting, or switching branches.
-- Do not use destructive Git commands to discard work unless the user explicitly requests that exact action.
 - Keep pull request descriptions as short prose without headings, lists, manual line wrapping, or em dashes.
-- Do not manually start Codex reviews. They run automatically after each push.
-- Resolve every addressed review conversation and continue until no unresolved review comments remain.
