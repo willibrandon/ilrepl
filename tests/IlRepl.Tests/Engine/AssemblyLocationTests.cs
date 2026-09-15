@@ -108,7 +108,7 @@ public sealed class AssemblyLocationTests
     private async Task AssertCaseAsync(string directory, string target, string api, string dispatch, bool supported)
     {
         TestContext.WriteLine(target + "." + api + ": " + dispatch);
-        var path = Path.Combine(directory, "actual-source-" + Guid.NewGuid().ToString("N") + ".dll");
+        var path = Path.Combine(directory, "actual-source-" + Guid.NewGuid().ToString("N") + ".exe");
         var fixture = AssemblyLocationFixture.Create(target, api, dispatch, path);
         File.WriteAllBytes(path, fixture.Image);
         var session = new Session();
@@ -118,11 +118,25 @@ public sealed class AssemblyLocationTests
         Assert.AreEqual(AssemblyLocationFixture.Scope, assembly.ManifestModule.ScopeName);
         Assert.AreEqual(AssemblyLocationFixture.ImageVersion, assembly.ImageRuntimeVersion);
         Assert.AreEqual("Main", assembly.EntryPoint!.Name);
+        if (AssemblyLocationFixture.IsModuleTable(api))
+        {
+            string[] expectedModules = [AssemblyLocationFixture.Scope];
+            Assert.AreNotEqual(AssemblyLocationFixture.Scope, Path.GetFileName(path));
+            Assert.AreSame(assembly.ManifestModule, assembly.GetModule(AssemblyLocationFixture.Scope));
+            Assert.AreSequenceEqual(expectedModules, assembly.GetModules().Select(module => module.ScopeName));
+            Assert.AreSequenceEqual(expectedModules, assembly.GetModules(true).Select(module => module.ScopeName));
+            Assert.AreSequenceEqual(expectedModules,
+                assembly.GetLoadedModules().Select(module => module.ScopeName));
+            Assert.AreSequenceEqual(expectedModules,
+                assembly.GetLoadedModules(true).Select(module => module.ScopeName));
+            Assert.AreSequenceEqual(expectedModules, assembly.Modules.Select(module => module.ScopeName));
+        }
         using (var reader = new PEReader(new MemoryStream(fixture.Image)))
         {
             var metadata = reader.GetMetadataReader();
             Assert.AreEqual(metadata.GetGuid(metadata.GetModuleDefinition().Mvid), assembly.ManifestModule.ModuleVersionId);
             Assert.AreEqual(CorFlags.ILOnly | CorFlags.Requires32Bit | CorFlags.Prefers32Bit, reader.PEHeaders.CorHeader!.Flags);
+            Assert.AreEqual(Characteristics.ExecutableImage, reader.PEHeaders.CoffHeader.Characteristics);
             Assert.AreEqual(Machine.I386, reader.PEHeaders.CoffHeader.Machine);
         }
         if (api == "GetPEKind")
@@ -143,7 +157,7 @@ public sealed class AssemblyLocationTests
         else
         {
             var problem = AssemblyLocationFixture.Problem(target, api);
-            var apiName = api == "GetFiles(bool)" ? "GetFiles" : api;
+            var apiName = api.EndsWith("(bool)", StringComparison.Ordinal) ? api[..^6] : api;
             Assert.Contains(item => item.Contains(problem, StringComparison.Ordinal), edit.Problems,
                 string.Join("; ", edit.Problems));
             Assert.Contains(dependency => dependency.Symbol.Contains(apiName, StringComparison.Ordinal)

@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
@@ -14,9 +15,9 @@ internal sealed partial class ImportedMethodFamily
         typeof(Assembly), typeof(Module), typeof(Attribute), typeof(CustomAttributeExtensions), typeof(CustomAttributeData),
         typeof(ICustomAttributeProvider), typeof(Type), typeof(Delegate), typeof(MethodBase), typeof(MethodInfo),
         typeof(PropertyInfo), typeof(MethodInvoker), typeof(ConstructorInvoker), typeof(Activator), typeof(RuntimeMethodHandle),
-        typeof(ModuleHandle),
+        typeof(ModuleHandle), typeof(object), typeof(RuntimeHelpers),
     }.SelectMany(type => type.GetMethods()).Where(method => AssemblyInspectionProblem(method) is not null || IsIndirectReflection(method)
-        || IsTypeLookup(method) || IsActivation(method) || IsAssemblyActivation(method))
+        || IsTypeLookup(method) || IsActivation(method) || IsAssemblyActivation(method) || IsObjectReferenceInspection(method))
         .SelectMany(method => method.Name.StartsWith("get_", StringComparison.Ordinal) ? new[] { method.Name, method.Name[4..] }
             : new[] { method.Name }).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -136,9 +137,10 @@ internal sealed partial class ImportedMethodFamily
             for (var position = 0; position < body.State.Entries.Count; position++)
             {
                 var instruction = body.State.Entries[position].Instruction;
+                if (instruction is not null) ValidateMetadataReference(values, body, position, instruction);
                 if (instruction?.Operand is not ResolvedMethod resolved || instruction.Op == OpCodes.Ldtoken) continue;
                 var target = resolved.Method ?? _pinned[resolved.Definition!.Name];
-                if (target.DeclaringType == typeof(object) && target.Name == nameof(ToString)
+                if (target.DeclaringType == typeof(object) && target.Name is nameof(ToString) or nameof(Equals) or nameof(GetHashCode)
                     && (instruction.Op == OpCodes.Callvirt || instruction.Op == OpCodes.Ldvirtftn))
                 {
                     var dispatched = MetadataIdentityOverride(target, values.Argument(body, position, -1));
@@ -157,7 +159,8 @@ internal sealed partial class ImportedMethodFamily
                     if (candidate is ReflectedDelegateName name && !IndirectReflectionNames.Contains(name.Name)) continue;
                     var member = candidate is PropertyInfo property ? property.GetMethod : candidate as MethodBase;
                     // A delegate's bound receiver was validated when its binding or method pointer was created.
-                    if (member?.DeclaringType == typeof(object) && member.Name == nameof(ToString)
+                    if (member?.DeclaringType == typeof(object) && !member.IsStatic
+                        && member.Name is nameof(ToString) or nameof(Equals) or nameof(GetHashCode)
                         && target.Name != nameof(Delegate.DynamicInvoke))
                     {
                         var receivers = InvocationReceiver(values, body, position, target);
@@ -166,6 +169,8 @@ internal sealed partial class ImportedMethodFamily
                             reason = "indirect reflection cannot prove a supported target";
                         member = MetadataIdentityOverride(member, receivers);
                     }
+                    if (member is not null && member.IsStatic && IsObjectReferenceInspection(member))
+                        reason = "indirect reflection cannot prove a supported target";
                     if (candidate is null) continue;
                     if (candidate is FieldInfo) continue;
                     if (member is null || IsIndirectReflection(member))
@@ -192,12 +197,13 @@ internal sealed partial class ImportedMethodFamily
 
     private static MethodBase MetadataIdentityOverride(MethodBase method, object?[]? receivers)
     {
-        if (method.DeclaringType != typeof(object) || method.Name != nameof(ToString)) return method;
-        foreach (var type in new[] { typeof(Assembly), typeof(Module) })
+        if (method.DeclaringType != typeof(object) || method.IsStatic
+            || method.Name is not (nameof(ToString) or nameof(Equals) or nameof(GetHashCode))) return method;
+        foreach (var type in new[] { typeof(Assembly), typeof(Module), typeof(ModuleHandle) })
         {
             if (receivers?.Any(receiver => type.IsInstanceOfType(receiver)
                 || receiver is ReflectedInstance instance && type.IsAssignableFrom(instance.Type)) == true)
-                return type.GetMethod(nameof(ToString), Type.EmptyTypes)!;
+                return type.GetMethod(method.Name, method.GetParameters().Select(parameter => parameter.ParameterType).ToArray())!;
         }
         return method;
     }

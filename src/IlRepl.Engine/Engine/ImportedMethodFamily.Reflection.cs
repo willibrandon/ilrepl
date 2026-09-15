@@ -93,9 +93,13 @@ internal sealed partial class ImportedMethodFamily
 
     private static string? AssemblyInspectionProblem(MethodBase method)
     {
+        if (MetadataReferenceProblem(method) is { } referenceProblem) return referenceProblem;
         if (method.DeclaringType is { } type && type.Assembly == typeof(Assembly).Assembly
             && typeof(Assembly).IsAssignableFrom(type))
         {
+            if (method.Name is nameof(Assembly.GetModule) or nameof(Assembly.GetModules) or nameof(Assembly.GetLoadedModules)
+                or "get_Modules")
+                return "assembly module inspection cannot reproduce the original module table";
             if (method.Name is "get_Location" or "get_CodeBase" or "get_EscapedCodeBase" or nameof(Assembly.GetFile)
                 or nameof(Assembly.GetFiles))
                 return "assembly file inspection cannot reproduce the original assembly file context";

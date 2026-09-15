@@ -36,6 +36,7 @@
     <TrimmerRootAssembly Include="System.Console" />
     <TrimmerRootAssembly Include="System.Collections" />
     <TrimmerRootAssembly Include="System.Collections.Immutable" />
+    <TrimmerRootAssembly Include="System.Collections.NonGeneric" />
     <TrimmerRootAssembly Include="System.Linq" />
     <TrimmerRootAssembly Include="System.Text.RegularExpressions" />
     <TrimmerRootAssembly Include="System.Runtime.Numerics" />

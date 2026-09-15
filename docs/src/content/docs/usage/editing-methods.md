@@ -150,7 +150,8 @@ It also shows console output, including direct stream writes, and tracks shared 
 Objects are compared through their fields without calling user properties, `ToString`, or equality methods.
 `Dictionary` and `HashSet` retain their entries, enumeration order, comparer settings, and shared references.
 Immutable hash collections and their builders use a stable structural order of keys and retain their comparer settings.
-Concurrent dictionaries use their logical entries and comparer settings, independent of bucket layout and insertion order.
+Concurrent dictionaries and hashtables use their logical entries and comparer settings, independent of bucket layout and insertion order.
+Synchronized hashtables retain their relationship to the underlying table.
 Distinct keys with identical structural observations make the comparison incomplete.
 `Task`, its subclasses, and `ValueTask` results are awaited.
 Tasks keep their identity and `AsyncState`. A null task is reported as `null Task`, distinct from a completed task with a null result.
@@ -210,7 +211,8 @@ When code uses reflection, copied types retain their full member context, includ
 Known constructor lookups and reflective invocation use the copied constructors.
 Runtime declarations needed only for reflection keep their metadata.
 Generated helpers do not change the declaring type's reflected member list.
-Assembly and module inspection is rejected for identity, file paths, image metadata, type lists, resources, and custom attributes.
+Assembly and module inspection is rejected for identity, reference comparisons, module lists, file paths, image metadata,
+type lists, resources, and custom attributes.
 Copies do not retain this source metadata. This includes `GetTypes`, `DefinedTypes`, `GetForwardedTypes`,
 `Assembly.GetName()`, `Assembly.Location`, `Assembly.GetReferencedAssemblies()`, `Module.ModuleVersionId`, and attribute APIs.
 Use type or member APIs to inspect copied attributes.

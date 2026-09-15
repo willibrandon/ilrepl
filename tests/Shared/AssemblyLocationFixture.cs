@@ -36,6 +36,11 @@ public static class AssemblyLocationFixture
         ("Module", "MDStreamVersion", "direct"), ("Module", "GetPEKind", "direct"),
         ("Module", "ToString", "direct"), ("Module", "ToString", "object"), ("Module", "ScopeName", "property"),
         ("ModuleHandle", "MDStreamVersion", "direct"),
+        ("Assembly", "GetModule", "direct"), ("Assembly", "GetModules", "direct"),
+        ("Assembly", "GetModules(bool)", "direct"), ("Assembly", "GetLoadedModules", "direct"),
+        ("Assembly", "GetLoadedModules(bool)", "direct"), ("Assembly", "Modules", "direct"),
+        ("Assembly", "GetModules", "invoke"), ("Assembly", "GetLoadedModules", "table-delegate"),
+        ("Assembly", "GetModule", "helper"),
     ];
 
     /// <summary>
@@ -48,6 +53,9 @@ public static class AssemblyLocationFixture
         ("Assembly", "Location", "token"), ("Module", "ModuleVersionId", "token"),
         ("Assembly", "Location", "lookalike"), ("Module", "Name", "lookalike"),
         ("Type", "Name", "direct"),
+        ("Assembly", "GetModule", "token"), ("Assembly", "GetLoadedModules(bool)", "token"),
+        ("Assembly", "Modules", "token"), ("Assembly", "GetModule", "lookalike"),
+        ("Assembly", "GetLoadedModules", "lookalike"), ("Assembly", "Modules", "lookalike"),
     ];
 
     /// <summary>
@@ -58,8 +66,17 @@ public static class AssemblyLocationFixture
     /// <returns>The guard's expected explanation.</returns>
     public static string Problem(string target, string api) => target is "Module" or "ModuleHandle"
         ? "module identity inspection cannot reproduce the original module metadata"
+        : IsModuleTable(api) ? "assembly module inspection cannot reproduce the original module table"
         : FileDependent(target, api) ? "assembly file inspection cannot reproduce the original assembly file context"
         : AssemblyIdentityFixture.Problem;
+
+    /// <summary>
+    /// Identifies the exact module-table APIs whose source contents generated copies cannot reproduce.
+    /// </summary>
+    /// <param name="api">The selected property or method spelling.</param>
+    /// <returns>Whether this operation observes the assembly's module table.</returns>
+    public static bool IsModuleTable(string api) => api is "GetModule" or "GetModules" or "GetModules(bool)"
+        or "GetLoadedModules" or "GetLoadedModules(bool)" or "Modules";
 
     /// <summary>
     /// Identifies source observations that a file-loaded original cannot retain when reloaded from captured bytes.
@@ -189,9 +206,11 @@ public static class AssemblyLocationFixture
         };
         var inspection = api switch
         {
-            "GetFile" => receiver.GetMethod(api, [typeof(string)])!,
-            "GetFiles" => receiver.GetMethod(api, Type.EmptyTypes)!,
+            "GetFile" or "GetModule" => receiver.GetMethod(api, [typeof(string)])!,
+            "GetFiles" or "GetModules" or "GetLoadedModules" => receiver.GetMethod(api, Type.EmptyTypes)!,
             "GetFiles(bool)" => receiver.GetMethod("GetFiles", [typeof(bool)])!,
+            "GetModules(bool)" => receiver.GetMethod("GetModules", [typeof(bool)])!,
+            "GetLoadedModules(bool)" => receiver.GetMethod("GetLoadedModules", [typeof(bool)])!,
             "GetPEKind" => receiver.GetMethod(api)!,
             "ToString" => receiver.GetMethod(api, Type.EmptyTypes)!,
             _ => receiver.GetProperty(api)!.GetMethod!,
@@ -213,6 +232,7 @@ public static class AssemblyLocationFixture
             "EntryPoint" => "Main",
             _ => path,
         };
+        if (IsModuleTable(api)) expected = Scope;
         if (dispatch == "lookalike") expected = "user metadata";
         var instructions = new InstructionEncoder(new BlobBuilder());
         void Call(MethodBase method)
@@ -267,22 +287,38 @@ public static class AssemblyLocationFixture
                     instructions.OpCode(ILOpCode.Castclass);
                     instructions.Token(TypeReference(typeof(string)));
                 }
-                else if (dispatch == "delegate")
+                else if (dispatch == "invoke")
                 {
-                    LoadType(typeof(Func<string>));
+                    instructions.OpCode(ILOpCode.Ldtoken);
+                    instructions.Token(MethodReference(inspection));
+                    Call(typeof(MethodBase).GetMethod(nameof(MethodBase.GetMethodFromHandle), [typeof(RuntimeMethodHandle)])!);
+                    LoadReceiver();
+                    instructions.OpCode(ILOpCode.Ldnull);
+                    Call(typeof(MethodBase).GetMethod(nameof(MethodBase.Invoke), [typeof(object), typeof(object[])])!);
+                    instructions.OpCode(ILOpCode.Castclass);
+                    instructions.Token(SignatureType(typeof(Module[])));
+                }
+                else if (dispatch is "delegate" or "table-delegate")
+                {
+                    LoadType(dispatch == "table-delegate" ? typeof(Func<Module[]>) : typeof(Func<string>));
                     LoadReceiver();
                     instructions.LoadString(metadata.GetOrAddUserString(inspection.Name));
                     Call(typeof(Delegate).GetMethod(nameof(Delegate.CreateDelegate), [typeof(Type), typeof(object), typeof(string)])!);
                     instructions.OpCode(ILOpCode.Ldnull);
                     Call(typeof(Delegate).GetMethod(nameof(Delegate.DynamicInvoke))!);
                     instructions.OpCode(ILOpCode.Castclass);
-                    instructions.Token(TypeReference(typeof(string)));
+                    instructions.Token(dispatch == "table-delegate" ? SignatureType(typeof(Module[])) : TypeReference(typeof(string)));
+                }
+                else if (dispatch == "helper")
+                {
+                    instructions.LoadArgument(0);
+                    instructions.Call(MetadataTokens.MethodDefinitionHandle(3));
                 }
                 else
                 {
                     LoadReceiver();
-                    if (api == "GetFile") instructions.LoadString(metadata.GetOrAddUserString(Scope));
-                    if (api == "GetFiles(bool)") instructions.LoadConstantI4(1);
+                    if (api is "GetFile" or "GetModule") instructions.LoadString(metadata.GetOrAddUserString(Scope));
+                    if (api.EndsWith("(bool)", StringComparison.Ordinal)) instructions.LoadConstantI4(1);
                     if (api == "GetPEKind")
                     {
                         instructions.LoadLocalAddress(1);
@@ -322,10 +358,36 @@ public static class AssemblyLocationFixture
                         Call(typeof(object).GetMethod(nameof(ToString))!);
                     }
                 }
+
+                if (IsModuleTable(api))
+                {
+                    if (api == "GetModule")
+                    {
+                        instructions.OpCode(ILOpCode.Ldnull);
+                        instructions.OpCode(ILOpCode.Ceq);
+                        instructions.LoadConstantI4(0);
+                    }
+                    else if (api == "Modules")
+                    {
+                        Call(typeof(Enumerable).GetMethods().Single(method => method.Name == nameof(Enumerable.Count)
+                            && method.GetParameters().Length == 1).MakeGenericMethod(typeof(Module)));
+                        instructions.LoadConstantI4(1);
+                    }
+                    else
+                    {
+                        instructions.OpCode(ILOpCode.Ldlen);
+                        instructions.OpCode(ILOpCode.Conv_i4);
+                        instructions.LoadConstantI4(1);
+                    }
+                    instructions.OpCode(ILOpCode.Ceq);
+                }
             }
 
-            instructions.LoadArgument(0);
-            Call(typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+            if (!IsModuleTable(api) || dispatch == "lookalike")
+            {
+                instructions.LoadArgument(0);
+                Call(typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+            }
             instructions.LoadConstantI4(42);
             instructions.OpCode(ILOpCode.Mul);
         }
@@ -361,9 +423,24 @@ public static class AssemblyLocationFixture
                 metadata.GetOrAddString(inspection.Name), metadata.GetOrAddBlob(helperSignature), bodyEncoder.AddMethodBody(helper),
                 MetadataTokens.ParameterHandle(1));
         }
+        else if (dispatch == "helper")
+        {
+            var helper = new InstructionEncoder(new BlobBuilder());
+            helper.Call(MethodReference(typeof(Assembly).GetMethod(nameof(Assembly.GetExecutingAssembly))!));
+            helper.LoadArgument(0);
+            helper.OpCode(ILOpCode.Callvirt);
+            helper.Token(MethodReference(inspection));
+            helper.OpCode(ILOpCode.Ret);
+            var helperSignature = new BlobBuilder();
+            new BlobEncoder(helperSignature).MethodSignature().Parameters(1,
+                result => EncodeType(result.Type(), typeof(Module)), parameters => parameters.AddParameter().Type().String());
+            metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.Static, MethodImplAttributes.IL,
+                metadata.GetOrAddString("FindSourceModule"), metadata.GetOrAddBlob(helperSignature), bodyEncoder.AddMethodBody(helper),
+                MetadataTokens.ParameterHandle(1));
+        }
 
         var image = new BlobBuilder();
-        new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
+        new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage),
             new MetadataRootBuilder(metadata, metadataVersion: ImageVersion), bodies, entryPoint: entry,
             flags: CorFlags.ILOnly | CorFlags.Requires32Bit | CorFlags.Prefers32Bit).Serialize(image);
         return (image.ToArray(), expected);

@@ -9,7 +9,7 @@ namespace IlRepl.Engine;
 /// <summary>
 /// Resolves finite reflection inputs from accepted IL without evaluating user code.
 /// </summary>
-internal sealed class ReflectionValueResolver(
+internal sealed partial class ReflectionValueResolver(
     MethodBase selected, IReadOnlyDictionary<MethodBase, MethodEditBody?> bodies, Func<ResolvedMethod, MethodBase> resolveMethod)
 {
     private const int Limit = 256;
@@ -139,7 +139,10 @@ internal sealed class ReflectionValueResolver(
         }
     }
 
-    private object?[]? Stack(MethodEditBody body, int position, int fromTop)
+    /// <summary>
+    /// Resolves a stack slot counted from the top, returning null when its complete value set is unknown.
+    /// </summary>
+    internal object?[]? Stack(MethodEditBody body, int position, int fromTop)
     {
         var values = body.State.Analysis.Before[position]?.Values;
         return values is not null && values.Length >= fromTop ? Value(body, values[^fromTop]) : null;

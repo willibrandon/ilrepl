@@ -19,7 +19,8 @@ public sealed class TypeResolver
     [
         "System.Runtime", "System.Console", "System.Collections", "System.Linq", "System.Text.RegularExpressions",
         "System.Runtime.Numerics", "System.Diagnostics.Process", "System.Threading", "System.Memory", "System.ObjectModel",
-        "System.Collections.Concurrent", "System.Collections.Immutable", "System.Runtime.InteropServices", "System.Text.Json",
+        "System.Collections.Concurrent", "System.Collections.Immutable", "System.Collections.NonGeneric",
+        "System.Runtime.InteropServices", "System.Text.Json",
     ];
 
     private readonly List<Assembly> _extra = [];

@@ -20,6 +20,11 @@ public sealed partial class LiveSessionTests
         ("Module", "ModuleVersionId", "token", true), ("Assembly", "Location", "lookalike", true),
         ("Type", "Name", "direct", true),
         ("ModuleHandle", "MDStreamVersion", "direct", false),
+        ("Assembly", "GetModule", "direct", false), ("Assembly", "GetModules(bool)", "direct", false),
+        ("Assembly", "GetLoadedModules(bool)", "direct", false), ("Assembly", "Modules", "direct", false),
+        ("Assembly", "GetModules", "invoke", false), ("Assembly", "GetLoadedModules", "table-delegate", false),
+        ("Assembly", "GetModule", "helper", false), ("Assembly", "GetModule", "token", true),
+        ("Assembly", "GetLoadedModules", "lookalike", true),
     ];
 
     /// <summary>
