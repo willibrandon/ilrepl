@@ -91,7 +91,7 @@ public sealed class AssemblyCompletionTests
     }
 
     /// <summary>
-    /// A pending assembly notification neither blocks normal input nor survives cancellation.
+    /// Watching assembly notifications tolerates concurrent loads, permits normal input, and stops on cancellation.
     /// </summary>
     /// <param name="remote">Whether the host process serves the notification.</param>
     [TestMethod]
@@ -102,17 +102,30 @@ public sealed class AssemblyCompletionTests
         var ct = TestContext.CancellationToken;
         await using var engine = remote ? await HostPaths.StartEngineAsync(ct) : (IReplEngine)new InProcessEngine();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var watching = engine.WaitForAssembliesAsync(engine.AssemblyVersion, cancellation.Token);
-        Assert.IsTrue((await engine.HandleAsync("nop", ct)).Succeeded);
-        while (watching.IsCompletedSuccessfully)
+        var watching = WatchAsync();
+        try
         {
-            watching = engine.WaitForAssembliesAsync(await watching, cancellation.Token);
+            Assert.IsTrue((await engine.HandleAsync("nop", ct)).Succeeded);
+            Assert.IsFalse(watching.IsCompleted, "The watcher must keep waiting after each assembly notification.");
+            Assert.IsTrue((await engine.HandleAsync("nop", ct)).Succeeded);
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
         }
 
-        Assert.IsTrue((await engine.HandleAsync("nop", ct)).Succeeded);
-        await cancellation.CancelAsync();
         await Assert.ThrowsAsync<OperationCanceledException>(() => watching.WaitAsync(TimeSpan.FromSeconds(3), ct));
         Assert.IsTrue((await engine.HandleAsync(".clear", ct)).Succeeded);
+
+        async Task WatchAsync()
+        {
+            var version = engine.AssemblyVersion;
+            while (true)
+            {
+                cancellation.Token.ThrowIfCancellationRequested();
+                version = await engine.WaitForAssembliesAsync(version, cancellation.Token);
+            }
+        }
     }
 
     private static IReadOnlyList<CompletionItem> Rows(PromptState state, IReplEngine engine)

@@ -50,7 +50,7 @@ public sealed class ComparisonStandardInputTests
     }
 
     /// <summary>
-    /// Input larger than a pipe buffer neither blocks startup nor prevents exit and timeout cleanup.
+    /// Large input reaches EOF or permits worker cleanup, with a short execution deadline only for the infinite loop.
     /// </summary>
     /// <param name="behavior">Whether the worker reads, ignores input, exits, times out, or is cancelled.</param>
     [TestMethod]
@@ -74,7 +74,8 @@ public sealed class ComparisonStandardInputTests
         var edit = session.PrepareEdit("Read", "Copy");
         session.CommitEdit(edit.Name, edit.Source);
         var input = new string('λ', 1_000_000);
-        var package = ComparisonCapture.Create(session, "Copy () --timeout 2s") with { StandardInput = input };
+        var request = behavior == "spin" ? "Copy () --timeout 2s" : "Copy ()";
+        var package = ComparisonCapture.Create(session, request) with { StandardInput = input };
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
         if (behavior == "cancel")
         {
@@ -83,7 +84,8 @@ public sealed class ComparisonStandardInputTests
 
         var result = await ProcessComparisonRunner.RunAsync(package, cancellation.Token);
 
-        Assert.AreEqual(behavior is "exit" or "spin" or "cancel" ? "incomplete" : "match", result.Outcome);
+        Assert.AreEqual(behavior is "exit" or "spin" or "cancel" ? "incomplete" : "match", result.Outcome,
+            $"original: {result.Original.Outcome}: {result.Original.Detail}; edited: {result.Edited.Outcome}: {result.Edited.Detail}");
         var outcome = behavior switch { "exit" => "crashed", "spin" => "timeout", "cancel" => "cancelled", _ => "completed" };
         foreach (var side in new[] { result.Original, result.Edited })
         {
