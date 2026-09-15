@@ -24,6 +24,11 @@ public sealed class CompletionLifetimeTests
     [TestMethod]
     public async Task Completion_RepeatedGenericEdits_StaySymbolicAndBounded()
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         const int editCount = 100;
         var session = new Session();
         using var completer = new OperandCompleter(session);
@@ -71,8 +76,6 @@ public sealed class CompletionLifetimeTests
         {
             if (!completing.Value)
             {
-                TestContext.WriteLine("Background load outside completion: " + args.LoadedAssembly.FullName
-                    + "\n" + Environment.StackTrace);
                 return;
             }
 
@@ -109,8 +112,19 @@ public sealed class CompletionLifetimeTests
     /// Two hundred unsent lines replay within the interactive allocation and latency budgets.
     /// </summary>
     [TestMethod]
-    public void Speculation_TwoHundredLines_StaysWithinBudget()
+    public async Task Speculation_TwoHundredLines_StaysWithinBudget()
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
+        using (var warmup = new EditingSession(new Session()))
+        {
+            warmup.Speculate([".method void Warmup() {", "nop", "}"], 3,
+                cancellationToken: TestContext.CancellationToken);
+        }
+
         using var editing = new EditingSession(new Session());
         string[] lines = [".method void Long() {", .. Enumerable.Repeat("nop", 198), "}"];
         var before = GC.GetAllocatedBytesForCurrentThread();

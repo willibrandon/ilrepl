@@ -43,8 +43,13 @@ public sealed class TypeLifetimeTests
     /// Loading a collectible definition leaves the process assembly catalog on the same snapshot.
     /// </summary>
     [TestMethod]
-    public void CollectibleLoad_DoesNotRebuildProcessAssemblyCatalog()
+    public async Task CollectibleLoad_DoesNotRebuildProcessAssemblyCatalog()
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         _ = DefineAndReset(new Session());
         var before = ProcessAssemblyCatalog();
         _ = DefineAndReset(new Session());

@@ -1,11 +1,10 @@
+using System.Runtime.CompilerServices;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for the validation that runs when a <c>.method</c> block closes: the candidate is
-/// compiled into a version assembly of its own and prepared on the JIT without ever being
-/// invoked, and only then bound into its trampoline.
+/// Tests validation and collection of method versions before and after binding their trampolines.
 /// </summary>
 [TestClass]
 public sealed class MethodValidationTests
@@ -145,38 +144,34 @@ public sealed class MethodValidationTests
     }
 
     /// <summary>
-    /// A version superseded by a compatible redefinition is released and collected; the
-    /// trampoline and the current version stay.
+    /// Superseded method versions are collected while the trampoline and its current version remain callable.
     /// </summary>
     [TestMethod]
     public void Redefinitions_ReleaseSupersededVersions()
     {
         TestSkip.Unless(!OperatingSystem.IsBrowser(), "unloading needs CoreCLR");
         const int Redefinitions = 20;
-        var before = VersionAssemblies();
         var session = new Session();
+        var versions = new List<WeakReference>();
         for (var i = 0; i <= Redefinitions; i++)
         {
-            session.AddLine(".method int32 M() {");
-            session.AddLine($"ldc.i4 {i}");
-            session.AddLine("ret");
-            session.AddLine("}");
+            versions.Add(DefineVersion(session, i));
         }
 
         Assert.HasCount(1, session.Methods);
         session.AddLine("call int32 M()");
         Assert.AreEqual(Redefinitions, session.Run().Value);
 
-        var after = int.MaxValue;
-        for (var round = 0; round < 20 && after - before >= Redefinitions; round++)
+        var superseded = versions.Take(Redefinitions).ToArray();
+        for (var round = 0; round < 20 && superseded.Any(version => version.IsAlive); round++)
         {
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
-            after = VersionAssemblies();
         }
 
-        Assert.IsLessThan(before + Redefinitions, after, "superseded versions should be collected once the trampoline is rebound");
+        Assert.DoesNotContain(version => version.IsAlive, superseded, "Superseded versions must be collected after rebinding.");
+        Assert.IsTrue(versions[^1].IsAlive, "The current version stays alive while bound.");
         Assert.AreEqual(Redefinitions, session.Methods[0].Trampoline.Method.Invoke(null, null), "the current version stays bound");
     }
 
@@ -213,8 +208,15 @@ public sealed class MethodValidationTests
         Assert.AreEqual(6, session.Submissions);
     }
 
-    private static int VersionAssemblies() =>
-        AppDomain.CurrentDomain.GetAssemblies().Count(a => a.GetName().Name?.StartsWith("ilrepl.methods.", StringComparison.Ordinal) == true);
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference DefineVersion(Session session, int value)
+    {
+        session.AddLine(".method int32 M() {");
+        session.AddLine($"ldc.i4 {value}");
+        session.AddLine("ret");
+        session.AddLine("}");
+        return new WeakReference(session.Methods[0].Version.Definition.Assembly);
+    }
 
     /// <summary>
     /// A static target named by callvirt is refused on its line and the method stays editable.

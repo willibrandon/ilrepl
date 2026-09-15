@@ -216,6 +216,11 @@ public sealed class OperandCompleterTests
     [TestMethod]
     public async Task GenericAnchor_ReplayedDeclarations_KeepTheChosenArity()
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         // Warm serialization dependencies before asserting that replay alone preserves the binding epoch.
         new DataContractJsonSerializer(typeof(string)).WriteObject(Stream.Null, "");
         Assembly.Load("System.Runtime.Serialization.Primitives");

@@ -185,6 +185,11 @@ public sealed class EngineCompletionTests
     [DataRow(true)]
     public async Task Snapshot_ResolvesFacadesWithoutRuntimeCallbacks(bool useHost)
     {
+        if (!useHost && await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var ct = TestContext.CancellationToken;
         await using var engine = useHost ? (IReplEngine)await HostPaths.StartEngineAsync(ct) : new InProcessEngine();
         Assert.IsTrue((await engine.HandleAsync(".load " + SampleHost.Samples.GreeterDll, ct)).Succeeded);
