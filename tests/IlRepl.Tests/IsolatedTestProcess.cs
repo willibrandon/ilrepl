@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Microsoft.VisualStudio.TestPlatform.ObjectModel.Utilities;
 
 namespace IlRepl.Tests;
 
@@ -11,7 +12,7 @@ internal static class IsolatedTestProcess
     private const string SelectedTest = "ILREPL_ISOLATED_TEST";
 
     /// <summary>
-    /// Runs the calling test in a child process, or lets its assertions run when already in that child.
+    /// Runs only the calling test case in a child process, or lets its assertions run when already in that child.
     /// </summary>
     /// <param name="context">The calling test's cancellation and output context.</param>
     /// <param name="method">The test method to run.</param>
@@ -37,8 +38,16 @@ internal static class IsolatedTestProcess
             start.ArgumentList.Add(typeof(IsolatedTestProcess).Assembly.Location);
         }
 
+        var filter = "FullyQualifiedName=" + FilterHelper.Escape(name);
+        if (context.TestData is { Length: > 0 })
+        {
+            var displayName = context.TestDisplayName
+                ?? throw new InvalidOperationException("MSTest did not supply the data-row display name.");
+            filter += "&Name=" + FilterHelper.Escape(displayName);
+        }
+
         start.ArgumentList.Add("--filter");
-        start.ArgumentList.Add("FullyQualifiedName=" + name);
+        start.ArgumentList.Add(filter);
         start.Environment[SelectedTest] = name;
         using var child = Process.Start(start) ?? throw new InvalidOperationException("The isolated test did not start.");
         var output = child.StandardOutput.ReadToEndAsync(context.CancellationToken);

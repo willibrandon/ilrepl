@@ -90,26 +90,19 @@ public sealed class IlReplAppCompletionTests
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");
+        const string label = "il[1]> ";
         const string original = "call Environment::get_CurrentManagedTh";
+        const string expected = "call Environment::get_CurrentManagedThreadId()";
         await auto.TypeAsync(original, ct: ct);
-        var expected = "";
-        await auto.WaitUntilAsync(snapshot =>
-        {
-            var candidates = PromptWidget.Candidates(prompt, engine.Catalog);
-            if (prompt.Text != original || candidates.Count != 1 || !snapshot.ContainsText("members 1/1"))
-            {
-                return false;
-            }
-
-            expected = "call " + candidates[0].InsertText;
-            return true;
-        }, description: "the bound property getter appears");
+        // Automation runs outside the UI thread. Read its immutable snapshots, not the editor or requester being updated.
+        await auto.WaitUntilAsync(snapshot => AppTest.PromptRow(snapshot, 0) == label + expected
+            && AppTest.CaretAt(snapshot, label.Length + original.Length, 0)
+            && snapshot.ContainsText("members 1/1"), description: "the bound property getter appears");
         switch (acceptance)
         {
             case "enter":
                 await auto.DownAsync(ct: ct);
-                await auto.WaitUntilAsync(snapshot => prompt.PaletteNavigated
-                    && PromptWidget.Candidates(prompt, engine.Catalog).Count == 1
+                await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("members 1/1")
                     && snapshot.ContainsText("Enter accepts"), description: "Down selects completion acceptance");
                 await auto.EnterAsync(ct: ct);
                 break;
@@ -138,27 +131,31 @@ public sealed class IlReplAppCompletionTests
                 break;
         }
 
-        await auto.WaitUntilAsync(snapshot => prompt.Text == expected && prompt.PaletteDismissed
+        await auto.WaitUntilAsync(snapshot => AppTest.PromptRow(snapshot, 0) == label + expected
+            && AppTest.CaretAt(snapshot, label.Length + expected.Length, 0)
             && !snapshot.ContainsText("members"), description: "the operand is accepted and the palette is closed");
-        Assert.IsEmpty(AppTest.Echoes(transcript));
         await auto.Ctrl().KeyAsync(Hex1bKey.Z, ct: ct);
-        await auto.WaitUntilAsync(_ => prompt.Text == original, description: "one undo restores the typed prefix");
-        await auto.WaitUntilAsync(snapshot => PromptWidget.Candidates(prompt, engine.Catalog).Count == 1
-            && snapshot.ContainsText("members 1/1"),
-            description: "undo restores completion at the original prefix");
+        await auto.WaitUntilAsync(snapshot => AppTest.PromptRow(snapshot, 0) == label + expected
+            && AppTest.CaretAt(snapshot, label.Length + original.Length, 0)
+            && snapshot.ContainsText("members 1/1"), description: "one undo restores the prefix, caret, and completion");
         await auto.TabAsync(ct: ct);
-        await auto.WaitUntilAsync(snapshot => prompt.Text == expected && prompt.PaletteDismissed
+        await auto.WaitUntilAsync(snapshot => AppTest.PromptRow(snapshot, 0) == label + expected
+            && AppTest.CaretAt(snapshot, label.Length + expected.Length, 0)
             && !snapshot.ContainsText("members"), description: "the restored operand is accepted again");
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Any(line => line.EndsWith(expected, StringComparison.Ordinal)),
-            description: "the accepted call binds");
+        await auto.WaitUntilTextAsync("stack [int32]");
         await auto.TypeAsync("ret", ct: ct);
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync(": int32");
-        Assert.DoesNotContain(LineKind.Error, transcript.Lines.Select(line => line.Kind));
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
         await IlReplApp.SettleAsync(prompt);
+        // Inspect the mutable transcript only after the app has stopped; no acceptance path may submit an extra line.
+        var echoes = AppTest.Echoes(transcript);
+        Assert.HasCount(2, echoes);
+        Assert.EndsWith(expected, echoes[0]);
+        Assert.EndsWith("ret", echoes[1]);
+        Assert.DoesNotContain(LineKind.Error, transcript.Lines.Select(line => line.Kind));
     }
     /// <summary>
     /// Every part of a long signature remains reachable without changing the editor or selected member.
