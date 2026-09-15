@@ -23,6 +23,7 @@ public sealed class IlReplAppCompletionTests
     /// Consecutive terminal Backspace bytes remove an invalid argument while preserving its selected generic owner.
     /// </summary>
     [TestMethod]
+    [DoNotParallelize]
     public async Task Operand_InvalidGenericArgument_CanBeDeleted()
     {
         var ct = TestContext.CancellationToken;
