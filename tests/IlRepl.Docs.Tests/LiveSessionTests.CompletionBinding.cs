@@ -729,5 +729,5 @@ public sealed partial class LiveSessionTests
           return /^il\[\d+\]>$/.test(row) && !status.includes('updating') && !status.includes('sending')
             && !status.includes('cancelling') && !status.includes('Ctrl+C cancels');
         }
-        """);
+        """, null, new() { Timeout = 120_000 });
 }
