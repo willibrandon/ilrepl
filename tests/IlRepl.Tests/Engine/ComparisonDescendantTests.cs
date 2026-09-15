@@ -133,28 +133,32 @@ public sealed class ComparisonDescendantTests
     }
 
     /// <summary>
-    /// Acts as an inherited-stream child or grandchild until the comparison's native process group terminates it.
+    /// Runs a descendant probe when one was requested.
     /// </summary>
-    [TestMethod]
-    [Timeout(90_000, CooperativeCancellation = true)]
-    public async Task RunDescendantProbe()
+    /// <returns>Whether a probe was requested.</returns>
+    internal static async Task<bool> TryRunDescendantProbeAsync()
     {
         var record = Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_RECORD");
-        TestSkip.Unless(record is not null, "runs as a child of Compare_StopsDescendantsAfterWorkerExit");
+        if (record is null)
+        {
+            return false;
+        }
+
         var ready = Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_READY")!;
         if (bool.Parse(Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_ESCAPE")!))
             ComparisonDescendantSource.EscapeProcessGroup();
         using var process = Process.GetCurrentProcess();
-        File.AppendAllText(record!, Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + " "
+        File.AppendAllText(record, Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + " "
             + process.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture) + Environment.NewLine);
         if (bool.Parse(Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_BRANCH")!))
         {
-            using var leaf = ComparisonDescendantSource.Start(Environment.ProcessPath!, record!, ready, false, false);
-            while (!File.Exists(ready)) await Task.Delay(10, TestContext.CancellationToken);
+            using var leaf = ComparisonDescendantSource.Start(Environment.ProcessPath!, record, ready, false, false);
+            while (!File.Exists(ready)) await Task.Delay(10);
             Environment.Exit(0);
         }
 
         File.WriteAllText(ready, "ready");
-        await Task.Delay(Timeout.Infinite, TestContext.CancellationToken);
+        await Task.Delay(Timeout.Infinite);
+        return true;
     }
 }

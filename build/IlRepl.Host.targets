@@ -4,6 +4,10 @@
     importing project's output and publish directories. The tool starts it with the dotnet muxer.
   -->
   <PropertyGroup>
+    <IlReplHostPublishReadyToRun Condition="'$(IlReplHostPublishReadyToRun)' == ''">false</IlReplHostPublishReadyToRun>
+    <_IlReplHostRuntimeIdentifier Condition="'$(IlReplHostPublishReadyToRun)' == 'true'">
+      $(NETCoreSdkRuntimeIdentifier)
+    </_IlReplHostRuntimeIdentifier>
     <_IlReplHostRoot>$(MSBuildThisFileDirectory)..\</_IlReplHostRoot>
     <_IlReplHostProject>$([System.IO.Path]::GetFullPath('$(_IlReplHostRoot)src\IlRepl.Host\IlRepl.Host.csproj'))</_IlReplHostProject>
     <!-- BaseIntermediateOutputPath may be absolute, as with artifacts output or a build that redirects it; NormalizeDirectory honors that. -->
@@ -14,7 +18,12 @@
 
     <_IlReplHostPropertiesToRemove>RuntimeIdentifier;RuntimeIdentifiers;SelfContained;PublishAot;PublishSingleFile;PublishTrimmed;PublishReadyToRun;UseAppHost;_CommandLineDefinedRuntimeIdentifier;_CommandLineDefinedSelfContained;_CommandLineDefinedOutputPath</_IlReplHostPropertiesToRemove>
 
-    <_IlReplHostPublishProperties>Configuration=$(Configuration);TargetFramework=net10.0;RuntimeIdentifier=;RuntimeIdentifiers=;PublishAot=false;SelfContained=false;PublishSingleFile=false;PublishTrimmed=false;PublishReadyToRun=false;UseAppHost=false;OutputPath=$(_IlReplHostOutputDirectory);IntermediateOutputPath=$(_IlReplHostIntermediateDirectory);PublishDir=$(_IlReplHostPublishDirectory)</_IlReplHostPublishProperties>
+    <_IlReplHostPublishProperties>
+      Configuration=$(Configuration);TargetFramework=net10.0;RuntimeIdentifier=$(_IlReplHostRuntimeIdentifier);
+      RuntimeIdentifiers=;PublishAot=false;SelfContained=false;PublishSingleFile=false;PublishTrimmed=false;
+      PublishReadyToRun=$(IlReplHostPublishReadyToRun);UseAppHost=false;OutputPath=$(_IlReplHostOutputDirectory);
+      IntermediateOutputPath=$(_IlReplHostIntermediateDirectory);PublishDir=$(_IlReplHostPublishDirectory)
+    </_IlReplHostPublishProperties>
 
     <_IlReplHostExcludedFiles>$(_IlReplHostPublishDirectory)**\*.pdb;$(_IlReplHostPublishDirectory)**\*.xml</_IlReplHostExcludedFiles>
   </PropertyGroup>

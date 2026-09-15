@@ -42,7 +42,7 @@ static async Task<(int Columns, int Rows)> RunSessionAsync(int columns, int rows
     var adapter = new WasmPresentationAdapter(columns, rows);
     WasmPresentationAdapter.Instance = adapter;
 
-    await using var engine = new InProcessEngine(new ReplCore(), BrowserComparisonRunner.RunAsync);
+    await using var engine = new InProcessEngine(new ReplCore());
     var transcript = new Transcript { MaxLines = 500 };
     PromptState? prompt = null;
     // Selection and copy are the terminal's own in the browser, so the mouse stays with it. Wheel

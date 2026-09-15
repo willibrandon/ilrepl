@@ -55,8 +55,6 @@ public static partial class ComparisonDescendantSource
     public static Process Start(string executable, string record, string ready, bool grandchild, bool escape)
     {
         var start = new ProcessStartInfo(executable) { UseShellExecute = false };
-        start.ArgumentList.Add("--filter");
-        start.ArgumentList.Add("FullyQualifiedName~ComparisonDescendantTests.RunDescendantProbe");
         start.Environment["ILREPL_DESCENDANT_RECORD"] = record;
         start.Environment["ILREPL_DESCENDANT_READY"] = ready;
         start.Environment["ILREPL_DESCENDANT_BRANCH"] = grandchild.ToString();

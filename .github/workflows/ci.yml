@@ -35,7 +35,7 @@ jobs:
             os: macos-26
             artifact: macos-arm64
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v6
@@ -68,7 +68,7 @@ jobs:
 
   native-aot:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 

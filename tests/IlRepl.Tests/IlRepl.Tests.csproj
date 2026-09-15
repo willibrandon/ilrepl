@@ -5,9 +5,12 @@
     <RootNamespace>IlRepl.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
     <MSTestAnalysisMode>Recommended</MSTestAnalysisMode>
+    <GenerateTestingPlatformEntryPoint>false</GenerateTestingPlatformEntryPoint>
     <IncludeIlReplHostInOutput>true</IncludeIlReplHostInOutput>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>$(NoWarn);MSTESTEXP</NoWarn>
+    <IncludeIlReplHostInOutput>true</IncludeIlReplHostInOutput>
+    <IlReplHostPublishReadyToRun>true</IlReplHostPublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>
@@ -33,10 +36,14 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/IlRepl/IlRepl.csproj" />
-    <ProjectReference Include="../../src/IlRepl.Engine/IlRepl.Engine.csproj" />
-    <ProjectReference Include="../../src/IlRepl.Host/IlRepl.Host.csproj" />
-    <ProjectReference Include="../../src/IlRepl.Protocol/IlRepl.Protocol.csproj" />
-    <ProjectReference Include="../../src/IlRepl.Tui/IlRepl.Tui.csproj" />
+    <ProjectReference Include="../../src/IlRepl.Engine/IlRepl.Engine.csproj"
+                      AdditionalProperties="IncludeIlReplHostInOutput=false" />
+    <ProjectReference Include="../../src/IlRepl.Host/IlRepl.Host.csproj"
+                      AdditionalProperties="IncludeIlReplHostInOutput=false" />
+    <ProjectReference Include="../../src/IlRepl.Protocol/IlRepl.Protocol.csproj"
+                      AdditionalProperties="IncludeIlReplHostInOutput=false" />
+    <ProjectReference Include="../../src/IlRepl.Tui/IlRepl.Tui.csproj"
+                      AdditionalProperties="IncludeIlReplHostInOutput=false" />
     <ProjectReference Include="../../samples/Greeter/Greeter.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../samples/Fixtures/Fixtures.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
