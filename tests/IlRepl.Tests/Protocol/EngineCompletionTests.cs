@@ -1,3 +1,4 @@
+using IlRepl.Engine;
 using IlRepl.Protocol;
 using IlRepl.Repl;
 
@@ -98,7 +99,7 @@ public sealed class EngineCompletionTests
     }
 
     /// <summary>
-    /// Completion waits for an executing cell and observes its committed revision through both transports.
+    /// Completion waits for an explicitly released cell and observes its committed revision through both transports.
     /// </summary>
     /// <param name="useHost">Whether to use the real host process.</param>
     [TestMethod]
@@ -109,16 +110,21 @@ public sealed class EngineCompletionTests
         var ct = TestContext.CancellationToken;
         await using var engine = useHost ? (IReplEngine)await HostPaths.StartEngineAsync(ct) : new InProcessEngine();
         var marker = Path.Combine(Path.GetTempPath(), "ilrepl-completion-gate-" + Guid.NewGuid().ToString("N"));
+        var release = marker + ".release";
+        Task<HandleReply>? running = null;
         try
         {
-            var escaped = marker.Replace("\\", "\\\\", StringComparison.Ordinal);
-            foreach (var line in new[] { $"ldstr \"{escaped}\"", "ldstr \"started\"",
-                "call File::WriteAllText(string, string)", "ldc.i4 500", "call Thread::Sleep(int32)" })
+            foreach (var line in new[]
+            {
+                "ldstr " + LiteralParser.Escape(marker), "ldstr \"started\"", "call File::WriteAllText(string, string)",
+                "WAIT: ldstr " + LiteralParser.Escape(release), "call File::Exists(string)", "brtrue DONE",
+                "call Thread::Yield()", "pop", "br WAIT", "DONE: nop",
+            })
             {
                 Assert.IsTrue((await engine.HandleAsync(line, ct)).Succeeded, line);
             }
 
-            var running = Task.Run(() => engine.HandleAsync("ret", ct), ct);
+            running = Task.Run(() => engine.HandleAsync("ret", ct), ct);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(15));
             while (!File.Exists(marker))
@@ -128,7 +134,9 @@ public sealed class EngineCompletionTests
 
             const string prefix = "call Environment::get_CurrentManagedTh";
             var completing = engine.CompleteAsync(new CompletionRequest([prefix], 0, prefix.Length, null, []), ct);
-            Assert.IsFalse(running.IsCompleted, "The marker is written before the half-second runtime pause.");
+            Assert.IsFalse(running.IsCompleted, "The executing cell has not been released.");
+            Assert.IsFalse(completing.IsCompleted, "Completion must wait for the executing cell.");
+            File.WriteAllText(release, "continue");
             var completed = await running;
             var snapshot = await completing;
             Assert.IsTrue(completed.Succeeded);
@@ -138,7 +146,19 @@ public sealed class EngineCompletionTests
         }
         finally
         {
-            File.Delete(marker);
+            try
+            {
+                if (running is not null)
+                {
+                    File.WriteAllText(release, "continue");
+                    await running;
+                }
+            }
+            finally
+            {
+                File.Delete(marker);
+                File.Delete(release);
+            }
         }
     }
 
