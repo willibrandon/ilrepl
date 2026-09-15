@@ -1,12 +1,14 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
 /// Compared code starts real background descendants and checks whether an earlier side left a process running.
 /// </summary>
-public static class ComparisonDescendantSource
+public static partial class ComparisonDescendantSource
 {
     /// <summary>
     /// Starts a descendant that inherits the worker's pipes, then returns, exits, throws, or waits for termination.
@@ -15,8 +17,9 @@ public static class ComparisonDescendantSource
     /// <param name="records">The test-owned directory containing process and readiness records.</param>
     /// <param name="grandchild">Whether an intermediate child exits before the comparison worker.</param>
     /// <param name="mode">The way the compared method ends.</param>
+    /// <param name="escape">Whether the child creates a new Unix session.</param>
     /// <returns>The normal result, or a distinct value if the previous side left a live descendant.</returns>
-    public static int Run(string executable, string records, bool grandchild, string mode)
+    public static int Run(string executable, string records, bool grandchild, string mode, bool escape)
     {
         var record = Path.Combine(records, "processes");
         if (File.Exists(record) && File.ReadAllLines(record).Any(IsRunning))
@@ -25,7 +28,7 @@ public static class ComparisonDescendantSource
         }
 
         var ready = Path.Combine(records, Guid.NewGuid().ToString("N"));
-        using var process = Start(executable, record, ready, grandchild);
+        using var process = Start(executable, record, ready, grandchild, escape);
         var wait = Stopwatch.StartNew();
         while (!File.Exists(ready))
         {
@@ -47,8 +50,9 @@ public static class ComparisonDescendantSource
     /// <param name="record">The process record path.</param>
     /// <param name="ready">The readiness path for the leaf process.</param>
     /// <param name="grandchild">Whether this process should launch a leaf and then exit.</param>
+    /// <param name="escape">Whether the child creates a new Unix session.</param>
     /// <returns>The started process.</returns>
-    public static Process Start(string executable, string record, string ready, bool grandchild)
+    public static Process Start(string executable, string record, string ready, bool grandchild, bool escape)
     {
         var start = new ProcessStartInfo(executable) { UseShellExecute = false };
         start.ArgumentList.Add("--filter");
@@ -56,6 +60,7 @@ public static class ComparisonDescendantSource
         start.Environment["ILREPL_DESCENDANT_RECORD"] = record;
         start.Environment["ILREPL_DESCENDANT_READY"] = ready;
         start.Environment["ILREPL_DESCENDANT_BRANCH"] = grandchild.ToString();
+        start.Environment["ILREPL_DESCENDANT_ESCAPE"] = escape.ToString();
         return Process.Start(start) ?? throw new InvalidOperationException("the descendant did not start");
     }
 
@@ -99,4 +104,16 @@ public static class ComparisonDescendantSource
             return null;
         }
     }
+
+    /// <summary>
+    /// Moves the current probe into a new Unix session so process-group cleanup alone cannot reach it.
+    /// </summary>
+    public static void EscapeProcessGroup()
+    {
+        if (!OperatingSystem.IsWindows() && CreateSession() < 0)
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+    }
+
+    [LibraryImport("libc", EntryPoint = "setsid", SetLastError = true)]
+    private static partial int CreateSession();
 }

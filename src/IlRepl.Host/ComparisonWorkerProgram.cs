@@ -12,7 +12,7 @@ internal static class ComparisonWorkerProgram
 {
     internal static async Task<int> RunAsync(string[] arguments)
     {
-        if (arguments.Length != 8)
+        if (arguments.Length != 9)
         {
             return 64;
         }
@@ -42,6 +42,8 @@ internal static class ComparisonWorkerProgram
             }, captureOutput: false, useStandardInput: true).ConfigureAwait(false);
         await File.WriteAllTextAsync(arguments[4], JsonSerializer.Serialize(result,
             ProtocolJsonContext.Default.ComparisonSide)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(arguments[8], "ready").ConfigureAwait(false);
+        await Task.Delay(Timeout.InfiniteTimeSpan).ConfigureAwait(false);
         return 0;
     }
 }

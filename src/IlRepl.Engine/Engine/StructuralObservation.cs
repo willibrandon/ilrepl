@@ -119,6 +119,7 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
 
         if (CaptureStringComparer(value, name, identity) is { } comparer) return comparer;
         if (CaptureImmutableCollection(value, depth, identity) is { } immutable) return immutable;
+        if (CaptureLookup(value, depth, identity) is { } lookup) return lookup;
         if (CaptureCollection(value, depth, identity) is { } collection) return collection;
 
         var members = new List<ObservedMember>();

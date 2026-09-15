@@ -36,20 +36,26 @@ public sealed class ComparisonDescendantTests
     /// </summary>
     /// <param name="grandchild">Whether the leaf outlives an intermediate parent as well as the comparison worker.</param>
     /// <param name="mode">The way the compared method ends.</param>
+    /// <param name="escape">Whether the child leaves the worker's Unix process group.</param>
     [TestMethod]
-    [DataRow(false, "return")]
-    [DataRow(true, "return")]
-    [DataRow(false, "exit")]
-    [DataRow(true, "exit")]
-    [DataRow(false, "throw")]
-    [DataRow(true, "throw")]
-    [DataRow(false, "timeout")]
-    [DataRow(true, "timeout")]
-    [DataRow(false, "cancel")]
-    [DataRow(true, "cancel")]
+    [DataRow(false, "return", false)]
+    [DataRow(true, "return", false)]
+    [DataRow(false, "exit", false)]
+    [DataRow(true, "exit", false)]
+    [DataRow(false, "throw", false)]
+    [DataRow(true, "throw", false)]
+    [DataRow(false, "timeout", false)]
+    [DataRow(true, "timeout", false)]
+    [DataRow(false, "cancel", false)]
+    [DataRow(true, "cancel", false)]
+    [DataRow(false, "return", true)]
+    [DataRow(false, "throw", true)]
+    [DataRow(false, "timeout", true)]
+    [DataRow(false, "cancel", true)]
     [Timeout(240_000, CooperativeCancellation = true)]
-    public async Task Compare_StopsDescendantsAfterWorkerExit(bool grandchild, string mode)
+    public async Task Compare_StopsDescendantsAfterWorkerExit(bool grandchild, string mode, bool escape)
     {
+        TestSkip.Unless(!escape || !OperatingSystem.IsWindows(), "Unix session escape is not available on Windows");
         var records = Directory.CreateTempSubdirectory("ilrepl-descendants-");
         var record = Path.Combine(records.FullName, "processes");
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
@@ -61,7 +67,9 @@ public sealed class ComparisonDescendantTests
             foreach (var line in IlLines.Expand(".method int32 Work() {", "ldstr " + LiteralParser.Escape(Environment.ProcessPath!),
                 "ldstr " + LiteralParser.Escape(records.FullName), grandchild ? "ldc.i4.1" : "ldc.i4.0",
                 "ldstr " + LiteralParser.Escape(mode),
-                "call int32 [IlRepl.Tests]IlRepl.Tests.Engine.ComparisonDescendantSource::Run(string, string, bool, string)", "ret", "}"))
+                escape ? "ldc.i4.1" : "ldc.i4.0",
+                "call int32 [IlRepl.Tests]IlRepl.Tests.Engine.ComparisonDescendantSource::Run(string, string, bool, string, bool)",
+                "ret", "}"))
             {
                 session.AddLine(line);
             }
@@ -134,12 +142,14 @@ public sealed class ComparisonDescendantTests
         var record = Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_RECORD");
         TestSkip.Unless(record is not null, "runs as a child of Compare_StopsDescendantsAfterWorkerExit");
         var ready = Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_READY")!;
+        if (bool.Parse(Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_ESCAPE")!))
+            ComparisonDescendantSource.EscapeProcessGroup();
         using var process = Process.GetCurrentProcess();
         File.AppendAllText(record!, Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + " "
             + process.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture) + Environment.NewLine);
         if (bool.Parse(Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_BRANCH")!))
         {
-            using var leaf = ComparisonDescendantSource.Start(Environment.ProcessPath!, record!, ready, false);
+            using var leaf = ComparisonDescendantSource.Start(Environment.ProcessPath!, record!, ready, false, false);
             while (!File.Exists(ready)) await Task.Delay(10, TestContext.CancellationToken);
             Environment.Exit(0);
         }

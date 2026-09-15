@@ -56,6 +56,7 @@ public static class ProcessComparisonRunner
             var limitPath = Path.Combine(directory.FullName, "output-limit");
             var groupPath = Path.Combine(directory.FullName, "group-ready");
             var startPath = Path.Combine(directory.FullName, "start");
+            var resultReadyPath = Path.Combine(directory.FullName, "result-ready");
             await File.WriteAllTextAsync(packagePath, JsonSerializer.Serialize(package, ProtocolJsonContext.Default.ComparisonPackage),
                 cancellationToken).ConfigureAwait(false);
             var bundled = Path.Combine(AppContext.BaseDirectory, "host", "ilrepl-host.dll");
@@ -81,6 +82,7 @@ public static class ProcessComparisonRunner
             process.StartInfo.ArgumentList.Add(limitPath);
             process.StartInfo.ArgumentList.Add(groupPath);
             process.StartInfo.ArgumentList.Add(startPath);
+            process.StartInfo.ArgumentList.Add(resultReadyPath);
             process.StartInfo.Environment.Clear();
             foreach (var pair in package.Environment)
             {
@@ -119,8 +121,15 @@ public static class ProcessComparisonRunner
             if (started == ready && !ready.IsCanceled)
             {
                 var timeout = Task.Delay(package.TimeoutMilliseconds, lifetime.Token);
-                var completed = await Task.WhenAny(exit, timeout, overflow.Task).ConfigureAwait(false);
-                if (completed != exit)
+                var resultReady = WaitForReadyAsync(resultReadyPath, lifetime.Token);
+                var completed = await Task.WhenAny(exit, resultReady, timeout, overflow.Task).ConfigureAwait(false);
+                if (completed == resultReady && !resultReady.IsCanceled)
+                {
+                    Kill(process);
+                    await exit.ConfigureAwait(false);
+                    await group.StopAsync().ConfigureAwait(false);
+                }
+                else if (completed != exit)
                 {
                     return await StopAsync(cancellationToken.IsCancellationRequested ? "cancelled"
                         : completed == overflow.Task ? "output-limit"
@@ -132,9 +141,9 @@ public static class ProcessComparisonRunner
             }
             else if (started == overflow.Task)
             {
-                await group.StopAsync().ConfigureAwait(false);
                 Kill(process);
                 await exit.ConfigureAwait(false);
+                await group.StopAsync().ConfigureAwait(false);
             }
 
             await exit.ConfigureAwait(false);
@@ -147,7 +156,7 @@ public static class ProcessComparisonRunner
                 return Failure("output-limit", "worker output exceeded the configured limit", rawOut, rawError);
             }
 
-            if (process.ExitCode != 0 || !File.Exists(resultPath))
+            if (!File.Exists(resultReadyPath) && (process.ExitCode != 0 || !File.Exists(resultPath)))
             {
                 return Failure("crashed", $"comparison host exited with code {process.ExitCode}", rawOut, rawError);
             }
@@ -170,8 +179,8 @@ public static class ProcessComparisonRunner
         {
             await lifetime.CancelAsync().ConfigureAwait(false);
             await inputLifetime.CancelAsync().ConfigureAwait(false);
-            await group.StopAsync().ConfigureAwait(false);
             Kill(process);
+            await group.StopAsync().ConfigureAwait(false);
             if (processStarted)
             {
                 await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
@@ -205,8 +214,8 @@ public static class ProcessComparisonRunner
 
         async Task<ComparisonSide> StopAsync(string outcome, string detail)
         {
-            await group.StopAsync().ConfigureAwait(false);
             Kill(process);
+            await group.StopAsync().ConfigureAwait(false);
             if (processStarted)
             {
                 await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
