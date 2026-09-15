@@ -39,6 +39,11 @@ public sealed record SessionStatus(
     long Revision = 0)
 {
     /// <summary>
+    /// The edit submission being written, or null when no outer edit block is open.
+    /// </summary>
+    public string? OpenEdit { get; init; }
+
+    /// <summary>
     /// The status of a fresh session.
     /// </summary>
     public static SessionStatus Initial { get; } = new("il[1]> ", 1, "[]", 0, 0, 0, 0, true, null, 0, null, 0, SessionMark.Initial, 0);

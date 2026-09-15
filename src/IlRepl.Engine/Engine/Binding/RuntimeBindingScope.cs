@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Emit;
 
@@ -32,7 +33,12 @@ public sealed class RuntimeBindingScope : IBindingScope
         Context = context;
         _registry = new RuntimeBindingRegistry();
         _generics = new SymbolGenericContext([.. context.Generics.TypeArguments.Select(ImportType)],
-            [.. context.Generics.MethodArguments.Select(ImportType)]);
+            [.. context.Generics.MethodArguments.Select((type, index) =>
+            {
+                var symbol = ImportType(type);
+                return symbol.IsGenericParameter && context.Generics.MethodParameterNames is { } names && index < names.Count
+                    ? TypeSymbol.Parameter(symbol.Owner, true, symbol.Position, names[index], symbol.ParameterAttributes) : symbol;
+            })]);
     }
 
     private RuntimeBindingScope(ParseContext context, RuntimeBindingRegistry registry, SymbolGenericContext generics)
@@ -240,7 +246,7 @@ public sealed class RuntimeBindingScope : IBindingScope
     }
 
     /// <inheritdoc/>
-    public bool TryGetDeclaration(TypeSymbol declaring, [System.Diagnostics.CodeAnalysis.NotNullWhen(
+    public bool TryGetDeclaration(TypeSymbol declaring, [NotNullWhen(
         true)] out IDeclarationMembers? members)
     {
         ArgumentNullException.ThrowIfNull(declaring);
@@ -269,7 +275,12 @@ public sealed class RuntimeBindingScope : IBindingScope
         return type.IsGenericType && type.GetGenericArguments().Any(ContainsBuilder);
     }
 
-    private static bool ContainsBuilder(Type type) => type is GenericTypeParameterBuilder or TypeBuilder
+    /// <summary>
+    /// Identifies type constructions whose reflection members cannot describe their substituted signatures.
+    /// </summary>
+    /// <param name="type">The type or generic argument to inspect.</param>
+    /// <returns>Whether a builder occurs anywhere in the construction.</returns>
+    internal static bool ContainsBuilder(Type type) => type is GenericTypeParameterBuilder or TypeBuilder
         || type.HasElementType && ContainsBuilder(type.GetElementType()!)
         || type.IsConstructedGenericType && type.GetGenericArguments().Any(ContainsBuilder);
 
@@ -441,7 +452,7 @@ public sealed class RuntimeBindingScope : IBindingScope
             return null;
         }
 
-        return Register(RuntimeSymbolImporter.Import(closed, definition.DeclaringType), closed);
+        return Register(SymbolRelations.Instantiate(definition, definition.DeclaringType, arguments), closed);
     }
 
     /// <inheritdoc/>
@@ -508,7 +519,7 @@ public sealed class RuntimeBindingScope : IBindingScope
     {
         ArgumentNullException.ThrowIfNull(type);
         var runtime = TypeOf(type);
-        if (runtime.IsGenericParameter || runtime is System.Reflection.Emit.TypeBuilder || !runtime.IsEnum)
+        if (runtime.IsGenericParameter || runtime is TypeBuilder || !runtime.IsEnum)
         {
             return null;
         }
@@ -526,6 +537,10 @@ public sealed class RuntimeBindingScope : IBindingScope
             return _registry.SessionMethods;
         }
     }
+
+    /// <inheritdoc/>
+    public IReadOnlyDictionary<string, MethodSymbol> MethodAliases => Context.Types.MethodAliases.ToDictionary(
+        pair => pair.Key, pair => Register(RuntimeSymbolImporter.Import(pair.Value), pair.Value), StringComparer.Ordinal);
 
     /// <inheritdoc/>
     public IReadOnlyList<VariableSymbol> Locals

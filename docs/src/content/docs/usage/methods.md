@@ -175,3 +175,6 @@ when you type the header, so a change that would break a caller is refused befor
 body; `.clear` the cell or keep the signature. Calls resolve as you type them, so two methods that
 call each other take three steps: define the second with a placeholder body, define the first
 with its call, then define the second again with its real body.
+
+To keep the original while changing a copy, use `.edit`. This also works with framework and loaded
+methods. See [Editing and comparing methods](/usage/editing-methods/).

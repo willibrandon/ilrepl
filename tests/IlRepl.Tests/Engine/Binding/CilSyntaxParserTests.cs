@@ -279,6 +279,90 @@ public sealed class CilSyntaxParserTests
     }
 
     /// <summary>
+    /// Session-shaped generic aliases retain their type arguments while ordinary nongeneric methods reject them during binding.
+    /// </summary>
+    [TestMethod]
+    public void ParseMethodReference_GenericSessionAlias_RetainsArgumentsAndRequiresGenericBinding()
+    {
+        const string text = "Fib<int32>()";
+        var syntax = CilSyntaxParser.ParseMethodReference(text);
+        Assert.IsTrue(syntax.IsSessionForm);
+        Assert.AreEqual("Fib", syntax.Name);
+        Assert.IsNotNull(syntax.GenericArguments);
+        Assert.HasCount(1, syntax.GenericArguments);
+        Assert.AreEqual("int32", syntax.GenericArguments[0].Keyword);
+        Assert.AreEqual("<int32>", text[syntax.GenericStart..syntax.GenericEnd]);
+        Assert.IsEmpty(syntax.Parameters!);
+        var session = IlLines.Load(".method int32 Fib() { ldc.i4.s 42; ret }");
+
+        var exception = Assert.ThrowsExactly<ReplException>(() => session.AddLine("call " + text));
+
+        Assert.Contains("not generic", exception.Message);
+        session.AddLine("call Fib()");
+        Assert.AreEqual(42, session.Run().Value);
+    }
+
+    /// <summary>
+    /// Generic return types keep their complete span before a session method name and its optional type arguments.
+    /// </summary>
+    /// <param name="returnType">The return type preceding the method name.</param>
+    /// <param name="suffix">The generic arguments and parameter list following the name.</param>
+    [TestMethod]
+    [DataRow("List<int32>", "()")]
+    [DataRow("List< List<int32> >", "()")]
+    [DataRow("Dictionary<string, List<int32[]>>[]", "<int32>()")]
+    [DataRow("class List<int32>", "<int32>()")]
+    [DataRow("List<int32>", "")]
+    public void ParseMethodReference_GenericReturnType_PrecedesSessionName(string returnType, string suffix)
+    {
+        var text = returnType + " Get" + suffix;
+
+        var syntax = CilSyntaxParser.ParseMethodReference(text);
+
+        Assert.IsTrue(syntax.IsSessionForm);
+        Assert.AreEqual("Get", syntax.Name);
+        Assert.IsNotNull(syntax.ReturnType);
+        Assert.AreEqual(returnType, text[syntax.ReturnType.Start..syntax.ReturnType.End]);
+        Assert.AreEqual("Get", text[syntax.NameStart..syntax.NameEnd]);
+        Assert.HasCount(suffix.StartsWith('<') ? 1 : 0, syntax.GenericArguments ?? []);
+    }
+
+    /// <summary>
+    /// Whitespace within a generic alias is not mistaken for a return type separator.
+    /// </summary>
+    /// <param name="text">The generic session reference.</param>
+    [TestMethod]
+    [DataRow("Get<Dictionary<string, List<int32>>>()")]
+    [DataRow("Get < List<int32> > ()")]
+    [DataRow("Get<[ 1 ]>()")]
+    public void ParseMethodReference_GenericAliasWhitespace_HasNoReturnType(string text)
+    {
+        var syntax = CilSyntaxParser.ParseMethodReference(text);
+
+        Assert.AreEqual("Get", syntax.Name);
+        Assert.IsNull(syntax.ReturnType);
+        Assert.IsEmpty(syntax.Parameters!);
+        Assert.AreEqual(1, syntax.GenericArity ?? syntax.GenericArguments!.Count);
+    }
+
+    /// <summary>
+    /// A shorthand generic return type binds and executes the declared session method.
+    /// </summary>
+    [TestMethod]
+    public void Run_SessionCallWithGenericReturnType_ReturnsTheDeclaredList()
+    {
+        var session = IlLines.Load(".method List<int32> Get() {",
+            "newobj instance void List<int32>::.ctor()", "dup", "ldc.i4.s 42",
+            "callvirt instance void List<int32>::Add(!0)", "ret", "}", "call List<int32> Get()");
+
+        var result = session.Run();
+
+        var values = Assert.IsInstanceOfType<List<int>>(result.Value);
+        Assert.HasCount(1, values);
+        Assert.AreEqual(42, values[0]);
+    }
+
+    /// <summary>
     /// Bad member text is refused with the resolver's messages.
     /// </summary>
     /// <param name="text">The bad text.</param>
@@ -292,7 +376,6 @@ public sealed class CilSyntaxParserTests
     [DataRow("Console::WriteLine<int32()", "unbalanced '<' in method name")]
     [DataRow("Hello::CountArgs(..., int32, ...)", "only one '...' is allowed in a parameter list")]
     [DataRow("string int32 Console::WriteLine()", "unexpected 'Console' in member reference")]
-    [DataRow("Fib<int32>()", "session methods are not generic")]
     [DataRow("Fib x y", "unexpected 'y' in method reference")]
     [DataRow("1Fib()", "expected 'Type::Method(...)' in method reference (or a session method name defined with .method)")]
     public void ParseMethodReference_Invalid_ReportsTheMessage(string text, string message)

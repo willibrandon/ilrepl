@@ -13,6 +13,11 @@ namespace IlRepl.Engine.Binding;
 public sealed record BoundMethod(MethodSymbol Method, MethodSymbol? Definition, IReadOnlyList<TypeSymbol>? OptionalParameterTypes)
 {
     /// <summary>
+    /// True when the reference explicitly names an edit alias rather than a declaring type and member.
+    /// </summary>
+    internal bool IsAlias { get; init; }
+
+    /// <summary>
     /// Explicit generic arguments with metadata-only shapes retained; empty when the reference has none.
     /// </summary>
     public IReadOnlyList<TypeSymbol> ExactGenericArguments { get; init; } = [];

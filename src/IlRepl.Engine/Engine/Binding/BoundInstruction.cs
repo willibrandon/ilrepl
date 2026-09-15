@@ -10,4 +10,10 @@ namespace IlRepl.Engine.Binding;
 /// <param name="Operand">The operand.</param>
 /// <param name="LocalIndex">The local the instruction reads or writes, for short forms and explicit operands.</param>
 /// <param name="ArgumentIndex">The argument the instruction reads or writes.</param>
-public sealed record BoundInstruction(OpCode Op, string Text, BoundOperand Operand, int? LocalIndex, int? ArgumentIndex);
+public sealed record BoundInstruction(OpCode Op, string Text, BoundOperand Operand, int? LocalIndex, int? ArgumentIndex)
+{
+    /// <summary>
+    /// The encoded prefix name when Reflection.Emit has no corresponding opcode.
+    /// </summary>
+    public string? DecodedPrefixName { get; init; }
+}

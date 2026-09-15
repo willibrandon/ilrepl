@@ -67,6 +67,8 @@ public sealed class IlReplAppViewportTests
         await AppTest.TypeLinesAsync(auto, s_long[..^1], ct);
         await auto.TypeAsync("}", ct: ct);
         await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.PromptRow(s, 7) == "  ...> }" && AppTest.CaretAt(s, 8, 7), description: "thirteen lines in eight rows with the caret on the last");
+        await auto.WaitUntilAsync(_ => recorder.Since(start).Any(frame => frame.Contains("editing 13 lines") && frame.Contains("  ...> }")),
+            description: "the typed frame's presentation filter completed");
         AssertEveryFrameShowsCaret(recorder.Since(start));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);

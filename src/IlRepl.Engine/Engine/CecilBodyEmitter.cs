@@ -1,8 +1,11 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using CecilInstruction = Mono.Cecil.Cil.Instruction;
 using CecilOpCode = Mono.Cecil.Cil.OpCode;
+using EmitOpCode = System.Reflection.Emit.OpCode;
+using EmitOpCodes = System.Reflection.Emit.OpCodes;
 
 namespace IlRepl.Engine;
 
@@ -29,7 +32,7 @@ public static class CecilBodyEmitter
         ArgumentNullException.ThrowIfNull(map);
         state.RequireValidFlow();
         new Emitter(method, state, writer, map).Run();
-        writer.SetStackLimit(method, Math.Max(1, state.Analysis.MaxStack));
+        writer.SetStackLimit(method, Math.Max(state.DeclaredMaxStack, Math.Max(1, state.Analysis.MaxStack)));
     }
 
     private sealed class Emitter(MethodDefinition method, CellState state, CecilWriter writer, EmitMap map)
@@ -48,10 +51,13 @@ public static class CecilBodyEmitter
         private readonly List<(CecilInstruction Instruction, Marker[] Targets)> _switches = [];
         private readonly List<Frame> _frames = [];
 
+        /// <summary>
+        /// Emits the validated entries, resolves labels, and preserves ordered exception clauses.
+        /// </summary>
         public void Run()
         {
-            method.Body.InitLocals = true;
-            method.Body.MaxStackSize = Math.Max(1, state.Analysis.MaxStack);
+            method.Body.InitLocals = state.InitLocals;
+            method.Body.MaxStackSize = Math.Max(state.DeclaredMaxStack, Math.Max(1, state.Analysis.MaxStack));
             foreach (var local in state.Locals)
             {
                 var type = local.ExactType is null
@@ -95,7 +101,7 @@ public static class CecilBodyEmitter
         {
             if (state.LastInstructionEndsFlow)
             {
-                if (_pending.Count > 0)
+                if (_pending.Count > 0 && !state.ExceptionRegions.Any())
                 {
                     Append(_il.Create(OpCodes.Ldnull));
                     Append(_il.Create(OpCodes.Throw));
@@ -125,8 +131,8 @@ public static class CecilBodyEmitter
 
         private void EmitInstruction(Instruction instruction)
         {
-            var op = Translate(instruction.Op);
-            if (instruction.Op == System.Reflection.Emit.OpCodes.Ret)
+            var op = instruction.DecodedPrefixName == "no." ? OpCodes.No : Translate(instruction.Op);
+            if (instruction.Op == EmitOpCodes.Ret)
             {
                 if (instruction.RetNull)
                 {
@@ -226,6 +232,26 @@ public static class CecilBodyEmitter
             var reference = resolved.Definition is not null
                 ? writer.Import(target, resolved.Definition)
                 : resolved.Declared is not null ? writer.Import(target, resolved.DeclaringType) : writer.Import(target);
+            if (reference is MethodDefinition { DeclaringType.HasGenericParameters: true } member)
+            {
+                // A copied self-call or delegate target must carry its owner's generic arguments.
+                reference = new MethodReference(member.Name, member.ReturnType, GenericSelf(member.DeclaringType))
+                {
+                    HasThis = member.HasThis,
+                    ExplicitThis = member.ExplicitThis,
+                    CallingConvention = member.CallingConvention,
+                };
+                foreach (var parameter in member.Parameters)
+                {
+                    reference.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
+                }
+
+                foreach (var parameter in member.GenericParameters)
+                {
+                    reference.GenericParameters.Add(new GenericParameter(parameter.Name, reference));
+                }
+            }
+
             if (resolved.ExactDeclaringType is { } exactDeclaring)
             {
                 var declaring = writer.Import(map.Map(exactDeclaring));
@@ -291,12 +317,28 @@ public static class CecilBodyEmitter
         {
             var field = map.Map((FieldInfo)instruction.Operand!);
             var reference = writer.Import(field);
+            if (reference is FieldDefinition { DeclaringType.HasGenericParameters: true } member)
+            {
+                reference = new FieldReference(member.Name, member.FieldType, GenericSelf(member.DeclaringType));
+            }
+
             if (instruction.ExactFieldDeclaringType is { } exactDeclaring)
             {
                 reference.DeclaringType = writer.Import(map.Map(exactDeclaring));
             }
 
             return reference;
+        }
+
+        private static GenericInstanceType GenericSelf(TypeDefinition type)
+        {
+            var instance = new GenericInstanceType(type);
+            foreach (var parameter in type.GenericParameters)
+            {
+                instance.GenericArguments.Add(parameter);
+            }
+
+            return instance;
         }
 
         private CallSite CallSite(CalliSignature signature)
@@ -309,10 +351,10 @@ public static class CecilBodyEmitter
             {
                 site.CallingConvention = signature.UnmanagedConvention switch
                 {
-                    System.Runtime.InteropServices.CallingConvention.Cdecl => MethodCallingConvention.C,
-                    System.Runtime.InteropServices.CallingConvention.StdCall => MethodCallingConvention.StdCall,
-                    System.Runtime.InteropServices.CallingConvention.ThisCall => MethodCallingConvention.ThisCall,
-                    System.Runtime.InteropServices.CallingConvention.FastCall => MethodCallingConvention.FastCall,
+                    CallingConvention.Cdecl => MethodCallingConvention.C,
+                    CallingConvention.StdCall => MethodCallingConvention.StdCall,
+                    CallingConvention.ThisCall => MethodCallingConvention.ThisCall,
+                    CallingConvention.FastCall => MethodCallingConvention.FastCall,
                     _ => MethodCallingConvention.Unmanaged,
                 };
             }
@@ -445,15 +487,14 @@ public static class CecilBodyEmitter
 
         private void Resolve()
         {
-            if (_pending.Count > 0)
+            if (_pending.Count > 0 && !state.ExceptionRegions.Any())
             {
-                // Every body ends with ret, so a marker after the last instruction cannot happen.
                 throw new InvalidOperationException("a label or block boundary has no instruction after it");
             }
 
             foreach (var (instruction, target) in _branches)
             {
-                instruction.Operand = target.Target!;
+                instruction.Operand = target.Target ?? throw new ReplException("a branch cannot target the end of the method");
             }
 
             foreach (var (instruction, targets) in _switches)
@@ -461,6 +502,26 @@ public static class CecilBodyEmitter
                 instruction.Operand = targets.Select(t => t.Target!).ToArray();
             }
 
+            foreach (var region in state.ExceptionRegions)
+            {
+                method.Body.ExceptionHandlers.Add(new ExceptionHandler(region.Kind switch
+                {
+                    IlClauseKind.Catch => ExceptionHandlerType.Catch,
+                    IlClauseKind.Filter => ExceptionHandlerType.Filter,
+                    IlClauseKind.Finally => ExceptionHandlerType.Finally,
+                    _ => ExceptionHandlerType.Fault,
+                })
+                {
+                    TryStart = _labels[region.TryStart].Target,
+                    TryEnd = _labels[region.TryEnd].Target,
+                    HandlerStart = _labels[region.HandlerStart].Target,
+                    HandlerEnd = _labels[region.HandlerEnd].Target,
+                    FilterStart = region.FilterStart is null ? null : _labels[region.FilterStart].Target,
+                    CatchType = region.CatchType is null ? null : writer.Import(map.Map(region.CatchType)),
+                });
+            }
+
+            WidenBranches();
             foreach (var frame in _completed)
             {
                 var tryEnd = frame.Handlers[0].FilterStart?.Target ?? frame.Handlers[0].Start!.Target!;
@@ -493,14 +554,46 @@ public static class CecilBodyEmitter
             }
         }
 
-        private static CecilOpCode Translate(System.Reflection.Emit.OpCode op)
+        private void WidenBranches()
         {
-            if (op == System.Reflection.Emit.OpCodes.Ldelem)
+            bool changed;
+            do
+            {
+                changed = false;
+                var offsets = new Dictionary<CecilInstruction, int>();
+                var offset = 0;
+                foreach (var instruction in method.Body.Instructions)
+                {
+                    offsets[instruction] = offset;
+                    offset += instruction.GetSize();
+                }
+
+                foreach (var (instruction, target) in _branches)
+                {
+                    if (instruction.OpCode.OperandType != Mono.Cecil.Cil.OperandType.ShortInlineBrTarget)
+                    {
+                        continue;
+                    }
+
+                    var distance = offsets[target.Target!] - offsets[instruction] - instruction.GetSize();
+                    if (distance is < sbyte.MinValue or > sbyte.MaxValue)
+                    {
+                        instruction.OpCode = OpCodesByName[instruction.OpCode.Name[..^2]];
+                        changed = true;
+                    }
+                }
+            }
+            while (changed);
+        }
+
+        private static CecilOpCode Translate(EmitOpCode op)
+        {
+            if (op == EmitOpCodes.Ldelem)
             {
                 return OpCodes.Ldelem_Any;
             }
 
-            if (op == System.Reflection.Emit.OpCodes.Stelem)
+            if (op == EmitOpCodes.Stelem)
             {
                 return OpCodes.Stelem_Any;
             }

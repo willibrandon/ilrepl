@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Emit;
 
@@ -14,11 +15,6 @@ public static class OpcodeTable
     public static IReadOnlyDictionary<string, OpCode> ByName { get; } = Build();
 
     /// <summary>
-    /// All opcode names in ordinal order.
-    /// </summary>
-    public static IReadOnlyList<string> Names { get; } = ByName.Keys.OrderBy(n => n, StringComparer.Ordinal).ToArray();
-
-    /// <summary>
     /// The encoded value of the <c>no.</c> prefix, which Reflection.Emit does not describe.
     /// </summary>
     public const ushort NoPrefixValue = 0xFE19;
@@ -30,12 +26,23 @@ public static class OpcodeTable
     public static IReadOnlyDictionary<ushort, IlOpcode> ByValue { get; } = BuildByValue();
 
     /// <summary>
+    /// Every encoded opcode by ILAsm name, including prefixes requiring metadata emission.
+    /// </summary>
+    public static IReadOnlyDictionary<string, IlOpcode> BySourceName { get; } =
+        ByValue.Values.ToDictionary(opcode => opcode.Name, StringComparer.Ordinal);
+
+    /// <summary>
+    /// All source opcode names in ordinal order.
+    /// </summary>
+    public static IReadOnlyList<string> Names { get; } = BySourceName.Keys.Order(StringComparer.Ordinal).ToArray();
+
+    /// <summary>
     /// Looks up an opcode by its encoded value.
     /// </summary>
     /// <param name="value">The byte for a one-byte opcode, <c>0xFExx</c> for a two-byte one.</param>
     /// <param name="opcode">The opcode when found.</param>
     /// <returns>True when the value encodes an instruction or prefix.</returns>
-    public static bool TryGetByValue(ushort value, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IlOpcode? opcode) => ByValue.TryGetValue(value, out opcode);
+    public static bool TryGetByValue(ushort value, [NotNullWhen(true)] out IlOpcode? opcode) => ByValue.TryGetValue(value, out opcode);
 
     /// <summary>
     /// The number of operand bytes an operand layout takes, or -1 for <see cref="OperandType.InlineSwitch"/>.
@@ -75,11 +82,27 @@ public static class OpcodeTable
     public static string Describe(OpCode opcode) => Descriptions.TryGetValue(opcode.Name ?? "", out var s) ? s : "";
 
     /// <summary>
+    /// Describes an encoded opcode, including one without a Reflection.Emit representation.
+    /// </summary>
+    /// <param name="opcode">The encoded opcode.</param>
+    /// <returns>The opcode's purpose.</returns>
+    public static string Describe(IlOpcode opcode) => opcode.IsSkipChecksPrefix
+        ? "omits the selected type, range, or null checks (unverifiable)" : Describe(opcode.Emit!.Value);
+
+    /// <summary>
     /// The stack transition as ILAsm writes it: what is popped, an arrow, what is pushed.
     /// </summary>
     /// <param name="opcode">The opcode.</param>
     /// <returns>For example <c>i i → i</c> for <c>add</c> on two integers.</returns>
     public static string StackTransition(OpCode opcode) => $"{Pop(opcode.StackBehaviourPop),-9} → {Push(opcode.StackBehaviourPush)}";
+
+    /// <summary>
+    /// Describes an encoded opcode's stack transition, including metadata-only prefixes.
+    /// </summary>
+    /// <param name="opcode">The encoded opcode.</param>
+    /// <returns>The values popped and pushed.</returns>
+    public static string StackTransition(IlOpcode opcode) => opcode.IsSkipChecksPrefix
+        ? "          → " : StackTransition(opcode.Emit!.Value);
 
     /// <summary>
     /// True for the reserved <c>prefixN</c> pseudo-opcodes that cannot be written in IL.

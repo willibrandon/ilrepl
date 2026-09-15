@@ -33,7 +33,11 @@ public static class MethodHeaderParser
         TypeSymbol[] Define(string[] names)
         {
             runtimeParameters = defineTypeParameters?.Invoke(names) ?? PrototypeGenerics.Create(names);
-            return [.. runtimeParameters.Select(scope.ImportType)];
+            return [.. runtimeParameters.Select((parameter, index) =>
+            {
+                var symbol = scope.ImportType(parameter);
+                return TypeSymbol.Parameter(symbol.Owner, true, symbol.Position, names[index], symbol.ParameterAttributes);
+            })];
         }
 
         var symbol = MethodDeclarationParser.ParseMember(spec, scope, owner, out opensBlock, out closesBlock, out _, Define);

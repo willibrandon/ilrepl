@@ -1,16 +1,15 @@
 using System.Globalization;
+using System.Numerics;
 
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Parses the literal written after <c>=</c> in an <c>.args</c> declaration into a value of the
-/// declared type.
+/// Parses argument literals into values of their declared types.
 /// </summary>
 public static class ValueLiteralParser
 {
     /// <summary>
-    /// Parses a literal for the given type. Supports <c>null</c>, booleans, characters, strings,
-    /// all integer and floating-point primitives, <c>decimal</c>, native integers, and enum names.
+    /// Parses null, boolean, character, string, numeric, native integer, and enum literals for the given type.
     /// </summary>
     /// <param name="literal">The literal text.</param>
     /// <param name="type">The declared argument type.</param>
@@ -62,7 +61,7 @@ public static class ValueLiteralParser
 
             if (target == typeof(float))
             {
-                return (float)LiteralParser.ParseFloat(s, "argument");
+                return LiteralParser.ParseFloat32(s, "argument");
             }
 
             if (target == typeof(double))
@@ -82,8 +81,18 @@ public static class ValueLiteralParser
 
             if (target.IsPrimitive || target == typeof(nint) || target == typeof(nuint))
             {
-                var value = LiteralParser.ParseInteger(s, "argument");
-                return Convert.ChangeType(value, target, CultureInfo.InvariantCulture);
+                var value = ParseInteger(s);
+                if (target == typeof(nint))
+                {
+                    return checked((nint)(long)value);
+                }
+
+                if (target == typeof(nuint))
+                {
+                    return checked((nuint)(ulong)value);
+                }
+
+                return target == typeof(ulong) ? (ulong)value : Convert.ChangeType((long)value, target, CultureInfo.InvariantCulture);
             }
         }
         catch (Exception ex) when (ex is OverflowException or FormatException or InvalidCastException)
@@ -92,6 +101,35 @@ public static class ValueLiteralParser
         }
 
         throw new ReplException($"cannot write a literal of type {TypeNameFormatter.Pretty(type)}; use a primitive, string, enum, or null");
+    }
+
+    private static BigInteger ParseInteger(string literal)
+    {
+        var text = literal.Replace("_", "", StringComparison.Ordinal);
+        var negative = text.StartsWith('-');
+        if (negative || text.StartsWith('+'))
+        {
+            text = text[1..];
+        }
+
+        var hexadecimal = text.StartsWith("0x", StringComparison.OrdinalIgnoreCase);
+        var binary = text.StartsWith("0b", StringComparison.OrdinalIgnoreCase);
+        if ((hexadecimal || binary) && text.Length == 2)
+        {
+            throw new FormatException("a numeric base prefix must be followed by digits");
+        }
+
+        var value = hexadecimal
+            ? BigInteger.Parse("0" + text[2..], NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture)
+            : binary ? BigInteger.Parse("0" + text[2..], NumberStyles.AllowBinarySpecifier, CultureInfo.InvariantCulture)
+                : text.Length == 3 && text[0] == '\'' && text[2] == '\'' ? text[1]
+                    : BigInteger.Parse(text, NumberStyles.None, CultureInfo.InvariantCulture);
+        if (negative)
+        {
+            value = -value;
+        }
+
+        return value;
     }
 
     private static object ParseObject(string s)

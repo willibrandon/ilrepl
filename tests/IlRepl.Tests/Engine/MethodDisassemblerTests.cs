@@ -344,7 +344,7 @@ public sealed class MethodDisassemblerTests
         Assert.Contains(l => l.EndsWith("switch (IL_000e, IL_000f)\t[]", StringComparison.Ordinal), column);
         Assert.Contains(l => l.EndsWith("jmp void [" + method.Method.Module.Assembly.GetName().Name + "]N.Fixture::Target()\tunreachable", StringComparison.Ordinal), column);
 
-        // no. and arglist come from raw bytes Cecil does not write.
+        // A vararg method provides a real arglist instruction and its required calling convention.
         var vararg = Cecil((module, type) =>
         {
             var m = new MethodDefinition("V", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void) { CallingConvention = MethodCallingConvention.VarArg };

@@ -1,10 +1,19 @@
 using System.Reflection.Emit;
 namespace IlRepl.Engine.Binding;
 
+/// <summary>
+/// Applies command transitions to the editor snapshot.
+/// </summary>
 public sealed partial class EditingSession
 {
     private void ApplyCommand(string command, string? argument)
     {
+        if (command == ".edit")
+        {
+            OpenEdit(argument ?? "");
+            return;
+        }
+
         SessionTransitionRules.ValidateInput(command, argument);
         var transition = SessionTransitionRules.Of(command);
         if (SessionTransitionRules.RequiresNoOpenBlock(transition))
@@ -79,6 +88,11 @@ public sealed partial class EditingSession
 
     private void RequireNoOpenBlock()
     {
+        if (_state.Edit is { } edit)
+        {
+            throw new ReplException($"edit {edit.Name} is still open; close it with }}");
+        }
+
         if (_state.Method?.Signature is { } method)
         {
             throw new ReplException($"method {method.Name} is still open; close it with }}");
@@ -97,6 +111,12 @@ public sealed partial class EditingSession
 
     private void Clear()
     {
+        if (_state.BeforeEdit is { } before)
+        {
+            _state = before.Clone();
+            return;
+        }
+
         var target = SessionTransitionRules.ClearTargetOf(_state.Method is not null, _state.OpenTypes.Count > 0);
         if (target == ClearTarget.Method)
         {
@@ -125,6 +145,12 @@ public sealed partial class EditingSession
 
     private void Undo()
     {
+        if (_state.BeforeEdit is { } before)
+        {
+            _state = before.Clone();
+            return;
+        }
+
         if (_state.OpenTypes.FirstOrDefault() is { } family)
         {
             string[] retained = [.. family.Lines.SkipLast(1)];

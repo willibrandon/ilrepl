@@ -1,3 +1,4 @@
+using System.Text;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
@@ -133,16 +134,57 @@ internal sealed class CompletionCandidateSource
     {
         switch (_site.Kind)
         {
+            case CompletionSiteKind.EditName:
+                foreach (var name in _view.Snapshot.EditNames)
+                {
+                    _candidates.Add(new OperandCandidate
+                    {
+                        Kind = CompletionKind.Methods, Rank = new CandidateRankFacts(name, name, true),
+                    });
+                }
+
+                break;
+            case CompletionSiteKind.Scenario:
+                foreach (var method in _scope.SessionMethods.Where(method => method.IsStatic
+                    && method.Parameters.Count == 0 && method.Arity == 0))
+                {
+                    AddMethod(method, method.Name);
+                }
+
+                break;
+            case CompletionSiteKind.CommandOption:
+            {
+                string[] options = _site.Owner switch
+                {
+                    ".diff" => ["--raw"],
+                    ".compare" => ["--assert", "--timeout", "--stdin", "--files"],
+                    _ => ["--original"],
+                };
+                foreach (var option in options)
+                {
+                    _candidates.Add(new OperandCandidate
+                    {
+                        Kind = CompletionKind.Commands, Rank = new CandidateRankFacts(option, option, true),
+                    });
+                }
+
+                break;
+            }
             case CompletionSiteKind.Type:
             case CompletionSiteKind.MemberHead:
             case CompletionSiteKind.TypeArgument:
                 await AddTypesAsync(genericArguments, hasElementSuffix, cancellationToken);
                 if (_site.Kind == CompletionSiteKind.MemberHead && !_site.NextIsDoubleColon
-                    && _site.Owner is "call" or "jmp" or "ldftn" or "ldtoken method" or ".dis" or ".disassemble")
+                    && _site.Owner is "call" or "jmp" or "ldftn" or "ldtoken method" or ".dis" or ".disassemble" or ".edit")
                 {
                     foreach (var method in _scope.SessionMethods)
                     {
                         AddMethod(method);
+                    }
+
+                    foreach (var alias in _scope.MethodAliases)
+                    {
+                        AddMethod(alias.Value, alias.Key);
                     }
                 }
 
@@ -172,7 +214,7 @@ internal sealed class CompletionCandidateSource
                     else
                     {
                         var methods = _scope.AllMethods(owner).Concat(_scope.Constructors(owner, false));
-                        if (_site.Owner is "ldtoken method" or ".dis" or ".disassemble")
+                        if (_site.Owner is "ldtoken method" or ".dis" or ".disassemble" or ".edit")
                         {
                             methods = methods.Concat(_scope.Constructors(owner, true));
                         }
@@ -451,7 +493,7 @@ internal sealed class CompletionCandidateSource
         else if (type.IsGenericDefinition)
         {
             _candidates.Add(candidate with { Kind = CompletionKind.TypeArguments, StartsGeneric = true });
-            if (_site.Owner is "ldtoken" or "ldtoken method" or ".dis" or ".disassemble")
+            if (_site.Owner is "ldtoken" or "ldtoken method" or ".dis" or ".disassemble" or ".edit")
             {
                 _candidates.Add(candidate);
             }
@@ -462,7 +504,7 @@ internal sealed class CompletionCandidateSource
         }
     }
 
-    private void AddMethod(MethodSymbol method)
+    private void AddMethod(MethodSymbol method, string? alias = null)
     {
         if (!MemberEligibility.Admits(method, _site, _view))
         {
@@ -473,7 +515,8 @@ internal sealed class CompletionCandidateSource
         {
             Kind = method.Source == MethodSymbolSource.Session ? CompletionKind.Methods : CompletionKind.Members,
             Method = method,
-            Rank = new CandidateRankFacts(method.Name, method.Name,
+            Alias = alias,
+            Rank = new CandidateRankFacts(alias ?? method.Name, alias ?? method.Name,
                 method.Source == MethodSymbolSource.Session || method.DeclaringType is { } owner && _scope.IsSessionType(owner),
                 IsCompilerGenerated: method.Name.StartsWith('<'), ParameterCount: method.Parameters.Count,
                 ParameterList: string.Join(", ", method.ParameterTypes.Select(SymbolRenderer.Pretty)),
@@ -482,7 +525,7 @@ internal sealed class CompletionCandidateSource
         if (method.IsGenericDefinition)
         {
             _candidates.Add(candidate with { Kind = CompletionKind.TypeArguments, StartsGeneric = true });
-            if (_site.Owner is "ldtoken method" or ".dis" or ".disassemble")
+            if (_site.Owner is "ldtoken method" or ".dis" or ".disassemble" or ".edit")
             {
                 _candidates.Add(candidate);
             }
@@ -509,7 +552,7 @@ internal sealed class CompletionCandidateSource
     /// <returns>The decoded matching prefix.</returns>
     public static string DecodePrefix(string text)
     {
-        var result = new System.Text.StringBuilder();
+        var result = new StringBuilder();
         var index = 0;
         if (text.StartsWith('[') && text.IndexOf(']', StringComparison.Ordinal) is var end && end >= 0)
         {

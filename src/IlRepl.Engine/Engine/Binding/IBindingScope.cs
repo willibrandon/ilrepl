@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
@@ -58,7 +60,7 @@ public interface IBindingScope
     /// <param name="declaring">The declaring type, its definition, or a construction of it.</param>
     /// <param name="members">The members.</param>
     /// <returns>True when the type is being written.</returns>
-    bool TryGetDeclaration(TypeSymbol declaring, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IDeclarationMembers? members);
+    bool TryGetDeclaration(TypeSymbol declaring, [NotNullWhen(true)] out IDeclarationMembers? members);
 
     /// <summary>
     /// True for a type the session declared, written or accepted.
@@ -178,6 +180,11 @@ public interface IBindingScope
     /// The methods defined with <c>.method</c> at the top level, resolvable by bare name.
     /// </summary>
     IReadOnlyList<MethodSymbol> SessionMethods { get; }
+
+    /// <summary>
+    /// Copied methods addressed by edit name while retaining their instance and generic signatures.
+    /// </summary>
+    IReadOnlyDictionary<string, MethodSymbol> MethodAliases { get; }
 
     /// <summary>
     /// The declared locals, by index.

@@ -16,6 +16,10 @@ public static class Completer
         new(".ops", "[filter]", "list opcodes with their stack transitions", true),
         new(".show", "", "the cell, with the stack after each instruction", false),
         new(".dis", "<method>", "disassemble a method: framework, loaded, session, or class member", true),
+        new(".edit", "[<method> [as Name]]", "open an editable copy; omit the method to edit the last disassembly", true),
+        new(".diff", "[Name] [--raw]", "compare original and edited instructions, stacks, and metadata", true),
+        new(".compare", "Name (<arguments>) | Name using Scenario",
+            "run the original and edit from the same explicit starting conditions", true),
         new(".undo", "", "remove the last line of the cell", false),
         new(".clear", "", "drop the cell, keep declarations", false),
         new(".reset", "", "drop the cell, declarations, methods, and types", false),
@@ -30,7 +34,7 @@ public static class Completer
         new(".vararg", "", "give the cell the vararg calling convention", false),
         new(".try", "{", "open a protected region", true),
         new(".method", "T Name(T arg, ...) {", "define a method that persists across cells", true),
-        new(".methods", "", "list the methods defined with .method", false),
+        new(".methods", "[Edit]", "list methods or inspect the dependencies of an edit", true),
         new(".class", "[attrs] Name [extends T] {", "define a type that persists across cells", true),
         new(".field", "[public] [static] T Name", "declare a field of the open class", true),
         new(".property", "T Name() {", "declare a property of the open class; .get and .set name its accessors", true),
@@ -68,7 +72,7 @@ public static class Completer
                 continue;
             }
 
-            var op = OpcodeTable.ByName[name];
+            var op = OpcodeTable.BySourceName[name];
             items.Add(new CompletionItem(name, OpcodeTable.StackTransition(op), OpcodeTable.Describe(op), op.OperandType != OperandType.InlineNone));
         }
 
@@ -102,7 +106,7 @@ public static class Completer
                 continue;
             }
 
-            var op = OpcodeTable.ByName[name];
+            var op = OpcodeTable.BySourceName[name];
             items.Add(new CompletionItem(name, OpcodeTable.StackTransition(op), OpcodeTable.Describe(op), op.OperandType != OperandType.InlineNone));
         }
 

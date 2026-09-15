@@ -70,7 +70,7 @@ jobs:
         run: pwsh tests/IlRepl.Docs.Tests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium webkit
 
       - name: Drive the live session in a browser
-        run: dotnet test tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj --no-build
+        run: dotnet test --project tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj --no-build
 
       - uses: actions/configure-pages@v5
 

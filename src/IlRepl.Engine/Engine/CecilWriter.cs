@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Reflection.Emit;
 using IlRepl.Engine.Binding;
 using Mono.Cecil;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
@@ -682,7 +683,7 @@ public sealed class CecilWriter
         {
             // A member of a loaded session type, reached through an instantiation: the definition
             // was written here, so the reference is built on the written instantiation.
-            var definitionMethod = method.Module.ResolveMethod(method.MetadataToken)!;
+            var definitionMethod = DefinitionOf(method, definedInstance.GetGenericTypeDefinition());
             if (_definedMethods.TryGetValue(definitionMethod, out var written))
             {
                 var onWritten = new MethodReference(written.Name, written.ReturnType, Import(definedInstance))
@@ -893,12 +894,11 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// The method on the generic type definition behind a member of an instantiation: by token
-    /// for a loaded member, by shape for a wrapper over a builder.
+    /// Finds a constructed member's definition through its token, runtime handle, or uncreated builder signature.
     /// </summary>
     private static MethodBase DefinitionOf(MethodBase method, Type definitionType)
     {
-        if (method is not System.Reflection.Emit.MethodBuilder and not System.Reflection.Emit.ConstructorBuilder && definitionType is not System.Reflection.Emit.TypeBuilder)
+        if (method is not MethodBuilder and not ConstructorBuilder && definitionType is not TypeBuilder)
         {
             try
             {
@@ -906,7 +906,16 @@ public sealed class CecilWriter
             }
             catch (Exception ex) when (ex is ArgumentException or NotSupportedException or InvalidOperationException)
             {
-                // A wrapper without a token of its own; matched by shape below.
+                // Constructed wrappers can retain the underlying handle without exposing a metadata token.
+            }
+
+            try
+            {
+                return MethodBase.GetMethodFromHandle(method.MethodHandle, definitionType.TypeHandle)!;
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or InvalidOperationException)
+            {
+                // An uncreated builder has neither identity, so its declared signature is used below.
             }
         }
 

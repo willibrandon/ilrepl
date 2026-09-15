@@ -22,6 +22,8 @@ public sealed class Submission
     private readonly bool _inBlockComment;
     private readonly Func<CancellationToken, Task> _persist;
     private readonly Action<SubmissionEvent> _post;
+    private readonly Lock _comparisonLock = new();
+    private CancellationTokenSource? _comparisonCancellation;
     private volatile bool _cancelled;
     private volatile bool _running = true;
     private int _sent;
@@ -90,18 +92,21 @@ public sealed class Submission
     public Task Completion { get; }
 
     /// <summary>
-    /// Stops after the reply in flight.
-    /// </summary>
-    /// <summary>
     /// True once a cancel has been asked for and the worker has not yet reached the check.
     /// </summary>
     public bool CancelRequested => _cancelled;
 
     /// <summary>
-    /// Asks the worker to stop after the line in flight: a provisional unit is withdrawn and its
-    /// text comes back; a unit that just committed stays.
+    /// Cancels an isolated comparison or stops after the current line, returning provisional text.
     /// </summary>
-    public void Cancel() => _cancelled = true;
+    public void Cancel()
+    {
+        _cancelled = true;
+        lock (_comparisonLock)
+        {
+            _comparisonCancellation?.Cancel();
+        }
+    }
 
     private async Task RunAsync()
     {
@@ -147,6 +152,36 @@ public sealed class Submission
                         var start = _lines[index].Length - _lines[index].TrimStart().Length;
                         var location = new AnalysisLocation(_sourceIdentity, index, start, _lines[index].Length - start);
                         reply = await _engine.HandleSourceAsync(_lines[index], location, CancellationToken.None).ConfigureAwait(false);
+                        if (reply.PendingComparison is { } comparison)
+                        {
+                            _post(SubmissionEvent.Reply(reply.Lines));
+                            using var cancellation = new CancellationTokenSource();
+                            lock (_comparisonLock)
+                            {
+                                _comparisonCancellation = cancellation;
+                                if (_cancelled)
+                                {
+                                    cancellation.Cancel();
+                                }
+                            }
+
+                            try
+                            {
+                                reply = await _engine.CompareAsync(comparison.Identity, cancellation.Token).ConfigureAwait(false);
+                            }
+                            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+                            {
+                                _post(SubmissionEvent.Cancel([], TextFrom(index + 1)));
+                                return;
+                            }
+                            finally
+                            {
+                                lock (_comparisonLock)
+                                {
+                                    _comparisonCancellation = null;
+                                }
+                            }
+                        }
                     }
                     catch (ReplEngineException ex)
                     {
@@ -156,6 +191,14 @@ public sealed class Submission
                     }
 
                     Interlocked.Increment(ref _sent);
+                    if (reply.EditDocument is { } document)
+                    {
+                        var remaining = TextFrom(index + 1);
+                        _post(new SubmissionEvent(SubmissionEventKind.EditDocument, reply.Lines,
+                            document.Source + (remaining.Length == 0 ? "" : "\n" + remaining)));
+                        return;
+                    }
+
                     expect = BlockBalance.Scan(_lines[index], expect.Depth, expect.InBlockComment, expect.AwaitingBrace, _commands);
                     var cut = false;
                     if (reply.Quit)

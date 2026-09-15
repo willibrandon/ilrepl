@@ -13,6 +13,11 @@ namespace IlRepl.Engine;
 public sealed record ResolvedMethod
 {
     /// <summary>
+    /// True when the call uses an edit alias that grants access to its selected copied method.
+    /// </summary>
+    internal bool IsAlias { get; init; }
+
+    /// <summary>
     /// Initializes a reference to a framework method or constructor.
     /// </summary>
     /// <param name="method">The method.</param>

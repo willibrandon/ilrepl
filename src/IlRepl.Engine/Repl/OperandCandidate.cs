@@ -29,6 +29,11 @@ internal sealed record OperandCandidate
     public MethodSymbol? Method { get; init; }
 
     /// <summary>
+    /// The session edit name inserted instead of the underlying member reference.
+    /// </summary>
+    public string? Alias { get; init; }
+
+    /// <summary>
     /// The selected field.
     /// </summary>
     public FieldSymbol? Field { get; init; }

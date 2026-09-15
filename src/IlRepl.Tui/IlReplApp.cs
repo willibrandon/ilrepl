@@ -386,6 +386,10 @@ public static class IlReplApp
 
                     prompt.Submission = null;
                     break;
+                case SubmissionEventKind.EditDocument:
+                    Return(prompt, e.Text ?? "", 1, select: false);
+                    prompt.Submission = null;
+                    break;
                 case SubmissionEventKind.Cancelled:
                     Return(prompt, e.Text ?? "", 0, select: false);
                     prompt.Submission = null;

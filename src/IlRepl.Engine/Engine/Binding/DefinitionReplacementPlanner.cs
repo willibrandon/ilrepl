@@ -52,9 +52,49 @@ public static class DefinitionReplacementPlanner
         ArgumentNullException.ThrowIfNull(methodMentions);
         ArgumentNullException.ThrowIfNull(nameOf);
         ArgumentNullException.ThrowIfNull(comparer);
+        return PlanFromTypes(identitiesOf(replaced), families.Where(family => !ReferenceEquals(family, replaced)).ToArray(),
+            methods, identitiesOf, familyMentions, methodMentions, nameOf, comparer);
+    }
+
+    /// <summary>
+    /// Finds dependent declarations from a set of replaced identities, including imported method families.
+    /// </summary>
+    /// <typeparam name="TFamily">The type family record.</typeparam>
+    /// <typeparam name="TMethod">The session method record.</typeparam>
+    /// <typeparam name="TType">The type identity representation.</typeparam>
+    /// <param name="replacedTypes">The identities being replaced.</param>
+    /// <param name="families">The potentially dependent type families.</param>
+    /// <param name="methods">The potentially dependent session methods.</param>
+    /// <param name="identitiesOf">The identities defined by each family.</param>
+    /// <param name="familyMentions">Whether a family references a collected type or method.</param>
+    /// <param name="methodMentions">Whether a method references a collected type or method.</param>
+    /// <param name="nameOf">The logical session method name.</param>
+    /// <param name="comparer">The type identity comparer.</param>
+    /// <returns>Every declaration requiring an atomic rebuild.</returns>
+    public static ReplacementClosure<TFamily, TMethod> PlanFromTypes<TFamily, TMethod, TType>(
+        IEnumerable<TType> replacedTypes,
+        IReadOnlyList<TFamily> families,
+        IReadOnlyList<TMethod> methods,
+        Func<TFamily, IEnumerable<TType>> identitiesOf,
+        Func<TFamily, IReadOnlySet<TType>, IReadOnlySet<string>, bool> familyMentions,
+        Func<TMethod, IReadOnlySet<TType>, IReadOnlySet<string>, bool> methodMentions,
+        Func<TMethod, string> nameOf,
+        IEqualityComparer<TType> comparer)
+        where TFamily : class
+        where TMethod : class
+        where TType : notnull
+    {
+        ArgumentNullException.ThrowIfNull(replacedTypes);
+        ArgumentNullException.ThrowIfNull(families);
+        ArgumentNullException.ThrowIfNull(methods);
+        ArgumentNullException.ThrowIfNull(identitiesOf);
+        ArgumentNullException.ThrowIfNull(familyMentions);
+        ArgumentNullException.ThrowIfNull(methodMentions);
+        ArgumentNullException.ThrowIfNull(nameOf);
+        ArgumentNullException.ThrowIfNull(comparer);
         var dependentFamilies = new List<TFamily>();
         var dependentMethods = new List<TMethod>();
-        var mentionedTypes = new HashSet<TType>(identitiesOf(replaced), comparer);
+        var mentionedTypes = new HashSet<TType>(replacedTypes, comparer);
         var mentionedMethods = new HashSet<string>(StringComparer.Ordinal);
         bool changed;
         do
@@ -62,7 +102,7 @@ public static class DefinitionReplacementPlanner
             changed = false;
             foreach (var family in families)
             {
-                if (ReferenceEquals(family, replaced) || dependentFamilies.Contains(family))
+                if (dependentFamilies.Contains(family))
                 {
                     continue;
                 }

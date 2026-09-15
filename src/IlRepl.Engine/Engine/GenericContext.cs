@@ -14,6 +14,11 @@ public sealed record GenericContext(IReadOnlyList<Type> TypeArguments, IReadOnly
     public static GenericContext Empty { get; } = new([], []);
 
     /// <summary>
+    /// The current declaration's parameter names when an edited method retains its original runtime parameter identities.
+    /// </summary>
+    internal IReadOnlyList<string>? MethodParameterNames { get; init; }
+
+    /// <summary>
     /// Returns a copy of this context with the declaring type's arguments replaced.
     /// </summary>
     /// <param name="typeArguments">The new declaring type arguments.</param>
@@ -51,11 +56,12 @@ public sealed record GenericContext(IReadOnlyList<Type> TypeArguments, IReadOnly
                 : $"{prefix}{index} is out of range: {list.Count} {scope} generic parameter(s) are in scope");
         }
 
-        foreach (var t in list)
+        for (var position = 0; position < list.Count; position++)
         {
-            if (t.Name == reference)
+            var name = isMethod && MethodParameterNames is { } names && position < names.Count ? names[position] : list[position].Name;
+            if (name == reference)
             {
-                return t;
+                return list[position];
             }
         }
 

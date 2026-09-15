@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
 using IlRepl.Protocol;
@@ -95,7 +96,7 @@ public sealed class HostProcessEngine : IReplEngine
         {
             process = Process.Start(startInfo) ?? throw new HostProtocolException("the host process did not start");
         }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
         {
             throw new HostProtocolException($"could not start '{startInfo.FileName} {hostPath}': {ex.Message}", ex);
         }
@@ -163,6 +164,10 @@ public sealed class HostProcessEngine : IReplEngine
         ArgumentNullException.ThrowIfNull(line);
         return CallAsync(() => _host.HandleAsync(line, cancellationToken));
     }
+
+    /// <inheritdoc/>
+    public Task<HandleReply> CompareAsync(string identity, CancellationToken cancellationToken) =>
+        CallAsync(() => _host.CompareAsync(identity, cancellationToken));
 
     /// <inheritdoc />
     public Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken)

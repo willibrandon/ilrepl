@@ -12,7 +12,12 @@ namespace IlRepl.Engine;
 /// </summary>
 public sealed partial class Session
 {
-    private LineResult ReplaceWithDependents(OpenTypeBlock block, TypeDeclaration declaration, SessionType previous, (List<SessionType> Types, List<SessionMethod> Methods) closure)
+    private LineResult ReplaceWithDependents(OpenTypeBlock block, TypeDeclaration declaration, SessionType previous,
+        (List<SessionType> Types, List<SessionMethod> Methods) closure)
+        => RebuildDefinitions(block, declaration, previous, closure, null, block.KindWord + " " + block.Path);
+
+    private LineResult RebuildDefinitions(OpenTypeBlock? block, TypeDeclaration? declaration, SessionType? previous,
+        (List<SessionType> Types, List<SessionMethod> Methods) closure, Action<EmitMap>? mapReplacedTypes, string subject)
     {
         var savedTypes = _types.ToList();
         var savedMethods = _methods.ToList();
@@ -34,10 +39,13 @@ public sealed partial class Session
             // 1. Declare every family of the group ahead of its lines, mapping the identities the
             //    session holds onto the new prototypes.
             var map = new EmitMap(_ => throw new InvalidOperationException("no session methods are mapped here"));
-            var members = new List<(SessionType? Old, TypeDeclaration Declaration, string HeaderLine, IReadOnlyList<string> Lines, int Order)>
+            mapReplacedTypes?.Invoke(map);
+            var members = new List<(SessionType? Old, TypeDeclaration Declaration,
+                string HeaderLine, IReadOnlyList<string> Lines, int Order)>();
+            if (block is not null)
             {
-                (previous, declaration, block.HeaderLine, [.. block.Lines], int.MaxValue),
-            };
+                members.Add((previous, declaration!, block.HeaderLine, [.. block.Lines], int.MaxValue));
+            }
             members.AddRange(closure.Types.Select(t => (Old: (SessionType?)t, t.Declaration, t.Declaration.HeaderLine, t.Declaration.Lines, t.Order)));
             var predeclared = new Dictionary<string, Dictionary<string, (TypeBuilder Prototype, OwnMembers Members)>>(StringComparer.Ordinal);
             foreach (var member in members)
@@ -52,7 +60,7 @@ public sealed partial class Session
 
                 if (ReferenceEquals(member.Declaration, declaration))
                 {
-                    generations.Add(block.FamilyTypes);
+                    generations.Add(block!.FamilyTypes);
                 }
 
                 DeclareAhead(member.Declaration, null, module, family, map, member.Old?.Types, generations);
@@ -107,10 +115,11 @@ public sealed partial class Session
                 }
                 catch (ReplException ex)
                 {
-                    throw new ReplException($"cannot redefine {block.KindWord} {block.Path}: {name}: {ex.Message}  (redefine {name} first without it, or .reset)", ex);
+                    throw new ReplException($"cannot redefine {subject}: {name}: {ex.Message}"
+                        + $"  (redefine {name} first without it, or .reset)", ex);
                 }
 
-                if (name != block.KindWord + " " + block.Path)
+                if (name != subject)
                 {
                     rebuiltNames.Add(name);
                 }
@@ -305,7 +314,8 @@ public sealed partial class Session
             }
             catch (ReplException ex)
             {
-                throw new ReplException($"cannot redefine {block.KindWord} {block.Path}: the cell body would no longer compile: {ex.Message}  (.clear the cell first)", ex);
+                throw new ReplException($"cannot redefine {subject}: the cell body would no longer compile: {ex.Message}"
+                    + "  (.clear the cell first)", ex);
             }
 
             _cell = cell;
@@ -348,8 +358,10 @@ public sealed partial class Session
             _pendingMethods.Clear();
         }
 
-        var list = rebuiltNames.Count == 1 ? rebuiltNames[0] : string.Join(", ", rebuiltNames.Take(rebuiltNames.Count - 1)) + " and " + rebuiltNames[^1];
-        return new LineResult(LineOutcome.TypeEnd, null, $"replaced {block.KindWord} {block.Path}; rebuilt {list} (existing instances and delegates keep the previous definitions)");
+        var list = rebuiltNames.Count == 1 ? rebuiltNames[0]
+            : string.Join(", ", rebuiltNames.Take(rebuiltNames.Count - 1)) + " and " + rebuiltNames[^1];
+        return new LineResult(LineOutcome.TypeEnd, null,
+            $"replaced {subject}; rebuilt {list} (existing instances and delegates keep the previous definitions)");
     }
 
     /// <summary>

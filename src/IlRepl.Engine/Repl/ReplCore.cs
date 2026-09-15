@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Reflection;
+using System.Reflection.Emit;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
@@ -12,7 +13,7 @@ namespace IlRepl.Repl;
 /// on top of it. While a <c>.method</c> block is open, lines go to the method, and the cell
 /// number advances when the block commits, as it does after a run.
 /// </summary>
-public sealed class ReplCore : IDisposable
+public sealed partial class ReplCore : IDisposable
 {
     private static readonly CilTokenizer Tokenizer = new(CilVocabularyBuilder.Vocabulary);
     private readonly OperandCompleter _operands;
@@ -41,7 +42,7 @@ public sealed class ReplCore : IDisposable
         Session = session;
         Options = options;
         Transcript = new Transcript { MaxLines = options.MaxTranscriptLines };
-        _operands = new OperandCompleter(session);
+        _operands = new OperandCompleter(session, CaptureEditingSeed);
     }
 
     /// <summary>
@@ -81,7 +82,10 @@ public sealed class ReplCore : IDisposable
                 state.StackText is "?" or "invalid" or "unreachable" ? null : state.Stack.Count, state.Locals.Count,
                 state.InstructionCount, state.OpenBlockDepth, state.IsEmpty, Session.OpenMethod?.Name, Session.Methods.Count,
                 Session.OpenType, Session.TypeCount, Session.Mark() with { EchoStack = Options.EchoStack, ShowTiming = Options.ShowTiming },
-                Session.OpenDepth, Session.CompletionRevision);
+                _editBlock?.Depth ?? Session.OpenDepth, Session.CompletionRevision)
+            {
+                OpenEdit = _editBlock?.Name,
+            };
         }
     }
 
@@ -121,6 +125,11 @@ public sealed class ReplCore : IDisposable
 
         try
         {
+            if (_editBlock is not null && normalized.Text is not (".clear" or ".reset" or ".undo" or ".u"))
+            {
+                return ContinueEdit(normalized);
+            }
+
             var operation = ReplLineDispatcher.Classify(normalized, Session.OpenMethod is not null, Session.State.HasPendingLabels,
                 Session.State.OpenBlockDepth > 0);
             switch (operation.Kind)
@@ -241,6 +250,7 @@ public sealed class ReplCore : IDisposable
     public HandleResult Rollback(SessionMark mark)
     {
         ArgumentNullException.ThrowIfNull(mark);
+        _editBlock = null;
         var method = Session.OpenMethod?.Name;
         var type = Session.OpenType;
         if (!Session.Rollback(mark))
@@ -460,9 +470,30 @@ public sealed class ReplCore : IDisposable
                 Disassemble(argument);
                 return new HandleResult(true, false);
 
+            case ".edit":
+                return Edit(argument);
+
+            case ".diff":
+                return Diff(argument);
+
+            case ".compare":
+            {
+                var package = ComparisonCapture.Create(Session, argument);
+                Note("comparison starting state: " + package.StartingState);
+                return new HandleResult(true, false) { ComparisonPackage = package };
+            }
+
             case ".undo":
             case ".u":
             {
+                if (_editBlock is not null)
+                {
+                    _editBlock = null;
+                    Session.EditInputChanged();
+                    Note("edit submission abandoned; committed version retained");
+                    return new HandleResult(true, false);
+                }
+
                 var wasOpen = Session.OpenMethod;
                 var wasType = Session.OpenType;
                 if (!Session.Undo())
@@ -485,6 +516,14 @@ public sealed class ReplCore : IDisposable
             }
 
             case ".clear":
+                if (_editBlock is not null)
+                {
+                    _editBlock = null;
+                    Session.EditInputChanged();
+                    Note("edit submission abandoned; committed version retained");
+                    return new HandleResult(true, false);
+                }
+
                 if (Session.OpenMethod is { } abandoned)
                 {
                     var owner = Session.OpenType;
@@ -505,17 +544,27 @@ public sealed class ReplCore : IDisposable
                 return new HandleResult(true, false);
 
             case ".reset":
+                _editBlock = null;
+                _lastDisassembled = null;
                 Session.Reset();
                 Note("cell, declarations, methods, and types cleared");
                 return new HandleResult(true, false);
 
             case ".types":
+                foreach (var edit in Session.Edits.Where(edit => edit.Current is not null))
+                {
+                    foreach (var type in edit.Current!.RuntimeTypes)
+                    {
+                        Listing("  " + TypeNameFormatter.Pretty(type) + " (edit " + edit.Name + ")");
+                    }
+                }
+
                 foreach (var type in Session.Types)
                 {
                     ListType(type.Declaration, 1);
                 }
 
-                if (Session.Types.Count == 0)
+                if (Session.Types.Count == 0 && Session.Edits.All(edit => edit.Current is null))
                 {
                     Note("no types");
                 }
@@ -523,12 +572,46 @@ public sealed class ReplCore : IDisposable
                 return new HandleResult(true, false);
 
             case ".methods":
+                if (argument.Length != 0)
+                {
+                    var selected = Session.Edits.FirstOrDefault(edit => edit.Name == argument)
+                        ?? throw new ReplException($"no edit '{argument}' in the session; use .methods to list definitions");
+                    Listing($"  {selected.Name} (revision {selected.Revision}): {selected.Reference}");
+                    foreach (var dependency in selected.Dependencies)
+                    {
+                        Listing($"    {dependency.Disposition}: {dependency.Access} {dependency.Symbol}");
+                        Listing("      assembly: " + dependency.Assembly);
+                        Listing("      source: " + dependency.Location);
+                    }
+
+                    foreach (var problem in selected.Problems)
+                    {
+                        Note("preflight: " + problem);
+                    }
+
+                    if (selected.Dependencies.Count == 0)
+                    {
+                        Note("no referenced member dependencies");
+                    }
+
+                    return new HandleResult(true, false);
+                }
+
+                foreach (var edit in Session.Edits)
+                {
+                    Listing($"  {edit.Name} (revision {edit.Revision}): {edit.Reference}");
+                    if (edit.Method is { } method)
+                    {
+                        Listing("    " + MemberResolver.Describe(method));
+                    }
+                }
+
                 foreach (var method in Session.Methods)
                 {
                     Transcript.Add(LineKind.Listing, "  " + method.Signature.DescribeWithNames(), SpanStyle.Default);
                 }
 
-                if (Session.Methods.Count == 0)
+                if (Session.Methods.Count == 0 && Session.Edits.Count == 0)
                 {
                     Note("no methods");
                 }
@@ -558,7 +641,7 @@ public sealed class ReplCore : IDisposable
                 {
                     count = assembly.GetExportedTypes().Length;
                 }
-                catch (Exception ex) when (ex is System.Reflection.ReflectionTypeLoadException or FileNotFoundException
+                catch (Exception ex) when (ex is ReflectionTypeLoadException or FileNotFoundException
                     or NotSupportedException)
                 {
                     count = -1;
@@ -631,7 +714,7 @@ public sealed class ReplCore : IDisposable
         {
             names = names.Where(n =>
                 n.Contains(filter, StringComparison.Ordinal)
-                || OpcodeTable.Describe(OpcodeTable.ByName[n]).Contains(filter, StringComparison.OrdinalIgnoreCase));
+                || OpcodeTable.Describe(OpcodeTable.BySourceName[n]).Contains(filter, StringComparison.OrdinalIgnoreCase));
         }
 
         var list = names.ToList();
@@ -643,7 +726,7 @@ public sealed class ReplCore : IDisposable
 
         foreach (var name in list)
         {
-            var op = OpcodeTable.ByName[name];
+            var op = OpcodeTable.BySourceName[name];
             Transcript.Add(new TranscriptLine(LineKind.Listing,
             [
                 new TranscriptSpan("  " + name.PadRight(16), SpanStyle.Opcode),
@@ -659,7 +742,24 @@ public sealed class ReplCore : IDisposable
 
     private void Disassemble(string spec)
     {
-        var resolved = MemberResolver.ResolveMethod(spec, Session.InspectionContext, wantConstructor: false);
+        var original = spec.EndsWith(" --original", StringComparison.Ordinal);
+        var reference = (original ? spec[..^11] : spec).Trim();
+        var edit = Session.Edits.FirstOrDefault(edit => edit.Name == reference);
+        if (original && edit is null)
+        {
+            throw new ReplException("--original requires an edit name");
+        }
+
+        if (edit is not null)
+        {
+            var captured = original ? edit.Original : MethodDisassembler.Disassemble(edit.Method
+                ?? throw new ReplException($"edit '{edit.Name}' has no committed version"), Session);
+            ShowDisassembly(captured);
+            _lastDisassembled = reference;
+            return;
+        }
+
+        var resolved = MemberResolver.ResolveMethod(reference, Session.InspectionContext, wantConstructor: false);
         MethodBase method;
         if (resolved.Definition is { } definition)
         {
@@ -667,7 +767,7 @@ public sealed class ReplCore : IDisposable
                 ?? throw new ReplException($"no method '{definition.Name}' in the session");
             method = record.Version.Body;
         }
-        else if (resolved.Method is { } loaded && loaded.DeclaringType is not System.Reflection.Emit.TypeBuilder && resolved.Declared is null)
+        else if (resolved.Method is { } loaded && loaded.DeclaringType is not TypeBuilder && resolved.Declared is null)
         {
             method = loaded;
         }
@@ -677,6 +777,12 @@ public sealed class ReplCore : IDisposable
         }
 
         var listing = MethodDisassembler.Disassemble(method, Session);
+        ShowDisassembly(listing);
+        _lastDisassembled = reference;
+    }
+
+    private void ShowDisassembly(DisassembledMethod listing)
+    {
         var column = StackAnalysis.Run(listing, out var diagnostics);
         Listing("  " + listing.Header + " {");
         Listing("  .maxstack " + listing.MaxStack.ToString(CultureInfo.InvariantCulture));

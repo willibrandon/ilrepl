@@ -36,7 +36,7 @@ jobs:
         run: dotnet build --no-restore
 
       - name: Test
-        run: dotnet test tests/IlRepl.Tests/IlRepl.Tests.csproj --no-build --report-trx --results-directory TestResults
+        run: dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj --no-build --report-trx --results-directory TestResults
         env:
           # The ILAsm round trips must run on CI, not be skipped when ilasm is missing.
           ILREPL_REQUIRE_ILASM: 1
@@ -63,8 +63,37 @@ jobs:
         run: dotnet run --file scripts/Publish-NativeAot.cs -- --rid linux-x64 --package-version 0.0.0-ci
 
   browser:
+    name: browser (${{ matrix.suite.name }}, ${{ matrix.browser.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        browser:
+          - name: chromium
+            filter: 'Name!~webkit'
+          - name: webkit
+            filter: 'Name~webkit'
+        suite:
+          - name: editing
+            filter: 'FullyQualifiedName~LiveSession_Edit&FullyQualifiedName!~Compar'
+          - name: comparison-metadata
+            filter: >-
+              FullyQualifiedName~Compar&
+              (FullyQualifiedName~Metadata|FullyQualifiedName~Assembly|FullyQualifiedName~Module|FullyQualifiedName~ReferencePolicy)
+          - name: comparison-members
+            filter: >-
+              FullyQualifiedName~Compar&FullyQualifiedName!~Metadata&FullyQualifiedName!~Assembly&
+              FullyQualifiedName!~Module&FullyQualifiedName!~ReferencePolicy&
+              (FullyQualifiedName~Member|FullyQualifiedName~Reflect|FullyQualifiedName~Type|
+              FullyQualifiedName~Boundar|FullyQualifiedName~Exact)
+          - name: comparison-values
+            filter: >-
+              FullyQualifiedName~Compar&FullyQualifiedName!~Metadata&FullyQualifiedName!~Assembly&
+              FullyQualifiedName!~Module&FullyQualifiedName!~ReferencePolicy&FullyQualifiedName!~Member&
+              FullyQualifiedName!~Reflect&FullyQualifiedName!~Type&FullyQualifiedName!~Boundar&FullyQualifiedName!~Exact
+          - name: session
+            filter: 'FullyQualifiedName!~Compar&FullyQualifiedName!~LiveSession_Edit'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
 
@@ -99,12 +128,16 @@ jobs:
       - name: Install Chromium and WebKit
         run: pwsh tests/IlRepl.Docs.Tests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium webkit
 
-      - name: Test the published runtime in both browsers
-        run: dotnet test tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj --no-build --report-trx --results-directory BrowserTestResults
+      - name: Test the published runtime
+        run: |
+          filter='(${{ matrix.suite.filter }})&(${{ matrix.browser.filter }})'
+          dotnet test --project tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj \
+            --no-build --report-trx --results-directory BrowserTestResults \
+            --filter "${filter// /}"
 
       - name: Upload browser test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: browser-test-results
+          name: browser-test-results-${{ matrix.suite.name }}-${{ matrix.browser.name }}
           path: BrowserTestResults/

@@ -22,6 +22,11 @@ internal sealed record EditingSeed(
     long Revision) : IDisposable
 {
     /// <summary>
+    /// The pinned original method definitions available to edit submissions.
+    /// </summary>
+    internal IReadOnlyList<EditingMethodEdit> Edits { get; init; } = [];
+
+    /// <summary>
     /// Releases the captured assemblies when the editing view is discarded.
     /// </summary>
     public void Dispose() => Snapshot.Dispose();

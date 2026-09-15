@@ -1,4 +1,7 @@
+using System.Globalization;
 using System.Reflection;
+using System.Reflection.Emit;
+using System.Runtime.InteropServices;
 
 namespace IlRepl.Engine.Binding;
 
@@ -130,7 +133,7 @@ public static class SymbolBinder
         var (managed, unmanaged, convention) = Conventions(syntax.ConventionWords);
         var returnType = BindCore(syntax.ReturnType, scope, lenient);
         var parameters = syntax.Parameters.Select(p => BindCore(p, scope, lenient)).ToList();
-        var extensible = unmanaged && convention == System.Runtime.InteropServices.CallingConvention.Winapi;
+        var extensible = unmanaged && convention == CallingConvention.Winapi;
         if (extensible)
         {
             SymbolSignatureProvider.StripModifiers(returnType, out _, out var modifiers);
@@ -184,6 +187,19 @@ public static class SymbolBinder
         var opName = op.Name!;
         var text = syntax.Text;
         var operand = syntax.Operand;
+        if (syntax.DecodedPrefixName == "no.")
+        {
+            var mask = LiteralParser.ParseInteger(operand.Text, "no.");
+            if (mask is < 1 or > 7)
+            {
+                throw new ReplException("no. requires a check mask from 1 through 7");
+            }
+
+            return new BoundInstruction(op, text, new BoundOperand { Kind = OperandKind.Byte, Value = (byte)mask }, null, null)
+            {
+                DecodedPrefixName = "no.",
+            };
+        }
 
         var implicitLocal = opName switch
         {
@@ -238,7 +254,7 @@ public static class SymbolBinder
                 return new BoundInstruction(op, text, BoundOperand.None, null, null);
 
             case OperandSyntaxKind.Integer:
-                if (op.OperandType == System.Reflection.Emit.OperandType.ShortInlineI)
+                if (op.OperandType == OperandType.ShortInlineI)
                 {
                     var v = LiteralParser.ParseInteger(operand.Text, opName);
                     if (opName == "ldc.i4.s")
@@ -259,7 +275,7 @@ public static class SymbolBinder
                     return Literal(OperandKind.Byte, (byte)v);
                 }
 
-                if (op.OperandType == System.Reflection.Emit.OperandType.InlineI)
+                if (op.OperandType == OperandType.InlineI)
                 {
                     var v = LiteralParser.ParseInteger(operand.Text, opName);
                     if (v is < int.MinValue or > uint.MaxValue)
@@ -273,7 +289,7 @@ public static class SymbolBinder
                 return Literal(OperandKind.Int64, LiteralParser.ParseInteger(operand.Text, opName));
 
             case OperandSyntaxKind.Float:
-                return op.OperandType == System.Reflection.Emit.OperandType.ShortInlineR
+                return op.OperandType == OperandType.ShortInlineR
                     ? Literal(OperandKind.Single, LiteralParser.ParseFloat32(operand.Text, opName))
                     : Literal(OperandKind.Double, LiteralParser.ParseFloat(operand.Text, opName));
 
@@ -311,7 +327,7 @@ public static class SymbolBinder
                 {
                     Kind = OperandKind.Method,
                     Method = BindMethodReference(
-                    operand.Member!, scope, op == System.Reflection.Emit.OpCodes.Newobj)
+                    operand.Member!, scope, op == OpCodes.Newobj)
                 }, null, null);
 
             case OperandSyntaxKind.Field:
@@ -384,7 +400,7 @@ public static class SymbolBinder
             throw new ReplException("expected a local name or index");
         }
 
-        if (int.TryParse(operand, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture,
+        if (int.TryParse(operand, NumberStyles.Integer, CultureInfo.InvariantCulture,
             out var index))
         {
             if (index < 0 || index >= locals.Count)
@@ -426,7 +442,7 @@ public static class SymbolBinder
             throw new ReplException("expected an argument name or index");
         }
 
-        if (int.TryParse(operand, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture,
+        if (int.TryParse(operand, NumberStyles.Integer, CultureInfo.InvariantCulture,
             out var index))
         {
             if (index < 0 || index >= arguments.Count)
@@ -456,13 +472,13 @@ public static class SymbolBinder
     /// </summary>
     /// <param name="words">The ordered calling-convention words, such as <c>instance</c>, <c>vararg</c>, or <c>cdecl</c>.</param>
     /// <returns>The managed convention, whether the signature is unmanaged, and the unmanaged convention.</returns>
-    public static (CallingConventions Managed, bool IsUnmanaged, System.Runtime.InteropServices.CallingConvention Unmanaged) Conventions(
+    public static (CallingConventions Managed, bool IsUnmanaged, CallingConvention Unmanaged) Conventions(
         IEnumerable<string> words)
     {
         ArgumentNullException.ThrowIfNull(words);
         var managed = CallingConventions.Standard;
         var isUnmanaged = false;
-        var unmanaged = System.Runtime.InteropServices.CallingConvention.Winapi;
+        var unmanaged = CallingConvention.Winapi;
         foreach (var word in words)
         {
             switch (word)
@@ -481,19 +497,19 @@ public static class SymbolBinder
                     break;
                 case "cdecl":
                     isUnmanaged = true;
-                    unmanaged = System.Runtime.InteropServices.CallingConvention.Cdecl;
+                    unmanaged = CallingConvention.Cdecl;
                     break;
                 case "stdcall":
                     isUnmanaged = true;
-                    unmanaged = System.Runtime.InteropServices.CallingConvention.StdCall;
+                    unmanaged = CallingConvention.StdCall;
                     break;
                 case "thiscall":
                     isUnmanaged = true;
-                    unmanaged = System.Runtime.InteropServices.CallingConvention.ThisCall;
+                    unmanaged = CallingConvention.ThisCall;
                     break;
                 case "fastcall":
                     isUnmanaged = true;
-                    unmanaged = System.Runtime.InteropServices.CallingConvention.FastCall;
+                    unmanaged = CallingConvention.FastCall;
                     break;
                 default:
                     break;
@@ -798,6 +814,54 @@ public static class SymbolBinder
 
     private static BoundMethod BindSessionMethod(MemberSyntax syntax, IBindingScope scope, bool wantConstructor)
     {
+        if (scope.MethodAliases.TryGetValue(syntax.Name, out var alias))
+        {
+            if (syntax.GenericArity is { } arity && (!alias.IsGenericDefinition || alias.Arity != arity))
+            {
+                throw new ReplException($"{syntax.Name} does not name a generic method definition of arity {arity}");
+            }
+
+            if (wantConstructor != alias.IsConstructor || (syntax.ExplicitInstance && alias.IsStatic)
+                || (syntax.IsVarArg && !alias.IsVarArg))
+            {
+                throw new ReplException($"{syntax.Name} names {scope.Describe(alias)}; use its declared invocation convention");
+            }
+
+            var definition = alias;
+            var arguments = syntax.GenericArguments?.Select(argument => BindType(argument, scope)).ToArray();
+            if (arguments is not null)
+            {
+                alias = scope.Instantiate(alias, arguments.Select(argument => argument.Type).ToArray())
+                    ?? throw new ReplException($"the generic arguments do not satisfy {scope.Describe(definition)}");
+            }
+
+            if (syntax.ReturnType is { } returned && !ReturnMatches(alias, BindType(returned, scope)))
+            {
+                throw new ReplException($"{syntax.Name} returns {scope.Pretty(alias.ReturnType)}");
+            }
+
+            if (syntax.Parameters is not null
+                && !ParametersMatch(alias, syntax.FixedParameters.Select(parameter => BindType(parameter, scope)).ToArray()))
+            {
+                throw new ReplException($"the arguments do not match {scope.Describe(alias)}");
+            }
+
+            var optional = syntax.OptionalParameters?.Select(parameter => BindType(parameter, scope)).ToArray();
+            var optionalTypes = optional?.Select(parameter => parameter.Type).ToArray() ?? (syntax.IsVarArg ? [] : null);
+            return new BoundMethod(alias, alias == definition ? null : definition, optionalTypes)
+            {
+                IsAlias = true,
+                ExactGenericArguments = arguments?.Select(argument => argument.ExactType).ToArray() ?? [],
+                ExactOptionalParameterTypes = optional?.Select(parameter => parameter.ExactType).ToArray()
+                    ?? (optionalTypes is null ? null : []),
+            };
+        }
+
+        if (syntax.GenericArguments is not null || syntax.GenericArity is not null)
+        {
+            throw new ReplException("session methods are not generic");
+        }
+
         var returnType = syntax.ReturnType is null ? null : BindType(syntax.ReturnType, scope);
         var name = syntax.Name;
         if (wantConstructor)

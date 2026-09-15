@@ -6,6 +6,7 @@
     <IsPackable>false</IsPackable>
     <MSTestAnalysisMode>Recommended</MSTestAnalysisMode>
     <IncludeIlReplHostInOutput>true</IncludeIlReplHostInOutput>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>$(NoWarn);MSTESTEXP</NoWarn>
   </PropertyGroup>
 

@@ -190,7 +190,8 @@ public static class MethodDeclarationParser
         var nameStart = FindNameStart(s, pos, firstParen);
         var nameText = s[nameStart..firstParen].Trim();
         var typeParameterSpecs = (IReadOnlyList<GenericParameterSpec>)[];
-        var lt = nameText.IndexOf('<', StringComparison.Ordinal);
+        var genericStart = nameText.StartsWith('\'') ? CilSyntaxParser.EndOfQuoted(nameText, 0) + 1 : 0;
+        var lt = nameText.IndexOf('<', genericStart);
         if (lt >= 0)
         {
             if (!nameText.EndsWith('>'))
@@ -208,7 +209,8 @@ public static class MethodDeclarationParser
             throw new ReplException(MemberUsage);
         }
 
-        if (name is not (".ctor" or ".cctor") && !InstructionParser.IsIdentifier(name))
+        if (name is not (".ctor" or ".cctor") && !InstructionParser.IsIdentifier(name)
+            && !(nameText.StartsWith('\'') && nameText.EndsWith('\'') && !name.Contains('\0')))
         {
             throw new ReplException($"bad method name '{name}'");
         }
@@ -361,13 +363,7 @@ public static class MethodDeclarationParser
             }
             else if (c == '\'')
             {
-                var close = s.IndexOf('\'', i + 1);
-                if (close < 0)
-                {
-                    return -1;
-                }
-
-                i = close;
+                i = CilSyntaxParser.EndOfQuoted(s, i);
             }
             else if (c == '(')
             {
@@ -410,40 +406,34 @@ public static class MethodDeclarationParser
         // The name is the last whitespace-separated token before the parameter list, taking a
         // quoted name or a generic parameter list as one token.
         var depth = 0;
-        var i = paren - 1;
-        while (i >= from && char.IsWhiteSpace(s[i]))
-        {
-            i--;
-        }
-
-        while (i >= from)
+        var start = from;
+        for (var i = from; i < paren; i++)
         {
             var c = s[i];
-            if (c == '>')
+            if (c == '\'')
             {
-                depth++;
+                i = CilSyntaxParser.EndOfQuoted(s, i);
             }
             else if (c == '<')
             {
-                depth--;
+                depth++;
             }
-            else if (c == '\'' && depth == 0)
+            else if (c == '>')
             {
-                var open = s.LastIndexOf('\'', i - 1);
-                if (open >= from)
-                {
-                    return open;
-                }
+                depth--;
             }
             else if (char.IsWhiteSpace(c) && depth == 0)
             {
-                return i + 1;
+                var next = i + 1;
+                TypeParser.SkipWhitespace(s, ref next);
+                if (next < paren)
+                {
+                    start = next;
+                }
             }
-
-            i--;
         }
 
-        return from;
+        return start;
     }
 
     private static List<ParameterSymbol> ParseParameters(string inner, IBindingScope context, bool allowVarArg)
@@ -609,6 +599,7 @@ public static class MethodDeclarationParser
         var returnType = BindTypeAt(
             s, ref pos, context, out _, out var returnRequired, out var returnOptional, out var exactReturnType);
         TypeParser.SkipWhitespace(s, ref pos);
+        var quotedName = pos < s.Length && s[pos] == '\'';
         var name = ReadName(s, ref pos);
         TypeParser.SkipWhitespace(s, ref pos);
         if (name.Length == 0 || pos >= s.Length || s[pos] != '(')
@@ -616,7 +607,7 @@ public static class MethodDeclarationParser
             throw new ReplException(Usage);
         }
 
-        if (!InstructionParser.IsIdentifier(name))
+        if (!quotedName && !InstructionParser.IsIdentifier(name))
         {
             throw new ReplException($"bad method name '{name}'");
         }
@@ -692,13 +683,8 @@ public static class MethodDeclarationParser
     {
         if (pos < s.Length && s[pos] == '\'')
         {
-            var end = s.IndexOf('\'', pos + 1);
-            if (end < 0)
-            {
-                throw new ReplException("unterminated quoted name");
-            }
-
-            var quoted = s[(pos + 1)..end];
+            var end = CilSyntaxParser.EndOfQuoted(s, pos);
+            var quoted = CilSyntaxParser.DecodeQuoted(s[(pos + 1)..end]);
             pos = end + 1;
             return quoted;
         }

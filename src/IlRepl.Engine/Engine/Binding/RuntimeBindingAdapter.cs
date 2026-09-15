@@ -110,6 +110,7 @@ public sealed class RuntimeBindingAdapter
             case MethodSignature session:
                 return new ResolvedMethod(session)
                 {
+                    IsAlias = bound.IsAlias,
                     ExactOptionalParameterTypes = bound.ExactOptionalParameterTypes,
                 };
             case RuntimeDeclaredMember declared:
@@ -130,6 +131,7 @@ public sealed class RuntimeBindingAdapter
                 };
                 return new ResolvedMethod(declared.Builder, effective, declaringType)
                 {
+                    IsAlias = bound.IsAlias,
                     ExactDeclaringType = Exact(method.DeclaringType),
                     OptionalParameterTypesOverride = optional,
                     ExactOptionalParameterTypes = bound.ExactOptionalParameterTypes,
@@ -156,6 +158,7 @@ public sealed class RuntimeBindingAdapter
 
                 return new ResolvedMethod(mapped, ToSignature(method), declaringType)
                 {
+                    IsAlias = bound.IsAlias,
                     ExactDeclaringType = Exact(method.DeclaringType),
                     OptionalParameterTypesOverride = optional,
                     ExactOptionalParameterTypes = bound.ExactOptionalParameterTypes,
@@ -165,9 +168,22 @@ public sealed class RuntimeBindingAdapter
                 };
             }
 
+            case MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } generic
+                when generic.GetGenericArguments().Any(RuntimeBindingScope.ContainsBuilder):
+                return new ResolvedMethod(generic, ToSignature(method), ToType(method.DeclaringType!))
+                {
+                    IsAlias = bound.IsAlias,
+                    DeclaredDefinition = ToSignature(RuntimeSymbolImporter.Import(generic.GetGenericMethodDefinition())),
+                    GenericArguments = ToTypes(method.GenericArguments),
+                    ExactDeclaringType = Exact(method.DeclaringType),
+                    OptionalParameterTypesOverride = optional,
+                    ExactOptionalParameterTypes = bound.ExactOptionalParameterTypes,
+                    ExactGenericArguments = ExactGenericArguments(bound),
+                };
             case MethodBase runtime:
                 return new ResolvedMethod(runtime, optional)
                 {
+                    IsAlias = bound.IsAlias,
                     ExactDeclaringType = Exact(method.DeclaringType),
                     ExactOptionalParameterTypes = bound.ExactOptionalParameterTypes,
                     ExactGenericArguments = ExactGenericArguments(bound),
@@ -246,10 +262,11 @@ public sealed class RuntimeBindingAdapter
         return new Instruction
         {
             Op = bound.Op,
+            DecodedPrefixName = bound.DecodedPrefixName,
             Text = bound.Text,
             Kind = operand.Kind,
             Operand = value,
-            ExactTypeOperand = operand.ExactType is { } type && RuntimeSymbolTypes.RequiresExact(type) ? type : null,
+            ExactTypeOperand = operand.ExactType is { } type && RuntimeSymbolTypes.RequiresExactOperand(type) ? type : null,
             ExactFieldDeclaringType = operand.Field is { } field ? Exact(field.DeclaringType) : null,
             LocalIndex = bound.LocalIndex,
             ArgumentIndex = bound.ArgumentIndex,

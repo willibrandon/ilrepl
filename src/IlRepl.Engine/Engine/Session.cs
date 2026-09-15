@@ -515,6 +515,20 @@ public sealed partial class Session
         }
 
         _methods.Clear();
+        foreach (var edit in _edits)
+        {
+            if (edit.Baseline.Definition is { } baseline)
+            {
+                SessionAssemblies.Release(baseline);
+            }
+
+            if (edit.Current?.Definition is { } current)
+            {
+                SessionAssemblies.Release(current);
+            }
+        }
+
+        _edits.Clear();
         _open = null;
         foreach (var type in _types)
         {
@@ -587,6 +601,11 @@ public sealed partial class Session
         var signatures = Signatures();
         var headerContext = new ParseContext([], [], GenericContext.Empty, Resolver, signatures, _typeTable);
         var signature = MethodHeaderParser.Parse(spec, headerContext, out var braceOpen);
+        if (_edits.Any(edit => edit.Name == signature.Name))
+        {
+            throw new ReplException($"'{signature.Name}' already belongs to an edit; choose another method name");
+        }
+
         var replacing = _methods.FirstOrDefault(m => m.Signature.Name == signature.Name);
         var table = new List<MethodSignature>(signatures);
         var index = table.FindIndex(s => s.Name == signature.Name);

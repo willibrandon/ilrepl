@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Reflection.Emit;
 
@@ -117,11 +118,12 @@ public static class CellCompiler
         AccessGrants.Grant(assembly, module, typeDependencies);
 
         var parameterTypes = state.Arguments.Select(a => a.Type).ToArray();
+        run.InitLocals = state.InitLocals;
         run.SetParameters(parameterTypes);
         for (var i = 0; i < state.Arguments.Count; i++)
         {
             var name = state.Arguments[i].Name
-                ?? "arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                ?? "arg" + i.ToString(CultureInfo.InvariantCulture);
             run.DefineParameter(i + 1, ParameterAttributes.None, name);
         }
 

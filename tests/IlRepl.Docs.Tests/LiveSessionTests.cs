@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
@@ -428,8 +429,29 @@ public sealed partial class LiveSessionTests
     private static async Task<IPage> OpenSessionAsync(IBrowserContext context)
     {
         var page = await context.NewPageAsync();
-        await page.GotoAsync(s_site!.BaseUrl + "/try/");
-        await WaitForSessionAsync(page, 1, 180_000);
+        var errors = new ConcurrentQueue<string>();
+        page.PageError += (_, error) => errors.Enqueue(error);
+        page.RequestFailed += (_, request) => errors.Enqueue(request.Url + ": " + request.Failure);
+        page.Console += (_, message) =>
+        {
+            if (message.Type == "error") errors.Enqueue(message.Text);
+        };
+        try
+        {
+            await page.GotoAsync(s_site!.BaseUrl + "/try/");
+            await WaitForSessionAsync(page, 1, 180_000);
+        }
+        catch (TimeoutException exception)
+        {
+            var state = await page.EvaluateAsync<string>("""
+                () => JSON.stringify({ ready: window.ilreplReady, sessions: window.ilreplSessionCount,
+                  status: document.getElementById('session-status')?.textContent,
+                  restart: window.ilreplLastRestart, terminal: document.getElementById('terminal')?.textContent })
+                """);
+            throw new InvalidOperationException("browser session startup timed out: " + state + "\n"
+                + string.Join('\n', errors.TakeLast(16)), exception);
+        }
+
         await ClickIntoTerminalAsync(page);
         return page;
     }

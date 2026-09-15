@@ -63,6 +63,16 @@ public sealed class BindingSnapshot : IDisposable
     public IReadOnlyList<MethodSymbol> SessionMethods { get; private init; } = [];
 
     /// <summary>
+    /// Immutable edit aliases over captured metadata identities.
+    /// </summary>
+    public IReadOnlyDictionary<string, MethodSymbol> MethodAliases { get; private init; } = new Dictionary<string, MethodSymbol>();
+
+    /// <summary>
+    /// The captured edit names, including drafts that do not yet have an executable alias.
+    /// </summary>
+    internal IReadOnlyList<string> EditNames { get; private init; } = [];
+
+    /// <summary>
     /// The generic parameters in scope for the body.
     /// </summary>
     public SymbolGenericContext Generics { get; private init; } = SymbolGenericContext.Empty;
@@ -115,6 +125,8 @@ public sealed class BindingSnapshot : IDisposable
         bool inspecting = false) => new(Catalog, SearchOrder, Engine, CoreLib, [.. SessionAssemblies], types)
         {
             SessionMethods = methods,
+            MethodAliases = MethodAliases,
+            EditNames = EditNames,
             Generics = generics,
             Locals = locals,
             Arguments = arguments,
@@ -146,7 +158,7 @@ public sealed class BindingSnapshot : IDisposable
             own.Add(method.Version.Definition.Assembly);
         }
 
-        return Capture(session.CompletionContext, own);
+        return Capture(session.CompletionContext, own, session.Edits.Select(edit => edit.Name));
     }
 
     /// <summary>
@@ -154,8 +166,10 @@ public sealed class BindingSnapshot : IDisposable
     /// </summary>
     /// <param name="context">The parse context.</param>
     /// <param name="sessionAssemblies">The session's own loaded assemblies, whose types the table names.</param>
+    /// <param name="editNames">The edit names available for command operands.</param>
     /// <returns>The snapshot.</returns>
-    public static BindingSnapshot Capture(ParseContext context, IEnumerable<Assembly>? sessionAssemblies = null)
+    public static BindingSnapshot Capture(ParseContext context, IEnumerable<Assembly>? sessionAssemblies = null,
+        IEnumerable<string>? editNames = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         var leases = new List<MetadataLease>();
@@ -257,6 +271,9 @@ public sealed class BindingSnapshot : IDisposable
         {
             SessionMethods = [.. context.Methods.Select(signature => RuntimeSymbolImporter.Import(signature, null,
                 RuntimeDefinitions.OfDeclaration(signature, 0), MethodSymbolSource.Session, true))],
+            MethodAliases = context.Types.MethodAliases.ToDictionary(pair => pair.Key,
+                pair => RuntimeSymbolImporter.Import(pair.Value), StringComparer.Ordinal),
+            EditNames = editNames?.ToArray() ?? [],
             Generics = new SymbolGenericContext([.. context.Generics.TypeArguments.Select(RuntimeSymbolImporter.Import)],
                 [.. context.Generics.MethodArguments.Select(RuntimeSymbolImporter.Import)]),
             Locals = [.. context.Locals.Select(local => new VariableSymbol(RuntimeSymbolImporter.Import(local.Type), local.Name,
