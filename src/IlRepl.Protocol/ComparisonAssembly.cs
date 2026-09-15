@@ -13,6 +13,11 @@ public sealed record ComparisonAssembly(string Name, byte[] Image)
     public string? OriginalLocation { get; init; }
 
     /// <summary>
+    /// The adjacent satellite files available when the original assembly context was captured, including an empty inventory.
+    /// </summary>
+    public IReadOnlyList<string>? OriginalSatelliteFiles { get; init; }
+
+    /// <summary>
     /// Whether the original assembly belongs to a collectible load context.
     /// </summary>
     public bool IsCollectible { get; init; }

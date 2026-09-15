@@ -29,6 +29,9 @@ until `.reset`; `.clear` abandons an open edit without removing saved revisions.
 The method name, generic parameter count, and instance/static declaration must stay the same.
 Changes to parameter names and `[in]`, `[out]`, and `[opt]` flags are saved with the copy.
 Use `.param [1] = int32(8)` to change a parameter's default. Unmentioned defaults are kept; `[opt]` controls whether it is optional.
+Use `.custom` to add an attribute to the method, or after `.param [N]` to add one to a parameter; `[0]` selects the return value.
+Original attributes are kept. Each revision applies its attribute additions afresh.
+Use `.override` to map the edited method to an interface or virtual base method. Other dispatch mappings are kept.
 
 `.methods` lists copies and their revisions. `.types` shows their declaring types, such as
 `IlRepl.Edits.Maximum.Owner`. Call the copy by its name: `call Maximum`.
@@ -231,6 +234,8 @@ If a dependency cannot be copied, `.edit` explains why and leaves the source ava
 Some framework methods use runtime internals that cannot be copied. You can replace that code and
 compare the result with the actual original. Scenario calls need compatible signatures.
 When the original needs its assembly file context, that file must still match the captured image or comparison reports a setup failure.
+Satellite assemblies are captured from loaded assemblies and adjacent culture directories.
+Adding, changing, or removing an adjacent satellite after capture causes a setup failure.
 
 Methods without an IL body cannot be opened. Instructions and native calls still need support from
 the runtime where you run them.

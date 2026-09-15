@@ -16,7 +16,7 @@ namespace IlRepl.Tests.Engine;
 /// Real cultural satellite resolution remains successful for originals while copied lookups reject recoverably.
 /// </summary>
 [TestClass]
-public sealed class SatelliteAssemblyTests
+public sealed partial class SatelliteAssemblyTests
 {
     private const string ProbeDirectory = "ILREPL_SATELLITE_PROBE_DIRECTORY";
     private static readonly string[] Dispatches = ["direct", "reflection", "delegate", "token", "lookalike"];

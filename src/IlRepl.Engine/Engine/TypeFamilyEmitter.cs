@@ -10,7 +10,6 @@ using CecilMethodImplAttributes = Mono.Cecil.MethodImplAttributes;
 using CecilParameterAttributes = Mono.Cecil.ParameterAttributes;
 using CecilPropertyAttributes = Mono.Cecil.PropertyAttributes;
 using CecilTypeAttributes = Mono.Cecil.TypeAttributes;
-using NamedArgument = Mono.Cecil.CustomAttributeNamedArgument;
 
 namespace IlRepl.Engine;
 
@@ -469,69 +468,5 @@ internal sealed class TypeFamilyEmitter(
     private static object? ConstantFor(object? value) => value is Enum e ? System.Convert.ChangeType(e, Enum
         .GetUnderlyingType(e.GetType()), System.Globalization.CultureInfo.InvariantCulture) : value;
 
-    private CustomAttribute Attribute(CustomAttributeDeclaration declaration)
-    {
-        var attribute = new CustomAttribute(writer.Import(declaration.Constructor));
-        var parameters = declaration.Constructor.GetParameters();
-        for (var i = 0; i < declaration.FixedArguments.Count; i++)
-        {
-            attribute.ConstructorArguments.Add(Argument(parameters[i].ParameterType, declaration.FixedArguments[i]));
-        }
-
-        foreach (var (field, value) in declaration.NamedFields)
-        {
-            attribute.Fields.Add(new NamedArgument(field.Name, Argument(field.FieldType, value)));
-        }
-
-        foreach (var (property, value) in declaration.NamedProperties)
-        {
-            attribute.Properties.Add(new NamedArgument(property.Name, Argument(property.PropertyType, value)));
-        }
-
-        return attribute;
-    }
-
-    private CustomAttributeArgument Argument(Type declared, object? value)
-    {
-        if (declared == typeof(object))
-        {
-            // A boxed value carries its own type in the blob.
-            var actual = value switch
-            {
-                null => typeof(object),
-                Type => typeof(Type),
-                _ => value.GetType(),
-            };
-            return new CustomAttributeArgument(writer.Import(typeof(object)), value is null ? null : Argument(actual, value));
-        }
-
-        if (declared == typeof(Type))
-        {
-            return new CustomAttributeArgument(writer.Import(typeof(Type)), value is Type t ? writer.Import(t) : null);
-        }
-
-        if (declared.IsArray)
-        {
-            if (value is not Array array)
-            {
-                return new CustomAttributeArgument(writer.Import(declared), null);
-            }
-
-            var element = declared.GetElementType()!;
-            var items = new CustomAttributeArgument[array.Length];
-            for (var i = 0; i < array.Length; i++)
-            {
-                items[i] = Argument(element, array.GetValue(i));
-            }
-
-            return new CustomAttributeArgument(writer.Import(declared), items);
-        }
-
-        if (declared.IsEnum)
-        {
-            return new CustomAttributeArgument(writer.Import(declared), ConstantFor(value));
-        }
-
-        return new CustomAttributeArgument(writer.Import(declared), value);
-    }
+    private CustomAttribute Attribute(CustomAttributeDeclaration declaration) => CecilCustomAttributes.Create(declaration, writer);
 }

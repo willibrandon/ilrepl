@@ -120,7 +120,8 @@ internal sealed partial class ReflectionValueResolver(
                     ? Convert.ToInt32(instruction.Operand) : op.Value - OpCodes.Ldc_I4_0.Value];
             if (op == OpCodes.Castclass || op == OpCodes.Isinst || op == OpCodes.Ldind_Ref || op == OpCodes.Ldobj)
                 return Stack(body, position, 1);
-            if (op.Name?.StartsWith("ldelem", StringComparison.Ordinal) == true) return Collection(body, position, 2);
+            if (op.Name?.StartsWith("ldelem", StringComparison.Ordinal) == true)
+                return Collection(body, position, 2) ?? ArrayElementValues(body, position);
             if (instruction.LocalIndex is { } local && op.Name?.StartsWith("ldloc", StringComparison.Ordinal) == true)
                 return Local(body, local);
             if (instruction.ArgumentIndex is { } parameter && op.Name?.StartsWith("ldarg", StringComparison.Ordinal) == true)
@@ -244,6 +245,8 @@ internal sealed partial class ReflectionValueResolver(
 
     private object?[]? Call(MethodEditBody body, int position, MethodBase method)
     {
+        if (method.DeclaringType == typeof(Array) && method.Name == nameof(Array.GetValue))
+            return ArrayElementValues(body, position, method.GetParameters().Length + 1);
         var owner = method.DeclaringType;
         var name = method.Name;
         object?[]? Input(int parameter = -1) => Argument(body, position, parameter);

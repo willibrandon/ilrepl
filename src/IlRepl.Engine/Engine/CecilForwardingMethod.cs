@@ -64,6 +64,7 @@ internal static class CecilForwardingMethod
             if (parameter.HasConstant) copy.Constant = parameter.Constant;
             method.Parameters.Add(copy);
         }
+        CecilCustomAttributes.CopyMethod(selected, method, selected.HasThis ? 1 : 0);
 
         var ownerMap = target.DeclaringType.GenericParameters.Select((parameter, index) =>
             (parameter, value: (TypeReference)owner.GenericParameters[index])).ToDictionary(pair => pair.parameter, pair => pair.value);

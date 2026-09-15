@@ -81,7 +81,7 @@ public static partial class ComparisonCapture
         var moduleId = Guid.NewGuid();
         var original = CaptureImage(session, edit, options, original: true, dependencies, moduleId);
         var edited = CaptureImage(session, edit, options, original: false, dependencies, moduleId);
-        if (original.OriginalAssembly is not null) CaptureLoadedSatellites(session, dependencies);
+        if (original.OriginalAssembly is not null) CaptureSatellites(session, dependencies);
         var environment = Environment.GetEnvironmentVariables().Cast<DictionaryEntry>()
             .ToDictionary(pair => (string)pair.Key, pair => (string)pair.Value!, StringComparer.Ordinal);
         return new ComparisonPackage(edit.Name, edit.Fingerprint, edit.Revision, original, edited, dependencies.Values.ToArray(),

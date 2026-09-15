@@ -69,6 +69,7 @@ internal static partial class ComparisonInstrumentation
         {
             wrapper.Parameters.Add(new ParameterDefinition(parameter));
         }
+        CecilCustomAttributes.CopyMethod(target, wrapper);
 
         for (var index = 0; index < target.GenericParameters.Count; index++)
         {

@@ -38,6 +38,8 @@ internal sealed partial class ReflectionValueResolver
             var instruction = body.State.Entries[position].Instruction;
             if (instruction is null) return false;
             var op = instruction.Op;
+            if (op.Name?.StartsWith("ldelem", StringComparison.Ordinal) == true)
+                return ArrayElementMayReferenceMetadata(body, position);
             if (op == OpCodes.Castclass || op == OpCodes.Isinst || op == OpCodes.Ldind_Ref || op == OpCodes.Ldobj
                 || op == OpCodes.Box || op == OpCodes.Unbox_Any)
                 return HasMetadataReference(body, position, 1);
@@ -58,6 +60,8 @@ internal sealed partial class ReflectionValueResolver
             if (instruction.Operand is ResolvedMethod resolved && (op == OpCodes.Call || op == OpCodes.Callvirt))
             {
                 var method = resolveMethod(resolved);
+                if (method.DeclaringType == typeof(Array) && method.Name == nameof(Array.GetValue))
+                    return ArrayElementMayReferenceMetadata(body, position, method.GetParameters().Length + 1);
                 if (method is MethodInfo info && MetadataType(info.ReturnType)) return true;
                 return bodies.TryGetValue(IlAsmRenderer.DefinitionOf(method), out var called) && called is not null
                     && called.State.Entries.Select((entry, index) => (entry.Instruction, index)).Any(entry =>

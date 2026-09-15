@@ -144,6 +144,15 @@ public static partial class ComparisonWorker
                     if (!string.IsNullOrEmpty(name.CultureName) && name.Name?.EndsWith(".resources", StringComparison.Ordinal) == true)
                         Resolve(executionContext, name);
                 }
+                foreach (var parent in package.Dependencies)
+                {
+                    if (parent.OriginalSatelliteFiles is not { } paths) continue;
+                    var current = ComparisonSatelliteFiles.Paths(parent);
+                    var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+                    if (!paths.SequenceEqual(current, comparer))
+                        throw new ReplException("the original assembly's satellite files changed after comparison capture: "
+                            + parent.OriginalLocation);
+                }
                 var dependency = package.Dependencies.FirstOrDefault(dependency =>
                     string.Equals(dependency.Name, identity, StringComparison.OrdinalIgnoreCase));
                 if (dependency?.OriginalLocation is { } location) VerifyOriginalFile(dependency, location);

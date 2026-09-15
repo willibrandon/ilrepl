@@ -134,6 +134,8 @@ internal sealed partial class ImportedMethodFamily
             }
 
             CopyAttributes(source.GetCustomAttributesData(), definition, writer);
+            if (source is MethodBase edited && _methods[edited] is { } body)
+                WriteEditedAttributes(body, (MethodDefinition)definition, writer);
         }
 
         // Constructed override references copy method signatures, so those signatures must be complete first.
@@ -228,7 +230,7 @@ internal sealed partial class ImportedMethodFamily
         }
     }
 
-    private static void FillType(Type original, TypeDefinition definition, Dictionary<MemberInfo, IMemberDefinition> definitions,
+    private void FillType(Type original, TypeDefinition definition, Dictionary<MemberInfo, IMemberDefinition> definitions,
         CecilWriter writer)
     {
         definition.BaseType = original.BaseType is { } parent ? writer.Import(parent) : null;
@@ -248,13 +250,7 @@ internal sealed partial class ImportedMethodFamily
             definition.Interfaces.Add(new InterfaceImplementation(writer.Import(contract)));
         }
 
-        foreach (var (body, declaration) in ImportedMetadata.Overrides(original))
-        {
-            if (definitions.TryGetValue(IlAsmRenderer.DefinitionOf(body), out var method))
-            {
-                ((MethodDefinition)method).Overrides.Add(writer.Import(declaration));
-            }
-        }
+        WriteOverrides(original, definitions, writer);
 
         foreach (var property in original.GetProperties(Declared))
         {

@@ -387,6 +387,7 @@ internal sealed partial class ImportedMethodFamily
     private void Scan(MethodEditBody body)
     {
         var from = ContextOf(body.Method);
+        ScanEditedMetadata(body, from);
         foreach (var parameter in body.State.Signature!.TypeParameters)
         {
             foreach (var constraint in parameter.Constraints)
