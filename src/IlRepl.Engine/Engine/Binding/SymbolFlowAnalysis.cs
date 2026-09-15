@@ -1,3 +1,6 @@
+using System.Reflection.Emit;
+using IlRepl.Protocol;
+
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
@@ -47,6 +50,94 @@ internal static class SymbolFlowAnalysis
         return new ControlFlowAnalysis<TypeSymbol>(Rules(scope)).Run(graph,
             SymbolIdentity.Equal(returnType, TypeSymbol.Void) ? null : returnType,
             body.Signature is null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Extends a converged preview when the appended instruction cannot change earlier edges or exception regions.
+    /// </summary>
+    /// <param name="body">The editing body including the candidate instruction.</param>
+    /// <param name="scope">The candidate instruction's binding scope.</param>
+    /// <param name="result">The extended analysis when the incremental step is safe.</param>
+    /// <returns>Whether the candidate has a complete incremental analysis.</returns>
+    public static bool TryAppend(EditingBody body, IBindingScope scope, out FlowResult<TypeSymbol> result)
+    {
+        result = null!;
+        if (body.Analysis is not { } previous || previous.Before.Length != body.FlowNodes.Count
+            || body.FlowNodes[^1] is not { Instruction: { } instruction } node
+            || node.Labels.Count != 0 || node.Targets.Count != 0 || node.EffectUnknown
+            || body.FlowNodes.Any(candidate => candidate.Block is not null || candidate.ExceptionRegion is not null)
+            || instruction.Op.OpCodeType == OpCodeType.Prefix || instruction.DecodedPrefixName is not null
+            || instruction.Op == OpCodes.Jmp || instruction.Op == OpCodes.Localloc
+            || instruction.Op.FlowControl is not (FlowControl.Next or FlowControl.Call)
+            || previous.Diagnostics.Any(diagnostic => diagnostic.Code is "FLOW020" or "FLOW021"))
+        {
+            return false;
+        }
+
+        var declaringType = body.Signature?.DeclaringType;
+        var tracksConstructorInitialization = body.Signature is { Name: ".ctor", IsStatic: false }
+            && declaringType?.IsValueType == false;
+        var graph = new FlowGraph<TypeSymbol>([node], TypeSymbol.Object, hasThis: body.ThisIndex == 0,
+            declaringType: declaringType, tracksConstructorInitialization: tracksConstructorInitialization)
+        {
+            BodyName = body.Signature?.Name ?? "cell",
+        };
+        var original = previous.End;
+        var values = original?.Values;
+        var copies = values?.Select(value => value with { Origins = [] }).ToArray();
+        if (original is not null)
+        {
+            graph.Seeds[0] = original with { Values = copies };
+        }
+        else
+        {
+            graph.Seeds.Clear();
+        }
+
+        var returnType = body.Signature?.ReturnType;
+        var step = new ControlFlowAnalysis<TypeSymbol>(Rules(scope)).Run(graph,
+            SymbolIdentity.Equal(returnType, TypeSymbol.Void) ? null : returnType, body.Signature is null);
+        if (step.Diagnostics.Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error))
+        {
+            // Reanalyze the full body so errors retain the original producer locations and graph context.
+            return false;
+        }
+
+        var position = previous.Before.Length - 1;
+        FlowState<TypeSymbol>? Restore(FlowState<TypeSymbol>? current)
+        {
+            if (current?.Values is not { } currentValues || values is null || copies is null)
+            {
+                return current;
+            }
+
+            FlowValue<TypeSymbol> RestoreValue(FlowValue<TypeSymbol> value)
+            {
+                for (var index = 0; index < copies.Length; index++)
+                {
+                    if (ReferenceEquals(copies[index], value))
+                    {
+                        return values[index];
+                    }
+                }
+
+                return value with { Origins = [position] };
+            }
+
+            return current with { Values = [.. currentValues.Select(RestoreValue)] };
+        }
+
+        var before = new FlowState<TypeSymbol>?[previous.Before.Length + 1];
+        var after = new FlowState<TypeSymbol>?[previous.After.Length + 1];
+        Array.Copy(previous.Before, before, position);
+        Array.Copy(previous.After, after, position);
+        before[position] = Restore(step.Before[0]);
+        after[position] = Restore(step.After[0]);
+        before[^1] = Restore(step.End);
+        after[^1] = before[^1];
+        result = new FlowResult<TypeSymbol>(before, after,
+            [.. previous.Diagnostics, .. step.Diagnostics], Math.Max(previous.MaxStack, step.MaxStack));
+        return true;
     }
 
     /// <summary>
