@@ -6,7 +6,6 @@ on:
     paths:
       - 'docs/**'
       - 'src/**'
-      - 'tests/IlRepl.Docs.Tests/**'
       - 'scripts/Publish-Wasm.cs'
       - 'scripts/Generate-OpcodeReference.cs'
       - 'scripts/Highlight-Cil.cs'

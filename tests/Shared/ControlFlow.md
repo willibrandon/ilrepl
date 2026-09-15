@@ -2,14 +2,13 @@
 
 The analyzer checks stack flow, not the complete ECMA metadata and verification specification.
 Each new correctness rejection needs a permitted counterpart. A verification failure alone does
-not justify refusing a correct body. The 286 method examples and the paired constructor example
-run unchanged on CoreCLR and browser Mono. The independent ILAsm fixtures only substitute
+not justify refusing a correct body. The method examples and the paired constructor example
+run unchanged on CoreCLR. The independent ILAsm fixtures only substitute
 ILAsm's `} {` for the REPL's `} handler {` spelling.
 
 `ControlFlowCorpusTests` checks symbolic preview, live acceptance, ILVerification's exact codes,
-execution, `.il` reassembly, and `.save` execution. `LiveSessionTests.ControlFlow` enters the same
-source in Chromium and WebKit, checks acceptance or recovery, then executes accepted methods.
-`ControlFlowOperandTableTests` adds all 288 operand pairs in eight published numeric tables without
+execution, `.il` reassembly, and `.save` execution. `ControlFlowOperandTableTests` adds the
+operand pairs from the published numeric tables without
 using the analyzer to build its expected results. Incorrect bodies are never executed.
 Native ILAsm changes a static `callvirt` reference to an instance signature, so that one verifier
 fixture assembles a static `call` and changes only its opcode in metadata before verification.
@@ -287,8 +286,7 @@ Missing metadata and uncategorized verifier failures fail the fixture instead of
 expected rejection. Source fixture rejections assert the original verifier codes, including
 `PathStackDepth`, `PathStackUnexpected`, `StackUnderflow`, `TryNonEmptyStack`, and `ReadOnly`.
 
-Run these checks with the repository's pinned SDK and verifier package. Browser tests require
-publishing the current WASM build and rebuilding the docs before running the headless browser suite.
+Run these checks with the repository's pinned SDK and verifier package.
 
 Reference checkouts used for this audit: dotnet/runtime at
 `6b1fb3c43c8a5478c592813ee2e263fe4375af4c` and ECMA-335 at
