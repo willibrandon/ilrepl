@@ -11,8 +11,30 @@ permissions:
 
 jobs:
   test:
-    name: test (ubuntu-latest)
-    runs-on: ubuntu-latest
+    name: tests (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            os: ubuntu-latest
+            artifact: linux-x64
+          - name: Linux Arm64
+            os: ubuntu-24.04-arm
+            artifact: linux-arm64
+          - name: Windows x64
+            os: windows-latest
+            artifact: windows-x64
+          - name: Windows Arm64
+            os: windows-11-arm
+            artifact: windows-arm64
+          - name: macOS x64
+            os: macos-26-intel
+            artifact: macos-x64
+          - name: macOS Arm64
+            os: macos-26
+            artifact: macos-arm64
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 5
 
     steps:
@@ -41,37 +63,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test-results-ubuntu-latest
+          name: test-results-${{ matrix.artifact }}
           path: TestResults/
-
-  platform:
-    name: platform (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-26]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.302'
-
-      - name: Restore
-        run: dotnet restore tests/IlRepl.Tests/IlRepl.Tests.csproj
-
-      - name: Build
-        run: dotnet build tests/IlRepl.Tests/IlRepl.Tests.csproj --no-restore
-
-      - name: Test the terminal process
-        run: >-
-          dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj --no-build
-          --filter 'FullyQualifiedName~IlRepl.Tests.EndToEnd'
-        env:
-          ILREPL_REQUIRE_ILASM: 1
 
   native-aot:
     runs-on: ubuntu-latest
