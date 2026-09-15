@@ -111,7 +111,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         var incomingPredecessors = new int[count];
         var additionalIncoming = new Dictionary<int, FlowState<T>>?[count];
         var diagnostics = new Dictionary<(int, string), AnalysisDiagnostic>();
-        var queue = new Queue<int>();
+        // Visit earlier instructions first so forward branches finish contributing before their joins are analyzed.
+        var queue = new PriorityQueue<int, int>();
         var queued = new bool[count];
         var unwindEntries = (Dictionary<(int Source, int Handler), FlowState<T>>?)null;
         var maxStack = 0;
@@ -124,7 +125,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (!queued[slot])
             {
                 queued[slot] = true;
-                queue.Enqueue(position);
+                queue.Enqueue(position, position);
             }
         }
 
@@ -315,7 +316,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
         var iterations = 0;
     AnalyzeQueue:
-        while (queue.TryDequeue(out var index))
+        while (queue.TryDequeue(out var index, out _))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (++iterations % 64 == 0)
@@ -468,11 +469,13 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         {
                             thisArgumentIsOriginal = filterPaths.All(path => path.ThisArgumentIsOriginal);
                         }
+                        // Ordinary control flow retains verifier paths even when constant propagation excludes them.
+                        // Constructor calls initialize this state; conditional edges and exception dispatch refine paths.
                         state = WithExceptional(new FlowState<T>([.. output], state.HasUnknownPath,
                             ThisArgumentIsOriginal: thisArgumentIsOriginal,
                             FilterPaths: filterPaths,
-                            ConstructorState: ConstructorStateFor(filterPaths, initializesConstructorThis
-                                ? ConstructorThisState.Initialized : state.ConstructorState),
+                            ConstructorState: initializesConstructorThis
+                                ? ConstructorThisState.Initialized : state.ConstructorState,
                             IsCorrelationOnly: state.IsCorrelationOnly),
                             state.PendingUnwindHandlers, state.SyntheticHandler);
                     }
@@ -630,17 +633,27 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         booleanBranch, transferredPops, transferredPushes, transferredValues, graph);
                 }
 
+                // Refine constructor state when a branch selects correlated alternatives, such as a finalizer
+                // initializing only the path that skipped the earlier constructor call. Preserve any verifier
+                // state absent from those alternatives, including a constant-excluded edge retained at a join.
+                var constructorState = state.ConstructorState;
+                if (!ReferenceEquals(edgeFilterPaths, state.FilterPaths)
+                    && ConstructorStateFor(state.FilterPaths, constructorState) == constructorState)
+                {
+                    constructorState = ConstructorStateFor(edgeFilterPaths, constructorState);
+                }
+
                 var outgoing = (FlowState<T>?)(edge.ClearsStack && !state.Invalid
                     ? state with
                     {
                         Values = [],
                         FilterPaths = ClearFilterPathStacks(edgeFilterPaths),
-                        ConstructorState = ConstructorStateFor(edgeFilterPaths, state.ConstructorState),
+                        ConstructorState = constructorState,
                     }
                     : state with
                     {
                         FilterPaths = edgeFilterPaths,
-                        ConstructorState = ConstructorStateFor(edgeFilterPaths, state.ConstructorState),
+                        ConstructorState = constructorState,
                     });
                 if (edge.ClearsStack)
                 {
@@ -3795,11 +3808,17 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     }
 
     private static bool SameFilterPaths(FilterPathState[]? left, FilterPathState[]? right) =>
-        left is null && right is null || left is not null && right is not null && left.Length == right.Length
-            && left.All(path => right.Any(candidate => SameFilterPath(path, candidate)));
+        ReferenceEquals(left, right) || left is not null && right is not null && left.Length == right.Length
+            && (left.Zip(right).All(pair => SameFilterPath(pair.First, pair.Second))
+                || left.All(path => right.Any(candidate => SameFilterPath(path, candidate))));
 
     private static bool SameFilterPath(FilterPathState left, FilterPathState right)
     {
+        if (ReferenceEquals(left, right))
+        {
+            return true;
+        }
+
         if (left.ThisArgumentIsOriginal != right.ThisArgumentIsOriginal || left.StackUnknown != right.StackUnknown
             || left.ConstructorState != right.ConstructorState
             || !SameFilterValues(left.Values, right.Values)
@@ -3811,17 +3830,17 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return false;
         }
 
-        var localsMatch = left.Locals is null || right.Locals is not null
+        var localsMatch = ReferenceEquals(left.Locals, right.Locals) || left.Locals is null || right.Locals is not null
             && left.Locals.All(pair => right.Locals.TryGetValue(pair.Key, out var value)
                 && SameFilterValue(value, pair.Value));
-        var argumentsMatch = left.Arguments is null || right.Arguments is not null
+        var argumentsMatch = ReferenceEquals(left.Arguments, right.Arguments) || left.Arguments is null || right.Arguments is not null
             && left.Arguments.All(pair => right.Arguments.TryGetValue(pair.Key, out var value)
                 && SameFilterValue(value, pair.Value));
         return localsMatch && argumentsMatch;
     }
 
     private static bool SameReceiverConditions(IReadOnlyDictionary<int, FilterPathValue>? left,
-        IReadOnlyDictionary<int, FilterPathValue>? right) => left is null && right is null
+        IReadOnlyDictionary<int, FilterPathValue>? right) => ReferenceEquals(left, right)
         || left is not null && right is not null && left.Count == right.Count
             && left.All(pair => right.TryGetValue(pair.Key, out var condition)
                 && SameFilterValue(pair.Value, condition));
@@ -3838,6 +3857,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
 
     private static bool SameUnwindEffect(PendingUnwindEffect? left, PendingUnwindEffect? right)
     {
+        if (ReferenceEquals(left, right))
+        {
+            return true;
+        }
+
         if (left is null || right is null)
         {
             return left is null && right is null;
@@ -3855,15 +3879,15 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     }
 
     private static bool SameHandlerEntries(IReadOnlyDictionary<int, FilterPathState[]> left,
-        IReadOnlyDictionary<int, FilterPathState[]> right) => left.Count == right.Count
+        IReadOnlyDictionary<int, FilterPathState[]> right) => ReferenceEquals(left, right) || left.Count == right.Count
         && left.All(pair => right.TryGetValue(pair.Key, out var entries)
             && SameTransformations(pair.Value, entries));
 
     private static bool SameTransformations(FilterPathState[] left, FilterPathState[] right) =>
-        left.Length == right.Length && left.All(path => right.Any(candidate => SameFilterPath(path, candidate)));
+        SameFilterPaths(left, right);
 
     private static bool SameFilterValues(FilterPathValue[] left, FilterPathValue[] right) =>
-        left.Length == right.Length && left.Zip(right).All(pair => SameFilterValue(pair.First, pair.Second));
+        ReferenceEquals(left, right) || left.Length == right.Length && left.Zip(right).All(pair => SameFilterValue(pair.First, pair.Second));
 
     private static bool SameFilterValue(FilterPathValue left, FilterPathValue right) =>
         left.IsZero == right.IsZero && left.IsOne == right.IsOne && left.IsThis == right.IsThis
@@ -3880,7 +3904,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         && SameSet(left.ExcludedSources, right.ExcludedSources);
 
     private static bool SameSet<TValue>(IReadOnlyList<TValue>? left, IReadOnlyList<TValue>? right) =>
-        left is null && right is null || left is not null && right is not null
+        ReferenceEquals(left, right) || left is not null && right is not null
             && left.Count == right.Count && left.SequenceEqual(right);
 
     private static FilterPathValue ConstantFilterValue(StackOperandView<T> view, bool isThis)

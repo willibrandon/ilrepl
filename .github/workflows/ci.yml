@@ -10,13 +10,29 @@ permissions:
   contents: read
 
 jobs:
-  build-and-test:
+  test:
+    name: tests (${{ matrix.name }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-26]
+        include:
+          - name: Linux x64
+            os: ubuntu-latest
+            artifact: linux-x64
+          - name: Linux Arm64
+            os: ubuntu-24.04-arm
+            artifact: linux-arm64
+          - name: Windows x64
+            os: windows-latest
+            artifact: windows-x64
+          - name: Windows Arm64
+            os: windows-11-arm
+            artifact: windows-arm64
+          - name: macOS Arm64
+            os: macos-26
+            artifact: macos-arm64
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v6
@@ -33,7 +49,9 @@ jobs:
         run: dotnet build tests/IlRepl.Tests/IlRepl.Tests.csproj --no-restore
 
       - name: Test
-        run: dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj --no-build --report-trx --results-directory TestResults
+        run: >-
+          dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj --no-build
+          --report-trx --results-directory TestResults
         env:
           # The ILAsm round trips must run on CI, not be skipped when ilasm is missing.
           ILREPL_REQUIRE_ILASM: 1
@@ -42,7 +60,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test-results-${{ matrix.os }}
+          name: test-results-${{ matrix.artifact }}
           path: TestResults/
 
   native-aot:

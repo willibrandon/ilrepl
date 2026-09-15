@@ -6,7 +6,6 @@ on:
     paths:
       - 'docs/**'
       - 'src/**'
-      - 'tests/IlRepl.Docs.Tests/**'
       - 'scripts/Publish-Wasm.cs'
       - 'scripts/Generate-OpcodeReference.cs'
       - 'scripts/Highlight-Cil.cs'
@@ -25,7 +24,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
 

@@ -204,7 +204,6 @@ public sealed class EditCompletionTests
     /// Every draft remains reachable across pages and preparing another draft invalidates the old continuation cursor.
     /// </summary>
     [TestMethod]
-    [DoNotParallelize]
     public async Task Names_PageAllDraftsAndRejectACursorAfterMutation()
     {
         // Other sessions can update shared assembly bindings and invalidate a paging cursor.

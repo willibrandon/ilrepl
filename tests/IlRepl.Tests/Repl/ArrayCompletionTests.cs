@@ -155,7 +155,6 @@ public sealed class ArrayCompletionTests
     /// Releasing a cell also releases the metadata body used for an exact generic array reference.
     /// </summary>
     [TestMethod]
-    [DoNotParallelize]
     public void Release_CollectsTheMetadataCellBody()
     {
         var session = new Session();

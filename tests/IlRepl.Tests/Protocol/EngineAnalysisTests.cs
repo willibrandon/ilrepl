@@ -19,7 +19,6 @@ public sealed class EngineAnalysisTests
     /// Caret movement reuses document facts while session changes invalidate their binding identity.
     /// </summary>
     [TestMethod]
-    [DoNotParallelize]
     public async Task CaretMoves_ReuseFactsAndResetInvalidatesThem()
     {
         await using var engine = new InProcessEngine();

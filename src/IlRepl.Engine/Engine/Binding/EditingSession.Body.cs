@@ -329,7 +329,8 @@ public sealed partial class EditingSession
             return;
         }
 
-        var analysis = SymbolFlowAnalysis.Run(body, scope);
+        var analysis = SymbolFlowAnalysis.TryAppend(body, scope, out var appended)
+            ? appended : SymbolFlowAnalysis.Run(body, scope);
         if (analysis.Diagnostics.FirstOrDefault(d => d.Kind == AnalysisDiagnosticKind.Error) is { } error)
         {
             body.FlowNodes.RemoveAt(body.FlowNodes.Count - 1);
