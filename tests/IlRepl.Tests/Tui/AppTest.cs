@@ -10,22 +10,10 @@ namespace IlRepl.Tests.Tui;
 /// </summary>
 internal static class AppTest
 {
-    private static readonly Hex1bTerminalInputSequenceOptions AutomationOptions = new()
-    {
-        PollInterval = TimeSpan.FromMilliseconds(10),
-    };
-
     /// <summary>
     /// The default wait for anything the screen should show.
     /// </summary>
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
-
-    /// <summary>
-    /// Creates a prompt automator that checks terminal changes promptly.
-    /// </summary>
-    /// <param name="terminal">The headless terminal to automate.</param>
-    /// <returns>An automator configured for prompt tests.</returns>
-    public static Hex1bTerminalAutomator Automate(Hex1bTerminal terminal) => new(terminal, AutomationOptions, Timeout);
 
     /// <summary>
     /// Builds the app on a headless terminal.
@@ -38,9 +26,7 @@ internal static class AppTest
     /// <param name="history">The history store, or none.</param>
     /// <param name="onPrompt">Receives the prompt's state.</param>
     /// <returns>The terminal, not yet running.</returns>
-    public static Hex1bTerminal Build(IReplEngine engine, Transcript transcript, int width = 100, int height = 30,
-        Func<Hex1bTerminalBuilder, Hex1bTerminalBuilder>? configure = null, IHistoryStore? history = null,
-        Action<PromptState>? onPrompt = null)
+    public static Hex1bTerminal Build(IReplEngine engine, Transcript transcript, int width = 100, int height = 30, Func<Hex1bTerminalBuilder, Hex1bTerminalBuilder>? configure = null, IHistoryStore? history = null, Action<PromptState>? onPrompt = null)
     {
         var builder = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, history: history, onPrompt: onPrompt)
             .WithHeadless()
@@ -104,8 +90,7 @@ internal static class AppTest
     /// </summary>
     /// <param name="snapshot">The snapshot.</param>
     /// <returns>The line, zero based from the prompt's first visible line.</returns>
-    public static int CaretLine(Hex1bTerminalSnapshot snapshot) => Caret(snapshot) is { } c
-        && PromptTop(snapshot) is var top && top >= 0 ? c.Y - top : -1;
+    public static int CaretLine(Hex1bTerminalSnapshot snapshot) => Caret(snapshot) is { } c && PromptTop(snapshot) is var top && top >= 0 ? c.Y - top : -1;
 
     /// <summary>
     /// True when the caret cell is at a column of a visible prompt line.
@@ -114,16 +99,14 @@ internal static class AppTest
     /// <param name="x">The column.</param>
     /// <param name="line">The visible line, zero based from the prompt's first visible line.</param>
     /// <returns>True when the caret is there.</returns>
-    public static bool CaretAt(Hex1bTerminalSnapshot snapshot, int x, int line) => PromptTop(snapshot) is var top
-        && top >= 0 && Caret(snapshot) == (x, top + line);
+    public static bool CaretAt(Hex1bTerminalSnapshot snapshot, int x, int line) => PromptTop(snapshot) is var top && top >= 0 && Caret(snapshot) == (x, top + line);
 
     /// <summary>
     /// The echoed input lines, in order.
     /// </summary>
     /// <param name="transcript">The transcript.</param>
     /// <returns>The plain text of every input line.</returns>
-    public static List<string> Echoes(Transcript transcript) => transcript.Lines
-        .Where(line => line.Kind == LineKind.Input).Select(line => line.PlainText).ToList();
+    public static List<string> Echoes(Transcript transcript) => transcript.Lines.Where(l => l.Kind == LineKind.Input).Select(l => l.PlainText).ToList();
 
     /// <summary>
     /// Types lines, each followed by Enter.

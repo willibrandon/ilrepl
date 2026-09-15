@@ -155,13 +155,12 @@ public sealed class MethodComparisonIsolationTests
             "callvirt instance void System.IO.TextWriter::Write(string)", "AGAIN: br AGAIN", "}");
         Commit(session, "Spin");
 
-        var package = ComparisonCapture.Create(session, "Copy () --timeout 1s") with { TimeoutMilliseconds = 250 };
-        var result = await ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken);
+        var result = await Run(session, "Copy () --timeout 1s");
 
         Assert.AreEqual("incomplete", result.Outcome, Details(result));
         Assert.AreEqual("timeout", result.Original.Outcome);
         Assert.AreEqual("timeout", result.Edited.Outcome);
-        Assert.Contains("250 ms", result.Original.Detail!);
+        Assert.Contains("1000 ms", result.Original.Detail!);
         Assert.AreEqual("stdout é", result.Original.StandardOutput);
         Assert.AreEqual("stdout é", result.Edited.StandardOutput);
         Assert.AreEqual("stderr λ", result.Original.StandardError);

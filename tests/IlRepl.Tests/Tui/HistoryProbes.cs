@@ -26,9 +26,9 @@ public sealed class HistoryProbes
     public const string SentinelVariable = "ILREPL_HISTORY_SENTINEL";
 
     /// <summary>
-    /// The file that tells the holder to release its lock.
+    /// How long the holder keeps the lock, in milliseconds.
     /// </summary>
-    public const string ReleaseVariable = "ILREPL_HISTORY_RELEASE";
+    public const string HoldVariable = "ILREPL_HISTORY_HOLD_MS";
 
     /// <summary>
     /// How many entries the appender writes, and the prefix it gives them.
@@ -50,22 +50,13 @@ public sealed class HistoryProbes
         TestSkip.Unless(Environment.GetEnvironmentVariable(Probe) == "hold", "runs as a child of FileHistoryStoreTests");
         var path = Environment.GetEnvironmentVariable(PathVariable)!;
         var sentinel = Environment.GetEnvironmentVariable(SentinelVariable)!;
-        var release = Environment.GetEnvironmentVariable(ReleaseVariable)!;
+        var hold = int.Parse(Environment.GetEnvironmentVariable(HoldVariable)!, System.Globalization.CultureInfo.InvariantCulture);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         using (new FileStream(path + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1))
         {
             File.AppendAllText(path, FileHistoryStore.Format("held by the child", DateTimeOffset.Now));
             File.WriteAllText(sentinel, "held");
-            var started = Environment.TickCount64;
-            while (!File.Exists(release))
-            {
-                if (Environment.TickCount64 - started > 30_000)
-                {
-                    throw new TimeoutException("the parent did not release the history lock");
-                }
-
-                Thread.Sleep(1);
-            }
+            Thread.Sleep(hold);
         }
     }
 

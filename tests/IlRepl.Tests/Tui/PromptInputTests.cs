@@ -1,5 +1,6 @@
 using System.Text;
 using Hex1b;
+using Hex1b.Automation;
 using Hex1b.Input;
 using IlRepl.Protocol;
 using IlRepl.Repl;
@@ -39,7 +40,7 @@ public sealed class PromptInputTests
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript,
             onPrompt: value => prompt = value).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = AppTest.Automate(terminal);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.SendAsync(Encoding.UTF8.GetBytes(packet));
         await auto.WaitUntilAsync(_ => prompt.Text == expected, description: "each control key edits in packet order");
@@ -67,7 +68,7 @@ public sealed class PromptInputTests
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript,
             onPrompt: value => prompt = value).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = AppTest.Automate(terminal);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto,
             [".method int32 F() {", "ldc.i4 1", "lcd.i4 2", "add", "ret", "}"], ct);

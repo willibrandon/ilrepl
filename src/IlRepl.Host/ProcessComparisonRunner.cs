@@ -22,14 +22,13 @@ public static class ProcessComparisonRunner
     {
         ArgumentNullException.ThrowIfNull(package);
         var path = Path.Combine(Path.GetTempPath(), "ilrepl-compare-" + Guid.NewGuid().ToString("N"));
-        var json = JsonSerializer.SerializeToUtf8Bytes(package, ProtocolJsonContext.Default.ComparisonPackage);
-        var original = await RunSideAsync(package, json, true, path, cancellationToken).ConfigureAwait(false);
-        var edited = await RunSideAsync(package, json, false, path, cancellationToken).ConfigureAwait(false);
+        var original = await RunSideAsync(package, true, path, cancellationToken).ConfigureAwait(false);
+        var edited = await RunSideAsync(package, false, path, cancellationToken).ConfigureAwait(false);
         return ComparisonResults.Compare(package, original, edited);
     }
 
-    private static async Task<ComparisonSide> RunSideAsync(ComparisonPackage package, byte[] json, bool original,
-        string path, CancellationToken cancellationToken)
+    private static async Task<ComparisonSide> RunSideAsync(ComparisonPackage package, bool original, string path,
+        CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
         {
@@ -58,7 +57,8 @@ public static class ProcessComparisonRunner
             var groupPath = Path.Combine(directory.FullName, "group-ready");
             var startPath = Path.Combine(directory.FullName, "start");
             var resultReadyPath = Path.Combine(directory.FullName, "result-ready");
-            await File.WriteAllBytesAsync(packagePath, json, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(packagePath, JsonSerializer.Serialize(package, ProtocolJsonContext.Default.ComparisonPackage),
+                cancellationToken).ConfigureAwait(false);
             var bundled = Path.Combine(AppContext.BaseDirectory, "host", "ilrepl-host.dll");
             var host = File.Exists(bundled) ? bundled : typeof(ProcessComparisonRunner).Assembly.Location;
             process.StartInfo = new ProcessStartInfo
@@ -233,7 +233,7 @@ public static class ProcessComparisonRunner
     {
         while (!File.Exists(path))
         {
-            await Task.Delay(1, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(10, cancellationToken).ConfigureAwait(false);
         }
     }
 

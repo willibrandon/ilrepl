@@ -193,7 +193,7 @@ public sealed class AnalysisRequesterTests
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, new Transcript(),
             onApp: value => app = value, onPrompt: value => prompt = value).WithHeadless().WithDimensions(80, 24).Build();
         var run = terminal.RunAsync(ct);
-        var auto = AppTest.Automate(terminal);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync("call Console::Wr", ct: ct);
         await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("members 1/1")
@@ -209,12 +209,11 @@ public sealed class AnalysisRequesterTests
         await auto.TabAsync(ct: ct);
         await auto.WaitUntilAsync(_ => prompt.Text == "call Console::WriteLine()");
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
         foreach (var request in engine.Analyses)
         {
             request.Answer.TrySetCanceled(ct);
         }
-
-        await run;
 
         await IlReplApp.SettleAsync(prompt);
     }

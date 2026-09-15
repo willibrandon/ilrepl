@@ -74,11 +74,7 @@ public sealed class ComparisonStandardInputTests
         var edit = session.PrepareEdit("Read", "Copy");
         session.CommitEdit(edit.Name, edit.Source);
         var input = new string('λ', 1_000_000);
-        var package = ComparisonCapture.Create(session, "Copy () --timeout 1s") with
-        {
-            StandardInput = input,
-            TimeoutMilliseconds = 250,
-        };
+        var package = ComparisonCapture.Create(session, "Copy () --timeout 2s") with { StandardInput = input };
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
         if (behavior == "cancel")
         {

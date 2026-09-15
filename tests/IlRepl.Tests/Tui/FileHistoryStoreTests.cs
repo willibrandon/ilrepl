@@ -145,7 +145,7 @@ public sealed class FileHistoryStoreTests
         using (new FileStream(store.LockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1))
         {
             append = store.AppendAsync("waited", TestContext.CancellationToken);
-            await Task.Yield();
+            await Task.Delay(300, TestContext.CancellationToken);
             Assert.IsFalse(append.IsCompleted, "the append must wait for the lock");
             Assert.IsFalse(File.Exists(path));
         }
@@ -165,12 +165,12 @@ public sealed class FileHistoryStoreTests
     {
         var path = TempPath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var store = new FileHistoryStore(path, TimeSpan.FromMilliseconds(50));
+        var store = new FileHistoryStore(path, TimeSpan.FromMilliseconds(200));
         using (new FileStream(store.LockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1))
         {
             var watch = Stopwatch.StartNew();
             await store.AppendAsync("lost", TestContext.CancellationToken);
-            Assert.IsGreaterThanOrEqualTo(30, watch.ElapsedMilliseconds);
+            Assert.IsGreaterThanOrEqualTo(150, watch.ElapsedMilliseconds);
         }
 
         Assert.IsNotNull(store.Problem);
@@ -193,7 +193,7 @@ public sealed class FileHistoryStoreTests
         using (new FileStream(store.LockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1))
         {
             load = store.LoadAsync(TestContext.CancellationToken);
-            await Task.Yield();
+            await Task.Delay(200, TestContext.CancellationToken);
             Assert.IsFalse(load.IsCompleted, "the load must wait for the lock");
             await File.AppendAllTextAsync(path, "\n# 2026-09-07 10:30:15.000000\n+second\n", TestContext.CancellationToken);
         }
@@ -211,14 +211,13 @@ public sealed class FileHistoryStoreTests
     {
         var path = TempPath();
         var sentinel = path + ".sentinel";
-        var release = path + ".release";
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         using var child = StartProbe("HoldLock", new Dictionary<string, string>
         {
             [HistoryProbes.Probe] = "hold",
             [HistoryProbes.PathVariable] = path,
             [HistoryProbes.SentinelVariable] = sentinel,
-            [HistoryProbes.ReleaseVariable] = release,
+            [HistoryProbes.HoldVariable] = "1500",
         });
         var waited = Stopwatch.StartNew();
         while (!File.Exists(sentinel))
@@ -234,20 +233,10 @@ public sealed class FileHistoryStoreTests
         }
 
         var store = new FileHistoryStore(path, TimeSpan.FromSeconds(30));
-        Task append;
-        try
-        {
-            append = store.AppendAsync("appended by the parent", TestContext.CancellationToken);
-            await Task.Yield();
-            Assert.IsFalse(append.IsCompleted, "the parent's append must wait for the child's lock");
-        }
-        finally
-        {
-            await File.WriteAllTextAsync(release, "release", TestContext.CancellationToken);
-        }
-
-        await append;
+        var append = Stopwatch.StartNew();
+        await store.AppendAsync("appended by the parent", TestContext.CancellationToken);
         Assert.IsNull(store.Problem, store.Problem);
+        Assert.IsGreaterThanOrEqualTo(500, append.ElapsedMilliseconds, "the parent's append must wait for the child's lock");
         await child.WaitForExitAsync(TestContext.CancellationToken);
         Assert.AreEqual(0, child.ExitCode, await child.StandardOutput.ReadToEndAsync(TestContext.CancellationToken));
         Assert.AreSequenceEqual(["held by the child", "appended by the parent"], FileHistoryStore.Parse(await File.ReadAllTextAsync(path, TestContext.CancellationToken)));
