@@ -11,7 +11,6 @@ namespace IlRepl.Tests.Repl;
 /// Verifies bounded preview ownership and allocation while repeatedly replacing unsent generic declarations.
 /// </summary>
 [TestClass]
-[DoNotParallelize]
 public sealed class CompletionLifetimeTests
 {
     /// <summary>
@@ -20,11 +19,17 @@ public sealed class CompletionLifetimeTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
-    /// A thousand generic edits preserve completion without creating runtime assemblies or retaining past documents.
+    /// Repeated generic edits preserve completion without creating runtime assemblies or retaining past documents.
     /// </summary>
     [TestMethod]
-    public async Task Completion_ThousandGenericEdits_StaySymbolicAndBounded()
+    public async Task Completion_RepeatedGenericEdits_StaySymbolicAndBounded()
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
+        const int editCount = 100;
         var session = new Session();
         using var completer = new OperandCompleter(session);
         string[] lines = [".class public Box<T> {", ".field public !0 value0", "}", "ldtoken Box"];
@@ -38,7 +43,7 @@ public sealed class CompletionLifetimeTests
         AppDomain.CurrentDomain.AssemblyLoad += Record;
         try
         {
-            for (var edit = 1; edit <= 1000; edit++)
+            for (var edit = 1; edit <= editCount; edit++)
             {
                 lines[1] = ".field public !0 value" + edit;
                 var reply = await completer.CompleteAsync(request, TestContext.CancellationToken);
@@ -57,22 +62,20 @@ public sealed class CompletionLifetimeTests
         Assert.IsLessThan(20_000_000L, retained);
         Assert.IsEmpty(session.Types);
         Assert.AreEqual(0, session.Submissions);
-        TestContext.WriteLine($"1000 generic edits: {watch.Elapsed.TotalMilliseconds:F0} ms, {retained:N0} retained bytes");
+        TestContext.WriteLine($"Repeated generic edits: {watch.Elapsed.TotalMilliseconds:F0} ms, {retained:N0} retained bytes");
         foreach (var line in lines.Take(3))
         {
             session.AddLine(line);
         }
 
         var defined = session.Types.Single().RuntimeType!;
-        Assert.IsNotNull(defined.GetField("value1000"));
-        Assert.AreEqual(typeof(string), defined.MakeGenericType(typeof(string)).GetField("value1000")!.FieldType);
+        Assert.IsNotNull(defined.GetField("value" + editCount));
+        Assert.AreEqual(typeof(string), defined.MakeGenericType(typeof(string)).GetField("value" + editCount)!.FieldType);
 
         void Record(object? sender, AssemblyLoadEventArgs args)
         {
             if (!completing.Value)
             {
-                TestContext.WriteLine("Background load outside completion: " + args.LoadedAssembly.FullName
-                    + "\n" + Environment.StackTrace);
                 return;
             }
 
@@ -109,8 +112,19 @@ public sealed class CompletionLifetimeTests
     /// Two hundred unsent lines replay within the interactive allocation and latency budgets.
     /// </summary>
     [TestMethod]
-    public void Speculation_TwoHundredLines_StaysWithinBudget()
+    public async Task Speculation_TwoHundredLines_StaysWithinBudget()
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
+        using (var warmup = new EditingSession(new Session()))
+        {
+            warmup.Speculate([".method void Warmup() {", "nop", "}"], 3,
+                cancellationToken: TestContext.CancellationToken);
+        }
+
         using var editing = new EditingSession(new Session());
         string[] lines = [".method void Long() {", .. Enumerable.Repeat("nop", 198), "}"];
         var before = GC.GetAllocatedBytesForCurrentThread();

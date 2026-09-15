@@ -3,8 +3,7 @@ using System.Reflection;
 namespace IlRepl.Tests;
 
 /// <summary>
-/// Finds an ilasm to assemble rendered ILAsm with: the one named by ILREPL_ILASM, one on the
-/// PATH or in ~/.local/bin, or the one restored with the test project's ILAsm package.
+/// Finds a compatible ilasm for assembling rendered IL.
 /// </summary>
 internal static class IlasmLocator
 {
@@ -19,15 +18,15 @@ internal static class IlasmLocator
             return configured;
         }
 
-        var directories = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
-            .Append(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin"))
-            .ToList();
-        var package = typeof(IlasmLocator).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "IlasmPackagePath")?.Value;
-        if (!string.IsNullOrEmpty(package))
+        var package = typeof(IlasmLocator).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => attribute.Key == "IlasmPackagePath")?.Value;
+        if (!string.IsNullOrEmpty(package) && File.Exists(Path.Combine(package, name)))
         {
-            directories.Add(package);
+            return Path.Combine(package, name);
         }
 
+        var directories = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
+            .Append(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin"));
         return directories.Where(d => d.Length > 0).Select(d => Path.Combine(d, name)).FirstOrDefault(File.Exists);
     }
 

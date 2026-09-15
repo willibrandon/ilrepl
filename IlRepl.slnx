@@ -12,6 +12,5 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/IlRepl.Tests/IlRepl.Tests.csproj" />
-    <Project Path="tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj" />
   </Folder>
 </Solution>

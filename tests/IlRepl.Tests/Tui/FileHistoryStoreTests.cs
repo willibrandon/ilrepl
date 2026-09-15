@@ -212,7 +212,7 @@ public sealed class FileHistoryStoreTests
         var path = TempPath();
         var sentinel = path + ".sentinel";
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        using var child = StartProbe("HoldLock", new Dictionary<string, string>
+        using var child = StartProbe(new Dictionary<string, string>
         {
             [HistoryProbes.Probe] = "hold",
             [HistoryProbes.PathVariable] = path,
@@ -251,8 +251,20 @@ public sealed class FileHistoryStoreTests
     {
         var path = TempPath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        using var first = StartProbe("AppendMany", new Dictionary<string, string> { [HistoryProbes.Probe] = "append", [HistoryProbes.PathVariable] = path, [HistoryProbes.CountVariable] = "100", [HistoryProbes.PrefixVariable] = "a" });
-        using var second = StartProbe("AppendMany", new Dictionary<string, string> { [HistoryProbes.Probe] = "append", [HistoryProbes.PathVariable] = path, [HistoryProbes.CountVariable] = "100", [HistoryProbes.PrefixVariable] = "b" });
+        using var first = StartProbe(new Dictionary<string, string>
+        {
+            [HistoryProbes.Probe] = "append",
+            [HistoryProbes.PathVariable] = path,
+            [HistoryProbes.CountVariable] = "100",
+            [HistoryProbes.PrefixVariable] = "a",
+        });
+        using var second = StartProbe(new Dictionary<string, string>
+        {
+            [HistoryProbes.Probe] = "append",
+            [HistoryProbes.PathVariable] = path,
+            [HistoryProbes.CountVariable] = "100",
+            [HistoryProbes.PrefixVariable] = "b",
+        });
         await first.WaitForExitAsync(TestContext.CancellationToken);
         await second.WaitForExitAsync(TestContext.CancellationToken);
         Assert.AreEqual(0, first.ExitCode, await first.StandardOutput.ReadToEndAsync(TestContext.CancellationToken));
@@ -339,7 +351,7 @@ public sealed class FileHistoryStoreTests
         }
     }
 
-    private static Process StartProbe(string probe, Dictionary<string, string> environment)
+    private static Process StartProbe(Dictionary<string, string> environment)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -349,8 +361,6 @@ public sealed class FileHistoryStoreTests
             UseShellExecute = false,
             WorkingDirectory = AppContext.BaseDirectory,
         };
-        startInfo.ArgumentList.Add("--filter");
-        startInfo.ArgumentList.Add("FullyQualifiedName~HistoryProbes." + probe);
         foreach (var (name, value) in environment)
         {
             startInfo.Environment[name] = value;

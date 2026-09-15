@@ -19,15 +19,15 @@ internal static class IldasmLocator
             return configured;
         }
 
-        var directories = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
-            .Append(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin"))
-            .ToList();
-        var package = typeof(IldasmLocator).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "IldasmPackagePath")?.Value;
-        if (!string.IsNullOrEmpty(package))
+        var package = typeof(IldasmLocator).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => attribute.Key == "IldasmPackagePath")?.Value;
+        if (!string.IsNullOrEmpty(package) && File.Exists(Path.Combine(package, name)))
         {
-            directories.Add(package);
+            return Path.Combine(package, name);
         }
 
+        var directories = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
+            .Append(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin"));
         return directories.Where(d => d.Length > 0).Select(d => Path.Combine(d, name)).FirstOrDefault(File.Exists);
     }
 

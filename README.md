@@ -193,20 +193,8 @@ dotnet run --project src/IlRepl
 
 `dotnet build` publishes the host into `host/` beside the front-end. The tests cover the engine
 in-process on the real JIT, the sample library in `samples/Greeter`, every transcript in
-`samples/Transcripts`, the terminal UI on a headless terminal emulator, the front-end as a process
-in a PTY. To run the docs site's tests against a rebuilt browser runtime:
-
-```sh
-dotnet workload install wasm-tools
-dotnet run --file scripts/Publish-Wasm.cs
-pnpm --dir docs install --frozen-lockfile
-pnpm --dir docs build
-pwsh tests/IlRepl.Docs.Tests/bin/Debug/net10.0/playwright.ps1 install chromium webkit
-dotnet test --project tests/IlRepl.Docs.Tests/IlRepl.Docs.Tests.csproj
-```
-
-The browser tests run headlessly in Chromium and WebKit. Installing their dependencies also
-requires PowerShell (`pwsh`); on Linux, use `install --with-deps chromium webkit` when needed.
+`samples/Transcripts`, the terminal UI on a headless terminal emulator, and the front-end as a
+process in a PTY.
 
 Repository utilities are file-based apps under `scripts/`:
 

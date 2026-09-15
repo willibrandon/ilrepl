@@ -487,7 +487,6 @@ public sealed class ControlFlowReceiverTests
     /// Widened finalizer effects invalidate locals that could restore a replaced receiver.
     /// </summary>
     [TestMethod]
-    [DoNotParallelize]
     [Timeout(30_000, CooperativeCancellation = true)]
     public async Task WidenedFinalizerLocal_DoesNotRestoreStaleReceiver()
     {
@@ -567,7 +566,6 @@ public sealed class ControlFlowReceiverTests
     /// Analysis stays responsive when mutually exclusive switch paths exceed the correlation bound.
     /// </summary>
     [TestMethod]
-    [DoNotParallelize]
     [Timeout(30_000, CooperativeCancellation = true)]
     public async Task ExcessCorrelatedSwitchPaths_CompleteWithinTheBound()
     {

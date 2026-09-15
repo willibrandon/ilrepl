@@ -317,7 +317,6 @@ public sealed class FrontEndProcessTests
     /// </summary>
     [TestMethod]
     // Measure the wall-clock budget without other tests launching and driving competing child processes.
-    [DoNotParallelize]
     public async Task Pty_Pastes200LineMethod_CompletesWithinFiveSeconds()
     {
         TestSkip.Unless(!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("ILREPL_PTY_TESTS") == "1",
