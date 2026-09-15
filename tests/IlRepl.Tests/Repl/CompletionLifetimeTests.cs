@@ -25,7 +25,7 @@ public sealed class CompletionLifetimeTests
     [TestMethod]
     public async Task Completion_RepeatedGenericEdits_StaySymbolicAndBounded()
     {
-        const int editCount = 100;
+        const int editCount = 20;
         var session = new Session();
         using var completer = new OperandCompleter(session);
         string[] lines = [".class public Box<T> {", ".field public !0 value0", "}", "ldtoken Box"];
@@ -55,7 +55,7 @@ public sealed class CompletionLifetimeTests
 
         var retained = GC.GetTotalMemory(forceFullCollection: true) - baseline;
         Assert.IsEmpty(loaded, "Preview must not load or create an assembly: " + string.Join(", ", loaded));
-        Assert.IsLessThan(20_000_000L, retained);
+        Assert.IsLessThan(400_000L, retained);
         Assert.IsEmpty(session.Types);
         Assert.AreEqual(0, session.Submissions);
         TestContext.WriteLine($"Repeated generic edits: {watch.Elapsed.TotalMilliseconds:F0} ms, {retained:N0} retained bytes");

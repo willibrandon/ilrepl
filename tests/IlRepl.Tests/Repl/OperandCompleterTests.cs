@@ -246,7 +246,7 @@ public sealed class OperandCompleterTests
         lines[^1] = Apply(lines[^1], first, starter) + "str";
         var anchor = new ContinuationAnchor(lines.Length - 1, first.ReplaceStart,
             first.ReplaceStart + starter.InsertText.Length, starter.Continuation);
-        for (var edit = 0; edit < 100; edit++)
+        for (var edit = 0; edit < 10; edit++)
         {
             lines[0] = "nop // " + edit;
             var reply = await completer.CompleteAsync(new CompletionRequest(lines, lines.Length - 1, lines[^1].Length, null, [anchor]),

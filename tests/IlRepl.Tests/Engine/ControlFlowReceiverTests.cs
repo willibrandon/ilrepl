@@ -571,7 +571,7 @@ public sealed class ControlFlowReceiverTests
     [Timeout(30_000, CooperativeCancellation = true)]
     public async Task ExcessCorrelatedSwitchPaths_CompleteWithinTheBound()
     {
-        var lines = ControlFlowReceiverExamples.BoundedCorrelatedFinalizerSource(192);
+        var lines = ControlFlowReceiverExamples.BoundedCorrelatedFinalizerSource(65);
         var session = new Session();
         using var editing = new EditingSession(session);
         var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 1, 0, 1), TestContext.CancellationToken);

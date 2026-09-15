@@ -78,7 +78,7 @@ public sealed class ComparisonDescendantTests
             session.CommitEdit(edit.Name, edit.Source);
             var package = ComparisonCapture.Create(session, "Copy ()") with
             {
-                TimeoutMilliseconds = mode == "timeout" ? 15_000 : 60_000,
+                TimeoutMilliseconds = mode == "timeout" ? 1_000 : 60_000,
             };
             running = ProcessComparisonRunner.RunAsync(package, cancel.Token);
             if (mode == "cancel")

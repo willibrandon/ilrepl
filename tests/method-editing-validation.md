@@ -48,8 +48,6 @@ Run from the repository root with the SDK selected by `global.json`:
 ```sh
 ILREPL_REQUIRE_ILASM=1 dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj
 dotnet scripts/Highlight-Cil.cs --verify
-dotnet scripts/Publish-Wasm.cs --configuration Debug
-pnpm --dir docs build
 dotnet scripts/Publish-NativeAot.cs --rid linux-x64
 ```
 

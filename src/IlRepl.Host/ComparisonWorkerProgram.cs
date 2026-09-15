@@ -21,7 +21,7 @@ internal static class ComparisonWorkerProgram
         await File.WriteAllTextAsync(arguments[6], "prepared").ConfigureAwait(false);
         while (!File.Exists(arguments[7]))
         {
-            await Task.Delay(10).ConfigureAwait(false);
+            await Task.Delay(1).ConfigureAwait(false);
         }
 
         Console.OutputEncoding = new UTF8Encoding(false);

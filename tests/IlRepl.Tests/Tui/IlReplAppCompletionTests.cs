@@ -35,7 +35,7 @@ public sealed class IlReplAppCompletionTests
         await using var terminal = IlReplApp.Configure(Hex1b.Hex1bTerminal.CreateBuilder(), engine, transcript,
             onPrompt: value => prompt = value).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync("call Greeter.Generic::Constrained", ct: ct);
         await auto.WaitUntilTextAsync("members 1/1");
@@ -84,7 +84,7 @@ public sealed class IlReplAppCompletionTests
         await using var terminal = AppTest.Build(engine, transcript, configure: builder => builder.WithMouse(),
             onPrompt: value => prompt = value);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
         await auto.WaitUntilTextAsync("il[1]>");
         const string original = "call Environment::get_CurrentManagedTh";
         await auto.TypeAsync(original, ct: ct);
@@ -168,7 +168,7 @@ public sealed class IlReplAppCompletionTests
         await using var terminal = AppTest.Build(engine, new Transcript(), width: 60, height: 20,
             onPrompt: value => prompt = value);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync("call Console::Wr", ct: ct);
         await auto.WaitUntilTextAsync("signature part 0");
@@ -205,7 +205,7 @@ public sealed class IlReplAppCompletionTests
             configure: builder => builder.AddPresentationFilter(recorder), onPrompt: value => prompt = value);
         recorder.Terminal = terminal;
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
         await auto.WaitUntilTextAsync("il[1]>");
         const string prefix = "call Console::W";
         await auto.TypeAsync(prefix, ct: ct);
@@ -258,7 +258,7 @@ public sealed class IlReplAppCompletionTests
             configure: builder => builder.AddPresentationFilter(recorder), onPrompt: value => prompt = value);
         recorder.Terminal = terminal;
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
         await auto.WaitUntilTextAsync("il[1]>");
         const string prefix = "call Console::W";
         await auto.TypeAsync(prefix, ct: ct);

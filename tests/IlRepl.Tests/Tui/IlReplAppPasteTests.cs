@@ -32,7 +32,7 @@ public sealed class IlReplAppPasteTests
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
             .WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.SendAsync(System.Text.Encoding.UTF8.GetBytes("\x1b[200~ldc.i4.s 42\nret\x1b[201~\r"));
         await auto.WaitUntilTextAsync("= 42 : int32");
@@ -54,7 +54,7 @@ public sealed class IlReplAppPasteTests
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript)
             .WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(new string(' ', 4 * 1024 * 1024 + 1));
         await auto.WaitUntilTextAsync("paste failed:");
@@ -80,7 +80,7 @@ public sealed class IlReplAppPasteTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(".method int32 Twice(int32 n) {\n  ldarg n\n  ldc.i4 2\n  mul\n  ret\n}\n");
@@ -107,7 +107,7 @@ public sealed class IlReplAppPasteTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync("ldc.i4.1\n\nldc.i4.2\n\n");
@@ -135,7 +135,7 @@ public sealed class IlReplAppPasteTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync("ldc.i4.1\n");
@@ -160,7 +160,7 @@ public sealed class IlReplAppPasteTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync("ldc.i4.1\n\n");
@@ -185,7 +185,7 @@ public sealed class IlReplAppPasteTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(".method int32 F() {\n  ldc.i4 1\n\n  ret\n}\n");
@@ -211,7 +211,7 @@ public sealed class IlReplAppPasteTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync("ldc.i4 1\n// note\n");
@@ -237,7 +237,7 @@ public sealed class IlReplAppPasteTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync("ldc.i4 1\n/*\n\n*/\n");
@@ -263,7 +263,7 @@ public sealed class IlReplAppPasteTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, ["ldc.i4 1"], ct);
@@ -288,7 +288,7 @@ public sealed class IlReplAppPasteTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(".method void F() {\n      nop\n\tret\n}\n");
@@ -314,7 +314,7 @@ public sealed class IlReplAppPasteTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync("ldc.i4.1\n\n");

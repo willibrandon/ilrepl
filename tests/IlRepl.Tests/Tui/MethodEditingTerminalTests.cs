@@ -1,4 +1,3 @@
-using Hex1b.Automation;
 using Hex1b.Input;
 using IlRepl.Protocol;
 
@@ -28,7 +27,7 @@ public sealed class MethodEditingTerminalTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript, width: 120, height: 40);
         var run = terminal.RunAsync(token);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, [".method int32 Answer() {", "ldc.i4.s 42", "ret", "}"], token);
         await auto.WaitUntilTextAsync("end of method Answer");

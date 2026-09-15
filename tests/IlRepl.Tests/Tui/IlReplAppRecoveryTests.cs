@@ -35,7 +35,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_typo, ct);
@@ -72,7 +72,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, [".method int32 F() {", "ldstr \"wrong\"", "ret", "}"], ct);
@@ -105,7 +105,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, [".class C {", ".method public static int32 M() {", "lcd.i4 1", "ret", "}", "}"], ct);
@@ -137,7 +137,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_typo, ct);
@@ -169,7 +169,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_typo, ct);
@@ -196,7 +196,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_typo, ct);
@@ -230,7 +230,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, ["ldc.i4 7"], ct);
@@ -257,7 +257,7 @@ public sealed class IlReplAppRecoveryTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync("ldc.i4 1\nldc.i4 0\ndiv\nret\nnop\n");
@@ -285,7 +285,7 @@ public sealed class IlReplAppRecoveryTests
         var adapter = new ScriptedPresentationAdapter(120, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(".method int32 F() {\nldc.i4 1\n.undo\nlcd.i4 2\nret\n}\n");
@@ -319,7 +319,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_twice, ct);
@@ -350,7 +350,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_twice, ct);
@@ -380,7 +380,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_tryTypo, ct);
@@ -411,7 +411,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_tryTypo, ct);
@@ -443,7 +443,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, [".try {", "nop", "ldc.i4 1", "} catch [System.Runtime]System.Exception {", "pop", "}"], ct);
@@ -472,7 +472,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript, 100, 40);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, [".locals init (int32 i)", "ldc.i4 5", "stloc i"], ct);
@@ -509,7 +509,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.WaitUntilTextAsync("1 open block");
@@ -546,7 +546,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_twice, ct);
@@ -581,7 +581,7 @@ public sealed class IlReplAppRecoveryTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(".method void F() {\n.reset\nldnull\nthrow\nret\nldc.i4 42\n}\n");
@@ -607,7 +607,7 @@ public sealed class IlReplAppRecoveryTests
         var recorder = new PresentationRecorder();
         await using var terminal = AppTest.Build(engine, transcript, configure: b => b.AddPresentationFilter(recorder));
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_typo, ct);
@@ -639,7 +639,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, [".method int32 F() {", ".quiet", "lcd.i4 1", "ret", "}"], ct);
@@ -670,7 +670,7 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         engine.Allow(1);
@@ -712,7 +712,7 @@ public sealed class IlReplAppRecoveryTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(".try\n{\n  nop\n  lcd.i4 1\n} catch [System.Runtime]System.Exception\n{\n  pop\n}\n");
@@ -749,7 +749,7 @@ public sealed class IlReplAppRecoveryTests
         PromptState? prompt = null;
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, onPrompt: p => prompt = p).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, ["lcd.i4 1"], ct);
@@ -786,7 +786,7 @@ public sealed class IlReplAppRecoveryTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(".try {\n  nop\n} /* note */ catch [System.Runtime]System.Exception {\n  pop\n  lcd.i4 1\n}\n");
@@ -822,7 +822,7 @@ public sealed class IlReplAppRecoveryTests
         var adapter = new ScriptedPresentationAdapter(100, 30);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(".method void F() {\n  .clear\n  ldc.i4 7\n\n}\n");

@@ -1,6 +1,5 @@
 using System.Text;
 using Hex1b;
-using Hex1b.Automation;
 using Hex1b.Input;
 using IlRepl.Protocol;
 using IlRepl.Tests.Engine;
@@ -64,7 +63,7 @@ public sealed class ExceptionRangeWhitespaceTests
         var adapter = new ScriptedPresentationAdapter(120, 40);
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(token);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
         await auto.WaitUntilTextAsync("il[1]>");
         var source = ExceptionRangeExamples.Source(kind, "\t");
         await adapter.SendAsync(Encoding.UTF8.GetBytes("\x1b[200~" + source + "\x1b[201~\r"));

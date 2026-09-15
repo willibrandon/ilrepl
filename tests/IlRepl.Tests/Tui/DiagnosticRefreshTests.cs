@@ -30,7 +30,7 @@ public sealed class DiagnosticRefreshTests
             configure: builder => builder.AddPresentationFilter(recorder), onPrompt: value => prompt = value);
         recorder.Terminal = terminal;
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = AppTest.Automate(terminal);
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync(".method void F(", ct: ct);
         await auto.WaitUntilAsync(_ => engine.Analyses.LastOrDefault()?.Request.Lines[0] == prompt.Text);
@@ -72,12 +72,12 @@ public sealed class DiagnosticRefreshTests
             && engine.Analyses.LastOrDefault()?.Request.Lines[0] == prompt.Text && prompt.Analysis is null);
         Assert.IsEmpty(PromptDiagnostics.Lines(prompt, 80), "a resolved diagnostic must not return on the next edit");
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
-        await run;
         foreach (var request in engine.Analyses)
         {
             request.Answer.TrySetCanceled(ct);
         }
 
+        await run;
         await IlReplApp.SettleAsync(prompt);
     }
 
