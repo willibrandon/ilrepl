@@ -4,6 +4,8 @@
 
 using System.CommandLine;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Xml.Linq;
 
 var ridOption = new Option<string>("--rid") { Description = "The runtime identifier to publish for.", Required = true };
 var versionOption = new Option<string>("--package-version")
@@ -69,6 +71,10 @@ root.SetAction(async (parseResult, cancellationToken) =>
         }
 
         Console.WriteLine($"smoke test passed for {rid}");
+        if (!await SmokeSessionsAsync(repo, publishDirectory, executable, cancellationToken))
+        {
+            return 1;
+        }
     }
 
     var pack = await RunAsync(repo, "dotnet", ["pack", project, "-c", "Release", "-r", rid, "-o", packagesDirectory, $"-p:Version={version}", $"-p:PackageVersion={version}", "--nologo", "-v", "quiet"], cancellationToken);
@@ -107,7 +113,8 @@ static async Task<int> RunAsync(string workingDirectory, string fileName, string
     return process.ExitCode;
 }
 
-static async Task<(int ExitCode, string Output)> CaptureAsync(string workingDirectory, string fileName, string[] arguments, CancellationToken cancellationToken)
+static async Task<(int ExitCode, string Output)> CaptureAsync(string workingDirectory, string fileName, string[] arguments,
+    CancellationToken cancellationToken, IReadOnlyDictionary<string, string>? environment = null)
 {
     var startInfo = new ProcessStartInfo(fileName)
     {
@@ -115,17 +122,123 @@ static async Task<(int ExitCode, string Output)> CaptureAsync(string workingDire
         UseShellExecute = false,
         RedirectStandardOutput = true,
         RedirectStandardError = true,
+        RedirectStandardInput = true,
     };
     foreach (var argument in arguments)
     {
         startInfo.ArgumentList.Add(argument);
     }
 
+    if (environment is not null)
+    {
+        foreach (var (key, value) in environment)
+        {
+            startInfo.Environment[key] = value;
+        }
+    }
+
     using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"{fileName} did not start");
+    process.StandardInput.Close();
     var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
     var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
     await process.WaitForExitAsync(cancellationToken);
     return (process.ExitCode, await stdout + await stderr);
+}
+
+static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory, string executable, CancellationToken cancellationToken)
+{
+    var directory = Directory.CreateTempSubdirectory("ilrepl-native-session-").FullName;
+    try
+    {
+        var feed = Path.Combine(directory, "feed");
+        Directory.CreateDirectory(feed);
+        var packed = await RunAsync(repo, "dotnet",
+            ["pack", Path.Combine(repo, "samples", "Greeter", "Greeter.csproj"), "-c", "Release", "-o", feed,
+                "-p:IsPackable=true", "-p:PackageId=IlRepl.SessionSmoke", "-p:PackageVersion=1.0.0", "--nologo", "-v", "quiet"],
+            cancellationToken);
+        if (packed != 0)
+        {
+            return false;
+        }
+
+        new XDocument(new XElement("configuration",
+            new XElement("packageSources", new XElement("clear"), new XElement("add", new XAttribute("key", "local"),
+                new XAttribute("value", feed))),
+            new XElement("packageSourceMapping", new XElement("clear")),
+            new XElement("fallbackPackageFolders", new XElement("clear")),
+            new XElement("config", new XElement("add", new XAttribute("key", "globalPackagesFolder"),
+                new XAttribute("value", Path.Combine(directory, "packages")))))).Save(Path.Combine(directory, "NuGet.Config"));
+
+        var installedRuntime = Path.TrimEndingDirectorySeparator(RuntimeEnvironment.GetRuntimeDirectory());
+        var installedRoot = Path.GetFullPath(Path.Combine(installedRuntime, "..", "..", ".."));
+        var runtimeOnly = Path.Combine(directory, "runtime-only");
+        Directory.CreateDirectory(runtimeOnly);
+        var muxerName = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
+        var muxer = Path.Combine(runtimeOnly, muxerName);
+        File.Copy(Path.Combine(installedRoot, muxerName), muxer);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(muxer, File.GetUnixFileMode(Path.Combine(installedRoot, muxerName)));
+        }
+
+        CopyDirectory(Path.Combine(installedRoot, "host"), Path.Combine(runtimeOnly, "host"));
+        CopyDirectory(installedRuntime, Path.Combine(runtimeOnly, "shared", "Microsoft.NETCore.App",
+            Path.GetFileName(installedRuntime)));
+        var environment = new Dictionary<string, string>
+        {
+            ["DOTNET_HOST_PATH"] = muxer, ["DOTNET_ROOT"] = runtimeOnly, ["DOTNET_MULTILEVEL_LOOKUP"] = "0",
+            ["PATH"] = runtimeOnly, ["NUGET_PACKAGES"] = Path.Combine(directory, "packages"),
+        };
+        var sdks = await CaptureAsync(directory, muxer, ["--list-sdks"], cancellationToken, environment);
+        if (sdks.ExitCode != 0 || !string.IsNullOrWhiteSpace(sdks.Output))
+        {
+            Console.Error.WriteLine("runtime-only smoke fixture unexpectedly found an SDK: " + sdks.Output);
+            return false;
+        }
+
+        var save = await CaptureAsync(directory, executable, ["--no-color", "-e",
+            ".load nuget:IlRepl.SessionSmoke; ldc.i4 6; ldc.i4 7; call Greeter.Ops::Multiply(int32, int32); "
+                + ".session save example.ilrepl.json --embed"], cancellationToken, environment);
+        var open = await CaptureAsync(directory, executable,
+            ["--no-color", "--batch", "example.ilrepl.json"], cancellationToken, environment);
+        var run = await CaptureAsync(directory, executable,
+            ["--no-color", "example.ilrepl.json", "--run"], cancellationToken, environment);
+        if (save.ExitCode != 0 || !save.Output.Contains("= 42 : int32", StringComparison.Ordinal)
+            || open.ExitCode != 0 || !open.Output.Contains("reopened source", StringComparison.Ordinal)
+            || open.Output.Contains("= 42 : int32", StringComparison.Ordinal)
+            || run.ExitCode != 0 || !run.Output.Contains("= 42 : int32", StringComparison.Ordinal))
+        {
+            Console.Error.WriteLine("session/runtime-only package smoke failed:\n" + save.Output + open.Output + run.Output);
+            return false;
+        }
+
+        if (Directory.EnumerateFiles(publishDirectory, "NuGet.*.dll", SearchOption.TopDirectoryOnly).Any())
+        {
+            Console.Error.WriteLine("NuGet restore libraries must remain inside the host directory");
+            return false;
+        }
+
+        Console.WriteLine("session save/open/run and runtime-only package smoke passed");
+        return true;
+    }
+    finally
+    {
+        Directory.Delete(directory, recursive: true);
+    }
+}
+
+static void CopyDirectory(string source, string destination)
+{
+    Directory.CreateDirectory(destination);
+    foreach (var file in Directory.EnumerateFiles(source))
+    {
+        File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
+    }
+
+    foreach (var directory in Directory.EnumerateDirectories(source))
+    {
+        CopyDirectory(directory, Path.Combine(destination, Path.GetFileName(directory)));
+    }
 }
 
 static string FindRepoRoot()

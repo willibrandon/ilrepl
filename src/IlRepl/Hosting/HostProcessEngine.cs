@@ -7,11 +7,42 @@ using StreamJsonRpc;
 namespace IlRepl.Hosting;
 
 /// <summary>
+/// Runs a framework-dependent execution host and communicates with it through JSON-RPC on standard streams.
+/// </summary>
+/// <remarks>
 /// Runs the framework-dependent host as a child process and talks to it over JSON-RPC on its
 /// standard streams.
-/// </summary>
+/// </remarks>
 public sealed class HostProcessEngine : IReplEngine
 {
+    /// <inheritdoc />
+    public async Task<SessionReply> SessionAsync(SessionRequest request, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        try
+        {
+            var reply = await _host.SessionAsync(request, cancellationToken).ConfigureAwait(false);
+            if (reply.FailureExitCode is { } exitCode)
+            {
+                throw new ReplEngineException(string.Join('\n', reply.Reply.Lines.Select(line => line.PlainText)))
+                {
+                    ExitCode = exitCode,
+                };
+            }
+
+            Status = reply.Reply.Status;
+            return reply;
+        }
+        catch (RemoteInvocationException exception)
+        {
+            throw new ReplEngineException(exception.Message, exception);
+        }
+        catch (ConnectionLostException exception)
+        {
+            throw new HostProtocolException("the host exited" + ExitDetail(), exception);
+        }
+    }
+
     private readonly Process _process;
     private readonly JsonRpc _rpc;
     private readonly IReplHost _host;
@@ -74,7 +105,19 @@ public sealed class HostProcessEngine : IReplEngine
     /// <param name="cancellationToken">Cancels the start.</param>
     /// <returns>The running engine.</returns>
     /// <exception cref="HostProtocolException">The host could not be started or did not answer.</exception>
-    public static async Task<HostProcessEngine> StartAsync(string? hostAssemblyPath = null, string? workingDirectory = null, CancellationToken cancellationToken = default)
+    public static Task<HostProcessEngine> StartAsync(string? hostAssemblyPath = null, string? workingDirectory = null,
+        CancellationToken cancellationToken = default) => StartAsync(hostAssemblyPath, workingDirectory, null, cancellationToken);
+
+    /// <summary>
+    /// Starts an isolated host with environment overrides scoped to the child process.
+    /// </summary>
+    /// <param name="hostAssemblyPath">The host assembly location, or null for standard discovery.</param>
+    /// <param name="workingDirectory">The initial host directory, or null for the caller's directory.</param>
+    /// <param name="environment">Environment overrides applied only to the child host.</param>
+    /// <param name="cancellationToken">Cancels startup.</param>
+    /// <returns>The running engine.</returns>
+    public static async Task<HostProcessEngine> StartAsync(string? hostAssemblyPath, string? workingDirectory,
+        IReadOnlyDictionary<string, string?>? environment, CancellationToken cancellationToken = default)
     {
         var hostPath = hostAssemblyPath ?? HostLocator.FindHost();
         var startInfo = new ProcessStartInfo
@@ -90,6 +133,10 @@ public sealed class HostProcessEngine : IReplEngine
         };
         startInfo.ArgumentList.Add(hostPath);
         startInfo.Environment["DOTNET_NOLOGO"] = "1";
+        if (environment is not null)
+        {
+            foreach (var (name, value) in environment) startInfo.Environment[name] = value;
+        }
 
         Process process;
         try

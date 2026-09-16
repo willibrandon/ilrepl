@@ -111,7 +111,11 @@ public sealed partial class ReplCore : IDisposable
     /// <summary>
     /// Releases cached editing snapshots and cancels any outstanding completion request.
     /// </summary>
-    public void Dispose() => _operands.Dispose();
+    public void Dispose()
+    {
+        _operands.Dispose();
+        Session.Resolver.Dispose();
+    }
 
     /// <summary>
     /// Handles one input line using the session's declaration, execution and comment-state rules.
@@ -120,14 +124,28 @@ public sealed partial class ReplCore : IDisposable
     /// <param name="location">The optional editor source identity.</param>
     /// <returns>Whether it succeeded and whether the user asked to leave.</returns>
     public HandleResult Handle(string line, AnalysisLocation? location = null)
+        => RecordInput(line, location);
+
+    private HandleResult HandleCore(string line, AnalysisLocation? location)
     {
         ArgumentNullException.ThrowIfNull(line);
         var normalized = Session.Normalize(line) with { Location = location };
+        return HandleNormalized(normalized);
+    }
+
+    private HandleResult HandleNormalized(NormalizedLine normalized)
+    {
+        var line = normalized.Raw;
         var commentOpen = normalized.InBlockCommentBefore;
         Transcript.Add(new TranscriptLine(LineKind.Input, [new TranscriptSpan(Prompt, SpanStyle.Prompt), .. Tokenizer.Spans(line, ref commentOpen, SpanStyle.Input)]));
 
         try
         {
+            if (TrySessionAction(normalized, out var action))
+            {
+                return new HandleResult(true, false) { SessionAction = action };
+            }
+
             if (_editBlock is not null && normalized.Text is not (".clear" or ".reset" or ".undo" or ".u"))
             {
                 return ContinueEdit(normalized);
@@ -234,6 +252,8 @@ public sealed partial class ReplCore : IDisposable
         }
         catch (CellException ex)
         {
+            AddOutput(ex.StandardOutput, SpanStyle.Output);
+            AddOutput(ex.StandardError, SpanStyle.Error);
             var inner = ex.InnerException ?? ex;
             Transcript.Add(new TranscriptLine(LineKind.Error,
             [
@@ -266,6 +286,15 @@ public sealed partial class ReplCore : IDisposable
             Note("nothing withdrawn: the session has run, committed, or discarded something since the block began");
             return new HandleResult(false, false);
         }
+
+        var withdrawal = new SessionEntry
+        {
+            Number = CellNumber,
+            Kind = SessionEntryKind.Rollback,
+            Mark = mark,
+        };
+        _sourceEntries.Add(withdrawal);
+        _ = TrackSource(withdrawal, CellNumber, false);
 
         // A toggle the block carried, .quiet or .time, goes back with it: the block is sent again whole.
         Options.EchoStack = mark.EchoStack;
@@ -313,6 +342,7 @@ public sealed partial class ReplCore : IDisposable
         AddOutput(result.StandardOutput, SpanStyle.Output);
         AddOutput(result.StandardError, SpanStyle.Error);
 
+        using var formatting = new ConsoleCapture();
         var spans = new List<TranscriptSpan> { new("  = ", SpanStyle.Dim) };
         if (result.IsVoid)
         {
@@ -328,6 +358,8 @@ public sealed partial class ReplCore : IDisposable
             spans.Add(new TranscriptSpan("   " + Elapsed(result.Elapsed), SpanStyle.Dim));
         }
 
+        AddOutput(formatting.StandardOutput, SpanStyle.Output);
+        AddOutput(formatting.StandardError, SpanStyle.Error);
         Transcript.Add(new TranscriptLine(LineKind.Result, spans));
     }
 
@@ -351,6 +383,8 @@ public sealed partial class ReplCore : IDisposable
 
     private void EchoStack()
     {
+        if (_restoringSource) return;
+
         if (Session.State.StackText is "unreachable" or "?" or "invalid")
         {
             Transcript.Add(LineKind.Stack, "  ┊ " + Session.State.StackText, SpanStyle.Dim);
@@ -386,7 +420,10 @@ public sealed partial class ReplCore : IDisposable
         Transcript.Add(new TranscriptLine(LineKind.Stack, spans));
     }
 
-    private void Note(string text) => Transcript.Add(LineKind.Info, "  " + text, SpanStyle.Dim);
+    private void Note(string text)
+    {
+        if (!_restoringSource) Transcript.Add(LineKind.Info, "  " + text, SpanStyle.Dim);
+    }
 
     /// <summary>
     /// Adds a listing line coloured by the tokenizer, so it reads as it would at the prompt.
@@ -642,7 +679,7 @@ public sealed partial class ReplCore : IDisposable
 
             case ".load":
             {
-                var assembly = Session.Resolver.Load(argument);
+                var assembly = Session.Resolver.Load(UnquotePath(argument));
                 Session.AdvanceGeneration();
                 int count;
                 try
@@ -656,17 +693,19 @@ public sealed partial class ReplCore : IDisposable
                 }
 
                 Note($"loaded {assembly.GetName().Name} {assembly.GetName().Version}" + (count >= 0 ? $" ({count} public types)" : ""));
+                CaptureAssemblyReference(argument, assembly);
             }
 
             return new HandleResult(true, false);
 
             case ".assemblies":
-                foreach (var assembly in Session.Resolver.LoadedAssemblies)
+                foreach (var reference in _references.Where(reference => reference.Origin != "baseline"))
                 {
-                    Transcript.Add(LineKind.Listing, "  " + assembly.GetName().Name + "  " + (assembly.IsDynamic ? "(dynamic)" : assembly.Location), SpanStyle.Default);
+                    Transcript.Add(LineKind.Listing, "  " + reference.Origin + " " + reference.Request + " "
+                        + reference.Version + " (" + ReferenceStatus(reference) + ")", SpanStyle.Default);
                 }
 
-                if (Session.Resolver.LoadedAssemblies.Count == 0)
+                if (_references.All(reference => reference.Origin == "baseline"))
                 {
                     Note("no assemblies loaded beyond the framework");
                 }
@@ -675,6 +714,7 @@ public sealed partial class ReplCore : IDisposable
 
             case ".save":
                 RequireNoOpenBlock();
+                argument = UnquotePath(argument);
                 Session.Save(argument);
                 {
                     var parts = new List<string> { "IlRepl.Cell.Run" };

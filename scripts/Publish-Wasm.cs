@@ -98,5 +98,6 @@ static class PageFiles
     public static readonly string[] Names =
     [
         "main.js", "worker.js", "interop.js", "comparison-worker.js", "comparison-interop.js", "comparison-supervisor.js",
+        "workspace-controls.js",
     ];
 }

@@ -15,7 +15,7 @@ namespace IlRepl.Tui;
 /// attached to a terminal builder so the same tree runs on a real console or a headless
 /// emulator in tests.
 /// </remarks>
-public static class IlReplApp
+public static partial class IlReplApp
 {
     /// <summary>
     /// The banner shown at the top of an empty transcript.
@@ -55,6 +55,18 @@ public static class IlReplApp
             OpenDocumentation = DocumentationLauncher.Open,
             CurrentHelpIdentity = () => (engine.Status.Revision, engine.AssemblyVersion),
         };
+        if (engine is SessionController controller)
+        {
+            ConfigureSessions(prompt, controller);
+            if (controller.Workspace is { } workspace)
+            {
+                foreach (var line in workspace.Reply.Lines)
+                {
+                    transcript.Add(line);
+                }
+            }
+        }
+
         onPrompt?.Invoke(prompt);
         return builder
             .AddPresentationFilter(size)
@@ -67,7 +79,7 @@ public static class IlReplApp
                         workload.EnableMouse = options.EnableMouse;
                     }
 
-                    prompt.PasteInput = new PromptInputReader(adapter.InputEvents);
+                    prompt.PasteInput = new PromptInputReader(adapter.InputEvents, input => prompt.FilterInput?.Invoke(input) == true);
                     options.WorkloadAdapter = new PromptInputAdapter(adapter, prompt.PasteInput);
                     // The prompt paints its own caret cell, so no hardware caret follows the mouse,
                     // and Ctrl+C is the prompt's: it copies, clears, or quits.
@@ -330,6 +342,11 @@ public static class IlReplApp
 
     private static void StartSubmission(PromptState prompt, IReplEngine engine, string text)
     {
+        if (engine is SessionController controller)
+        {
+            controller.Editor = new SessionEditor();
+        }
+
         prompt.Analyzer?.Cancel();
         prompt.Requester?.Cancel(prompt);
         if (prompt.Busy)
@@ -359,6 +376,14 @@ public static class IlReplApp
     {
         while (prompt.Events.TryDequeue(out var e))
         {
+            if (prompt.SessionDialog is { Submitted: true } && !e.SessionQuit
+                && e.Kind is SubmissionEventKind.Completed or SubmissionEventKind.Refused or SubmissionEventKind.Failed
+                    or SubmissionEventKind.Cancelled or SubmissionEventKind.SessionDocument or SubmissionEventKind.EditDocument)
+            {
+                prompt.SessionDialog = null;
+                app.RequestFocus(node => node is EditorNode);
+            }
+
             foreach (var line in e.Lines ?? [])
             {
                 transcript.Add(line);
@@ -400,6 +425,29 @@ public static class IlReplApp
                 case SubmissionEventKind.EditDocument:
                     Return(prompt, e.Text ?? "", 1, select: false);
                     prompt.Submission = null;
+                    break;
+                case SubmissionEventKind.SessionDocument:
+                    prompt.SessionBusy = false;
+                    prompt.Submission = null;
+                    if (e.SessionEditor is { } editor)
+                    {
+                        if (prompt.Pending.Count != 0)
+                        {
+                            var pending = string.Join('\n', prompt.Pending);
+                            prompt.Pending.Clear();
+                            editor = editor with { Lines = [.. editor.Lines, .. pending.Split('\n')] };
+                        }
+
+                        RestoreEditor(prompt, editor);
+                        prompt.Requester?.Cancel(prompt);
+                        prompt.Analyzer?.Cancel();
+                    }
+
+                    if (e.SessionQuit)
+                    {
+                        app.RequestStop();
+                    }
+
                     break;
                 case SubmissionEventKind.Cancelled:
                     Return(prompt, e.Text ?? "", 0, select: false);
@@ -514,12 +562,18 @@ public static class IlReplApp
         // applied here, on the render thread, before anything reads the transcript or the prompt.
         prompt.PasteInput?.FrameReady();
         Drain(prompt, transcript, engine, app);
+        var dialog = prompt.SessionDialog;
+
+        if (engine is SessionController session && !prompt.Busy)
+        {
+            session.Editor = CaptureEditor(prompt);
+        }
         prompt.Requester?.Refresh(prompt);
         prompt.Analyzer?.Refresh(prompt);
 
         prompt.HelpRevision = engine.Status.Revision;
         prompt.HelpAssemblyVersion = engine.AssemblyVersion;
-        if (prompt.Help is { } help)
+        if (dialog is null && prompt.Help is { } help)
         {
             help.Refresh(prompt, engine.Catalog);
             app.ReleaseCapture();
@@ -536,7 +590,7 @@ public static class IlReplApp
         // The prompt is the only place input goes. A click on the scrollbar still focuses the
         // transcript panel, so focus is pulled back on the next render as a last resort; clicks
         // and wheel notches over the transcript itself are handed back at once, below.
-        if (app.FocusedNode is not null and not EditorNode)
+        if (dialog is null && app.FocusedNode is not null and not EditorNode)
         {
             app.RequestFocus(node => node is EditorNode);
         }
@@ -742,12 +796,35 @@ public static class IlReplApp
         })
         .InputBindings(b =>
         {
-            b.Ctrl().Key(Hex1bKey.Q).Action(c =>
+            b.Ctrl().Key(Hex1bKey.Q).Action(async c =>
             {
-                prompt.Submission?.Cancel();
+                if (prompt.Submission is { IsRunning: true } || prompt.SessionBusy)
+                {
+                    c.RequestStop();
+                    if (engine is SessionController active) await active.DisposeAsync().ConfigureAwait(false);
+                    prompt.Submission?.Cancel();
+                    return;
+                }
+
+                if (engine is SessionController controller)
+                {
+                    _ = RunSessionActionAsync(prompt, controller, SessionOperation.Quit);
+                    return;
+                }
+
                 c.RequestStop();
-                return Task.CompletedTask;
             }, "Quit");
+            if (engine is SessionController controllerForKeys)
+            {
+                b.Ctrl().Key(Hex1bKey.S).Action(c =>
+                {
+                    _ = RunSessionActionAsync(prompt, controllerForKeys, SessionOperation.Save);
+                }, "Save session");
+                b.Ctrl().Key(Hex1bKey.O).Action(c =>
+                {
+                    _ = RunSessionActionAsync(prompt, controllerForKeys, SessionOperation.Open);
+                }, "Open session");
+            }
             b.Ctrl().Key(Hex1bKey.L).Action(_ =>
             {
                 transcript.Clear();
@@ -793,6 +870,23 @@ public static class IlReplApp
                 }
             }, "Select transcript lines");
         });
+
+        if (dialog is not null)
+        {
+            app.ReleaseCapture();
+            var content = BuildSessionDialog(ctx, app, prompt, dialog);
+            var overlay = ctx.VStack(v =>
+            [
+                v.ZStack(z =>
+                [
+                    root,
+                    z.Center(z.Border(content).FixedWidth(Math.Min(80, size.Width <= 0 ? 80 : size.Width))),
+                ]).Fill(),
+            ]);
+            // A completed operation can post while this frame is being drawn, after Drain ran.
+            // Keep the same redraw handoff as the editor until its submitted dialog is settled.
+            return dialog.Submitted || !prompt.Events.IsEmpty ? overlay.RedrawAfter(16) : overlay;
+        }
 
         // While lines are in flight the worker posts from another thread. A frame is asked for on
         // every post, and the root also redraws on a timer, so a post that lands while a frame is

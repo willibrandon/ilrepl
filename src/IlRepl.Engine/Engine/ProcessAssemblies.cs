@@ -131,5 +131,5 @@ internal static class ProcessAssemblies
     }
 
     private static bool IsSearchable(Assembly assembly) =>
-        !assembly.IsDynamic && AssemblyLoadContext.GetLoadContext(assembly) is not { IsCollectible: true };
+        !assembly.IsDynamic && AssemblyLoadContext.GetLoadContext(assembly) is not ReferenceLoadContext and not { IsCollectible: true };
 }

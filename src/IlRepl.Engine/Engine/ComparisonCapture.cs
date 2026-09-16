@@ -21,6 +21,7 @@ public static partial class ComparisonCapture
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(command);
+        using var references = session.Resolver.EnterContext();
         var options = ComparisonCommand.Parse(command);
         var edit = session.Edits.FirstOrDefault(edit => edit.Name == options.Name)
             ?? throw new ReplException($"no edit '{options.Name}' in the session");
@@ -81,7 +82,7 @@ public static partial class ComparisonCapture
         var moduleId = Guid.NewGuid();
         var original = CaptureImage(session, edit, options, original: true, dependencies, moduleId);
         var edited = CaptureImage(session, edit, options, original: false, dependencies, moduleId);
-        if (original.OriginalAssembly is not null) CaptureSatellites(session, dependencies);
+        if (original.OriginalAssembly is not null) CaptureSatellites(session, dependencies, edit.Baseline.SourceResolver);
         var environment = Environment.GetEnvironmentVariables().Cast<DictionaryEntry>()
             .ToDictionary(pair => (string)pair.Key, pair => (string)pair.Value!, StringComparer.Ordinal);
         return new ComparisonPackage(edit.Name, edit.Fingerprint, edit.Revision, original, edited, dependencies.Values.ToArray(),
@@ -115,6 +116,7 @@ public static partial class ComparisonCapture
             return CaptureExternalOriginal(session, edit, options, dependencies, moduleId);
         }
 
+        var family = original && edit.Baseline.Problems.Count == 0 ? edit.Baseline : edit.Current!;
         MethodDefinition? entry = null;
         MethodDefinition? selectedMethod = null;
         MethodReference? externalVarArg = null;
@@ -157,11 +159,10 @@ public static partial class ComparisonCapture
         {
             foreach (var reference in module.AssemblyReferences)
             {
-                CaptureDependency(reference.FullName, session, dependencies);
+                CaptureDependency(reference.FullName, session, dependencies, source: family.SourceResolver);
             }
         }
 
-        var family = original && edit.Baseline.Problems.Count == 0 ? edit.Baseline : edit.Current!;
         var names = family.RuntimeTypes.ToDictionary(type => type.FullName!, type =>
         {
             var source = (Type)family.OriginalMember(type);
@@ -173,6 +174,7 @@ public static partial class ComparisonCapture
         {
             OriginalAssembly = original && edit.Baseline.Problems.Count != 0 ? edit.Original.Method.Module.Assembly.FullName : null,
             OriginalModule = original && edit.Baseline.Problems.Count != 0 ? edit.Original.Method.Module.ModuleVersionId : null,
+            NativeLibraries = CaptureNativeLibraries(family.SourceResolver),
         };
     }
 
@@ -181,11 +183,11 @@ public static partial class ComparisonCapture
     {
         var method = edit.Original.Requested;
         var owner = method.DeclaringType!;
-        CaptureDependency(method.Module.Assembly.FullName!, session, dependencies);
+        CaptureDependency(method.Module.Assembly.FullName!, session, dependencies, source: edit.Baseline.SourceResolver);
         foreach (var argument in owner.GetGenericArguments()
             .Concat(method.IsGenericMethod ? method.GetGenericArguments() : Type.EmptyTypes))
         {
-            CaptureOriginalArgument(argument, session, dependencies);
+            CaptureOriginalArgument(argument, session, dependencies, edit.Baseline.SourceResolver);
         }
 
         var writer = new CecilWriter(SessionAssemblyKind.Cell);
@@ -194,7 +196,7 @@ public static partial class ComparisonCapture
         var image = writer.Write();
         foreach (var reference in writer.Module.AssemblyReferences)
         {
-            CaptureDependency(reference.FullName, session, dependencies);
+            CaptureDependency(reference.FullName, session, dependencies, source: edit.Baseline.SourceResolver);
         }
 
         return new ComparisonImage(image, entry.DeclaringType.FullName, entry.Name, entry.MetadataToken.ToInt32(),
@@ -202,19 +204,35 @@ public static partial class ComparisonCapture
         {
             OriginalAssembly = method.Module.Assembly.FullName,
             OriginalModule = method.Module.ModuleVersionId,
+            NativeLibraries = CaptureNativeLibraries(edit.Baseline.SourceResolver),
         };
     }
 
+    private static ComparisonNativeLibrary[] CaptureNativeLibraries(TypeResolver resolver) =>
+        [.. resolver.NativeLibraries.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair =>
+        {
+            using var stream = File.OpenRead(pair.Value);
+            if (stream.Length > SessionCodec.FileLimit)
+            {
+                throw new ReplException($"native dependency '{pair.Key}' exceeds the 64 MiB file limit");
+            }
+
+            var image = new byte[checked((int)stream.Length)];
+            stream.ReadExactly(image);
+            return new ComparisonNativeLibrary(pair.Key, SessionCodec.Hash(image), image);
+        })];
+
     private static void CaptureDependency(string identity, Session session, Dictionary<string, ComparisonAssembly> captured,
-        bool required = true)
+        bool required = true, TypeResolver? source = null)
     {
         if (captured.ContainsKey(identity))
         {
             return;
         }
 
+        var resolver = source ?? session.Resolver;
         var name = new AssemblyName(identity);
-        var assembly = session.Resolver.Assemblies.FirstOrDefault(assembly =>
+        var assembly = resolver.Assemblies.FirstOrDefault(assembly =>
             string.Equals(assembly.FullName, name.FullName, StringComparison.OrdinalIgnoreCase));
         if (assembly is null)
         {
@@ -245,7 +263,7 @@ public static partial class ComparisonCapture
         {
             image = definition.Image;
         }
-        else if (session.Resolver.TryGetImage(assembly, out var retained))
+        else if (resolver.TryGetImage(assembly, out var retained))
         {
             image = retained;
         }
@@ -272,7 +290,7 @@ public static partial class ComparisonCapture
 
         foreach (var reference in module.AssemblyReferences)
         {
-            CaptureDependency(reference.FullName, session, captured, required: false);
+            CaptureDependency(reference.FullName, session, captured, required: false, source: resolver);
         }
     }
 

@@ -83,6 +83,52 @@ public sealed class FrameworkAccessTests
         Assert.IsEmpty(mismatches, string.Join("\n", mismatches));
     }
 
+    /// <summary>
+    /// Generated definitions retain their own dependency identities even when a catalog contains another session's same-name image.
+    /// </summary>
+    [TestMethod]
+    public void Snapshot_KeepsOwnedReferenceIdentityAcrossSessions()
+    {
+        var name = "IlReplOwnedAccessTarget" + Guid.NewGuid().ToString("N");
+        var first = new Session();
+        var second = new Session();
+        try
+        {
+            var dependencyA = first.Resolver.LoadImage(BuildTarget(name));
+            var dependencyB = second.Resolver.LoadImage(BuildTarget(name));
+            foreach (var session in new[] { first, second })
+            {
+                session.AddLine(".class public Derived extends [" + name + "]T {");
+                session.AddLine("}");
+            }
+
+            var derivedA = first.Types.Single().RuntimeType!;
+            var derivedB = second.Types.Single().RuntimeType!;
+            var assemblies = new[] { derivedA.Assembly, dependencyB, derivedB.Assembly, dependencyA, typeof(object).Assembly };
+            var sources = assemblies.Select(assembly => (assembly, AssemblySymbolSource.For(assembly)!)).ToArray();
+            var catalog = new LoadedBindingCatalog(sources);
+            var symbolA = RuntimeSymbolImporter.Import(derivedA);
+            var symbolB = RuntimeSymbolImporter.Import(derivedB);
+            var locatedA = catalog.Locate(symbolA)!.Value;
+            var locatedB = catalog.Locate(symbolB)!.Value;
+            var baseA = locatedA.Source.BaseType(locatedA.Handle, catalog);
+            var baseB = locatedB.Source.BaseType(locatedB.Handle, catalog);
+
+            Assert.AreSame(dependencyA.GetType("T"), derivedA.BaseType);
+            Assert.AreSame(dependencyB.GetType("T"), derivedB.BaseType);
+            Assert.AreEqual(RuntimeSymbolImporter.Import(derivedA.BaseType!), baseA);
+            Assert.AreEqual(RuntimeSymbolImporter.Import(derivedB.BaseType!), baseB);
+            Assert.AreNotEqual(baseA, baseB);
+        }
+        finally
+        {
+            first.Reset();
+            second.Reset();
+            first.Resolver.Dispose();
+            second.Resolver.Dispose();
+        }
+    }
+
     private static string? RuleVerdict(Type t, string kind, string word, AccessContext where, AccessFacts facts)
     {
         const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance

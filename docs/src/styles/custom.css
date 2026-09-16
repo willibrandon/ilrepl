@@ -558,3 +558,33 @@ starlight-toc {
   visibility: hidden;
   pointer-events: none;
 }
+.sl-markdown-content #session-files {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block: 1rem 0.5rem;
+}
+
+.sl-markdown-content #session-files button {
+  border: 1px solid var(--sl-color-gray-4);
+  border-radius: 0.3rem;
+  padding: 0.35rem 0.65rem;
+  background: var(--sl-color-gray-6);
+  color: var(--sl-color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.sl-markdown-content #session-files button:hover {
+  border-color: var(--sl-color-accent);
+}
+
+.sl-markdown-content #session-file-message {
+  font-size: 0.85rem;
+}
+
+.sl-markdown-content #session-file-message input {
+  min-width: 15rem;
+  max-width: 100%;
+}

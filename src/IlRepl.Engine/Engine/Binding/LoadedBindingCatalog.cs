@@ -20,6 +20,7 @@ public sealed class LoadedBindingCatalog
     private readonly Dictionary<long, AssemblySymbolSource> _byInstance = [];
     private readonly Dictionary<long, LoadedContextIdentity> _contexts = [];
     private readonly Dictionary<long, IReadOnlyDictionary<int, TypeSymbol>> _observedTypes = [];
+    private readonly Dictionary<long, Dictionary<string, long>> _ownedReferences = [];
     private readonly Dictionary<string, List<AssemblySymbolSource>> _byName = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -38,8 +39,24 @@ public sealed class LoadedBindingCatalog
 
             _sources.Add(source);
             _byInstance[source.Instance] = source;
-            _contexts[source.Instance] = LoadedContextIdentity.Of(AssemblyLoadContext.GetLoadContext(assembly));
+            var context = AssemblyLoadContext.GetLoadContext(assembly);
+            _contexts[source.Instance] = LoadedContextIdentity.Of(context);
             _observedTypes[source.Instance] = RuntimeBindingObservations.Capture(assembly);
+            if (context is DefinitionLoadContext or ReferenceLoadContext)
+            {
+                var bindings = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+                foreach (var reference in assembly.GetReferencedAssemblies())
+                {
+                    var loaded = context is DefinitionLoadContext definition ? definition.FindLoadedReference(reference)
+                        : ((ReferenceLoadContext)context).FindLoaded(reference);
+                    if (loaded is not null)
+                    {
+                        bindings[reference.FullName] = RuntimeDefinitions.AssemblyInstance(loaded);
+                    }
+                }
+
+                _ownedReferences[source.Instance] = bindings;
+            }
             if (!_byName.TryGetValue(source.Name, out var same))
             {
                 same = [];
@@ -155,6 +172,12 @@ public sealed class LoadedBindingCatalog
         }
 
         var compatible = candidates.Where(candidate => candidate.Identity.Satisfies(requested)).ToArray();
+        var identity = requester.Reader.GetAssemblyReference(reference).GetAssemblyName().FullName;
+        if (_ownedReferences.TryGetValue(requester.Instance, out var owned) && owned.TryGetValue(identity, out var instance))
+        {
+            return compatible.SingleOrDefault(candidate => candidate.Instance == instance);
+        }
+
         if (requesterContext.IsSession && SessionAssemblies.IsSessionName(name))
         {
             // A session assembly's context resolves session names through the session registry,

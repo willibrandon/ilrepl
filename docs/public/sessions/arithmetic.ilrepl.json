@@ -1,0 +1,77 @@
+{
+  "format": "ilrepl-session",
+  "version": 1,
+  "runtime": {
+    "ilreplVersion": "0.4.1",
+    "framework": "net10.0",
+    "description": ".NET 10",
+    "rid": "",
+    "operatingSystem": "",
+    "architecture": "",
+    "culture": ""
+  },
+  "entries": [
+    {
+      "identity": "4ca9f2dce1994b33875702d41fa1642e",
+      "number": 1,
+      "kind": "Source",
+      "source": [
+        "ldc.i4 6",
+        "ldc.i4 7",
+        "mul"
+      ]
+    },
+    {
+      "identity": "83a2651c2b7e4a22892908b087e400f7",
+      "number": 1,
+      "kind": "Run",
+      "source": [
+        "ret"
+      ]
+    }
+  ],
+  "cells": [
+    {
+      "identity": "44ddb423f2be40ad8e50e01497071125",
+      "number": 1,
+      "kind": "cell",
+      "source": [
+        "ldc.i4 6",
+        "ldc.i4 7",
+        "mul",
+        "ret"
+      ],
+      "inputs": [],
+      "state": "succeeded",
+      "output": [
+        {
+          "kind": "Result",
+          "spans": [
+            {
+              "text": "  = ",
+              "style": "Dim"
+            },
+            {
+              "text": "42",
+              "style": "Number"
+            },
+            {
+              "text": " : int32",
+              "style": "Dim"
+            }
+          ],
+          "plainText": "  = 42 : int32"
+        }
+      ]
+    }
+  ],
+  "interruptions": [],
+  "editor": {
+    "lines": [],
+    "caret": 0,
+    "anchor": 0,
+    "revision": 0
+  },
+  "references": [],
+  "assets": []
+}

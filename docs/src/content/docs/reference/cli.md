@@ -9,7 +9,9 @@ ilrepl [options] [script]
 
 | Option | Meaning |
 | --- | --- |
-| `script` | An IL script to run, one line per instruction. Prompts are echoed. |
+| `script` | An IL script to run, or a `.ilrepl.json` session to open without execution. |
+| `--session <path>` | Open a session, including a file without the recommended extension. |
+| `--run` | Explicitly run the opened session and exit. Requires a session; cannot accompany a script or `--eval`. |
 | `-e, --eval <il>` | Run lines separated by `;` and exit. `ret` runs the cell. Can be repeated. |
 | `--batch` | Read lines from standard input without the terminal UI. Implied when input is piped. |
 | `-q, --quiet` | Do not echo the stack after each instruction. |
@@ -18,9 +20,12 @@ ilrepl [options] [script]
 | `--version` | Print the version. |
 | `--help` | Print the options. |
 
-The exit code is 0 when every line succeeded, 1 when any line failed, 2 for a bad script path,
+The exit code is 0 when every line succeeded, 1 for source, document, dependency, or execution failures, 2 for an unreadable input path,
 and 3 when the host could not be started. Input that ends inside a `.method`, `.class`, or `.edit` block is an error;
 close it with `}` first.
+
+Reopened source and drafts stay inert at batch EOF. Use `--run` or `.session run` to execute a saved experiment.
+See [Saving and sharing sessions](/usage/sessions/).
 
 Scripts accept `.edit method as Name { ... }` blocks. Add `--assert` to `.compare` to require a complete
 match and return exit code 1 otherwise. Without it, a difference is reported as a result.

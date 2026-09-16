@@ -28,6 +28,11 @@ public sealed class Transcript
     public long TotalAdded { get; private set; }
 
     /// <summary>
+    /// Observes newly formatted lines before scrollback limits discard them.
+    /// </summary>
+    public event Action<TranscriptLine>? LineAdded;
+
+    /// <summary>
     /// Appends a line.
     /// </summary>
     /// <param name="line">The line.</param>
@@ -37,6 +42,7 @@ public sealed class Transcript
         _lines.Add(line);
         TotalAdded++;
         Version++;
+        LineAdded?.Invoke(line);
         if (MaxLines > 0 && _lines.Count > MaxLines)
         {
             _lines.RemoveRange(0, _lines.Count - MaxLines);

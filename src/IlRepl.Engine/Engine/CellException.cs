@@ -1,11 +1,20 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Raised when a compiled cell ran and threw. The original exception is available through
-/// <see cref="Exception.InnerException"/>.
+/// Retains a cell's original exception and the output produced before execution failed.
 /// </summary>
 public sealed class CellException : Exception
 {
+    /// <summary>
+    /// The standard output captured before the cell threw.
+    /// </summary>
+    public string StandardOutput { get; internal set; } = "";
+
+    /// <summary>
+    /// The standard error captured before the cell threw.
+    /// </summary>
+    public string StandardError { get; internal set; } = "";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="CellException"/> class.
     /// </summary>

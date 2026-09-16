@@ -5,11 +5,14 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Compiles the current cell for explicit execution with its owned dependencies and retained declarations.
+/// </summary>
+/// <remarks>
 /// Compiles a session's cell into a dynamic assembly whose type carries <c>Run</c> alone and
 /// calls session methods through their trampolines. Every compile replays the cell's lines
 /// against a fresh <see cref="CellState"/> so generic parameters bind to the method being
 /// emitted. Saving to disk is <see cref="AssemblyExporter"/>'s job.
-/// </summary>
+/// </remarks>
 public static class CellCompiler
 {
 
@@ -22,6 +25,9 @@ public static class CellCompiler
     public static CompiledCell Compile(Session session)
     {
         ArgumentNullException.ThrowIfNull(session);
+        using var references = session.Resolver.EnterContext();
+        RequireComplete(session);
+        session.Activate();
         var name = SessionAssemblies.NextName(SessionAssemblyKind.Cell);
         // Collectible assemblies let CoreCLR unload old cells; the browser runtime has no unloading.
         var access = OperatingSystem.IsBrowser() ? AssemblyBuilderAccess.Run : AssemblyBuilderAccess.RunAndCollect;
@@ -170,7 +176,7 @@ public static class CellCompiler
         var dependencies = session.Methods.Select(m => m.Trampoline.Definition)
             .Concat(typeDependencies).Concat(helpers).Distinct().ToArray();
         var definition = SessionAssemblies.RegisterCell(assembly, created, dependencies, context);
-        return new CompiledCell(assembly, created, method, state.Arguments.Select(a => a.Value).ToArray(), definition)
+        return new CompiledCell(assembly, created, method, state.Arguments.Select(a => a.ExecutionValue()).ToArray(), definition)
         {
             Helpers = helpers,
         };

@@ -310,6 +310,15 @@ internal sealed class CaretWalk
     {
         var word = _r.TextAt(head);
         var name = word.ToString();
+        if (name == ".session")
+        {
+            if (WordSite(head + 1, CompletionSiteKind.CommandOption, ".session", -1) is { } verb)
+            {
+                return verb with { DeclarationComplete = false };
+            }
+
+            name += " " + _r.TextAt(head + 1).ToString();
+        }
         if (name is ".diff" or ".compare" or ".methods")
         {
             if (WordSite(head + 1, CompletionSiteKind.EditName, name, -1) is { } operand)
@@ -324,7 +333,8 @@ internal sealed class CaretWalk
             }
         }
 
-        if (name is ".diff" or ".compare" or ".dis" or ".disassemble")
+        if (name is ".diff" or ".compare" or ".dis" or ".disassemble" or ".load" or ".save"
+            or ".session save" or ".session open" or ".session restore")
         {
             var start = _caret;
             while (start > _r.EndOf(head) && !char.IsWhiteSpace(_line[start - 1]))

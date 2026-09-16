@@ -4,8 +4,7 @@ using System.Runtime.CompilerServices;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Asks the JIT to compile a method without running it, so IL the runtime would reject is
-/// reported when a <c>.method</c> block closes rather than at the first call.
+/// Asks the JIT to compile a method, which can activate its module and run initialization.
 /// </summary>
 /// <remarks>
 /// The browser build runs on Mono's interpreter, where <c>RuntimeHelpers.PrepareMethod</c>
@@ -21,7 +20,7 @@ public static class MethodPreparation
     public static bool IsSupported => !OperatingSystem.IsBrowser();
 
     /// <summary>
-    /// Compiles the method. Never invokes it.
+    /// Prepares a method for execution and permits the runtime to activate its module.
     /// </summary>
     /// <param name="method">A method on a created type.</param>
     /// <exception cref="InvalidProgramException">The JIT rejected the method's IL.</exception>

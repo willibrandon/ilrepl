@@ -215,24 +215,44 @@ internal sealed partial class ImportedMethodFamily
     /// </summary>
     internal IEnumerable<Type> SourceTypes => _types.Keys;
 
+    /// <summary>
+    /// Captures the selected original and the session method bindings visible when editing begins.
+    /// </summary>
+    /// <param name="name">The stable edit name.</param>
+    /// <param name="method">The selected original method.</param>
+    /// <param name="session">The owning session.</param>
+    /// <returns>The immutable source family before its first compilation.</returns>
     internal static ImportedMethodFamily Capture(string name, MethodBase method, Session session)
     {
         var signatures = session.Methods.Select(m => m.Signature).ToArray();
         var pinned = session.Methods.ToDictionary(m => m.Signature.Name, m => m.Version.Body, StringComparer.Ordinal);
         var types = session.TypeTable.Clone();
-        return new ImportedMethodFamily(name, session, signatures, pinned, MethodEditBody.Read(method, session, signatures, types), types);
+        return new ImportedMethodFamily(name, session, signatures, pinned, MethodEditBody.Read(method, session, signatures, types), types)
+        {
+            _signatureHeaders = session.Methods.ToDictionary(item => item.Signature.Name, item => item.HeaderLine, StringComparer.Ordinal),
+        };
     }
 
+    /// <summary>
+    /// Parses a revision with immutable original bindings and the latest unrelated live references.
+    /// </summary>
+    /// <param name="source">The complete edited method definition.</param>
+    /// <returns>The revised family awaiting compilation.</returns>
     internal ImportedMethodFamily Revise(string source)
     {
-        var types = _session.TypeTable.Clone();
+        RefreshSnapshotSession();
+        var types = (_liveSession ?? _session).TypeTable.Clone();
         foreach (var type in SourceTypes)
         {
             types.Add(type.FullName!.Replace('+', '/'), type);
         }
 
         return new ImportedMethodFamily(Name, _session, _signatures, _pinned,
-            MethodEditBody.Parse(Selected.Listing, source, _session, _signatures, types), _sourceTypes);
+            MethodEditBody.Parse(Selected.Listing, source, _session, _signatures, types), _sourceTypes)
+        {
+            _liveSession = _liveSession,
+            _signatureHeaders = _signatureHeaders,
+        };
     }
 
     private static Type DefinitionOf(Type type) => type.IsGenericType ? type.GetGenericTypeDefinition() : type;
@@ -626,8 +646,12 @@ internal sealed partial class ImportedMethodFamily
         : !type.IsGenericParameter && (_types.ContainsKey(DefinitionOf(type)) || (type.IsConstructedGenericType
             && type.GetGenericArguments().Any(ContainsCopiedType)));
 
+    /// <summary>
+    /// Compiles the copied family against its own dependency context and honors deferred activation.
+    /// </summary>
     internal void Compile()
     {
+        using var references = _session.Resolver.EnterContext();
         RequireValid();
         var writer = new CecilWriter(SessionAssemblyKind.Types);
         var definitions = Write(writer);
@@ -667,7 +691,7 @@ internal sealed partial class ImportedMethodFamily
         }
 
         // Preparing a method can run its module constructor; imported bodies have already passed static flow validation.
-        if (MethodPreparation.IsSupported && _moduleInitializers.Count == 0)
+        if (!_session.DeferActivation && MethodPreparation.IsSupported && _moduleInitializers.Count == 0)
         {
             foreach (var method in _runtime.Values.OfType<MethodBase>().Append(EntryPoint).Append(CallableEntryPoint)
                 .Where(method => !method.IsAbstract && !method.ContainsGenericParameters && !HasNonIlImplementation(method)).Distinct())

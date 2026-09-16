@@ -54,7 +54,7 @@ public sealed class MethodEdit
     /// <summary>
     /// The identity of the captured original, retained across revisions.
     /// </summary>
-    public string Fingerprint { get; }
+    public string Fingerprint { get; internal set; }
 
     /// <summary>
     /// The number of successful commits to this copy.

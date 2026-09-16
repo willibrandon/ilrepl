@@ -7,10 +7,7 @@ using TypeAttributes = Mono.Cecil.TypeAttributes;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Compiles the definitions a session keeps: a method body becomes a version assembly whose
-/// calls to other session methods go through their trampolines. Compilation writes, loads, and
-/// where the runtime supports it prepares the body on the JIT, and never invokes anything, so a
-/// failure is a verdict the session can report while its block stays open.
+/// Writes and loads method definitions, optionally preparing their bodies for execution.
 /// </summary>
 public static class DefinitionCompiler
 {
@@ -28,8 +25,7 @@ public static class DefinitionCompiler
         CompileMethod(signature, state, trampoline, trampolines, prepare, null);
 
     /// <summary>
-    /// Compiles one version of a session method whose body may reference prototypes of families
-    /// written in the same group.
+    /// Compiles a method version with references to prototypes of families emitted in the same group.
     /// </summary>
     /// <param name="signature">The method's signature.</param>
     /// <param name="state">The validated body.</param>
@@ -105,8 +101,7 @@ public static class DefinitionCompiler
                 Prepare(body, name);
             }
 
-            var implementation = Delegate.CreateDelegate(trampoline.DelegateType, body);
-            return new CompiledMethodVersion(definition, body, implementation);
+            return new CompiledMethodVersion(definition, body, trampoline.DelegateType);
         }
         catch
         {
@@ -131,9 +126,7 @@ public static class DefinitionCompiler
         }
         catch (Exception ex)
         {
-            // Preparation never runs user code, so anything else it throws (a missing member
-            // behind callvirt on a static, a type that fails to load) is also a verdict on the
-            // body, and the session must be able to keep the block open.
+            // Preparation may activate the module. Reopening bypasses this execution boundary.
             throw new ReplException($"the runtime rejected method {name}: {ex.Message} (the block is still open)", ex);
         }
     }

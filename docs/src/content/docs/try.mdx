@@ -18,7 +18,13 @@ This is ilrepl itself, compiled to WebAssembly. Cells compile with Reflection.Em
 
 Click into the terminal and type. Enter continues a block while its braces are open and sends it once they balance, so a method is typed or pasted in one go. Tab completes opcodes, types, and members. Up and Down choose matches while the palette is open; otherwise they move through the buffer and reach history at its ends. History stays in this browser between visits, and `.help` lists the commands. Drag across the transcript to select text and press y, Cmd+C, or Ctrl+C to copy it.
 
-Ctrl+Q ends the session and a fresh one starts in its place. The button in the corner restarts the runtime, and the page does that on its own if the session stops responding, say after a cell that never returns.
+Open, Download, and Share keep your experiment as editable source. Opening a file or link does not run it; use Run all when ready.
+Ctrl+S downloads and Ctrl+O opens the file picker while the terminal has focus.
+Share links include source and required dependencies. Larger experiments download as session files.
+
+Ctrl+Q ends the session and a fresh one starts in its place. The restart button reopens retained source in a fresh runtime without
+executing it. The page also recovers source and the editor draft if a cell stops responding. Previous results remain historical text.
+See [Saving and sharing sessions](/usage/sessions/) for dependency and runtime limits.
 
 ```cil
 ldc.i4 6

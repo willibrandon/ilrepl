@@ -1,7 +1,10 @@
 ---
-title: Saving cells
+title: Exporting an assembly
 description: Write a cell to disk as an assembly, or look at it as ILAsm.
 ---
+
+To keep editable source, drafts, dependencies, and previous results, [save a session](/usage/sessions/).
+Assembly export creates a `.dll` for use outside ilrepl.
 
 ## As an assembly
 

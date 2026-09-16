@@ -68,7 +68,9 @@ public sealed partial class SiblingTypeLookupTests
             var session = new Session();
             var image = SiblingTypeLookupFixture.Create(api, shape, arity, ignoreCase, internalType, qualified, flow, path);
             if (api == "activator-from") File.WriteAllBytes(path, image);
-            var assembly = api == "activator-from" ? session.Resolver.Load(path) : session.Resolver.LoadImage(image);
+            // CreateInstanceFrom always uses LoadFrom's default context; this case already runs in an isolated child.
+            var assembly = api == "activator-from" ? session.Resolver.Load(Assembly.LoadFrom(path).FullName!)
+                : session.Resolver.LoadImage(image);
             var owner = assembly.GetType("Lookup.Owner")!;
             var sibling = assembly.GetType("Lookup.Sibling")!;
             Assert.AreSame(owner.Assembly, sibling.Assembly);

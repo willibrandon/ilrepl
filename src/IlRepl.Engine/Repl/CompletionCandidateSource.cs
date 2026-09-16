@@ -158,6 +158,11 @@ internal sealed class CompletionCandidateSource
                 {
                     ".diff" => ["--raw"],
                     ".compare" => ["--assert", "--timeout", "--stdin", "--files"],
+                    ".session" => ["save", "open", "restore", "cells", "cell", "run"],
+                    ".session save" or ".save" => ["--embed"],
+                    ".session open" => ["--force"],
+                    ".session restore" => ["--build"],
+                    ".load" => ["--reload", "--framework", "--configuration", "--no-build"],
                     _ => ["--original"],
                 };
                 foreach (var option in options)

@@ -26,24 +26,27 @@ if (TryParseSize(initialSize, out var initialColumns, out var initialRows))
     rows = initialRows;
 }
 
-// A session ends when the user quits with Ctrl+Q or .quit. The page is told, and the next session
-// starts in the same runtime with a fresh engine, so quitting never leaves the box empty. History
-// is in the browser's database, so the next session, and the next visit, start with it.
+// Each worker owns one session. After quitting, persist history and let the page replace this
+// worker with a fresh runtime. Starting another loop here would race that replacement.
 var history = new BrowserHistoryStore();
-while (true)
-{
-    (columns, rows) = await RunSessionAsync(columns, rows, history);
-    await history.SettleAsync();
-    WasmPresentationAdapter.NotifyExited();
-}
+await RunSessionAsync(columns, rows, history);
+await history.SettleAsync();
+WasmPresentationAdapter.NotifyExited();
 
-static async Task<(int Columns, int Rows)> RunSessionAsync(int columns, int rows, BrowserHistoryStore history)
+static async Task RunSessionAsync(int columns, int rows, BrowserHistoryStore history)
 {
     var adapter = new WasmPresentationAdapter(columns, rows);
     WasmPresentationAdapter.Instance = adapter;
 
-    await using var engine = new InProcessEngine(new ReplCore());
+    await using var engine = new SessionController(new InProcessEngine(new ReplCore()),
+        _ => Task.FromResult<IReplEngine>(new InProcessEngine(new ReplCore())));
+    await BrowserWorkspace.InitializeAsync(engine);
     var transcript = new Transcript { MaxLines = 500 };
+    transcript.Add(LineKind.Info, IlReplApp.Banner, SpanStyle.Dim);
+    foreach (var line in BrowserWorkspace.StartupMessages)
+    {
+        transcript.Add(line);
+    }
     PromptState? prompt = null;
     // Selection and copy are the terminal's own in the browser, so the mouse stays with it. Wheel
     // notches still reach the app, as the reports a terminal sends; the page makes them.
@@ -51,6 +54,7 @@ static async Task<(int Columns, int Rows)> RunSessionAsync(int columns, int rows
         history: history, onPrompt: p =>
         {
             prompt = p;
+            BrowserWorkspace.Attach(p);
             p.OpenDocumentation = null;
             p.DocumentationTargetChanged = WasmPresentationAdapter.DocumentationTarget;
         }, ownSelection: false)
@@ -59,8 +63,7 @@ static async Task<(int Columns, int Rows)> RunSessionAsync(int columns, int rows
     WasmPresentationAdapter.NotifyReady(adapter.Width, adapter.Height);
     try
     {
-        // A block still going by when the session ends stops before the next session starts
-        // on the same worker, however the session ended.
+        // Settle pending submissions before handing the completed session back to the page.
         await IlReplApp.RunAsync(terminal, prompt, CancellationToken.None);
     }
     catch (Exception ex) when (ex is not OperationCanceledException)
@@ -69,8 +72,6 @@ static async Task<(int Columns, int Rows)> RunSessionAsync(int columns, int rows
         Console.Error.WriteLine(ex.ToString());
         throw;
     }
-
-    return (adapter.Width, adapter.Height);
 }
 
 static bool TryParseSize(string? size, out int columns, out int rows)

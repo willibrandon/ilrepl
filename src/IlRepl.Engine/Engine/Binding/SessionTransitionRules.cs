@@ -35,6 +35,7 @@ public static class SessionTransitionRules
         [".load"] = SessionTransition.Load,
         [".assemblies"] = SessionTransition.None,
         [".save"] = SessionTransition.Save,
+        [".session"] = SessionTransition.None,
         [".il"] = SessionTransition.None,
     };
 

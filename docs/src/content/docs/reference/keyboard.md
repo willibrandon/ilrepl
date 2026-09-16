@@ -13,7 +13,7 @@ description: Keys in the terminal UI.
 | PageUp, PageDown | Scroll the palette's detail pane. |
 | F1 | Open instruction or diagnostic help; press F1 or Escape to return to the editor. |
 | F8, Shift+F8 | Move to the next or previous diagnostic in the buffer. |
-| Escape | Dismiss the palette. |
+| Escape | Dismiss the palette or cancel a session dialog. |
 | Home, End, Left, Right | Move within the line; with Ctrl, by word. |
 | Shift+arrows | Select in the buffer. Typing replaces the selection and Ctrl+C copies it. |
 | Ctrl+U | Delete from the caret back to the start of the line; at the start of a line, join it to the line above. |
@@ -21,10 +21,16 @@ description: Keys in the terminal UI.
 | Ctrl+L | Clear the transcript. |
 | Shift+Up | On an empty prompt, select the last transcript line. Shift+Up and Shift+Down extend the selection, y copies it, and Escape or a click ends it. Dragging with the mouse selects as well. |
 | Ctrl+C | Copy the selection; otherwise clear the buffer, or cancel a block that is going by; otherwise quit. |
-| Ctrl+Q | Quit. |
+| Ctrl+S | Save the session; ask for a path on the first save. |
+| Ctrl+O | Choose a session to open without execution. |
+| Ctrl+Q | Quit; offer Save, Discard, and Cancel for a modified file-associated session. |
+
+In the Save changes dialog, Up and Down or Shift+Tab and Tab move between Save, Discard, and Cancel.
+Navigation wraps at either end. Enter confirms the focused choice; Escape cancels.
 
 In the browser, selection and copy are the terminal's own: drag to select and press y, Cmd+C, or
 Ctrl+C to copy. Shift+Up and Ctrl+C's copy of a buffer selection belong to the desktop.
+Ctrl+S downloads a session and Ctrl+O opens the page's file picker while the browser terminal has focus.
 
 The palette opens on an opcode or command prefix, then follows the operand being edited. A type
 name leads to its members after `::`; field instructions offer fields, `ldloc` and `ldarg` offer

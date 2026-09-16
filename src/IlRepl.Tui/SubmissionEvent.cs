@@ -22,6 +22,16 @@ public sealed record SubmissionEvent(
     bool Select = false)
 {
     /// <summary>
+    /// The editor state returned by a workspace operation.
+    /// </summary>
+    public SessionEditor? SessionEditor { get; init; }
+
+    /// <summary>
+    /// Whether an approved workspace action requested that the terminal close.
+    /// </summary>
+    public bool SessionQuit { get; init; }
+
+    /// <summary>
     /// A settled read-only completion request, applied only on the render thread.
     /// </summary>
     public CompletionResult? CompletionResult { get; init; }

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Hex1b.Documents;
+using Hex1b.Input;
 using Hex1b.Widgets;
 using IlRepl.Protocol;
 
@@ -10,6 +11,33 @@ namespace IlRepl.Tui;
 /// </summary>
 public sealed partial class PromptState
 {
+    /// <summary>
+    /// The file or unsaved-source dialog currently displayed above the retained editor.
+    /// </summary>
+    public SessionDialog? SessionDialog { get; set; }
+
+    /// <summary>
+    /// Whether a keyboard workspace operation is awaiting storage or user input.
+    /// </summary>
+    public bool SessionBusy { get; set; }
+
+    /// <summary>
+    /// Lets a host consume an input event after preceding keys and pastes have reached the editor.
+    /// </summary>
+    public Func<Hex1bEvent, bool>? FilterInput { get; set; }
+
+    /// <summary>
+    /// Captures the unsent text, caret and selection on the terminal input or render thread.
+    /// </summary>
+    /// <returns>The current editor state.</returns>
+    public SessionEditor CaptureSessionEditor() => new()
+    {
+        Lines = Text.Split('\n'),
+        Caret = Editor.Cursor.Position.Value,
+        Anchor = Editor.Cursor.SelectionAnchor?.Value ?? Editor.Cursor.Position.Value,
+        Revision = Editor.Document.Version,
+    };
+
     /// <summary>
     /// Coordinates streamed paste application with subsequent terminal input.
     /// </summary>
@@ -137,7 +165,7 @@ public sealed partial class PromptState
     /// <summary>
     /// Whether a submission is in flight: from Enter until the frame that drains its last event.
     /// </summary>
-    public bool Busy => Submission is not null;
+    public bool Busy => Submission is not null || SessionBusy;
 
     /// <summary>
     /// The buffer.

@@ -42,8 +42,51 @@
     }
   },
   "blocks": {
+    "04fe6f99c4ed389e4ee9cd854759d69f0b4fee24583915a93d161ad2bad7177b": {
+      "where": "usage/sessions.md:106",
+      "language": "cil",
+      "editor": true,
+      "lines": [
+        [
+          [
+            0,
+            5,
+            "Command"
+          ],
+          [
+            6,
+            27,
+            "String"
+          ]
+        ],
+        [
+          [
+            0,
+            5,
+            "Command"
+          ],
+          [
+            6,
+            12,
+            "String"
+          ]
+        ],
+        [
+          [
+            0,
+            5,
+            "Command"
+          ],
+          [
+            6,
+            12,
+            "String"
+          ]
+        ]
+      ]
+    },
     "0602b5e9d811baa36bfdd6a7652ee032c41f7d3d44d07e9f86da235ed7b28ffe": {
-      "where": "try.mdx:24",
+      "where": "try.mdx:30",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -934,7 +977,7 @@
       ]
     },
     "131881e42302ead3f52d7ff319d9d29440e73495101dc803b7ed2a080b86a58b": {
-      "where": "getting-started/installation.md:41",
+      "where": "getting-started/installation.md:43",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -1887,7 +1930,7 @@
       ]
     },
     "1af8992fec5bbad5930309f71ae3d531b6d08d9e07567dc52cadb2be21cebdeb": {
-      "where": "usage/saving-cells.md:16",
+      "where": "usage/saving-cells.md:19",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -16592,6 +16635,58 @@
         []
       ]
     },
+    "baa7c16c3622cc0e1ce024e83ecdfd98b0f0427f4aa9ef834655838d3f642dfd": {
+      "where": "usage/sessions.md:11",
+      "language": "cil",
+      "editor": true,
+      "lines": [
+        [
+          [
+            0,
+            6,
+            "Opcode"
+          ],
+          [
+            7,
+            1,
+            "Number"
+          ]
+        ],
+        [
+          [
+            0,
+            6,
+            "Opcode"
+          ],
+          [
+            7,
+            1,
+            "Number"
+          ]
+        ],
+        [
+          [
+            0,
+            3,
+            "Opcode"
+          ]
+        ],
+        [
+          [
+            0,
+            3,
+            "Opcode"
+          ]
+        ],
+        [
+          [
+            0,
+            8,
+            "Command"
+          ]
+        ]
+      ]
+    },
     "bb4c92ab11fa390de4b9101d914fac19d2dd32d659800ca3795b391e3e8d2809": {
       "where": "usage/disassembly.md:172",
       "language": "ilrepl",
@@ -17534,7 +17629,7 @@
       ]
     },
     "c23f73077407d9562051d9ea3325dfc08fc8d4616b554030c86662011659768f": {
-      "where": "usage/saving-cells.md:61",
+      "where": "usage/saving-cells.md:64",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -20712,6 +20807,49 @@
             5,
             8,
             "Dim"
+          ]
+        ]
+      ]
+    },
+    "f85aafeb152f54a65f340566dc47c873c128a17550ffa98195faadfb8406fd97": {
+      "where": "usage/sessions.md:93",
+      "language": "cil",
+      "editor": true,
+      "lines": [
+        [
+          [
+            0,
+            5,
+            "Command"
+          ],
+          [
+            6,
+            22,
+            "String"
+          ]
+        ],
+        [
+          [
+            0,
+            5,
+            "Command"
+          ],
+          [
+            6,
+            29,
+            "String"
+          ]
+        ],
+        [
+          [
+            0,
+            5,
+            "Command"
+          ],
+          [
+            6,
+            31,
+            "String"
           ]
         ]
       ]

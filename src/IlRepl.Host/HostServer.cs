@@ -6,11 +6,33 @@ using StreamJsonRpc;
 namespace IlRepl.Host;
 
 /// <summary>
+/// Exposes the execution engine and desktop workspace operations through the host RPC connection.
+/// </summary>
+/// <remarks>
 /// Serves a <see cref="ReplCore"/> over JSON-RPC. The process console is detached from the
 /// protocol streams so cells can print without corrupting the channel.
-/// </summary>
+/// </remarks>
 public sealed class HostServer : IReplHost, IAsyncDisposable
 {
+    /// <inheritdoc />
+    public async Task<SessionReply> SessionAsync(SessionRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _engine.SessionAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (request.Action.Operation == SessionOperation.Open
+            && exception is not InvalidDataException && exception is IOException or UnauthorizedAccessException)
+        {
+            return new SessionReply
+            {
+                FailureExitCode = 2,
+                Reply = new HandleReply(false, false,
+                    [TranscriptLine.Of(LineKind.Error, exception.Message, SpanStyle.Error)], _engine.Status),
+            };
+        }
+    }
+
     private readonly InProcessEngine _engine;
 
     /// <summary>
@@ -21,6 +43,7 @@ public sealed class HostServer : IReplHost, IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(core);
         _engine = new InProcessEngine(core, ProcessComparisonRunner.RunAsync);
+        _engine.SessionTooling = new HostSessionService(_engine).ExecuteAsync;
     }
 
     /// <inheritdoc />

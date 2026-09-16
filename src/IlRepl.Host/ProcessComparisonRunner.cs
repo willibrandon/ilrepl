@@ -101,6 +101,7 @@ public static class ProcessComparisonRunner
             stderr = ReadOutputAsync(process.StandardError, package.OutputLimit, overflow, outputLifetime.Token);
             var exit = process.WaitForExitAsync(CancellationToken.None);
             var ready = WaitForReadyAsync(readyPath, lifetime.Token);
+            var resultReady = WaitForReadyAsync(resultReadyPath, lifetime.Token);
             var startup = Task.Delay(TimeSpan.FromMinutes(2), lifetime.Token);
             var prepared = WaitForReadyAsync(groupPath, lifetime.Token);
             var preparation = await Task.WhenAny(exit, prepared, startup, overflow.Task).ConfigureAwait(false);
@@ -110,7 +111,7 @@ public static class ProcessComparisonRunner
                 await File.WriteAllTextAsync(startPath, "start", cancellationToken).ConfigureAwait(false);
             }
 
-            var started = await Task.WhenAny(exit, ready, startup, overflow.Task).ConfigureAwait(false);
+            var started = await Task.WhenAny(exit, ready, resultReady, startup, overflow.Task).ConfigureAwait(false);
             if (started == startup || cancellationToken.IsCancellationRequested)
             {
                 return await StopAsync(cancellationToken.IsCancellationRequested ? "cancelled" : "setup-failed",
@@ -118,10 +119,15 @@ public static class ProcessComparisonRunner
                     .ConfigureAwait(false);
             }
 
-            if (started == ready && !ready.IsCanceled)
+            if (started == resultReady && !resultReady.IsCanceled)
+            {
+                Kill(process);
+                await exit.ConfigureAwait(false);
+                await group.StopAsync().ConfigureAwait(false);
+            }
+            else if (started == ready && !ready.IsCanceled)
             {
                 var timeout = Task.Delay(package.TimeoutMilliseconds, lifetime.Token);
-                var resultReady = WaitForReadyAsync(resultReadyPath, lifetime.Token);
                 var completed = await Task.WhenAny(exit, resultReady, timeout, overflow.Task).ConfigureAwait(false);
                 if (completed == resultReady && !resultReady.IsCanceled)
                 {

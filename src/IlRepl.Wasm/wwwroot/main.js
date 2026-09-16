@@ -8,6 +8,7 @@
   const baseUrl = scriptUrl.substring(0, scriptUrl.lastIndexOf('/') + 1);
   const { createComparisonSupervisor } = await import(baseUrl + 'comparison-supervisor.js');
   const comparisons = createComparisonSupervisor(baseUrl);
+  const { createWorkspaceControls } = await import(baseUrl + 'workspace-controls.js');
   const container = document.getElementById('terminal');
   if (!container) return;
   const statusEl = document.getElementById('session-status');
@@ -67,13 +68,25 @@
     };
     fitColumns();
 
-    // The supervisor owns the worker. A quit inside the app starts a new session in the same
-    // runtime. A crash, or a session that stops responding, gets a new worker. The restart button
-    // does the same by hand. A session that fails before it has run for a few seconds is left
-    // failed, since starting it again would most likely fail the same way.
+    // The supervisor owns worker replacement after quitting, restarting, or a runtime failure.
+    // A session that fails before it has run for a few seconds is left failed, since starting it
+    // again would most likely fail the same way.
     const heartbeatLimit = 8000;
     const restartDelay = 1500;
     let worker = null;
+    let preparing = null;
+    let preparationTimer = null;
+    const queuedInput = [];
+    let checkpoint = null;
+    let preferences = 'true,false';
+    let nextGeneration = 0;
+    const workspace = createWorkspaceControls({
+      getWorker: () => worker,
+      getCheckpoint: () => checkpoint,
+      replace: (source, path, run) => startWorker(source, path, run),
+      setStatus,
+      focus: () => term.focus(),
+    });
     let generation = 0;
     let lastMessageAt = 0;
     let readyAt = 0;
@@ -98,6 +111,7 @@
       comparisons.stop();
       resetHelp();
       if (worker) {
+        workspace.stop(worker);
         worker.onmessage = null;
         worker.onerror = null;
         worker.terminate();
@@ -116,8 +130,19 @@
       restartTimer = setTimeout(() => { restartTimer = null; startWorker(); }, delay);
     };
 
+    const recordInterruption = () => {
+      if (!checkpoint?.pendingSubmission) return;
+      const document = checkpoint.document;
+      document.interruptions ||= [];
+      const identity = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
+      document.interruptions.push({ identity, number: checkpoint.pendingSubmission,
+        source: checkpoint.pendingSource || [] });
+      checkpoint = { ...checkpoint, document, dirty: true, pendingSubmission: 0 };
+    };
+
     const fail = (reason, detail) => {
       const hadRun = readyAt !== 0 && Date.now() - readyAt > 3000;
+      recordInterruption();
       stopWorker();
       window.ilreplLastRestart = reason;
       if (hadRun) {
@@ -129,21 +154,91 @@
       }
     };
 
-    const startWorker = () => {
-      stopWorker();
-      const own = ++generation;
-      term.reset();
+    const startWorker = (source = checkpoint ? JSON.stringify(checkpoint.document) : '', path = checkpoint?.path || null, run = null) => {
+      if (preparing) preparing.terminate();
+      if (preparationTimer) clearTimeout(preparationTimer);
+      const candidate = new Worker(baseUrl + 'worker.js', { type: 'module' });
+      preparing = candidate;
+      const own = ++nextGeneration;
+      let candidateCheckpoint = null;
+      let retainedDocument = null;
+      const assets = new Map();
+      const retainCheckpoint = msg => {
+        const document = JSON.parse(msg.document);
+        for (const asset of document.assets) assets.set(asset.hash, asset);
+        document.assets = msg.assetHashes.map(hash => assets.get(hash));
+        document.entries = [...(retainedDocument?.entries || []).slice(0, msg.entryPrefix), ...document.entries];
+        const cells = new Map((retainedDocument?.cells || []).map(cell => [cell.number, cell]));
+        for (const cell of document.cells) cells.set(cell.number, cell);
+        document.cells = msg.cellNumbers.map(number => cells.get(number));
+        retainedDocument = document;
+        return { document, path: msg.path, dirty: msg.dirty, preferences: msg.preferences,
+          pendingSubmission: msg.pendingSubmission, pendingSource: msg.pendingSource };
+      };
+      const output = [];
+      const flushQueuedInput = () => {
+        for (const input of queuedInput.splice(0)) send(input.text, input.binary);
+      };
+      const rejectCandidate = detail => {
+        if (preparing !== candidate) return;
+        clearTimeout(preparationTimer);
+        preparationTimer = null;
+        preparing = null;
+        candidate.terminate();
+        workspace.error(detail);
+        setStatus(worker ? 'Ready' : 'Failed');
+        flushQueuedInput();
+      };
+      preparationTimer = setTimeout(() => rejectCandidate(
+        'Opening the session timed out; try again or use Restart.'), 45_000);
       lastMessageAt = Date.now();
       setStatus('Loading');
-      worker = new Worker(baseUrl + 'worker.js', { type: 'module' });
-      // The worker queues this until the runtime is up, so the app's first layout matches the terminal.
-      sendResize();
+      candidate.postMessage({ type: 'workspace-init', document: source, path, preferences });
+      candidate.postMessage({ type: 'resize', cols: term.cols, rows: term.rows });
 
-      worker.onmessage = (e) => {
+      candidate.onmessage = (e) => {
+        const incoming = e.data;
+        if (preparing === candidate) {
+          if (incoming.type === 'workspace-checkpoint') {
+            candidateCheckpoint = retainCheckpoint(incoming);
+            candidate.postMessage({ type: 'workspace-ack', identity: incoming.identity });
+            return;
+          }
+          if (incoming.type === 'output') { output.push(incoming.data); return; }
+          if (incoming.type === 'error') {
+            rejectCandidate(incoming.message);
+            return;
+          }
+          if (incoming.type !== 'ready') return;
+          clearTimeout(preparationTimer);
+          preparationTimer = null;
+          stopWorker();
+          preparing = null;
+          worker = candidate;
+          generation = own;
+          checkpoint = candidateCheckpoint;
+          preferences = checkpoint?.preferences || preferences;
+          term.reset();
+          for (const data of output) term.write(new Uint8Array(data));
+        }
         if (own !== generation) return;
         lastMessageAt = Date.now();
         const msg = e.data;
-        if (msg.type === 'output') {
+        if (msg.type === 'workspace-checkpoint') {
+          checkpoint = retainCheckpoint(msg);
+          preferences = checkpoint.preferences;
+          worker.postMessage({ type: 'workspace-ack', identity: msg.identity });
+        } else if (msg.type === 'workspace-editor') {
+          if (checkpoint) {
+            const document = checkpoint.document;
+            const editor = JSON.parse(msg.editor);
+            const changed = document.editor.lines.join('\n') !== editor.lines.join('\n');
+            document.editor = editor;
+            checkpoint = { ...checkpoint, document, dirty: checkpoint.dirty || changed };
+          }
+        } else if (msg.type.startsWith('workspace-')) {
+          workspace.message(msg, worker);
+        } else if (msg.type === 'output') {
           term.write(new Uint8Array(msg.data));
         } else if (msg.type === 'documentation-target') {
           if (msg.sequence === helpSequence) {
@@ -172,20 +267,31 @@
           term.focus();
           window.ilreplSessionCount++;
           window.ilreplReady = true;
+          workspace.ready();
+          flushQueuedInput();
+          if (run !== null) {
+            const selected = run;
+            run = null;
+            workspace.running();
+            workspace.request('run', selected).then(workspace.completed, workspace.error);
+          }
         } else if (msg.type === 'exited') {
-          // Ctrl+Q or .quit. The worker starts the next session itself; only the screen is cleared.
-          window.ilreplReady = false;
+          // Quit starts a fresh worker, dropping all previous runtime state and source.
+          stopWorker();
           window.ilreplLastRestart = 'quit';
-          resetHelp();
-          readyAt = 0;
           setStatus('Restarting');
-          term.reset();
+          checkpoint = null;
+          startWorker('', null);
         } else if (msg.type === 'error') {
           console.error('ilrepl worker error', msg.message, msg.stack);
           fail('error', msg.message);
         }
       };
-      worker.onerror = (e) => {
+      candidate.onerror = (e) => {
+        if (preparing === candidate) {
+          rejectCandidate(e.message);
+          return;
+        }
         if (own !== generation) return;
         console.error('ilrepl worker error', e.message, e.filename, e.lineno);
         fail('error', 'The worker failed: ' + e.message);
@@ -206,11 +312,16 @@
       restartButton.addEventListener('click', () => {
         window.ilreplLastRestart = 'button';
         setStatus('Restarting');
+        recordInterruption();
         startWorker();
       });
     }
 
     const send = (text, binary = false) => {
+      if (preparing) {
+        queuedInput.push({ text, binary });
+        return;
+      }
       if (!worker) return;
       if (helpPending) {
         helpQueue.push({ text, binary });
@@ -369,7 +480,7 @@
       send(`\x1b[<0;${cell.col};${cell.row}M\x1b[<0;${cell.col};${cell.row}m`);
     });
 
-    startWorker();
+    startWorker(location.hash.startsWith('#session=') ? location.hash : '', null);
   } catch (err) {
     setStatus('Failed');
     console.error('ilrepl page error', err);

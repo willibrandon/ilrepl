@@ -41,6 +41,7 @@ public static partial class ComparisonWorker
         using var stdout = captureOutput ? new ComparisonOutputWriter(package.OutputLimit, Limit) : null;
         using var stderr = captureOutput ? new ComparisonOutputWriter(package.OutputLimit, Limit) : null;
         using var stdin = useStandardInput ? null : new StringReader(package.StandardInput);
+        IReadOnlyDictionary<string, string> nativeLibraries = new Dictionary<string, string>();
         var loaded = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
         var preserveContext = package.Original.OriginalAssembly is not null;
         var executionContext = preserveContext && package.Dependencies.Any(dependency => dependency.IsCollectible)
@@ -60,6 +61,7 @@ public static partial class ComparisonWorker
             }
 
             assembly = LoadDependency(preserveContext ? executionContext : context, dependency, preserveContext);
+            BindNativeLibraries(assembly, nativeLibraries);
             loaded.Add(name.FullName, assembly);
             return assembly;
         }
@@ -69,6 +71,7 @@ public static partial class ComparisonWorker
         if (executionContext != AssemblyLoadContext.Default) executionContext.Resolving += Resolve;
         try
         {
+            nativeLibraries = MaterializeNativeLibraries(image);
             if (captureOutput)
             {
                 Console.SetOut(stdout!);
@@ -165,6 +168,7 @@ public static partial class ComparisonWorker
 
             using var code = new MemoryStream(image.Image, writable: false);
             var assembly = executionContext.LoadFromStream(code);
+            BindNativeLibraries(assembly, nativeLibraries);
             var type = assembly.GetType(image.EntryType, throwOnError: true)!;
             Type Argument(string name) => Type.GetType(name, throwOnError: true)!;
             if (image.TypeArguments.Count != 0)

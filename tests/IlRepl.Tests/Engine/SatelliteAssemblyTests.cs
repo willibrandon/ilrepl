@@ -145,7 +145,8 @@ public sealed partial class SatelliteAssemblyTests
         File.WriteAllBytes(satellitePath, fixture.Satellite);
         AssertMetadata(fixture.Source, fixture.Satellite, fixture.Name);
         var session = new Session();
-        var assembly = session.Resolver.Load(sourcePath);
+        var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(sourcePath);
+        session.Resolver.Load(assembly.FullName!);
         Assert.AreEqual(sourcePath, assembly.Location);
         var satellite = assembly.GetSatelliteAssembly(CultureInfo.GetCultureInfo(SatelliteAssemblyFixture.Culture));
         Assert.AreEqual(satellitePath, satellite.Location);

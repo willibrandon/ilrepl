@@ -10,6 +10,16 @@ namespace IlRepl.Protocol;
 public sealed record HandleReply(bool Succeeded, bool Quit, IReadOnlyList<TranscriptLine> Lines, SessionStatus Status)
 {
     /// <summary>
+    /// The typed workspace action awaiting the frontend coordinator.
+    /// </summary>
+    public SessionAction? SessionAction { get; init; }
+
+    /// <summary>
+    /// The restored editor snapshot supplied by a session action.
+    /// </summary>
+    public SessionEditor? SessionEditor { get; init; }
+
+    /// <summary>
     /// Source findings that explain a refused line, including earlier instructions affected by it.
     /// </summary>
     public IReadOnlyList<AnalysisDiagnostic> Diagnostics { get; init; } = [];
