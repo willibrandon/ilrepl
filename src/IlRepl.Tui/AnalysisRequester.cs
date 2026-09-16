@@ -12,6 +12,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
     private readonly List<PendingAnalysis> _owned = [];
     private readonly ConcurrentQueue<CompletedAnalysis> _completed = new();
     private AnalysisRequestKey? _current;
+    private (AnalysisRequestKey Key, AnalysisReply Reply)? _published;
     private PendingAnalysis? _pending;
     private Task? _settlement;
     private long _nextRequestId;
@@ -21,6 +22,20 @@ public sealed class AnalysisRequester(IReplEngine engine)
     /// Whether the current document is still being analyzed.
     /// </summary>
     public bool IsPending => _pending is not null;
+
+    /// <summary>
+    /// Returns diagnostics while their document and session remain current, including during caret-only refreshes.
+    /// </summary>
+    internal IReadOnlyList<AnalysisDiagnostic> Diagnostics(PromptState state)
+    {
+        if (!state.Busy && _published is { } published && published.Key.Text == state.Text
+            && published.Key.Version == state.Editor.Document.Version && published.Key.Revision == _engine.Status.Revision
+            && published.Key.AssemblyVersion == _engine.AssemblyVersion)
+        {
+            return published.Reply.Diagnostics;
+        }
+        return [];
+    }
 
     /// <summary>
     /// Applies completed work and starts analysis when the document or session changes.
@@ -55,7 +70,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
         {
             var display = key.Text.Length > 0 && _current is { } previous
                 && previous.Revision == key.Revision && previous.AssemblyVersion == key.AssemblyVersion
-                    ? PromptDiagnostics.Display(state) : null;
+                    ? PromptDiagnostics.PreviousDisplay(state) : null;
             Cancel();
             _current = key;
             state.Analysis = null;
@@ -83,6 +98,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
             if (completed.Reply is { } reply && reply.Revision == key.Revision && reply.AssemblyVersion == key.AssemblyVersion
                 && reply.DocumentVersion == key.Version)
             {
+                _published = (key, reply);
                 state.Analysis = reply;
                 state.Highlighter.Diagnostics = reply.Diagnostics;
             }

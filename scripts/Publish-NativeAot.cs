@@ -58,6 +58,16 @@ root.SetAction(async (parseResult, cancellationToken) =>
             return 1;
         }
 
+        var diagnostic = await CaptureAsync(publishDirectory, executable,
+            ["--no-color", "-e", "ldstr \"text\"; call int32 System.Math::Abs(int32)"], cancellationToken);
+        if (diagnostic.ExitCode == 0 || !diagnostic.Output.Contains("Expected:", StringComparison.Ordinal)
+            || !diagnostic.Output.Contains("actual string", StringComparison.Ordinal)
+            || !diagnostic.Output.Contains("ldstr \"text\"", StringComparison.Ordinal))
+        {
+            Console.Error.WriteLine("diagnostic smoke test failed:\n" + diagnostic.Output);
+            return 1;
+        }
+
         Console.WriteLine($"smoke test passed for {rid}");
     }
 

@@ -8,6 +8,9 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
+/// Builds the source editor with completion, history, diagnostic navigation, and contextual help.
+/// </summary>
+/// <remarks>
 /// The prompt: an editor that holds one line or a whole block, with the prompt in its gutter, a
 /// completion palette above it, ghost text for the best match, and history on Up and Down.
 /// Enter is the only key that decides: it continues a buffer whose braces are open and submits
@@ -16,7 +19,7 @@ namespace IlRepl.Tui;
 /// that come in faster than frames still do the right thing. While a submission is in flight the
 /// sent text is with the worker, not in the editor, so typing goes on; a buffer submitted then
 /// goes after the one in flight, and Enter on an empty buffer does nothing.
-/// </summary>
+/// </remarks>
 /// <param name="Label">The prompt shown on the first line.</param>
 /// <param name="Catalog">Every opcode and command the palette can offer.</param>
 /// <param name="State">The prompt's state, owned above the widget.</param>
@@ -193,6 +196,13 @@ public sealed partial record PromptWidget(
 
     private void Bind(InputBindingsBuilder b, PromptState state)
     {
+        if (state.Help is not null)
+        {
+            PromptHelpWidget.Bind(b, state, Catalog, Width, Math.Max(1, Fit.EditorRows + Fit.TranscriptRows));
+            return;
+        }
+        b.Key(Hex1bKey.F1).Action(_ => PromptHelpWidget.Process(state,
+            () => PromptHelp.Open(state, Catalog)), "Instruction help");
         b.Key(Hex1bKey.F8).Action(_ => PromptDiagnostics.Move(state, false), "Next diagnostic");
         b.Shift().Key(Hex1bKey.F8).Action(_ => PromptDiagnostics.Move(state, true), "Previous diagnostic");
         // The builder runs for every key, so what it reads here is the state that key meets.

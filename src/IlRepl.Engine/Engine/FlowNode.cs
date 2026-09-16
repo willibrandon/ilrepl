@@ -10,9 +10,25 @@ namespace IlRepl.Engine;
 internal sealed record FlowNode<T>(AnalysisLocation Location, string Source) where T : class
 {
     /// <summary>
+    /// The real source coordinates, or null when Location supplies only an internal entry identity.
+    /// </summary>
+    public AnalysisLocation? SourceLocation { get; init; } = Location;
+
+    /// <summary>
+    /// Identifies whether this source can be navigated in the current editor snapshot.
+    /// </summary>
+    public AnalysisSourceKind SourceKind { get; init; } = Location.Offset is not null ? AnalysisSourceKind.Imported
+        : Location.Line >= 0 ? AnalysisSourceKind.Document : AnalysisSourceKind.Accepted;
+
+    /// <summary>
     /// The instruction's shared operand facts, or null for a source boundary.
     /// </summary>
     public StackOperandView<T>? Instruction { get; init; }
+
+    /// <summary>
+    /// The resolved instruction signature, retaining the original source separately for navigation.
+    /// </summary>
+    public string? InstructionSyntax { get; init; }
 
     /// <summary>
     /// Whether this entry represents an implicit transition rather than a typed instruction.

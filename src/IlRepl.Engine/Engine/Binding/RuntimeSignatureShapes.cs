@@ -17,7 +17,7 @@ internal static class RuntimeSignatureShapes
     /// <returns>The signature with its original bounds and function-pointer flags.</returns>
     public static MethodSymbol Restore(MethodBase method, MethodSymbol symbol)
     {
-        if (!CecilMetadataSignatures.IsRequired(method))
+        if (method.DeclaringType?.IsArray == true || !CecilMetadataSignatures.IsRequired(method))
         {
             return symbol;
         }

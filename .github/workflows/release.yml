@@ -39,7 +39,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '10.0.302'
+          dotnet-version: '10.0.400'
 
       - name: Publish, smoke test, and pack
         run: dotnet run --file scripts/Publish-NativeAot.cs -- --rid ${{ matrix.rid }} --package-version ${{ github.ref_name }}
@@ -68,7 +68,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '10.0.302'
+          dotnet-version: '10.0.400'
 
       - name: Download native tool packages
         uses: actions/download-artifact@v8
@@ -112,7 +112,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '10.0.302'
+          dotnet-version: '10.0.400'
 
       - name: Download tool packages
         uses: actions/download-artifact@v8

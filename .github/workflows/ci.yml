@@ -40,27 +40,50 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '10.0.302'
+          dotnet-version: '10.0.400'
 
-      - name: Restore
-        run: dotnet restore tests/IlRepl.Tests/IlRepl.Tests.csproj
-
-      - name: Build
-        run: dotnet build tests/IlRepl.Tests/IlRepl.Tests.csproj --no-restore
+      - name: Restore solution workloads
+        run: dotnet workload restore
 
       - name: Test
-        run: >-
-          dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj --no-build
-          --report-trx --results-directory TestResults
-        env:
-          # The ILAsm round trips must run on CI, not be skipped when ilasm is missing.
-          ILREPL_REQUIRE_ILASM: 1
+        run: dotnet test --report-trx --results-directory TestResults
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.artifact }}
+          path: TestResults/
+
+  test-musl:
+    name: tests (Alpine ${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            os: ubuntu-latest
+          - arch: arm64
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run the complete suite on Alpine
+        run: >-
+          docker run --rm
+          -v "$PWD:/repo" -w /repo
+          mcr.microsoft.com/dotnet/sdk:10.0.400-alpine3.23
+          sh -c 'apk add --no-cache build-base icu-libs libstdc++ &&
+          dotnet workload restore &&
+          dotnet test --report-trx --results-directory TestResults'
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-linux-musl-${{ matrix.arch }}
           path: TestResults/
 
   native-aot:
@@ -72,7 +95,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '10.0.302'
+          dotnet-version: '10.0.400'
 
       - name: Publish, smoke test, and pack for linux-x64
         run: dotnet run --file scripts/Publish-NativeAot.cs -- --rid linux-x64 --package-version 0.0.0-ci

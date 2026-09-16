@@ -3,9 +3,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Batch;
 
 /// <summary>
-/// Runs lines through an engine without the terminal UI and streams the transcript to a
-/// writer. Used for scripts, <c>-e</c>, and piped input. A cell left open at the end of the
-/// input is run; a <c>.method</c> block left open is an error.
+/// Runs scripts, expressions, and piped input with physical source coordinates and streams the transcript to a writer.
 /// </summary>
 public sealed class BatchRunner
 {
@@ -41,9 +39,13 @@ public sealed class BatchRunner
     {
         ArgumentNullException.ThrowIfNull(lines);
         var ok = true;
+        var sourceIdentity = Guid.NewGuid().ToString("N");
+        var lineIndex = 0;
         foreach (var line in lines)
         {
-            var reply = await _engine.HandleAsync(line, cancellationToken).ConfigureAwait(false);
+            var start = line.Length - line.TrimStart().Length;
+            var location = new AnalysisLocation(sourceIdentity, lineIndex++, start, line.Length - start);
+            var reply = await _engine.HandleSourceAsync(line, location, cancellationToken).ConfigureAwait(false);
             ok &= reply.Succeeded;
             Write(reply);
             if (reply.PendingComparison is { } comparison)

@@ -67,6 +67,51 @@ public sealed class FrontEndProcessTests
     }
 
     /// <summary>
+    /// The quiet option preserves physical script lines while a quiet directive written in the script counts as source.
+    /// </summary>
+    /// <param name="quiet">Whether the CLI enables quiet output before running the script.</param>
+    /// <param name="scriptQuiet">Whether the script itself starts with a quiet directive.</param>
+    [TestMethod]
+    [DataRow(false, false)]
+    [DataRow(true, false)]
+    [DataRow(false, true)]
+    [DataRow(true, true)]
+    public async Task Script_QuietOptionPreservesSourceLines(bool quiet, bool scriptQuiet)
+    {
+        var directory = Directory.CreateTempSubdirectory("ilrepl-source-lines-").FullName;
+        try
+        {
+            var path = Path.Combine(directory, "failure.il");
+            string[] lines = ["// header", ".locals init (int32 value)", "ldstr \"wrong\"", "call int32 Math::Abs(int32)"];
+            if (scriptQuiet)
+            {
+                lines = [".quiet on", .. lines];
+            }
+
+            await File.WriteAllLinesAsync(path, lines, TestContext.CancellationToken);
+            string[] arguments = quiet ? ["--no-color", "--quiet", path] : ["--no-color", path];
+            var (code, stdout, stderr) = await RunAsync(arguments);
+            Assert.AreEqual(1, code, stderr + stdout);
+            Assert.Contains("argument 1: expected int32; actual string", stdout);
+            var producerLine = scriptQuiet ? 4 : 3;
+            Assert.Contains($"from line {producerLine}: ldstr \"wrong\"", stdout);
+            Assert.DoesNotContain($"from line {producerLine + 1}: ldstr \"wrong\"", stdout);
+            if (quiet || scriptQuiet)
+            {
+                Assert.DoesNotContain("┊ [", stdout);
+            }
+            else
+            {
+                Assert.Contains("┊ [", stdout);
+            }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// A block comment that spans lines inside a method reaches the host as one comment, and the
     /// text after its closing delimiter is assembled.
     /// </summary>
@@ -168,7 +213,6 @@ public sealed class FrontEndProcessTests
     [TestMethod]
     public async Task Pty_RunsTerminalUi()
     {
-        TestSkip.Unless(!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("ILREPL_PTY_TESTS") == "1", "PTY test runs on Unix by default");
         var ct = TestContext.CancellationToken;
         var recorder = new WorkloadRecorder();
         await using var terminal = Hex1bTerminal.CreateBuilder()
@@ -186,7 +230,7 @@ public sealed class FrontEndProcessTests
 
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
-        await auto.WaitUntilTextAsync("il[1]>");
+        await WaitForPromptAsync(terminal, run, ct);
 
         // What the process writes is what a terminal would see: the hardware caret is hidden and
         // no caret shape is ever asked for; the prompt paints its own caret cell.
@@ -214,26 +258,19 @@ public sealed class FrontEndProcessTests
     [TestMethod]
     public async Task Pty_NoHistory_WritesNoFile()
     {
-        TestSkip.Unless(!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("ILREPL_PTY_TESTS") == "1", "PTY test runs on Unix by default");
         var ct = TestContext.CancellationToken;
         var config = Directory.CreateTempSubdirectory("ilrepl-nohistory-").FullName;
         try
         {
             await using var terminal = Hex1bTerminal.CreateBuilder()
-                .WithPtyProcess(options =>
-                {
-                    // The child is started through env so the config directory reaches it.
-                    options.FileName = "/usr/bin/env";
-                    options.Arguments = ["XDG_CONFIG_HOME=" + config, "NO_COLOR=", Hosting.HostLocator.FindDotnet(), RepoPaths.FrontEndAssembly, "--no-history"];
-                    options.WorkingDirectory = RepoPaths.Root;
-                })
+                .WithPtyProcess(options => ConfigureHistoryProcess(options, config, noHistory: true))
                 .WithHeadless()
                 .WithDimensions(100, 30)
                 .Build();
 
             var run = terminal.RunAsync(ct);
             var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
-            await auto.WaitUntilTextAsync("il[1]>");
+            await WaitForPromptAsync(terminal, run, ct);
             await auto.TypeAsync("nop", ct: ct);
             await auto.EnterAsync(ct: ct);
             await auto.WaitUntilTextAsync("1 instruction");
@@ -254,19 +291,12 @@ public sealed class FrontEndProcessTests
     [TestMethod]
     public async Task Pty_History_PersistsBlockAcrossRuns()
     {
-        TestSkip.Unless(!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("ILREPL_PTY_TESTS") == "1", "PTY test runs on Unix by default");
         var ct = TestContext.CancellationToken;
         var config = Directory.CreateTempSubdirectory("ilrepl-history-").FullName;
         try
         {
             Hex1bTerminalBuilder Builder() => Hex1bTerminal.CreateBuilder()
-                .WithPtyProcess(options =>
-                {
-                    // The child is started through env so the config directory reaches it.
-                    options.FileName = "/usr/bin/env";
-                    options.Arguments = ["XDG_CONFIG_HOME=" + config, "NO_COLOR=", Hosting.HostLocator.FindDotnet(), RepoPaths.FrontEndAssembly];
-                    options.WorkingDirectory = RepoPaths.Root;
-                })
+                .WithPtyProcess(options => ConfigureHistoryProcess(options, config, noHistory: false))
                 .WithHeadless()
                 .WithDimensions(100, 30);
 
@@ -274,7 +304,7 @@ public sealed class FrontEndProcessTests
             {
                 var run = first.RunAsync(ct);
                 var auto = new Hex1bTerminalAutomator(first, defaultTimeout: TimeSpan.FromSeconds(30));
-                await auto.WaitUntilTextAsync("il[1]>");
+                await WaitForPromptAsync(first, run, ct);
                 foreach (var line in new[] { ".method int32 Twice(int32 n) {", "ldarg n", "ldc.i4 2", "mul", "ret", "}" })
                 {
                     await auto.TypeAsync(line, ct: ct);
@@ -295,7 +325,7 @@ public sealed class FrontEndProcessTests
             {
                 var run = second.RunAsync(ct);
                 var auto = new Hex1bTerminalAutomator(second, defaultTimeout: TimeSpan.FromSeconds(30));
-                await auto.WaitUntilTextAsync("il[1]>");
+                await WaitForPromptAsync(second, run, ct);
                 await auto.UpAsync(ct: ct);
                 await auto.WaitUntilTextAsync("editing 6 lines");
                 await auto.WaitUntilTextAsync("il[1]> .method int32 Twice(int32 n) {");
@@ -316,11 +346,8 @@ public sealed class FrontEndProcessTests
     /// A pasted method of two hundred lines goes through the real host in well under five seconds.
     /// </summary>
     [TestMethod]
-    // Measure the wall-clock budget without other tests launching and driving competing child processes.
     public async Task Pty_Pastes200LineMethod_CompletesWithinFiveSeconds()
     {
-        TestSkip.Unless(!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("ILREPL_PTY_TESTS") == "1",
-            "PTY test runs on Unix by default");
         var ct = TestContext.CancellationToken;
         await using var terminal = Hex1bTerminal.CreateBuilder()
             .WithPtyProcess(options =>
@@ -336,7 +363,7 @@ public sealed class FrontEndProcessTests
 
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
-        await auto.WaitUntilTextAsync("il[1]>");
+        await WaitForPromptAsync(terminal, run, ct);
         var lines = new List<string> { ".method int32 Big() {", "  ldc.i4 7" };
         lines.AddRange(Enumerable.Repeat("  nop", 196));
         lines.Add("  ret");
@@ -357,6 +384,57 @@ public sealed class FrontEndProcessTests
         await auto.WaitUntilTextAsync("= 7 : int32");
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         Assert.AreEqual(0, await run);
+    }
+
+    private static async Task WaitForPromptAsync(Hex1bTerminal terminal, Task<int> run, CancellationToken cancellationToken)
+    {
+        using var waiting = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var prompt = new Hex1bTerminalInputSequenceBuilder()
+            .WaitUntil(snapshot => snapshot.ContainsText("il[1]>"), TimeSpan.FromSeconds(30), "the initial prompt")
+            .Build().ApplyAsync(terminal, waiting.Token);
+        try
+        {
+            if (await Task.WhenAny(prompt, run) == run)
+            {
+                var exitCode = await run;
+                Assert.Fail($"The terminal process exited with code {exitCode} before displaying its prompt.");
+            }
+
+            await prompt;
+        }
+        finally
+        {
+            await waiting.CancelAsync();
+            try
+            {
+                using var snapshot = await prompt;
+            }
+            catch (OperationCanceledException) when (waiting.IsCancellationRequested)
+            {
+            }
+        }
+    }
+
+    private static void ConfigureHistoryProcess(Hex1bTerminalProcessOptions options, string config, bool noHistory)
+    {
+        string[] arguments = noHistory ? [RepoPaths.FrontEndAssembly, "--no-history"] : [RepoPaths.FrontEndAssembly];
+        options.WorkingDirectory = RepoPaths.Root;
+        if (OperatingSystem.IsWindows())
+        {
+            options.FileName = Hosting.HostLocator.FindDotnet();
+            options.Arguments = arguments;
+            options.Environment = new Dictionary<string, string>
+            {
+                ["XDG_CONFIG_HOME"] = config, ["TERM"] = "xterm-256color", ["NO_COLOR"] = "",
+            };
+        }
+        else
+        {
+            // Hex1b 0.165.0's Unix PTY inherits the environment instead of applying options.Environment.
+            options.FileName = "/usr/bin/env";
+            options.Arguments = ["XDG_CONFIG_HOME=" + config, "TERM=xterm-256color", "NO_COLOR=",
+                Hosting.HostLocator.FindDotnet(), .. arguments];
+        }
     }
 
     private async Task<(int Code, string StdOut, string StdErr)> RunAsync(string[] arguments, string? stdin = null)

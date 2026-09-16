@@ -50,6 +50,7 @@
   </ItemGroup>
 
   <Import Project="../../build/IlRepl.Host.targets" />
+  <Import Project="../../build/IlRepl.PtyTests.targets" />
 
   <ItemGroup>
     <Compile Include="../Shared/*.cs" Link="Shared/%(Filename)%(Extension)" />

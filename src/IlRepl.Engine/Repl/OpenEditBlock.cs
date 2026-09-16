@@ -1,3 +1,5 @@
+using IlRepl.Protocol;
+
 namespace IlRepl.Repl;
 
 /// <summary>
@@ -14,6 +16,11 @@ internal sealed class OpenEditBlock(string name)
     /// The method source accepted so far, excluding the outer .edit braces.
     /// </summary>
     internal List<string> Lines { get; } = [];
+
+    /// <summary>
+    /// Original source coordinates corresponding to the accepted edit lines, when supplied by the editor.
+    /// </summary>
+    internal List<AnalysisLocation?> Locations { get; } = [];
 
     /// <summary>
     /// The open source braces, initially the outer .edit brace.

@@ -159,6 +159,7 @@ internal sealed class EditingStack
                 MethodIsConstructor = method.IsConstructor,
                 MethodIsAbstract = method.IsAbstract,
                 MethodIsVirtual = method.IsVirtual,
+                MethodIsArrayAddress = RuntimeArrayMethods.IsAddress(method),
                 MethodAccessIsKnownValid = MemberEligibility.AccessProblem(
                     method, scope.Access, AccessFacts.From(scope)) is null,
                 DeclaringTypeIsAbstract = method.DeclaringType?.IsAbstract,

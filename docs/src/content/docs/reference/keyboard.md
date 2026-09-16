@@ -11,6 +11,7 @@ description: Keys in the terminal UI.
 | Ctrl+P, Ctrl+N | Walk history from any line of the buffer. |
 | Right | Accept the grey suffix when it would append exactly as shown; otherwise move the caret. |
 | PageUp, PageDown | Scroll the palette's detail pane. |
+| F1 | Open instruction or diagnostic help; press F1 or Escape to return to the editor. |
 | F8, Shift+F8 | Move to the next or previous diagnostic in the buffer. |
 | Escape | Dismiss the palette. |
 | Home, End, Left, Right | Move within the line; with Ctrl, by word. |
@@ -35,7 +36,12 @@ Operand matching ignores case and recognizes the capitals of a name: `wr` and `W
 `WriteLine`. The inserted spelling uses the correct case, qualification and quotes. Tab, Enter
 after moving in the palette, and a click accept the highlighted row as one undoable edit.
 The grey suffix appears only when that edit appends to the text already there. The pane under
-the rows shows the selected signature in full; PageUp and PageDown reveal the rest when it wraps.
+the rows shows the selected signature, stack effect, and instruction behavior. PageUp and PageDown reveal the rest when it wraps.
+
+In F1 help, PageUp and PageDown scroll, Tab and Shift+Tab select a source location or documentation
+link, and Enter opens it. F8 and Shift+F8 move between diagnostics. Only locations in the current
+buffer move the caret; accepted source and imported IL offsets remain visible for reference.
+The documentation URL stays visible for copying when a terminal cannot open links.
 
 A block goes to the engine line by line once Enter sends it. A paste lands in the editor and
 waits for Enter. A refused block comes back with the offending line selected, which may be

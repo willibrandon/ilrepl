@@ -4,9 +4,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Colours the buffer with the tokenizer, line by line, carrying an open <c>/* */</c> from the
-/// engine's state through the lines above the viewport. The result is cached by document version
-/// and viewport, so the frames between keystrokes reuse it.
+/// Colors the buffer and current-document diagnostics while preserving lexical state across viewport boundaries.
 /// </summary>
 public sealed class CilDecorationProvider : ITextDecorationProvider
 {
@@ -57,7 +55,9 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
     /// </summary>
     public DocumentPosition? Caret { get; set; }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Colors source tokens and underlines errors belonging to this document.
+    /// </summary>
     public IReadOnlyList<TextDecorationSpan> GetDecorations(int startLine, int endLine, IHex1bDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -92,7 +92,8 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
             }
         }
 
-        foreach (var diagnostic in Diagnostics.Where(d => d.Kind == AnalysisDiagnosticKind.Error))
+        foreach (var diagnostic in Diagnostics.Where(d => d.Kind == AnalysisDiagnosticKind.Error
+            && d.Explanation?.Source is null or { Kind: AnalysisSourceKind.Document }))
         {
             var location = diagnostic.Location;
             var line = location.Line + 1;

@@ -5,10 +5,13 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Tracks the evaluation stack using shared instruction transfer and validation rules.
+/// </summary>
+/// <remarks>
 /// A static, linear model of the evaluation stack with best-effort types. It runs before an
 /// instruction is accepted so underflows and arity mistakes are reported at the prompt, and it
 /// is what the stack echo after each line shows.
-/// </summary>
+/// </remarks>
 public sealed class StackSimulator
 {
     private readonly List<Type?> _items = [];
@@ -385,6 +388,7 @@ public sealed class StackSimulator
                     MethodIsConstructor = method.IsConstructor,
                     MethodIsAbstract = method.Declared?.Attributes.HasFlag(MethodAttributes.Abstract) ?? method.Method?.IsAbstract,
                     MethodIsVirtual = method.Declared?.Attributes.HasFlag(MethodAttributes.Virtual) ?? method.Method?.IsVirtual,
+                    MethodIsArrayAddress = RuntimeArrayMethods.IsAddress(method.Method),
                     MethodAccessIsKnownValid = MemberAccess.MethodVerdict(
                         method, context.Scope ?? AccessScope.Cell, context.Types, judgeAll: true) is null,
                     DeclaringTypeIsAbstract = method.DeclaringType?.IsAbstract,

@@ -87,7 +87,7 @@ public static class OpcodeTable
     /// <param name="opcode">The encoded opcode.</param>
     /// <returns>The opcode's purpose.</returns>
     public static string Describe(IlOpcode opcode) => opcode.IsSkipChecksPrefix
-        ? "omits the selected type, range, or null checks (unverifiable)" : Describe(opcode.Emit!.Value);
+        ? "permits skipping selected checks (unverifiable)" : Describe(opcode.Emit!.Value);
 
     /// <summary>
     /// The stack transition as ILAsm writes it: what is popped, an arrow, what is pushed.
@@ -226,7 +226,8 @@ public static class OpcodeTable
         ["shr"] = "shift right (arithmetic)", ["shr.un"] = "shift right (logical)", ["neg"] = "negate", ["not"] = "bitwise complement",
         ["conv.i1"] = "convert to int8", ["conv.i2"] = "convert to int16", ["conv.i4"] = "convert to int32", ["conv.i8"] = "convert to int64",
         ["conv.r4"] = "convert to float32", ["conv.r8"] = "convert to float64", ["conv.u4"] = "convert to uint32", ["conv.u8"] = "convert to uint64",
-        ["callvirt"] = "call virtual method on object", ["cpobj"] = "copy value type", ["ldobj"] = "load value type through pointer",
+        ["callvirt"] = "call instance method with virtual dispatch when applicable",
+        ["cpobj"] = "copy value type", ["ldobj"] = "load value type through pointer",
         ["ldstr"] = "push string literal", ["newobj"] = "allocate object and call constructor", ["castclass"] = "cast (throws on failure)", ["isinst"] = "type test (null when it fails)",
         ["conv.r.un"] = "convert unsigned integer to float", ["unbox"] = "unbox to value type address", ["throw"] = "throw exception",
         ["ldfld"] = "load instance field", ["ldflda"] = "load instance field address", ["stfld"] = "store instance field",
@@ -263,8 +264,9 @@ public static class OpcodeTable
         ["ldloc"] = "push local", ["ldloca"] = "push local address", ["stloc"] = "pop into local",
         ["localloc"] = "allocate stack memory", ["endfilter"] = "end exception filter",
         ["unaligned."] = "prefix: unaligned access", ["volatile."] = "prefix: volatile access", ["tail."] = "prefix: tail call",
-        ["initobj"] = "zero-initialize value type at address", ["constrained."] = "prefix: constrained callvirt", ["cpblk"] = "copy memory block",
+        ["initobj"] = "zero-initialize value type at address",
+        ["constrained."] = "prefix: constrained instance or static interface call", ["cpblk"] = "copy memory block",
         ["initblk"] = "fill memory block", ["rethrow"] = "rethrow current exception", ["sizeof"] = "push size of type",
-        ["refanytype"] = "typed reference to type handle", ["readonly."] = "prefix: readonly ldelema",
+        ["refanytype"] = "typed reference to type handle", ["readonly."] = "prefix: controlled-mutability array address",
     };
 }

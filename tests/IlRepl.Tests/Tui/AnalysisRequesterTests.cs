@@ -160,19 +160,22 @@ public sealed class AnalysisRequesterTests
     }
 
     /// <summary>
-    /// Ordinary diagnostic words remain whole when an explanation wraps to another terminal row.
+    /// Diagnostic words remain whole, including when a word exactly fills a terminal row.
     /// </summary>
+    /// <param name="width">The number of terminal columns available to the preview.</param>
     [TestMethod]
-    public async Task Diagnostics_WrapAtWordBoundaries()
+    [DataRow(21)]
+    [DataRow(24)]
+    public async Task Diagnostics_WrapAtWordBoundaries(int width)
     {
         await using var engine = new InProcessEngine();
         var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
         state.SetText("nop", 0);
         state.Analysis = new AnalysisReply(1, 1, 1, 1, null, false,
             [new("TEST", AnalysisDiagnosticKind.Error, "both incoming paths need compatible stacks", new("body", 0, 0, 3), [])]);
-        var rows = PromptDiagnostics.Lines(state, 24);
+        var rows = PromptDiagnostics.Lines(state, width);
         Assert.AreEqual("error on line 1: both incoming paths need compatible stacks", string.Join(' ', rows));
-        Assert.IsTrue(rows.All(row => DisplayWidth.GetStringWidth(row) <= 24));
+        Assert.IsTrue(rows.All(row => DisplayWidth.GetStringWidth(row) <= width));
     }
 
     /// <summary>
@@ -182,40 +185,101 @@ public sealed class AnalysisRequesterTests
     public async Task DiagnosticsArriving_KeepCompletionFocused()
     {
         var ct = TestContext.CancellationToken;
-        await using var engine = new CompletionEngine { HoldAnalysis = true };
-        engine.Immediate = new CompletionReply(CompletionKind.Members, 5, 11,
-            [new CompletionItem("WriteLine", "[] → void", "Console", false)
-            {
-                Kind = CompletionKind.Members, Insert = "Console::WriteLine()",
-            }], null, 1, false, engine.Status.Revision, "focus", 1, []);
-        PromptState prompt = null!;
-        Hex1bApp app = null!;
-        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, new Transcript(),
-            onApp: value => app = value, onPrompt: value => prompt = value).WithHeadless().WithDimensions(80, 24).Build();
-        var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
-        await auto.WaitUntilTextAsync("il[1]>");
-        await auto.TypeAsync("call Console::Wr", ct: ct);
-        await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("members 1/1")
-            && engine.Analyses.LastOrDefault()?.Request.Lines[0] == prompt.Text);
-        var focused = app.FocusedNode;
-        Assert.IsNotNull(focused);
-        var pending = engine.Analyses.Last();
-        pending.Answer.SetResult(new AnalysisReply(pending.Request.DocumentVersion, engine.Status.Revision, 1, engine.AssemblyVersion,
-            new AnalyzedStack(AnalyzedStackKind.Known, []), true,
-            [new("TEST", AnalysisDiagnosticKind.Incomplete, "finish the member name", new("document", 0, 5, 11), [])]));
-        await auto.WaitUntilTextAsync("finish the member name");
-        Assert.AreSame(focused, app.FocusedNode, "arriving diagnostics must retain the focused editor");
-        await auto.TabAsync(ct: ct);
-        await auto.WaitUntilAsync(_ => prompt.Text == "call Console::WriteLine()");
-        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
-        await run;
-        foreach (var request in engine.Analyses)
+        await using var engine = await HostPaths.StartEngineAsync(ct);
+        const string original = "call Environment::get_CurrentManagedTh";
+        const string expected = "call Environment::get_CurrentManagedThreadId()";
+        // Stabilize real RPC serialization before testing focus; a first diagnostic can load new searchable assemblies.
+        using (var warmup = CancellationTokenSource.CreateLinkedTokenSource(ct))
         {
-            request.Answer.TrySetCanceled(ct);
+            warmup.CancelAfter(AppTest.Timeout);
+            await engine.AnalyzeAsync(new(["pop", expected], 1, expected.Length, 1), warmup.Token);
+            CompletionReply completion;
+            AnalysisReply analysis;
+            do
+            {
+                completion = await engine.CompleteAsync(new(["pop", original], 1, original.Length, null, []), warmup.Token);
+                analysis = await engine.AnalyzeAsync(new(["pop", expected], 1, expected.Length, 1), warmup.Token);
+            }
+            while (completion.AssemblyVersion != analysis.AssemblyVersion || analysis.AssemblyVersion != engine.AssemblyVersion);
         }
 
-        await IlReplApp.SettleAsync(prompt);
+        PromptState prompt = null!;
+        Hex1bApp app = null!;
+        AnalysisRequester analyzer = null!;
+        var recorder = new FrameRecorder();
+        var adapter = new ScriptedPresentationAdapter(80, 24);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, new Transcript(),
+            onApp: value => app = value, onPrompt: value =>
+            {
+                prompt = value;
+                analyzer = value.Analyzer!;
+                // Attach the real analyzer after the completion palette has appeared.
+                value.Analyzer = null;
+            }).WithPresentation(adapter).AddPresentationFilter(recorder).Build();
+        recorder.Terminal = terminal;
+        using var terminalCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var run = terminal.RunAsync(terminalCancellation.Token);
+        try
+        {
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+            await auto.WaitUntilTextAsync("il[1]>");
+            await adapter.PasteAsync("pop\n" + original);
+            Hex1bNode? focused = null;
+            await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("members 1/1") && prompt.Text == "pop\n" + original
+                && recorder.Frames is [.., var frame] && frame.Contains("members 1/1")
+                && frame.CaretRow?.TrimEnd() == "  ...> " + expected && (focused = app.FocusedNode) is EditorNode,
+                description: "the complete member palette and focused editor are ready before analysis");
+            Assert.IsNull(prompt.Analysis);
+            var firstDiagnosticFrame = recorder.Count;
+            prompt.Analyzer = analyzer;
+            // With no definition provider, F12 only queues input and a render; a mid-frame Invalidate can be coalesced away.
+            await auto.KeyAsync(Hex1bKey.F12, ct: ct);
+
+            Hex1bNode? afterDiagnostic = null;
+            AnalysisReply? published = null;
+            await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("error on line 1:")
+                && snapshot.ContainsText("members 1/1") && recorder.Frames is [.., var frame]
+                && frame.Index >= firstDiagnosticFrame && frame.Contains("error on line 1:") && frame.Contains("members 1/1")
+                && prompt.Requester?.IsPending == false && (published = prompt.Analysis) is not null
+                && prompt.Completions is { } completion && prompt.Requester.Matches(prompt, completion)
+                && (afterDiagnostic = app.FocusedNode) is EditorNode,
+                description: "the real diagnostic renders above the palette with editor focus restored after reconciliation");
+            Assert.AreSame(focused, afterDiagnostic, "arriving diagnostics must retain the focused editor");
+            Assert.Contains(item => item.Code == "FLOW006" && item.Kind == AnalysisDiagnosticKind.Error && item.Location.Line == 0,
+                published!.Diagnostics);
+            Trace("before Tab");
+            await auto.TabAsync(ct: ct);
+            await auto.WaitUntilAsync(_ => prompt.Text == "pop\n" + expected,
+                description: "Tab accepts the original member completion without changing the diagnostic's source");
+            await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+            await run;
+        }
+        finally
+        {
+            await terminalCancellation.CancelAsync();
+            try
+            {
+                await run;
+            }
+            catch (OperationCanceledException) when (terminalCancellation.IsCancellationRequested)
+            {
+            }
+            Trace("after app stopped");
+            prompt.Analyzer = analyzer;
+            await IlReplApp.SettleAsync(prompt);
+        }
+
+        void Trace(string stage)
+        {
+            var snapshot = prompt.Completions;
+            TestContext.WriteLine($"{stage}: text=[{prompt.Text}], caret={prompt.Editor.Cursor.Position}, palette={prompt.Palette}");
+            TestContext.WriteLine($"focus={app.FocusedNode?.GetType().Name}, capture={app.CapturedNode?.GetType().Name}");
+            TestContext.WriteLine($"pending={prompt.Requester?.IsPending}, engine={engine.AssemblyVersion}, "
+                + $"completion={snapshot?.Reply.AssemblyVersion}, analysis={prompt.Analysis?.AssemblyVersion}");
+            TestContext.WriteLine($"matches={snapshot is not null && prompt.Requester?.Matches(prompt, snapshot) == true}, "
+                + $"candidates={PromptWidget.Candidates(prompt, engine.Catalog).Count}, "
+                + $"pending display={prompt.PendingDisplay is not null}");
+        }
     }
 
     /// <summary>

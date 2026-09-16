@@ -1,5 +1,4 @@
 using System.Reflection.Emit;
-using IlRepl.Protocol;
 
 namespace IlRepl.Engine.Binding;
 
@@ -97,9 +96,9 @@ internal static class SymbolFlowAnalysis
         var returnType = body.Signature?.ReturnType;
         var step = new ControlFlowAnalysis<TypeSymbol>(Rules(scope)).Run(graph,
             SymbolIdentity.Equal(returnType, TypeSymbol.Void) ? null : returnType, body.Signature is null);
-        if (step.Diagnostics.Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error))
+        if (step.Diagnostics.Count > 0)
         {
-            // Reanalyze the full body so errors retain the original producer locations and graph context.
+            // Reanalyze the full body so every explanation retains its original producer locations and graph context.
             return false;
         }
 
@@ -121,7 +120,8 @@ internal static class SymbolFlowAnalysis
                     }
                 }
 
-                return value with { Origins = [position] };
+                // Dup copies the value record while preserving its producer rather than creating a new value.
+                return value with { Origins = instruction.Op == OpCodes.Dup ? values[^1].Origins : [position] };
             }
 
             return current with { Values = [.. currentValues.Select(RestoreValue)] };

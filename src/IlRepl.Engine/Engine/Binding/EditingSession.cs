@@ -29,35 +29,21 @@ public sealed partial class EditingSession : IDisposable
     {
     }
 
+    /// <summary>
+    /// Replays accepted source with its original coordinates while retaining a distinct editor-document identity.
+    /// </summary>
     internal EditingSession(EditingSeed seed)
     {
         _seed = seed;
         _state = EmptyState();
         try
         {
+            _replaySourceKind = AnalysisSourceKind.Accepted;
             _state.Methods.AddRange(_seed.Snapshot.SessionMethods);
             _state.Definitions.AddRange(_seed.Definitions);
-            foreach (var declaration in _seed.CellDeclarations)
-            {
-                AddLine(declaration);
-            }
-
-            foreach (var line in _seed.CellLines)
-            {
-                AddLine(line);
-            }
-
-            foreach (var line in _seed.OpenLines)
-            {
-                if (line.StartsWith(".edit ", StringComparison.Ordinal))
-                {
-                    OpenEdit(line[6..]);
-                }
-                else
-                {
-                    AddLine(line);
-                }
-            }
+            ReplayAcceptedLines(_seed.CellDeclarations, _seed.CellDeclarationLocations);
+            ReplayAcceptedLines(_seed.CellLines, _seed.CellLocations);
+            ReplayAcceptedLines(_seed.OpenLines, _seed.OpenLocations);
 
             _state.InBlockComment = _seed.InBlockComment;
             _state.TypeArguments = _seed.TypeArguments;
@@ -67,6 +53,35 @@ public sealed partial class EditingSession : IDisposable
         {
             _seed.Dispose();
             throw;
+        }
+        finally
+        {
+            _replaySourceKind = null;
+            _replayLocation = null;
+        }
+    }
+
+    private void ReplayAcceptedLines(IReadOnlyList<string> lines, IReadOnlyList<AnalysisLocation?> locations)
+    {
+        for (var index = 0; index < lines.Count; index++)
+        {
+            _replayLocation = index < locations.Count ? locations[index] : null;
+            var inComment = _state.InBlockComment;
+            var kind = CilLexer.Classify(lines[index], ref inComment, out var line);
+            _state.InBlockComment = inComment;
+            if (kind != SourceLineKind.Text)
+            {
+                continue;
+            }
+
+            if (line.StartsWith(".edit ", StringComparison.Ordinal))
+            {
+                OpenEdit(line[6..]);
+            }
+            else
+            {
+                AddLine(line);
+            }
         }
     }
 

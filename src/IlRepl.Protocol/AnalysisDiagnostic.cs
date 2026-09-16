@@ -13,4 +13,10 @@ public sealed record AnalysisDiagnostic(
     AnalysisDiagnosticKind Kind,
     string Message,
     AnalysisLocation Location,
-    IReadOnlyList<AnalysisRelatedLocation> Related);
+    IReadOnlyList<AnalysisRelatedLocation> Related)
+{
+    /// <summary>
+    /// The checked requirement and the established stack values that explain this finding.
+    /// </summary>
+    public DiagnosticExplanation? Explanation { get; init; }
+}

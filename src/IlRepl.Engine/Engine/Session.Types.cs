@@ -6,11 +6,14 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Manages type blocks, their member bodies, and complete families of session types.
+/// </summary>
+/// <remarks>
 /// The <c>.class</c> half of the session: type blocks, their members, and the families they
 /// commit. While a family is open, every line goes to it; a member method inside it takes its
 /// body lines the way a session method does, and closing the outermost brace commits the whole
 /// family at once.
-/// </summary>
+/// </remarks>
 public sealed partial class Session
 {
     private static readonly string[] AccessorWords = [".get", ".set", ".other", ".addon", ".removeon", ".fire"];
@@ -127,6 +130,11 @@ public sealed partial class Session
 
     private LineResult OpenTypeBlock(string spec, string line)
     {
+        if (_openType is null)
+        {
+            _familySourceLocations.Clear();
+        }
+
         var enclosing = _openType;
         var header = TypeHeaderParser.Parse(spec, nested: enclosing is not null);
         if (enclosing is null && _types.Any(t => t.FullName == (header.Namespace.Length == 0 ? header.Name : header.Namespace + "." + header.Name)))
@@ -1524,14 +1532,15 @@ public sealed partial class Session
         return true;
     }
 
-    private void ReplayFamily(string headerLine, IReadOnlyList<string> lines)
+    private void ReplayFamily(string headerLine, List<string> lines)
     {
         // Stored lines hold no comments; they are replayed as they are.
+        var locations = _familySourceLocations.ToDictionary();
         var text = headerLine.Trim();
         OpenTypeBlock(text[".class".Length..], text);
-        foreach (var line in lines)
+        for (var index = 0; index < lines.Count; index++)
         {
-            AddTypeLine(NormalizedLine.FromText(line));
+            AddTextLine(NormalizedLine.FromText(lines[index]) with { Location = locations.GetValueOrDefault(index) });
         }
     }
 

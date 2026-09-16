@@ -2,6 +2,9 @@ using IlRepl.Protocol;
 
 namespace IlRepl.Engine.Binding;
 
+/// <summary>
+/// Analyzes unsent documents and presents validated stack facts and instruction help at the caret.
+/// </summary>
 public sealed partial class EditingSession
 {
     /// <summary>
@@ -54,6 +57,7 @@ public sealed partial class EditingSession
         var caretBindingsStale = false;
         var loadLine = -1;
         var positions = new List<(object? Body, int Node, bool HasBody, bool BindingsStale)>();
+        var sourceHelp = new List<InstructionHelp?>();
         AnalyzedDocument = null;
         try
         {
@@ -65,6 +69,7 @@ public sealed partial class EditingSession
                     var stalePosition = (Body: (object?)null, Node: 0,
                         HasBody: _state.Method is not null || _state.OpenTypes.Count == 0, BindingsStale: true);
                     positions.Add(stalePosition);
+                    sourceHelp.Add(null);
                     if (line == request.Line)
                     {
                         hasBody = stalePosition.HasBody;
@@ -80,15 +85,23 @@ public sealed partial class EditingSession
                 }
 
                 var declaration = false;
+                InstructionHelp? help = null;
                 if (line < request.Lines.Count)
                 {
                     var comment = _state.InBlockComment;
                     var kind = CilLexer.Classify(request.Lines[line], ref comment, out var source);
                     declaration = kind == SourceLineKind.Text && IsDeclarationLine(source);
+                    if (kind == SourceLineKind.Text && !declaration)
+                    {
+                        var remainder = InstructionParser.SplitLabels(source).Remainder;
+                        var end = remainder.IndexOfAny([' ', '\t']);
+                        help = InstructionReference.Find(end < 0 ? remainder : remainder[..end]);
+                    }
                 }
                 var bodyPosition = (Body: (object?)_state.Body.AnalysisIdentity, Node: _state.Body.FlowNodes.Count,
                     HasBody: !declaration && (_state.Method is not null || _state.OpenTypes.Count == 0), BindingsStale: false);
                 positions.Add(bodyPosition);
+                sourceHelp.Add(help);
                 _analysisBodies.TryAdd(_state.Body.AnalysisIdentity, _state.Body);
                 if (line == request.Line)
                 {
@@ -124,9 +137,12 @@ public sealed partial class EditingSession
                 _analysisBodies.TryAdd(caretBody.AnalysisIdentity, caretBody);
             }
 
+            var helpRules = new Dictionary<object, FlowTypeRules<TypeSymbol>>();
             foreach (var body in _analysisBodies.Values)
             {
-                body.Analysis = await SymbolFlowAnalysis.RunAsync(body, Scope(body), cancellationToken).ConfigureAwait(false);
+                var scope = Scope(body);
+                helpRules.Add(body.AnalysisIdentity, SymbolFlowAnalysis.Rules(scope));
+                body.Analysis = await SymbolFlowAnalysis.RunAsync(body, scope, cancellationToken).ConfigureAwait(false);
             }
 
             var result = caretBindingsStale ? null : caretBody.Analysis!;
@@ -161,7 +177,13 @@ public sealed partial class EditingSession
                 && caretBody.FlowNodes[caretPosition] is { Instruction: not null, Synthetic: false };
             var reply = new AnalysisReply(request.DocumentVersion, Revision, _identity, 0,
                 hasBody ? stack : null, instruction,
-                diagnostics.OrderBy(diagnostic => diagnostic.Location.Line).ThenBy(diagnostic => diagnostic.Code).ToArray());
+                diagnostics.OrderBy(diagnostic => diagnostic.Location.Line).ThenBy(diagnostic => diagnostic.Code).ToArray())
+            {
+                InstructionHelp = instruction
+                    ? InstructionReference.For(caretBody.FlowNodes, caretPosition,
+                        helpRules[caretBody.AnalysisIdentity], incoming, ReturnArity(caretBody), result!.After[caretPosition])
+                    : sourceHelp.ElementAtOrDefault(fromCaret ? 0 : request.Line),
+            };
             if (!fromCaret)
             {
                 var presentations = positions.Select((position, line) =>
@@ -169,7 +191,7 @@ public sealed partial class EditingSession
                     if (position.BindingsStale)
                     {
                         var unknown = position.HasBody ? new AnalyzedStack(AnalyzedStackKind.Unknown, [], true) : null;
-                        return (unknown, false);
+                        return (unknown, false, (InstructionHelp?)null);
                     }
 
                     var body = _analysisBodies[position.Body!];
@@ -179,7 +201,11 @@ public sealed partial class EditingSession
                         state?.Values?.Select(value => EditingStack.Name(value.Type)).ToArray() ?? [], analysis.Incomplete) : null;
                     var beforeInstruction = position.Node < body.FlowNodes.Count && body.FlowNodes[position.Node].Location.Line == line
                         && body.FlowNodes[position.Node] is { Instruction: not null, Synthetic: false };
-                    return (display, beforeInstruction);
+                    var help = beforeInstruction
+                        ? InstructionReference.For(body.FlowNodes, position.Node,
+                            helpRules[body.AnalysisIdentity], state, ReturnArity(body), analysis.After[position.Node])
+                        : sourceHelp[line];
+                    return (display, beforeInstruction, help);
                 }).ToArray();
                 AnalyzedDocument = new AnalyzedDocument([.. request.Lines], reply, presentations);
             }
@@ -197,6 +223,9 @@ public sealed partial class EditingSession
             _documentRaw = "";
         }
     }
+
+    private static int? ReturnArity(EditingBody body) => body.Signature is null ? null
+        : SymbolIdentity.Equal(body.Signature.ReturnType, TypeSymbol.Void) ? 0 : 1;
 
     private static readonly string[] s_declarationDirectives =
     [

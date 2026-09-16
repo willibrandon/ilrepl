@@ -4,6 +4,9 @@ using IlRepl.Protocol;
 
 namespace IlRepl.Tui;
 
+/// <summary>
+/// Presents complete instruction signatures and contextual explanations in the completion palette.
+/// </summary>
 public sealed partial record PromptWidget
 {
     /// <summary>
@@ -30,9 +33,32 @@ public sealed partial record PromptWidget
     public static IReadOnlyList<string> DetailLines(PromptState state, IReadOnlyList<CompletionItem> catalog, int width)
     {
         var candidates = DisplayCandidates(state, catalog);
-        return candidates.Count > 0
-            && candidates[Math.Clamp(state.SelectedIndex, 0, candidates.Count - 1)].FullDetail is { Length: > 0 } detail
-                ? PaletteText.Wrap(detail, Math.Max(1, (width <= 0 ? 80 : width) - 2)) : [];
+        if (candidates.Count == 0)
+        {
+            return [];
+        }
+
+        var item = candidates[Math.Clamp(state.SelectedIndex, 0, candidates.Count - 1)];
+        var details = new List<string>();
+        if (item.FullDetail is { Length: > 0 } detail)
+        {
+            details.Add(detail);
+        }
+
+        if (item.InstructionHelp is { } help)
+        {
+            if (item.FullDetail is null)
+            {
+                details.Add(help.Syntax);
+            }
+
+            details.Add("Stack effect: " + help.StackEffect);
+            details.Add(help.Explanation);
+            details.AddRange(help.Notes);
+            details.Add("F1 help · " + help.DocumentationUrl);
+        }
+
+        return details.SelectMany(detail => PaletteText.WrapWords(detail, Math.Max(1, (width <= 0 ? 80 : width) - 2))).ToArray();
     }
 
     private static BorderWidget BuildPalette(
@@ -85,9 +111,9 @@ public sealed partial record PromptWidget
                 }));
         }
 
-        if (fit.DetailRows > 1 && candidates[state.SelectedIndex].FullDetail is { } detail)
+        if (fit.DetailRows > 1)
         {
-            var wrapped = PaletteText.Wrap(detail, innerWidth);
+            var wrapped = DetailLines(state, candidates, width);
             var shown = fit.DetailRows - 1;
             state.DetailScroll = Math.Clamp(state.DetailScroll, 0, Math.Max(0, wrapped.Count - shown));
             var title = wrapped.Count > shown ? $"detail {state.DetailScroll + 1}/{wrapped.Count - shown + 1}  PgUp/PgDn" : "detail";

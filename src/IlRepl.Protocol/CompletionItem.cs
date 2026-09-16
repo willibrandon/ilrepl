@@ -12,6 +12,12 @@ namespace IlRepl.Protocol;
 public sealed record CompletionItem(string Name, string Detail, string Description, bool TakesOperand)
 {
     /// <summary>
+    /// Explains the instruction being completed, including its resolved stack effect when available.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public InstructionHelp? InstructionHelp { get; init; }
+
+    /// <summary>
     /// The insertion spelling, or null to insert the label.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

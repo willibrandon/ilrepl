@@ -6,9 +6,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// What the prompt keeps between frames: the editor and its document, the history, the palette's
-/// selection, the submission in flight, and the queue other threads post to. It lives above the
-/// widget so the status bar, the frame's drain, and the key bindings all see the same thing.
+/// Keeps the editor, history, completion, and pending work shared by the prompt, status bar, and input bindings.
 /// </summary>
 public sealed partial class PromptState
 {
@@ -27,6 +25,7 @@ public sealed partial class PromptState
         ArgumentNullException.ThrowIfNull(history);
         ArgumentNullException.ThrowIfNull(tokenizer);
         History = history;
+        Tokenizer = tokenizer;
         Editor = new EditorState(new Hex1bDocument("")) { TabSize = AutoIndent.Unit.Length };
         Highlighter = new CilDecorationProvider(tokenizer);
         Commands = tokenizer.Vocabulary.Commands;
@@ -51,6 +50,11 @@ public sealed partial class PromptState
     /// Colours the buffer.
     /// </summary>
     public CilDecorationProvider Highlighter { get; }
+
+    /// <summary>
+    /// Shares the editor's vocabulary and token colors with contextual help.
+    /// </summary>
+    internal CilTokenizer Tokenizer { get; }
 
     /// <summary>
     /// The dot-words that are commands, whose arguments hold no brace that counts.

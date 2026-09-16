@@ -78,12 +78,25 @@
     let lastMessageAt = 0;
     let readyAt = 0;
     let restartTimer = null;
+    let documentationUrl = null;
+    let helpSequence = 0;
+    let helpActive = false;
+    let helpPending = false;
+    const helpQueue = [];
+    const resetHelp = () => {
+      documentationUrl = null;
+      helpSequence = 0;
+      helpActive = false;
+      helpPending = false;
+      helpQueue.length = 0;
+    };
 
     const sendResize = () => { if (worker) worker.postMessage({ type: 'resize', cols: term.cols, rows: term.rows }); };
 
     const stopWorker = () => {
       if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
       comparisons.stop();
+      resetHelp();
       if (worker) {
         worker.onmessage = null;
         worker.onerror = null;
@@ -132,6 +145,17 @@
         const msg = e.data;
         if (msg.type === 'output') {
           term.write(new Uint8Array(msg.data));
+        } else if (msg.type === 'documentation-target') {
+          if (msg.sequence === helpSequence) {
+            helpActive = msg.active === true;
+            helpPending = false;
+            documentationUrl = typeof msg.url === 'string'
+              && /^https:\/\/ilrepl\.dev\/reference\/opcodes\/#[-a-z0-9]+$/.test(msg.url) ? msg.url : null;
+            while (!helpPending && helpQueue.length) {
+              const next = helpQueue.shift();
+              send(next.text, next.binary);
+            }
+          }
         } else if (msg.type === 'comparison-run') {
           comparisons.run(msg, worker);
         } else if (msg.type === 'comparison-cancel') {
@@ -152,6 +176,7 @@
           // Ctrl+Q or .quit. The worker starts the next session itself; only the screen is cleared.
           window.ilreplReady = false;
           window.ilreplLastRestart = 'quit';
+          resetHelp();
           readyAt = 0;
           setStatus('Restarting');
           term.reset();
@@ -185,22 +210,34 @@
       });
     }
 
-    const send = (text) => {
+    const send = (text, binary = false) => {
       if (!worker) return;
-      const bytes = new TextEncoder().encode(text);
-      worker.postMessage({ type: 'input', data: btoa(String.fromCharCode(...bytes)) });
+      if (helpPending) {
+        helpQueue.push({ text, binary });
+        return;
+      }
+      // Wait for an actual UI action, not a raw-byte read, before enabling a new link.
+      const helpKey = text === '\x1bOP' || text === '\x1b[11~'
+        || (helpActive && ['\t', '\x1b[Z', '\r', '\x1b', '\x1b[19~', '\x1b[19;2~'].includes(text));
+      if (helpKey) {
+        helpSequence++;
+        helpPending = true;
+      }
+      documentationUrl = null;
+      const data = binary ? text : String.fromCharCode(...new TextEncoder().encode(text));
+      worker.postMessage({ type: 'input', data: btoa(data) });
     };
-    term.onData(send);
-    term.onBinary((data) => { if (worker) worker.postMessage({ type: 'input', data: btoa(data) }); });
+    term.onData((text) => send(text));
+    term.onBinary((data) => send(data, true));
     term.onResize(() => sendResize());
     container.addEventListener('keydown', (event) => {
-      const tab = event.key === 'Tab' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey;
+      const tab = event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey;
       const interrupt = event.key.toLowerCase() === 'c' && event.ctrlKey && !event.shiftKey && !event.altKey
         && !event.metaKey && !term.hasSelection();
       if (tab || interrupt) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        send(tab ? '\t' : '\x03');
+        send(tab ? (event.shiftKey ? '\x1b[Z' : '\t') : '\x03');
       }
     }, true);
     let resizeTimer = null;
@@ -241,6 +278,23 @@
         e.preventDefault();
         return false;
       }
+      if (e.type === 'keydown' && helpPending && key === 'enter'
+        && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        // Preserve queued source/editor actions, but never defer a browser popup beyond its gesture.
+        send('\r');
+        swallowed = key;
+        e.preventDefault();
+        return false;
+      }
+      if (e.type === 'keydown' && documentationUrl && key === 'enter'
+        && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        // Opening here retains the browser's user gesture; a worker round trip would lose it.
+        window.open(documentationUrl, '_blank', 'noopener,noreferrer');
+        swallowed = key;
+        e.preventDefault();
+        return false;
+      }
+      if (e.type === 'keydown' && key === 'f1') e.preventDefault();
       if (e.type !== 'keydown' || e.altKey || !term.hasSelection()) return true;
       const copies = ((e.ctrlKey || e.metaKey) && key === 'c') || (!e.ctrlKey && !e.metaKey && key === 'y');
       if (!copies) return true;

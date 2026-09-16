@@ -51,6 +51,11 @@ internal sealed partial class FlowGraph<T> where T : class
     public List<AnalysisDiagnostic> Diagnostics { get; } = [];
 
     /// <summary>
+    /// Retains stack-shape requirements and affected slots for graph-level diagnostics.
+    /// </summary>
+    public Dictionary<(int Position, string Code), StackProblem> StackProblems { get; } = [];
+
+    /// <summary>
     /// The type that declares the analyzed method, or null for the cell and session methods.
     /// </summary>
     public T? DeclaringType { get; }
@@ -309,9 +314,9 @@ internal sealed partial class FlowGraph<T> where T : class
     {
         foreach (var section in Sections.Values.Where(section => section.Kind == BlockKind.Try))
         {
-            if (before[section.Start]?.Values is { Length: > 0 })
+            if (before[section.Start]?.Values is { Length: > 0 } values)
             {
-                Report(section.Start, "FLOW016", AnalysisDiagnosticKind.Error, "a try region must begin with an empty stack");
+                ReportEmptyStack(section.Start, "FLOW016", "a try region must begin with an empty stack", values.Length);
             }
         }
 
@@ -344,10 +349,11 @@ internal sealed partial class FlowGraph<T> where T : class
         foreach (var target in backward)
         {
             if (!forward.Contains(target) && !Seeds.Keys.Any(seed => InstructionAt(seed) == target)
-                && before[target]?.Values is { Length: > 0 })
+                && before[target]?.Values is { Length: > 0 } values)
             {
-                Report(target, "FLOW017", AnalysisDiagnosticKind.Error,
-                    "a backward branch carrying values needs a predecessor at a lower instruction offset (ECMA-335 III.1.7.5)");
+                ReportEmptyStack(target, "FLOW017",
+                    "a backward branch carrying values needs a predecessor at a lower instruction offset (ECMA-335 III.1.7.5)",
+                    values.Length);
             }
         }
     }
@@ -633,7 +639,7 @@ internal sealed partial class FlowGraph<T> where T : class
                     || op is "ldfld" or "stfld" or "ldobj" or "stobj" or "initblk" or "cpblk";
                 var allowed = name switch
                 {
-                    "readonly." => op == "ldelema",
+                    "readonly." => op == "ldelema" || op is "call" or "callvirt" && instruction.MethodIsArrayAddress,
                     "constrained." => op is "callvirt" or "call" or "ldftn",
                     "tail." => op is "call" or "callvirt" or "calli",
                     "volatile." => memory || op is "ldsfld" or "stsfld",
@@ -711,4 +717,11 @@ internal sealed partial class FlowGraph<T> where T : class
 
     private void Report(int index, string code, AnalysisDiagnosticKind kind, string message) =>
         Diagnostics.Add(new AnalysisDiagnostic(code, kind, message, Nodes[index].Location, []));
+
+    private void ReportEmptyStack(int index, string code, string message, int count)
+    {
+        Report(index, code, AnalysisDiagnosticKind.Error, message);
+        StackProblems[(index, code)] = new StackProblem(message, "an empty stack",
+            Enumerable.Range(0, count).Select(slot => new StackRequirement(slot, "stack slot " + slot, "an empty stack")).ToArray());
+    }
 }

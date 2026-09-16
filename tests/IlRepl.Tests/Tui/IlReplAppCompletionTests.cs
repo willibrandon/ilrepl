@@ -82,28 +82,48 @@ public sealed class IlReplAppCompletionTests
         }
 
         var ct = TestContext.CancellationToken;
-        await using var engine = remote ? await HostPaths.StartEngineAsync(ct) : (IReplEngine)new InProcessEngine();
-        var transcript = new Transcript();
-        PromptState prompt = null!;
-        await using var terminal = AppTest.Build(engine, transcript, configure: builder => builder.WithMouse(),
-            onPrompt: value => prompt = value);
-        var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
-        await auto.WaitUntilTextAsync("il[1]>");
         const string label = "il[1]> ";
         const string original = "call Environment::get_CurrentManagedTh";
         const string expected = "call Environment::get_CurrentManagedThreadId()";
+        await using var engine = remote ? await HostPaths.StartEngineAsync(ct) : (IReplEngine)new InProcessEngine();
+        if (remote)
+        {
+            // Warm the real RPC paths before testing acceptance; first serialization can load searchable assemblies.
+            using var warmup = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            warmup.CancelAfter(AppTest.Timeout);
+            CompletionReply completion;
+            AnalysisReply analysis;
+            do
+            {
+                completion = await engine.CompleteAsync(new CompletionRequest([original], 0, original.Length, null, []), warmup.Token);
+                analysis = await engine.AnalyzeAsync(new AnalysisRequest([expected], 0, expected.Length, 1), warmup.Token);
+            }
+            while (completion.AssemblyVersion != analysis.AssemblyVersion || analysis.AssemblyVersion != engine.AssemblyVersion);
+        }
+
+        var transcript = new Transcript();
+        var recorder = new FrameRecorder();
+        PromptState prompt = null!;
+        await using var terminal = AppTest.Build(engine, transcript,
+            configure: builder => builder.AddPresentationFilter(recorder).WithMouse(), onPrompt: value => prompt = value);
+        recorder.Terminal = terminal;
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        await auto.WaitUntilTextAsync("il[1]>");
+        var firstFrame = recorder.Count;
         await auto.TypeAsync(original, ct: ct);
-        // Automation runs outside the UI thread. Read its immutable snapshots, not the editor or requester being updated.
-        await auto.WaitUntilAsync(snapshot => AppTest.PromptRow(snapshot, 0) == label + expected
-            && AppTest.CaretAt(snapshot, label.Length + original.Length, 0)
-            && snapshot.ContainsText("members 1/1"), description: "the bound property getter appears");
+        // Raw snapshots can show part of a synchronized update; also require a completed frame after the action.
+        await auto.WaitUntilAsync(snapshot => Ready(snapshot, original.Length, palette: true),
+            description: "the bound property getter appears");
+        firstFrame = recorder.Count;
         switch (acceptance)
         {
             case "enter":
                 await auto.DownAsync(ct: ct);
-                await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("members 1/1")
-                    && snapshot.ContainsText("Enter accepts"), description: "Down selects completion acceptance");
+                await auto.WaitUntilAsync(snapshot => Ready(snapshot, original.Length, palette: true)
+                    && snapshot.ContainsText("Enter accepts")
+                    && recorder.Frames[^1].Contains("Enter accepts"), description: "Down selects completion acceptance");
+                firstFrame = recorder.Count;
                 await auto.EnterAsync(ct: ct);
                 break;
             case "right":
@@ -111,15 +131,13 @@ public sealed class IlReplAppCompletionTests
                 break;
             case "click":
                 var row = -1;
-                using (var snapshot = terminal.CreateSnapshot())
+                var frame = recorder.Frames[^1];
+                for (var index = 0; index < frame.Height; index++)
                 {
-                    for (var index = 0; index < snapshot.Height; index++)
+                    if (frame.Lines[index].Contains('❯'))
                     {
-                        if (snapshot.GetLine(index).Contains('❯'))
-                        {
-                            row = index;
-                            break;
-                        }
+                        row = index;
+                        break;
                     }
                 }
 
@@ -131,17 +149,30 @@ public sealed class IlReplAppCompletionTests
                 break;
         }
 
-        await auto.WaitUntilAsync(snapshot => AppTest.PromptRow(snapshot, 0) == label + expected
-            && AppTest.CaretAt(snapshot, label.Length + expected.Length, 0)
-            && !snapshot.ContainsText("members"), description: "the operand is accepted and the palette is closed");
+        await auto.WaitUntilAsync(snapshot => Ready(snapshot, expected.Length, palette: false),
+            description: "the operand is accepted and the palette is closed");
+        firstFrame = recorder.Count;
         await auto.Ctrl().KeyAsync(Hex1bKey.Z, ct: ct);
-        await auto.WaitUntilAsync(snapshot => AppTest.PromptRow(snapshot, 0) == label + expected
-            && AppTest.CaretAt(snapshot, label.Length + original.Length, 0)
-            && snapshot.ContainsText("members 1/1"), description: "one undo restores the prefix, caret, and completion");
+        await auto.WaitUntilAsync(snapshot => Ready(snapshot, original.Length, palette: true),
+            description: "one undo restores the prefix, caret, and completion");
+        firstFrame = recorder.Count;
         await auto.TabAsync(ct: ct);
-        await auto.WaitUntilAsync(snapshot => AppTest.PromptRow(snapshot, 0) == label + expected
-            && AppTest.CaretAt(snapshot, label.Length + expected.Length, 0)
-            && !snapshot.ContainsText("members"), description: "the restored operand is accepted again");
+        await auto.WaitUntilAsync(snapshot => Ready(snapshot, expected.Length, palette: false),
+            description: "the restored operand is accepted again");
+
+        bool Ready(Hex1bTerminalSnapshot snapshot, int caret, bool palette)
+        {
+            var frames = recorder.Frames;
+            var completed = frames.Count == 0 ? null : frames[^1];
+            return AppTest.PromptRow(snapshot, 0) == label + expected
+                && AppTest.CaretAt(snapshot, label.Length + caret, 0)
+                && (palette ? snapshot.ContainsText("members 1/1") : !snapshot.ContainsText("members"))
+                && completed is not null && completed.Index >= firstFrame
+                && completed.CaretRow?.TrimEnd() == label + expected
+                && completed.Caret == AppTest.Caret(snapshot)
+                && (palette ? completed.Contains("members 1/1") : !completed.Contains("members"));
+        }
+
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("stack [int32]");
         await auto.TypeAsync("ret", ct: ct);

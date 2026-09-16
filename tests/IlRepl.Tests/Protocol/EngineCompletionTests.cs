@@ -29,7 +29,17 @@ public sealed class EngineCompletionTests
         var beforeRemote = remote.Status;
         var left = await local.CompleteAsync(request, TestContext.CancellationToken);
         var right = await remote.CompleteAsync(request, TestContext.CancellationToken);
-        Assert.AreSequenceEqual(left.Items, right.Items);
+        Assert.HasCount(left.Items.Count, right.Items);
+        for (var index = 0; index < left.Items.Count; index++)
+        {
+            var localItem = left.Items[index];
+            var remoteItem = right.Items[index];
+            Assert.AreEqual(localItem with { InstructionHelp = null }, remoteItem with { InstructionHelp = null });
+            Assert.IsNotNull(localItem.InstructionHelp);
+            Assert.IsNotNull(remoteItem.InstructionHelp);
+            Assert.AreEqual(localItem.InstructionHelp with { Notes = remoteItem.InstructionHelp.Notes }, remoteItem.InstructionHelp);
+            Assert.AreSequenceEqual(localItem.InstructionHelp.Notes, remoteItem.InstructionHelp.Notes);
+        }
         Assert.AreEqual(left.ReplaceStart, right.ReplaceStart);
         Assert.AreEqual(left.ReplaceLength, right.ReplaceLength);
         Assert.AreEqual(beforeLocal, local.Status);

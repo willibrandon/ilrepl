@@ -127,6 +127,7 @@ public sealed partial class EditingSession
             AddFlowNode(body, new FlowNode<TypeSymbol>(FlowLocation(body, text), text)
             {
                 Instruction = FlowView(instruction, body, scope),
+                InstructionSyntax = InstructionReference.Syntax(instruction, scope, text),
                 Labels = labels,
                 Targets = instruction.Operand.Kind switch
                 {
@@ -321,6 +322,10 @@ public sealed partial class EditingSession
 
     private void AddFlowNode(EditingBody body, FlowNode<TypeSymbol> node, IBindingScope scope)
     {
+        node = node with
+        {
+            SourceKind = _replaySourceKind ?? node.SourceKind,
+        };
         body.FlowNodes.Add(node);
         if (_analyzingDocument)
         {

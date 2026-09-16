@@ -1,3 +1,5 @@
+using IlRepl.Protocol;
+
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
@@ -21,6 +23,21 @@ internal sealed record EditingSeed(
     bool InBlockComment,
     long Revision) : IDisposable
 {
+    /// <summary>
+    /// Original source coordinates for each accepted cell declaration, when available.
+    /// </summary>
+    internal IReadOnlyList<AnalysisLocation?> CellDeclarationLocations { get; init; } = [];
+
+    /// <summary>
+    /// Original source coordinates for each accepted cell instruction or body directive, when available.
+    /// </summary>
+    internal IReadOnlyList<AnalysisLocation?> CellLocations { get; init; } = [];
+
+    /// <summary>
+    /// Original source coordinates for accepted instructions in the current open method or member body.
+    /// </summary>
+    internal IReadOnlyList<AnalysisLocation?> OpenLocations { get; init; } = [];
+
     /// <summary>
     /// The pinned original method definitions available to edit submissions.
     /// </summary>

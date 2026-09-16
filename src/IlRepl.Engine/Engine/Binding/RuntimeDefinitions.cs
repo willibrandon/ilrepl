@@ -101,7 +101,7 @@ public static class RuntimeDefinitions
         ArgumentNullException.ThrowIfNull(method);
         DefinitionId id;
         var assembly = method.DeclaringType?.Assembly ?? method.Module.Assembly;
-        if (assembly.IsDynamic)
+        if (assembly.IsDynamic || method.DeclaringType?.IsArray == true)
         {
             id = OfDeclaration(method, AssemblyInstance(assembly));
             Remember(Methods, id, method);

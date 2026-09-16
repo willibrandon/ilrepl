@@ -8,10 +8,13 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
+/// Composes the transcript, editor, contextual help, and status bar for terminal hosts.
+/// </summary>
+/// <remarks>
 /// The terminal UI: a following transcript, the prompt, and a status bar. The layout is
 /// attached to a terminal builder so the same tree runs on a real console or a headless
 /// emulator in tests.
-/// </summary>
+/// </remarks>
 public static class IlReplApp
 {
     /// <summary>
@@ -49,6 +52,8 @@ public static class IlReplApp
             Requester = new CompletionRequester(engine),
             Analyzer = new AnalysisRequester(engine),
             HistoryLoading = history is not null,
+            OpenDocumentation = DocumentationLauncher.Open,
+            CurrentHelpIdentity = () => (engine.Status.Revision, engine.AssemblyVersion),
         };
         onPrompt?.Invoke(prompt);
         return builder
@@ -175,9 +180,7 @@ public static class IlReplApp
     private static int Width(IReadOnlyList<string> sections) => sections.Sum(DisplayWidth.GetStringWidth) + (3 * Math.Max(0, sections.Count - 1));
 
     /// <summary>
-    /// The key hints for the status bar, read from what Enter will do now, so the hint never
-    /// promises one thing while the key does another. The least important hint comes first,
-    /// because hints are dropped from the left when the bar is too narrow for them all.
+    /// Fits relevant keyboard hints beside the status, retaining the most important actions at narrow widths.
     /// </summary>
     /// <param name="occupied">The sections already on the bar.</param>
     /// <param name="width">The terminal width, or zero when not known yet.</param>
@@ -203,6 +206,11 @@ public static class IlReplApp
                 _ when ownSelection => new List<string> { "Tab complete", "Shift+↑ select", "Ctrl+Q quit" },
                 _ => new List<string> { "Tab complete", "Ctrl+Q quit" },
             };
+        if (!copyMode)
+        {
+            hints.Insert(0, "F1 help");
+        }
+
         if (paletteVisible && !copyMode && enter is EnterAction.Continue or EnterAction.Submit && !hints.Contains("Tab complete"))
         {
             hints.Insert(0, "Tab complete");
@@ -371,10 +379,13 @@ public static class IlReplApp
                         transcript.Add(LineKind.Error, "  " + pasteError, SpanStyle.Error);
                     }
 
-                    prompt.Editor.InsertText(PastePayload.Prepare(e.Text ?? ""));
-                    prompt.LastLength = prompt.Editor.Document.Length;
-                    prompt.PaletteDismissed = false;
-                    prompt.PaletteNavigated = false;
+                    if (prompt.Help is null)
+                    {
+                        prompt.Editor.InsertText(PastePayload.Prepare(e.Text ?? ""));
+                        prompt.LastLength = prompt.Editor.Document.Length;
+                        prompt.PaletteDismissed = false;
+                        prompt.PaletteNavigated = false;
+                    }
                     prompt.PasteInput?.Applied();
                     break;
                 case SubmissionEventKind.Refused:
@@ -501,9 +512,26 @@ public static class IlReplApp
     {
         // Whatever the submission worker and the paste handler posted since the last frame is
         // applied here, on the render thread, before anything reads the transcript or the prompt.
+        prompt.PasteInput?.FrameReady();
         Drain(prompt, transcript, engine, app);
         prompt.Requester?.Refresh(prompt);
         prompt.Analyzer?.Refresh(prompt);
+
+        prompt.HelpRevision = engine.Status.Revision;
+        prompt.HelpAssemblyVersion = engine.AssemblyVersion;
+        if (prompt.Help is { } help)
+        {
+            help.Refresh(prompt, engine.Catalog);
+            app.ReleaseCapture();
+            app.RequestFocus(node => node is InteractableNode);
+            var expanded = ctx.VStack(_ =>
+                [new PromptHelpWidget(prompt, engine.Catalog, size.Width <= 0 ? 80 : size.Width,
+                    size.Height <= 0 ? 24 : size.Height).Fill()]);
+            return prompt.Analyzer?.IsPending == true || prompt.Requester?.IsPending == true || prompt.Busy
+                ? expanded.RedrawAfter(16) : expanded;
+        }
+
+        prompt.DocumentationTargetChanged?.Invoke(null, prompt.HelpInputSequence, false);
 
         // The prompt is the only place input goes. A click on the scrollbar still focuses the
         // transcript panel, so focus is pulled back on the next render as a last resort; clicks

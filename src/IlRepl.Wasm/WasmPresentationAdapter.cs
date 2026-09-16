@@ -5,10 +5,13 @@ using Hex1b;
 namespace IlRepl.Wasm;
 
 /// <summary>
+/// Connects the terminal UI to browser input and output through the Web Worker.
+/// </summary>
+/// <remarks>
 /// Bridges a Hex1b terminal to xterm.js through a Web Worker. Output bytes are posted to the
 /// main thread; input and resizes arrive through JavaScript queues that JavaScript signals into
 /// <see cref="ReadInputAsync"/>. This follows the pattern of Hex1b's own WasmDemo sample.
-/// </summary>
+/// </remarks>
 public sealed partial class WasmPresentationAdapter : IHex1bTerminalPresentationAdapter
 {
     private static TaskCompletionSource? s_inputSignal;
@@ -151,6 +154,12 @@ public sealed partial class WasmPresentationAdapter : IHex1bTerminalPresentation
         var signal = Interlocked.Exchange(ref s_inputSignal, null);
         signal?.TrySetResult();
     }
+
+    /// <summary>
+    /// Publishes the focused documentation target for activation inside the page's keyboard gesture.
+    /// </summary>
+    [JSImport("documentationTarget", "main.js")]
+    internal static partial void DocumentationTarget(string? url, int sequence, bool active);
 
     [JSImport("postTerminalOutput", "main.js")]
     private static partial void PostOutput(byte[] data);

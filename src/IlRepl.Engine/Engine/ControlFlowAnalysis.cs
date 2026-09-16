@@ -8,7 +8,7 @@ namespace IlRepl.Engine;
 /// Computes stack states and producer locations to a fixed point over runtime or symbolic bodies.
 /// </summary>
 /// <typeparam name="T">The type representation.</typeparam>
-internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : class
+internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : class
 {
     private const int MaxFilterPaths = 64;
     private const int MaxCorrelatedAlternatives = 256;
@@ -111,6 +111,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         var incomingPredecessors = new int[count];
         var additionalIncoming = new Dictionary<int, FlowState<T>>?[count];
         var diagnostics = new Dictionary<(int, string), AnalysisDiagnostic>();
+        var problems = new Dictionary<(int, string), (StackProblem Problem, FlowState<T>? State)>();
         // Visit earlier instructions first so forward branches finish contributing before their joins are analyzed.
         var queue = new PriorityQueue<int, int>();
         var queued = new bool[count];
@@ -130,11 +131,16 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         }
 
         void Report(int position, string code, string message, AnalysisDiagnosticKind kind = AnalysisDiagnosticKind.Error,
-            IReadOnlyList<AnalysisRelatedLocation>? related = null)
+            IReadOnlyList<AnalysisRelatedLocation>? related = null, StackProblem? problem = null)
         {
             var location = position < nodes.Count ? nodes[position].Location
                 : nodes.Count > 0 ? nodes[^1].Location : new AnalysisLocation("cell", -1, 0, 0);
             diagnostics[(position, code)] = new AnalysisDiagnostic(code, kind, message, location, related ?? []);
+            if (problem is not null)
+            {
+                var slot = position - start;
+                problems[(position, code)] = (problem, slot >= 0 && slot < before.Length ? before[slot] : null);
+            }
         }
 
         void ContinueFilterSearch(int source, FilterPathState[]? paths, bool fallbackThis,
@@ -402,13 +408,14 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             }
             else if (node.Instruction is { } view && !state.Invalid && state.Values is { } values)
             {
-                var problem = structuralProblems[slot] ?? ValidateStack(view, values, graph, index, returnType, cell,
+                var problem = structuralProblems[slot] is { } structure ? (StackProblem)structure
+                    : ValidateStack(view, values, graph, index, returnType, cell,
                     !state.IsCorrelationOnly);
                 if (problem is not null)
                 {
                     if (structuralProblems[slot] is null)
                     {
-                        Report(index, "FLOW005", problem, related: Related(nodes, index, state));
+                        Report(index, "FLOW005", problem.Message, related: Related(nodes, index, state), problem: problem);
                     }
 
                     state = new FlowState<T>(null, Invalid: true);
@@ -421,7 +428,11 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     {
                         var suffix = pops == 1 ? "" : "s";
                         Report(index, "FLOW006", $"stack underflow: '{view.Op.Name}' pops {pops} value{suffix}"
-                            + $" but the stack has {values.Length}: {_types.Render(state)}", related: Related(nodes, index, state));
+                            + $" but the stack has {values.Length}: {_types.Render(state)}", related: Related(nodes, index, state),
+                            problem: Failure("stack underflow", $"{pops} stack value{suffix}",
+                                [.. values.Select((value, slotIndex) => new StackRequirement(slotIndex,
+                                    "operand " + (slotIndex + 1), "an available stack value")),
+                                    new StackRequirement(-1, "missing value", $"{pops - values.Length} more stack value(s)")]));
                         state = new FlowState<T>(null, Invalid: true);
                     }
                     else
@@ -834,10 +845,48 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             graph.ValidateStacks(before);
         }
 
-        yield return new FlowResult<T>(before, after,
-            [.. validateGraph ? graph.Diagnostics : [],
-                .. diagnostics.OrderBy(pair => pair.Key.Item1).ThenBy(pair => pair.Key.Item2).Select(pair => pair.Value)],
-            maxStack);
+        AnalysisDiagnostic WithEvidence(AnalysisDiagnostic diagnostic, int position)
+        {
+            var slot = position - start;
+            var state = slot >= 0 && slot < before.Length ? before[slot] : null;
+            var problem = graph.StackProblems.GetValueOrDefault((position, diagnostic.Code));
+            if (problems.TryGetValue((position, diagnostic.Code), out var evidence))
+            {
+                // Revalidation updates this pair together; an invalid later join must not erase an established failing operand.
+                (problem, state) = evidence;
+            }
+            var paths = new List<(int Position, FlowState<T> State)>();
+            if (diagnostic.Code == "FLOW003" && slot >= 0 && slot < incomingStates.Length)
+            {
+                if (incomingStates[slot] is { } firstState)
+                {
+                    paths.Add((incomingPredecessors[slot], firstState));
+                }
+
+                if (additionalIncoming[slot] is { } otherStates)
+                {
+                    paths.AddRange(otherStates.OrderBy(pair => pair.Key).Select(pair => (pair.Key, pair.Value)));
+                }
+            }
+
+            return Explain(diagnostic, position, nodes, state, problem, paths, cell ? null : returnType is null ? 0 : 1,
+                slot >= 0 && slot < after.Length ? after[slot] : null);
+        }
+
+        var findings = new List<AnalysisDiagnostic>();
+        if (validateGraph)
+        {
+            foreach (var diagnostic in graph.Diagnostics)
+            {
+                var position = Enumerable.Range(0, nodes.Count).FirstOrDefault(
+                    candidate => nodes[candidate].Location == diagnostic.Location, -1);
+                findings.Add(WithEvidence(diagnostic, position));
+            }
+        }
+
+        findings.AddRange(diagnostics.OrderBy(pair => pair.Key.Item1).ThenBy(pair => pair.Key.Item2)
+            .Select(pair => WithEvidence(pair.Value, pair.Key.Item1)));
+        yield return new FlowResult<T>(before, after, findings, maxStack);
     }
 
     private static (bool Completes, ConstructorThisState ConstructorState,
@@ -1991,7 +2040,7 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         return view.StoreRestriction;
     }
 
-    private string? ValidateStack(StackOperandView<T> view, FlowValue<T>[] values, FlowGraph<T> graph, int index,
+    private StackProblem? ValidateStack(StackOperandView<T> view, FlowValue<T>[] values, FlowGraph<T> graph, int index,
         T? returnType, bool cell, bool receiverPathFeasible)
     {
         var op = view.Op;
@@ -2004,51 +2053,59 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             {
                 if (count > 1)
                 {
-                    return $"the stack must hold 0 or 1 value at ret, but has {count}: {_types.Render(new FlowState<T>(values))}";
+                    return ShapeFailure(
+                        $"the stack must hold 0 or 1 value at ret, but has {count}: {_types.Render(new FlowState<T>(values))}",
+                        "zero or one return value", count);
                 }
 
                 if (FollowsTailCall(graph, index) && (count == 0 || top is { } returned
                     && (_types.Algebra.IsValueType(returned) || _types.Algebra.IsGenericParameter(returned))
                     && _types.BoxedType(returned) is null))
                 {
-                    return "a tail call in the cell must return object directly; boxing or a synthesized null before ret is not allowed";
+                    return OperandFailure("a tail call in the cell must return object directly; "
+                        + "boxing or a synthesized null before ret is not allowed", count - 1, "return value", "object");
                 }
 
                 return top is not null && (_types.Algebra.IsByRef(top) || IsDataPointer(top))
-                    ? $"cannot return a {_types.Name(top)} from the cell; load through it first (ldind/ldobj)" : null;
+                    ? OperandFailure($"cannot return a {_types.Name(top)} from the cell; load through it first (ldind/ldobj)",
+                        count - 1, "return value", "a value that can be returned as object") : null;
             }
 
             if (count != (returnType is null ? 0 : 1))
             {
-                return returnType is null ? $"ret in void method {graph.BodyName} needs an empty stack"
+                var message = returnType is null ? $"ret in void method {graph.BodyName} needs an empty stack"
                     + $" but found {_types.Render(new FlowState<T>(values))} (pop first)"
                     : count == 0 ? $"ret needs {_types.Name(returnType)} on the stack but the stack is empty"
                     : $"ret needs exactly one {_types.Name(returnType)} on the stack but found {_types.Render(new FlowState<T>(values))}";
+                return ShapeFailure(message, returnType is null ? "an empty stack" : "exactly one " + _types.Name(returnType), count);
             }
 
             if (returnType is not null && !_types.CanAssign(top, returnType))
             {
                 var box = top is not null && _types.Algebra.IsValueType(top)
                     && _types.Category(returnType) == StackCategory.ObjectReference ? " (box it first)" : "";
-                return $"ret needs {_types.Name(returnType)} on the stack but found {_types.Name(top)}{box}";
+                return OperandFailure($"ret needs {_types.Name(returnType)} on the stack but found {_types.Name(top)}{box}",
+                    count - 1, "return value", _types.Name(returnType));
             }
         }
 
         if (op == OpCodes.Switch && kind is not null and not StackCategory.Int32)
         {
-            return $"switch needs int32 on the stack but found {_types.Name(top)}";
+            return OperandFailure($"switch needs int32 on the stack but found {_types.Name(top)}", count - 1, "index", "int32");
         }
 
         if (op.Name is "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s"
             && kind is not (null or StackCategory.Int32 or StackCategory.Int64 or StackCategory.NativeInt or StackCategory.ByRef)
             && !_types.CanAssign(top, _types.Algebra.Primitive("object")))
         {
-            return $"{op.Name} needs an integer, pointer, or reference but found {_types.Name(top)}";
+            return OperandFailure($"{op.Name} needs an integer, pointer, or reference but found {_types.Name(top)}",
+                count - 1, "condition", "integer, pointer, or reference");
         }
 
         if (op == OpCodes.Endfilter && (count != 1 || kind is not null and not StackCategory.Int32))
         {
-            return $"endfilter needs exactly one int32 but found {_types.Render(new FlowState<T>(values))}";
+            return ShapeFailure($"endfilter needs exactly one int32 but found {_types.Render(new FlowState<T>(values))}",
+                "exactly one int32", count);
         }
 
         if (op.Name is { } name
@@ -2057,7 +2114,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             && !(StoresLocal(view) && view.SlotIsPinned && _types.Algebra.IsByRef(slot)
                 && kind == StackCategory.NativeInt && values[^1].IsKnownZero))
         {
-            return $"{name} needs {_types.Name(slot)} but found {_types.Name(top)}";
+            return OperandFailure($"{name} needs {_types.Name(slot)} but found {_types.Name(top)}",
+                count - 1, "value", _types.Name(slot));
         }
 
         var pops = StackTransfer<T>.PopCount(view);
@@ -2099,6 +2157,16 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             return _types.Category(type) == StackCategory.ObjectReference && _types.CanAssign(type, owner);
         }
 
+        string ReceiverRequirement(T? owner)
+        {
+            if (graph.Prefixes(index).FirstOrDefault(prefix => prefix.Op == OpCodes.Constrained)?.Type is { } constrained)
+            {
+                return _types.Name(constrained) + "&";
+            }
+            return owner is not null && _types.Algebra.IsValueType(owner)
+                ? _types.Name(owner) + "& or " + _types.Name(owner) + "* or native int" : _types.Name(owner);
+        }
+
         bool FieldReceiver(T? type, T? owner)
         {
             if (type is null || owner is null)
@@ -2133,7 +2201,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (left is not null && right is not null
                 && !FlowNumericRules.Binary(op.Name!, _types.Category(left), _types.Category(right)))
             {
-                return $"{op.Name} cannot combine {_types.Name(left)} and {_types.Name(right)}";
+                return BinaryFailure($"{op.Name} cannot combine {_types.Name(left)} and {_types.Name(right)}",
+                    op.Name!, count, left, right);
             }
 
             if (left is not null && right is not null && FlowNumericRules.Comparison(op.Name!)
@@ -2141,7 +2210,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 && _types.Category(right) == StackCategory.ObjectReference
                 && (!Reference(left) || !Reference(right)))
             {
-                return $"{op.Name} cannot combine {_types.Name(left)} and {_types.Name(right)}";
+                return BinaryFailure($"{op.Name} cannot combine {_types.Name(left)} and {_types.Name(right)}",
+                    op.Name!, count, left, right);
             }
         }
 
@@ -2151,46 +2221,52 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 && kind is StackCategory.ByRef or StackCategory.ObjectReference;
             if (op == OpCodes.Conv_R_Un && kind == StackCategory.Float)
             {
-                return $"conv.r.un needs an integer value but found {_types.Name(top)}";
+                return OperandFailure($"conv.r.un needs an integer value but found {_types.Name(top)}", count - 1, "value", "integer");
             }
 
             if (!Numeric(top) && !addressConversion || unary == "not" && kind == StackCategory.Float)
             {
-                return $"{unary} needs a numeric value but found {_types.Name(top)}";
+                return OperandFailure($"{unary} needs a numeric value but found {_types.Name(top)}", count - 1, "value",
+                    unary == "not" ? "integer" : "numeric value");
             }
         }
 
         if (op == OpCodes.Ckfinite && kind is not (null or StackCategory.Float))
         {
-            return $"ckfinite needs a floating-point value but found {_types.Name(top)}";
+            return OperandFailure($"ckfinite needs a floating-point value but found {_types.Name(top)}",
+                count - 1, "value", "floating point");
         }
 
         if (op.Name is "throw" or "castclass" or "isinst" or "unbox" or "unbox.any"
             && !_types.CanAssign(top, _types.Algebra.Primitive("object")))
         {
-            return $"{op.Name} needs an object reference but found {_types.Name(top)}";
+            return OperandFailure($"{op.Name} needs an object reference but found {_types.Name(top)}",
+                count - 1, "value", "object reference");
         }
 
         if (op == OpCodes.Jmp && count != 0)
         {
-            return "jmp requires an empty evaluation stack";
+            return ShapeFailure("jmp requires an empty evaluation stack", "an empty stack", count);
         }
 
         if (op == OpCodes.Localloc && (count != 1 || kind is not (null or StackCategory.Int32 or StackCategory.NativeInt)))
         {
-            return "localloc needs exactly one integer size on the evaluation stack";
+            return ShapeFailure("localloc needs exactly one integer size on the evaluation stack",
+                "exactly one int32 or native int", count);
         }
 
         if (op == OpCodes.Cpblk)
         {
             if (!Address(values[^3].Type) || !Address(values[^2].Type))
             {
-                return "cpblk needs destination and source pointers";
+                return Failure("cpblk needs destination and source pointers", "destination and source pointers",
+                    new StackRequirement(count - 3, "destination", "pointer"),
+                    new StackRequirement(count - 2, "source", "pointer"));
             }
 
             if (values[^1].Type is { } size && _types.Category(size) != StackCategory.Int32)
             {
-                return $"cpblk needs an int32 size but found {_types.Name(size)}";
+                return OperandFailure($"cpblk needs an int32 size but found {_types.Name(size)}", count - 1, "size", "int32");
             }
         }
 
@@ -2198,23 +2274,25 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         {
             if (!Address(values[^3].Type))
             {
-                return $"initblk needs a destination pointer but found {_types.Name(values[^3].Type)}";
+                return OperandFailure($"initblk needs a destination pointer but found {_types.Name(values[^3].Type)}",
+                    count - 3, "destination", "pointer");
             }
 
             if (values[^2].Type is { } value && _types.Category(value) != StackCategory.Int32)
             {
-                return $"initblk needs an int32 value but found {_types.Name(value)}";
+                return OperandFailure($"initblk needs an int32 value but found {_types.Name(value)}", count - 2, "value", "int32");
             }
 
             if (values[^1].Type is { } size && _types.Category(size) != StackCategory.Int32)
             {
-                return $"initblk needs an int32 size but found {_types.Name(size)}";
+                return OperandFailure($"initblk needs an int32 size but found {_types.Name(size)}", count - 1, "size", "int32");
             }
         }
 
         if (graph.Prefixes(index).Any(prefix => prefix.Op == OpCodes.Tailcall) && count != view.ArgumentPops)
         {
-            return "a tail call requires exactly its arguments on the evaluation stack";
+            return ShapeFailure("a tail call requires exactly its arguments on the evaluation stack",
+                "exactly " + view.ArgumentPops + " call operands", count);
         }
 
         if (op.Name is "call" or "callvirt" or "newobj" or "calli")
@@ -2224,16 +2302,20 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             {
                 if (kind is not (null or StackCategory.NativeInt))
                 {
-                    return $"calli needs a function pointer but found {_types.Name(top)}";
+                    return OperandFailure($"calli needs a function pointer but found {_types.Name(top)}",
+                        count - 1, "function pointer", "native int");
                 }
             }
             if (view.IsInstance && !Receiver(values[first].Type, view.DeclaringType))
             {
-                return $"{op.Name} needs a {_types.Name(view.DeclaringType)} receiver but found {_types.Name(values[first].Type)}";
+                return OperandFailure(
+                    $"{op.Name} needs a {_types.Name(view.DeclaringType)} receiver but found {_types.Name(values[first].Type)}",
+                    first, "receiver", ReceiverRequirement(view.DeclaringType));
             }
             if (view.HasImplicitThis && !Address(values[first].Type) && !Reference(values[first].Type))
             {
-                return $"calli needs a reference or pointer receiver but found {_types.Name(values[first].Type)}";
+                return OperandFailure($"calli needs a reference or pointer receiver but found {_types.Name(values[first].Type)}",
+                    first, "receiver", "reference or pointer");
             }
 
             for (var parameter = 0; parameter < view.ParameterTypes.Count; parameter++)
@@ -2242,34 +2324,42 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                 var expected = view.ParameterTypes[parameter];
                 if (!_types.CanAssign(actual, expected) && !NativeIntegerToByRef(actual, expected))
                 {
-                    return $"{op.Name} argument {parameter + 1} needs {_types.Name(expected)} but found {_types.Name(actual)}";
+                    return OperandFailure($"{op.Name} argument {parameter + 1} needs {_types.Name(expected)}"
+                        + $" but found {_types.Name(actual)}",
+                        first + (view.IsInstance || view.HasImplicitThis ? 1 : 0) + parameter,
+                        "argument " + (parameter + 1), _types.Name(expected));
                 }
             }
         }
 
         if (op.Name is "stfld" or "stsfld" && view.FieldType is { } field && !_types.CanAssign(top, field))
         {
-            return $"{op.Name} needs {_types.Name(field)} but found {_types.Name(top)}";
+            return OperandFailure($"{op.Name} needs {_types.Name(field)} but found {_types.Name(top)}",
+                count - 1, "value", _types.Name(field));
         }
 
         if (receiverPathFeasible && view.ReceiverRestriction is { } receiverRestriction && !values[count - pops].IsThis)
         {
-            return receiverRestriction;
+            return OperandFailure(receiverRestriction, count - pops, "receiver", "the original this receiver");
         }
 
         if (op.Name is "ldfld" or "ldflda" or "stfld" && !FieldReceiver(values[count - pops].Type, view.DeclaringType))
         {
-            return $"{op.Name} needs a {_types.Name(view.DeclaringType)} receiver but found {_types.Name(values[count - pops].Type)}";
+            return OperandFailure(
+                $"{op.Name} needs a {_types.Name(view.DeclaringType)} receiver but found {_types.Name(values[count - pops].Type)}",
+                count - pops, "receiver", _types.Name(view.DeclaringType));
         }
 
         if (op == OpCodes.Ldvirtftn && !Receiver(top, view.DeclaringType))
         {
-            return $"ldvirtftn needs a {_types.Name(view.DeclaringType)} receiver but found {_types.Name(top)}";
+            return OperandFailure($"ldvirtftn needs a {_types.Name(view.DeclaringType)} receiver but found {_types.Name(top)}",
+                count - 1, "receiver", ReceiverRequirement(view.DeclaringType));
         }
 
         if (op == OpCodes.Box && view.Type is { } boxed && !_types.CanAssign(top, boxed))
         {
-            return $"box needs {_types.Name(boxed)} but found {_types.Name(top)}";
+            return OperandFailure($"box needs {_types.Name(boxed)} but found {_types.Name(top)}",
+                count - 1, "value", _types.Name(boxed));
         }
 
         if (op == OpCodes.Mkrefany && view.Type is { } referenced && top is { } pointer)
@@ -2278,19 +2368,22 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             {
                 if (!_types.Algebra.Same(_types.Algebra.ElementOf(pointer), referenced))
                 {
-                    return $"mkrefany needs a pointer to {_types.Name(referenced)} but found {_types.Name(pointer)}";
+                    return OperandFailure($"mkrefany needs a pointer to {_types.Name(referenced)} but found {_types.Name(pointer)}",
+                        count - 1, "address", _types.Name(referenced) + "&");
                 }
             }
             else if (_types.Category(pointer) != StackCategory.NativeInt)
             {
-                return $"mkrefany needs a pointer to {_types.Name(referenced)} but found {_types.Name(pointer)}";
+                return OperandFailure($"mkrefany needs a pointer to {_types.Name(referenced)} but found {_types.Name(pointer)}",
+                        count - 1, "address", _types.Name(referenced) + "&");
             }
         }
 
         if (op.Name is "refanytype" or "refanyval" && top is { } typedReference
             && !_types.Algebra.Same(typedReference, _types.Algebra.Primitive("typedref")))
         {
-            return $"{op.Name} needs a typedref but found {_types.Name(typedReference)}";
+            return OperandFailure($"{op.Name} needs a typedref but found {_types.Name(typedReference)}",
+                count - 1, "value", "typedref");
         }
 
         if (op.Name is { } memory && (memory.StartsWith("ldind", StringComparison.Ordinal)
@@ -2298,12 +2391,14 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         {
             if (!Address(values[count - pops].Type))
             {
-                return $"{op.Name} needs a managed or unmanaged pointer but found {_types.Name(values[count - pops].Type)}";
+                return OperandFailure(
+                    $"{op.Name} needs a managed or unmanaged pointer but found {_types.Name(values[count - pops].Type)}",
+                    count - pops, "address", "managed or unmanaged pointer");
             }
 
             if (memory == "cpobj" && !Address(top))
             {
-                return $"cpobj needs a source pointer but found {_types.Name(top)}";
+                return OperandFailure($"cpobj needs a source pointer but found {_types.Name(top)}", count - 1, "source", "pointer");
             }
 
             var address = values[count - pops].Type;
@@ -2311,7 +2406,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (memory == "cpobj" && top is { } source && _types.Algebra.IsByRef(source) && storage is not null
                 && _types.Algebra.ElementOf(source) is { } sourceType && !_types.CanAssign(sourceType, storage))
             {
-                return $"cpobj cannot copy {_types.Name(sourceType)} as {_types.Name(storage)}";
+                return OperandFailure($"cpobj cannot copy {_types.Name(sourceType)} as {_types.Name(storage)}",
+                    count - 1, "source", _types.Name(storage) + "&");
             }
 
             if (address is not null && _types.Algebra.IsByRef(address) && storage is not null
@@ -2323,30 +2419,35 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                     : memory.StartsWith("stind", StringComparison.Ordinal) || memory is "stobj" or "initobj" or "cpobj"
                         ? _types.CanAssign(storage, element) : _types.CanAssign(element, storage)))
             {
-                return $"{memory} cannot access {_types.Name(element)} through {_types.Name(address)}";
+                return OperandFailure($"{memory} cannot access {_types.Name(element)} through {_types.Name(address)}",
+                    count - pops, "address", "storage compatible with " + _types.Name(storage));
             }
 
             if (memory == "stind.ref" && !Reference(top))
             {
-                return $"stind.ref needs an object reference but found {_types.Name(top)}";
+                return OperandFailure($"stind.ref needs an object reference but found {_types.Name(top)}",
+                    count - 1, "value", "object reference");
             }
 
             if (memory == "stind.ref" && address is not null && _types.Algebra.IsByRef(address)
                 && _types.Algebra.ElementOf(address) is { } reference && !_types.CanAssign(top, reference))
             {
-                return $"stind.ref needs {_types.Name(reference)} but found {_types.Name(top)}";
+                return OperandFailure($"stind.ref needs {_types.Name(reference)} but found {_types.Name(top)}",
+                    count - 1, "value", _types.Name(reference));
             }
 
             if (storage is not null && (memory.StartsWith("stind", StringComparison.Ordinal) || memory == "stobj")
                 && memory != "stind.ref" && !_types.CanAssign(top, storage))
             {
-                return $"{memory} needs {_types.Name(storage)} but found {_types.Name(top)}";
+                return OperandFailure($"{memory} needs {_types.Name(storage)} but found {_types.Name(top)}",
+                    count - 1, "value", _types.Name(storage));
             }
         }
 
         if (op == OpCodes.Newarr && kind is not (null or StackCategory.Int32 or StackCategory.NativeInt))
         {
-            return $"newarr needs an integer length but found {_types.Name(top)}";
+            return OperandFailure($"newarr needs an integer length but found {_types.Name(top)}",
+                count - 1, "length", "int32 or native int");
         }
 
         if (op.Name is { } arrayOp && (arrayOp.StartsWith("ldelem", StringComparison.Ordinal)
@@ -2356,29 +2457,33 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (array is not null && !_types.Algebra.IsArray(array) && !_types.Algebra.Same(array, _types.Algebra.NullReference)
                 && !_types.Algebra.Same(array, _types.Algebra.UnknownReference))
             {
-                return $"{arrayOp} needs an array but found {_types.Name(array)}";
+                return OperandFailure($"{arrayOp} needs an array but found {_types.Name(array)}", count - pops, "array", "array reference");
             }
 
             if (array is not null && _types.Algebra.IsArray(array) && !_types.IsVector(array))
             {
-                return $"{arrayOp} needs a zero-based one-dimensional array but found {_types.Name(array)}";
+                return OperandFailure($"{arrayOp} needs a zero-based one-dimensional array but found {_types.Name(array)}",
+                    count - pops, "array", "zero-based one-dimensional array");
             }
 
             if (pops > 1 && values[count - pops + 1].Type is { } offset
                 && _types.Category(offset) is not (StackCategory.Int32 or StackCategory.NativeInt))
             {
-                return $"{arrayOp} needs an integer index but found {_types.Name(offset)}";
+                return OperandFailure($"{arrayOp} needs an integer index but found {_types.Name(offset)}",
+                    count - pops + 1, "index", "int32 or native int");
             }
             var actualElement = array is not null && _types.Algebra.IsArray(array) ? _types.Algebra.ElementOf(array) : null;
             var instructionElement = ArrayInstructionType(view);
             if (actualElement is not null && arrayOp is ("ldelem.ref" or "stelem.ref") && !Reference(actualElement))
             {
-                return $"{arrayOp} needs an array with reference elements but found {_types.Name(array)}";
+                return OperandFailure($"{arrayOp} needs an array with reference elements but found {_types.Name(array)}",
+                    count - pops, "array", "array with reference elements");
             }
 
             if (arrayOp == "stelem.ref" && !Reference(top))
             {
-                return $"stelem.ref needs an object reference but found {_types.Name(top)}";
+                return OperandFailure($"stelem.ref needs an object reference but found {_types.Name(top)}",
+                    count - 1, "value", "object reference");
             }
 
             if (actualElement is not null && instructionElement is not null && arrayOp != "ldlen"
@@ -2396,7 +2501,9 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
                         : _types.ArrayElementCompatible(actualElement, instructionElement));
                 if (!compatibleElement)
                 {
-                    return $"{arrayOp} cannot access {_types.Name(actualElement)} elements as {_types.Name(instructionElement)}";
+                    return OperandFailure(
+                        $"{arrayOp} cannot access {_types.Name(actualElement)} elements as {_types.Name(instructionElement)}",
+                        count - pops, "array", "elements compatible with " + _types.Name(instructionElement));
                 }
             }
 
@@ -2404,7 +2511,8 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
             if (arrayOp.StartsWith("stelem", StringComparison.Ordinal) && storedAs is not null
                 && !_types.CanAssign(top, storedAs))
             {
-                return $"{arrayOp} needs {_types.Name(storedAs)} but found {_types.Name(top)}";
+                return OperandFailure($"{arrayOp} needs {_types.Name(storedAs)} but found {_types.Name(top)}",
+                    count - 1, "value", _types.Name(storedAs));
             }
         }
 
@@ -3951,14 +4059,14 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
         var result = new List<AnalysisRelatedLocation>();
         if (predecessor >= 0 && predecessor < nodes.Count)
         {
-            result.Add(new AnalysisRelatedLocation(nodes[predecessor].Location, $"incoming stack {_types.Render(state)}"));
+            result.Add(new AnalysisRelatedLocation(SourceLocation(nodes[predecessor]), $"incoming stack {_types.Render(state)}"));
         }
 
         foreach (var value in state.Values ?? [])
         {
             foreach (var origin in value.Origins)
             {
-                result.Add(new AnalysisRelatedLocation(nodes[origin].Location, $"produces {_types.Name(value.Type)}"));
+                result.Add(new AnalysisRelatedLocation(SourceLocation(nodes[origin]), "produces an incoming stack value"));
             }
         }
 
@@ -3966,6 +4074,6 @@ internal sealed class ControlFlowAnalysis<T>(FlowTypeRules<T> types) where T : c
     }
 
     private static string Path(IReadOnlyList<FlowNode<T>> nodes, int index) => index < 0 ? "the entry"
-        : nodes[index].Location.Offset is { } offset ? $"IL_{offset:X4}"
-        : $"line {nodes[index].Location.Line + 1}";
+        : SourceLocation(nodes[index]).Offset is { } offset ? $"IL_{offset:X4}"
+        : DiagnosticFormatter.Location(SourceLocation(nodes[index]));
 }
