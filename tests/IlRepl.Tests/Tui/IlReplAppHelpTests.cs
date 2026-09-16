@@ -51,6 +51,9 @@ public sealed class IlReplAppHelpTests
                         var loaded = engine.HandleAsync(".load " + SampleHost.Samples.GreeterDll, ct)
                             .WaitAsync(AppTest.Timeout, ct).GetAwaiter().GetResult();
                         Assert.IsTrue(loaded.Succeeded);
+                        // The load reply and the assembly notification travel independently over RPC.
+                        engine.WaitForAssembliesAsync(previous, ct)
+                            .WaitAsync(AppTest.Timeout, ct).GetAwaiter().GetResult();
                         Assert.IsGreaterThan(previous, engine.AssemblyVersion);
                     }
                     Volatile.Write(ref publishedSequence, sequence);

@@ -230,7 +230,7 @@ public sealed class FrontEndProcessTests
 
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
-        await auto.WaitUntilTextAsync("il[1]>");
+        await WaitForPromptAsync(terminal, run, ct);
 
         // What the process writes is what a terminal would see: the hardware caret is hidden and
         // no caret shape is ever asked for; the prompt paints its own caret cell.
@@ -270,7 +270,7 @@ public sealed class FrontEndProcessTests
 
             var run = terminal.RunAsync(ct);
             var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
-            await auto.WaitUntilTextAsync("il[1]>");
+            await WaitForPromptAsync(terminal, run, ct);
             await auto.TypeAsync("nop", ct: ct);
             await auto.EnterAsync(ct: ct);
             await auto.WaitUntilTextAsync("1 instruction");
@@ -304,7 +304,7 @@ public sealed class FrontEndProcessTests
             {
                 var run = first.RunAsync(ct);
                 var auto = new Hex1bTerminalAutomator(first, defaultTimeout: TimeSpan.FromSeconds(30));
-                await auto.WaitUntilTextAsync("il[1]>");
+                await WaitForPromptAsync(first, run, ct);
                 foreach (var line in new[] { ".method int32 Twice(int32 n) {", "ldarg n", "ldc.i4 2", "mul", "ret", "}" })
                 {
                     await auto.TypeAsync(line, ct: ct);
@@ -325,7 +325,7 @@ public sealed class FrontEndProcessTests
             {
                 var run = second.RunAsync(ct);
                 var auto = new Hex1bTerminalAutomator(second, defaultTimeout: TimeSpan.FromSeconds(30));
-                await auto.WaitUntilTextAsync("il[1]>");
+                await WaitForPromptAsync(second, run, ct);
                 await auto.UpAsync(ct: ct);
                 await auto.WaitUntilTextAsync("editing 6 lines");
                 await auto.WaitUntilTextAsync("il[1]> .method int32 Twice(int32 n) {");
@@ -363,7 +363,7 @@ public sealed class FrontEndProcessTests
 
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
-        await auto.WaitUntilTextAsync("il[1]>");
+        await WaitForPromptAsync(terminal, run, ct);
         var lines = new List<string> { ".method int32 Big() {", "  ldc.i4 7" };
         lines.AddRange(Enumerable.Repeat("  nop", 196));
         lines.Add("  ret");
@@ -384,6 +384,35 @@ public sealed class FrontEndProcessTests
         await auto.WaitUntilTextAsync("= 7 : int32");
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         Assert.AreEqual(0, await run);
+    }
+
+    private static async Task WaitForPromptAsync(Hex1bTerminal terminal, Task<int> run, CancellationToken cancellationToken)
+    {
+        using var waiting = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var prompt = new Hex1bTerminalInputSequenceBuilder()
+            .WaitUntil(snapshot => snapshot.ContainsText("il[1]>"), TimeSpan.FromSeconds(30), "the initial prompt")
+            .Build().ApplyAsync(terminal, waiting.Token);
+        try
+        {
+            if (await Task.WhenAny(prompt, run) == run)
+            {
+                var exitCode = await run;
+                Assert.Fail($"The terminal process exited with code {exitCode} before displaying its prompt.");
+            }
+
+            await prompt;
+        }
+        finally
+        {
+            await waiting.CancelAsync();
+            try
+            {
+                using var snapshot = await prompt;
+            }
+            catch (OperationCanceledException) when (waiting.IsCancellationRequested)
+            {
+            }
+        }
     }
 
     private static void ConfigureHistoryProcess(Hex1bTerminalProcessOptions options, string config, bool noHistory)
