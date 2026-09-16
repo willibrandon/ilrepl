@@ -10,6 +10,7 @@ namespace IlRepl.Tests;
 internal static class IsolatedTestProcess
 {
     private const string SelectedTest = "ILREPL_ISOLATED_TEST";
+    private const string Workspace = "ILREPL_ISOLATED_WORKSPACE";
 
     /// <summary>
     /// Runs only the calling test case in a child process, or lets its assertions run when already in that child.
@@ -25,6 +26,39 @@ internal static class IsolatedTestProcess
             return false;
         }
 
+        await RunChildAsync(context, name);
+        return true;
+    }
+
+    /// <summary>
+    /// Runs assertions with owned temporary files and deletes them only after the child releases all runtime image mappings.
+    /// </summary>
+    /// <param name="context">The calling test's cancellation and output context.</param>
+    /// <param name="test">The assertions that use the parent's temporary directory.</param>
+    /// <param name="method">The test method to run.</param>
+    internal static async Task WithDirectoryAsync(TestContext context, Func<string, Task> test, [CallerMemberName] string method = "")
+    {
+        var name = context.FullyQualifiedTestClassName + "." + method;
+        if (Environment.GetEnvironmentVariable(SelectedTest) == name)
+        {
+            await test(Environment.GetEnvironmentVariable(Workspace)
+                ?? throw new InvalidOperationException("The isolated test workspace was not supplied."));
+            return;
+        }
+
+        var directory = Directory.CreateTempSubdirectory("ilrepl-isolated-").FullName;
+        try
+        {
+            await RunChildAsync(context, name, directory);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static async Task RunChildAsync(TestContext context, string name, string? directory = null)
+    {
         var start = new ProcessStartInfo
         {
             FileName = Environment.ProcessPath!,
@@ -49,6 +83,7 @@ internal static class IsolatedTestProcess
         start.ArgumentList.Add("--filter");
         start.ArgumentList.Add(filter);
         start.Environment[SelectedTest] = name;
+        if (directory is not null) start.Environment[Workspace] = directory;
         using var child = Process.Start(start) ?? throw new InvalidOperationException("The isolated test did not start.");
         var output = child.StandardOutput.ReadToEndAsync(context.CancellationToken);
         var error = child.StandardError.ReadToEndAsync(context.CancellationToken);
@@ -58,7 +93,6 @@ internal static class IsolatedTestProcess
             var details = await output + Environment.NewLine + await error;
             context.WriteLine(details);
             Assert.AreEqual(0, child.ExitCode, details);
-            return true;
         }
         finally
         {

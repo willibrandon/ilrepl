@@ -163,13 +163,13 @@ public sealed partial class SessionFileStore
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            try
+            if (OperatingSystem.IsWindows())
             {
-                File.Move(temporary, path);
+                ReplaceWindowsFile(temporary, path);
             }
-            catch (IOException) when (File.Exists(path))
+            else
             {
-                File.Replace(temporary, path, destinationBackupFileName: null);
+                File.Move(temporary, path, overwrite: true);
             }
         }
         finally

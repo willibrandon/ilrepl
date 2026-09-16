@@ -1,7 +1,7 @@
 namespace IlRepl.Tests;
 
 /// <summary>
-/// Replaces loaded fixture images by renaming them and removes their files after collectible contexts have been released.
+/// Replaces loaded fixture images by renaming them while their original bytes remain mapped by the runtime.
 /// </summary>
 internal static class AssemblyFileCleanup
 {
@@ -14,27 +14,5 @@ internal static class AssemblyFileCleanup
     {
         File.Move(path, path + "." + Guid.NewGuid().ToString("N") + ".previous");
         File.WriteAllBytes(path, image);
-    }
-
-    /// <summary>
-    /// Deletes an owned fixture directory after the test method has returned and released its reflection references.
-    /// </summary>
-    /// <param name="path">The fixture directory owned by the completed test.</param>
-    internal static void DeleteDirectory(string path)
-    {
-        for (var attempt = 0; ; attempt++)
-        {
-            try
-            {
-                Directory.Delete(path, recursive: true);
-                return;
-            }
-            catch (Exception exception) when (OperatingSystem.IsWindows() && attempt < 10
-                && exception is IOException or UnauthorizedAccessException)
-            {
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
-            }
-        }
     }
 }

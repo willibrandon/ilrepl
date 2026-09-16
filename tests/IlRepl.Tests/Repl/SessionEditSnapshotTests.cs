@@ -17,17 +17,6 @@ namespace IlRepl.Tests.Repl;
 [TestClass]
 public sealed class SessionEditSnapshotTests
 {
-    private readonly List<string> _assemblyDirectories = [];
-
-    /// <summary>
-    /// Removes mapped fixture images after the test has released its original and restored reflection bindings.
-    /// </summary>
-    [TestCleanup]
-    public void DeleteAssemblyDirectories()
-    {
-        foreach (var directory in _assemblyDirectories) AssemblyFileCleanup.DeleteDirectory(directory);
-    }
-
     /// <summary>
     /// Supplies cancellation for real host storage, reload, and comparison operations.
     /// </summary>
@@ -162,15 +151,14 @@ public sealed class SessionEditSnapshotTests
     [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
-    public async Task Reopen_RebuiltDependencyKeepsOriginalAndPrivateHelperBindings(bool externalHelper)
-    {
-        var directory = Directory.CreateTempSubdirectory("ilrepl-frozen-edit-").FullName;
-        var name = "FrozenEdit" + Guid.NewGuid().ToString("N");
-        var path = Path.Combine(directory, name + ".dll");
-        var helperName = name + "Dependency";
-        var helperPath = Path.Combine(directory, helperName + ".dll");
-        try
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public Task Reopen_RebuiltDependencyKeepsOriginalAndPrivateHelperBindings(bool externalHelper) =>
+        IsolatedTestProcess.WithDirectoryAsync(TestContext, async directory =>
         {
+            var name = "FrozenEdit" + Guid.NewGuid().ToString("N");
+            var path = Path.Combine(directory, name + ".dll");
+            var helperName = name + "Dependency";
+            var helperPath = Path.Combine(directory, helperName + ".dll");
             File.WriteAllBytes(path, CreateImage(name, 21, externalHelper ? helperName : null));
             using var initial = new ReplCore();
             if (externalHelper)
@@ -226,12 +214,7 @@ public sealed class SessionEditSnapshotTests
             Assert.IsTrue(reopened.Handle("call int32 [" + name + "]SnapshotValues::Read()").Succeeded, Transcript(reopened));
             Assert.IsTrue(reopened.Handle("ret").Succeeded, Transcript(reopened));
             Assert.Contains("= 84 : int32", Transcript(reopened));
-        }
-        finally
-        {
-            _assemblyDirectories.Add(directory);
-        }
-    }
+        });
 
     private static byte[] CreateImage(string name, int value, string? dependency = null)
     {

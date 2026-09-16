@@ -132,15 +132,20 @@ public sealed class SessionFileStoreTests
     }
 
     /// <summary>
-    /// Saving over an open document preserves its existing reader and makes the new revision immediately readable.
+    /// Saving over an open document preserves its reader and publishes the new revision, including long Unicode paths.
     /// </summary>
+    /// <param name="name">The destination filename passed through the platform's rename operation.</param>
+    /// <param name="longPath">Whether the destination exceeds the legacy Windows path limit.</param>
     [TestMethod]
-    public async Task Write_ReplacesDocumentWhilePreviousReaderRemainsOpen()
+    [DataRow("example.ilrepl.json", false)]
+    [DataRow("session λ 😀.ilrepl.json", true)]
+    public async Task Write_ReplacesDocumentWhilePreviousReaderRemainsOpen(string name, bool longPath)
     {
         var directory = Directory.CreateTempSubdirectory("ilrepl-store-reader-").FullName;
         try
         {
-            var path = Path.Combine(directory, "example.ilrepl.json");
+            var parent = longPath ? Path.Combine(directory, new string('a', 100), new string('b', 100), new string('c', 100)) : directory;
+            var path = Path.Combine(parent, name);
             var store = new SessionFileStore(Path.Combine(directory, "cache"));
             var token = TestContext.CancellationToken;
             await store.WriteAsync(path, Document("ldc.i4.1"), false, token);

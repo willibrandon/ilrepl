@@ -12,17 +12,6 @@ namespace IlRepl.Tests.Repl;
 [TestClass]
 public sealed class SessionDocumentTests
 {
-    private readonly List<string> _assemblyDirectories = [];
-
-    /// <summary>
-    /// Removes mapped fixture images after this test's core and reflection locals have left their method scope.
-    /// </summary>
-    [TestCleanup]
-    public void DeleteAssemblyDirectories()
-    {
-        foreach (var directory in _assemblyDirectories) AssemblyFileCleanup.DeleteDirectory(directory);
-    }
-
     /// <summary>
     /// Supplies cancellation for asynchronous completion and recall requests.
     /// </summary>
@@ -129,31 +118,33 @@ public sealed class SessionDocumentTests
     /// Repeating an earlier assembly load records that assembly rather than the most recently added different dependency.
     /// </summary>
     [TestMethod]
-    public void CaptureSession_RepeatedAssemblyLoadRetainsTheRequestedImage()
-    {
-        var fixture = new SessionDependencyFixture();
-        _assemblyDirectories.Add(fixture.DirectoryPath);
-        var first = fixture.AssemblyName + "First";
-        var second = fixture.AssemblyName + "Second";
-        fixture.WritePackage(first, "1.0.0", 21);
-        fixture.WritePackage(second, "1.0.0", 42);
-        var firstImage = fixture.PackageImage(first, "1.0.0");
-        var secondImage = fixture.PackageImage(second, "1.0.0");
-        var firstPath = Path.Combine(fixture.DirectoryPath, first + ".dll");
-        var secondPath = Path.Combine(fixture.DirectoryPath, second + ".dll");
-        File.WriteAllBytes(firstPath, firstImage);
-        File.WriteAllBytes(secondPath, secondImage);
-        using var core = new ReplCore();
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public Task CaptureSession_RepeatedAssemblyLoadRetainsTheRequestedImage() =>
+        IsolatedTestProcess.WithDirectoryAsync(TestContext, directory =>
+        {
+            using var fixture = new SessionDependencyFixture();
+            var first = fixture.AssemblyName + "First";
+            var second = fixture.AssemblyName + "Second";
+            fixture.WritePackage(first, "1.0.0", 21);
+            fixture.WritePackage(second, "1.0.0", 42);
+            var firstImage = fixture.PackageImage(first, "1.0.0");
+            var secondImage = fixture.PackageImage(second, "1.0.0");
+            var firstPath = Path.Combine(directory, first + ".dll");
+            var secondPath = Path.Combine(directory, second + ".dll");
+            File.WriteAllBytes(firstPath, firstImage);
+            File.WriteAllBytes(secondPath, secondImage);
+            using var core = new ReplCore();
 
-        Submit(core, ".load \"" + firstPath + "\"", ".load \"" + secondPath + "\"", ".load \"" + firstPath + "\"");
+            Submit(core, ".load \"" + firstPath + "\"", ".load \"" + secondPath + "\"", ".load \"" + firstPath + "\"");
 
-        var document = core.CaptureSession(new SessionEditor());
-        Assert.HasCount(3, document.References);
-        Assert.AreEqual(firstPath, document.References[2].Request);
-        Assert.AreEqual(SessionCodec.Hash(firstImage), Assert.ContainsSingle(document.References[2].Assets).Hash);
-        Assert.AreEqual(document.References[2].Identity, document.Entries[2].Reference);
-        Assert.HasCount(2, document.Assets);
-    }
+            var document = core.CaptureSession(new SessionEditor());
+            Assert.HasCount(3, document.References);
+            Assert.AreEqual(firstPath, document.References[2].Request);
+            Assert.AreEqual(SessionCodec.Hash(firstImage), Assert.ContainsSingle(document.References[2].Assets).Hash);
+            Assert.AreEqual(document.References[2].Identity, document.Entries[2].Reference);
+            Assert.HasCount(2, document.Assets);
+            return Task.CompletedTask;
+        });
 
     /// <summary>
     /// Standard output and error produced before an exception remain historical across a file round trip without replay.
@@ -565,13 +556,12 @@ public sealed class SessionDocumentTests
     /// Captured dependency images reopen and remain inspectable without invoking their module or type initializers.
     /// </summary>
     [TestMethod]
-    public void ReopenSession_LoadsCapturedReferenceWithoutInitializingIt()
-    {
-        var directory = Directory.CreateTempSubdirectory("ilrepl-session-module-");
-        var marker = Path.Combine(directory.FullName, "marker");
-        var path = Path.Combine(directory.FullName, "source.dll");
-        try
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public Task ReopenSession_LoadsCapturedReferenceWithoutInitializingIt() =>
+        IsolatedTestProcess.WithDirectoryAsync(TestContext, directory =>
         {
+            var marker = Path.Combine(directory, "marker");
+            var path = Path.Combine(directory, "source.dll");
             File.WriteAllBytes(path, ModuleInitializerFixture.Create(true, marker));
             using var core = new ReplCore();
             Submit(core, ".load " + path, ".method int32 Read() {", "call int32 Owner::Read()", "ret", "}");
@@ -587,12 +577,8 @@ public sealed class SessionDocumentTests
             Submit(reopened, "call Read", "ret");
             Assert.AreEqual("initialized\n", File.ReadAllText(marker));
             Assert.Contains("= 142 : int32", Transcript(reopened));
-        }
-        finally
-        {
-            _assemblyDirectories.Add(directory.FullName);
-        }
-    }
+            return Task.CompletedTask;
+        });
 
     /// <summary>
     /// Runtime failures retain their source and error output and do not execute again during reopening.
