@@ -24,6 +24,7 @@ public sealed partial class Session
     /// <returns>The prepared edit.</returns>
     public MethodEdit PrepareEdit(string reference, string? name = null)
     {
+        using var references = Resolver.EnterContext();
         ArgumentException.ThrowIfNullOrWhiteSpace(reference);
         if (OpenMethod is not null || OpenType is not null)
         {
@@ -97,6 +98,7 @@ public sealed partial class Session
     /// <returns>The edit with its newly committed revision.</returns>
     public MethodEdit CommitEdit(string name, string source)
     {
+        using var references = Resolver.EnterContext();
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(source);
         var edit = _edits.FirstOrDefault(edit => edit.Name == name) ?? throw new ReplException($"no edit '{name}' in the session");

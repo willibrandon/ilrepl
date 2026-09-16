@@ -6,12 +6,16 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for how session assemblies are named, loaded, recognized, kept alive, and released.
-/// Each fact here was first established by a stage 1 spike against the runtime.
+/// Tests how session assemblies are named, loaded, recognized, kept alive, and released by the runtime.
 /// </summary>
 [TestClass]
 public sealed partial class DefinitionAssemblyTests
 {
+    /// <summary>
+    /// Supplies cancellation and results for isolated runtime lifetime checks.
+    /// </summary>
+    public TestContext TestContext { get; set; } = null!;
+
     /// <summary>
     /// Names are unique across kinds and the version never carries the counter.
     /// </summary>
@@ -57,17 +61,16 @@ public sealed partial class DefinitionAssemblyTests
     }
 
     /// <summary>
-    /// A retained type keeps its unresolved dependency alive after the session releases both,
-    /// first use still works, and everything collects once the type is dropped. Not parallel:
-    /// a concurrent test that enumerates the loaded assemblies holds every assembly object
-    /// while it does, which would keep these alive through the collection rounds.
+    /// A retained type keeps its unresolved dependency usable until both collect in a process free of unrelated reflection roots.
     /// </summary>
     [TestMethod]
-    public void Release_RetainedType_KeepsDependencyThenCollects()
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task Release_RetainedType_KeepsDependencyThenCollects()
     {
         TestSkip.Unless(!OperatingSystem.IsBrowser(), "unloading needs CoreCLR");
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
         var (holderWeak, pointWeak) = RetainedScenario();
-        Collect(() => !holderWeak.TryGetTarget(out _) && !pointWeak.TryGetTarget(out _));
+        Collect(() => AreCollected(holderWeak, pointWeak));
         Assert.IsFalse(holderWeak.TryGetTarget(out _), "the retained definition should collect once it is dropped");
         Assert.IsFalse(pointWeak.TryGetTarget(out _), "its dependency should collect with it");
     }
@@ -220,4 +223,8 @@ public sealed partial class DefinitionAssemblyTests
             GC.Collect();
         }
     }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static bool AreCollected(WeakReference<Assembly> holder, WeakReference<Assembly> point) =>
+        !holder.TryGetTarget(out _) && !point.TryGetTarget(out _);
 }

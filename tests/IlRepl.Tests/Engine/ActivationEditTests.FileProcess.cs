@@ -63,9 +63,10 @@ public sealed partial class ActivationEditTests
         var overload = int.Parse(Environment.GetEnvironmentVariable(FileProbeOverload)!, CultureInfo.InvariantCulture);
         var nested = bool.Parse(Environment.GetEnvironmentVariable(FileProbeNested)!);
         var session = new Session();
-        var assembly = session.Resolver.Load(path);
+        var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(path);
         var name = ActivationExamples.Name(nested, overload == 8);
         Assert.AreEqual(42, assembly.GetType("Activation.Owner")!.GetMethod("Read")!.Invoke(null, [path, name]));
+        session.Resolver.Load(path);
         var edit = session.PrepareEdit("int32 Activation.Owner::Read(string, string)", "Copy");
         Assert.IsEmpty(edit.Problems, string.Join('\n', edit.Problems));
         session.CommitEdit(edit.Name, edit.Source);

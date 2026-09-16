@@ -38,6 +38,11 @@ cells can be saved to disk as real assemblies with `.save`, or shown as ILAsm wi
 reads any method back, the framework's or your own, with the same stack column beside each
 instruction.
 
+Save editable experiments with `.session save example.ilrepl.json` or Ctrl+S, and reopen them with
+`ilrepl example.ilrepl.json` or Ctrl+O. Reopening preserves source and historical results without running code;
+`.session run` or `ilrepl example.ilrepl.json --run` executes explicitly. Sessions can record NuGet packages,
+SDK projects, and embedded dependency images. See [Saving and sharing sessions](https://ilrepl.dev/usage/sessions/).
+
 Use `.edit` to change a copy of the method, `.diff` to inspect the changes, and `.compare` to run both
 versions with the same inputs. The original stays available. See
 [Editing and comparing methods](https://ilrepl.dev/usage/editing-methods/).

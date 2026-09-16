@@ -4,12 +4,23 @@ using StreamJsonRpc;
 namespace IlRepl.Protocol;
 
 /// <summary>
+/// Defines the source-generated RPC contract between the frontend and its execution host.
+/// </summary>
+/// <remarks>
 /// The JSON-RPC contract between the front-end and the host. The host serves it; the front-end
 /// talks to a source-generated proxy.
-/// </summary>
+/// </remarks>
 [JsonRpcContract, GenerateShape(IncludeMethods = MethodShapeFlags.PublicInstance)]
 public partial interface IReplHost
 {
+    /// <summary>
+    /// Captures, reconstructs, saves, or explicitly executes a typed workspace operation.
+    /// </summary>
+    /// <param name="request">The operation and matching editor snapshot.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns>The source workspace and resulting engine reply.</returns>
+    Task<SessionReply> SessionAsync(SessionRequest request, CancellationToken cancellationToken);
+
     /// <summary>
     /// Returns the completion catalog and the initial session status.
     /// </summary>

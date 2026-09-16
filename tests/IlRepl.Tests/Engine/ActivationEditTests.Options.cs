@@ -29,7 +29,10 @@ public sealed partial class ActivationEditTests
         var edit = session.PrepareEdit("int32 Activation.Owner::Read(string, string)", "Copy");
         var assembly = typeof(List<>).Assembly.FullName!;
         var name = "System.Collections.Generic.List`1[[" + edit.Original.Requested.DeclaringType!.AssemblyQualifiedName + "]]";
-        Assert.AreEqual(42, edit.Original.Requested.Invoke(null, [assembly, name]));
+        using (AssemblyLoadContext.GetLoadContext(edit.Original.Requested.Module.Assembly)!.EnterContextualReflection())
+        {
+            Assert.AreEqual(42, edit.Original.Requested.Invoke(null, [assembly, name]));
+        }
         Assert.IsEmpty(edit.Problems, string.Join('\n', edit.Problems));
         session.CommitEdit(edit.Name, edit.Source);
         Assert.AreEqual(42, edit.Method!.Invoke(null, [assembly, name]));

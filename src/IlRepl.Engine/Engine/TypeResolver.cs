@@ -3,10 +3,9 @@ using System.Reflection;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Finds types by their IL name across the assemblies a session can see: everything loaded in
-/// the process plus anything added with <see cref="Load"/>.
+/// Resolves IL type names through the shared runtime and a session's owned dependency images.
 /// </summary>
-public sealed class TypeResolver
+public sealed partial class TypeResolver : IDisposable
 {
     internal static readonly string[] CommonNamespaces =
     [
@@ -25,6 +24,92 @@ public sealed class TypeResolver
 
     private readonly List<Assembly> _extra = [];
     private readonly Dictionary<Assembly, byte[]> _images = [];
+    private ReferenceLoadContext _context = new();
+    private readonly List<ReferenceLoadContext> _previousContexts = [];
+
+    /// <summary>
+    /// Makes newly generated definitions resolve external types through this session's owned references.
+    /// </summary>
+    /// <returns>The nested resolution scope.</returns>
+    internal IDisposable EnterContext() => new ReferenceLoadScope(_context);
+
+    /// <summary>
+    /// Registers all managed dependency images before loading their public types.
+    /// </summary>
+    /// <param name="images">The verified implementation and satellite images.</param>
+    public void RegisterImages(IEnumerable<byte[]> images)
+    {
+        foreach (var image in images)
+        {
+            _context.Register(image);
+        }
+    }
+
+    /// <summary>
+    /// Registers a verified native dependency selected for the current runtime.
+    /// </summary>
+    /// <param name="name">The library filename.</param>
+    /// <param name="path">The owned native asset path.</param>
+    public void RegisterNative(string name, string path) => _context.RegisterNative(name, path);
+
+    /// <summary>
+    /// Rebinds unused changed dependency graphs while retaining runtime identities outside the affected graphs.
+    /// </summary>
+    /// <param name="images">New or changed images verified by the session dependency checks.</param>
+    /// <param name="removed">Assembly identities no longer supplied by the dependency graph.</param>
+    internal void ReplaceImages(IEnumerable<byte[]> images, IEnumerable<AssemblyName> removed)
+    {
+        var replacements = images.ToArray();
+        var removals = removed.ToArray();
+        if (replacements.Length == 0 && removals.Length == 0)
+        {
+            return;
+        }
+
+        var names = replacements.Select(ReferenceLoadContext.Identity).Concat(removals).Select(name => name.Name + "/" + name.CultureName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var context = new ReferenceLoadContext(_context, removed: removals);
+        foreach (var image in replacements)
+        {
+            context.Register(image, force: true);
+        }
+
+        _previousContexts.Add(_context);
+        _context = context;
+        foreach (var assembly in _extra.Where(assembly =>
+            names.Contains(assembly.GetName().Name + "/" + assembly.GetName().CultureName)).ToArray())
+        {
+            _extra.Remove(assembly);
+            _images.Remove(assembly);
+        }
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        foreach (var resolver in _snapshotResolvers)
+        {
+            resolver.Dispose();
+        }
+
+        _snapshotResolvers.Clear();
+        foreach (var context in _previousContexts.Append(_context))
+        {
+            if (context.IsCollectible)
+            {
+                context.Unload();
+            }
+        }
+
+        _previousContexts.Clear();
+        _extra.Clear();
+        _images.Clear();
+    }
+
+    /// <summary>
+    /// Keeps reconstructed declarations free of argument materialization and method activation.
+    /// </summary>
+    internal bool DeferActivation { get; set; }
 
     /// <summary>
     /// Initializes a resolver and loads the framework assemblies most cells reach for.
@@ -69,12 +154,7 @@ public sealed class TypeResolver
                 // browser's file system is in memory and its runtime loads from bytes.
                 var path = Path.GetFullPath(nameOrPath);
                 image = File.ReadAllBytes(path);
-                if (OperatingSystem.IsBrowser())
-                {
-                    return LoadImage(image);
-                }
-
-                assembly = Assembly.LoadFrom(path);
+                assembly = _context.LoadImage(image, path);
             }
             else
             {
@@ -100,19 +180,19 @@ public sealed class TypeResolver
     }
 
     /// <summary>
-    /// Loads an assembly from its image so its types resolve, and keeps the image for listings. This
-    /// is the path a host without a file system takes, and the one tests take for assemblies they write.
+    /// Loads an owned assembly image for type resolution and retains its exact bytes for inspection.
     /// </summary>
     /// <param name="image">The PE image.</param>
+    /// <param name="path">An optional source location used only while its bytes match the owned image.</param>
     /// <returns>The loaded assembly.</returns>
     /// <exception cref="ReplException">The image could not be loaded.</exception>
-    public Assembly LoadImage(byte[] image)
+    public Assembly LoadImage(byte[] image, string? path = null)
     {
         ArgumentNullException.ThrowIfNull(image);
         Assembly assembly;
         try
         {
-            assembly = System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromStream(new MemoryStream(image, writable: false));
+            assembly = _context.LoadImage(image, path);
         }
         catch (Exception ex) when (ex is FileLoadException or BadImageFormatException or ArgumentException)
         {

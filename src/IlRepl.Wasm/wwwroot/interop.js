@@ -3,6 +3,48 @@
 const inputChunks = [];
 let pendingResize = '';
 const comparisons = new Map();
+const acknowledgements = new Map();
+let checkpointSequence = 0;
+let initialSource = null;
+let initialFile = null;
+let preferences = 'true,false';
+
+export function initialDocument() {
+  const source = initialSource;
+  initialSource = null;
+  return source;
+}
+
+export function initialPath() { return initialFile; }
+export function initialPreferences() { return preferences; }
+
+export function checkpoint(source, path, dirty, echoStack, showTiming, pendingSubmission, pendingSource,
+  entryPrefix, cellNumbers, assetHashes) {
+  return acknowledged({ type: 'workspace-checkpoint', document: source, path, dirty, entryPrefix,
+    cellNumbers: cellNumbers ? cellNumbers.split(',').map(Number) : [], assetHashes: assetHashes ? assetHashes.split(',') : [],
+    preferences: [echoStack, showTiming].join(','), pendingSubmission, pendingSource: JSON.parse(pendingSource) });
+}
+
+export function editorChanged(editor) {
+  self.postMessage({ type: 'workspace-editor', editor });
+}
+
+export function inputBarrier() {
+  inputChunks.push(new TextEncoder().encode('\x1b[24;8~'));
+  self.__ilreplSignalInput?.();
+}
+
+export function pageAction(operation, document, value) {
+  return acknowledged({ type: 'workspace-action', operation, document, value });
+}
+
+function acknowledged(message) {
+  return new Promise((resolve, reject) => {
+    const identity = ++checkpointSequence;
+    acknowledgements.set(identity, { resolve, reject });
+    self.postMessage({ ...message, identity });
+  });
+}
 
 export function runComparisonSide(identity, packageJson, original) {
   return new Promise((resolve) => {
@@ -136,6 +178,19 @@ self.onmessage = (e) => {
     const resolve = comparisons.get(msg.identity);
     comparisons.delete(msg.identity);
     resolve?.(msg.result);
+  } else if (msg.type === 'workspace-init') {
+    initialSource = msg.document || null;
+    initialFile = msg.path || null;
+    preferences = msg.preferences || 'true,false';
+  } else if (msg.type === 'workspace-ack') {
+    const pending = acknowledgements.get(msg.identity);
+    acknowledgements.delete(msg.identity);
+    if (msg.error) pending?.reject(new Error(msg.error));
+    else pending?.resolve();
+  } else if (msg.type === 'workspace-request') {
+    Promise.resolve().then(() => self.__ilreplWorkspace(msg.operation, msg.value || '')).then(
+      value => self.postMessage({ type: 'workspace-result', identity: msg.identity, value }),
+      error => self.postMessage({ type: 'workspace-result', identity: msg.identity, error: String(error) }));
   }
 };
 

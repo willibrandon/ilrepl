@@ -17,6 +17,13 @@
 
   <ItemGroup>
     <PackageReference Include="StreamJsonRpc" />
+    <PackageReference Include="NuGet.Commands" />
+    <PackageReference Include="NuGet.Credentials" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="PortableRuntimeIdentifierGraph.json" />
+    <None Update="THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

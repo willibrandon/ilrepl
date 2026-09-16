@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.Loader;
 using System.Text.Json;
 using IlRepl.Engine;
 using IlRepl.Host;
@@ -84,7 +85,8 @@ public sealed partial class SatelliteAssemblyTests
         File.WriteAllBytes(sourcePath, fixture.Source);
         if (!missing) File.WriteAllBytes(satellitePath, fixture.Satellite);
         var session = new Session();
-        var assembly = session.Resolver.Load(sourcePath);
+        var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(sourcePath);
+        session.Resolver.Load(assembly.FullName!);
         var satelliteName = fixture.Name + ".resources";
         void AssertNotLoaded() => Assert.DoesNotContain(candidate => candidate.GetName().Name == satelliteName,
             session.Resolver.Assemblies);

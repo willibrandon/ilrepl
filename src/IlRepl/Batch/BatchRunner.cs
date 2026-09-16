@@ -41,11 +41,37 @@ public sealed class BatchRunner
         var ok = true;
         var sourceIdentity = Guid.NewGuid().ToString("N");
         var lineIndex = 0;
+        var suppliedSource = false;
+        var suppliedInstructions = false;
         foreach (var line in lines)
         {
+            var before = _engine.Status;
+            var comment = before.Mark.InBlockComment;
+            var kind = CilLexer.Classify(line, ref comment, out var text);
             var start = line.Length - line.TrimStart().Length;
             var location = new AnalysisLocation(sourceIdentity, lineIndex++, start, line.Length - start);
             var reply = await _engine.HandleSourceAsync(line, location, cancellationToken).ConfigureAwait(false);
+            if (reply.SessionEditor is not null)
+            {
+                suppliedSource = false;
+                suppliedInstructions = false;
+            }
+            else if (reply.Succeeded && kind == SourceLineKind.Text
+                && (!text.StartsWith('.') || _engine.Vocabulary.Directives.Contains(text.Split(' ')[0])))
+            {
+                suppliedSource = true;
+                if (before.OpenMethod is null && before.OpenType is null && before.OpenEdit is null
+                    && reply.Status.OpenMethod is null && reply.Status.OpenType is null && reply.Status.OpenEdit is null
+                    && reply.Status.CellNumber == before.CellNumber && reply.Status.Instructions > before.Instructions)
+                {
+                    suppliedInstructions = true;
+                }
+            }
+
+            if (reply.Status.CellIsEmpty)
+            {
+                suppliedInstructions = false;
+            }
             ok &= reply.Succeeded;
             Write(reply);
             if (reply.PendingComparison is { } comparison)
@@ -62,6 +88,10 @@ public sealed class BatchRunner
         }
 
         var status = _engine.Status;
+        if (!suppliedSource)
+        {
+            return ok ? 0 : 1;
+        }
         if (status.OpenEdit is { } edit)
         {
             var message = $"edit {edit} is still open; close it with }}";
@@ -88,7 +118,7 @@ public sealed class BatchRunner
             return 1;
         }
 
-        if (!status.CellIsEmpty)
+        if (suppliedInstructions && !status.CellIsEmpty)
         {
             var reply = await _engine.HandleAsync("ret", cancellationToken).ConfigureAwait(false);
             ok &= reply.Succeeded;
@@ -98,7 +128,11 @@ public sealed class BatchRunner
         return ok ? 0 : 1;
     }
 
-    private void Write(HandleReply reply)
+    /// <summary>
+    /// Prints a response and any recalled draft without submitting its source for execution.
+    /// </summary>
+    /// <param name="reply">The response from a batch line or startup session open.</param>
+    internal void Write(HandleReply reply)
     {
         foreach (var line in reply.Lines)
         {
@@ -113,6 +147,12 @@ public sealed class BatchRunner
         if (reply.EditDocument is { } document)
         {
             _output.WriteLine(document.Source);
+        }
+
+        if (reply.SessionEditor is { Lines.Length: > 0 } editor && editor.Lines.Any(line => line.Length != 0))
+        {
+            _output.WriteLine("  editor draft (not executed)");
+            foreach (var line in editor.Lines) _output.WriteLine(line);
         }
 
         _output.Flush();

@@ -10,6 +10,11 @@ namespace IlRepl.Repl;
 public sealed record HandleResult(bool Succeeded, bool QuitRequested)
 {
     /// <summary>
+    /// The typed session action awaiting frontend coordination.
+    /// </summary>
+    public SessionAction? SessionAction { get; init; }
+
+    /// <summary>
     /// Source findings retained when the submitted line is refused.
     /// </summary>
     public IReadOnlyList<AnalysisDiagnostic> Diagnostics { get; init; } = [];

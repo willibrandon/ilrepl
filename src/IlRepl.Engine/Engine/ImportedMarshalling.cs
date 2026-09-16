@@ -192,8 +192,11 @@ internal static class ImportedMarshalling
     }
 
     private static Type ResolveType(string name, Module module, TypeResolver resolver) => Type.GetType(name,
-        identity => resolver.Assemblies.FirstOrDefault(assembly =>
-            string.Equals(assembly.FullName, identity.FullName, StringComparison.OrdinalIgnoreCase))
+        identity => resolver.Assemblies.Prepend(module.Assembly).FirstOrDefault(assembly =>
+            AssemblyName.ReferenceMatchesDefinition(identity, assembly.GetName())
+            && (identity.Version is null || identity.Version == assembly.GetName().Version)
+            && (identity.GetPublicKeyToken() is not { Length: > 0 } token
+                || token.AsSpan().SequenceEqual(assembly.GetName().GetPublicKeyToken())))
             ?? SessionAssemblies.Resolve(identity) ?? Assembly.Load(identity),
         (assembly, type, ignoreCase) => (assembly ?? module.Assembly).GetType(type, throwOnError: true, ignoreCase), throwOnError: true)!;
 }

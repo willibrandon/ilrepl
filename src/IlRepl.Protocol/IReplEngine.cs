@@ -2,11 +2,23 @@
 namespace IlRepl.Protocol;
 
 /// <summary>
+/// Defines the engine operations shared by terminal, batch, and browser frontends.
+/// </summary>
+/// <remarks>
 /// What the front-end needs from a REPL engine: a completion catalog, the session status, and
 /// a way to hand it lines.
-/// </summary>
+/// </remarks>
 public interface IReplEngine : IAsyncDisposable
 {
+    /// <summary>
+    /// Captures, reconstructs, or explicitly executes a typed session workspace operation.
+    /// </summary>
+    /// <param name="request">The operation and matching editor snapshot.</param>
+    /// <param name="cancellationToken">Cancels the operation.</param>
+    /// <returns>The resulting source workspace and engine reply.</returns>
+    Task<SessionReply> SessionAsync(SessionRequest request, CancellationToken cancellationToken) =>
+        Task.FromException<SessionReply>(new NotSupportedException("this engine has no session document support"));
+
     /// <summary>
     /// Every opcode and command the completer offers.
     /// </summary>

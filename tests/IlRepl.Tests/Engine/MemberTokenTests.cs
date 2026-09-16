@@ -196,6 +196,7 @@ public sealed class MemberTokenTests
         foreach (var image in new[] { AssemblyExporter.Write(session, "member-token-copy"), IlasmLocator.Assemble(session.ToIlAsm()) })
         {
             var context = new AssemblyLoadContext("member-token-copy", isCollectible: true);
+            context.Resolving += (_, name) => session.Resolver.Assemblies.FirstOrDefault(assembly => assembly.FullName == name.FullName);
             try
             {
                 var assembly = context.LoadFromStream(new MemoryStream(image));

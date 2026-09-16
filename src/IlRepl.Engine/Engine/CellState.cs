@@ -962,7 +962,7 @@ public sealed class CellState
         var scope = new RuntimeBindingScope(Context);
         var adapter = new RuntimeBindingAdapter(scope);
         return [.. VariableDeclarationParser.ParseArguments(spec, scope)
-            .Select(argument => RuntimeArgumentMaterializer.Materialize(argument, adapter))];
+            .Select(argument => RuntimeArgumentMaterializer.Materialize(argument, adapter, Context.Resolver.DeferActivation))];
     }
 
     private string DescribeLocals() =>

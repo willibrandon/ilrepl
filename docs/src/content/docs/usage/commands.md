@@ -38,11 +38,11 @@ Directives are part of the cell. Commands act on the session.
 | `.dis <method>` | Disassemble a method: a framework or loaded method, a method defined with `.method`, or a member of a closed class. See [Disassembly](/usage/disassembly/). |
 | `.undo` | Remove the last line of the cell, or of the open method or class. |
 | `.clear` | Drop the cell body, keep declarations, methods, and types. Inside a method or class block, abandon the block. |
-| `.reset` | Drop the cell body, every declaration, every method, and every type. |
+| `.reset` | Drop current source state; keep dependencies, session path, and historical submissions. |
 | `.il` | Render the types, the methods, and the cell as ILAsm. |
 | `.save <path.dll>` | Write the types, the methods, and the cell to disk as an assembly. |
-| `.load <name or path>` | Load an assembly so its types resolve. |
-| `.assemblies` | List the assemblies loaded with `.load`. |
+| `.load <name or path>` | Load an assembly, SDK project, or `nuget:Id[,range]` dependency; reopen `.ilrepl.json` source. |
+| `.assemblies` | List loaded references with origins, resolved versions, and availability. |
 | `.methods [Edit]` | List methods and edits, or inspect an edit's dependency report. |
 | `.types` | List the types defined with `.class`, with their members. |
 | `.stack` | Show the stack. |
@@ -50,6 +50,22 @@ Directives are part of the cell. Commands act on the session.
 | `.quiet [on\|off]` | Stop echoing the stack after each instruction. |
 | `.run` | Run the cell, the same as `ret` or an empty line. |
 | `.quit` | Leave. |
+
+## Sessions
+
+| Command | Meaning |
+| --- | --- |
+| `.session` | Show the associated file, changes, runtime, and dependencies. |
+| `.session save [path] [--embed]` | Save editable source, drafts, and historical results; optionally embed dependencies. |
+| `.session open <path> [--force]` | Reopen in a fresh runtime without execution; `--force` permits discarding modified source. |
+| `.session restore [--build]` | Recover locked dependencies; `--build` permits project evaluation and builds. |
+| `.session cells` | List retained prompt numbers and historical output. |
+| `.session cell <number>` | Recall source and its input declarations without running it. |
+| `.session run [numbers]` | Run all or selected cells from fresh runtime state; accept ranges such as `2-4`. |
+
+`.save path.ilrepl.json` saves a session. `.load path.ilrepl.json` reopens it.
+Project loads accept `--framework`, `--configuration`, and `--no-build`. Use `.load <reference> --reload` to adopt a rebuilt
+dependency in a fresh runtime. See [Saving and sharing sessions](/usage/sessions/).
 
 ## Method edits
 

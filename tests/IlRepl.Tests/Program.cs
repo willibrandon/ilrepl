@@ -18,7 +18,8 @@ internal static class Program
     {
         try
         {
-            if (await HistoryProbes.TryRunAsync() ||
+            if (await SessionCredentialProvider.TryRunAsync(args) ||
+                await HistoryProbes.TryRunAsync() ||
                 await ActivationEditTests.TryRunFileActivationProbeAsync() ||
                 await ComparisonDescendantTests.TryRunDescendantProbeAsync())
             {

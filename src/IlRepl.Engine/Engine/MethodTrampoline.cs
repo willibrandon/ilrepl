@@ -10,23 +10,27 @@ using TypeAttributes = Mono.Cecil.TypeAttributes;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Provides a stable method entry point whose implementation can be bound or replaced at an activation boundary.
+/// </summary>
+/// <remarks>
 /// The stable entry point of a session method. Every caller, whether a cell, another session
 /// method, or a session type, binds to <see cref="Method"/>, which forwards to whichever version
 /// is bound through a delegate held in a private static field. A delegate to a static method
 /// keeps that method's assembly alive, so a version lives exactly as long as something can
 /// still reach it: this field, a delegate a user retained, or a call in flight.
-/// </summary>
+/// </remarks>
 public sealed class MethodTrampoline
 {
-    private readonly Action<Delegate> _bind;
+    private readonly Lazy<Action<Delegate>> _bind;
 
-    private MethodTrampoline(MethodSignature signature, DefinitionAssembly definition, MethodInfo method, Type delegateType, Action<Delegate> bind)
+    private MethodTrampoline(MethodSignature signature, DefinitionAssembly definition, MethodInfo method,
+        Type delegateType, Func<Action<Delegate>> bind)
     {
         Signature = signature;
         Definition = definition;
         Method = method;
         DelegateType = delegateType;
-        _bind = bind;
+        _bind = new Lazy<Action<Delegate>>(bind);
     }
 
     /// <summary>
@@ -58,8 +62,7 @@ public sealed class MethodTrampoline
     public static MethodTrampoline Create(MethodSignature signature) => Create(signature, null);
 
     /// <summary>
-    /// Creates the trampoline for a signature that may mention prototypes of families written in
-    /// the same group.
+    /// Creates a trampoline whose signature may reference prototypes of families emitted in the same group.
     /// </summary>
     /// <param name="signature">The signature.</param>
     /// <param name="externals">Prototypes of the group, referenced by their assembly names, or null.</param>
@@ -136,21 +139,23 @@ public sealed class MethodTrampoline
 
         // Binding must not go through reflection once a commit is under way, so the typed Bind
         // is wrapped once here into a delegate that takes any delegate of the right type.
-        var typed = loadedBind.CreateDelegate(typeof(Action<>).MakeGenericType(loadedDelegate));
-        var shim = typeof(MethodTrampoline).GetMethod(nameof(BindCore), BindingFlags.NonPublic | BindingFlags.Static)!.MakeGenericMethod(loadedDelegate);
-        var binder = (Action<Delegate>)shim.CreateDelegate(typeof(Action<Delegate>), typed);
-        return new MethodTrampoline(signature, definition, loaded, loadedDelegate, binder);
+        return new MethodTrampoline(signature, definition, loaded, loadedDelegate, () =>
+        {
+            var typed = loadedBind.CreateDelegate(typeof(Action<>).MakeGenericType(loadedDelegate));
+            var shim = typeof(MethodTrampoline).GetMethod(nameof(BindCore), BindingFlags.NonPublic | BindingFlags.Static)!
+                .MakeGenericMethod(loadedDelegate);
+            return (Action<Delegate>)shim.CreateDelegate(typeof(Action<Delegate>), typed);
+        });
     }
 
     /// <summary>
-    /// Points the trampoline at a version. One reference store; callers already inside a call
-    /// finish on the version they entered with.
+    /// Binds one implementation while existing callers finish on the version they entered with.
     /// </summary>
     /// <param name="implementation">A delegate of <see cref="DelegateType"/> over the version's body.</param>
     public void Bind(Delegate implementation)
     {
         ArgumentNullException.ThrowIfNull(implementation);
-        _bind(implementation);
+        _bind.Value(implementation);
     }
 
     private static void AddParameters(MethodDefinition method, MethodSignature signature, TypeReference[] parameterTypes)

@@ -7,7 +7,7 @@ namespace IlRepl.Tui;
 /// <summary>
 /// Orders paste application before later input and preserves control keys grouped with printable text.
 /// </summary>
-internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source) : ChannelReader<Hex1bEvent>
+internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source, Func<Hex1bEvent, bool> filter) : ChannelReader<Hex1bEvent>
 {
     private TaskCompletionSource? _applied;
     private TaskCompletionSource? _frameReady;
@@ -28,7 +28,7 @@ internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source) : Chan
         }
         if (_pendingText is not null)
         {
-            item = TakeTextOrControl();
+            item = Filter(TakeTextOrControl());
             return true;
         }
 
@@ -43,18 +43,20 @@ internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source) : Chan
             return false;
         }
 
-        if (item is Hex1bPasteEvent paste)
-        {
-            _paste = paste.Paste;
-            _applied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        }
-        else if (item is Hex1bKeyEvent { Key: Hex1bKey.None } key && FindControl(key.Text, 0) >= 0)
+        if (item is Hex1bKeyEvent { Key: Hex1bKey.None } key && FindControl(key.Text, 0) >= 0)
         {
             // Hex1b treats some control bytes inside multi-character text tokens as printable.
             // Keep Unicode text together, while delivering each control byte as its own key.
             _pendingText = key;
             _textOffset = 0;
             item = TakeTextOrControl();
+        }
+
+        item = Filter(item);
+        if (item is Hex1bPasteEvent paste)
+        {
+            _paste = paste.Paste;
+            _applied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
         return true;
@@ -158,6 +160,8 @@ internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source) : Chan
 
         return result;
     }
+
+    private Hex1bEvent Filter(Hex1bEvent item) => filter(item) ? Hex1bKeyEvent.Plain(Hex1bKey.None) : item;
 
     private static int FindControl(string text, int start)
     {

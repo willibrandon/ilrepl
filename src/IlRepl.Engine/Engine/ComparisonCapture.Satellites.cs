@@ -10,17 +10,17 @@ namespace IlRepl.Engine;
 /// </summary>
 public static partial class ComparisonCapture
 {
-    private static void CaptureSatellites(Session session, Dictionary<string, ComparisonAssembly> dependencies)
+    private static void CaptureSatellites(Session session, Dictionary<string, ComparisonAssembly> dependencies, TypeResolver source)
     {
         var parents = dependencies.Values.ToArray();
         var names = parents.Select(parent => new AssemblyName(parent.Name)).ToArray();
-        foreach (var assembly in session.Resolver.Assemblies.ToArray())
+        foreach (var assembly in source.Assemblies.ToArray())
         {
             var name = assembly.GetName();
             if (string.IsNullOrEmpty(name.CultureName) || !names.Any(parent =>
                 string.Equals(name.Name, parent.Name + ".resources", StringComparison.OrdinalIgnoreCase)
                 && name.GetPublicKeyToken().AsSpan().SequenceEqual(parent.GetPublicKeyToken()))) continue;
-            CaptureDependency(name.FullName, session, dependencies);
+            CaptureDependency(name.FullName, session, dependencies, source: source);
         }
 
         foreach (var parent in parents)

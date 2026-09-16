@@ -5,9 +5,12 @@ using IlRepl.Protocol;
 namespace IlRepl.Repl;
 
 /// <summary>
+/// Runs the shared REPL core inside the current process with serialized submission and workspace operations.
+/// </summary>
+/// <remarks>
 /// An engine that runs <see cref="ReplCore"/> in the current process. The browser build uses it;
 /// the Native AOT tool talks to the same core through the host process instead.
-/// </summary>
+/// </remarks>
 public sealed partial class InProcessEngine : IReplEngine
 {
     private readonly ReplCore _core;
@@ -152,11 +155,12 @@ public sealed partial class InProcessEngine : IReplEngine
         cancellationToken.ThrowIfCancellationRequested();
         await _warmupCancellation.CancelAsync().ConfigureAwait(false);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        HandleReply reply;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
             var result = _core.Handle(line, location);
-            var reply = Reply(result);
+            reply = Reply(result);
             if (result.ComparisonPackage is { } package)
             {
                 var ticket = new ComparisonTicket(Guid.NewGuid().ToString("N"), package.Name, package.StartingState);
@@ -164,12 +168,27 @@ public sealed partial class InProcessEngine : IReplEngine
                 reply = reply with { PendingComparison = ticket };
             }
 
-            return reply;
         }
         finally
         {
             _gate.Release();
         }
+
+        if (reply.SessionAction is { Operation: SessionOperation.Load, Reload: false } action && SessionTooling is { } tooling)
+        {
+            try
+            {
+                var loaded = await tooling(new SessionRequest { Action = action }, cancellationToken).ConfigureAwait(false);
+                return loaded.Reply with { Lines = [.. reply.Lines, .. loaded.Reply.Lines] };
+            }
+            catch (Exception exception) when (exception is ReplException or IOException or InvalidDataException or ArgumentException)
+            {
+                return new HandleReply(false, false,
+                    [.. reply.Lines, TranscriptLine.Of(LineKind.Error, "  " + exception.Message, SpanStyle.Error)], Status);
+            }
+        }
+
+        return reply;
     }
 
     /// <inheritdoc />
@@ -237,6 +256,7 @@ public sealed partial class InProcessEngine : IReplEngine
             Diagnostics = result.Diagnostics,
             EditDocument = result.EditDocument,
             Diff = result.Diff,
+            SessionAction = result.SessionAction,
         };
     }
 

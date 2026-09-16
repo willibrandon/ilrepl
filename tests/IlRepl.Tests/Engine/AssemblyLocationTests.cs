@@ -117,7 +117,10 @@ public sealed class AssemblyLocationTests
         var fixture = AssemblyLocationFixture.Create(target, api, dispatch, path, machine: imageMachine);
         File.WriteAllBytes(path, fixture.Image);
         var session = new Session();
-        var assembly = session.Resolver.Load(path);
+        // This isolated child tests actual LoadFrom metadata, rather than the session's owned image loader.
+        var original = Assembly.LoadFrom(path);
+        var assembly = session.Resolver.Load(original.FullName!);
+        Assert.AreSame(original, assembly);
         Assert.AreEqual(path, assembly.Location);
         Assert.IsTrue(File.Exists(assembly.Location));
         Assert.AreEqual(AssemblyLocationFixture.Scope, assembly.ManifestModule.ScopeName);

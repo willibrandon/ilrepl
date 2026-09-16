@@ -1,7 +1,7 @@
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
-/// Creates argument values only for actual input, after the shared declaration binder succeeds.
+/// Projects argument declarations while deferring runtime values during document reconstruction.
 /// </summary>
 internal static class RuntimeArgumentMaterializer
 {
@@ -10,16 +10,18 @@ internal static class RuntimeArgumentMaterializer
     /// </summary>
     /// <param name="declaration">The bound declaration.</param>
     /// <param name="adapter">The actual input's runtime adapter.</param>
+    /// <param name="defer">Whether to retain the initializer until execution.</param>
     /// <returns>The runtime argument.</returns>
-    public static ArgumentDeclaration Materialize(ArgumentSyntax declaration, RuntimeBindingAdapter adapter)
+    public static ArgumentDeclaration Materialize(ArgumentSyntax declaration, RuntimeBindingAdapter adapter, bool defer = false)
     {
         var type = adapter.ToType(declaration.Type);
-        var value = declaration.Literal is not null
+        var value = defer ? null : declaration.Literal is not null
             ? ValueLiteralParser.Parse(declaration.Literal, type)
             : type.IsValueType ? Array.CreateInstance(type, 1).GetValue(0) : null;
         return new ArgumentDeclaration(type, declaration.Name, value, declaration.Literal ?? (type.IsValueType ? "default" : "null"))
         {
             ExactType = declaration.ExactType,
+            Deferred = defer,
         };
     }
 }

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.Loader;
 using System.Text;
 using System.Text.RegularExpressions;
 using IlRepl.Engine;
@@ -10,8 +11,7 @@ using OpCodes = Mono.Cecil.Cil.OpCodes;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Independent checks of the disassembly: Mono.Cecil's reader over the same bytes, ildasm's text
-/// over the same assembly, and a round trip through ilasm compared by meaning.
+/// Independently verifies disassembly with Cecil metadata, ildasm output, and executable ilasm round trips.
 /// </summary>
 [TestClass]
 public sealed partial class DisassemblyFidelityTests
@@ -601,10 +601,17 @@ public sealed partial class DisassemblyFidelityTests
         var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture").Methods.First(m => m.Name == "M");
         var method = ModuleDefinition.ReadModule(new MemoryStream(reassembled)).Types.First(t => t.Name == "T").Methods.Single(m => m.HasBody);
         CecilOracle.AssertSameMeaning(original, method, assembly.GetName().FullName, assembly.GetName().FullName, image, reassembled);
-        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-backslash", isCollectible: true);
-        var loaded = context.LoadFromStream(new MemoryStream(reassembled));
-        Assert.AreEqual(1, loaded.GetType("N.T")!.GetMethod("M")!.Invoke(null, null));
-        context.Unload();
+        var context = new AssemblyLoadContext("ilasm-backslash", isCollectible: true);
+        try
+        {
+            context.Resolving += (_, requested) => requested.FullName == assembly.FullName ? assembly : null;
+            var loaded = context.LoadFromStream(new MemoryStream(reassembled));
+            Assert.AreEqual(1, loaded.GetType("N.T")!.GetMethod("M")!.Invoke(null, null));
+        }
+        finally
+        {
+            context.Unload();
+        }
     }
 
     /// <summary>

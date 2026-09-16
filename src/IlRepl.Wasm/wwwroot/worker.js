@@ -44,6 +44,7 @@ try {
   const config = getConfig();
   const exports = await getAssemblyExports(config.mainAssemblyName);
   self.__ilreplSignalInput = exports.IlRepl.Wasm.WasmPresentationAdapter.SignalInputAvailable;
+  self.__ilreplWorkspace = exports.IlRepl.Wasm.BrowserWorkspace.ExecuteAsync;
   await runMain();
 } catch (err) {
   self.postMessage({ type: 'error', message: err.toString(), stack: err.stack });

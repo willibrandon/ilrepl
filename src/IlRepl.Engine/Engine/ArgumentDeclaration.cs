@@ -12,6 +12,19 @@ namespace IlRepl.Engine;
 public sealed record ArgumentDeclaration(Type Type, string? Name, object? Value, string ValueText)
 {
     /// <summary>
+    /// Whether the initializer has been retained without creating its runtime value.
+    /// </summary>
+    internal bool Deferred { get; init; }
+
+    /// <summary>
+    /// Materializes a reopened argument only at an explicit execution boundary.
+    /// </summary>
+    /// <returns>The value passed to the cell.</returns>
+    internal object? ExecutionValue() => !Deferred ? Value : ValueText == "default"
+        ? (Type.IsValueType ? Array.CreateInstance(Type, 1).GetValue(0) : null)
+        : ValueLiteralParser.Parse(ValueText, Type);
+
+    /// <summary>
     /// The exact type retained when its runtime projection cannot represent its complete shape.
     /// </summary>
     internal TypeSymbol? ExactType { get; init; }

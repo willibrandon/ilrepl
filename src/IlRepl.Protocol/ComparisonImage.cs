@@ -24,4 +24,9 @@ public sealed record ComparisonImage(byte[] Image, string EntryType, string Entr
     /// The required module identity for an original invocation.
     /// </summary>
     public Guid? OriginalModule { get; init; }
+
+    /// <summary>
+    /// The verified native images owned by this side's captured dependency graph.
+    /// </summary>
+    public IReadOnlyList<ComparisonNativeLibrary> NativeLibraries { get; set; } = [];
 }

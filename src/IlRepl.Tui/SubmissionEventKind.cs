@@ -1,10 +1,13 @@
 namespace IlRepl.Tui;
 
 /// <summary>
+/// Identifies the terminal updates produced while submitting or replacing editable source.
+/// </summary>
+/// <remarks>
 /// What an event posted to the prompt's queue is. The submission worker and the paste handler
 /// post from other threads; the frame drains the queue on the render thread, the only thread
 /// that touches the transcript and the prompt.
-/// </summary>
+/// </remarks>
 public enum SubmissionEventKind
 {
     /// <summary>
@@ -56,4 +59,9 @@ public enum SubmissionEventKind
     /// The engine returned a complete method draft for the multiline editor.
     /// </summary>
     EditDocument,
+
+    /// <summary>
+    /// A session action returned source, status, or a controlled quit request.
+    /// </summary>
+    SessionDocument,
 }

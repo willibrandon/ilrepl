@@ -2,6 +2,7 @@ using Mono.Cecil;
 using Mono.Cecil.Cil;
 using CilInstruction = Mono.Cecil.Cil.Instruction;
 using Assembly = System.Reflection.Assembly;
+using AssemblyName = System.Reflection.AssemblyName;
 using RuntimeGenericAttributes = System.Reflection.GenericParameterAttributes;
 
 namespace IlRepl.Engine;
@@ -468,8 +469,7 @@ internal static partial class ComparisonInstrumentation
             return false;
         }
 
-        var runtime = Assembly.Load(assembly.FullName).GetType(definition.FullName.Replace('/', '+'), throwOnError: true)!;
-        return typeof(Task).IsAssignableFrom(runtime);
+        return typeof(Task).IsAssignableFrom(RuntimeType(definition, assembly));
     }
 
     private static bool CannotBox(TypeReference type)
@@ -504,7 +504,14 @@ internal static partial class ComparisonInstrumentation
 
         // Imported signatures already have loaded runtime types, including assemblies available only as images in the browser.
         var assembly = (AssemblyNameReference)definition.Scope;
-        return Assembly.Load(assembly.FullName).GetType(definition.FullName.Replace('/', '+'), throwOnError: true)!.IsByRefLike;
+        return RuntimeType(definition, assembly).IsByRefLike;
+    }
+
+    private static Type RuntimeType(TypeReference definition, AssemblyNameReference assembly)
+    {
+        var name = new AssemblyName(assembly.FullName);
+        var runtime = ReferenceLoadScope.Current?.Resolve(name) ?? SessionAssemblies.Resolve(name) ?? Assembly.Load(name);
+        return runtime.GetType(TypeResolver.ReflectionName(definition.FullName), throwOnError: true)!;
     }
 
     private static TypeReference Unmodified(TypeReference type)

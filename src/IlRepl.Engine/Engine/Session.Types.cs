@@ -1220,7 +1220,7 @@ public sealed partial class Session
     {
         var prototypes = block.FamilyTypes.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
         var trampolines = _methods.ToDictionary(m => m.Signature.Name, m => m.Trampoline, StringComparer.Ordinal);
-        var compiled = TypeEmitter.Compile(declaration, prototypes, trampolines, MethodPreparation.IsSupported);
+        var compiled = TypeEmitter.Compile(declaration, prototypes, trampolines, !DeferActivation && MethodPreparation.IsSupported);
         var table = _typeTable.Clone();
         if (previous is not null)
         {

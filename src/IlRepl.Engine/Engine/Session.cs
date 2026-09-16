@@ -196,18 +196,19 @@ public sealed partial class Session
     }
 
     /// <summary>
-    /// Restores the lexical state from before a refused line, including any block comment it opened.
+    /// Discards comments opened by refused code while preserving the closure of a preceding comment.
     /// </summary>
     /// <param name="line">The refused line.</param>
     public void Forget(NormalizedLine line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        if (InBlockComment != line.InBlockCommentBefore)
+        var retainedComment = line.Kind != SourceLineKind.Text && line.InBlockCommentBefore;
+        if (InBlockComment != retainedComment)
         {
             CompletionRevision++;
         }
 
-        InBlockComment = line.InBlockCommentBefore;
+        InBlockComment = retainedComment;
     }
 
     /// <summary>
@@ -240,6 +241,7 @@ public sealed partial class Session
     public LineResult AddLine(NormalizedLine line)
     {
         ArgumentNullException.ThrowIfNull(line);
+        using var references = Resolver.EnterContext();
         if (line.Kind != SourceLineKind.Text)
         {
             return new LineResult(LineOutcome.Empty, null, null);
@@ -567,19 +569,26 @@ public sealed partial class Session
     /// <exception cref="CellException">The cell threw.</exception>
     public CellResult Run()
     {
+        using var capture = new ConsoleCapture();
         var isVoid = _cell.Stack.Count == 0 && !_cell.ReturnsValue;
         var compiled = CellCompiler.Compile(this);
+        RecordActivation(compiled);
         var typeArguments = TypeArguments;
         ClearCell();
         CellsRun++;
         Submissions++;
 
-        using var capture = new ConsoleCapture();
         var stopwatch = Stopwatch.StartNew();
         object? value;
         try
         {
             value = compiled.Invoke(typeArguments);
+        }
+        catch (CellException exception)
+        {
+            exception.StandardOutput = capture.StandardOutput;
+            exception.StandardError = capture.StandardError;
+            throw;
         }
         catch (InvalidProgramException ex)
         {
@@ -731,7 +740,8 @@ public sealed partial class Session
         CompiledMethodVersion version;
         try
         {
-            version = DefinitionCompiler.CompileMethod(open.Signature, open.State, trampoline, trampolines, MethodPreparation.IsSupported);
+            version = DefinitionCompiler.CompileMethod(open.Signature, open.State, trampoline, trampolines,
+                !DeferActivation && MethodPreparation.IsSupported);
         }
         catch
         {
@@ -743,13 +753,13 @@ public sealed partial class Session
             throw;
         }
 
-        if (!sameSignature)
+        if (!sameSignature && !DeferActivation)
         {
             trampoline.Bind(version.Implementation);
         }
 
         // Phase B: one reference store and the record swap. Neither can fail.
-        if (sameSignature)
+        if (sameSignature && !DeferActivation)
         {
             trampoline.Bind(version.Implementation);
         }

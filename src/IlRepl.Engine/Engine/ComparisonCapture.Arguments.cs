@@ -8,11 +8,12 @@ namespace IlRepl.Engine;
 /// </summary>
 public static partial class ComparisonCapture
 {
-    private static void CaptureOriginalArgument(Type type, Session session, Dictionary<string, ComparisonAssembly> dependencies)
+    private static void CaptureOriginalArgument(Type type, Session session, Dictionary<string, ComparisonAssembly> dependencies,
+        TypeResolver source)
     {
         if (type.HasElementType)
         {
-            CaptureOriginalArgument(type.GetElementType()!, session, dependencies);
+            CaptureOriginalArgument(type.GetElementType()!, session, dependencies, source);
             return;
         }
 
@@ -20,11 +21,11 @@ public static partial class ComparisonCapture
         {
             foreach (var argument in type.GetGenericArguments())
             {
-                CaptureOriginalArgument(argument, session, dependencies);
+                CaptureOriginalArgument(argument, session, dependencies, source);
             }
         }
 
-        CaptureDependency(type.Assembly.FullName!, session, dependencies);
+        CaptureDependency(type.Assembly.FullName!, session, dependencies, source: source);
     }
 
     private static string ArgumentName(TypeReference type)

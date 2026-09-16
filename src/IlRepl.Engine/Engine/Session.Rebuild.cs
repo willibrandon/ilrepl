@@ -4,12 +4,15 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Rebuilds dependent definitions transactionally while preserving their source-time binding relationships.
+/// </summary>
+/// <remarks>
 /// Replacing a family other definitions depend on. Every member of the closure, the new family
 /// included, is declared ahead of its lines as a fresh prototype, so the replays bind to the new
 /// identities whatever order they run in and however the members refer to each other. The
 /// group is then written as assemblies that name each other, loaded together, and published
 /// as one, or not at all.
-/// </summary>
+/// </remarks>
 public sealed partial class Session
 {
     private LineResult ReplaceWithDependents(OpenTypeBlock block, TypeDeclaration declaration, SessionType previous,
@@ -205,7 +208,8 @@ public sealed partial class Session
             foreach (var pending in _pendingMethods)
             {
                 var trampoline = newTrampolines[pending.Signature.Name];
-                var version = DefinitionCompiler.CompileMethod(pending.Signature, pending.State, trampoline, trampolines, MethodPreparation.IsSupported, externals);
+                var version = DefinitionCompiler.CompileMethod(pending.Signature, pending.State, trampoline, trampolines,
+                    !DeferActivation && MethodPreparation.IsSupported, externals);
                 created.Add(version.Definition);
                 foreach (var (_, family) in loaded)
                 {
@@ -215,7 +219,7 @@ public sealed partial class Session
                 versions.Add((pending, trampoline, version));
             }
 
-            if (MethodPreparation.IsSupported)
+            if (!DeferActivation && MethodPreparation.IsSupported)
             {
                 foreach (var (pending, family) in loaded)
                 {
@@ -225,7 +229,10 @@ public sealed partial class Session
 
             foreach (var (_, trampoline, version) in versions)
             {
-                trampoline.Bind(version.Implementation);
+                if (!DeferActivation)
+                {
+                    trampoline.Bind(version.Implementation);
+                }
             }
 
             // 7. Publish: the records, the table, the cell.

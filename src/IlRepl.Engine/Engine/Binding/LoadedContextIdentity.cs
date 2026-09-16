@@ -20,6 +20,6 @@ internal sealed record LoadedContextIdentity(long Id, bool IsDefault, bool IsSes
         ? new(0, false, false, false)
         : Identities.GetValue(context, current => new(Interlocked.Increment(ref s_nextId),
             ReferenceEquals(current, AssemblyLoadContext.Default), current is DefinitionLoadContext,
-            current.GetType() == typeof(AssemblyLoadContext) || current is DefinitionLoadContext
+            current.GetType() == typeof(AssemblyLoadContext) || current is DefinitionLoadContext or ReferenceLoadContext
                 || ReferenceEquals(current, AssemblyLoadContext.Default)));
 }

@@ -4,6 +4,8 @@ description: Install ilrepl as a dotnet tool.
 ---
 
 Installing with `dotnet tool` requires the .NET 10 SDK. Running ilrepl requires the .NET 10 runtime.
+Loading NuGet packages also works with the runtime alone. Loading or rebuilding an SDK project requires the SDK
+selected by that project's `global.json`. See [Saving and sharing sessions](/usage/sessions/).
 The front-end is a Native AOT executable; the part that
 compiles and runs IL is a small framework-dependent host that ships inside the package and runs on
 your `dotnet`.

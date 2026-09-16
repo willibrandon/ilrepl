@@ -3,6 +3,9 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
+/// Submits buffered source in order while retaining provisional input and reporting replies to the terminal.
+/// </summary>
+/// <remarks>
 /// Sends a buffer to the engine one line at a time, off the render thread, and posts what
 /// happened to the prompt's queue. Each reply is read against the mark its unit began with: a
 /// refused line withdraws its unit and brings the text back; a line that ran or committed moves
@@ -10,7 +13,7 @@ namespace IlRepl.Tui;
 /// still provisional. The event that ends the submission carries the last reply's lines, so the
 /// frame that shows them also sees the submission over. Between lines the worker yields, so the
 /// screen repaints and keys are read even where the engine answers on the same thread.
-/// </summary>
+/// </remarks>
 public sealed class Submission
 {
     private readonly IReplEngine _engine;
@@ -102,6 +105,10 @@ public sealed class Submission
     public void Cancel()
     {
         _cancelled = true;
+        if (_engine is SessionController controller)
+        {
+            controller.CancelExecution();
+        }
         lock (_comparisonLock)
         {
             _comparisonCancellation?.Cancel();
@@ -151,6 +158,11 @@ public sealed class Submission
                     {
                         var start = _lines[index].Length - _lines[index].TrimStart().Length;
                         var location = new AnalysisLocation(_sourceIdentity, index, start, _lines[index].Length - start);
+                        if (_engine is SessionController controller)
+                        {
+                            controller.PendingInput = _lines.Skip(index + 1).ToArray();
+                        }
+
                         reply = await _engine.HandleSourceAsync(_lines[index], location, CancellationToken.None).ConfigureAwait(false);
                         if (reply.PendingComparison is { } comparison)
                         {
@@ -191,6 +203,18 @@ public sealed class Submission
                     }
 
                     Interlocked.Increment(ref _sent);
+                    if (reply.SessionEditor is { } editor)
+                    {
+                        var remaining = TextFrom(index + 1);
+                        if (remaining.Length != 0)
+                        {
+                            editor = editor with { Lines = [.. editor.Lines, .. remaining.Split('\n')] };
+                        }
+
+                        _post(new SubmissionEvent(SubmissionEventKind.SessionDocument, reply.Lines) { SessionEditor = editor });
+                        return;
+                    }
+
                     if (reply.EditDocument is { } document)
                     {
                         var remaining = TextFrom(index + 1);
@@ -303,6 +327,11 @@ public sealed class Submission
         }
         finally
         {
+            if (_engine is SessionController controller)
+            {
+                controller.PendingInput = [];
+            }
+
             _running = false;
         }
     }
