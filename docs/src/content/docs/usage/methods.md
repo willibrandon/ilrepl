@@ -139,6 +139,11 @@ il[5]> ldstr "42"
   ┊ [string]
 il[5]> ret
   error: ret needs int32 on the stack but found string
+    ret
+    Expected: return value must be int32
+    Stack before (bottom → top): [string]
+    return value: expected int32; actual string
+      from line 2: ldstr "42"
   method Answer abandoned; the block is back in the editor
 ```
 

@@ -85,6 +85,10 @@ The stack model catches the common ones before the runtime sees them.
 ```ilrepl
 il[4]> add
   error: stack underflow: 'add' pops 2 values but the stack has 0: []
+    add
+    Expected: 2 stack values
+    Stack before (bottom → top): []
+    missing value: expected 2 more stack value(s); actual missing
 il[4]> lcd.i4 1
   error: unknown opcode 'lcd.i4' (did you mean 'ldc.i4'?)
 ```

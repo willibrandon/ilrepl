@@ -2113,61 +2113,6 @@
         ]
       ]
     },
-    "1c155265cf3a83e77cc0cc4c4d707470a4557e61975085b743b31f7010b3e706": {
-      "where": "getting-started/quick-start.md:86",
-      "language": "ilrepl",
-      "editor": false,
-      "lines": [
-        [
-          [
-            0,
-            7,
-            "Prompt"
-          ],
-          [
-            7,
-            3,
-            "Opcode"
-          ]
-        ],
-        [
-          [
-            0,
-            9,
-            "Error"
-          ]
-        ],
-        [
-          [
-            0,
-            7,
-            "Prompt"
-          ],
-          [
-            7,
-            6,
-            "Error"
-          ],
-          [
-            13,
-            1,
-            "Input"
-          ],
-          [
-            14,
-            1,
-            "Number"
-          ]
-        ],
-        [
-          [
-            0,
-            9,
-            "Error"
-          ]
-        ]
-      ]
-    },
     "202eaf80f7cead13867bed174f762a82a19b771337deef1b587d34f6113daa04": {
       "where": "usage/exception-blocks.md:65",
       "language": "ilrepl",
@@ -3080,7 +3025,7 @@
       ]
     },
     "324cd0f1ec6ed2388504eaf97067a6b52dc5816da41ae410525e8e91c9994835": {
-      "where": "usage/methods.md:148",
+      "where": "usage/methods.md:153",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -5525,7 +5470,7 @@
       ]
     },
     "47e43950b6eedd94267f5ac421769451c5f2d7c1df1392fb81d22dfe4a20e067": {
-      "where": "usage/editing.md:131",
+      "where": "usage/editing.md:140",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -5796,7 +5741,7 @@
       ]
     },
     "50e97167e6fd96a373ea16473b38a469d8fc49b1d10aeddcda49d7618d3e4443": {
-      "where": "usage/editing.md:184",
+      "where": "usage/editing.md:193",
       "language": "ilrepl",
       "editor": true,
       "lines": [
@@ -7031,7 +6976,7 @@
       ]
     },
     "55caf7175963e9083e2c5de6b3f37bc5142722bd522ca18c98bcc1e34574cca0": {
-      "where": "usage/editing.md:222",
+      "where": "usage/editing.md:231",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -9626,7 +9571,7 @@
       ]
     },
     "5a701d61891036bbe524226e7064b09efcdfe7fe9cffc614744b31edd12d96dd": {
-      "where": "usage/editing.md:77",
+      "where": "usage/editing.md:86",
       "language": "ilrepl",
       "editor": true,
       "lines": [
@@ -12538,7 +12483,7 @@
       ]
     },
     "7dd2ce1c0c9aaf2cb73c39d280c2b1baf9998aad849e7fd76010e6e283e02607": {
-      "where": "usage/editing.md:171",
+      "where": "usage/editing.md:180",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -15222,6 +15167,172 @@
         ]
       ]
     },
+    "aabc07b7b81de21b6eb7e84a0cb07c39f2784a207de6460d3622e6f98f95c38b": {
+      "where": "usage/methods.md:136",
+      "language": "ilrepl",
+      "editor": false,
+      "lines": [
+        [
+          [
+            0,
+            7,
+            "Prompt"
+          ],
+          [
+            7,
+            7,
+            "Directive"
+          ],
+          [
+            14,
+            1,
+            "Input"
+          ],
+          [
+            15,
+            5,
+            "Type"
+          ],
+          [
+            20,
+            1,
+            "Input"
+          ],
+          [
+            21,
+            6,
+            "Member"
+          ],
+          [
+            27,
+            2,
+            "Punctuation"
+          ],
+          [
+            29,
+            1,
+            "Input"
+          ],
+          [
+            30,
+            1,
+            "Punctuation"
+          ]
+        ],
+        [
+          [
+            0,
+            23,
+            "Dim"
+          ]
+        ],
+        [
+          [
+            0,
+            7,
+            "Prompt"
+          ],
+          [
+            7,
+            5,
+            "Opcode"
+          ],
+          [
+            12,
+            1,
+            "Input"
+          ],
+          [
+            13,
+            4,
+            "String"
+          ]
+        ],
+        [
+          [
+            0,
+            4,
+            "Dim"
+          ],
+          [
+            4,
+            1,
+            "Dim"
+          ],
+          [
+            5,
+            6,
+            "TopType"
+          ],
+          [
+            11,
+            1,
+            "Dim"
+          ]
+        ],
+        [
+          [
+            0,
+            7,
+            "Prompt"
+          ],
+          [
+            7,
+            3,
+            "Opcode"
+          ]
+        ],
+        [
+          [
+            0,
+            9,
+            "Error"
+          ]
+        ],
+        [
+          [
+            0,
+            7,
+            "Dim"
+          ]
+        ],
+        [
+          [
+            0,
+            40,
+            "Dim"
+          ]
+        ],
+        [
+          [
+            0,
+            41,
+            "Dim"
+          ]
+        ],
+        [
+          [
+            0,
+            47,
+            "Dim"
+          ]
+        ],
+        [
+          [
+            0,
+            29,
+            "Dim"
+          ]
+        ],
+        [
+          [
+            0,
+            58,
+            "Dim"
+          ]
+        ]
+      ]
+    },
     "ac23657548a9b55f6ca2816cff069def674c5e596cc57e2e11252d68b3ceca96": {
       "where": "usage/types.md:292",
       "language": "ilrepl",
@@ -15799,139 +15910,8 @@
         ]
       ]
     },
-    "aeb8dade72a6fa43ba6112e684be22f0d127813694ed6dc4f086f8f04806d5c7": {
-      "where": "usage/methods.md:136",
-      "language": "ilrepl",
-      "editor": false,
-      "lines": [
-        [
-          [
-            0,
-            7,
-            "Prompt"
-          ],
-          [
-            7,
-            7,
-            "Directive"
-          ],
-          [
-            14,
-            1,
-            "Input"
-          ],
-          [
-            15,
-            5,
-            "Type"
-          ],
-          [
-            20,
-            1,
-            "Input"
-          ],
-          [
-            21,
-            6,
-            "Member"
-          ],
-          [
-            27,
-            2,
-            "Punctuation"
-          ],
-          [
-            29,
-            1,
-            "Input"
-          ],
-          [
-            30,
-            1,
-            "Punctuation"
-          ]
-        ],
-        [
-          [
-            0,
-            23,
-            "Dim"
-          ]
-        ],
-        [
-          [
-            0,
-            7,
-            "Prompt"
-          ],
-          [
-            7,
-            5,
-            "Opcode"
-          ],
-          [
-            12,
-            1,
-            "Input"
-          ],
-          [
-            13,
-            4,
-            "String"
-          ]
-        ],
-        [
-          [
-            0,
-            4,
-            "Dim"
-          ],
-          [
-            4,
-            1,
-            "Dim"
-          ],
-          [
-            5,
-            6,
-            "TopType"
-          ],
-          [
-            11,
-            1,
-            "Dim"
-          ]
-        ],
-        [
-          [
-            0,
-            7,
-            "Prompt"
-          ],
-          [
-            7,
-            3,
-            "Opcode"
-          ]
-        ],
-        [
-          [
-            0,
-            9,
-            "Error"
-          ]
-        ],
-        [
-          [
-            0,
-            58,
-            "Dim"
-          ]
-        ]
-      ]
-    },
     "b065b4a8d5733b9a901af009ad66b8742a8599243578735e69772a5e6e2e90cc": {
-      "where": "usage/editing.md:104",
+      "where": "usage/editing.md:113",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -16586,7 +16566,7 @@
       ]
     },
     "b83977eb881ec33dfd6edff32b52ac912ec7379628f361663cb57d1e62f41dc0": {
-      "where": "usage/editing.md:165",
+      "where": "usage/editing.md:174",
       "language": "ilrepl",
       "editor": true,
       "lines": [
@@ -17975,6 +17955,89 @@
             5,
             8,
             "Dim"
+          ]
+        ]
+      ]
+    },
+    "d084bc9223fd6f3393ea49f98b90d134174d79bafee78d92953d7b816a573aa8": {
+      "where": "getting-started/quick-start.md:86",
+      "language": "ilrepl",
+      "editor": false,
+      "lines": [
+        [
+          [
+            0,
+            7,
+            "Prompt"
+          ],
+          [
+            7,
+            3,
+            "Opcode"
+          ]
+        ],
+        [
+          [
+            0,
+            9,
+            "Error"
+          ]
+        ],
+        [
+          [
+            0,
+            7,
+            "Dim"
+          ]
+        ],
+        [
+          [
+            0,
+            28,
+            "Dim"
+          ]
+        ],
+        [
+          [
+            0,
+            35,
+            "Dim"
+          ]
+        ],
+        [
+          [
+            0,
+            65,
+            "Dim"
+          ]
+        ],
+        [
+          [
+            0,
+            7,
+            "Prompt"
+          ],
+          [
+            7,
+            6,
+            "Error"
+          ],
+          [
+            13,
+            1,
+            "Input"
+          ],
+          [
+            14,
+            1,
+            "Number"
+          ]
+        ],
+        [
+          [
+            0,
+            9,
+            "Error"
           ]
         ]
       ]
@@ -19642,7 +19705,7 @@
       ]
     },
     "e205daa0861c38063d43aea43e68d19926214d0d5979522ffeb217fa2e739270": {
-      "where": "usage/editing.md:114",
+      "where": "usage/editing.md:123",
       "language": "ilrepl",
       "editor": true,
       "lines": [
@@ -20567,7 +20630,7 @@
       ]
     },
     "f836de1ec82b8d658ad437ad3f7fc5e48eec1a0d198f0a0c40c60138ce9f9eb4": {
-      "where": "usage/editing.md:155",
+      "where": "usage/editing.md:164",
       "language": "ilrepl",
       "editor": false,
       "lines": [
