@@ -4,6 +4,8 @@
     <RootNamespace>Greeter</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
+    <!-- Keep symbols separate so the complete sample image fits in a shared session link. -->
+    <DebugType>portable</DebugType>
     <Description>A small library the ilrepl tests load and call into. Every member shape a REPL cell might reference lives here.</Description>
   </PropertyGroup>
 

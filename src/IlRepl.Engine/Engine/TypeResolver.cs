@@ -56,17 +56,19 @@ public sealed partial class TypeResolver : IDisposable
     /// Rebinds unused changed dependency graphs while retaining runtime identities outside the affected graphs.
     /// </summary>
     /// <param name="images">New or changed images verified by the session dependency checks.</param>
-    internal void ReplaceImages(IEnumerable<byte[]> images)
+    /// <param name="removed">Assembly identities no longer supplied by the dependency graph.</param>
+    internal void ReplaceImages(IEnumerable<byte[]> images, IEnumerable<AssemblyName> removed)
     {
         var replacements = images.ToArray();
-        if (replacements.Length == 0)
+        var removals = removed.ToArray();
+        if (replacements.Length == 0 && removals.Length == 0)
         {
             return;
         }
 
-        var names = replacements.Select(ReferenceLoadContext.Identity).Select(name => name.Name + "/" + name.CultureName)
+        var names = replacements.Select(ReferenceLoadContext.Identity).Concat(removals).Select(name => name.Name + "/" + name.CultureName)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var context = new ReferenceLoadContext(_context);
+        var context = new ReferenceLoadContext(_context, removed: removals);
         foreach (var image in replacements)
         {
             context.Register(image, force: true);

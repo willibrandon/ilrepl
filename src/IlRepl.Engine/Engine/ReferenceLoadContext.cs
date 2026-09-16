@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 
 namespace IlRepl.Engine;
@@ -10,6 +11,8 @@ namespace IlRepl.Engine;
 /// </summary>
 internal sealed class ReferenceLoadContext : AssemblyLoadContext
 {
+    private static readonly Lock MappingGate = new();
+    private static readonly ConditionalWeakTable<Assembly, byte[]> MappedImages = [];
     private static readonly Dictionary<string, string> FrameworkPaths =
         ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "").Split(Path.PathSeparator,
             StringSplitOptions.RemoveEmptyEntries)
@@ -20,6 +23,7 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     private readonly Dictionary<string, string> _paths = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, byte[]> _images = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _native = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _removed;
     private readonly ReferenceLoadContext? _previous;
     private readonly bool _reusePreviousImages;
 
@@ -28,11 +32,14 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     /// </summary>
     /// <param name="previous">The previous context supplying unchanged assembly identities.</param>
     /// <param name="reusePreviousImages">Whether unchanged images may retain their previous dependency bindings.</param>
-    public ReferenceLoadContext(ReferenceLoadContext? previous = null, bool reusePreviousImages = true)
+    /// <param name="removed">Obsolete identities excluded from inherited bindings and sibling probing.</param>
+    public ReferenceLoadContext(ReferenceLoadContext? previous = null, bool reusePreviousImages = true,
+        IEnumerable<AssemblyName>? removed = null)
         : base("ilrepl.references." + Guid.NewGuid().ToString("N"), !OperatingSystem.IsBrowser())
     {
         _previous = previous;
         _reusePreviousImages = reusePreviousImages;
+        _removed = (removed ?? []).Select(Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -78,20 +85,22 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
             return;
         }
 
-        if (!force && _reusePreviousImages && _previous?.ContainsImage(identity, image) == true)
-        {
-            return;
-        }
-
         lock (_gate)
         {
             var key = Key(identity);
+            if (!force && !_images.ContainsKey(key) && !_removed.Contains(key) && _reusePreviousImages
+                && _previous?.ContainsImage(identity, image) == true)
+            {
+                return;
+            }
+
             if (_images.TryGetValue(key, out var previous) && !previous.AsSpan().SequenceEqual(image))
             {
                 throw new ReplException($"'{identity.Name}' is already loaded with different contents; use .load with --reload");
             }
 
             _images[key] = image;
+            _removed.Remove(key);
             if (path is not null) _paths[key] = Path.GetFullPath(path);
         }
     }
@@ -154,7 +163,8 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     {
         lock (_gate)
         {
-            return _images.ContainsKey(Key(name)) ? LoadFromAssemblyName(name) : _previous?.Resolve(name);
+            return _images.ContainsKey(Key(name)) ? LoadFromAssemblyName(name)
+                : _removed.Contains(Key(name)) ? null : _previous?.Resolve(name);
         }
     }
 
@@ -169,7 +179,7 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
         {
             return _images.ContainsKey(Key(name))
                 ? Assemblies.FirstOrDefault(assembly => Key(assembly.GetName()).Equals(Key(name), StringComparison.OrdinalIgnoreCase))
-                : _previous?.FindLoaded(name);
+                : _removed.Contains(Key(name)) ? null : _previous?.FindLoaded(name);
         }
     }
 
@@ -180,6 +190,7 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
         {
             if (!_images.TryGetValue(Key(assemblyName), out var image))
             {
+                if (IsRemoved(assemblyName)) return null;
                 if (_previous?.Resolve(assemblyName) is { } previous) return previous;
                 foreach (var directory in _paths.Values.Select(Path.GetDirectoryName).Distinct().ToArray())
                 {
@@ -187,8 +198,7 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
                     if (File.Exists(candidate))
                     {
                         var bytes = File.ReadAllBytes(candidate);
-                        Register(bytes, path: candidate);
-                        return LoadFromAssemblyPath(candidate);
+                        return LoadImage(bytes, candidate);
                     }
                 }
 
@@ -208,7 +218,23 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
                 {
                     var current = new byte[image.Length];
                     source.ReadExactly(current);
-                    if (current.AsSpan().SequenceEqual(image)) return LoadFromAssemblyPath(path);
+                    if (current.AsSpan().SequenceEqual(image))
+                    {
+                        lock (MappingGate)
+                        {
+                            // CoreCLR can reuse a mapped PE by path after that file has been renamed and replaced.
+                            // Keep Location for unchanged files; changed images must bypass that process-wide path cache.
+                            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                            var previousMapping = MappedImages.Any(pair => pair.Key.Location.Equals(path, comparison)
+                                && !pair.Value.AsSpan().SequenceEqual(image));
+                            if (!previousMapping)
+                            {
+                                var mapped = LoadFromAssemblyPath(path);
+                                MappedImages.GetValue(mapped, _ => image);
+                                return mapped;
+                            }
+                        }
+                    }
                 }
             }
 
@@ -246,12 +272,20 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
 
     private static string Key(AssemblyName name) => name.Name + "/" + name.CultureName;
 
+    private bool IsRemoved(AssemblyName name)
+    {
+        lock (_gate)
+        {
+            return !_images.ContainsKey(Key(name)) && (_removed.Contains(Key(name)) || _previous?.IsRemoved(name) == true);
+        }
+    }
+
     private bool ContainsImage(AssemblyName name, byte[] image)
     {
         lock (_gate)
         {
             return _images.TryGetValue(Key(name), out var previous) ? previous.AsSpan().SequenceEqual(image)
-                : _previous?.ContainsImage(name, image) == true;
+                : !_removed.Contains(Key(name)) && _previous?.ContainsImage(name, image) == true;
         }
     }
 }

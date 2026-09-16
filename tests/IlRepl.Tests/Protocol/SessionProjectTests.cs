@@ -196,7 +196,7 @@ public sealed class SessionProjectTests
     }
 
     /// <summary>
-    /// Selecting a compatible target ignores shared-framework requirements conditional on an unselected target.
+    /// Explicitly selecting a compatible target ignores shared-framework requirements conditional on an unselected target.
     /// </summary>
     [TestMethod]
     [Timeout(120_000, CooperativeCancellation = true)]
@@ -212,7 +212,7 @@ public sealed class SessionProjectTests
         xml.Save(project);
         await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
 
-        await SubmitAsync(controller, ".load " + Quote(project));
+        await SubmitAsync(controller, ".load " + Quote(project) + " --framework net10.0");
 
         Assert.AreEqual("net10.0", (await CaptureAsync(controller)).References.Single().Framework);
         await AssertValueAsync(controller, fixture.AssemblyName, 21);

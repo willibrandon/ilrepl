@@ -127,7 +127,8 @@ public sealed partial class SessionFileStore
 
     private static async Task<byte[]> ReadBoundedAsync(string path, CancellationToken cancellationToken)
     {
-        await using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 8192, useAsync: true);
+        await using var input = new FileStream(path, FileMode.Open, FileAccess.Read,
+            FileShare.Read | FileShare.Delete, 8192, useAsync: true);
         if (input.Length > SessionCodec.FileLimit)
         {
             throw new InvalidDataException("the session or dependency exceeds the 64 MiB file limit");
@@ -162,7 +163,14 @@ public sealed partial class SessionFileStore
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(temporary, path, overwrite: true);
+            try
+            {
+                File.Move(temporary, path);
+            }
+            catch (IOException) when (File.Exists(path))
+            {
+                File.Replace(temporary, path, destinationBackupFileName: null);
+            }
         }
         finally
         {

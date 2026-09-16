@@ -141,7 +141,8 @@ typed `.session open` points to the Open control.
 Download includes available dependency images so the file can be opened elsewhere; `--embed` is already applied in the browser.
 Package restore and project builds are desktop operations.
 
-Share creates a URL fragment containing source, the dependency manifest, and dependency images that the demo does not already provide.
+Share creates a URL fragment containing source, the dependency manifest, and the loaded dependency images.
+The bundled sample is included so a later demo update cannot change a shared experiment.
 Nothing is uploaded to the documentation server. Links longer than 16 KiB fall back to a session download.
 Expanded link contents are limited to 1 MiB. Browser imports are limited to 8 MiB; desktop session files can be up to 64 MiB.
 If clipboard access is unavailable, the page displays the link for copying.

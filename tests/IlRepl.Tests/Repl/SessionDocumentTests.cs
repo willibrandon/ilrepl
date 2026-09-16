@@ -12,6 +12,17 @@ namespace IlRepl.Tests.Repl;
 [TestClass]
 public sealed class SessionDocumentTests
 {
+    private readonly List<string> _assemblyDirectories = [];
+
+    /// <summary>
+    /// Removes mapped fixture images after this test's core and reflection locals have left their method scope.
+    /// </summary>
+    [TestCleanup]
+    public void DeleteAssemblyDirectories()
+    {
+        foreach (var directory in _assemblyDirectories) AssemblyFileCleanup.DeleteDirectory(directory);
+    }
+
     /// <summary>
     /// Supplies cancellation for asynchronous completion and recall requests.
     /// </summary>
@@ -120,7 +131,8 @@ public sealed class SessionDocumentTests
     [TestMethod]
     public void CaptureSession_RepeatedAssemblyLoadRetainsTheRequestedImage()
     {
-        using var fixture = new SessionDependencyFixture();
+        var fixture = new SessionDependencyFixture();
+        _assemblyDirectories.Add(fixture.DirectoryPath);
         var first = fixture.AssemblyName + "First";
         var second = fixture.AssemblyName + "Second";
         fixture.WritePackage(first, "1.0.0", 21);
@@ -565,7 +577,7 @@ public sealed class SessionDocumentTests
             Submit(core, ".load " + path, ".method int32 Read() {", "call int32 Owner::Read()", "ret", "}");
             var document = core.CaptureSession(new SessionEditor());
             File.Delete(marker);
-            File.Delete(path);
+            File.Move(path, path + ".previous");
 
             using var reopened = Reopen(document);
 
@@ -578,7 +590,7 @@ public sealed class SessionDocumentTests
         }
         finally
         {
-            directory.Delete(true);
+            _assemblyDirectories.Add(directory.FullName);
         }
     }
 

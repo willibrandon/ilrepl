@@ -132,6 +132,36 @@ public sealed class SessionFileStoreTests
     }
 
     /// <summary>
+    /// Saving over an open document preserves its existing reader and makes the new revision immediately readable.
+    /// </summary>
+    [TestMethod]
+    public async Task Write_ReplacesDocumentWhilePreviousReaderRemainsOpen()
+    {
+        var directory = Directory.CreateTempSubdirectory("ilrepl-store-reader-").FullName;
+        try
+        {
+            var path = Path.Combine(directory, "example.ilrepl.json");
+            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            var token = TestContext.CancellationToken;
+            await store.WriteAsync(path, Document("ldc.i4.1"), false, token);
+            await using var reader = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+
+            await store.WriteAsync(path, Document("ldc.i4.2"), false, token);
+            await store.WriteAsync(path, Document("ldc.i4.3"), false, token);
+
+            Assert.AreSequenceEqual(["ldc.i4.3"], (await store.ReadAsync(path, token)).Editor.Lines);
+            using var previous = new MemoryStream();
+            await reader.CopyToAsync(previous, token);
+            Assert.AreSequenceEqual(["ldc.i4.1"], SessionCodec.Read(previous.ToArray()).Editor.Lines);
+            Assert.IsEmpty(Directory.GetFiles(directory, "*.tmp", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// Save As rewrites project and assembly locators relative to the new file while leaving sources and snapshots unchanged.
     /// </summary>
     [TestMethod]

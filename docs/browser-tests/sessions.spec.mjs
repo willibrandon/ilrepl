@@ -416,7 +416,7 @@ test('dirty open supports cancel, save, and discard without losing the active dr
   expect(await page.evaluate(() => window.ilreplSessionCount)).toBe(count + 2);
 });
 
-test('sharing a loaded bundled sample omits its image and resolves it before explicit typed execution', async ({ page, context }) => {
+test('shared samples retain their original image after the bundled sample changes', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await typeLine(page, '.load /samples/Greeter.dll');
   await expect(page.locator('#terminal')).toContainText('Greeter');
@@ -428,11 +428,26 @@ test('sharing a loaded bundled sample omits its image and resolves it before exp
   await expect(page.locator('#session-file-message')).toContainText('Share link copied');
   const link = await page.evaluate(() => navigator.clipboard.readText());
   const sharedDocument = JSON.parse(gunzipSync(Buffer.from(link.split('#session=v1.')[1], 'base64url')));
-  expect(sharedDocument.assets).toEqual([]);
+  expect(sharedDocument.assets).toHaveLength(1);
   expect(sharedDocument.references[0].assets[0].hash).toMatch(/^[0-9a-f]{64}$/);
+  const original = await readFile(new URL('../public/try/samples/Greeter.dll', import.meta.url));
+  expect(Buffer.from(sharedDocument.assets[0].image, 'base64')).toEqual(original);
+  expect(sharedDocument.assets[0].hash).toBe(sharedDocument.references[0].assets[0].hash);
+  // Change a real user string without changing the PE layout, as a later sample update might do.
+  const updated = Buffer.from(original);
+  const greeting = updated.indexOf(Buffer.from('Hello, ', 'utf16le'));
+  expect(greeting).toBeGreaterThan(0);
+  updated.write('Howdy, ', greeting, 'utf16le');
+  expect(createHash('sha256').update(updated).digest('hex')).not.toBe(sharedDocument.assets[0].hash);
+  let updatedRequests = 0;
+  await context.route('**/samples/Greeter.dll', async route => {
+    updatedRequests++;
+    await route.fulfill({ contentType: 'application/octet-stream', body: updated });
+  });
   const shared = await context.newPage();
   await shared.goto(link);
   await ready(shared);
+  expect(updatedRequests).toBeGreaterThan(0);
   await expect(shared.locator('#terminal')).not.toContainText('missing assets');
   await expect(shared.locator('#terminal')).not.toContainText('= 42 : int32');
   await typeLine(shared, '.session run');
@@ -442,6 +457,12 @@ test('sharing a loaded bundled sample omits its image and resolves it before exp
   const portable = await download(shared);
   expect(portable.assets).toHaveLength(1);
   expect(portable.assets[0].hash).toBe(sharedDocument.references[0].assets[0].hash);
+  await typeLine(shared, '.clear');
+  await typeLine(shared, 'ldstr "reader"');
+  await typeLine(shared, 'call string [Greeter]Greeter.Hello::Say(string)');
+  await typeLine(shared, 'ret');
+  await expect(shared.locator('#terminal')).toContainText('Hello, reader!');
+  await expect(shared.locator('#terminal')).not.toContainText('Howdy, reader!');
 });
 
 test('unsupported documents and mismatched assets preserve the current draft; oversized links are bounded', async ({ page }) => {

@@ -497,7 +497,7 @@ public sealed class SessionPackageAssetTests
             : OperatingSystem.IsMacOS() ? "libSystem.Native.dylib" : "libSystem.Native.so";
         var path = OperatingSystem.IsWindows() ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), name)
             : Path.Combine(directory, name);
-        return (alias + Path.GetExtension(name), File.ReadAllBytes(path),
+        return (alias + "Native" + Path.GetExtension(name), File.ReadAllBytes(path),
             OperatingSystem.IsWindows() ? "GetCurrentProcessId" : "SystemNative_GetPid");
     }
 

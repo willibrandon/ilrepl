@@ -17,6 +17,17 @@ namespace IlRepl.Tests.Repl;
 [TestClass]
 public sealed class SessionEditSnapshotTests
 {
+    private readonly List<string> _assemblyDirectories = [];
+
+    /// <summary>
+    /// Removes mapped fixture images after the test has released its original and restored reflection bindings.
+    /// </summary>
+    [TestCleanup]
+    public void DeleteAssemblyDirectories()
+    {
+        foreach (var directory in _assemblyDirectories) AssemblyFileCleanup.DeleteDirectory(directory);
+    }
+
     /// <summary>
     /// Supplies cancellation for real host storage, reload, and comparison operations.
     /// </summary>
@@ -121,7 +132,7 @@ public sealed class SessionEditSnapshotTests
             }
 
             var rebuilt = externalHelper ? dependencyPath : path;
-            File.WriteAllBytes(rebuilt, CreateImage(externalHelper ? dependencyName : fixture.AssemblyName, 84));
+            AssemblyFileCleanup.Replace(rebuilt, CreateImage(externalHelper ? dependencyName : fixture.AssemblyName, 84));
             var reloaded = await controller.HandleAsync(".load " + rebuilt + " --reload", token);
             Assert.IsTrue(reloaded.Succeeded, string.Join('\n', reloaded.Lines.Select(line => line.PlainText)));
             var saved = await controller.HandleAsync(".session save " + savedPath, token);
@@ -184,7 +195,7 @@ public sealed class SessionEditSnapshotTests
             var document = initial.CaptureSession(new SessionEditor());
             var replacement = CreateImage(externalHelper ? helperName : name, 84);
             var replacedPath = externalHelper ? helperPath : path;
-            File.WriteAllBytes(replacedPath, replacement);
+            AssemblyFileCleanup.Replace(replacedPath, replacement);
             var hash = SessionCodec.Hash(replacement);
             var replacedName = AssemblyName.GetAssemblyName(replacedPath).FullName!;
             var changed = document with
@@ -218,7 +229,7 @@ public sealed class SessionEditSnapshotTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            _assemblyDirectories.Add(directory);
         }
     }
 

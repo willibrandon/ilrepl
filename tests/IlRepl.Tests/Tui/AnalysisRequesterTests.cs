@@ -247,10 +247,28 @@ public sealed class AnalysisRequesterTests
             Assert.AreSame(focused, afterDiagnostic, "arriving diagnostics must retain the focused editor");
             Assert.Contains(item => item.Code == "FLOW006" && item.Kind == AnalysisDiagnosticKind.Error && item.Location.Line == 0,
                 published!.Diagnostics);
-            Trace("before Tab");
-            await auto.TabAsync(ct: ct);
-            await auto.WaitUntilAsync(_ => prompt.Text == "pop\n" + expected,
-                description: "Tab accepts the original member completion without changing the diagnostic's source");
+            var version = published.AssemblyVersion;
+            do
+            {
+                Trace("before Tab");
+                await auto.TabAsync(ct: ct);
+                await auto.WaitUntilAsync(_ =>
+                {
+                    if (prompt.Text == "pop\n" + expected) return true;
+                    if (engine.AssemblyVersion != version && prompt.Requester?.IsPending == false
+                        && prompt.Completions is { } refreshed && prompt.Requester.Matches(prompt, refreshed))
+                    {
+                        version = refreshed.Reply.AssemblyVersion;
+                        return true;
+                    }
+
+                    return false;
+                },
+                    description: "Tab accepts the member or a changed assembly catalog finishes refreshing it");
+                // A new assembly legitimately invalidates the old query; only that change permits another Tab.
+                Assert.AreSame(focused, app.FocusedNode, "a catalog refresh must also preserve editor focus");
+            }
+            while (prompt.Text != "pop\n" + expected);
             await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
             await run;
         }

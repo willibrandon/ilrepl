@@ -275,11 +275,7 @@ public static partial class BrowserWorkspace
         }, CancellationToken.None).ConfigureAwait(false);
         if (operation == "share")
         {
-            var document = captured.Document with
-            {
-                Assets = [.. captured.Document.Assets.Where(asset => asset.Hash != s_sample?.Hash)],
-            };
-            return SessionCodec.Share(document, value);
+            return SessionCodec.Share(captured.Document, value);
         }
 
         s_download = captured.Document;

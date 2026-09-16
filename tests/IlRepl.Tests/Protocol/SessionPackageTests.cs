@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using IlRepl.Hosting;
 using IlRepl.Protocol;
+using Mono.Cecil;
 
 namespace IlRepl.Tests.Protocol;
 
@@ -87,6 +88,48 @@ public sealed class SessionPackageTests
         Assert.IsNotNull(selected.RequestedVersion);
         Assert.AreSequenceEqual([selected.Identity], root.Dependencies);
         await AssertValueAsync(controller, shared, 15);
+    }
+
+    /// <summary>
+    /// A package upgrade drops obsolete transitives from live binding and saved documents while retaining the new executable graph.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task Load_UpgradeRemovesObsoleteTransitiveAssembly()
+    {
+        using var fixture = new SessionDependencyFixture();
+        var removed = fixture.AssemblyName + "Removed";
+        fixture.WritePackage(removed, "1.0.0", 21);
+        using (var unique = AssemblyDefinition.ReadAssembly(new MemoryStream(fixture.PackageImage(removed, "1.0.0"))))
+        {
+            unique.MainModule.GetType("DependencySamples.Values").Name = "RemovedValues";
+            using var bytes = new MemoryStream();
+            unique.Write(bytes);
+            fixture.PackageAsset(removed, "1.0.0", "lib/net10.0/" + removed + ".dll", bytes.ToArray());
+        }
+        fixture.WritePackage(fixture.AssemblyName, "1.0.0", 42, (removed, "[1.0.0]"));
+        fixture.WritePackage(fixture.AssemblyName, "2.0.0", 84);
+        await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
+        await SubmitAsync(controller, ".load nuget:" + fixture.AssemblyName + ",[1.0.0]");
+        Assert.Contains(reference => reference.Request == removed, (await CaptureAsync(controller)).References);
+
+        await SubmitAsync(controller, ".load nuget:" + fixture.AssemblyName + ",[2.0.0]");
+
+        var document = await CaptureAsync(controller);
+        Assert.AreEqual("2.0.0", Assert.ContainsSingle(document.References).Version);
+        var missing = await controller.HandleAsync("call int32 [" + removed + "]DependencySamples.RemovedValues::Read()",
+            TestContext.CancellationToken);
+        Assert.IsFalse(missing.Succeeded);
+        Assert.Contains("not found", string.Join('\n', missing.Lines.Select(line => line.PlainText)));
+        await AssertValueAsync(controller, fixture.AssemblyName, 84);
+        var path = Path.Combine(fixture.DirectoryPath, "upgraded.ilrepl.json");
+        await SubmitAsync(controller, ".session save \"" + path + "\" --embed");
+        await SubmitAsync(controller, ".session open \"" + path + "\"");
+        await AssertValueAsync(controller, fixture.AssemblyName, 84);
+        await SubmitAsync(controller, ".load nuget:" + removed + ",[1.0.0]");
+        await SubmitAsync(controller, ".clear");
+        await SubmitAsync(controller, "call int32 [" + removed + "]DependencySamples.RemovedValues::Read()");
+        AssertResult(await SubmitAsync(controller, "ret"), 21);
     }
 
     /// <summary>
@@ -280,7 +323,7 @@ public sealed class SessionPackageTests
         await SubmitAsync(controller, ".clear");
         var before = await CaptureAsync(controller);
         var epoch = controller.AssemblyVersion >> 32;
-        File.WriteAllBytes(path, fixture.PackageImage(fixture.AssemblyName, "2.0.0"));
+        AssemblyFileCleanup.Replace(path, fixture.PackageImage(fixture.AssemblyName, "2.0.0"));
 
         var failed = await controller.HandleAsync(".load \"" + path + "\"", TestContext.CancellationToken);
 

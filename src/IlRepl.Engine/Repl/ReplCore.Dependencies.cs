@@ -43,35 +43,49 @@ public sealed partial class ReplCore
     public void AdoptReferences(SessionDocument document)
     {
         SessionCodec.Validate(document);
+        static string Key(SessionReferenceAsset asset)
+        {
+            var name = new AssemblyName(asset.Name);
+            return name.Name + "/" + name.CultureName;
+        }
+
         var oldAssets = _references.Where(reference => reference.Origin != "baseline").SelectMany(reference => reference.Assets)
-            .Where(asset => asset.Kind is "managed" or "satellite").DistinctBy(asset => asset.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(asset => asset.Name, asset => asset.Hash,
-                StringComparer.OrdinalIgnoreCase);
-        var changed = document.References.Where(reference => reference.Origin != "baseline").SelectMany(reference => reference.Assets)
-            .Where(asset => asset.Kind is "managed" or "satellite")
-            .Where(asset => !oldAssets.TryGetValue(asset.Name, out var hash) || hash != asset.Hash)
-            .DistinctBy(asset => asset.Hash).ToArray();
-        var oldNames = oldAssets.Keys.Select(name => new AssemblyName(name).Name!).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var replaced = changed.Select(asset => new AssemblyName(asset.Name).Name!).Where(oldNames.Contains)
+            .Where(asset => asset.Kind is "managed" or "satellite").DistinctBy(Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(Key, StringComparer.OrdinalIgnoreCase);
+        var nextAssets = document.References.Where(reference => reference.Origin != "baseline").SelectMany(reference => reference.Assets)
+            .Where(asset => asset.Kind is "managed" or "satellite").DistinctBy(Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(Key, StringComparer.OrdinalIgnoreCase);
+        var changed = nextAssets.Values.Where(asset => !oldAssets.TryGetValue(Key(asset), out var previous)
+            || previous.Hash != asset.Hash).ToArray();
+        var removed = oldAssets.Values.Where(asset => !nextAssets.ContainsKey(Key(asset))).ToArray();
+        var oldNames = oldAssets.Values.Select(asset => new AssemblyName(asset.Name).Name!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var replaced = changed.Concat(removed).Select(asset => new AssemblyName(asset.Name).Name!).Where(oldNames.Contains)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var oldNative = _references.Where(reference => reference.Origin != "baseline").SelectMany(reference => reference.Assets)
             .Where(asset => asset.Kind == "native").DistinctBy(asset => asset.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(asset => asset.Name, asset => asset.Hash, StringComparer.OrdinalIgnoreCase);
-        var nativeChanges = document.References.Where(reference => reference.Origin != "baseline"
+        var affectedReferences = document.References.Where(reference => reference.Origin != "baseline"
             && reference.Assets.Any(asset => asset.Kind == "native" && oldNative.TryGetValue(asset.Name, out var hash)
                 && hash != asset.Hash)).Select(reference => reference.Identity).ToHashSet(StringComparer.Ordinal);
+        var graphs = _references.Concat(document.References).Where(reference => reference.Origin != "baseline").ToArray();
         var previousCount = -1;
-        while (previousCount != nativeChanges.Count)
+        while (previousCount != affectedReferences.Count + replaced.Count)
         {
-            previousCount = nativeChanges.Count;
-            nativeChanges.UnionWith(document.References.Where(reference => reference.Origin != "baseline"
-                && reference.Dependencies.Any(nativeChanges.Contains)).Select(reference => reference.Identity));
+            previousCount = affectedReferences.Count + replaced.Count;
+            affectedReferences.UnionWith(graphs.Where(reference => reference.Dependencies.Any(affectedReferences.Contains)
+                || reference.Assets.Any(asset => asset.Kind is "managed" or "satellite"
+                    && replaced.Contains(new AssemblyName(asset.Name).Name!))).Select(reference => reference.Identity));
+            replaced.UnionWith(graphs.Where(reference => affectedReferences.Contains(reference.Identity))
+                .SelectMany(reference => reference.Assets).Where(asset => asset.Kind is "managed" or "satellite")
+                .Select(asset => new AssemblyName(asset.Name).Name!).Where(oldNames.Contains));
+            // A retained image keeps the context that loaded it, including bindings below its direct dependencies.
+            replaced.UnionWith(Session.Resolver.LoadedAssemblies.Where(assembly =>
+                    assembly.GetReferencedAssemblies().Any(reference => replaced.Contains(reference.Name!)))
+                .Select(assembly => assembly.GetName().Name!).Where(oldNames.Contains));
         }
 
-        var nativeOwners = document.References.Where(reference => nativeChanges.Contains(reference.Identity))
-            .SelectMany(reference => reference.Assets).Where(asset => asset.Kind is "managed" or "satellite").ToArray();
-        replaced.UnionWith(nativeOwners.Select(asset => new AssemblyName(asset.Name).Name!).Where(oldNames.Contains));
-        changed = [.. changed.Concat(nativeOwners).DistinctBy(asset => asset.Name, StringComparer.OrdinalIgnoreCase)];
+        changed = [.. changed.Concat(nextAssets.Values.Where(asset => replaced.Contains(new AssemblyName(asset.Name).Name!)))
+            .DistinctBy(Key, StringComparer.OrdinalIgnoreCase)];
 
         var users = ReferenceUsers(replaced).Distinct(StringComparer.Ordinal).ToArray();
         if (users.Length != 0)
@@ -90,7 +104,8 @@ public sealed partial class ReplCore
         }
 
         var images = document.Assets.ToDictionary(asset => asset.Hash, asset => asset.Image, StringComparer.Ordinal);
-        Session.Resolver.ReplaceImages(changed.Select(asset => images[asset.Hash]));
+        Session.Resolver.ReplaceImages(changed.Select(asset => images[asset.Hash]), removed.Select(asset => new AssemblyName(asset.Name)));
+        if (removed.Length != 0) Session.AdvanceGeneration();
         _references.Clear();
         _references.AddRange(document.References);
         foreach (var asset in document.Assets)
