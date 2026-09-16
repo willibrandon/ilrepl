@@ -2,7 +2,6 @@
 #:property TargetFramework=net10.0
 #:project ../src/IlRepl.Engine/IlRepl.Engine.csproj
 
-using System.Globalization;
 using System.Reflection.Emit;
 using System.Text;
 using IlRepl.Engine;
@@ -17,13 +16,13 @@ sb.AppendLine("title: Opcodes");
 sb.AppendLine("description: Every CIL opcode ilrepl accepts, with its stack transition and operand.");
 sb.AppendLine("---");
 sb.AppendLine();
-sb.AppendLine("This table is generated from the engine's opcode table by `scripts/Generate-OpcodeReference.cs`.");
+sb.AppendLine("Find an instruction's stack effect, behavior, and operand below. F1 shows the same help in the terminal.");
 sb.AppendLine("The stack column reads pops then pushes, using the abbreviations ILAsm uses: `i` for int32 or native int,");
 sb.AppendLine("`i8` for int64, `r4` and `r8` for floats, `ref` for an object reference, `1` for any single value, and `…`");
 sb.AppendLine("when the count depends on the operand.");
 sb.AppendLine();
-sb.AppendLine("| Opcode | Stack | Operand | Description |");
-sb.AppendLine("| --- | --- | --- | --- |");
+sb.AppendLine("| Opcode | Stack | Operand |");
+sb.AppendLine("| --- | --- | --- |");
 
 var count = 0;
 foreach (var name in OpcodeTable.Names)
@@ -35,15 +34,32 @@ foreach (var name in OpcodeTable.Names)
 
     var op = OpcodeTable.BySourceName[name];
     var stack = OpcodeTable.StackTransition(op).Replace("  ", " ", StringComparison.Ordinal).Trim();
-    sb.Append("| `").Append(name).Append("` | `").Append(stack).Append("` | ")
-      .Append(Operand(op)).Append(" | ").Append(OpcodeTable.Describe(op)).AppendLine(" |");
+    sb.Append("| [`").Append(name).Append("`](#").Append(InstructionReference.Anchor(name)).Append(") | `").Append(stack).Append("` | ")
+      .Append(Operand(op)).AppendLine(" |");
     count++;
 }
 
-sb.AppendLine();
-sb.Append(count.ToString(CultureInfo.InvariantCulture))
-  .AppendLine(" opcodes. `calli` takes a signature, `switch` takes a label list, and the prefixes");
-sb.AppendLine("`constrained.`, `no.`, `readonly.`, `tail.`, `unaligned.`, and `volatile.` apply to the next instruction.");
+foreach (var name in OpcodeTable.Names.Where(name => !OpcodeTable.IsReserved(name)))
+{
+    var help = InstructionReference.For(name);
+    sb.AppendLine();
+    sb.Append("<h2 id=\"").Append(InstructionReference.Anchor(name)).Append("\"><code>").Append(name).AppendLine("</code></h2>");
+    sb.AppendLine();
+    sb.Append('`').Append(help.Syntax).AppendLine("`");
+    sb.AppendLine();
+    sb.Append("Stack: `").Append(help.StackEffect).AppendLine("`");
+    sb.AppendLine();
+    sb.AppendLine(help.Explanation);
+    foreach (var note in help.Notes)
+    {
+        sb.AppendLine();
+        sb.AppendLine(note);
+    }
+
+    sb.AppendLine();
+    sb.Append('[').Append(name == "no." ? "CLI specification" : "Microsoft reference")
+        .Append("](").Append(InstructionReference.ExternalUrl(name)).AppendLine(")");
+}
 
 File.WriteAllText(output, sb.ToString());
 Console.WriteLine($"wrote {output} ({count} opcodes)");

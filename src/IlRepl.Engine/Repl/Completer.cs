@@ -5,9 +5,12 @@ using IlRepl.Protocol;
 namespace IlRepl.Repl;
 
 /// <summary>
+/// Completes opcode names, REPL commands, and directives at the start of a line.
+/// </summary>
+/// <remarks>
 /// Completes the first word of a line: opcode names, and REPL commands and directives when the
 /// word starts with a dot.
-/// </summary>
+/// </remarks>
 public static class Completer
 {
     private static readonly CompletionItem[] CommandItems =
@@ -73,7 +76,8 @@ public static class Completer
             }
 
             var op = OpcodeTable.BySourceName[name];
-            items.Add(new CompletionItem(name, OpcodeTable.StackTransition(op), OpcodeTable.Describe(op), op.OperandType != OperandType.InlineNone));
+            items.Add(new CompletionItem(name, OpcodeTable.StackTransition(op), InstructionReference.For(name).Explanation,
+                op.OperandType != OperandType.InlineNone) { InstructionHelp = InstructionReference.For(name) });
         }
 
         items.AddRange(CommandItems);
@@ -107,7 +111,8 @@ public static class Completer
             }
 
             var op = OpcodeTable.BySourceName[name];
-            items.Add(new CompletionItem(name, OpcodeTable.StackTransition(op), OpcodeTable.Describe(op), op.OperandType != OperandType.InlineNone));
+            items.Add(new CompletionItem(name, OpcodeTable.StackTransition(op), InstructionReference.For(name).Explanation,
+                op.OperandType != OperandType.InlineNone) { InstructionHelp = InstructionReference.For(name) });
         }
 
         return items;

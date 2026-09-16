@@ -1,4 +1,5 @@
 using IlRepl.Engine.Binding;
+using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
 
@@ -7,6 +8,8 @@ namespace IlRepl.Engine;
 /// </summary>
 public sealed partial class Session
 {
+    private readonly Dictionary<int, AnalysisLocation> _familySourceLocations = [];
+
     /// <summary>
     /// Invalidates analysis and completion after accepted source changes inside an edit submission.
     /// </summary>
@@ -72,6 +75,11 @@ public sealed partial class Session
                 snapshot, definitions, [.. _declarationLines], [.. _bodyLines],
                 openLines, TypeArguments?.Select(RuntimeSymbolImporter.Import).ToArray(), InBlockComment, CompletionRevision)
             {
+                CellDeclarationLocations = CaptureLocations(_declarationLines, _cell.Entries),
+                CellLocations = CaptureLocations(_bodyLines, _cell.Entries),
+                OpenLocations = _openType is not null ? CaptureFamilyLocations(openLines.Count)
+                    : _open is { } open
+                        ? [null, .. CaptureLocations(open.BodyLines, open.State.Entries)] : [],
                 Edits = _edits.Select(edit => new EditingMethodEdit(edit.Name, edit.Reference,
                     RuntimeSymbolImporter.Import(IlAsmRenderer.DefinitionOf(edit.Original.Method)), edit.Revision)
                 {
@@ -85,6 +93,51 @@ public sealed partial class Session
             snapshot.Dispose();
             throw;
         }
+    }
+
+    private AnalysisLocation?[] CaptureFamilyLocations(int length)
+    {
+        var locations = new AnalysisLocation?[length];
+        foreach (var (index, location) in _familySourceLocations)
+        {
+            if (index + 1 < length)
+            {
+                locations[index + 1] = location;
+            }
+        }
+
+        if (_openMember is { } member)
+        {
+            var body = CaptureLocations(member.BodyLines, member.State.Entries);
+            for (var index = 0; index < body.Length; index++)
+            {
+                locations[length - body.Length + index] ??= body[index];
+            }
+        }
+
+        return locations;
+    }
+
+    private static AnalysisLocation?[] CaptureLocations(List<string> lines, IReadOnlyList<CellEntry> entries)
+    {
+        var locations = new AnalysisLocation?[lines.Count];
+        var position = 0;
+        for (var line = 0; line < lines.Count; line++)
+        {
+            for (var candidate = position; candidate < entries.Count; candidate++)
+            {
+                if (entries[candidate].Source != lines[line])
+                {
+                    continue;
+                }
+
+                locations[line] = entries[candidate].Location;
+                position = candidate + 1;
+                break;
+            }
+        }
+
+        return locations;
     }
 
     private static IEnumerable<string> ReferencedSessionMethods(CellState body) =>

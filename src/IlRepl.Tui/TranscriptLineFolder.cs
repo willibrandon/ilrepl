@@ -1,15 +1,12 @@
 using System.Globalization;
+using System.Text;
 using Hex1b;
 using IlRepl.Protocol;
 
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Folds a transcript line into rows that fit a width, keeping each run's style. Rows break at
-/// the last space that fits, or inside a word when nothing else fits. Leading spaces are kept,
-/// so listings keep their indentation. A line made of several runs gets a hanging indent: the
-/// rows after the first start under the last run, so a description folds beneath itself and not
-/// beneath its label.
+/// Folds styled transcript lines at word boundaries while preserving indentation and complete Unicode text elements.
 /// </summary>
 public static class TranscriptLineFolder
 {
@@ -46,6 +43,12 @@ public static class TranscriptLineFolder
         }
 
         var indent = HangingIndent(runs, width);
+        var contentStart = 0;
+        while (contentStart < cells.Count && cells[contentStart].Text == " ")
+        {
+            contentStart++;
+        }
+
         var rows = new List<IReadOnlyList<TranscriptSpan>>();
         var start = 0;
         while (start < cells.Count)
@@ -73,9 +76,10 @@ public static class TranscriptLineFolder
                 break;
             }
 
-            // Break at the last space that fits, dropping that space. Otherwise break the word.
-            var breakAt = -1;
-            for (var i = end - 1; i > start; i--)
+            // A word can fill the row exactly, leaving its separating space just beyond the fitted cells.
+            // Drop only the wrapping separator; initial indentation is never a word boundary.
+            var breakAt = cells[end].Text == " " && end > contentStart ? end : -1;
+            for (var i = end - 1; breakAt < 0 && i > Math.Max(start, contentStart); i--)
             {
                 if (cells[i].Text == " ")
                 {
@@ -128,7 +132,7 @@ public static class TranscriptLineFolder
         {
             var style = cells[i].Style;
             var j = i;
-            var text = new System.Text.StringBuilder();
+            var text = new StringBuilder();
             while (j < end && cells[j].Style == style)
             {
                 text.Append(cells[j].Text);

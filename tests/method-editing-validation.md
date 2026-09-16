@@ -46,22 +46,22 @@ outcomes are `different` and then `match`; its cell results are exactly `42`, `4
 Run from the repository root with the SDK selected by `global.json`:
 
 ```sh
-ILREPL_REQUIRE_ILASM=1 dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj
+dotnet test
 dotnet scripts/Highlight-Cil.cs --verify
 dotnet scripts/Publish-Wasm.cs --configuration Debug
 pnpm --dir docs build
 dotnet scripts/Publish-NativeAot.cs --rid linux-x64
 ```
 
-Validation explicitly selected Microsoft ILAsm and ILDAsm 10.0.11. Set `ILREPL_ILASM` and `ILREPL_ILDASM`
-to those executables if `PATH` selects another implementation. `ILREPL_REQUIRE_ILASM=1` makes missing
-assembler support fail the relevant tests. Native AOT packaging includes the repository smoke test; the
+The test project automatically restores Microsoft ILAsm and ILDAsm 10.0.11 for the current platform.
+Missing assembler or disassembler tools fail the relevant tests. No environment variables are required.
+Native AOT packaging includes the repository smoke test; the
 published executable can also run the sample transcript directly.
 
 Collect production coverage with the same settings used for this change:
 
 ```sh
-ILREPL_REQUIRE_ILASM=1 dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj \
+dotnet test \
   --coverage --coverage-settings tests/coverage.config.xml \
   --coverage-output-format cobertura --coverage-output artifacts/coverage/method-editing.cobertura.xml \
   --results-directory artifacts/coverage --report-trx

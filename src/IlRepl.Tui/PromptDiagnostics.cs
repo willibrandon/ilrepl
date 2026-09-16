@@ -1,4 +1,3 @@
-using System.Globalization;
 using Hex1b.Documents;
 using IlRepl.Protocol;
 
@@ -17,12 +16,14 @@ public static class PromptDiagnostics
     public static AnalysisDiagnostic? Current(PromptState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        var diagnostics = Visible(state);
-        return diagnostics.FirstOrDefault(d => d.Location.Line == state.CaretLine - 1 && d.Kind == AnalysisDiagnosticKind.Error)
-            ?? diagnostics.FirstOrDefault(d => d.Location.Line == state.CaretLine - 1)
-            ?? diagnostics.FirstOrDefault(d => d.Kind == AnalysisDiagnosticKind.Error)
-            ?? (diagnostics.Count > 0 ? diagnostics[0] : null);
+        return Current(state, Visible(state));
     }
+
+    private static AnalysisDiagnostic? Current(PromptState state, IReadOnlyList<AnalysisDiagnostic> diagnostics) =>
+        diagnostics.FirstOrDefault(d => AtCaret(d, state) && d.Kind == AnalysisDiagnosticKind.Error)
+        ?? diagnostics.FirstOrDefault(d => AtCaret(d, state))
+        ?? diagnostics.FirstOrDefault(d => d.Kind == AnalysisDiagnosticKind.Error)
+        ?? (diagnostics.Count > 0 ? diagnostics[0] : null);
 
     /// <summary>
     /// Omits a refused current operand while its completion request has confirmed choices.
@@ -30,7 +31,7 @@ public static class PromptDiagnostics
     internal static IReadOnlyList<AnalysisDiagnostic> Visible(PromptState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        var diagnostics = state.Analysis?.Diagnostics ?? [];
+        var diagnostics = state.Analyzer is { } analyzer ? analyzer.Diagnostics(state) : state.Analysis?.Diagnostics ?? [];
         if (!CompletionOwnsCaret(state))
         {
             return diagnostics;
@@ -48,7 +49,17 @@ public static class PromptDiagnostics
     public static DiagnosticDisplay? Display(PromptState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        if (Current(state) is not { } diagnostic)
+        return Display(state, Visible(state));
+    }
+
+    /// <summary>
+    /// Retains only the previous explanation's presentation while fresh source evidence is unavailable.
+    /// </summary>
+    internal static DiagnosticDisplay? PreviousDisplay(PromptState state) => Display(state, state.Analysis?.Diagnostics ?? []);
+
+    private static DiagnosticDisplay? Display(PromptState state, IReadOnlyList<AnalysisDiagnostic> diagnostics)
+    {
+        if (Current(state, diagnostics) is not { } diagnostic)
         {
             return state.Analysis is null ? state.PendingDiagnostic : null;
         }
@@ -60,14 +71,16 @@ public static class PromptDiagnostics
             AnalysisDiagnosticKind.Unknown => "unknown",
             _ => "incomplete",
         };
-        var count = Visible(state).Count;
+        var count = diagnostics.Count;
         var suffix = count > 1 ? $" ({count} findings; F8 next)" : "";
-        var text = $"{kind} on line {diagnostic.Location.Line + 1}: {diagnostic.Message}{suffix}";
+        var where = diagnostic.Explanation?.Source is { Kind: not AnalysisSourceKind.Document } source
+            ? " at " + DiagnosticFormatter.Source(source) : $" on line {diagnostic.Location.Line + 1}";
+        var text = $"{kind}{where}: {diagnostic.Message}{suffix}";
         return new DiagnosticDisplay(text, diagnostic.Kind == AnalysisDiagnosticKind.Error ? SpanStyle.Error : SpanStyle.Dim);
     }
 
     /// <summary>
-    /// Wraps one explanation into at most three terminal rows.
+    /// Uses transcript word wrapping to fit one explanation into at most three terminal rows.
     /// </summary>
     /// <param name="state">The prompt.</param>
     /// <param name="width">The available terminal columns.</param>
@@ -81,33 +94,8 @@ public static class PromptDiagnostics
         }
 
         var columns = Math.Max(1, width <= 0 ? 80 : width);
-        var lines = WrapWords(display.Text.ReplaceLineEndings(" "), columns).Take(4).ToArray();
+        var lines = PaletteText.WrapWords(display.Text.ReplaceLineEndings(" "), columns).Take(4).ToArray();
         return lines.Length <= 3 ? lines : [lines[0], lines[1], PaletteText.Clip(lines[2], Math.Max(0, columns - 1)) + "…"];
-    }
-
-    private static IEnumerable<string> WrapWords(string text, int width)
-    {
-        while (text.Length > 0)
-        {
-            var portion = PaletteText.Clip(text, width, ellipsis: false);
-            if (portion.Length == text.Length)
-            {
-                yield return portion;
-                yield break;
-            }
-
-            if (portion.Length == 0)
-            {
-                yield return "…";
-                text = text[StringInfo.GetNextTextElementLength(text)..];
-                continue;
-            }
-
-            var boundary = portion.LastIndexOf(' ');
-            var length = boundary > 0 ? boundary : portion.Length;
-            yield return text[..length].TrimEnd();
-            text = text[length..].TrimStart();
-        }
     }
 
     /// <summary>
@@ -118,7 +106,9 @@ public static class PromptDiagnostics
     public static void Move(PromptState state, bool backwards)
     {
         ArgumentNullException.ThrowIfNull(state);
-        var positions = Visible(state).Select(d => d.Location).Where(location => location.Line >= 0)
+        state.Analyzer?.Refresh(state);
+        var positions = Visible(state).Where(d => d.Explanation?.Source is null or { Kind: AnalysisSourceKind.Document })
+            .Select(d => d.Location).Where(location => location.Line >= 0 && location.Line < state.LineCount && location.Offset is null)
             .Distinct().OrderBy(location => location.Line).ThenBy(location => location.Start).ToArray();
         if (positions.Length == 0)
         {
@@ -146,4 +136,11 @@ public static class PromptDiagnostics
         return state.Palette == PaletteMode.Open && state.Completions is { Reply.Items.Count: > 0 } completion
             && state.Requester?.Matches(state, completion) == true;
     }
+
+    /// <summary>
+    /// Matches only diagnostics belonging to the caret's current document source.
+    /// </summary>
+    internal static bool AtCaret(AnalysisDiagnostic diagnostic, PromptState state) =>
+        diagnostic.Location.Line == state.CaretLine - 1
+        && diagnostic.Explanation?.Source is null or { Kind: AnalysisSourceKind.Document };
 }

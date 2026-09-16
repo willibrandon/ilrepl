@@ -17,4 +17,10 @@ public sealed record AnalysisReply(
     long AssemblyVersion,
     AnalyzedStack? Stack,
     bool BeforeInstruction,
-    IReadOnlyList<AnalysisDiagnostic> Diagnostics);
+    IReadOnlyList<AnalysisDiagnostic> Diagnostics)
+{
+    /// <summary>
+    /// Explains the instruction at the caret without requiring the completion palette to be open.
+    /// </summary>
+    public InstructionHelp? InstructionHelp { get; init; }
+}

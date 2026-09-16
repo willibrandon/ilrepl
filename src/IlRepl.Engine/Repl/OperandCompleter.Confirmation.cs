@@ -119,6 +119,8 @@ public sealed partial class OperandCompleter
             return new CompletionItem(label, detail, description, false)
             {
                 Insert = insertion, Kind = candidate.Kind, Continues = continues,
+                InstructionHelp = instruction is not null ? InstructionReference.For(instruction, query.View)
+                    : OpcodeHelp(site),
                 FullDetail = full + (description.Length == 0 ? "" : "\n" + description),
                 Owner = candidate.GenericOwner?.Label,
             };
@@ -233,14 +235,38 @@ public sealed partial class OperandCompleter
             query.View.DeclarationContext, paths));
         var constraints = ConstraintDetails(target.Parameters);
         var full = target.Method is { } signature ? query.Members.FullSignature(signature) : query.Types.Spell(target.Type!);
+        var help = OpcodeHelp(site);
+        if (help is not null)
+        {
+            var syntax = InstructionReference.Syntax(site.Owner, full);
+            if (site.Kind == CompletionSiteKind.TypeArgument)
+            {
+                var original = query.Identity.Document.Lines[query.Identity.Document.Line];
+                var line = original[..site.ReplaceStart] + insertion + original[site.ReplaceEnd..];
+                var comment = query.View.InBlockComment;
+                syntax = InstructionParser.SplitLabels(CilLexer.StripComments(line, ref comment).Trim()).Remainder;
+            }
+
+            help = help with
+            {
+                Syntax = syntax,
+                Notes = [.. help.Notes,
+                    "Generic type arguments are unresolved; the stack effect remains generic until the operand is complete."],
+            };
+        }
+
         return new CompletionItem(target.Label, "type arguments", candidate.Rank.DeclaringPath, false)
         {
             Insert = insertion,
             CaretOffset = caret,
             Kind = CompletionKind.TypeArguments, Continues = true, Continuation = token,
+            InstructionHelp = help,
             FullDetail = full + (constraints.Length == 0 ? "" : "\n" + constraints), Owner = candidate.GenericOwner?.Label,
         };
     }
+
+    private static InstructionHelp? OpcodeHelp(CompletionSite site) =>
+        InstructionReference.Find(site.Owner is "ldtoken method" or "ldtoken field" ? "ldtoken" : site.Owner);
 
     private static bool Matches(BoundInstruction instruction, OperandCandidate candidate, CompletionSite site)
     {

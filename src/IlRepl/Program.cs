@@ -57,14 +57,13 @@ root.SetAction(async (parseResult, cancellationToken) =>
 
     await using (engine.ConfigureAwait(false))
     {
-        var prelude = quiet ? QuietPrelude : [];
+        if (quiet)
+        {
+            await engine.HandleAsync(".quiet on", cancellationToken).ConfigureAwait(false);
+        }
+
         if (!batch)
         {
-            foreach (var line in prelude)
-            {
-                await engine.HandleAsync(line, cancellationToken).ConfigureAwait(false);
-            }
-
             var history = noHistory ? null : new FileHistoryStore(FileHistoryStore.DefaultPath());
             return await IlReplApp.RunAsync(engine, history, cancellationToken).ConfigureAwait(false);
         }
@@ -86,7 +85,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
         }
 
         var runner = new BatchRunner(engine, Console.Out, color, echo);
-        return await runner.RunAsync(prelude.Concat(lines), cancellationToken).ConfigureAwait(false);
+        return await runner.RunAsync(lines, cancellationToken).ConfigureAwait(false);
     }
 });
 
@@ -133,9 +132,4 @@ static IEnumerable<string> ReadStandardInput()
     {
         yield return line;
     }
-}
-
-static partial class Program
-{
-    private static readonly string[] QuietPrelude = [".quiet on"];
 }

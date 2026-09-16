@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Hex1b;
+using IlRepl.Protocol;
 
 namespace IlRepl.Tui;
 
@@ -58,6 +59,27 @@ public static class PaletteText
     {
         var clipped = Clip(text, Math.Max(0, width - 1));
         return clipped + new string(' ', Math.Max(0, width - DisplayWidth.GetStringWidth(clipped)));
+    }
+
+    /// <summary>
+    /// Wraps prose with transcript word boundaries while preserving indentation, empty paragraphs, and Unicode text elements.
+    /// </summary>
+    /// <param name="text">The prose, including explicit paragraph breaks.</param>
+    /// <param name="width">The available terminal cells, with a minimum of one.</param>
+    /// <returns>Every wrapped paragraph, dropping only the space used as a wrapping separator.</returns>
+    public static IReadOnlyList<string> WrapWords(string text, int width)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var result = new List<string>();
+        foreach (var paragraph in text.ReplaceLineEndings("\n").Split('\n'))
+        {
+            foreach (var row in TranscriptLineFolder.Fold([new TranscriptSpan(paragraph)], Math.Max(1, width)))
+            {
+                result.Add(string.Concat(row.Select(span => span.Text)));
+            }
+        }
+
+        return result;
     }
 
     /// <summary>

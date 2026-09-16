@@ -5,6 +5,9 @@ using IlRepl.Protocol;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Validates, compiles, and executes a terminal session while retaining its declarations and accepted source.
+/// </summary>
+/// <remarks>
 /// One REPL session: the resolver, the declarations and methods that persist across cells, and
 /// the cell currently being written. Lines are validated as they arrive; <see cref="Run"/>
 /// compiles and executes the cell and clears it. While a <c>.method</c> block is open, lines go
@@ -12,7 +15,7 @@ namespace IlRepl.Engine;
 /// it into its trampoline, and completes the submission. The session's records are read and
 /// written only by the thread that drives it; code a cell started on other threads reaches
 /// trampolines and types, never these records.
-/// </summary>
+/// </remarks>
 public sealed partial class Session
 {
     private readonly List<string> _declarationLines = [];
@@ -256,7 +259,15 @@ public sealed partial class Session
         var text = line.Text;
         if (_openType is not null)
         {
-            return AddTypeLine(line);
+            var family = _openType.Outermost;
+            var position = family.Lines.Count;
+            var acceptedType = AddTypeLine(line);
+            if (line.Location is { } location && family.Lines.Count > position)
+            {
+                _familySourceLocations[position] = location;
+            }
+
+            return acceptedType;
         }
 
         if (_open is not null)
@@ -835,28 +846,33 @@ public sealed partial class Session
     {
         var generics = new GenericContext([], PrototypeGenerics.Create(_typeParameterNames));
         var state = new CellState(Resolver, generics, table, null, false, types, null);
-        foreach (var line in _declarationLines)
+        var declarationLocations = CaptureLocations(_declarationLines, _cell.Entries);
+        for (var index = 0; index < _declarationLines.Count; index++)
         {
-            state.Apply(NormalizedLine.FromText(line));
+            state.Apply(NormalizedLine.FromText(_declarationLines[index]) with { Location = declarationLocations[index] });
         }
 
-        foreach (var line in _bodyLines)
+        var bodyLocations = CaptureLocations(_bodyLines, _cell.Entries);
+        for (var index = 0; index < _bodyLines.Count; index++)
         {
-            state.Apply(NormalizedLine.FromText(line));
+            state.Apply(NormalizedLine.FromText(_bodyLines[index]) with { Location = bodyLocations[index] });
         }
 
         return state;
     }
 
-    private CellState ReplayOpenBody(OpenMethodBlock open, bool? braceSeen = null) => ReplayBody(open.Signature, open.BodyLines, open.Signatures, braceSeen ?? open.State.BraceSeen);
+    private CellState ReplayOpenBody(OpenMethodBlock open, bool? braceSeen = null) => ReplayBody(
+        open.Signature, open.BodyLines, open.Signatures, CaptureLocations(open.BodyLines, open.State.Entries),
+        braceSeen ?? open.State.BraceSeen);
 
-    private CellState ReplayBody(MethodSignature signature, IReadOnlyList<string> lines, IReadOnlyList<MethodSignature> table, bool braceSeen = true)
+    private CellState ReplayBody(MethodSignature signature, List<string> lines, IReadOnlyList<MethodSignature> table,
+        AnalysisLocation?[] locations, bool braceSeen)
     {
         // The opening brace is never stored: a replay starts with it seen unless told otherwise.
         var state = new CellState(Resolver, GenericContext.Empty, table, signature, braceSeen, _typeTable, null);
-        foreach (var line in lines)
+        for (var index = 0; index < lines.Count; index++)
         {
-            state.Apply(NormalizedLine.FromText(line));
+            state.Apply(NormalizedLine.FromText(lines[index]) with { Location = locations[index] });
         }
 
         return state;

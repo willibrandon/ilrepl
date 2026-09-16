@@ -10,6 +10,7 @@ namespace IlRepl.Tui;
 internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source) : ChannelReader<Hex1bEvent>
 {
     private TaskCompletionSource? _applied;
+    private TaskCompletionSource? _frameReady;
     private PasteContext? _paste;
     private Hex1bKeyEvent? _pendingText;
     private int _textOffset;
@@ -20,6 +21,11 @@ internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source) : Chan
     /// <inheritdoc />
     public override bool TryRead([MaybeNullWhen(false)] out Hex1bEvent item)
     {
+        if (_frameReady is { Task.IsCompleted: false })
+        {
+            item = null;
+            return false;
+        }
         if (_pendingText is not null)
         {
             item = TakeTextOrControl();
@@ -57,6 +63,10 @@ internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source) : Chan
     /// <inheritdoc />
     public override async ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
     {
+        if (_frameReady is { Task.IsCompleted: false } frame)
+        {
+            await frame.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
         if (_pendingText is not null)
         {
             return true;
@@ -81,6 +91,16 @@ internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source) : Chan
     }
 
     /// <summary>
+    /// Defers queued input until a help transition has rebuilt the focused widget.
+    /// </summary>
+    internal void PauseUntilFrame() => _frameReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    /// Releases input when the app begins rendering the new help or editor surface.
+    /// </summary>
+    internal void FrameReady() => _frameReady?.TrySetResult();
+
+    /// <summary>
     /// Releases queued keys after the paste has changed the document and its caret.
     /// </summary>
     public void Applied()
@@ -96,6 +116,7 @@ internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source) : Chan
     {
         _paste?.Cancel();
         _pendingText = null;
+        FrameReady();
         Applied();
     }
 

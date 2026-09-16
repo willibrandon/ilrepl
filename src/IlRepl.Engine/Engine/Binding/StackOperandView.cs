@@ -90,6 +90,11 @@ public sealed record StackOperandView<T> where T : class
     public bool? MethodIsVirtual { get; init; }
 
     /// <summary>
+    /// Whether the method is the runtime-provided array operation that returns an element's managed address.
+    /// </summary>
+    public bool MethodIsArrayAddress { get; init; }
+
+    /// <summary>
     /// Whether access to the method operand is known to pass CLI accessibility checks.
     /// </summary>
     public bool MethodAccessIsKnownValid { get; init; }

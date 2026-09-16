@@ -8,11 +8,14 @@ using IlRepl.Protocol;
 namespace IlRepl.Repl;
 
 /// <summary>
+/// Handles REPL source and commands, producing transcript output and session state.
+/// </summary>
+/// <remarks>
 /// The REPL without a user interface: it takes lines, drives the <see cref="Session"/>, and
 /// writes what happened to the <see cref="Transcript"/>. The terminal UI and batch mode both sit
 /// on top of it. While a <c>.method</c> block is open, lines go to the method, and the cell
 /// number advances when the block commits, as it does after a run.
-/// </summary>
+/// </remarks>
 public sealed partial class ReplCore : IDisposable
 {
     private static readonly CilTokenizer Tokenizer = new(CilVocabularyBuilder.Vocabulary);
@@ -215,6 +218,11 @@ public sealed partial class ReplCore : IDisposable
         {
             Session.Forget(normalized);
             Error(ex.Message);
+            foreach (var detail in ex.Diagnostics.SelectMany(DiagnosticFormatter.Details))
+            {
+                Note("  " + detail);
+            }
+
             return new HandleResult(false, false) { Diagnostics = ex.Diagnostics };
         }
         catch (Exception ex) when (ReplRecovery.IsRecoverable(ex))
@@ -714,7 +722,8 @@ public sealed partial class ReplCore : IDisposable
         {
             names = names.Where(n =>
                 n.Contains(filter, StringComparison.Ordinal)
-                || OpcodeTable.Describe(OpcodeTable.BySourceName[n]).Contains(filter, StringComparison.OrdinalIgnoreCase));
+                || InstructionReference.For(n).Explanation.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || InstructionReference.For(n).Notes.Any(note => note.Contains(filter, StringComparison.OrdinalIgnoreCase)));
         }
 
         var list = names.ToList();
@@ -731,7 +740,7 @@ public sealed partial class ReplCore : IDisposable
             [
                 new TranscriptSpan("  " + name.PadRight(16), SpanStyle.Opcode),
                 new TranscriptSpan(OpcodeTable.StackTransition(op).PadRight(24), SpanStyle.Dim),
-                new TranscriptSpan(OpcodeTable.Describe(op)),
+                new TranscriptSpan(InstructionReference.For(name).Explanation),
             ]));
         }
 
@@ -987,10 +996,9 @@ public sealed partial class ReplCore : IDisposable
         foreach (var diagnostic in diagnostics)
         {
             Note(diagnostic.Kind.ToString().ToLowerInvariant() + ": " + diagnostic.Message);
-            foreach (var related in diagnostic.Related)
+            foreach (var detail in DiagnosticFormatter.Details(diagnostic))
             {
-                var location = related.Location.Offset is { } offset ? $"IL_{offset:x4}" : $"line {related.Location.Line + 1}";
-                Note($"  {location}: {related.Message}");
+                Note("  " + detail);
             }
         }
     }

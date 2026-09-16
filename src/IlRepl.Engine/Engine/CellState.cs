@@ -7,9 +7,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// The parsed contents of a cell, built up one line at a time. It is replayable: the session
-/// keeps a copy for validation and echo, and the compiler builds a fresh one against the real
-/// method so generic parameters bind to the method being emitted.
+/// Stores replayable parsed cell contents for validation, transcript output, and binding against the emitted method.
 /// </summary>
 public sealed class CellState
 {
@@ -399,7 +397,7 @@ public sealed class CellState
         }
 
         var line = normalized.Text;
-        _currentLocation = Location(normalized);
+        _currentLocation = normalized.Location;
         _analysisBeforeLine = _analysis;
         _analysis = null;
         var text = line;
@@ -450,7 +448,7 @@ public sealed class CellState
                 Kind = EntryKind.Labels,
                 Source = line,
                 Labels = labels,
-                Location = Location(normalized)
+                Location = normalized.Location
             });
             _definedLabels.UnionWith(labels);
             return new LineResult(LineOutcome.Labels, null, null);
@@ -486,16 +484,10 @@ public sealed class CellState
             Source = line,
             Labels = labels,
             Instruction = instruction,
-            Location = Location(normalized)
+            Location = normalized.Location
         });
         _definedLabels.UnionWith(labels);
         return new LineResult(LineOutcome.Instruction, _entries[^1].Instruction, null);
-    }
-
-    private AnalysisLocation Location(NormalizedLine line)
-    {
-        var start = line.Raw.Length - line.Raw.TrimStart().Length;
-        return line.Location ?? new AnalysisLocation(Signature?.Name ?? "cell", _entries.Count, start, line.Raw.Length - start);
     }
 
     private void AcceptEntry(CellEntry entry)

@@ -63,6 +63,15 @@ The status bar shows `stack before` for the instruction at the caret. It follows
 so a branch below the caret can change that stack. On an insertion line it shows the incoming
 stack; declarations do not claim an instruction stack.
 
+F1 explains the diagnostic at the caret, the selected completion, or the current instruction.
+It shows the expected operands, the incoming stack from bottom to top, and the source of conflicting
+values. At a branch join, incoming paths are shown separately. Unknown, incomplete, unreachable,
+and unverifiable results remain distinct; unavailable evidence is identified explicitly.
+
+Help uses the whole terminal, including on short screens. Escape or F1 returns to the same buffer,
+selection, and undo history. Tab selects a producer or documentation link and Enter opens it.
+Previous help stays dimmed while its replacement is being checked, with navigation disabled.
+
 A compact diagnostic explains a conflicting join, missing target, or invalid instruction.
 F8 moves to the next finding and Shift+F8 moves back. Corrections update the stack and clear
 resolved findings. Completion uses the same incoming stack. `.show` and `.dis` retain the full

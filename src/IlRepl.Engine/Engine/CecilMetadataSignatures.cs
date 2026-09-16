@@ -127,6 +127,9 @@ internal static class CecilMetadataSignatures
         return reference;
     }
 
+    /// <summary>
+    /// Imports a complete signature while preserving the generic owner used by array member references.
+    /// </summary>
     internal static TypeReference Import(IlSignature signature, MemberReference context, CecilWriter writer)
     {
         switch (signature.Kind)
@@ -136,8 +139,18 @@ internal static class CecilMetadataSignatures
                 return writer.Import(signature.Resolved
                     ?? throw new ReplException($"could not resolve {signature.UnresolvedName} in a member signature"));
             case IlSignatureKind.TypeParameter:
+                if (context.DeclaringType is ArrayType && signature.Resolved is { } arrayTypeParameter)
+                {
+                    return writer.Import(arrayTypeParameter);
+                }
+
                 return context.DeclaringType.GetElementType().GenericParameters[signature.Index];
             case IlSignatureKind.MethodParameter:
+                if (context.DeclaringType is ArrayType && signature.Resolved is { } arrayMethodParameter)
+                {
+                    return writer.Import(arrayMethodParameter);
+                }
+
                 return ((MethodReference)context).GenericParameters[signature.Index];
             case IlSignatureKind.ByRef:
                 return new ByReferenceType(Import(signature.Element!, context, writer));

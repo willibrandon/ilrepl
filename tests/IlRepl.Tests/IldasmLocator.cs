@@ -32,7 +32,7 @@ internal static class IldasmLocator
     }
 
     /// <summary>
-    /// The path of ildasm. Without one the test is inconclusive, or fails when ILREPL_REQUIRE_ILASM is set, as on CI.
+    /// Returns ildasm or fails the test when the restored tool and fallback locations are missing.
     /// </summary>
     /// <returns>The path.</returns>
     public static string Require()
@@ -43,12 +43,8 @@ internal static class IldasmLocator
             return ildasm;
         }
 
-        if (Environment.GetEnvironmentVariable("ILREPL_REQUIRE_ILASM") is { Length: > 0 })
-        {
-            Assert.Fail("ildasm is required (ILREPL_REQUIRE_ILASM is set) but was not found on the PATH, in ~/.local/bin, or in the restored ILDAsm package");
-        }
-
-        Assert.Inconclusive("ildasm is not installed");
+        Assert.Fail("ildasm is required but was not found in the restored ILDAsm package, on PATH, or in ~/.local/bin. "
+            + "Run dotnet restore to restore the platform's ILDAsm package.");
         return "";
     }
 

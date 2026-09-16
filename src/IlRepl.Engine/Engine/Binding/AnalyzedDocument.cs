@@ -7,9 +7,9 @@ namespace IlRepl.Engine.Binding;
 /// </summary>
 /// <param name="Lines">The analyzed source snapshot.</param>
 /// <param name="Reply">The shared diagnostics and session identity.</param>
-/// <param name="Positions">The incoming stack and instruction flag at each document line.</param>
+/// <param name="Positions">The incoming stack, instruction flag, and help at each document line.</param>
 internal sealed record AnalyzedDocument(IReadOnlyList<string> Lines, AnalysisReply Reply,
-    IReadOnlyList<(AnalyzedStack? Stack, bool BeforeInstruction)> Positions)
+    IReadOnlyList<(AnalyzedStack? Stack, bool BeforeInstruction, InstructionHelp? Help)> Positions)
 {
     /// <summary>
     /// Selects the caret location from already computed document facts.
@@ -20,6 +20,7 @@ internal sealed record AnalyzedDocument(IReadOnlyList<string> Lines, AnalysisRep
         return Reply with
         {
             DocumentVersion = request.DocumentVersion, Stack = position.Stack, BeforeInstruction = position.BeforeInstruction,
+            InstructionHelp = position.Help,
         };
     }
 }

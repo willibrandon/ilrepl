@@ -23,6 +23,76 @@ public sealed class TranscriptLineFolderTests
     }
 
     /// <summary>
+    /// A word at the width boundary consumes its separator without losing a later word or an earlier fitting word.
+    /// </summary>
+    /// <param name="text">The complete line.</param>
+    /// <param name="width">The row width in terminal cells.</param>
+    /// <param name="expected">The exact rows in source order.</param>
+    [TestMethod]
+    [DataRow("ab cd", 1, new[] { "a", "b", "c", "d" })]
+    [DataRow("ab cd", 2, new[] { "ab", "cd" })]
+    [DataRow("ab cd", 3, new[] { "ab", "cd" })]
+    [DataRow("ab cd", 5, new[] { "ab cd" })]
+    [DataRow("a bc de", 4, new[] { "a bc", "de" })]
+    [DataRow("a  bc", 3, new[] { "a ", "bc" })]
+    public void WordBoundary_UsesTheAvailableRow(string text, int width, string[] expected)
+    {
+        var rows = TranscriptLineFolder.Fold([new TranscriptSpan(text)], width);
+
+        Assert.AreSequenceEqual(expected, rows.Select(Join));
+    }
+
+    /// <summary>
+    /// Initial indentation survives folding even when it fills a row or makes up the entire line.
+    /// </summary>
+    /// <param name="text">The indented line.</param>
+    /// <param name="width">The row width in terminal cells.</param>
+    /// <param name="expected">The exact rows including every indentation space.</param>
+    [TestMethod]
+    [DataRow("  ab cd", 2, new[] { "  ", "ab", "cd" })]
+    [DataRow("  ab cd", 4, new[] { "  ab", "cd" })]
+    [DataRow("    ", 2, new[] { "  ", "  " })]
+    [DataRow("   ab", 2, new[] { "  ", " a", "b" })]
+    public void LeadingSpaces_AreNeverDropped(string text, int width, string[] expected)
+    {
+        var rows = TranscriptLineFolder.Fold([new TranscriptSpan(text)], width);
+
+        Assert.AreSequenceEqual(expected, rows.Select(Join));
+    }
+
+    /// <summary>
+    /// Removing a boundary separator preserves the styles on both sides of a run boundary.
+    /// </summary>
+    [TestMethod]
+    public void WordBoundary_PreservesRunStyles()
+    {
+        var rows = TranscriptLineFolder.Fold(
+            [new TranscriptSpan("ab", SpanStyle.Opcode), new TranscriptSpan(" cd", SpanStyle.Type)], 2);
+
+        Assert.HasCount(2, rows);
+        Assert.AreSequenceEqual([new TranscriptSpan("ab", SpanStyle.Opcode)], rows[0]);
+        Assert.AreSequenceEqual([new TranscriptSpan("cd", SpanStyle.Type)], rows[1]);
+    }
+
+    /// <summary>
+    /// Wide, joined, and combining text elements remain indivisible even when wider than the requested row.
+    /// </summary>
+    /// <param name="width">The row width in terminal cells.</param>
+    [TestMethod]
+    [DataRow(1)]
+    [DataRow(2)]
+    public void UnicodeElements_RemainWhole(int width)
+    {
+        var rows = TranscriptLineFolder.Fold([new TranscriptSpan("界 👩‍💻 é", SpanStyle.Type)], width);
+
+        Assert.AreSequenceEqual(["界", "👩‍💻", "é"], rows.Select(Join));
+        foreach (var row in rows)
+        {
+            Assert.AreEqual(SpanStyle.Type, Assert.ContainsSingle(row).Style);
+        }
+    }
+
+    /// <summary>
     /// A paragraph breaks at spaces, fills each row as far as it can, and drops only the space
     /// at the break.
     /// </summary>

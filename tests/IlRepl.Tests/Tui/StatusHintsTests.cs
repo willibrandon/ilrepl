@@ -5,8 +5,7 @@ using IlRepl.Tui;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// The status bar keeps the hints that fit beside the other sections and drops the rest from
-/// the left, and it shows copy mode's keys while copy mode is on.
+/// The status bar retains the most relevant hints at narrow widths and exposes help whenever it fits.
 /// </summary>
 [TestClass]
 public sealed class StatusHintsTests
@@ -14,7 +13,8 @@ public sealed class StatusHintsTests
     private static readonly string[] s_facts = ["stack [int32, int32]", "no locals", "2 instructions"];
     private static readonly string[] s_methodFacts = ["method Fib", "stack [int32, int32]", "no locals", "2 instructions"];
     private static readonly string[] s_classFacts = ["class Point", "method Sum", "stack [int32, int32]", "no locals", "2 instructions"];
-    private static readonly string[] s_all = ["Tab complete", "Shift+↑ select", "Ctrl+Q quit"];
+    private static readonly string[] s_all = ["F1 help", "Tab complete", "Shift+↑ select", "Ctrl+Q quit"];
+    private static readonly string[] s_withoutHelp = ["Tab complete", "Shift+↑ select", "Ctrl+Q quit"];
     private static readonly string[] s_two = ["Shift+↑ select", "Ctrl+Q quit"];
     private static readonly string[] s_one = ["Ctrl+Q quit"];
     private static readonly string[] s_copyAll = ["Shift+↑↓ extend", "y yank", "Esc cancel"];
@@ -27,8 +27,11 @@ public sealed class StatusHintsTests
     [TestMethod]
     public void Hints_DropFromTheLeftAsWidthShrinks()
     {
-        Assert.AreSequenceEqual(s_all, IlReplApp.StatusHints(s_facts, 100, copyMode: false));
-        Assert.AreSequenceEqual(["Tab complete", "Ctrl+Q quit"], IlReplApp.StatusHints(s_facts, 100, false, EnterAction.Submit, 1, ownSelection: false), "without the app's own selection Shift+Up is not offered");
+        Assert.AreSequenceEqual(s_all, IlReplApp.StatusHints(s_facts, 120, copyMode: false));
+        Assert.AreSequenceEqual(s_withoutHelp, IlReplApp.StatusHints(s_facts, 100, copyMode: false));
+        Assert.AreSequenceEqual(["F1 help", "Tab complete", "Ctrl+Q quit"],
+            IlReplApp.StatusHints(s_facts, 100, false, EnterAction.Submit, 1, ownSelection: false),
+            "without the app's own selection Shift+Up is not offered");
         Assert.AreSequenceEqual(s_two, IlReplApp.StatusHints(s_facts, 83, copyMode: false));
         Assert.AreSequenceEqual(s_one, IlReplApp.StatusHints(s_facts, 60, copyMode: false));
         Assert.AreSequenceEqual(s_one, IlReplApp.StatusHints(s_facts, 20, copyMode: false));
@@ -51,7 +54,7 @@ public sealed class StatusHintsTests
     [TestMethod]
     public void UnknownWidth_KeepsEveryHint()
     {
-        Assert.HasCount(3, IlReplApp.StatusHints(s_facts, 0, copyMode: false));
+        Assert.AreSequenceEqual(s_all, IlReplApp.StatusHints(s_facts, 0, copyMode: false));
     }
 
     /// <summary>
@@ -60,7 +63,8 @@ public sealed class StatusHintsTests
     [TestMethod]
     public void MethodFact_TakesRoomFromTheHints()
     {
-        Assert.AreSequenceEqual(s_all, IlReplApp.StatusHints(s_methodFacts, 110, copyMode: false));
+        Assert.AreSequenceEqual(s_all, IlReplApp.StatusHints(s_methodFacts, 130, copyMode: false));
+        Assert.AreSequenceEqual(s_withoutHelp, IlReplApp.StatusHints(s_methodFacts, 110, copyMode: false));
         Assert.AreSequenceEqual(s_two, IlReplApp.StatusHints(s_methodFacts, 100, copyMode: false));
         Assert.AreSequenceEqual(s_one, IlReplApp.StatusHints(s_methodFacts, 83, copyMode: false));
     }
@@ -71,14 +75,15 @@ public sealed class StatusHintsTests
     [TestMethod]
     public void ClassFact_TakesRoomFromTheHints()
     {
-        Assert.AreSequenceEqual(s_all, IlReplApp.StatusHints(s_classFacts, 125, copyMode: false));
+        Assert.AreSequenceEqual(s_all, IlReplApp.StatusHints(s_classFacts, 145, copyMode: false));
+        Assert.AreSequenceEqual(s_withoutHelp, IlReplApp.StatusHints(s_classFacts, 125, copyMode: false));
         Assert.AreSequenceEqual(s_two, IlReplApp.StatusHints(s_classFacts, 110, copyMode: false));
         Assert.AreSequenceEqual(s_one, IlReplApp.StatusHints(s_classFacts, 90, copyMode: false));
     }
 
     private static readonly string[] s_continue = ["Ctrl+C clears", "Ctrl+Q quit", "Enter continues"];
     private static readonly string[] s_accept = ["Esc dismiss", "Ctrl+Q quit", "Enter accepts"];
-    private static readonly string[] s_busy = ["Ctrl+Q quit", "Ctrl+C cancels"];
+    private static readonly string[] s_busy = ["F1 help", "Ctrl+Q quit", "Ctrl+C cancels"];
     private const string Block = ".method void F() {\n  nop\n  ret\n}";
 
     /// <summary>
@@ -146,8 +151,7 @@ public sealed class StatusHintsTests
     }
 
     /// <summary>
-    /// While a submission is in flight the bar offers cancel, and keeps that offer on a narrow bar;
-    /// Enter itself still decides by the buffer, and what it sends waits its turn.
+    /// Busy status retains cancel at narrow widths while Enter continues to follow the buffer state.
     /// </summary>
     [TestMethod]
     public async Task StatusHints_Busy_ShowsProgress()
@@ -198,4 +202,3 @@ public sealed class StatusHintsTests
         return state;
     }
 }
-

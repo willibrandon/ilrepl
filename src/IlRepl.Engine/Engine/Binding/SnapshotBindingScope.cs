@@ -359,7 +359,8 @@ public sealed class SnapshotBindingScope : IBindingScope
         }
 
         var located = _snapshot.Catalog.Locate(definition);
-        var methods = located is { } l ? l.Source.Methods(l.Handle, _snapshot.Catalog) : [];
+        var methods = definition.IsArray ? SymbolArrayMethods.Create(definition)
+            : located is { } l ? l.Source.Methods(l.Handle, _snapshot.Catalog) : [];
         _shared.Methods[definition] = methods;
         return methods;
     }

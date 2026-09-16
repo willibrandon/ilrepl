@@ -47,7 +47,10 @@ internal static class RuntimeFlowAnalysis
         var nodes = entries.Select((entry, index) => new FlowNode<Type>(
             entry.Location ?? new AnalysisLocation(body, index, 0, entry.Source.Length), entry.Source)
         {
+            SourceLocation = entry.Location,
+            SourceKind = SourceKind(entry.Location),
             Instruction = entry.Instruction is { } instruction ? View(state, instruction, context) : null,
+            InstructionSyntax = InstructionSyntax(entry),
             Labels = entry.Labels,
             Targets = entry.Instruction?.Kind switch
             {
@@ -104,7 +107,10 @@ internal static class RuntimeFlowAnalysis
         var location = entry.Location ?? new AnalysisLocation(body, position, 0, entry.Source.Length);
         var node = new FlowNode<Type>(location, entry.Source)
         {
+            SourceLocation = entry.Location,
+            SourceKind = SourceKind(entry.Location),
             Instruction = View(state, instruction, state.Context),
+            InstructionSyntax = InstructionSyntax(entry),
         };
         var declaringType = state.Member?.Owner;
         var tracksConstructorInitialization = state.Signature is { Name: ".ctor", IsStatic: false }
@@ -129,8 +135,9 @@ internal static class RuntimeFlowAnalysis
         var returnType = state.Signature?.ReturnType;
         var step = new ControlFlowAnalysis<Type>(Rules(state.Types)).Run(graph,
             returnType == typeof(void) ? null : returnType, !state.IsMethod);
-        if (step.Diagnostics.Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error))
+        if (step.Diagnostics.Count > 0)
         {
+            // Diagnostic explanations require the original graph and producer locations.
             return false;
         }
 
@@ -158,7 +165,8 @@ internal static class RuntimeFlowAnalysis
                     }
                 }
 
-                return value with { Origins = [position] };
+                // Dup copies the value record while preserving its producer rather than creating a new value.
+                return value with { Origins = instruction.Op == OpCodes.Dup ? values[^1].Origins : [position] };
             }
 
             return current with
@@ -185,6 +193,28 @@ internal static class RuntimeFlowAnalysis
         before[^1] = end;
         after[^1] = end;
         return new FlowResult<Type>(before, after, diagnostics, maxStack);
+    }
+
+    private static AnalysisSourceKind SourceKind(AnalysisLocation? location) => location is null ? AnalysisSourceKind.Unavailable
+        : location.Offset is not null ? AnalysisSourceKind.Imported
+        : location.Line >= 0 ? AnalysisSourceKind.Document : AnalysisSourceKind.Accepted;
+
+    private static string InstructionSyntax(CellEntry entry)
+    {
+        if (entry.Instruction is not { DecodedPrefixName: null } instruction)
+        {
+            return entry.Source;
+        }
+
+        try
+        {
+            return IlAsmRenderer.RenderInstruction(instruction);
+        }
+        catch (ReplException)
+        {
+            // Source can represent exact metadata, such as omitted array bounds, that native ILAsm cannot export.
+            return entry.Source;
+        }
     }
 
     private static StackOperandView<Type> View(CellState state, Instruction instruction, ParseContext context)

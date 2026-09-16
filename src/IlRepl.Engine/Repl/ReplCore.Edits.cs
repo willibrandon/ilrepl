@@ -22,6 +22,7 @@ public sealed partial class ReplCore
         return _editBlock is { } block ? seed with
         {
             OpenLines = [".edit " + block.Name + " {", .. block.Lines],
+            OpenLocations = [null, .. block.Locations],
         } : seed;
     }
 
@@ -93,6 +94,7 @@ public sealed partial class ReplCore
         }
 
         block.Lines.Add(normalized.Raw);
+        block.Locations.Add(normalized.Location);
         block.Depth = depth;
         Session.EditInputChanged();
         return new HandleResult(true, false);

@@ -47,7 +47,13 @@ static async Task<(int Columns, int Rows)> RunSessionAsync(int columns, int rows
     PromptState? prompt = null;
     // Selection and copy are the terminal's own in the browser, so the mouse stays with it. Wheel
     // notches still reach the app, as the reports a terminal sends; the page makes them.
-    await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder().WithPresentation(adapter), engine, transcript, history: history, onPrompt: p => prompt = p, ownSelection: false)
+    await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder().WithPresentation(adapter), engine, transcript,
+        history: history, onPrompt: p =>
+        {
+            prompt = p;
+            p.OpenDocumentation = null;
+            p.DocumentationTargetChanged = WasmPresentationAdapter.DocumentationTarget;
+        }, ownSelection: false)
         .Build();
 
     WasmPresentationAdapter.NotifyReady(adapter.Width, adapter.Height);
