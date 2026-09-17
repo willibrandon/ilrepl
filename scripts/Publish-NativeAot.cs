@@ -204,7 +204,7 @@ static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory,
         var run = await CaptureAsync(directory, executable,
             ["--no-color", "example.ilrepl.json", "--run"], cancellationToken, environment);
         if (save.ExitCode != 0 || !save.Output.Contains("= 42 : int32", StringComparison.Ordinal)
-            || open.ExitCode != 0 || !open.Output.Contains("reopened source", StringComparison.Ordinal)
+            || open.ExitCode != 0 || !open.Output.Contains("Session opened. Nothing has run yet.", StringComparison.Ordinal)
             || open.Output.Contains("= 42 : int32", StringComparison.Ordinal)
             || run.ExitCode != 0 || !run.Output.Contains("= 42 : int32", StringComparison.Ordinal))
         {
