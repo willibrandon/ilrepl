@@ -424,8 +424,12 @@ public sealed class SessionReplayTests
     /// <summary>
     /// Successive fresh runs replace historical output without duplicating source or mutating earlier snapshots.
     /// </summary>
+    /// <param name="draft">An absent, empty, or whitespace-only editor buffer.</param>
     [TestMethod]
-    public void RunSession_RecordsLatestOutputWithoutDuplicatingSource()
+    [DataRow(null)]
+    [DataRow("")]
+    [DataRow(" \t\n\t ")]
+    public void RunSession_RecordsLatestOutputWithoutDuplicatingSource(string? draft)
     {
         var directory = Directory.CreateTempSubdirectory("ilrepl-replay-output-");
         var path = Path.Combine(directory.FullName, "value");
@@ -434,17 +438,18 @@ public sealed class SessionReplayTests
             File.WriteAllText(path, "original");
             using var source = new ReplCore();
             Submit(source, "ldstr \"" + Escape(path) + "\"", "call string System.IO.File::ReadAllText(string)", "ret");
-            var document = source.CaptureSession(new SessionEditor());
+            var editor = new SessionEditor { Lines = draft?.Split('\n') ?? [] };
+            var document = source.CaptureSession(editor);
             File.WriteAllText(path, "second");
             using var first = new ReplCore();
             Assert.IsTrue(first.RunSession(document, [], CancellationToken.None).Succeeded, Transcript(first));
-            var intermediate = first.CaptureSession(new SessionEditor());
+            var intermediate = first.CaptureSession(editor);
             File.WriteAllText(path, "third");
             using var second = new ReplCore();
 
             Assert.IsTrue(second.RunSession(intermediate, [], CancellationToken.None).Succeeded, Transcript(second));
 
-            var final = second.CaptureSession(new SessionEditor());
+            var final = second.CaptureSession(editor);
             AssertRetainedSource(document, intermediate);
             AssertRetainedSource(document, final);
             Assert.Contains("original", Assert.ContainsSingle(document.Cells[0].Output).PlainText);
@@ -457,6 +462,49 @@ public sealed class SessionReplayTests
         {
             directory.Delete(true);
         }
+    }
+
+    /// <summary>
+    /// An empty editor adds no source while run-all still executes any pending accepted instructions.
+    /// </summary>
+    /// <param name="pending">Whether accepted instructions are waiting for execution.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void RunSession_BlankEditorDoesNotBecomeSource(bool pending)
+    {
+        using var source = new ReplCore();
+        if (pending) Submit(source, "ldc.i4 42");
+        var editor = new SessionEditor { Lines = ["", " \t", ""] };
+        var document = source.CaptureSession(editor);
+        using var replay = new ReplCore();
+
+        Assert.IsTrue(replay.RunSession(document, [], CancellationToken.None).Succeeded, Transcript(replay));
+
+        var captured = replay.CaptureSession(new SessionEditor());
+        Assert.AreSequenceEqual(pending ? ["ldc.i4 42", "ret"] : Array.Empty<string>(),
+            captured.Entries.SelectMany(entry => entry.Source));
+        Assert.AreSequenceEqual(pending ? ["  = 42 : int32"] : Array.Empty<string>(), Results(replay));
+        Assert.HasCount(pending ? 1 : 0, captured.Cells);
+        Assert.AreEqual(pending ? 2 : 1, replay.CellNumber);
+    }
+
+    /// <summary>
+    /// Comments make a draft meaningful, retaining its surrounding whitespace when accepted for replay.
+    /// </summary>
+    [TestMethod]
+    public void RunSession_CommentDraftPreservesWhitespace()
+    {
+        string[] lines = ["", "  // keep this note", " \t", ""];
+        var document = new SessionDocument { Editor = new SessionEditor { Lines = lines } };
+        using var replay = new ReplCore();
+
+        Assert.IsTrue(replay.RunSession(document, [], CancellationToken.None).Succeeded, Transcript(replay));
+
+        var captured = replay.CaptureSession(new SessionEditor());
+        Assert.AreSequenceEqual(lines, captured.Entries.SelectMany(entry => entry.Source));
+        Assert.IsEmpty(captured.Cells);
+        Assert.IsEmpty(Results(replay));
     }
 
     private static void DefineAndRun(ReplCore core, int value)

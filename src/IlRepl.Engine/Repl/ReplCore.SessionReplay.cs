@@ -44,10 +44,13 @@ public sealed partial class ReplCore
         }
 
         // Editor text is source supplied for this explicit run, never an administrative command script.
-        foreach (var line in document.Editor.Lines)
+        if (document.Editor.Lines.Any(line => !string.IsNullOrWhiteSpace(line)))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            validation.AppendReplaySource(line);
+            foreach (var line in document.Editor.Lines)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                validation.AppendReplaySource(line);
+            }
         }
 
         if (validation._editBlock is not null)

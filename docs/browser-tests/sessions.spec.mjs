@@ -163,6 +163,31 @@ test('open and download preserve source; Run all executes only on request', asyn
   expect(reopened.entries).toEqual(executed.entries);
 });
 
+test('repeated Run all keeps saved source and empty prompt counts stable', async ({ page }) => {
+  const lines = ['ldc.i4 6', 'ldc.i4 7', 'mul'];
+  await open(page, document(lines));
+  let previous;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const count = await page.evaluate(() => window.ilreplSessionCount);
+    await page.getByRole('button', { name: 'Run all', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => window.ilreplSessionCount)).toBe(count + 1);
+    await expect(page.locator('#session-file-message')).toContainText('Execution finished');
+    await expect(page.locator('#terminal')).toContainText('= 42 : int32');
+    await expect.poll(() => outputCount(page, 'il[2]>')).toBe(1);
+
+    const saved = await download(page);
+    expect(saved.entries.flatMap(entry => entry.source)).toEqual([...lines, 'ret']);
+    expect(saved.cells).toHaveLength(1);
+    expect(saved.cells[0].state).toBe('succeeded');
+    expect(saved.editor.lines.join('\n')).toBe('');
+    if (previous) {
+      expect(saved.entries).toEqual(previous.entries);
+      expect(saved.cells).toEqual(previous.cells);
+    }
+    previous = saved;
+  }
+});
+
 test('sharing opens an editable experiment without replay', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const source = experiment();
