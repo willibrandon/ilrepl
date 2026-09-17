@@ -27,7 +27,8 @@ Other `.save` paths still [export an assembly](/usage/saving-cells/).
 Try the [portable arithmetic session](/sessions/arithmetic.ilrepl.json). It needs no external dependencies.
 Here is the same experiment saved, reopened, inspected, and explicitly run:
 
-```text
+<!-- transcript-only -->
+```ilrepl
 il[2]> .session save arithmetic.ilrepl.json
   saved session /work/arithmetic.ilrepl.json
 il[2]> .session open arithmetic.ilrepl.json

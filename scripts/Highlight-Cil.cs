@@ -89,7 +89,10 @@ foreach (var file in files)
                 }
             }
 
-            var spans = language == "cil" ? Cil(body) : await TranscriptAsync(engine, body, where);
+            // Reopened history includes old prompts that must not be submitted as new input by the documentation generator.
+            var transcriptOnly = i > 0 && lines[i - 1] == "<!-- transcript-only -->";
+            var spans = language == "cil" ? Cil(body)
+                : transcriptOnly ? StyledLines(body, SpanStyle.Input) : await TranscriptAsync(engine, body, where);
             if (update && language == "ilrepl" && !IsEditorView(body) && body.Any(line => Patterns.InputLine().IsMatch(line)))
             {
                 body = spans.Select(line => string.Concat(line.Select(span => span.Text)).TrimEnd()).ToList();
