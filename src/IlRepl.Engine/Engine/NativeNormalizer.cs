@@ -222,7 +222,10 @@ public static partial class NativeNormalizer
             return;
         }
         var relocation = Relocation().Match(operands[1]);
-        var number = relocation.Success ? relocation.Groups[2] : Number().Match(operands[1]);
+        // CoreCLR prints shifted Arm64 immediates as "#0x1234 LSL #16", without a separating comma.
+        var shifted = Shift().Match(operands.Length > 2 ? operands[2] : operands[1]);
+        var immediateText = operands.Length == 2 && shifted.Success ? operands[1][..shifted.Index].TrimEnd() : operands[1];
+        var number = relocation.Success ? relocation.Groups[2] : Number().Match(immediateText);
         var sourceIndex = line.IndexOf(operands[1], line.IndexOf(',') + 1, StringComparison.Ordinal);
         var width32 = arm && operands[0].StartsWith('w') || !arm && (operands[0].StartsWith('e') || operands[0].StartsWith('r') &&
             operands[0].EndsWith('d'));
@@ -230,8 +233,7 @@ public static partial class NativeNormalizer
         if (operation is "mov" or "movabs" or "movz" or "movn" or "movk" && number.Success
             && TryNumber(number.Value, out var immediate))
         {
-            var shift = operands.Length > 2 && Shift().Match(operands[2]) is { Success: true } shifted
-                ? int.Parse(shifted.Groups[1].Value, CultureInfo.InvariantCulture) : 0;
+            var shift = shifted.Success ? int.Parse(shifted.Groups[1].Value, CultureInfo.InvariantCulture) : 0;
             if (shift is < 0 or > 48 || (shift % 16) != 0 || width32 && shift > 16)
             { registers.Remove(destination); return; }
             var value = (immediate << shift) & mask;
@@ -381,6 +383,6 @@ public static partial class NativeNormalizer
     [GeneratedRegex(@"\bL\d+\b", RegexOptions.CultureInvariant)]
     private static partial Regex BranchLabel();
 
-    [GeneratedRegex(@"lsl\s+#?(\d+)", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\blsl\s+#?(\d+)$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex Shift();
 }

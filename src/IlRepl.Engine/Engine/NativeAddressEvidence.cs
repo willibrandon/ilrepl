@@ -79,9 +79,7 @@ public sealed class NativeAddressEvidence : IDisposable
         if (!_seen.Add(method) || method.ContainsGenericParameters) return;
         var symbol = MethodSymbol(method);
         Add((ulong)method.MethodHandle.Value, "method-handle", symbol, "RuntimeMethodHandle.Value", MemberResolver.Describe(method));
-        // GetFunctionPointer can activate a module, so callers enter only after the complete activation check.
-        Add((ulong)method.MethodHandle.GetFunctionPointer(), "entry-point", symbol, "RuntimeMethodHandle.GetFunctionPointer",
-            MemberResolver.Describe(method));
+        ObserveEntryPoint(method, symbol);
         if (method.DeclaringType is { } owner) ObserveType(owner);
         var bytes = method.GetMethodBody()?.GetILAsByteArray();
         if (bytes is null || depth > 16) return;
@@ -135,13 +133,22 @@ public sealed class NativeAddressEvidence : IDisposable
                     if (callee.DeclaringType is { } declaring) ObserveType(declaring);
                     Add((ulong)callee.MethodHandle.Value, "method-handle", MethodSymbol(callee), "RuntimeMethodHandle.Value",
                         MemberResolver.Describe(callee));
-                    Add((ulong)callee.MethodHandle.GetFunctionPointer(), "entry-point", MethodSymbol(callee),
-                        "RuntimeMethodHandle.GetFunctionPointer", MemberResolver.Describe(callee));
+                    ObserveEntryPoint(callee, MethodSymbol(callee));
                     // Follow captured user callees for operands introduced through inlining; framework code remains event-attributed.
                     if (SessionAssemblies.IsSessionAssembly(callee.Module.Assembly)) Scan(callee, depth + 1);
                     break;
             }
         }
+    }
+
+    private void ObserveEntryPoint(MethodBase method, string symbol)
+    {
+        // GetFunctionPointer can activate a module, so callers enter only after the complete activation check.
+        var entry = method.MethodHandle.GetFunctionPointer();
+        var display = MemberResolver.Describe(method);
+        Add((ulong)entry, "entry-point", symbol, "RuntimeMethodHandle.GetFunctionPointer", display);
+        var cell = NativeEntryPoint.IndirectionCell(entry);
+        Add((ulong)cell, "entry-point-cell", symbol, "decoded PC-relative target load in the runtime method entry stub", display);
     }
 
     private void ObserveType(Type type)

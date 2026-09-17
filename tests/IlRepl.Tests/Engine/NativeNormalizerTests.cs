@@ -140,21 +140,26 @@ public sealed class NativeNormalizerTests
     /// <summary>
     /// Independently located Arm64 address chunks reconstruct one identity before they are normalized.
     /// </summary>
+    /// <param name="shiftSyntax">The separator and shift spelling emitted after an immediate.</param>
     [TestMethod]
-    public void Normalize_Arm64MovzMovkSequencesProduceEquivalentSymbolsAcrossProcesses()
+    [DataRow(", lsl")]
+    [DataRow(", LSL")]
+    [DataRow(" lsl")]
+    [DataRow(" LSL")]
+    public void Normalize_Arm64MovzMovkSequencesProduceEquivalentSymbolsAcrossProcesses(string shiftSyntax)
     {
-        var left = Listing("Owner:Value", "    movz x0, #0x5678\n    movk x0, #0x1234, lsl #16\n"
-            + "    movk x0, #0x7FFF, lsl #32\n    ret");
-        var right = Listing("Owner:Value", "    movz x0, #0x2468\n    movk x0, #0x1357, lsl #16\n"
-            + "    movk x0, #0x7FFE, lsl #32\n    ret");
+        var left = Listing("Owner:Value", $"    movz x0, #0x5678\n    movk x0, #0x1234{shiftSyntax} #16\n"
+            + $"    movk x0, #0x7FFF{shiftSyntax} #32\n    ret");
+        var right = Listing("Owner:Value", $"    movz x0, #0x2468\n    movk x0, #0x1357{shiftSyntax} #16\n"
+            + $"    movk x0, #0x7FFE{shiftSyntax} #32\n    ret");
 
         var normalLeft = NativeNormalizer.Normalize(left, [Fact(0x7FFF12345678, "string", "hello")], [], [], "Arm64", []);
         var normalRight = NativeNormalizer.Normalize(right, [Fact(0x7FFE13572468, "string", "hello")], [], [], "Arm64", []);
 
         Assert.AreSequenceEqual(normalLeft.Lines, normalRight.Lines);
         Assert.Contains("    movz x0, bits0:15(<string:hello>)", normalLeft.Lines);
-        Assert.Contains("    movk x0, bits16:31(<string:hello>), lsl #16", normalLeft.Lines);
-        Assert.Contains("    movk x0, bits32:47(<string:hello>), lsl #32", normalLeft.Lines);
+        Assert.Contains($"    movk x0, bits16:31(<string:hello>){shiftSyntax} #16", normalLeft.Lines);
+        Assert.Contains($"    movk x0, bits32:47(<string:hello>){shiftSyntax} #32", normalLeft.Lines);
         Assert.IsEmpty(normalLeft.Problems);
         Assert.IsEmpty(normalRight.Problems);
     }
@@ -162,30 +167,61 @@ public sealed class NativeNormalizerTests
     /// <summary>
     /// Arm64 constant construction remains numeric even when its reassembled value equals a runtime handle.
     /// </summary>
+    /// <param name="shiftSyntax">The separator and shift spelling emitted after an immediate.</param>
     [TestMethod]
-    public void Normalize_Arm64LiteralChunksRemainDistinct()
+    [DataRow(", lsl")]
+    [DataRow(" LSL")]
+    public void Normalize_Arm64LiteralChunksRemainDistinct(string shiftSyntax)
     {
-        var listing = Listing("Owner:Value", "    movz x0, #0x5678\n    movk x0, #0x1234, lsl #16\n    ret");
+        var listing = Listing("Owner:Value", $"    movz x0, #0x5678\n    movk x0, #0x1234{shiftSyntax} #16\n    ret");
 
         var normal = NativeNormalizer.Normalize(listing, [Fact(0x12345678, "type", "Owner")], [], [], "Arm64", [0x12345678]);
 
         Assert.Contains("    movz x0, #0x5678", normal.Lines);
-        Assert.Contains("    movk x0, #0x1234, lsl #16", normal.Lines);
+        Assert.Contains($"    movk x0, #0x1234{shiftSyntax} #16", normal.Lines);
         Assert.DoesNotContain(line => line.Contains("<type:", StringComparison.Ordinal), normal.Lines);
     }
 
     /// <summary>
     /// Arm64 move-not and move-keep obey 32-bit zero extension before matching an observed handle.
     /// </summary>
+    /// <param name="shiftSyntax">The separator and shift spelling emitted after an immediate.</param>
     [TestMethod]
-    public void Normalize_Arm64MovnAndMovkRespectRegisterWidth()
+    [DataRow(", lsl")]
+    [DataRow(" LSL")]
+    public void Normalize_Arm64MovnAndMovkRespectRegisterWidth(string shiftSyntax)
     {
-        var listing = Listing("Owner:Value", "    movn w0, #0xA987\n    movk w0, #0x1234, lsl #16\n    ret");
+        var listing = Listing("Owner:Value", $"    movn w0, #0xA987\n    movk w0, #0x1234{shiftSyntax} #16\n    ret");
 
         var normal = NativeNormalizer.Normalize(listing, [Fact(0x12345678, "type", "Owner")], [], [], "Arm64", []);
 
         Assert.Contains("    movn w0, ~bits0:15(<type:Owner>)", normal.Lines);
-        Assert.Contains("    movk w0, bits16:31(<type:Owner>), lsl #16", normal.Lines);
+        Assert.Contains($"    movk w0, bits16:31(<type:Owner>){shiftSyntax} #16", normal.Lines);
+        Assert.IsEmpty(normal.Problems);
+    }
+
+    /// <summary>
+    /// Real CoreCLR Arm64 shift syntax proves the address returned by a compilation-only static field probe.
+    /// </summary>
+    [TestMethod]
+    public void Normalize_Arm64StaticProbeReassemblesCoreClrShiftSyntax()
+    {
+        const string address = "    movz    x0, #0x1FA0\n    movk    x0, #0x6C0 LSL #16\n    movk    x0, #0xFFE0 LSL #32\n";
+        var listing = Listing("Owner:Value", address + "    ldr     x0, [x0]\n    ret     lr");
+        var probeListing = Listing("Probe:Address", address + "    ret     lr");
+        NativeProbe[] probes = [new() { Method = "Probe:Address", Kind = "static-field", Symbol = "Owner::Value" }];
+
+        var normal = NativeNormalizer.Normalize(listing, [], probes, [listing, probeListing], "Arm64", []);
+
+        var field = Assert.ContainsSingle(normal.Addresses);
+        Assert.AreEqual(0xFFE006C01FA0UL, field.Address);
+        Assert.AreEqual("static-field", field.Kind);
+        Assert.Contains("never invoked", field.Evidence);
+        Assert.Contains("    movz    x0, bits0:15(<static-field:Owner::Value>)", normal.Lines);
+        Assert.Contains("    movk    x0, bits16:31(<static-field:Owner::Value>) LSL #16", normal.Lines);
+        Assert.Contains("    movk    x0, bits32:47(<static-field:Owner::Value>) LSL #32", normal.Lines);
+        Assert.Contains("    ldr     x0, [x0]", normal.Lines);
+        Assert.Contains("    ret     lr", normal.Lines);
         Assert.IsEmpty(normal.Problems);
     }
 
