@@ -10,6 +10,8 @@ reads framework methods, methods from assemblies brought in with `.load`, member
 `.class`, and methods defined with `.method`. The last case is the interesting one: it shows the
 bytes the REPL compiled for what you typed.
 
+Use [`.jit`](/usage/native-code/) to inspect the native machine code CoreCLR generates for a selected body.
+
 ## A method you wrote
 
 Define this method first:

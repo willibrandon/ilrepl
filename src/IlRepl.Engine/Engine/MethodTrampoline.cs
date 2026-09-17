@@ -158,6 +158,21 @@ public sealed class MethodTrampoline
         _bind.Value(implementation);
     }
 
+    /// <summary>
+    /// Restores an unchanged captured trampoline without binding or compiling its implementation.
+    /// </summary>
+    /// <param name="signature">The resolved callable signature.</param>
+    /// <param name="method">The loaded trampoline.</param>
+    /// <returns>The inactive callable binding.</returns>
+    internal static MethodTrampoline Restore(MethodSignature signature, MethodInfo method)
+    {
+        if (!SessionAssemblies.TryGetDefinition(method.Module.Assembly, out var definition))
+            throw new ReplException("the captured trampoline has no owned assembly");
+        var field = method.DeclaringType!.GetField(method.Name + "Impl", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new ReplException("the captured trampoline has no implementation field");
+        return new MethodTrampoline(signature, definition, method, field.FieldType, () => value => field.SetValue(null, value));
+    }
+
     private static void AddParameters(MethodDefinition method, MethodSignature signature, TypeReference[] parameterTypes)
     {
         for (var i = 0; i < parameterTypes.Length; i++)

@@ -6,12 +6,13 @@ using System.Runtime.CompilerServices;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Names, loads, and recognizes the assemblies a session owns. Each gets a globally unique simple
-/// name <c>ilrepl.&lt;kind&gt;.&lt;N&gt;</c> and the fixed version 1.0.0.0, is loaded into a
-/// <see cref="DefinitionLoadContext"/> of its own, and is registered by the identity of the loaded
-/// assembly object. Recognition is a lookup, never a name comparison, so an unrelated assembly
-/// that happens to be called <c>ilrepl.types.1</c> is not a session assembly.
+/// Names, loads, and recognizes assemblies by their registered session ownership.
 /// </summary>
+/// <remarks>
+/// Each assembly receives a globally unique <c>ilrepl.&lt;kind&gt;.&lt;N&gt;</c> name and version 1.0.0.0.
+/// Original definitions use separate <see cref="DefinitionLoadContext"/> instances; captured images retain their ownership.
+/// Recognition uses the loaded assembly identity, so matching a generated name does not establish session ownership.
+/// </remarks>
 public static class SessionAssemblies
 {
     /// <summary>
@@ -230,5 +231,19 @@ public static class SessionAssemblies
         {
             Index[assembly.FullName!] = new WeakReference<Assembly>(assembly);
         }
+    }
+
+    /// <summary>
+    /// Registers an unchanged image loaded by an isolated inspection context.
+    /// </summary>
+    /// <param name="assembly">The loaded image.</param>
+    /// <param name="image">The captured original bytes.</param>
+    /// <param name="kind">The original generated assembly role.</param>
+    /// <returns>The session definition record.</returns>
+    internal static DefinitionAssembly RegisterCaptured(Assembly assembly, byte[] image, SessionAssemblyKind kind)
+    {
+        var definition = new DefinitionAssembly(assembly, kind, [], null) { Image = image };
+        Owners.AddOrUpdate(assembly, definition);
+        return definition;
     }
 }

@@ -300,10 +300,12 @@ public sealed partial class Session
             return new LineResult(LineOutcome.TypeArguments, null, "type arguments: " + string.Join(", ", TypeArguments!.Select(TypeNameFormatter.Pretty)));
         }
 
+        var previousEntries = _cell.Entries.Count;
         var result = _cell.Apply(line);
         switch (result.Outcome)
         {
             case LineOutcome.Empty:
+                if (_cell.Entries.Count != previousEntries) _bodyLines.Add(text);
                 break;
             case LineOutcome.Locals:
             case LineOutcome.Arguments:

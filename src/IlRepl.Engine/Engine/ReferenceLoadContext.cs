@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
@@ -22,10 +23,28 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     private readonly Lock _gate = new();
     private readonly Dictionary<string, string> _paths = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, byte[]> _images = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Assembly> _captured = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _native = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _removed;
     private readonly ReferenceLoadContext? _previous;
     private readonly bool _reusePreviousImages;
+
+    /// <summary>
+    /// Retrieves the original bytes retained by a session-owned loaded assembly.
+    /// </summary>
+    /// <param name="assembly">The already loaded assembly.</param>
+    /// <param name="image">The exact image, when retained.</param>
+    /// <returns>Whether the image is available.</returns>
+    internal static bool TryGetMappedImage(Assembly assembly,
+        [NotNullWhen(true)] out byte[]? image)
+    {
+        if (MappedImages.TryGetValue(assembly, out image)) return true;
+        if (GetLoadContext(assembly) is ReferenceLoadContext context)
+        {
+            lock (context._gate) return context._images.TryGetValue(Key(assembly.GetName()), out image);
+        }
+        return false;
+    }
 
     /// <summary>
     /// Creates an isolated dependency context, collectible on desktop runtimes.
@@ -35,7 +54,7 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     /// <param name="removed">Obsolete identities excluded from inherited bindings and sibling probing.</param>
     public ReferenceLoadContext(ReferenceLoadContext? previous = null, bool reusePreviousImages = true,
         IEnumerable<AssemblyName>? removed = null)
-        : base("ilrepl.references." + Guid.NewGuid().ToString("N"), !OperatingSystem.IsBrowser())
+        : base("ilrepl.references." + Guid.NewGuid().ToString("N"), AssemblyLifetimeScope.Collectible)
     {
         _previous = previous;
         _reusePreviousImages = reusePreviousImages;
@@ -106,6 +125,15 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     }
 
     /// <summary>
+    /// Registers an assembly already loaded in a captured graph without creating a second runtime identity.
+    /// </summary>
+    /// <param name="assembly">The isolated captured assembly.</param>
+    internal void RegisterCaptured(Assembly assembly)
+    {
+        lock (_gate) _captured[Key(assembly.GetName())] = assembly;
+    }
+
+    /// <summary>
     /// Registers a native asset from the selected runtime graph.
     /// </summary>
     /// <param name="name">The library filename.</param>
@@ -163,7 +191,8 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     {
         lock (_gate)
         {
-            return _images.ContainsKey(Key(name)) ? LoadFromAssemblyName(name)
+            return _captured.TryGetValue(Key(name),
+                out var captured) ? captured : _images.ContainsKey(Key(name)) ? LoadFromAssemblyName(name)
                 : _removed.Contains(Key(name)) ? null : _previous?.Resolve(name);
         }
     }
@@ -177,7 +206,7 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     {
         lock (_gate)
         {
-            return _images.ContainsKey(Key(name))
+            return _captured.TryGetValue(Key(name), out var captured) ? captured : _images.ContainsKey(Key(name))
                 ? Assemblies.FirstOrDefault(assembly => Key(assembly.GetName()).Equals(Key(name), StringComparison.OrdinalIgnoreCase))
                 : _removed.Contains(Key(name)) ? null : _previous?.FindLoaded(name);
         }
@@ -188,6 +217,7 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     {
         lock (_gate)
         {
+            if (_captured.TryGetValue(Key(assemblyName), out var captured)) return captured;
             if (!_images.TryGetValue(Key(assemblyName), out var image))
             {
                 if (IsRemoved(assemblyName)) return null;

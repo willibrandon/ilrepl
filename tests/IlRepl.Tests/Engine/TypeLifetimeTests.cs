@@ -93,14 +93,16 @@ public sealed class TypeLifetimeTests
     /// </remarks>
     [TestMethod]
     [Timeout(30_000, CooperativeCancellation = true)]
-    public void Reset_CollectsWhileOtherThreadsResolveNames()
+    public async Task Reset_CollectsWhileOtherThreadsResolveNames()
     {
-        var resolver = new TypeResolver();
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        using var resolver = new TypeResolver();
         var context = new ParseContext([], [], GenericContext.Empty, resolver, []);
         var ct = TestContext.CancellationToken;
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var searches = new int[4];
         using var cycle = new Barrier(searches.Length);
+        using var progress = new ManualResetEventSlim();
         Task[] workers =
         [
             Worker(() => resolver.Resolve("NoSuchTypeAnywhere", null), 0),
@@ -112,7 +114,7 @@ public sealed class TypeLifetimeTests
         {
             // The first miss scans every exported type once; the searches after it are the fast
             // ones that never leave the runtime's list alone.
-            WaitForSearches(searches, ct);
+            WaitForSearches(searches, progress, ct);
 
             for (var round = 0; round < 5; round++)
             {
@@ -120,7 +122,7 @@ public sealed class TypeLifetimeTests
                 var weak = DefineAndReset(session);
                 // Keep searches active after the collectible definition is loaded. Its load must
                 // neither enter nor cause a rebuild of the process assembly catalog.
-                WaitForSearches(searches, ct);
+                WaitForSearches(searches, progress, ct);
                 for (var i = 0; i < 10 && weak.IsAlive; i++)
                 {
                     GC.Collect();
@@ -136,21 +138,23 @@ public sealed class TypeLifetimeTests
             Task.WaitAll(workers, CancellationToken.None);
         }
 
-        Task Worker(Action action, int index) => Task.Factory.StartNew(() => Repeat(action, searches, index, cycle, stop.Token),
+        Task Worker(Action action, int index) => Task.Factory.StartNew(() => Repeat(action, searches, index, cycle, progress, stop.Token),
             CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    private static void WaitForSearches(int[] searches, CancellationToken cancellationToken)
+    private static void WaitForSearches(int[] searches, ManualResetEventSlim progress, CancellationToken cancellationToken)
     {
         var starts = Enumerable.Range(0, searches.Length).Select(index => Volatile.Read(ref searches[index])).ToArray();
-        while (Enumerable.Range(0, searches.Length).Any(index => Volatile.Read(ref searches[index]) - starts[index] < 5))
+        while (true)
         {
-            Thread.Sleep(10);
-            cancellationToken.ThrowIfCancellationRequested();
+            progress.Reset();
+            if (Enumerable.Range(0, searches.Length).All(index => Volatile.Read(ref searches[index]) - starts[index] >= 5)) return;
+            progress.Wait(cancellationToken);
         }
     }
 
-    private static void Repeat(Action miss, int[] searches, int index, Barrier cycle, CancellationToken token)
+    private static void Repeat(Action miss, int[] searches, int index, Barrier cycle, ManualResetEventSlim progress,
+        CancellationToken token)
     {
         try
         {
@@ -166,6 +170,7 @@ public sealed class TypeLifetimeTests
                 }
 
                 Interlocked.Increment(ref searches[index]);
+                progress.Set();
                 // Keep loading and searching concurrent without letting assembly creation outrun the slowest search.
                 cycle.SignalAndWait(token);
             }

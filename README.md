@@ -47,6 +47,9 @@ Use `.edit` to change a copy of the method, `.diff` to inspect the changes, and 
 versions with the same inputs. The original stays available. See
 [Editing and comparing methods](https://ilrepl.dev/usage/editing-methods/).
 
+Inspect CoreCLR's machine code with `.jit`, and compare generated code with `.jit Left --against Right`
+or `.diff Copy --native`. See [Native code](https://ilrepl.dev/usage/native-code/).
+
 ```ilrepl
 il[1]> .locals init (string m)
   locals: 0:string m

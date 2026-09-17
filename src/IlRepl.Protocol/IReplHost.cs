@@ -14,6 +14,14 @@ namespace IlRepl.Protocol;
 public partial interface IReplHost
 {
     /// <summary>
+    /// Inspects a prepared implementation in an isolated native compilation worker.
+    /// </summary>
+    /// <param name="identity">The one-use native inspection ticket.</param>
+    /// <param name="cancellationToken">Cancels the isolated worker.</param>
+    /// <returns>The native report and transcript.</returns>
+    Task<HandleReply> InspectNativeAsync(string identity, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Captures, reconstructs, saves, or explicitly executes a typed workspace operation.
     /// </summary>
     /// <param name="request">The operation and matching editor snapshot.</param>

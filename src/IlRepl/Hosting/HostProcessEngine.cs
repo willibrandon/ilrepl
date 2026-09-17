@@ -216,6 +216,10 @@ public sealed class HostProcessEngine : IReplEngine
     public Task<HandleReply> CompareAsync(string identity, CancellationToken cancellationToken) =>
         CallAsync(() => _host.CompareAsync(identity, cancellationToken));
 
+    /// <inheritdoc/>
+    public Task<HandleReply> InspectNativeAsync(string identity, CancellationToken cancellationToken) =>
+        CallAsync(() => _host.InspectNativeAsync(identity, cancellationToken));
+
     /// <inheritdoc />
     public Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken)
     {

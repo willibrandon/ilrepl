@@ -20,7 +20,7 @@ public sealed class DefinitionLoadContext : AssemblyLoadContext
     /// Initializes a context, collectible where the runtime supports unloading.
     /// </summary>
     /// <param name="name">The name of the assembly the context will hold.</param>
-    public DefinitionLoadContext(string name) : base(name, isCollectible: !OperatingSystem.IsBrowser())
+    public DefinitionLoadContext(string name) : base(name, isCollectible: AssemblyLifetimeScope.Collectible)
     {
     }
 
@@ -35,8 +35,8 @@ public sealed class DefinitionLoadContext : AssemblyLoadContext
     protected override Assembly? Load(AssemblyName assemblyName)
     {
         ArgumentNullException.ThrowIfNull(assemblyName);
-        return SessionAssemblies.IsSessionName(assemblyName.Name)
-            ? SessionAssemblies.Resolve(assemblyName) : _references?.Resolve(assemblyName);
+        return _references?.Resolve(assemblyName)
+            ?? (SessionAssemblies.IsSessionName(assemblyName.Name) ? SessionAssemblies.Resolve(assemblyName) : null);
     }
 
     /// <inheritdoc />

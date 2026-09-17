@@ -6,6 +6,8 @@
 
   <ItemGroup>
     <PackageVersion Include="Hex1b" Version="0.165.0" />
+    <PackageVersion Include="Microsoft.Diagnostics.NETCore.Client" Version="0.2.745401" />
+    <PackageVersion Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.2.6" />
     <PackageVersion Include="Microsoft.ILVerification" Version="10.0.11" />
     <PackageVersion Include="Mono.Cecil" Version="0.11.6" />
     <PackageVersion Include="NuGet.Commands" Version="7.9.0" />

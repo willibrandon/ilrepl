@@ -36,6 +36,8 @@ Directives are part of the cell. Commands act on the session.
 | `.ops [filter]` | List opcodes with their stack transitions. The filter matches names and descriptions. |
 | `.show` | List the cell, or the open method or class, with control-flow stack states and diagnostic details. |
 | `.dis <method>` | Disassemble a method: a framework or loaded method, a method defined with `.method`, or a member of a closed class. See [Disassembly](/usage/disassembly/). |
+| `.jit [method \| cell N]` | Inspect actual CoreCLR native code. See [Native code](/usage/native-code/). |
+| `.jit Left --against Right` | Compare native code in separate fresh workers; add `--assert` to require equality. |
 | `.undo` | Remove the last line of the cell, or of the open method or class. |
 | `.clear` | Drop the cell body, keep declarations, methods, and types. Inside a method or class block, abandon the block. |
 | `.reset` | Drop current source state; keep dependencies, session path, and historical submissions. |
@@ -76,6 +78,7 @@ dependency in a fresh runtime. See [Saving and sharing sessions](/usage/sessions
 | `.edit method as Name { ... }` | Define a copy from a `.method` block. |
 | `.dis Name [--original]` | Disassemble the copy or its original. |
 | `.diff [Name] [--raw]` | Compare instructions, stack states, and metadata; `--raw` includes encoding differences. |
+| `.diff [Name] --native` | Compare the original and edited native code; add `--assert` to require equality. |
 | `.compare Name (literals)` | Run a closed static method and its original with the same inputs. |
 | `.compare Name using Scenario` | Use a parameterless method to set up inputs and call each version. |
 

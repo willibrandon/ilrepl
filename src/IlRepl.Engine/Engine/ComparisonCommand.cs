@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace IlRepl.Engine;
 
 /// <summary>
@@ -7,6 +5,11 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static partial class ComparisonCommand
 {
+    /// <summary>
+    /// Parses a named behavioral comparison with its literal or scenario workload and execution limits.
+    /// </summary>
+    /// <param name="text">The text following .compare.</param>
+    /// <returns>The validated comparison options.</returns>
     internal static ComparisonOptions Parse(string text)
     {
         var space = text.IndexOf(' ');
@@ -53,18 +56,7 @@ internal static partial class ComparisonCommand
                     break;
                 case "--timeout":
                 {
-                    var value = Word(ref rest);
-                    var multiplier = value.EndsWith("ms", StringComparison.Ordinal) ? 1
-                        : value.EndsWith('m') ? 60000 : 1000;
-                    var number = value.EndsWith("ms", StringComparison.Ordinal) ? value[..^2]
-                        : value.EndsWith('s') || value.EndsWith('m') ? value[..^1] : value;
-                    if (!double.TryParse(number, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var duration)
-                        || duration * multiplier is < 1 or > int.MaxValue || !double.IsFinite(duration))
-                    {
-                        throw new ReplException("--timeout requires a positive duration, for example 500ms, 30s, or 2m");
-                    }
-
-                    timeout = (int)(duration * multiplier);
+                    timeout = ComparisonDuration.Parse(Word(ref rest));
                     break;
                 }
                 case "--stdin":

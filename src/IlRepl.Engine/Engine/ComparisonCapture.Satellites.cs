@@ -10,7 +10,13 @@ namespace IlRepl.Engine;
 /// </summary>
 public static partial class ComparisonCapture
 {
-    private static void CaptureSatellites(Session session, Dictionary<string, ComparisonAssembly> dependencies, TypeResolver source)
+    /// <summary>
+    /// Retains the loaded and adjacent satellite graph used by an isolated execution.
+    /// </summary>
+    /// <param name="session">The declaration context.</param>
+    /// <param name="dependencies">The immutable images to extend.</param>
+    /// <param name="source">The selected dependency binding graph.</param>
+    internal static void CaptureSatellites(Session session, Dictionary<string, ComparisonAssembly> dependencies, TypeResolver source)
     {
         var parents = dependencies.Values.ToArray();
         var names = parents.Select(parent => new AssemblyName(parent.Name)).ToArray();

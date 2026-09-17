@@ -11,6 +11,15 @@ namespace IlRepl.Protocol;
 public interface IReplEngine : IAsyncDisposable
 {
     /// <summary>
+    /// Inspects a prepared implementation in an isolated native compilation worker.
+    /// </summary>
+    /// <param name="identity">The one-use native inspection ticket.</param>
+    /// <param name="cancellationToken">Cancels workers without changing the live session.</param>
+    /// <returns>The native report and transcript.</returns>
+    Task<HandleReply> InspectNativeAsync(string identity, CancellationToken cancellationToken) =>
+        Task.FromException<HandleReply>(new NotSupportedException("this engine has no native inspection worker"));
+
+    /// <summary>
     /// Captures, reconstructs, or explicitly executes a typed session workspace operation.
     /// </summary>
     /// <param name="request">The operation and matching editor snapshot.</param>

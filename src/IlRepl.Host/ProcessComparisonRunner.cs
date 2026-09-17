@@ -49,6 +49,7 @@ public static class ProcessComparisonRunner
         {
             // Failed cleanup must prevent the next worker from inheriting changed fixtures or stale control files.
             ComparisonDirectory.Delete(path);
+            ComparisonDirectory.Create(path);
             var work = Directory.CreateDirectory(Path.Combine(directory.FullName, "work"));
             var packagePath = Path.Combine(directory.FullName, "package.json");
             var readyPath = Path.Combine(directory.FullName, "ready");
@@ -265,11 +266,12 @@ public static class ProcessComparisonRunner
     private static async Task<string> ReadOutputAsync(StreamReader reader, int limit, TaskCompletionSource overflow,
         CancellationToken cancellationToken)
     {
+        using var capturedOutput = reader;
         var text = new StringBuilder();
         var buffer = new char[4096];
         try
         {
-            while (await reader.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false) is var count && count != 0)
+            while (await capturedOutput.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false) is var count && count != 0)
             {
                 var remaining = Math.Max(0, limit - text.Length);
                 text.Append(buffer, 0, Math.Min(count, remaining));

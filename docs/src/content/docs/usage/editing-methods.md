@@ -5,6 +5,7 @@ description: Copy a method, change its IL, and compare it with the original.
 
 `.edit` makes an editable copy of a method, including its signature, locals, labels, and exception handlers.
 Use `.diff` to inspect your changes and `.compare` to run both versions with the same inputs.
+Use [`.diff --native`](/usage/native-code/) to compare the machine code generated for the original and edit.
 
 ## Open a method
 

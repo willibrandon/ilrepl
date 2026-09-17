@@ -519,7 +519,11 @@ public sealed partial class ReplCore : IDisposable
                 return Edit(argument);
 
             case ".diff":
-                return Diff(argument);
+                return NativeCommand.IsNativeComparison(argument)
+                    ? Native(argument, diff: true) : Diff(argument);
+
+            case ".jit":
+                return Native(argument);
 
             case ".compare":
             {

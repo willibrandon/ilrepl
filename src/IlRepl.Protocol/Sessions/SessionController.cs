@@ -425,6 +425,13 @@ public sealed partial class SessionController : IReplEngine
     }
 
     /// <inheritdoc />
+    public async Task<HandleReply> InspectNativeAsync(string identity, CancellationToken cancellationToken)
+    {
+        await CheckpointAsync(cancellationToken).ConfigureAwait(false);
+        return await _engine.InspectNativeAsync(identity, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
     public async Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

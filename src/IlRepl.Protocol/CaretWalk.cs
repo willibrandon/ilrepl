@@ -333,7 +333,7 @@ internal sealed class CaretWalk
             }
         }
 
-        if (name is ".diff" or ".compare" or ".dis" or ".disassemble" or ".load" or ".save"
+        if (name is ".diff" or ".compare" or ".jit" or ".dis" or ".disassemble" or ".load" or ".save"
             or ".session save" or ".session open" or ".session restore")
         {
             var start = _caret;
@@ -352,6 +352,25 @@ internal sealed class CaretWalk
             {
                 return Site(CompletionSiteKind.CommandOption, name, start, start, end) with { DeclarationComplete = false };
             }
+        }
+
+        if (name is ".jit" or ".diff")
+        {
+            for (var index = head + 1; index < _r.Count; index++)
+            {
+                var option = _r.TextAt(index).ToString();
+                if (option.StartsWith('-') && _r.TextAt(index - 1).SequenceEqual("-")
+                    && _r.EndOf(index - 1) == _r.StartOf(index)) option = "-" + option;
+                if (option == "using" && WordSite(index + 1, CompletionSiteKind.Scenario, name, -1) is { } scenario)
+                    return scenario with { DeclarationComplete = false };
+                if (option is "--tier" or "--pgo"
+                    && WordSite(index + 1, CompletionSiteKind.CommandOption, name + " " + option, -1) is { } value)
+                    return value with { DeclarationComplete = false };
+                if (option == "--against" && _caret > _r.EndOf(index))
+                    return Member(index + 1, ".dis", CompletionSiteKind.Method, complete: false) ?? CompletionSite.None;
+            }
+            if (name == ".jit")
+                return Member(head + 1, ".dis", CompletionSiteKind.Method, complete: false) ?? CompletionSite.None;
         }
 
         if (word.SequenceEqual(".dis") || word.SequenceEqual(".disassemble") || word.SequenceEqual(".edit"))

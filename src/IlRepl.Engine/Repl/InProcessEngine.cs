@@ -24,6 +24,8 @@ public sealed partial class InProcessEngine : IReplEngine
     private AnalyzedDocument? _analysisCache;
     private readonly Func<ComparisonPackage, CancellationToken, Task<ComparisonReply>>? _comparisonRunner;
     private (ComparisonTicket Ticket, ComparisonPackage Package, MethodEdit Edit)? _preparedComparison;
+    private readonly Func<NativePackage, CancellationToken, Task<NativeReply>>? _nativeRunner;
+    private (NativeTicket Ticket, NativePackage Package, long Revision)? _preparedNative;
 
     /// <summary>
     /// Initializes an engine over a new session.
@@ -45,11 +47,14 @@ public sealed partial class InProcessEngine : IReplEngine
     /// </summary>
     /// <param name="core">The live REPL core.</param>
     /// <param name="comparisonRunner">The isolated execution coordinator, or null when comparisons are unavailable.</param>
-    public InProcessEngine(ReplCore core, Func<ComparisonPackage, CancellationToken, Task<ComparisonReply>>? comparisonRunner)
+    /// <param name="nativeRunner">The isolated native compilation coordinator.</param>
+    public InProcessEngine(ReplCore core, Func<ComparisonPackage, CancellationToken, Task<ComparisonReply>>? comparisonRunner,
+        Func<NativePackage, CancellationToken, Task<NativeReply>>? nativeRunner = null)
     {
         ArgumentNullException.ThrowIfNull(core);
         _core = core;
         _comparisonRunner = comparisonRunner;
+        _nativeRunner = nativeRunner;
         Status = core.Status;
         _core.Session.CompletionChanged += CancelWarmup;
         _warmup = WarmAsync();
@@ -166,6 +171,13 @@ public sealed partial class InProcessEngine : IReplEngine
                 var ticket = new ComparisonTicket(Guid.NewGuid().ToString("N"), package.Name, package.StartingState);
                 _preparedComparison = (ticket, package, _core.Session.Edits.Single(edit => edit.Name == package.Name));
                 reply = reply with { PendingComparison = ticket };
+            }
+
+            if (result.NativePackage is { } native)
+            {
+                var ticket = new NativeTicket { Identity = Guid.NewGuid().ToString("N"), Name = native.Left.Name };
+                _preparedNative = (ticket, native, _core.Status.Revision);
+                reply = reply with { PendingNative = ticket };
             }
 
         }

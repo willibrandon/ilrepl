@@ -39,7 +39,7 @@ public static partial class MemberEligibility
 
         return site.Owner switch
         {
-            ".compare" => site.Kind == CompletionSiteKind.Scenario && method.Source == MethodSymbolSource.Session
+            ".compare" or ".jit" or ".diff" => site.Kind == CompletionSiteKind.Scenario && method.Source == MethodSymbolSource.Session
                 && method.IsStatic && method.Parameters.Count == 0 && method.Arity == 0,
             "call" => method.IsStatic ? !method.IsVirtual || HasConstrainedInterfaceReceiver(method, view) : !method.IsAbstract,
             "callvirt" => !method.IsStatic && !method.IsConstructor,
