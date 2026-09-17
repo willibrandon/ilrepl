@@ -14,6 +14,11 @@ namespace IlRepl.Engine;
 public sealed record CompiledCell(AssemblyBuilder Assembly, Type CellType, MethodInfo EntryPoint, object?[] ArgumentValues, DefinitionAssembly Definition)
 {
     /// <summary>
+    /// The implementation body before any vararg or metadata forwarding wrapper.
+    /// </summary>
+    public MethodInfo? Implementation { get; init; }
+
+    /// <summary>
     /// Owns any metadata-emitted body assemblies retained by the dynamic entry point.
     /// </summary>
     internal IReadOnlyList<DefinitionAssembly> Helpers { get; init; } = [];

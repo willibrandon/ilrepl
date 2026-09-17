@@ -42,7 +42,7 @@ public sealed class HostServer : IReplHost, IAsyncDisposable
     public HostServer(ReplCore core)
     {
         ArgumentNullException.ThrowIfNull(core);
-        _engine = new InProcessEngine(core, ProcessComparisonRunner.RunAsync);
+        _engine = new InProcessEngine(core, ProcessComparisonRunner.RunAsync, ProcessNativeRunner.RunAsync);
         _engine.SessionTooling = new HostSessionService(_engine).ExecuteAsync;
     }
 
@@ -68,6 +68,10 @@ public sealed class HostServer : IReplHost, IAsyncDisposable
     /// <inheritdoc/>
     public Task<HandleReply> CompareAsync(string identity, CancellationToken cancellationToken) =>
         _engine.CompareAsync(identity, cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<HandleReply> InspectNativeAsync(string identity, CancellationToken cancellationToken) =>
+        _engine.InspectNativeAsync(identity, cancellationToken);
 
     /// <inheritdoc />
     public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)

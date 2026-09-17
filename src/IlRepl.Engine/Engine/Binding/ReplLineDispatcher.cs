@@ -38,9 +38,10 @@ public static class ReplLineDispatcher
         var text = line.Text;
         if (text.StartsWith('.') && !IsDirective(text))
         {
-            var space = text.IndexOf(' ', StringComparison.Ordinal);
-            var command = space < 0 ? text : text[..space];
-            var argument = space < 0 ? "" : text[(space + 1)..].Trim();
+            var end = 0;
+            while (end < text.Length && !char.IsWhiteSpace(text[end])) end++;
+            var command = text[..end];
+            var argument = text[end..].Trim();
             return new ReplLineOperation(ReplLineKind.Command, line, command, argument);
         }
 

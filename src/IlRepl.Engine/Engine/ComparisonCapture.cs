@@ -208,7 +208,12 @@ public static partial class ComparisonCapture
         };
     }
 
-    private static ComparisonNativeLibrary[] CaptureNativeLibraries(TypeResolver resolver) =>
+    /// <summary>
+    /// Freezes the verified native dependencies used by an isolated execution.
+    /// </summary>
+    /// <param name="resolver">The selected dependency graph.</param>
+    /// <returns>The named immutable native assets.</returns>
+    internal static ComparisonNativeLibrary[] CaptureNativeLibraries(TypeResolver resolver) =>
         [.. resolver.NativeLibraries.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair =>
         {
             using var stream = File.OpenRead(pair.Value);
@@ -294,7 +299,12 @@ public static partial class ComparisonCapture
         }
     }
 
-    private static List<ComparisonFile> Files(string? directory)
+    /// <summary>
+    /// Captures fixture contents, links, permissions, and timestamps for isolated execution.
+    /// </summary>
+    /// <param name="directory">The optional source directory.</param>
+    /// <returns>The complete immutable tree.</returns>
+    internal static List<ComparisonFile> Files(string? directory)
     {
         if (directory is null)
         {

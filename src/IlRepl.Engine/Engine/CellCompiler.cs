@@ -22,15 +22,24 @@ public static class CellCompiler
     /// <param name="session">The session holding the cell.</param>
     /// <returns>The compiled cell.</returns>
     /// <exception cref="ReplException">The cell is incomplete or the runtime rejected it.</exception>
-    public static CompiledCell Compile(Session session)
+    public static CompiledCell Compile(Session session) => CompileCore(session, activate: true);
+
+    /// <summary>
+    /// Emits the normal cell body without binding delegates or creating argument values.
+    /// </summary>
+    /// <param name="session">The captured declaration context.</param>
+    /// <returns>The emitted implementation and its invocation wrapper.</returns>
+    public static CompiledCell CompileForInspection(Session session) => CompileCore(session, activate: false);
+
+    private static CompiledCell CompileCore(Session session, bool activate)
     {
         ArgumentNullException.ThrowIfNull(session);
         using var references = session.Resolver.EnterContext();
         RequireComplete(session);
-        session.Activate();
+        if (activate) session.Activate();
         var name = SessionAssemblies.NextName(SessionAssemblyKind.Cell);
         // Collectible assemblies let CoreCLR unload old cells; the browser runtime has no unloading.
-        var access = OperatingSystem.IsBrowser() ? AssemblyBuilderAccess.Run : AssemblyBuilderAccess.RunAndCollect;
+        var access = AssemblyLifetimeScope.Collectible ? AssemblyBuilderAccess.RunAndCollect : AssemblyBuilderAccess.Run;
         var context = SessionAssemblies.CreateCellContext(name);
         AssemblyBuilder assembly;
         if (context is null)
@@ -45,7 +54,7 @@ public static class CellCompiler
             assembly = AssemblyBuilder.DefineDynamicAssembly(SessionAssemblies.MakeAssemblyName(name), access);
         }
 
-        return Build(session, assembly, name, context);
+        return Build(session, assembly, name, context, activate);
     }
 
     /// <summary>
@@ -93,7 +102,8 @@ public static class CellCompiler
         }
     }
 
-    private static CompiledCell Build(Session session, AssemblyBuilder assembly, string moduleName, DefinitionLoadContext? context)
+    private static CompiledCell Build(Session session, AssemblyBuilder assembly, string moduleName,
+        DefinitionLoadContext? context, bool activate)
     {
         RequireComplete(session);
         var cell = session.Cell;
@@ -134,6 +144,7 @@ public static class CellCompiler
         }
 
         var helpers = new List<DefinitionAssembly>();
+        MethodInfo? implementation = null;
         EmitGuarded("the cell", () =>
         {
             var il = run.GetILGenerator();
@@ -145,6 +156,7 @@ public static class CellCompiler
 
             // Reflection.Emit rebuilds operands from Type objects, losing array bounds, modifiers, and function-pointer signatures.
             var (bodyDefinition, bodyMethod) = CecilCellBody.Compile(state, names, methods);
+            implementation = bodyMethod;
             helpers.Add(bodyDefinition);
             var target = names.Count == 0 ? bodyMethod : bodyMethod.MakeGenericMethod(genericParameters);
             for (var index = 0; index < parameterTypes.Length; index++)
@@ -176,9 +188,11 @@ public static class CellCompiler
         var dependencies = session.Methods.Select(m => m.Trampoline.Definition)
             .Concat(typeDependencies).Concat(helpers).Distinct().ToArray();
         var definition = SessionAssemblies.RegisterCell(assembly, created, dependencies, context);
-        return new CompiledCell(assembly, created, method, state.Arguments.Select(a => a.ExecutionValue()).ToArray(), definition)
+        return new CompiledCell(assembly, created, method, activate ? state.Arguments.Select(a => a.ExecutionValue()).ToArray() : [],
+            definition)
         {
             Helpers = helpers,
+            Implementation = implementation ?? created.GetMethod("Run", BindingFlags.Public | BindingFlags.Static),
         };
     }
 

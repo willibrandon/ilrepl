@@ -85,8 +85,10 @@ internal static class IsolatedTestProcess
         start.Environment[SelectedTest] = name;
         if (directory is not null) start.Environment[Workspace] = directory;
         using var child = Process.Start(start) ?? throw new InvalidOperationException("The isolated test did not start.");
-        var output = child.StandardOutput.ReadToEndAsync(context.CancellationToken);
-        var error = child.StandardError.ReadToEndAsync(context.CancellationToken);
+        using var standardOutput = child.StandardOutput;
+        using var standardError = child.StandardError;
+        var output = standardOutput.ReadToEndAsync(context.CancellationToken);
+        var error = standardError.ReadToEndAsync(context.CancellationToken);
         try
         {
             await child.WaitForExitAsync(context.CancellationToken);

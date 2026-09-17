@@ -1,5 +1,10 @@
 using IlRepl.Host;
 
+if (args.Length > 0 && args[0] == "--native-worker")
+{
+    return await NativeWorkerProgram.RunAsync(args).ConfigureAwait(false);
+}
+
 if (args.Length > 0 && args[0] == "--comparison-worker")
 {
     return await ComparisonWorkerProgram.RunAsync(args).ConfigureAwait(false);

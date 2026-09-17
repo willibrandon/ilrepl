@@ -610,7 +610,7 @@
       ]
     },
     "0ac9e0f85f1091c067d2b37a7638362d89e73d42a2be486fc2bf89ca90c400c3": {
-      "where": "usage/disassembly.md:154",
+      "where": "usage/disassembly.md:156",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -1578,7 +1578,7 @@
       ]
     },
     "1a771f7dca99348f8213e79675e4ff747d4691e7680e9e285704ce51a0077bfa": {
-      "where": "usage/editing-methods.md:308",
+      "where": "usage/editing-methods.md:309",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -3435,7 +3435,7 @@
       ]
     },
     "3c8c0c3a71396509f8b54c9d4b1608e163728b049f64dd497e7964e1e50c6b47": {
-      "where": "usage/disassembly.md:100",
+      "where": "usage/disassembly.md:102",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -3993,7 +3993,7 @@
       ]
     },
     "3feb1d908b4a32624ac6ffc2d6c49c232b75077f8e0b08cd9c58f05b90716c40": {
-      "where": "usage/editing-methods.md:19",
+      "where": "usage/editing-methods.md:20",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -5964,7 +5964,7 @@
       ]
     },
     "539471ce5c1aa044c4f535d71d857b1ec0c0d8719b05f09bd7bc2b2af37ace60": {
-      "where": "usage/disassembly.md:211",
+      "where": "usage/disassembly.md:213",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -9851,7 +9851,7 @@
       ]
     },
     "5f2fe6b2d99e1e670709cab1775d990cb6e23af27158914fc39985a54536e3db": {
-      "where": "usage/editing-methods.md:277",
+      "where": "usage/editing-methods.md:278",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -11123,7 +11123,7 @@
       ]
     },
     "77597bfb42f7849cdcd1e969a05582c47f90c6162114fe627a94f85da6b4bfa3": {
-      "where": "usage/editing-methods.md:108",
+      "where": "usage/editing-methods.md:109",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -13880,7 +13880,7 @@
       ]
     },
     "934c237792ecc9c64941bb6ea826af9d9401ad3cf84e815ed6404be44e3909e3": {
-      "where": "usage/editing-methods.md:46",
+      "where": "usage/editing-methods.md:47",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -14116,7 +14116,7 @@
       ]
     },
     "9b159b38153ebd2f531f6d164895f2d6c60ab049323cef26fe0691441e35680b": {
-      "where": "usage/disassembly.md:141",
+      "where": "usage/disassembly.md:143",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -14624,7 +14624,7 @@
       ]
     },
     "a033d26c489da9425b81a212f65ebfd17a5830bbcb7cbdbe15f89c9ad901b5cb": {
-      "where": "usage/disassembly.md:75",
+      "where": "usage/disassembly.md:77",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -16115,7 +16115,7 @@
       ]
     },
     "b4ce6a5122e276c2a797fd10458c02e6f8d9ff81fd87b995399ca7362cfa5b76": {
-      "where": "usage/disassembly.md:39",
+      "where": "usage/disassembly.md:41",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -16688,7 +16688,7 @@
       ]
     },
     "bb4c92ab11fa390de4b9101d914fac19d2dd32d659800ca3795b391e3e8d2809": {
-      "where": "usage/disassembly.md:172",
+      "where": "usage/disassembly.md:174",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -18336,7 +18336,7 @@
       ]
     },
     "d81d24142bb6dbdb5eb9c5b140b6626886e32ffa3b58244830f9a0492a252048": {
-      "where": "usage/editing-methods.md:12",
+      "where": "usage/editing-methods.md:13",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -20642,7 +20642,7 @@
       ]
     },
     "f193282413a88e8bbb7224a635482e00028b5a86fb486aa10b0b2d742624e6d3": {
-      "where": "usage/editing-methods.md:66",
+      "where": "usage/editing-methods.md:67",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -20680,7 +20680,7 @@
       ]
     },
     "f31f0102b94a3b3f70d8c9e88d187b97fe6093d8caca77b197215dbafad9b6eb": {
-      "where": "usage/disassembly.md:263",
+      "where": "usage/disassembly.md:265",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -20932,6 +20932,49 @@
             0,
             19,
             "Dim"
+          ]
+        ]
+      ]
+    },
+    "f7f684a12c94104188cd95a380cac86d7a4cac98fe4ee6bc45ea5cb14d893e76": {
+      "where": "usage/native-code.md:150",
+      "language": "ilrepl-native",
+      "editor": false,
+      "lines": [
+        [
+          [
+            0,
+            56,
+            "Comment"
+          ]
+        ],
+        [
+          [
+            4,
+            3,
+            "Opcode"
+          ],
+          [
+            8,
+            3,
+            "Type"
+          ],
+          [
+            14,
+            3,
+            "Type"
+          ],
+          [
+            18,
+            1,
+            "Number"
+          ]
+        ],
+        [
+          [
+            4,
+            3,
+            "Opcode"
           ]
         ]
       ]

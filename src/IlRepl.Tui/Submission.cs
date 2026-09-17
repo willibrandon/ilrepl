@@ -164,7 +164,7 @@ public sealed class Submission
                         }
 
                         reply = await _engine.HandleSourceAsync(_lines[index], location, CancellationToken.None).ConfigureAwait(false);
-                        if (reply.PendingComparison is { } comparison)
+                        if (reply.PendingComparison is not null || reply.PendingNative is not null)
                         {
                             _post(SubmissionEvent.Reply(reply.Lines));
                             using var cancellation = new CancellationTokenSource();
@@ -179,7 +179,10 @@ public sealed class Submission
 
                             try
                             {
-                                reply = await _engine.CompareAsync(comparison.Identity, cancellation.Token).ConfigureAwait(false);
+                                reply = reply.PendingNative is { } native
+                                    ? await _engine.InspectNativeAsync(native.Identity, cancellation.Token).ConfigureAwait(false)
+                                    : await _engine.CompareAsync(reply.PendingComparison!.Identity,
+                                        cancellation.Token).ConfigureAwait(false);
                             }
                             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
                             {

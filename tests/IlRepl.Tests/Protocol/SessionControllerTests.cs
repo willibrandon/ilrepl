@@ -1,4 +1,5 @@
 using IlRepl.Host;
+using IlRepl.Engine;
 using IlRepl.Protocol;
 using IlRepl.Repl;
 
@@ -463,6 +464,59 @@ public sealed class SessionControllerTests
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// Native inspection waits for the latest source and editor checkpoint before starting an explicitly authorized workload.
+    /// </summary>
+    [TestMethod]
+    [Timeout(90_000, CooperativeCancellation = true)]
+    public async Task InspectNative_WaitsForAcknowledgedCheckpointBeforeStartingWorker()
+    {
+        var token = TestContext.CancellationToken;
+        using var files = new SessionWorkspaceFixture();
+        using var core = new ReplCore();
+        await using var controller = new SessionController(new InProcessEngine(core, null, ProcessNativeRunner.RunAsync),
+            _ => Task.FromResult<IReplEngine>(new InProcessEngine()));
+        await SubmitAsync(controller, ".method void Write() {", "ldstr " + LiteralParser.Escape(files.MarkerPath),
+            "ldstr \"executed\"", "call void File::WriteAllText(string, string)", "ret", "}");
+        var prepared = await controller.HandleAsync(".jit Write --run", token);
+        Assert.IsTrue(prepared.Succeeded);
+        Assert.IsNotNull(prepared.PendingNative);
+        controller.Editor = new SessionEditor { Lines = ["// latest unsent editor"], Caret = 4, Revision = 19 };
+        controller.PendingInput = ["// queued source"];
+        var offered = new TaskCompletionSource<SessionReply>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var accepted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        controller.PublishCheckpointAsync = async (snapshot, cancellation) =>
+        {
+            offered.TrySetResult(snapshot);
+            await accepted.Task.WaitAsync(cancellation);
+        };
+
+        var running = controller.InspectNativeAsync(prepared.PendingNative.Identity, token);
+        HandleReply reply;
+        try
+        {
+            await Task.WhenAny(offered.Task, running).WaitAsync(token);
+            Assert.IsTrue(offered.Task.IsCompletedSuccessfully, "Inspection must offer a checkpoint before it can complete.");
+            var checkpoint = await offered.Task;
+            Assert.IsFalse(running.IsCompleted);
+            Assert.IsFalse(File.Exists(files.MarkerPath));
+            Assert.Contains(".method void Write() {", checkpoint.Document.Entries.SelectMany(entry => entry.Source));
+            Assert.AreSequenceEqual(["// queued source", "// latest unsent editor"], checkpoint.Document.Editor.Lines);
+            Assert.AreEqual(19L, checkpoint.Document.Editor.Revision);
+        }
+        finally
+        {
+            accepted.TrySetResult();
+            reply = await running;
+        }
+
+        Assert.IsTrue(reply.Succeeded, string.Join('\n', reply.Lines.Select(line => line.PlainText)));
+        Assert.IsNotNull(reply.Native);
+        Assert.AreEqual("complete", reply.Native.Outcome);
+        Assert.AreEqual(1, reply.Native.Left.Invocations);
+        Assert.AreEqual("executed", await File.ReadAllTextAsync(files.MarkerPath, token));
     }
 
     /// <summary>

@@ -17,6 +17,8 @@
 
   <ItemGroup>
     <PackageReference Include="StreamJsonRpc" />
+    <PackageReference Include="Microsoft.Diagnostics.NETCore.Client" />
+    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" ExcludeAssets="build;buildTransitive" />
     <PackageReference Include="NuGet.Commands" />
     <PackageReference Include="NuGet.Credentials" />
   </ItemGroup>

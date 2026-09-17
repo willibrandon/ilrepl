@@ -23,6 +23,7 @@ public static class SessionTransitionRules
         [".edit"] = SessionTransition.None,
         [".diff"] = SessionTransition.None,
         [".compare"] = SessionTransition.None,
+        [".jit"] = SessionTransition.None,
         [".undo"] = SessionTransition.Undo,
         [".u"] = SessionTransition.Undo,
         [".clear"] = SessionTransition.Clear,

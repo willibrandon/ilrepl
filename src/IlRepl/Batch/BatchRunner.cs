@@ -30,7 +30,7 @@ public sealed class BatchRunner
     }
 
     /// <summary>
-    /// Runs every line, then runs any cell left open. Returns 0 when every line succeeded.
+    /// Runs every line and executes pending instructions at EOF unless the latest code action was inspection.
     /// </summary>
     /// <param name="lines">The lines.</param>
     /// <param name="cancellationToken">Cancels the run.</param>
@@ -72,6 +72,9 @@ public sealed class BatchRunner
             {
                 suppliedInstructions = false;
             }
+            var command = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            if (kind == SourceLineKind.Text && command is ".show" or ".list" or ".ls" or ".il"
+                or ".dis" or ".disassemble" or ".diff" or ".jit") suppliedInstructions = false;
             ok &= reply.Succeeded;
             Write(reply);
             if (reply.PendingComparison is { } comparison)
@@ -79,6 +82,12 @@ public sealed class BatchRunner
                 var compared = await _engine.CompareAsync(comparison.Identity, cancellationToken).ConfigureAwait(false);
                 ok &= compared.Succeeded;
                 Write(compared);
+            }
+            if (reply.PendingNative is { } native)
+            {
+                var inspected = await _engine.InspectNativeAsync(native.Identity, cancellationToken).ConfigureAwait(false);
+                ok &= inspected.Succeeded;
+                Write(inspected);
             }
 
             if (reply.Quit)

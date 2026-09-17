@@ -569,6 +569,8 @@ public sealed class ControlFlowReceiverTests
     [Timeout(30_000, CooperativeCancellation = true)]
     public async Task ExcessCorrelatedSwitchPaths_CompleteWithinTheBound()
     {
+        // Measure analysis responsiveness independently of other tests' forced collections and assembly catalog changes.
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
         var lines = ControlFlowReceiverExamples.BoundedCorrelatedFinalizerSource(192);
         var session = new Session();
         using var editing = new EditingSession(session);

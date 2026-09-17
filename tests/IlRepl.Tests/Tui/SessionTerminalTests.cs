@@ -103,6 +103,7 @@ public sealed class SessionTerminalTests
         Assert.AreEqual("ldc.i4.s 42", prompt.Text, "Typing in the path dialog must not edit the source behind it.");
         await auto.KeyAsync(Hex1bKey.Escape, ct: token);
         await auto.WaitUntilAsync(_ => prompt.SessionDialog is null && !prompt.SessionBusy);
+        await auto.WaitUntilNoTextAsync("Save session");
 
         Assert.AreEqual("ldc.i4.s 42", prompt.Text);
         Assert.AreEqual(caret, prompt.Editor.Cursor.Position.Value);

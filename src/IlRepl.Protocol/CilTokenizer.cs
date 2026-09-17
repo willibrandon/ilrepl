@@ -3,12 +3,12 @@ using System.Text;
 namespace IlRepl.Protocol;
 
 /// <summary>
-/// Colours a line of IL by its grammar: the first word decides whether the line is an
-/// instruction, a directive, a command, or a mistake, and the rest is read by the shape that
-/// first word gives it. The same tokens light the editor's buffer, the echoed input, and every
-/// listing, so a line reads the same wherever it appears. Only a <c>/* */</c> carries state from
-/// line to line, as one flag.
+/// Colors IL by grammar consistently across the editor, echoed input, and listings.
 /// </summary>
+/// <remarks>
+/// The first word determines whether a line contains an instruction, directive, command, or mistake and shapes subsequent tokens.
+/// Only block comments carry state across lines.
+/// </remarks>
 public sealed class CilTokenizer
 {
     private static readonly string[] BlockKeywords = ["catch", "filter", "finally", "fault", "handler"];
@@ -638,7 +638,8 @@ public sealed class CilTokenizer
 
     private static int ReadCommand(CilLineReader r, int i, ReadOnlySpan<char> command)
     {
-        if (command.SequenceEqual(".dis") || command.SequenceEqual(".disassemble") || command.SequenceEqual(".edit"))
+        if (command.SequenceEqual(".dis") || command.SequenceEqual(".disassemble") || command.SequenceEqual(".edit") ||
+            command.SequenceEqual(".jit"))
         {
             return r.ReadMemberReference(i);
         }

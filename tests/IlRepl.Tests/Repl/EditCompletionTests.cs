@@ -144,6 +144,13 @@ public sealed class EditCompletionTests
     /// <param name="expected">The complete option spelling.</param>
     [TestMethod]
     [DataRow(".diff Copy", "--ra", "--raw")]
+    [DataRow(".diff Copy", "--na", "--native")]
+    [DataRow(".diff Copy --native", "--as", "--assert")]
+    [DataRow(".jit Value", "--ag", "--against")]
+    [DataRow(".jit Value", "--tie", "--tier")]
+    [DataRow(".jit Value", "--co", "--collectible")]
+    [DataRow(".jit Value", "--en", "--env")]
+    [DataRow(".jit Value", "--al", "--allow-initializers")]
     [DataRow(".compare Copy (21)", "--as", "--assert")]
     [DataRow(".compare Copy (21)", "--ti", "--timeout")]
     [DataRow(".compare Copy (21)", "--st", "--stdin")]

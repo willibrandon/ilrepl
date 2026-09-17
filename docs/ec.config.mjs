@@ -1,14 +1,14 @@
-// Code blocks tagged cil or ilrepl are coloured with the terminal's own tokenizer and palette:
+// CIL, REPL, and native listing blocks use the terminal's tokenizer and palette:
 // scripts/Highlight-Cil.cs writes their tokens to src/generated/cil-tokens.json, and this plugin
 // lays those colours on the rendered lines, the terminal's own on the dark theme and the same
-// roles in the palette for a light ground on the light one. Shiki never sees the two languages.
+// roles in the palette for a light ground on the light one. Shiki never sees these languages.
 import { definePlugin, ExpressiveCodeAnnotation, InlineStyleAnnotation } from '@expressive-code/core';
 import { h } from '@expressive-code/core/hast';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 const map = JSON.parse(readFileSync(new URL('./src/generated/cil-tokens.json', import.meta.url), 'utf8'));
-const terminalLanguages = new Set(['cil', 'ilrepl']);
+const terminalLanguages = new Set(['cil', 'ilrepl', 'ilrepl-native']);
 
 // The block's text as the generator keys it: its lines, trailing blank lines dropped, joined by newlines.
 const key = (code) => {
@@ -52,12 +52,13 @@ const terminalColours = definePlugin({
 });
 
 export default {
-  // The two languages exist so the blocks are not reported as unknown; they carry no grammar,
+  // These languages exist so the blocks are not reported as unknown; they carry no grammar,
   // since the colours come from the plugin.
   shiki: {
     langs: [
       { name: 'cil', scopeName: 'source.cil', patterns: [] },
       { name: 'ilrepl', scopeName: 'source.ilrepl', patterns: [] },
+      { name: 'ilrepl-native', scopeName: 'source.ilrepl-native', patterns: [] },
     ],
   },
   plugins: [terminalColours],

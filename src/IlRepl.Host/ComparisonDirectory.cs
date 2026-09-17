@@ -1,10 +1,20 @@
 namespace IlRepl.Host;
 
 /// <summary>
-/// Removes worker files and restores owner access to restricted directories without following symbolic links.
+/// Owns private worker directories and removes their files without following symbolic links.
 /// </summary>
 internal static class ComparisonDirectory
 {
+    /// <summary>
+    /// Creates a worker's control directory before captured inputs and environment values are written.
+    /// </summary>
+    /// <param name="path">The unique worker-owned temporary directory.</param>
+    internal static void Create(string path)
+    {
+        if (OperatingSystem.IsWindows()) Directory.CreateDirectory(path);
+        else Directory.CreateDirectory(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
     /// <summary>
     /// Deletes a comparison's temporary tree so the next worker starts with fresh files at the same path.
     /// </summary>

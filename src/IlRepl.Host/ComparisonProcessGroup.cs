@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
@@ -53,7 +54,7 @@ internal sealed partial class ComparisonProcessGroup : IDisposable
     /// <summary>
     /// Terminates the owned group even when its original worker is no longer running.
     /// </summary>
-    /// <returns>A task that completes when the owned process group or job is empty.</returns>
+    /// <returns>A task that completes when the owned process group or job has no executing processes.</returns>
     internal async Task StopAsync()
     {
         if (_stopped) return;
@@ -89,6 +90,7 @@ internal sealed partial class ComparisonProcessGroup : IDisposable
                 var exists = SignalGroup(-_group, 0);
                 error = exists == 0 ? 0 : Marshal.GetLastPInvokeError();
                 if (error == 3) break; // ESRCH confirms that the group is empty.
+                if (OperatingSystem.IsLinux() && !HasLiveLinuxMembers(_group)) break;
                 // Darwin can return EPERM while an exited group's zombies await reaping.
                 if (error != 0 && !(OperatingSystem.IsMacOS() && error == 1)) throw new Win32Exception(error);
                 if (wait.Elapsed > TimeSpan.FromSeconds(10)) throw new IOException("comparison descendants did not terminate");
@@ -97,6 +99,35 @@ internal sealed partial class ComparisonProcessGroup : IDisposable
         }
 
         _stopped = true;
+    }
+
+    private static bool HasLiveLinuxMembers(int group)
+    {
+        // A container's PID 1 may not reap adopted children. Zombies cannot execute or hold a pipe open,
+        // but kill(group, 0) still reports their group as existing; only their parent can reap them.
+        foreach (var directory in Directory.EnumerateDirectories("/proc"))
+        {
+            if (!int.TryParse(Path.GetFileName(directory), NumberStyles.None, CultureInfo.InvariantCulture, out _)) continue;
+            try
+            {
+                var status = File.ReadAllText(Path.Combine(directory, "stat"));
+                var closing = status.LastIndexOf(')');
+                if (closing < 0 || closing + 2 >= status.Length) return true;
+                var fields = status[(closing + 2)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (fields.Length < 3) return true;
+                if (int.TryParse(fields[2], NumberStyles.None, CultureInfo.InvariantCulture, out var owner)
+                    && owner == group && fields[0] is not ("Z" or "X")) return true;
+            }
+            catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+            {
+                // The process exited while the snapshot was being read.
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return true; // Missing evidence must not be mistaken for completed cleanup.
+            }
+        }
+        return false;
     }
 
     /// <summary>

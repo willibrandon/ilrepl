@@ -156,7 +156,12 @@ internal sealed class CompletionCandidateSource
             {
                 string[] options = _site.Owner switch
                 {
-                    ".diff" => ["--raw"],
+                    ".diff" => ["--raw", "--native", "--assert", "--tier", "--timeout", "--stdin", "--files", "--pgo",
+                        "--collectible", "--run", "--iterations", "--env", "--allow-initializers"],
+                    ".jit" => ["--against", "--original", "--info", "--raw", "--assert", "--tier", "--pgo", "--collectible",
+                        "--run", "--iterations", "--timeout", "--stdin", "--files", "--env", "--allow-initializers"],
+                    ".jit --tier" or ".diff --tier" => ["fullopts", "optimized", "tier0", "tier1"],
+                    ".jit --pgo" or ".diff --pgo" => ["on", "off"],
                     ".compare" => ["--assert", "--timeout", "--stdin", "--files"],
                     ".session" => ["save", "open", "restore", "cells", "cell", "run"],
                     ".session save" or ".save" => ["--embed"],

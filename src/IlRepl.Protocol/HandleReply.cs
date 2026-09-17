@@ -43,4 +43,14 @@ public sealed record HandleReply(bool Succeeded, bool Quit, IReadOnlyList<Transc
     /// A comparison ready to execute after the caller displays its explicit starting conditions.
     /// </summary>
     public ComparisonTicket? PendingComparison { get; init; }
+
+    /// <summary>
+    /// The native listing or comparison produced by an isolated worker.
+    /// </summary>
+    public NativeReply? Native { get; init; }
+
+    /// <summary>
+    /// The native request ready to run after its configuration has been displayed.
+    /// </summary>
+    public NativeTicket? PendingNative { get; init; }
 }

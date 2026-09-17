@@ -71,6 +71,13 @@ dependent callers; a failed one leaves the previous version in place.
 same inputs. The report compares their arguments, results, exceptions, and console output. Previously
 run cells are not replayed, and ending a comparison leaves the session available.
 
+## Native inspection
+
+Native inspection runs in a fresh CoreCLR worker with the terminal host's runtime and architecture.
+It preserves captured method images and re-emits retained cells without replaying earlier execution.
+The report combines native listings with observed runtime compilation events. See [Native code](/usage/native-code/)
+for compilation settings, execution boundaries, and comparison behavior.
+
 ## Projects
 
 | Project | Purpose |

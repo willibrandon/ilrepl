@@ -135,6 +135,18 @@ public sealed partial class TypeResolver : IDisposable
     public IReadOnlyList<Assembly> LoadedAssemblies => _extra;
 
     /// <summary>
+    /// Adds an already isolated captured assembly without loading a second runtime identity.
+    /// </summary>
+    /// <param name="assembly">The assembly owned by the inspection context.</param>
+    /// <param name="image">Its original image.</param>
+    internal void AddCaptured(Assembly assembly, byte[] image)
+    {
+        if (!_extra.Contains(assembly)) _extra.Insert(0, assembly);
+        _images.TryAdd(assembly, image);
+        _context.RegisterCaptured(assembly);
+    }
+
+    /// <summary>
     /// Loads an assembly by file path or by name so its types resolve.
     /// </summary>
     /// <param name="nameOrPath">A path to a .dll, or an assembly name such as <c>System.Net.Http</c>.</param>
@@ -174,6 +186,7 @@ public sealed partial class TypeResolver : IDisposable
         if (image is not null)
         {
             _images.TryAdd(assembly, image);
+            _context.RegisterCaptured(assembly);
         }
 
         return assembly;
@@ -205,6 +218,7 @@ public sealed partial class TypeResolver : IDisposable
         }
 
         _images.TryAdd(assembly, image);
+        _context.RegisterCaptured(assembly);
         return assembly;
     }
 

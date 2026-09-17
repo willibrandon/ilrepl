@@ -31,6 +31,7 @@ export default defineConfig({
             { label: 'Methods', slug: 'usage/methods' },
             { label: 'Editing blocks', slug: 'usage/editing' },
             { label: 'Disassembly', slug: 'usage/disassembly' },
+            { label: 'Native code', slug: 'usage/native-code' },
             { label: 'Editing and comparing methods', slug: 'usage/editing-methods' },
             { label: 'Types', slug: 'usage/types' },
             { label: 'Arguments and generics', slug: 'usage/arguments-and-generics' },

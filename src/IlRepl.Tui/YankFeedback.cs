@@ -1,11 +1,11 @@
+using System.Diagnostics;
 using Hex1b;
 using Hex1b.Widgets;
 
 namespace IlRepl.Tui;
 
 /// <summary>
-/// What the user sees after a yank: the copied rows flash for a moment and the status bar says
-/// what was copied for a moment longer. Both clear on their own.
+/// Briefly highlights copied rows and shows an automatically expiring message in the status bar.
 /// </summary>
 public sealed class YankFeedback
 {
@@ -66,6 +66,7 @@ public sealed class YankFeedback
 
     private async Task ClearLaterAsync(Hex1bApp app, long generation)
     {
+        var started = Stopwatch.GetTimestamp();
         await Task.Delay(FlashDuration).ConfigureAwait(false);
         if (Interlocked.Read(ref _generation) == generation)
         {
@@ -74,7 +75,8 @@ public sealed class YankFeedback
             app.Invalidate();
         }
 
-        await Task.Delay(NotificationDuration - FlashDuration).ConfigureAwait(false);
+        var remaining = NotificationDuration - Stopwatch.GetElapsedTime(started);
+        if (remaining > TimeSpan.Zero) await Task.Delay(remaining).ConfigureAwait(false);
         if (Interlocked.Read(ref _generation) == generation)
         {
             Notification = null;

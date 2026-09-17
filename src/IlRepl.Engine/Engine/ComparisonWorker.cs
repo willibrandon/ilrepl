@@ -96,47 +96,7 @@ public static partial class ComparisonWorker
                 Environment.SetEnvironmentVariable(pair.Key, pair.Value);
             }
 
-            foreach (var file in package.Files.OrderBy(file => file.LinkTarget is not null))
-            {
-                var root = Path.GetFullPath(Environment.CurrentDirectory) + Path.DirectorySeparatorChar;
-                var path = Path.GetFullPath(file.Path, root);
-                var pathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-                var rootEntry = file.Path == "." && file.IsDirectory && file.LinkTarget is null;
-                if (!path.StartsWith(root, pathComparison) && !(rootEntry && string.Equals(path, root[..^1], pathComparison)))
-                {
-                    throw new ReplException("a comparison fixture path escapes its working directory");
-                }
-
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                if (file.LinkTarget is { } target)
-                {
-                    var destination = Path.GetFullPath(target, Path.GetDirectoryName(path)!);
-                    var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-                    if (!destination.StartsWith(root, comparison) && !string.Equals(destination, root[..^1], comparison))
-                    {
-                        throw new ReplException("a comparison fixture link escapes its working directory");
-                    }
-
-                    if (file.IsDirectory)
-                    {
-                        Directory.CreateSymbolicLink(path, target);
-                    }
-                    else
-                    {
-                        File.CreateSymbolicLink(path, target);
-                    }
-                }
-                else if (file.IsDirectory)
-                {
-                    Directory.CreateDirectory(path);
-                }
-                else
-                {
-                    File.WriteAllBytes(path, file.Contents);
-                }
-            }
-
-            RestoreFixtureMetadata(package.Files, restoreFileTimes);
+            RestoreFixtures(package.Files, restoreFileTimes);
             ComparisonProbe.Initialize(image.TypeNames);
             ready();
             if (image.OriginalAssembly is { } identity)

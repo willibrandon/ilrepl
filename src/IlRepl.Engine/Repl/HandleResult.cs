@@ -33,4 +33,9 @@ public sealed record HandleResult(bool Succeeded, bool QuitRequested)
     /// The immutable package awaiting execution by the frontend's isolated-runtime coordinator.
     /// </summary>
     internal ComparisonPackage? ComparisonPackage { get; init; }
+
+    /// <summary>
+    /// The captured implementation awaiting isolated compilation.
+    /// </summary>
+    internal NativePackage? NativePackage { get; init; }
 }

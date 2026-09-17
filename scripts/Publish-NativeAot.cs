@@ -50,6 +50,15 @@ root.SetAction(async (parseResult, cancellationToken) =>
         return 1;
     }
 
+    var nativeDiagnostics = Directory.EnumerateFiles(Path.Combine(publishDirectory, "host"), "*", SearchOption.AllDirectories)
+        .Where(path => Path.GetFileName(path) is "TraceEventNative.dll" or "KernelTraceControl.dll"
+            or "KernelTraceControl.Win61.dll" or "msdia140.dll").ToArray();
+    if (nativeDiagnostics.Length != 0)
+    {
+        Console.Error.WriteLine("unused native diagnostics helpers were bundled: " + string.Join(", ", nativeDiagnostics));
+        return 1;
+    }
+
     // The smoke test only runs when the build machine can execute the binary.
     if (CanRunHere(rid))
     {
@@ -218,6 +227,8 @@ static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory,
             return false;
         }
 
+        if (!await SmokeNativeAsync(directory, executable, environment, cancellationToken)) return false;
+
         Console.WriteLine("session save/open/run and runtime-only package smoke passed");
         return true;
     }
@@ -225,6 +236,28 @@ static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory,
     {
         Directory.Delete(directory, recursive: true);
     }
+}
+
+static async Task<bool> SmokeNativeAsync(string directory, string executable, IReadOnlyDictionary<string, string> environment,
+    CancellationToken cancellationToken)
+{
+    const string declaration = ".method int32 Increment(int32 value) {; ldarg.0; ldc.i4.1; add; ret; }; ";
+    var listing = await CaptureAsync(directory, executable,
+        ["--no-color", "-e", declaration + ".jit Increment --against Increment --assert"], cancellationToken, environment);
+    var difference = await CaptureAsync(directory, executable,
+        ["--no-color", "-e", declaration + ".method int32 Other(int32 value) {; ldarg.0; ldc.i4.2; add; ret; }; "
+            + ".jit Increment --against Other --assert"], cancellationToken, environment);
+    if (listing.ExitCode != 0 || !listing.Output.Contains("native inspection: equal", StringComparison.Ordinal)
+        || !listing.Output.Contains("FullOpts", StringComparison.Ordinal)
+        || !listing.Output.Contains("0 workload invocations", StringComparison.Ordinal)
+        || difference.ExitCode == 0 || !difference.Output.Contains("native inspection: different", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("native inspection/runtime-only smoke failed:\n" + listing.Output + difference.Output);
+        return false;
+    }
+
+    Console.WriteLine("native inspection, comparison, and assertion smoke passed without an SDK");
+    return true;
 }
 
 static void CopyDirectory(string source, string destination)

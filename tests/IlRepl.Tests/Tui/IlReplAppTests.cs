@@ -325,10 +325,7 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// Dragging across the transcript selects text, the status bar switches to copy mode's keys,
-    /// y copies to the clipboard through the terminal, the selection is gone, the status bar says
-    /// what was yanked, and the prompt is back in charge. The caret the terminal is asked for is
-    /// a blinking block.
+    /// Yanking copies the selected transcript, restores the prompt, and expires feedback without changing the terminal's caret shape.
     /// </summary>
     [TestMethod]
     public async Task DragOnTranscript_CopiesSelection()
