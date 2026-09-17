@@ -34,6 +34,11 @@ public sealed record SessionRequest
     public bool Modified { get; init; }
 
     /// <summary>
+    /// Whether reconstruction should announce an explicitly opened session rather than silently recover a checkpoint.
+    /// </summary>
+    public bool AnnounceOpen { get; init; } = true;
+
+    /// <summary>
     /// Additive format fields retained when a supported document is saved again.
     /// </summary>
     [JsonExtensionData]

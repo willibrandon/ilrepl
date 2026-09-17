@@ -68,12 +68,15 @@ public sealed partial class InProcessEngine
                 _sessionDiagnostics = _core.ReopenSession(document);
                 _sessionPath = action.Path;
                 _savedSessionHash = request.Modified ? null : DocumentHash(_core.CaptureSession(document.Editor));
-                _core.Transcript.Add(LineKind.Info,
-                    "  Session opened. Nothing has run yet. Saved output is shown for reference.", SpanStyle.Dim);
-                if (document.Assets.Length != 0)
+                if (request.AnnounceOpen)
                 {
                     _core.Transcript.Add(LineKind.Info,
-                        "  embedded code can run when you explicitly execute the experiment", SpanStyle.Dim);
+                        "  Session opened. Nothing has run yet. Saved output is shown for reference.", SpanStyle.Dim);
+                    if (document.Assets.Length != 0)
+                    {
+                        _core.Transcript.Add(LineKind.Info,
+                            "  embedded code can run when you explicitly execute the experiment", SpanStyle.Dim);
+                    }
                 }
 
                 foreach (var diagnostic in _sessionDiagnostics)

@@ -17,6 +17,37 @@ public sealed class SessionControllerTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
+    /// Checkpoint recovery can omit the open announcement while retaining historical output and interruption notices.
+    /// </summary>
+    /// <param name="announce">Whether reconstruction represents an explicit open action.</param>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task Hydrate_OpenAnnouncementPreservesHistoryAndInterruptions(bool announce)
+    {
+        await using var controller = CreateController();
+        var incoming = Document("ldc.i4 42", "ret") with
+        {
+            Interruptions = [new SessionInterruption { Number = 2, Source = ["ret"] }],
+            Editor = new SessionEditor { Lines = ["// retained draft"] },
+        };
+        var request = Request(controller, SessionOperation.Hydrate, incoming) with { AnnounceOpen = announce };
+
+        var reply = await controller.SessionAsync(request, TestContext.CancellationToken);
+
+        Assert.IsTrue(reply.Reply.Succeeded);
+        var output = string.Join('\n', reply.Reply.Lines.Select(line => line.PlainText));
+        if (announce) Assert.Contains("Session opened. Nothing has run yet.", output);
+        else Assert.DoesNotContain("Session opened.", output);
+        Assert.Contains("= 42 : int32", output);
+        Assert.Contains("previous attempt starting at prompt 2 was interrupted; no code was replayed", output);
+        Assert.Contains("end of saved history; no code executed", output);
+        Assert.AreSequenceEqual(incoming.Editor.Lines, controller.Editor.Lines);
+        Assert.AreEqual(incoming.Cells[0].Identity, Assert.ContainsSingle(reply.Document.Cells).Identity);
+        Assert.AreEqual(incoming.Interruptions[0].Identity, Assert.ContainsSingle(reply.Document.Interruptions).Identity);
+    }
+
+    /// <summary>
     /// A long unexecuted submission checkpoints at structural boundaries while retaining every line for worker recovery.
     /// </summary>
     /// <param name="instructions">The length of the pasted method body.</param>

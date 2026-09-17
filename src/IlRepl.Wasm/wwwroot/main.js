@@ -83,7 +83,7 @@
     const workspace = createWorkspaceControls({
       getWorker: () => worker,
       getCheckpoint: () => checkpoint,
-      replace: (source, path, run) => startWorker(source, path, run),
+      replace: (source, path, run) => startWorker(source, path, run, run == null),
       setStatus,
       focus: () => term.focus(),
     });
@@ -154,7 +154,8 @@
       }
     };
 
-    const startWorker = (source = checkpoint ? JSON.stringify(checkpoint.document) : '', path = checkpoint?.path || null, run = null) => {
+    const startWorker = (source = checkpoint ? JSON.stringify(checkpoint.document) : '',
+      path = checkpoint?.path || null, run = null, announceOpen = false) => {
       if (preparing) preparing.terminate();
       if (preparationTimer) clearTimeout(preparationTimer);
       const candidate = new Worker(baseUrl + 'worker.js', { type: 'module' });
@@ -193,7 +194,7 @@
         'Opening the session timed out; try again or use Restart.'), 45_000);
       lastMessageAt = Date.now();
       setStatus('Loading');
-      candidate.postMessage({ type: 'workspace-init', document: source, path, preferences });
+      candidate.postMessage({ type: 'workspace-init', document: source, path, preferences, announceOpen });
       candidate.postMessage({ type: 'resize', cols: term.cols, rows: term.rows });
 
       candidate.onmessage = (e) => {
@@ -480,7 +481,7 @@
       send(`\x1b[<0;${cell.col};${cell.row}M\x1b[<0;${cell.col};${cell.row}m`);
     });
 
-    startWorker(location.hash.startsWith('#session=') ? location.hash : '', null);
+    startWorker(location.hash.startsWith('#session=') ? location.hash : '', null, null, true);
   } catch (err) {
     setStatus('Failed');
     console.error('ilrepl page error', err);

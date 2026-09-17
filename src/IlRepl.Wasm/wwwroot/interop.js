@@ -8,6 +8,7 @@ let checkpointSequence = 0;
 let initialSource = null;
 let initialFile = null;
 let preferences = 'true,false';
+let announceOpen = false;
 
 export function initialDocument() {
   const source = initialSource;
@@ -17,6 +18,7 @@ export function initialDocument() {
 
 export function initialPath() { return initialFile; }
 export function initialPreferences() { return preferences; }
+export function initialAnnounceOpen() { return announceOpen; }
 
 export function checkpoint(source, path, dirty, echoStack, showTiming, pendingSubmission, pendingSource,
   entryPrefix, cellNumbers, assetHashes) {
@@ -182,6 +184,7 @@ self.onmessage = (e) => {
     initialSource = msg.document || null;
     initialFile = msg.path || null;
     preferences = msg.preferences || 'true,false';
+    announceOpen = msg.announceOpen === true;
   } else if (msg.type === 'workspace-ack') {
     const pending = acknowledgements.get(msg.identity);
     acknowledgements.delete(msg.identity);

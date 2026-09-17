@@ -74,7 +74,7 @@ public static partial class BrowserWorkspace
                 var opened = await controller.SessionAsync(new SessionRequest
                 {
                     Action = new SessionAction { Operation = SessionOperation.Hydrate, Force = true, Path = InitialPath() },
-                    Document = SupplyBundledAssets(document), Editor = document.Editor,
+                    Document = SupplyBundledAssets(document), Editor = document.Editor, AnnounceOpen = InitialAnnounceOpen(),
                 }, CancellationToken.None).ConfigureAwait(false);
                 StartupMessages = opened.Reply.Lines;
             }
@@ -301,6 +301,9 @@ public static partial class BrowserWorkspace
 
     [JSImport("initialPreferences", "main.js")]
     private static partial string InitialPreferences();
+
+    [JSImport("initialAnnounceOpen", "main.js")]
+    private static partial bool InitialAnnounceOpen();
 
     [JSImport("checkpoint", "main.js")]
     [return: JSMarshalAs<JSType.Promise<JSType.Void>>]

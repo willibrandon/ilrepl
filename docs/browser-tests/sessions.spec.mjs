@@ -4,6 +4,7 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 import { expect, test } from '@playwright/test';
 
 const effect = 'SESSION_SMOKE_EXECUTED';
+const openNotice = 'Session opened. Nothing has run yet.';
 
 function document(lines, draft = []) {
   return {
@@ -125,6 +126,7 @@ test('open and download preserve source; Run all executes only on request', asyn
   await expect(page.locator('#terminal')).toContainText('timing on');
   const source = await embeddedExperiment();
   await open(page, source);
+  await expect(page.locator('#terminal')).toContainText(openNotice);
   await expect(page.locator('#terminal')).toContainText('// unsent Ω source');
   await expect(page.locator('#terminal')).toContainText(`il[1]> ldstr "${effect}"`);
   expect(await outputCount(page, effect)).toBe(0);
@@ -210,6 +212,7 @@ test('sharing opens an editable experiment without replay', async ({ page, conte
   const shared = await context.newPage();
   await shared.goto(link);
   await ready(shared);
+  await expect(shared.locator('#terminal')).toContainText(openNotice);
   await expect(shared.locator('#terminal')).toContainText('// unsent Ω source');
   await expect(shared.locator('#terminal')).toContainText(`il[1]> ldstr "${effect}"`);
   expect(await outputCount(shared, effect)).toBe(0);
@@ -289,6 +292,29 @@ for (const modifier of ['Control', 'Meta']) {
   });
 }
 
+test('restarting an empty session keeps the fresh terminal without an open notice', async ({ page }) => {
+  const initial = await terminalText(page);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const count = await page.evaluate(() => window.ilreplSessionCount);
+    await page.getByRole('button', { name: 'Restart the session', exact: true }).click();
+    await ready(page, count + 1);
+    await expect(page.locator('#terminal')).not.toContainText(openNotice);
+    await expect.poll(() => terminalText(page)).toBe(initial);
+  }
+  const saved = await download(page);
+  expect(saved.entries).toEqual([]);
+  expect(saved.cells).toEqual([]);
+  expect(saved.editor.lines.join('')).toBe('');
+});
+
+test('opening an empty session file still announces the explicit open', async ({ page }) => {
+  await open(page, document([]), 'empty.ilrepl.json');
+  await expect(page.locator('#terminal')).toContainText(openNotice);
+  const saved = await download(page);
+  expect(saved.entries).toEqual([]);
+  expect(saved.cells).toEqual([]);
+});
+
 test('manual restart recovers accepted source and the unsent editor', async ({ page }) => {
   await typeLine(page, 'ldc.i4.s 29');
   await expect(page.locator('#terminal')).toContainText('┊ [int32]');
@@ -300,6 +326,7 @@ test('manual restart recovers accepted source and the unsent editor', async ({ p
   await page.getByRole('button', { name: 'Restart the session', exact: true }).click();
   await ready(page, count + 1);
   expect(await page.evaluate(() => window.ilreplLastRestart)).toBe('button');
+  await expect(page.locator('#terminal')).not.toContainText(openNotice);
   await expect(page.locator('#terminal')).not.toContainText('= 29 : int32');
   const after = await download(page);
   expect(after.entries).toEqual(before.entries);
@@ -360,6 +387,8 @@ test('a hung cell restarts with its acknowledged source and does not replay', as
   await page.keyboard.press('Enter');
   await expect.poll(() => page.evaluate(() => window.ilreplLastRestart), { timeout: 45_000 }).toBe('hung');
   await ready(page, count + 1);
+  await expect(page.locator('#terminal')).not.toContainText(openNotice);
+  await expect(page.locator('#terminal')).toContainText('was interrupted; no code was replayed');
   const restored = await download(page);
   expect(restored.entries.some(entry => entry.source.includes('LOOP: br LOOP'))).toBe(true);
   expect(restored.cells.filter(cell => cell.state === 'succeeded')).toEqual([]);
