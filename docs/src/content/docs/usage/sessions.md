@@ -31,7 +31,7 @@ Here is the same experiment saved, reopened, inspected, and explicitly run:
 il[2]> .session save arithmetic.ilrepl.json
   saved session /work/arithmetic.ilrepl.json
 il[2]> .session open arithmetic.ilrepl.json
-  reopened source; previous results are history; objects and static field values start fresh
+  Session opened. Nothing has run yet. Saved output is shown for reference.
   saved session history (no code executed)
   1: cell, succeeded (historical)
 il[1]> ldc.i4 6

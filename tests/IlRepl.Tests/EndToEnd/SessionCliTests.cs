@@ -65,7 +65,7 @@ public sealed class SessionCliTests
         var (code, stdout, stderr) = await RunAsync(arguments);
 
         Assert.AreEqual(0, code, stderr + stdout);
-        Assert.Contains("reopened source", stdout);
+        Assert.Contains("Session opened. Nothing has run yet. Saved output is shown for reference.", stdout);
         Assert.DoesNotContain("= 42 : int32", stdout);
         Assert.IsFalse(File.Exists(files.MarkerPath));
     }
@@ -140,7 +140,7 @@ public sealed class SessionCliTests
 
         Assert.AreEqual(missing ? 2 : 1, code, stdout + stderr);
         Assert.IsNotEmpty(stderr);
-        Assert.DoesNotContain("reopened source", stdout);
+        Assert.DoesNotContain("Session opened.", stdout);
         Assert.IsFalse(File.Exists(files.MarkerPath));
     }
 
@@ -161,7 +161,7 @@ public sealed class SessionCliTests
 
         Assert.AreEqual(2, result.Code, result.StdOut + result.StdErr);
         Assert.Contains(Path.GetFileName(files.SessionPath), result.StdErr);
-        Assert.DoesNotContain("reopened source", result.StdOut);
+        Assert.DoesNotContain("Session opened.", result.StdOut);
         Assert.DoesNotContain("= 42 : int32", result.StdOut);
         Assert.IsFalse(File.Exists(files.MarkerPath));
         Assert.AreSequenceEqual(original, await File.ReadAllBytesAsync(files.SessionPath, TestContext.CancellationToken));
@@ -184,7 +184,7 @@ public sealed class SessionCliTests
         var opened = await RunAsync(["--eval", $".load \"{path}\"; .methods"]);
 
         Assert.AreEqual(0, opened.Code, opened.StdOut + opened.StdErr);
-        Assert.Contains("reopened source", opened.StdOut);
+        Assert.Contains("Session opened. Nothing has run yet. Saved output is shown for reference.", opened.StdOut);
         Assert.Contains("Value", opened.StdOut);
         Assert.DoesNotContain("= 7 : int32", opened.StdOut);
     }

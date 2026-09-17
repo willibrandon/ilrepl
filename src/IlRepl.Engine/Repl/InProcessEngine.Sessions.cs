@@ -69,7 +69,7 @@ public sealed partial class InProcessEngine
                 _sessionPath = action.Path;
                 _savedSessionHash = request.Modified ? null : DocumentHash(_core.CaptureSession(document.Editor));
                 _core.Transcript.Add(LineKind.Info,
-                    "  reopened source; previous results are history; objects and static field values start fresh", SpanStyle.Dim);
+                    "  Session opened. Nothing has run yet. Saved output is shown for reference.", SpanStyle.Dim);
                 if (document.Assets.Length != 0)
                 {
                     _core.Transcript.Add(LineKind.Info,

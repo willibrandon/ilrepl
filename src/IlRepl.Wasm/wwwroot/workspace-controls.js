@@ -2,11 +2,8 @@
 export function createWorkspaceControls({ getWorker, getCheckpoint, replace, setStatus, focus }) {
   const pending = new Map();
   let sequence = 0;
-  const toolbar = document.createElement('div');
-  toolbar.id = 'session-files';
-  toolbar.setAttribute('aria-label', 'Session files');
+  const toolbar = document.getElementById('session-files');
   const terminal = document.getElementById('terminal');
-  terminal.before(toolbar);
   const message = document.createElement('span');
   message.id = 'session-file-message';
   message.setAttribute('role', 'status');
@@ -117,16 +114,17 @@ export function createWorkspaceControls({ getWorker, getCheckpoint, replace, set
     }
   }
 
-  const actions = {
-    Open: () => picker.click(),
-    Download: save,
-    Share: share,
-    'Run all': async () => replace(await request('capture'), getCheckpoint()?.path, ''),
-  };
-  for (const [label, action] of Object.entries(actions)) {
+  const actions = [
+    ['Open', 'Open a saved session without running it.', () => picker.click()],
+    ['Download', 'Download the current session as an .ilrepl.json file.', save],
+    ['Share', 'Copy a link to share this session.', share],
+    ['Run all', 'Run all saved cells from the beginning.', async () => replace(await request('capture'), getCheckpoint()?.path, '')],
+  ];
+  for (const [label, tooltip, action] of actions) {
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = label;
+    button.title = tooltip;
     button.id = 'session-' + label.toLowerCase().replace(' ', '-');
     button.onclick = () => Promise.resolve().then(action).catch(showError);
     toolbar.append(button);

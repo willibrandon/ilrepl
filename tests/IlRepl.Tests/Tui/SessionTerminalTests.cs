@@ -219,7 +219,7 @@ public sealed class SessionTerminalTests
         await auto.Ctrl().KeyAsync(Hex1bKey.O, ct: token);
         await auto.WaitUntilTextAsync("Open session");
         await EnterPathAsync(auto, files.SessionPath, token);
-        await auto.WaitUntilTextAsync("reopened source");
+        await auto.WaitUntilTextAsync("Session opened. Nothing has run yet.");
         await auto.WaitUntilAsync(_ => prompt?.Text == "// retained draft" && !prompt.SessionBusy);
 
         Assert.AreEqual(3, prompt!.Editor.Cursor.Position.Value);

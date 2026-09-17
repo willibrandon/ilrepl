@@ -183,7 +183,7 @@ public sealed class SessionBatchTests
             TestContext.CancellationToken);
 
         Assert.AreEqual(0, code, output.ToString());
-        Assert.Contains("reopened source", output.ToString());
+        Assert.Contains("Session opened. Nothing has run yet. Saved output is shown for reference.", output.ToString());
         Assert.IsFalse(File.Exists(files.MarkerPath), output.ToString());
         Assert.IsFalse(engine.Status.CellIsEmpty);
     }
