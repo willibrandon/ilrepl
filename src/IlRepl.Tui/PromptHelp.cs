@@ -70,7 +70,7 @@ public sealed class PromptHelp
         && (_catalogUrl is not null && !_hasDiagnostic || MatchesAnalysis(state));
 
     /// <summary>
-    /// Keeps catalogue links usable during analysis refresh while source actions require current evidence.
+    /// Keeps instruction reference links usable during analysis refresh while source actions require current evidence.
     /// </summary>
     public bool IsActionCurrent(PromptState state, int index) => index >= 0 && index < _actions.Count && MatchesSource(state)
         && (IsCurrent(state) || _actions[index].Url is { } url && url == _catalogUrl);
@@ -120,9 +120,8 @@ public sealed class PromptHelp
         _palette = state.Palette;
         _ready = true;
         _hasDiagnostic = diagnostic is not null;
-        // A completion's catalogue link stays valid even when its accompanying incomplete-opcode diagnostic needs refreshing.
-        _catalogUrl = help is not null && ReferenceEquals(help, completion?.InstructionHelp)
-            && catalog.Any(item => ReferenceEquals(item, completion)) ? help.DocumentationUrl : null;
+        // Instruction documentation does not depend on the analysis, unlike diagnostic source navigation.
+        _catalogUrl = help?.DocumentationUrl;
         Heading = help is null ? "help" : "help · " + help.Mnemonic;
         var details = new List<TranscriptLine>();
         var actions = new List<HelpAction>();

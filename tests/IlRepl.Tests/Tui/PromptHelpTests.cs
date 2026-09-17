@@ -214,6 +214,32 @@ public sealed class PromptHelpTests
     }
 
     /// <summary>
+    /// Refreshing analysis keeps an unchanged instruction's documentation navigable while source actions await fresh evidence.
+    /// </summary>
+    [TestMethod]
+    public async Task DiagnosticDocumentationLink_RemainsNavigableDuringAnalysisRefresh()
+    {
+        await using var engine = new InProcessEngine();
+        var state = await StateAsync(engine, "ldstr \"wrong\"\ncall int32 Math::Abs(int32)");
+        string? opened = null;
+        state.OpenDocumentation = url => opened = url;
+        PromptHelp.Open(state, engine.Catalog);
+        var help = state.Help!;
+        Assert.IsNotNull(help.Actions[0].Source);
+
+        state.Analysis = await AnalyzeAsync(engine, state);
+
+        Assert.IsFalse(help.IsCurrent(state));
+        Assert.IsFalse(help.IsActionCurrent(state, 0));
+        help.MoveAction(state, backwards: false, 80, 8);
+        Assert.AreEqual(InstructionReference.For("call").DocumentationUrl, help.Actions[help.SelectedAction].Url);
+        help.Activate(state);
+        Assert.AreEqual(InstructionReference.For("call").DocumentationUrl, opened);
+        help.Refresh(state, engine.Catalog);
+        Assert.AreEqual(InstructionReference.For("call").DocumentationUrl, help.Actions[help.SelectedAction].Url);
+    }
+
+    /// <summary>
     /// New analysis after an assembly load retires diagnostic source navigation until help refreshes its evidence.
     /// </summary>
     [TestMethod]
