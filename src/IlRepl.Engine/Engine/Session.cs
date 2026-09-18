@@ -764,14 +764,29 @@ public sealed partial class Session
         var trampoline = sameSignature ? replacing!.Trampoline : MethodTrampoline.Create(open.Signature);
         var trampolines = _methods.Where(m => !ReferenceEquals(m, replacing)).ToDictionary(m => m.Signature.Name, m => m.Trampoline, StringComparer.Ordinal);
         trampolines[name] = trampoline;
-        CompiledMethodVersion version;
+        CompiledMethodVersion? version = null;
+        Delegate? implementation = null;
         try
         {
+            if (sameSignature && !DeferActivation)
+            {
+                trampoline.PrepareBinding();
+            }
+
             version = DefinitionCompiler.CompileMethod(open.Signature, open.State, trampoline, trampolines,
                 !DeferActivation && MethodPreparation.IsSupported);
+            if (!DeferActivation)
+            {
+                implementation = version.Implementation;
+            }
         }
         catch
         {
+            if (version is not null)
+            {
+                SessionAssemblies.Release(version.Definition);
+            }
+
             if (!sameSignature)
             {
                 SessionAssemblies.Release(trampoline.Definition);
@@ -782,13 +797,13 @@ public sealed partial class Session
 
         if (!sameSignature && !DeferActivation)
         {
-            trampoline.Bind(version.Implementation);
+            trampoline.Bind(implementation!);
         }
 
         // Phase B: one reference store and the record swap. Neither can fail.
         if (sameSignature && !DeferActivation)
         {
-            trampoline.Bind(version.Implementation);
+            trampoline.Bind(implementation!);
         }
 
         var committed = new SessionMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State, trampoline, version) { Order = sameSignature ? replacing!.Order : Submissions };

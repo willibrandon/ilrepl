@@ -54,7 +54,7 @@ public sealed partial class Session
         // A failed activation leaves the boundary pending so execution can retry it.
         foreach (var method in Methods)
         {
-            method.Trampoline.Bind(method.Version.Implementation);
+            method.Trampoline.BindInitial(method.Version.Implementation);
         }
 
         DeferActivation = false;
