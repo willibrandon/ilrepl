@@ -243,13 +243,14 @@ public sealed class BindingSnapshot : IDisposable
         ArgumentNullException.ThrowIfNull(context);
         var leases = new List<MetadataLease>();
         var ordered = new List<(Assembly Assembly, AssemblySymbolSource Source)>();
+        var captured = new HashSet<AssemblySymbolSource>(ReferenceEqualityComparer.Instance);
         var searchOrder = new List<AssemblySymbolSource>();
         var sessionInstances = new HashSet<long>();
 
         void Take(Assembly assembly, bool searched)
         {
             var source = AssemblySymbolSource.For(assembly, context.Resolver.TryGetImage(assembly, out var image) ? image : null);
-            if (source is null || ordered.Any(o => ReferenceEquals(o.Source, source)))
+            if (source is null || !captured.Add(source))
             {
                 return;
             }

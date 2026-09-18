@@ -241,6 +241,53 @@ public sealed class SnapshotResolutionTests
     }
 
     /// <summary>
+    /// Repeated image mentions preserve distinct load-context identities and the resolver's first matching type.
+    /// </summary>
+    [TestMethod]
+    public void Snapshot_RepeatedImagesPreserveContextIdentityAndSearchOrder()
+    {
+        using var resolver = new TypeResolver();
+        var (first, image, _) = CecilFixture.Build((module, type) =>
+        {
+            var method = new MethodDefinition("Read", MA.Public | MA.Static, module.TypeSystem.Int32);
+            method.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ldc_I4, 42);
+            method.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ret);
+            type.Methods.Add(method);
+        }, resolver, "SnapshotPriority" + Guid.NewGuid().ToString("N"));
+        var secondContext = new AssemblyLoadContext("snapshot-copy", isCollectible: true);
+        try
+        {
+            var second = secondContext.LoadFromStream(new MemoryStream(image));
+            resolver.AddCaptured(second, image);
+            var firstSource = AssemblySymbolSource.For(first)!;
+            var secondSource = AssemblySymbolSource.For(second)!;
+            var context = new ParseContext([], [], GenericContext.Empty, resolver, []);
+            using var snapshot = BindingSnapshot.Capture(context, [first, second, first, second]);
+            Assert.AreSame(secondSource, snapshot.SearchOrder[0]);
+            Assert.AreSame(firstSource, snapshot.SearchOrder[1]);
+            Assert.HasCount(2, snapshot.Catalog.Sources.Where(source => source.Name == firstSource.Name));
+            Assert.AreSame(firstSource, snapshot.Catalog.Source(firstSource.Instance));
+            Assert.AreSame(secondSource, snapshot.Catalog.Source(secondSource.Instance));
+            Assert.AreEqual(firstSource.Mvid, secondSource.Mvid);
+            Assert.AreNotEqual(firstSource.Instance, secondSource.Instance);
+
+            using var lease = snapshot.Lease();
+            snapshot.Dispose();
+            var scope = new SnapshotBindingScope(lease);
+            var type = second.GetTypes().Single(candidate => candidate.Name.StartsWith("SnapshotPriority", StringComparison.Ordinal));
+            var bound = SymbolBinder.BindType(CilSyntaxParser.ParseType(type.FullName!), scope).Type;
+            Assert.AreEqual(RuntimeSymbolImporter.Import(type), bound);
+            var method = SymbolBinder.BindMethodReference(CilSyntaxParser.ParseMethodReference(type.FullName + "::Read()"), scope, false);
+            Assert.AreEqual(RuntimeSymbolImporter.Import(type.GetMethod("Read")!), method.Method);
+            Assert.AreEqual(42, type.GetMethod("Read")!.Invoke(null, null));
+        }
+        finally
+        {
+            secondContext.Unload();
+        }
+    }
+
+    /// <summary>
     /// A reference to an assembly the catalog holds twice in one context, or not at all, stays unresolved.
     /// </summary>
     [TestMethod]
