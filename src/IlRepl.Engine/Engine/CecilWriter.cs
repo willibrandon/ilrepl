@@ -9,12 +9,15 @@ using TypeAttributes = Mono.Cecil.TypeAttributes;
 namespace IlRepl.Engine;
 
 /// <summary>
+/// Writes assemblies with exact framework and session member references.
+/// </summary>
+/// <remarks>
 /// Builds one session assembly with Mono.Cecil. It imports every framework and session member a
 /// body reaches for, records which session assemblies were referenced so the loader can keep
 /// them alive, and grants the assembly access to those session assemblies through
 /// <c>IgnoresAccessChecksTo</c>, because session assemblies have names nobody can grant to
 /// in advance.
-/// </summary>
+/// </remarks>
 public sealed class CecilWriter
 {
     private readonly Dictionary<string, DefinitionAssembly> _dependencies = new(StringComparer.Ordinal);
@@ -70,8 +73,7 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// Starts a session assembly under a name taken in advance, so other assemblies written in
-    /// the same group can reference it before it is loaded.
+    /// Starts a named session assembly so definitions in the same group can reference it before loading.
     /// </summary>
     /// <param name="kind">What the assembly will hold.</param>
     /// <param name="name">A name from <see cref="SessionAssemblies.NextName"/>.</param>
@@ -80,7 +82,8 @@ public sealed class CecilWriter
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         Kind = kind;
         Name = name;
-        Assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(Name, SessionAssemblies.Version), Name, ModuleKind.Dll);
+        Assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(Name, SessionAssemblies.Version), Name,
+            new ModuleParameters { Kind = ModuleKind.Dll, ReflectionImporterProvider = new CecilReflectionImporterProvider() });
         ReferenceCoreLibrary();
     }
 
@@ -94,7 +97,8 @@ public sealed class CecilWriter
         Kind = SessionAssemblyKind.Cell;
         Name = name;
         IsExport = true;
-        Assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0, 0, 0)), name, ModuleKind.Dll);
+        Assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0, 0, 0)), name,
+            new ModuleParameters { Kind = ModuleKind.Dll, ReflectionImporterProvider = new CecilReflectionImporterProvider() });
         ReferenceCoreLibrary();
     }
 

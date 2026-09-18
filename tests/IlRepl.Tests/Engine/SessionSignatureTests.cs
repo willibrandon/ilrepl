@@ -10,6 +10,60 @@ namespace IlRepl.Tests.Engine;
 public sealed class SessionSignatureTests
 {
     /// <summary>
+    /// Type reconstruction publishes runtime signatures or restores the original bindings after rejecting a dependent body.
+    /// </summary>
+    /// <param name="accepted">Whether the replacement preserves the field required by its dependent method.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void RebuiltDefinitions_RefreshSignaturesOrRestoreOriginalBindings(bool accepted)
+    {
+        using var core = new ReplCore();
+        var session = core.Session;
+        AddType("Value", 7);
+        Add(".method class Item Make() { newobj instance void Item::.ctor(); ret }");
+        Add(".method int32 Read(class Item item) { ldarg item; ldfld int32 Item::Value; ret }");
+        var before = session.InspectionContext;
+        var original = before.Methods.ToArray();
+        var oldType = original.Single(method => method.Name == "Make").ReturnType;
+
+        if (accepted) AddType("Value", 42);
+        else
+        {
+            var error = Assert.ThrowsExactly<ReplException>(() => AddType("Other", 42));
+            Assert.Contains("cannot redefine class Item: method Read:", error.Message);
+            Assert.Contains("Value", error.Message);
+        }
+
+        var current = session.Types.Single().RuntimeType;
+        var after = session.InspectionContext;
+        Assert.AreSame(current, after.Methods.Single(method => method.Name == "Make").ReturnType);
+        Assert.AreSame(current, after.Methods.Single(method => method.Name == "Read").Parameters.Single().Type);
+        Assert.AreSame(oldType, before.Methods.Single(method => method.Name == "Make").ReturnType);
+        Assert.AreSequenceEqual(original, before.Methods);
+        if (accepted) Assert.AreNotSame(oldType, current);
+        else
+        {
+            Assert.AreSame(oldType, current);
+            for (var index = 0; index < original.Length; index++) Assert.AreSame(original[index], after.Methods[index]);
+        }
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            Add("call class Item Make()", "call int32 Read(class Item)");
+            Assert.AreEqual(accepted ? 42 : 7, session.Run().Value);
+        }
+
+        void AddType(string field, int value) => Add(".class public Item {", $".field public int32 {field}",
+            ".method public instance void .ctor() {", "ldarg.0", "call instance void [System.Runtime]System.Object::.ctor()",
+            "ldarg.0", $"ldc.i4 {value}", $"stfld int32 Item::{field}", "ret", "}", "}");
+
+        void Add(params string[] source)
+        {
+            foreach (var line in IlLines.Expand(source)) session.AddLine(line);
+        }
+    }
+
+    /// <summary>
     /// New and replacement method bodies bind an ordered private snapshot without changing already retained contexts.
     /// </summary>
     /// <param name="count">The number of methods accepted before opening the next body.</param>

@@ -22,7 +22,7 @@ public sealed partial class Session
     private readonly List<string> _bodyLines = [];
     private readonly List<string> _typeParameterNames = [];
     private readonly List<SessionMethod> _methods = [];
-    private readonly WeakReference<MethodSignature[]> _methodSignatures = new([]);
+    private readonly WeakReference<MethodSignature[]?> _methodSignatures = new(null);
     private CellState _cell;
     private OpenMethodBlock? _open;
     private long _completionRevision;
@@ -531,6 +531,7 @@ public sealed partial class Session
         }
 
         _methods.Clear();
+        InvalidateSignatures();
         foreach (var edit in _edits)
         {
             if (edit.Baseline.Definition is { } baseline)
@@ -825,6 +826,7 @@ public sealed partial class Session
             _methods[index] = committed;
         }
 
+        InvalidateSignatures();
         _cell = cell;
         _open = null;
         Submissions++;
@@ -899,8 +901,6 @@ public sealed partial class Session
     private MethodSignature[] Signatures()
     {
         var unchanged = _methodSignatures.TryGetTarget(out var signatures) && signatures.Length == _methods.Count;
-        for (var index = 0; unchanged && index < _methods.Count; index++)
-            unchanged = ReferenceEquals(signatures![index], _methods[index].Signature);
         if (!unchanged)
         {
             signatures = _methods.Select(method => method.Signature).ToArray();
@@ -909,6 +909,8 @@ public sealed partial class Session
         }
         return signatures!;
     }
+
+    private void InvalidateSignatures() => _methodSignatures.SetTarget(null);
 
     private void Rebuild() => _cell = BuildCell(Signatures());
 
