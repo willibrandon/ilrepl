@@ -590,6 +590,11 @@ internal sealed partial class FlowGraph<T> where T : class
 
     private void ValidatePrefixes()
     {
+        if (!Nodes.Any(node => node.Instruction is { } instruction && IsPrefix(instruction)))
+        {
+            return;
+        }
+
         var prefixes = new List<int>();
         var targets = Nodes.SelectMany(node => node.Targets).ToHashSet(StringComparer.Ordinal);
         var targetedPositions = Nodes.Select((node, index) => (node, index))

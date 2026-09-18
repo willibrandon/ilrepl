@@ -16,6 +16,13 @@ internal static class CecilStackHeaders
     /// </summary>
     public static void Apply(byte[] image, IReadOnlyDictionary<MethodDefinition, int> limits)
     {
+        // Cecil updates each body's computed bound when writing it. Fat headers contain that value;
+        // tiny headers have an implicit bound of eight, so neither needs rereading unless our bound is higher.
+        if (limits.All(entry => entry.Key.Body.MaxStackSize <= ushort.MaxValue && entry.Value <= entry.Key.Body.MaxStackSize))
+        {
+            return;
+        }
+
         using var reader = new PEReader(new MemoryStream(image, writable: false));
         var metadata = reader.GetMetadataReader();
         foreach (var (method, limit) in limits)
