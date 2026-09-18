@@ -14,6 +14,11 @@ public sealed record SessionReply
     public SessionCheckpointRevision? CheckpointDelta { get; init; }
 
     /// <summary>
+    /// Correlates a workspace checkpoint and its final document reference for one pending host request.
+    /// </summary>
+    public string? CheckpointDelivery { get; init; }
+
+    /// <summary>
     /// The captured or reconstructed document.
     /// </summary>
     public SessionDocument Document { get; init; } = new();

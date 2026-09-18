@@ -22,6 +22,7 @@ public sealed partial class Session
     private readonly List<string> _bodyLines = [];
     private readonly List<string> _typeParameterNames = [];
     private readonly List<SessionMethod> _methods = [];
+    private readonly WeakReference<MethodSignature[]> _methodSignatures = new([]);
     private CellState _cell;
     private OpenMethodBlock? _open;
     private long _completionRevision;
@@ -872,7 +873,19 @@ public sealed partial class Session
 
     private static bool SameSignature(MethodSignature a, MethodSignature b) => SignatureIdentity.Same(a, b);
 
-    private List<MethodSignature> Signatures() => _methods.Select(m => m.Signature).ToList();
+    private MethodSignature[] Signatures()
+    {
+        var unchanged = _methodSignatures.TryGetTarget(out var signatures) && signatures.Length == _methods.Count;
+        for (var index = 0; unchanged && index < _methods.Count; index++)
+            unchanged = ReferenceEquals(signatures![index], _methods[index].Signature);
+        if (!unchanged)
+        {
+            signatures = _methods.Select(method => method.Signature).ToArray();
+            // Contexts own their binding tables; memoization must not extend the lifetime of retired definition types.
+            _methodSignatures.SetTarget(signatures);
+        }
+        return signatures!;
+    }
 
     private void Rebuild() => _cell = BuildCell(Signatures());
 

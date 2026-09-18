@@ -20,7 +20,16 @@ public sealed partial class HostProcessEngine : IReplEngine
         ObjectDisposedException.ThrowIf(_disposed, this);
         try
         {
-            var reply = await InvokeMutationAsync(token => _host.SessionAsync(request, token), cancellationToken).ConfigureAwait(false);
+            var reply = await InvokeMutationAsync(async token =>
+            {
+                var identity = _deliveries.Register();
+                try
+                {
+                    var response = await _host.SessionAsync(request with { CheckpointDelivery = identity }, token).ConfigureAwait(false);
+                    return _deliveries.Resolve(response, identity);
+                }
+                finally { _deliveries.Forget(identity); }
+            }, cancellationToken).ConfigureAwait(false);
             if (reply.FailureExitCode is { } exitCode)
             {
                 throw new ReplEngineException(string.Join('\n', reply.Reply.Lines.Select(line => line.PlainText)))

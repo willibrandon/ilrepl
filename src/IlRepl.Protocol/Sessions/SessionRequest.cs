@@ -44,6 +44,11 @@ public sealed record SessionRequest
     public int? HistoryLineLimit { get; init; }
 
     /// <summary>
+    /// The host transport's pending request identity when its reply can reference an acknowledged checkpoint document.
+    /// </summary>
+    public string? CheckpointDelivery { get; init; }
+
+    /// <summary>
     /// Additive format fields retained when a supported document is saved again.
     /// </summary>
     [JsonExtensionData]

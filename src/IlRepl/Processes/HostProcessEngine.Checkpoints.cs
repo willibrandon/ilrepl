@@ -8,6 +8,13 @@ namespace IlRepl.Processes;
 public sealed partial class HostProcessEngine
 {
     private readonly SessionCheckpointStore _checkpoints = new();
+    private readonly SessionCheckpointDeliveries _deliveries = new();
 
-    private SessionReply? AcceptCheckpoint(SessionReply checkpoint) => _checkpoints.Apply(checkpoint);
+    private SessionReply? AcceptCheckpoint(SessionReply checkpoint)
+    {
+        var accepted = _checkpoints.Apply(checkpoint);
+        if (accepted is null) return null;
+        _deliveries.Remember(accepted);
+        return accepted with { CheckpointDelivery = null };
+    }
 }

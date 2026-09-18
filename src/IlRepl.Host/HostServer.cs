@@ -20,7 +20,10 @@ public sealed partial class HostServer : IReplHost, IAsyncDisposable
         try
         {
             var reply = await _engine.SessionAsync(request, cancellationToken).ConfigureAwait(false);
-            return reply with { Reply = WithStreamedOutput(reply.Reply) };
+            var response = reply with { Reply = WithStreamedOutput(reply.Reply) };
+            return _client is not null && request.CheckpointDelivery is { } identity && reply.CheckpointDelivery == identity
+                ? response with { Document = new SessionDocument() }
+                : response with { CheckpointDelivery = null };
         }
         catch (Exception exception) when (request.Action.Operation == SessionOperation.Open
             && exception is not InvalidDataException && exception is IOException or UnauthorizedAccessException)

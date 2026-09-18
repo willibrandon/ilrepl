@@ -49,7 +49,10 @@ public sealed partial class InProcessEngine
 
             return await RunOperationAsync(request.Action.Operation.ToString().ToLowerInvariant(), async token =>
             {
-                var reply = await SessionTooling(request, token).ConfigureAwait(false);
+                var reply = (await SessionTooling(request, token).ConfigureAwait(false)) with
+                {
+                    CheckpointDelivery = request.CheckpointDelivery,
+                };
                 WorkspaceCheckpoint?.Invoke(reply);
                 return reply;
             }, cancellationToken).ConfigureAwait(false);
@@ -60,7 +63,7 @@ public sealed partial class InProcessEngine
         {
             return await ExecuteOperationAsync("session", token =>
             {
-                var reply = HandleSession(request, token);
+                var reply = HandleSession(request, token) with { CheckpointDelivery = request.CheckpointDelivery };
                 WorkspaceCheckpoint?.Invoke(reply);
                 return reply;
             }, cancellationToken).ConfigureAwait(false);
