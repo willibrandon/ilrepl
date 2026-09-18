@@ -286,6 +286,13 @@ public sealed partial class HostProcessEngine : IReplEngine
     }
 
     /// <inheritdoc />
+    public Task<HandleReply> HandleRetainedSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        return CallAsync(token => _host.HandleRetainedSourceAsync(line, location, token), cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(line);

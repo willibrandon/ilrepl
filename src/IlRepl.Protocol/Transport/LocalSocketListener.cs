@@ -13,7 +13,7 @@ public sealed class LocalSocketListener : IDisposable
     private readonly string _directory;
     private readonly byte[] _secret = RandomNumberGenerator.GetBytes(32);
     private readonly Guid _generation = Guid.NewGuid();
-    private const int ProtocolVersion = 3;
+    private const int ProtocolVersion = 4;
     private int _disposed;
 
     /// <summary>
@@ -48,7 +48,7 @@ public sealed class LocalSocketListener : IDisposable
     public string Secret => Convert.ToHexString(_secret) + "." + _generation.ToString("N");
 
     /// <summary>
-    /// Accepts the expected process and rejects stale or unrelated bootstrap connections.
+    /// Accepts the expected process and acknowledges rejection of stale or unrelated bootstrap connections.
     /// </summary>
     /// <param name="processId">The child process that owns this launch.</param>
     /// <param name="cancellationToken">Cancels acceptance and incomplete bootstrap reads.</param>
@@ -74,6 +74,9 @@ public sealed class LocalSocketListener : IDisposable
                     await stream.WriteAsync(new byte[] { 1 }, cancellationToken).ConfigureAwait(false);
                     return stream;
                 }
+                // Windows Unix sockets can leave a peer's pending read waiting after shutdown and close.
+                // Send an explicit rejection so the peer never relies on EOF to recognize a refused bootstrap.
+                await stream.WriteAsync(new byte[] { 0 }, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception) when (exception is IOException or SocketException or OperationCanceledException)
             {

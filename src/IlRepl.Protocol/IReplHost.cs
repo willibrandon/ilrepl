@@ -14,6 +14,15 @@ namespace IlRepl.Protocol;
 public partial interface IReplHost
 {
     /// <summary>
+    /// Handles frontend-retained source while preserving checkpoints at execution, commit, cancellation, and failure boundaries.
+    /// </summary>
+    /// <param name="line">The instruction still retained by the frontend.</param>
+    /// <param name="location">Its location in the submitting document.</param>
+    /// <param name="cancellationToken">Cancels the operation.</param>
+    /// <returns>The transcript and new status.</returns>
+    Task<HandleReply> HandleRetainedSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Requests interruption without waiting for the execution gate.
     /// </summary>
     /// <param name="identity">The operation the frontend intends to interrupt.</param>
