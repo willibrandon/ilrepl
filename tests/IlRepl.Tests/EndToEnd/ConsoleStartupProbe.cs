@@ -104,7 +104,11 @@ internal static partial class ConsoleStartupProbe
         RequireRestored(original);
         Console.WriteLine("console-mode-restored");
         var line = await Console.In.ReadLineAsync(token);
+        await File.WriteAllTextAsync(Path.Combine(directory, "cooked-line.txt"), line, token);
         Console.WriteLine("cooked-line:" + line);
+        // PTY process exit can stop the parent's output pump before it applies the final bytes.
+        // Retain the actual input and stay alive until the parent observes the complete rendered line.
+        while (!File.Exists(Path.Combine(directory, "cooked-line.observed"))) await Task.Delay(1, token);
         return line == "restored λ" ? 0 : 1;
     }
 

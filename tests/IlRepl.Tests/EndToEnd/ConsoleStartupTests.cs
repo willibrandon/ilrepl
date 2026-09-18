@@ -110,8 +110,7 @@ public sealed class ConsoleStartupTests
         Assert.AreEqual(draft + " unchanged", await File.ReadAllTextAsync(Path.Combine(files.DirectoryPath, "draft.txt"), token));
         await auto.TypeAsync("restored λ", ct: token);
         await auto.EnterAsync(ct: token);
-        await auto.WaitUntilTextAsync("cooked-line:restored λ");
-        Assert.AreEqual(0, await run.WaitAsync(token));
+        await AssertCookedLineAsync(auto, files, run, token);
 
         async Task SendObservedAsync(string text, bool requireMultipleReads = false)
         {
@@ -158,8 +157,7 @@ public sealed class ConsoleStartupTests
         await auto.WaitUntilTextAsync("console-mode-restored");
         await auto.TypeAsync("restored λ", ct: token);
         await auto.EnterAsync(ct: token);
-        await auto.WaitUntilTextAsync("cooked-line:restored λ");
-        Assert.AreEqual(0, await run.WaitAsync(token));
+        await AssertCookedLineAsync(auto, files, run, token);
     }
 
     /// <summary>
@@ -191,8 +189,26 @@ public sealed class ConsoleStartupTests
         await auto.WaitUntilTextAsync("console-mode-restored");
         await auto.TypeAsync("restored λ", ct: token);
         await auto.EnterAsync(ct: token);
-        await auto.WaitUntilTextAsync("cooked-line:restored λ");
-        Assert.AreEqual(0, await run.WaitAsync(token));
+        await AssertCookedLineAsync(auto, files, run, token);
+    }
+
+    private async Task AssertCookedLineAsync(
+        Hex1bTerminalAutomator auto, SessionWorkspaceFixture files, Task<int> run, CancellationToken token)
+    {
+        var path = Path.Combine(files.DirectoryPath, "cooked-line.txt");
+        try
+        {
+            await auto.WaitUntilTextAsync("cooked-line:restored λ");
+            Assert.AreEqual("restored λ", await File.ReadAllTextAsync(path, token));
+            Assert.IsFalse(run.IsCompleted, "The probe must remain alive until its final output has been observed.");
+            await File.WriteAllTextAsync(Path.Combine(files.DirectoryPath, "cooked-line.observed"), "observed", token);
+            Assert.AreEqual(0, await run.WaitAsync(token));
+        }
+        finally
+        {
+            if (File.Exists(path))
+                TestContext.WriteLine("Actual cooked input: " + await File.ReadAllTextAsync(path, CancellationToken.None));
+        }
     }
 
     private static Hex1bTerminalBuilder Create(SessionWorkspaceFixture files, string[] arguments) =>
