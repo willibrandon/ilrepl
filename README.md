@@ -190,19 +190,21 @@ lifetime supervisor tracks execution processes and stops them if the frontend ex
 
 ## Building
 
-Requires the .NET 10 SDK. The browser build also needs the `wasm-tools` workload, and the docs
-need Node 22 with pnpm.
+Requires the .NET 10 SDK.
 
 ```sh
-dotnet build
+dotnet build src/IlRepl
 dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj
 dotnet run --project src/IlRepl
 ```
 
-`dotnet build` publishes the host into `host/` beside the front-end. The tests cover the engine
+The build publishes the host into `host/` beside the front-end. The tests cover the engine
 in-process on the real JIT, the sample library in `samples/Greeter`, every transcript in
 `samples/Transcripts`, the terminal UI on a headless terminal emulator, and the front-end as a
 process in a PTY.
+
+To build the entire solution, run `dotnet workload restore` before `dotnet build`; the live demo
+needs the `wasm-tools` workload. Building the documentation site also requires Node 22 with pnpm.
 
 The [responsiveness validation guide](tests/responsiveness-validation.md) describes packaged
 terminal reference measurements and generated stress fixtures.

@@ -35,8 +35,8 @@ See [Saving and sharing sessions](/usage/sessions/).
 Scripts accept `.edit method as Name { ... }` blocks. Add `--assert` to `.compare` to require a complete
 match and return exit code 1 otherwise. Without it, a difference is reported as a result.
 
-A trailing `.show`, `.il`, `.dis`, `.diff`, or `.jit` suppresses pending-cell execution at EOF, including
-when inspection fails. Their aliases have the same behavior. Further accepted cell instructions restore
+A trailing `.show`, `.il`, `.dis`, `.diff`, `.jit`, `.save`, or `.session` command suppresses pending-cell execution at EOF,
+including when the command fails. Their aliases have the same behavior. Further accepted cell instructions restore
 EOF execution; explicit `.run`, blank-line execution, and `ret` retain their usual meanings. Native
 comparisons accept `--assert` to fail a script when the captured native code differs.
 
