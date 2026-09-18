@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
 using IlRepl.Protocol;
@@ -61,7 +62,10 @@ internal static class ResponsivenessProbe
         foreach (var scenario in scenarios)
         {
             var metrics = new Dictionary<string, List<double>>(StringComparer.Ordinal);
-            var launches = new List<(long Started, long Prompt, long FirstEdit, long Accepted)>();
+            var launches = new List<StartupSample>();
+            Exception? failure = null;
+            string? failureStage = null;
+            var stage = "launch";
             void Record(string name, double sample)
             {
                 if (!metrics.TryGetValue(name, out var values)) metrics.Add(name, values = []);
@@ -71,116 +75,181 @@ internal static class ResponsivenessProbe
             Directory.CreateDirectory(artifacts);
             var retained = scenario is "session" or "combined" ? session : null;
             var catalog = scenario is "catalog" or "combined";
-            for (var sample = 0; sample < (quick ? 2 : 30); sample++)
+            try
             {
-                await using var terminal = new MeasuredTerminal(frontend, artifacts, retained, token);
-                var prompt = await terminal.PromptAsync();
-                Record("prompt-painted", Stopwatch.GetElapsedTime(terminal.Started, prompt.Timestamp).TotalMilliseconds);
-                await terminal.PasteAsync("// editable", frame => frame.Contains("// editable"));
-                var firstEdit = terminal.LastPainted;
-                Record("prompt-editable", Stopwatch.GetElapsedTime(terminal.Started, prompt.Timestamp).TotalMilliseconds);
-                Record("first-edit-painted", Stopwatch.GetElapsedTime(terminal.Started, firstEdit).TotalMilliseconds);
-                await terminal.DraftAsync("ldc.i4.s 42\nret");
-                await terminal.CurrentAsync(frame => frame.Contains("stack [int32]") || frame.Contains("stack before [int32]"));
-                await terminal.InputAsync("\r", frame => frame.Contains("= 42 : int32"));
-                launches.Add((terminal.Started, prompt.Timestamp, firstEdit, terminal.LastPainted));
-                Record("first-accepted-submission", Stopwatch.GetElapsedTime(terminal.Started, terminal.LastPainted).TotalMilliseconds);
-                if (catalog)
+                for (var sample = 0; sample < (quick ? 2 : 30); sample++)
                 {
-                    await terminal.CommandAsync(".load " + assembly, Path.GetFileName(assembly)[..16]);
-                    await terminal.DraftAsync("");
-                    Record("cold-completion", await terminal.PasteAsync("call Responsiveness.CatalogType00000::Meth",
-                        frame => frame.Contains("members") && !frame.Contains("updating members") && frame.Contains("Method00")));
-                }
-                if (sample != 0) continue;
-                var draft = scenario switch
-                {
-                    "draft-200" => ResponsivenessFixtures.Draft(200),
-                    "draft-2000" => ResponsivenessFixtures.Draft(2000),
-                    "combined" => CombinedDraft(),
-                    "generic-4" => ResponsivenessFixtures.Generic(4),
-                    "generic-16" => ResponsivenessFixtures.Generic(16),
-                    "generic-64" => ResponsivenessFixtures.Generic(64),
-                    _ => "// input",
-                };
-                await terminal.DraftAsync(draft);
-                var suffix = draft.Split('\n')[^1];
-                suffix = suffix[^Math.Min(20, suffix.Length)..];
-                for (var index = 0; index < (quick ? 25 : 1_025); index++)
-                {
-                    var typed = await terminal.InputAsync("x", frame => frame.CaretRow?.Contains(suffix + "x", StringComparison.Ordinal)
-                        == true);
-                    await terminal.InputAsync("\x7f", frame => frame.CaretRow?.Contains(suffix + "x",
-                        StringComparison.Ordinal) == false);
-                    var restored = await terminal.CurrentAsync(frame => frame.Caret is not null);
-                    var draftCaret = restored.Caret!.Value;
-                    var moved = await terminal.InputAsync("\x1b[D", frame => frame.Caret == (draftCaret.X - 1, draftCaret.Y));
-                    await terminal.InputAsync("\x1b[C", frame => frame.Caret == draftCaret);
-                    if (index >= (quick ? 5 : 25))
+                    stage = "launch";
+                    await using var terminal = new MeasuredTerminal(frontend, artifacts, retained, token);
+                    launches.Add(new StartupSample(terminal.Started, null, null, null, null));
+                    void Progress(string phase)
                     {
-                        Record("input-painted", typed);
-                        Record("caret-painted", moved);
+                        stage = phase;
+                        if (sample == 0)
+                            Console.WriteLine($"Measuring {scenario}: {phase} at "
+                                + $"{Stopwatch.GetElapsedTime(terminal.Started).TotalMilliseconds:F1} ms after launch.");
                     }
+                    stage = "first focused prompt";
+                    var prompt = await terminal.PromptAsync();
+                    launches[sample] = launches[sample] with { Prompt = prompt.Timestamp };
+                    Record("prompt-painted", Stopwatch.GetElapsedTime(terminal.Started, prompt.Timestamp).TotalMilliseconds);
+                    stage = "first edit";
+                    await terminal.PasteAsync("// editable", frame => frame.Contains("// editable"));
+                    var firstEdit = terminal.LastPainted;
+                    launches[sample] = launches[sample] with { FirstEdit = firstEdit };
+                    Record("prompt-editable", Stopwatch.GetElapsedTime(terminal.Started, prompt.Timestamp).TotalMilliseconds);
+                    Record("first-edit-painted", Stopwatch.GetElapsedTime(terminal.Started, firstEdit).TotalMilliseconds);
+                    await terminal.DraftAsync("ldc.i4.s 42\nret");
+                    Progress("initial document analysis");
+                    await terminal.CurrentAsync(frame => frame.Contains("stack [int32]") || frame.Contains("stack before [int32]"));
+                    Progress("first submission");
+                    await terminal.InputAsync("\r", frame => frame.Contains("= 42 : int32"));
+                    launches[sample] = launches[sample] with { FirstAccepted = terminal.LastPainted };
+                    Record("first-accepted-submission", Stopwatch.GetElapsedTime(terminal.Started, terminal.LastPainted).TotalMilliseconds);
+                    Progress("first submission accepted");
+                    if (catalog)
+                    {
+                        Progress("large catalog load");
+                        await terminal.CommandAsync(".load " + assembly, Path.GetFileName(assembly)[..16]);
+                        await terminal.DraftAsync("");
+                        Progress("cold catalog completion");
+                        Record("cold-completion", await terminal.PasteAsync("call Responsiveness.CatalogType00000::Meth",
+                            frame => frame.Contains("members") && !frame.Contains("updating members") && frame.Contains("Method00")));
+                    }
+                    if (sample != 0) continue;
+                    var draft = scenario switch
+                    {
+                        "draft-200" => ResponsivenessFixtures.Draft(200),
+                        "draft-2000" => ResponsivenessFixtures.Draft(2000),
+                        "combined" => CombinedDraft(),
+                        "generic-4" => ResponsivenessFixtures.Generic(4),
+                        "generic-16" => ResponsivenessFixtures.Generic(16),
+                        "generic-64" => ResponsivenessFixtures.Generic(64),
+                        _ => "// input",
+                    };
+                    Progress("large draft preparation");
+                    await terminal.DraftAsync(draft);
+                    Progress("typing and caret measurements");
+                    var suffix = draft.Split('\n')[^1];
+                    suffix = suffix[^Math.Min(20, suffix.Length)..];
+                    for (var index = 0; index < (quick ? 25 : 1_025); index++)
+                    {
+                        var typed = await terminal.InputAsync("x", frame => frame.CaretRow?.Contains(suffix + "x", StringComparison.Ordinal)
+                            == true);
+                        await terminal.InputAsync("\x7f", frame => frame.CaretRow?.Contains(suffix + "x",
+                            StringComparison.Ordinal) == false);
+                        var restored = await terminal.CurrentAsync(frame => frame.Caret is not null);
+                        var draftCaret = restored.Caret!.Value;
+                        var moved = await terminal.InputAsync("\x1b[D", frame => frame.Caret == (draftCaret.X - 1, draftCaret.Y));
+                        await terminal.InputAsync("\x1b[C", frame => frame.Caret == draftCaret);
+                        if (index >= (quick ? 5 : 25))
+                        {
+                            Record("input-painted", typed);
+                            Record("caret-painted", moved);
+                        }
+                    }
+                    var completionSource = scenario.StartsWith("draft-", StringComparison.Ordinal) || scenario == "combined"
+                        ? string.Join('\n', draft.Split('\n')[..^2]) + "\ncall Console::Wr"
+                        : scenario.StartsWith("generic-", StringComparison.Ordinal)
+                            ? ".locals (" + draft["ldtoken ".Length..] + " value)\ncall Console::Wr" : "call Console::Wr";
+                    Progress("completion draft preparation");
+                    await terminal.DraftAsync(completionSource);
+                    var ready = await terminal.CurrentAsync(frame => frame.Contains("members") && !frame.Contains("updating members")
+                        && frame.Contains("Write("));
+                    Progress("warm completion measurements");
+                    var caret = ready.Caret ?? throw new InvalidOperationException("The completed page has no editing caret.");
+                    for (var index = 0; index < (quick ? 25 : 1_025); index++)
+                    {
+                        var append = index % 2 == 0;
+                        var column = caret.X + (append ? 1 : 0);
+                        var completed = await terminal.InputAsync(append ? "i" : "\x7f",
+                            frame => frame.Caret?.X == column && frame.Contains("members") && !frame.Contains("updating members")
+                                && frame.Contains("Write("));
+                        if (index >= (quick ? 5 : 25)) Record("warm-completion", completed);
+                    }
+                    Console.WriteLine($"Measured {scenario}: {metrics["input-painted"].Count} interaction samples.");
                 }
-                var completionSource = scenario.StartsWith("draft-", StringComparison.Ordinal) || scenario == "combined"
-                    ? string.Join('\n', draft.Split('\n')[..^2]) + "\ncall Console::Wr"
-                    : scenario.StartsWith("generic-", StringComparison.Ordinal)
-                        ? ".locals (" + draft["ldtoken ".Length..] + " value)\ncall Console::Wr" : "call Console::Wr";
-                await terminal.DraftAsync(completionSource);
-                var ready = await terminal.CurrentAsync(frame => frame.Contains("members") && !frame.Contains("updating members")
-                    && frame.Contains("Write("));
-                var caret = ready.Caret ?? throw new InvalidOperationException("The completed page has no editing caret.");
-                for (var index = 0; index < (quick ? 25 : 1_025); index++)
-                {
-                    var append = index % 2 == 0;
-                    var column = caret.X + (append ? 1 : 0);
-                    var completed = await terminal.InputAsync(append ? "i" : "\x7f",
-                        frame => frame.Caret?.X == column && frame.Contains("members") && !frame.Contains("updating members")
-                            && frame.Contains("Write("));
-                    if (index >= (quick ? 5 : 25)) Record("warm-completion", completed);
-                }
-                Console.WriteLine($"Measured {scenario}: {metrics["input-painted"].Count} interaction samples.");
             }
+            catch (Exception exception)
+            {
+                failure = exception;
+                failureStage = stage;
+            }
+            var artifactToken = failure is null ? token : CancellationToken.None;
             var processes = new List<ProcessMeasurement>();
             foreach (var path in Directory.EnumerateFiles(artifacts, "*.json"))
             {
-                var measured = JsonSerializer.Deserialize(await File.ReadAllTextAsync(path, token),
-                    MeasurementJsonContext.Default.ProcessMeasurement);
-                if (measured is not null) processes.Add(measured);
+                try
+                {
+                    var measured = JsonSerializer.Deserialize(await File.ReadAllTextAsync(path, artifactToken),
+                        MeasurementJsonContext.Default.ProcessMeasurement);
+                    if (measured is not null) processes.Add(measured);
+                }
+                catch (Exception exception) when (exception is IOException or JsonException or OperationCanceledException)
+                {
+                    failure ??= exception;
+                    failureStage ??= "process artifacts";
+                    artifactToken = CancellationToken.None;
+                }
             }
             var startups = new List<StartupSample>();
             for (var index = 0; index < launches.Count; index++)
             {
                 var launch = launches[index];
-                var next = index + 1 == launches.Count ? long.MaxValue : launches[index + 1].Started;
+                var next = index + 1 == launches.Count ? long.MaxValue : launches[index + 1].Launched;
                 var process = processes.SingleOrDefault(item => item.Role == "frontend"
-                    && item.Stages["entry"] >= launch.Started && item.Stages["entry"] < next);
-                if (process is null) throw new InvalidOperationException("A frontend did not retain its measurement artifact.");
+                    && item.Stages["entry"] >= launch.Launched && item.Stages["entry"] < next);
+                if (process is null)
+                {
+                    failure ??= new InvalidOperationException("A frontend did not retain its measurement artifact.");
+                    failureStage ??= "process artifacts";
+                    startups.Add(launch);
+                    continue;
+                }
                 string[] roles = OperatingSystem.IsWindows() ? ["host"] : ["host", "supervisor"];
                 foreach (var role in roles)
-                    if (!processes.Any(item => item.Role == role && item.Stages["entry"] >= launch.Started
+                    if (!processes.Any(item => item.Role == role && item.Stages["entry"] >= launch.Launched
                         && item.Stages["entry"] < next))
-                        throw new InvalidOperationException($"A {role} did not retain its measurement artifact.");
+                    {
+                        failure ??= new InvalidOperationException($"A {role} did not retain its measurement artifact.");
+                        failureStage ??= "process artifacts";
+                    }
                 var entry = process.Stages["entry"];
-                startups.Add(new StartupSample(launch.Started, launch.Prompt, launch.FirstEdit, launch.Accepted,
-                    process.Stages["host-ready"]));
-                Record("launch-to-entry", Stopwatch.GetElapsedTime(launch.Started, entry).TotalMilliseconds);
-                Record("entry-to-prompt", Stopwatch.GetElapsedTime(entry, launch.Prompt).TotalMilliseconds);
-                Record("entry-to-editable", Stopwatch.GetElapsedTime(entry, launch.Prompt).TotalMilliseconds);
-                Record("entry-to-first-edit", Stopwatch.GetElapsedTime(entry, launch.FirstEdit).TotalMilliseconds);
-                if (process.Stages.TryGetValue("frontend-prepared", out var prepared))
+                var ready = process.Stages.TryGetValue("host-ready", out var acknowledged) ? acknowledged : (long?)null;
+                if (ready is null)
                 {
-                    Record("entry-to-prepared", Stopwatch.GetElapsedTime(entry, prepared).TotalMilliseconds);
-                    Record("prepared-to-prompt", Stopwatch.GetElapsedTime(prepared, launch.Prompt).TotalMilliseconds);
+                    failure ??= new InvalidOperationException("A frontend did not record host readiness.");
+                    failureStage ??= "process artifacts";
                 }
+                startups.Add(launch with { HostReady = ready });
+                Record("launch-to-entry", Stopwatch.GetElapsedTime(launch.Launched, entry).TotalMilliseconds);
+                if (launch.Prompt is { } prompt)
+                {
+                    Record("entry-to-prompt", Stopwatch.GetElapsedTime(entry, prompt).TotalMilliseconds);
+                    Record("entry-to-editable", Stopwatch.GetElapsedTime(entry, prompt).TotalMilliseconds);
+                    if (process.Stages.TryGetValue("frontend-prepared", out var prepared))
+                    {
+                        Record("entry-to-prepared", Stopwatch.GetElapsedTime(entry, prepared).TotalMilliseconds);
+                        Record("prepared-to-prompt", Stopwatch.GetElapsedTime(prepared, prompt).TotalMilliseconds);
+                    }
+                }
+                if (launch.FirstEdit is { } edited)
+                    Record("entry-to-first-edit", Stopwatch.GetElapsedTime(entry, edited).TotalMilliseconds);
             }
             var record = new ResponsivenessRecord(1, commit, fixture, scenario, sdk, RuntimeInformation.FrameworkDescription,
                 RuntimeInformation.OSDescription, RuntimeInformation.RuntimeIdentifier, cpu, Environment.MachineName,
-                quick ? "Release NativeAOT; harness smoke, not a reference baseline" : "Release NativeAOT; reference",
+                failure is not null ? "Release NativeAOT; incomplete observation, not a reference baseline"
+                    : quick ? "Release NativeAOT; harness smoke, not a reference baseline" : "Release NativeAOT; reference",
                 frontend, frontendHash, Stopwatch.Frequency, [.. startups],
-                metrics.ToDictionary(pair => pair.Key, pair => LatencySamples.From(pair.Value)), [.. processes]);
+                metrics.ToDictionary(pair => pair.Key, pair => LatencySamples.From(pair.Value)), [.. processes])
+            {
+                Failure = failure is null ? null : failure.GetType().Name + ": " + failure.Message.Split('\n')[0],
+                FailureStage = failureStage,
+            };
             await File.WriteAllTextAsync(Path.Combine(output, scenario + ".json"),
-                JsonSerializer.Serialize(record, ResponsivenessJsonContext.Default.ResponsivenessRecord), token);
+                JsonSerializer.Serialize(record, ResponsivenessJsonContext.Default.ResponsivenessRecord),
+                failure is null ? token : CancellationToken.None);
+            if (failure is not null) ExceptionDispatchInfo.Capture(failure).Throw();
             if (!quick) failures.AddRange(CheckBudgets(record));
         }
         if (failures.Count > 0)

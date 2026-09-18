@@ -47,6 +47,11 @@ public sealed record SubmissionEvent(
     public SessionEditor? SessionEditor { get; init; }
 
     /// <summary>
+    /// The original saved draft to combine with the latest terminal input when startup finishes.
+    /// </summary>
+    public SessionEditor? StartupEditor { get; init; }
+
+    /// <summary>
     /// Whether an approved workspace action requested that the terminal close.
     /// </summary>
     public bool SessionQuit { get; init; }

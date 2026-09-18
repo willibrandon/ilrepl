@@ -1,4 +1,5 @@
 using IlRepl.Protocol;
+using System.Text.Json.Serialization;
 
 namespace IlRepl.Tests.Responsiveness;
 
@@ -25,4 +26,17 @@ namespace IlRepl.Tests.Responsiveness;
 internal sealed record ResponsivenessRecord(int Schema, string Commit, string Fixture, string Scenario, string Sdk,
     string Runtime, string OperatingSystem, string Rid, string Cpu, string Machine, string Configuration, string Frontend,
     string FrontendSha256, long TimestampFrequency, StartupSample[] Startups,
-    IReadOnlyDictionary<string, LatencySamples> Metrics, ProcessMeasurement[] Processes);
+    IReadOnlyDictionary<string, LatencySamples> Metrics, ProcessMeasurement[] Processes)
+{
+    /// <summary>
+    /// Identifies why an incomplete observation cannot be used as a reference baseline.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Failure { get; init; }
+
+    /// <summary>
+    /// Identifies the operation being measured when the incomplete observation stopped.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? FailureStage { get; init; }
+}

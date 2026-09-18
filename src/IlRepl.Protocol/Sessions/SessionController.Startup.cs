@@ -49,14 +49,19 @@ public sealed partial class SessionController
                 var previous = _engine;
                 await InstallEngineAsync(candidate).ConfigureAwait(false);
                 await previous.DisposeAsync().ConfigureAwait(false);
-                SetRuntimeState(SessionRuntimeState.Ready);
                 if (opened is not null)
                 {
-                    var editor = opened.Document.Editor with { Lines = [.. opened.Document.Editor.Lines, .. Editor.Lines] };
+                    var saved = opened.Document.Editor;
+                    var editor = saved.WithStartupInput(Editor);
                     Editor = editor;
-                    Workspace = opened with { Document = opened.Document with { Editor = editor } };
-                    RecoveryCompleted?.Invoke(Workspace);
+                    Workspace = opened with
+                    {
+                        Document = opened.Document with { Editor = editor },
+                        Dirty = opened.Dirty || !SameEditorText(saved, editor),
+                    };
+                    RecoveryCompleted?.Invoke(Workspace with { StartupEditor = saved });
                 }
+                SetRuntimeState(SessionRuntimeState.Ready);
             }
             finally
             {

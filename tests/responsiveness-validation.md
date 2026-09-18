@@ -41,6 +41,11 @@ completion runs once per fresh process. Warm interaction samples exclude the fir
 measurements. Startup distributions retain at least 30 launches. Every sample contributes to nearest-rank percentiles; outliers are
 retained. Full runs keep all scenario records and exit unsuccessfully when any measured acceptance budget is exceeded.
 
+The driver reports phase progress for the first launch of each workload. If an operation fails or times out, it retains an explicitly
+incomplete record with the failure stage, observed startup boundaries, collected latency samples, and available process artifacts.
+Unobserved boundaries are null. Incomplete observations never qualify as reference baselines; the original exception and terminal frame
+remain in the run log.
+
 The private `ILREPL_MEASUREMENTS_DIRECTORY` variable enables one measurement artifact per frontend, host, and supervisor process. These
 artifacts contain the actual runtime, monotonic startup stage timestamps, allocated bytes, retained managed bytes after a shutdown
 collection, and resident working set. Collection happens after latency samples. The driver records its SDK/runtime, OS/RID, CPU,

@@ -58,11 +58,14 @@ public static partial class IlReplApp
             OpenDocumentation = DocumentationLauncher.Open,
             CurrentHelpIdentity = () => (engine.Status.Revision, engine.AssemblyVersion),
         };
+        ConfigureInterruption(prompt, engine);
         if (engine is SessionController controller)
         {
             ConfigureSessions(prompt, controller);
             if (controller.Workspace is { } workspace)
             {
+                prompt.InitialSessionEditor = workspace.Document.Editor;
+                RestoreEditor(prompt, workspace.Document.Editor);
                 foreach (var line in workspace.Reply.Lines)
                 {
                     transcript.Add(line);
@@ -70,7 +73,6 @@ public static partial class IlReplApp
             }
         }
 
-        ConfigureInterruption(prompt, engine);
         size.OutputObserved += tokens => ObserveInterruptNotice(prompt, tokens);
         size.FirstFrameRendered += onFirstFrame;
         onPrompt?.Invoke(prompt);
@@ -352,8 +354,9 @@ public static partial class IlReplApp
 
     private static void StartSubmission(PromptState prompt, IReplEngine engine, string text)
     {
-        if (engine is SessionController { RuntimeState: not SessionRuntimeState.Ready } unavailable
-            && !unavailable.CanHandleWithoutRuntime(text))
+        if (engine is SessionController unavailable
+            && ((unavailable.RuntimeState != SessionRuntimeState.Ready && !unavailable.CanHandleWithoutRuntime(text))
+                || prompt.Events.Any(update => update.Kind == SubmissionEventKind.SessionDocument && update.RuntimeRecovery)))
         {
             prompt.SetText(text, text.Length);
             prompt.Post(SubmissionEvent.Reply([TranscriptLine.Of(LineKind.Info,
@@ -396,6 +399,11 @@ public static partial class IlReplApp
     {
         while (prompt.Events.TryDequeue(out var e))
         {
+            if (e.StartupEditor is not null && ReferenceEquals(e.SessionEditor, prompt.InitialSessionEditor))
+            {
+                prompt.InitialSessionEditor = null;
+                continue;
+            }
             if (e.RuntimeEpoch is { } epoch && engine is SessionController controller
                 && (epoch != engine.AssemblyVersion >> 32 || controller.RuntimeState == SessionRuntimeState.Restarting))
             {
@@ -458,6 +466,7 @@ public static partial class IlReplApp
                     prompt.Submission = null;
                     if (e.SessionEditor is { } editor)
                     {
+                        if (e.StartupEditor is { } saved) editor = saved.WithStartupInput(CaptureEditor(prompt));
                         if (e.RuntimeRecovery) prompt.Pending.Clear();
                         if (prompt.Pending.Count != 0)
                         {

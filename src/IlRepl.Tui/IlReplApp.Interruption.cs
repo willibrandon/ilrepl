@@ -55,7 +55,10 @@ public static partial class IlReplApp
             controller.RuntimeStateChanged += _ => prompt.Invalidate?.Invoke();
             controller.SupervisionChanged += _ => prompt.Invalidate?.Invoke();
             controller.RecoveryCompleted += result => prompt.Post(new SubmissionEvent(SubmissionEventKind.SessionDocument,
-                result.Reply.Lines) { SessionEditor = result.Document.Editor, RuntimeRecovery = true });
+                result.Reply.Lines)
+            {
+                SessionEditor = result.Document.Editor, StartupEditor = result.StartupEditor, RuntimeRecovery = true,
+            });
         }
     }
 

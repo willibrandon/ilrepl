@@ -1,0 +1,143 @@
+{
+  "ArchiveSchema": 1,
+  "Outcome": "incomplete",
+  "SourceCommit": "6413e1c379abbea7815b408f694ebfdb135bee17",
+  "FrontendSha256": "80db9f7772473ba87c3de587eb70a1568c1af0ffd36d2c66d0240207dc13bc20",
+  "PackageArchiveSha256": "06df3b8cc409a621875576aa33ac96dfe4c6089c8f249d1f92fb0e0a3611103d",
+  "Fixture": {
+    "Generator": "responsiveness-v1",
+    "AssemblySha256": "0d0752909320175431266f77698e47e06160c194c41f0da3bfd5c6121f0cddc2",
+    "SessionSha256": "d5b8ed0674e8f9812db6b33a8d07325b61398f9f5dadd62ddf3fd814fc4919e3"
+  },
+  "FailureStage": "initial document analysis",
+  "Limitation": "The driver stopped before writing latency distributions. Missing samples have not been reconstructed.",
+  "OriginalLogSha256": "1f42c617aa2fbbf70c418584ce3ce46420305a0e3c73767fd06c85895f38845e",
+  "OriginalLogSegments": [
+    "Responsiveness artifacts: /home/brandon/src/ilrepl/artifacts/responsiveness/linu",
+    "x-x64/20260918T070332325\nSystem.TimeoutException: The measured terminal did not ",
+    "paint the expected state.\nframe 134 caret (11, 33)\n 0|il[9993]> ldc.i4.1        ",
+    "                                                                                ",
+    "             │\n 1|il[9993]> ret                                                 ",
+    "                                                         │\n 2|  = 1 : int32     ",
+    "                                                                                ",
+    "                     │\n 3|  9994: cell, succeeded (historical)                  ",
+    "                                                                 │\n 4|il[9994]> ",
+    "ldc.i4.1                                                                        ",
+    "                             │\n 5|il[9994]> ret                                 ",
+    "                                                                         │\n 6|  ",
+    "= 1 : int32                                                                     ",
+    "                                     │\n 7|  9995: cell, succeeded (historical)  ",
+    "                                                                                ",
+    " │\n 8|il[9995]> ldc.i4.1                                                        ",
+    "                                             │\n 9|il[9995]> ret                 ",
+    "                                                                                ",
+    "         │\n10|  = 1 : int32                                                     ",
+    "                                                     │\n11|  9996: cell, succeede",
+    "d (historical)                                                                  ",
+    "                 │\n12|il[9996]> ldc.i4.1                                        ",
+    "                                                             │\n13|il[9996]> ret ",
+    "                                                                                ",
+    "                         │\n14|  = 1 : int32                                     ",
+    "                                                                     │\n15|  9997",
+    ": cell, succeeded (historical)                                                  ",
+    "                                 │\n16|il[9997]> ldc.i4.1                        ",
+    "                                                                             │\n1",
+    "7|il[9997]> ret                                                                 ",
+    "                                         │\n18|  = 1 : int32                     ",
+    "                                                                                ",
+    "     │\n19|  9998: cell, succeeded (historical)                                  ",
+    "                                                 │\n20|il[9998]> ldc.i4.1        ",
+    "                                                                                ",
+    "             │\n21|il[9998]> ret                                                 ",
+    "                                                         │\n22|  = 1 : int32     ",
+    "                                                                                ",
+    "                     │\n23|  9999: cell, succeeded (historical)                  ",
+    "                                                                 │\n24|il[9999]> ",
+    "ldc.i4.1                                                                        ",
+    "                             │\n25|il[9999]> ret                                 ",
+    "                                                                         │\n26|  ",
+    "= 1 : int32                                                                     ",
+    "                                     │\n27|  10000: cell, succeeded (historical) ",
+    "                                                                                ",
+    " │\n28|il[10000]> ldc.i4.1                                                       ",
+    "                                             │\n29|il[10000]> ret                ",
+    "                                                                                ",
+    "         │\n30|  = 1 : int32                                                     ",
+    "                                                     ▉\n31|  end of saved history",
+    "; no code executed                                                              ",
+    "                 ▉\n32|──────────────────────────────────────────────────────────",
+    "──────────────────────────────────────────────────────────────\n33|il[10001]> ldc",
+    ".i4.s 42                                                                        ",
+    "                          \n34|      ...> ret                                    ",
+    "                                                                      \n35|stack ",
+    "before [] │ no locals │ 0 instructions │ editing 2 lines         Ctrl+C clears │",
+    " Ctrl+Q quit │ Enter sends 2 lines\n ---> System.TimeoutException: The operation ",
+    "has timed out.\n   at IlRepl.Tests.Responsiveness.MeasuredTerminal.WaitAsync(Int3",
+    "2 first, Func`2 condition) in /home/brandon/src/ilrepl/tests/IlRepl.Tests/Respon",
+    "siveness/MeasuredTerminal.cs:line 138\n   --- End of inner exception stack trace ",
+    "---\n   at IlRepl.Tests.Responsiveness.MeasuredTerminal.WaitAsync(Int32 first, Fu",
+    "nc`2 condition) in /home/brandon/src/ilrepl/tests/IlRepl.Tests/Responsiveness/Me",
+    "asuredTerminal.cs:line 143\n   at IlRepl.Tests.Responsiveness.ResponsivenessProbe",
+    ".TryRunAsync(String[] args) in /home/brandon/src/ilrepl/tests/IlRepl.Tests/Respo",
+    "nsiveness/ResponsivenessProbe.cs:line 84\n   at IlRepl.Tests.Responsiveness.Respo",
+    "nsivenessProbe.TryRunAsync(String[] args) in /home/brandon/src/ilrepl/tests/IlRe",
+    "pl.Tests/Responsiveness/ResponsivenessProbe.cs:line 142\n   at IlRepl.Tests.Progr",
+    "am.Main(String[] args) in /home/brandon/src/ilrepl/tests/IlRepl.Tests/Program.cs",
+    ":line 25\n"
+  ],
+  "ProcessArtifacts": [
+    {
+      "FileName": "frontend-1266615.json",
+      "Sha256": "cf7064598f71a857378922bbbfffc9522dcb06da5a1a105822045d84063c1b89",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 1266615,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1148659104,
+        "RetainedBytes": 115923040,
+        "WorkingSetBytes": 268484608,
+        "Stages": {
+          "entry": 145656353217885,
+          "catalog-ready": 145656355376769,
+          "frontend-prepared": 145656355377360,
+          "prompt-rendered": 145656461529202,
+          "host-starting": 145656461584037,
+          "host-ready": 145656690185308,
+          "exit": 145777163794174
+        }
+      }
+    },
+    {
+      "FileName": "host-1266635.json",
+      "Sha256": "8deeba2c4115f1a5b2b57be33d1d4a9e3597d423313a7dac3cc5586290427c4f",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 1266635,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 647314104,
+        "RetainedBytes": 78749232,
+        "WorkingSetBytes": 315580416,
+        "Stages": {
+          "entry": 145656484898301,
+          "exit": 145777072797937
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-1266625.json",
+      "Sha256": "6b0c3bb266dc873d7c9dfff60ecd6e8d9aca430819af70e1876f21dac0a8f228",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 1266625,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1037312,
+        "RetainedBytes": 495128,
+        "WorkingSetBytes": 21602304,
+        "Stages": {
+          "entry": 145656467398792,
+          "exit": 145777159483329
+        }
+      }
+    }
+  ]
+}

@@ -19,6 +19,12 @@ public sealed record SessionReply
     public SessionDocument Document { get; init; } = new();
 
     /// <summary>
+    /// The original saved draft used to preserve editing through frontend startup notification delivery.
+    /// </summary>
+    [JsonIgnore]
+    public SessionEditor? StartupEditor { get; init; }
+
+    /// <summary>
     /// The associated session file path or download name.
     /// </summary>
     public string? Path { get; init; } = null;

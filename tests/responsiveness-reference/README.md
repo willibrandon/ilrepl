@@ -12,3 +12,8 @@ to keep generated data readable. `OriginalRecordSha256` identifies the original 
 budgets; they are evidence for the subsequent change, not replacement baselines. Reviewed baseline summaries and archive hashes live
 in `../responsiveness-baselines.json`. Generated assembly and session fixtures remain outside source control and can be regenerated
 using `../responsiveness-validation.md`.
+
+Incomplete attempts retain their failure details and available process observations separately from complete reference distributions.
+They never qualify as baselines. When an older driver stopped before writing a record, an incomplete archive preserves its original
+log and process artifacts without reconstructing missing latency samples.
+Concatenating `OriginalLogSegments` without separators reconstructs that log exactly; each retained process artifact has its own hash.
