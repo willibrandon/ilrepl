@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using IlRepl.Engine;
 using IlRepl.Protocol;
 
@@ -9,6 +10,10 @@ namespace IlRepl.Repl;
 /// </summary>
 public sealed partial class InProcessEngine
 {
+    private static readonly SessionJsonContext s_contentJson = new(new JsonSerializerOptions(SessionJsonContext.Default.Options)
+    {
+        WriteIndented = false,
+    });
     private string? _sessionPath;
     private string? _savedSessionHash;
     private string[] _sessionDiagnostics = [];
@@ -239,10 +244,16 @@ public sealed partial class InProcessEngine
         ? document.Entries.Length != 0 || document.Editor.Lines.Any(line => line.Length != 0)
         : _savedSessionHash != DocumentHash(document);
 
-    private static string DocumentHash(SessionDocument document) => SessionCodec.Hash(SessionCodec.Write(document with
+    private static string DocumentHash(SessionDocument document)
     {
-        Editor = document.Editor with { Caret = 0, Anchor = 0, Revision = 0,
-            Lines = document.Editor.Lines.Length == 1 && document.Editor.Lines[0].Length == 0 ? [] : document.Editor.Lines },
-        Assets = [],
-    }));
+        var content = document with
+        {
+            Editor = document.Editor with { Caret = 0, Anchor = 0, Revision = 0,
+                Lines = document.Editor.Lines.Length == 1 && document.Editor.Lines[0].Length == 0 ? [] : document.Editor.Lines },
+            Assets = [],
+        };
+        SessionCodec.Validate(content);
+        // This identity stays inside the runtime. Session files still use the public readable codec.
+        return SessionCodec.Hash(JsonSerializer.SerializeToUtf8Bytes(content, s_contentJson.SessionDocument));
+    }
 }
