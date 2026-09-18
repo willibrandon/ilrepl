@@ -17,6 +17,10 @@ The combined-workload observation at `20260918T164312150` measures `0523005`, in
 help refresh fix. It meets all existing budgets and retains the matching package, host, and fixture identities. It is an additional
 observation; the two complete baseline runs remain unchanged.
 
+The combined-workload observation at `20260918T174319580` measures `cab7969`, including source-tail checkpoint encoding and the
+Windows fixture correction. It meets all existing budgets and retains the matching package, host, and fixture identities. The initial
+baseline and preceding observations remain available for comparison.
+
 `ArchiveSchema` identifies this storage format. `Record` preserves every original startup timestamp, latency sample, percentile,
 process allocation, and memory observation. `Fixture` separates the original colon-delimited generator and content hashes into fields
 to keep generated data readable. `OriginalRecordSha256` identifies the original measurement artifact before that structural change.
