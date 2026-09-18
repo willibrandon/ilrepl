@@ -98,6 +98,7 @@ public static partial class IlReplApp
                     // The prompt paints its own caret cell, so no hardware caret follows the mouse,
                     // and Ctrl+C belongs to the prompt's copy, interrupt, and clear bindings.
                     options.EnableDefaultCtrlCExit = false;
+                    options.EnableRenderCaching = true;
                     options.Theme = Hex1bThemes.Default.Clone()
                         .Set(MouseTheme.ShowCursor, false)
                         .Set(EditorTheme.CursorBackgroundColor, SpanPalette.Color(SpanStyle.Prompt));

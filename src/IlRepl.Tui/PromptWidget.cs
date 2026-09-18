@@ -163,7 +163,7 @@ public sealed partial record PromptWidget(
             var children = new List<Hex1bWidget>();
             var diagnosticStyle = PromptDiagnostics.Display(state)?.Style ?? SpanStyle.Dim;
             children.AddRange(PromptDiagnostics.Lines(state, Width).Take(Fit.DiagnosticRows)
-                .Select(line => v.ThemePanel(SpanPalette.Mutator(diagnosticStyle), v.Text(line))));
+                .Select(line => StyledLine(line, diagnosticStyle)));
             if (paletteVisible)
             {
                 children.Add(BuildPalette(v, candidates, state, Fit, Width));
@@ -448,6 +448,9 @@ public sealed partial record PromptWidget(
 
         state.LastLength = editor.Document.Length;
     }
+
+    private static TranscriptLineWidget StyledLine(string text, SpanStyle style) =>
+        new TranscriptLineWidget(TranscriptLine.Of(LineKind.Info, text, style), 0).CacheRendering();
 
     // One recorded edit that swaps a range for new text and puts the caret after it, so undo
     // brings back the text and the caret as they were, with no selection left behind.

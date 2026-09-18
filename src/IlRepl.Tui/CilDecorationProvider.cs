@@ -20,6 +20,8 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
     private DocumentPosition? _caret;
     private IReadOnlyList<TextDecorationSpan> _cached = [];
     private IReadOnlyList<AnalysisDiagnostic> _diagnostics = [];
+    private IEditorSession? _session;
+    private bool _commentOpenAtStart;
 
     /// <summary>
     /// Source diagnostics matching the current document revision.
@@ -29,10 +31,11 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
         get => _diagnostics;
         set
         {
-            if (!ReferenceEquals(_diagnostics, value))
+            if (!ReferenceEquals(_diagnostics, value) && !_diagnostics.SequenceEqual(value))
             {
                 _diagnostics = value;
                 _version = -1;
+                _session?.Invalidate();
             }
         }
     }
@@ -50,7 +53,26 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
     /// <summary>
     /// Whether the engine has a <c>/*</c> open when the buffer starts.
     /// </summary>
-    public bool CommentOpenAtStart { get; set; }
+    public bool CommentOpenAtStart
+    {
+        get => _commentOpenAtStart;
+        set
+        {
+            if (_commentOpenAtStart == value) return;
+            _commentOpenAtStart = value;
+            _session?.Invalidate();
+        }
+    }
+
+    /// <summary>
+    /// Retains the editor's invalidation hook for decorations changed without a document edit.
+    /// </summary>
+    public void Activate(IEditorSession session) => _session = session;
+
+    /// <summary>
+    /// Releases the editor's invalidation hook when this provider is detached.
+    /// </summary>
+    public void Deactivate() => _session = null;
 
     /// <summary>
     /// Where the caret is. A first word the caret is still at the end of is not marked wrong

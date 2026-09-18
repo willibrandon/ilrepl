@@ -163,6 +163,54 @@ public sealed class AnalysisRequesterTests
     }
 
     /// <summary>
+    /// Caret motion after typing and deleting reuses the outstanding edited-document result and projects its latest position.
+    /// </summary>
+    [TestMethod]
+    public async Task CaretMoves_ReuseEditedDocumentWhileAnalysisIsPending()
+    {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        await using var engine = new CompletionEngine { HoldAnalysis = true };
+        await engine.PrimeAsync(TestContext.CancellationToken);
+        var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
+        var requester = new AnalysisRequester(engine);
+        try
+        {
+            const string typedSource = "ldc.i4.1\nretx";
+            state.SetText(typedSource, typedSource.Length);
+            requester.Refresh(state);
+            await WaitAsync(() => engine.Analyses.Count == 1);
+            var typed = engine.Analyses.Single();
+            await typed.Prepared;
+            state.Editor.DeleteBackward();
+            requester.Refresh(state);
+            Assert.IsTrue(typed.Cancellation.IsCancellationRequested);
+            typed.Release.SetResult();
+            await WaitAsync(() => { requester.Refresh(state); return engine.Analyses.Count == 2; });
+            var restored = engine.Analyses.Last();
+            await restored.Prepared;
+            for (var index = 0; index < 20; index++)
+            {
+                state.Editor.SetCursorPosition(new DocumentOffset(index % 2 == 0 ? 0 : 9));
+                requester.Refresh(state);
+                Assert.IsFalse(restored.Cancellation.IsCancellationRequested);
+                Assert.HasCount(2, engine.Analyses);
+            }
+            restored.Release.SetResult();
+            await WaitAsync(() => { requester.Refresh(state); return state.Analysis is not null; });
+            Assert.AreEqual("ldc.i4.1\nret", state.Text);
+            Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
+            Assert.IsEmpty(state.Analysis.Diagnostics);
+            Assert.HasCount(2, engine.Analyses);
+            Assert.IsFalse(requester.IsPending);
+        }
+        finally
+        {
+            foreach (var call in engine.Analyses) call.Release.TrySetResult();
+            await requester.SettleAsync(TimeSpan.FromSeconds(2));
+        }
+    }
+
+    /// <summary>
     /// Multiple edits replace one pending document instead of creating cancelled RPCs for intermediate versions.
     /// </summary>
     [TestMethod]

@@ -1,5 +1,8 @@
+using System.Collections.Concurrent;
 using Hex1b;
+using Hex1b.Automation;
 using Hex1b.Documents;
+using Hex1b.Widgets;
 using IlRepl.Protocol;
 using IlRepl.Repl;
 using IlRepl.Tui;
@@ -12,6 +15,70 @@ namespace IlRepl.Tests.Tui;
 [TestClass]
 public sealed class CilDecorationProviderTests
 {
+    /// <summary>
+    /// Supplies cancellation to real analysis and terminal rendering.
+    /// </summary>
+    public TestContext TestContext { get; set; } = null!;
+
+    /// <summary>
+    /// Real diagnostics and inherited comment changes repaint a cached editor without changing its document or caret.
+    /// </summary>
+    [TestMethod]
+    public async Task CachedEditor_RepaintsAnalysisAndCommentChangesWithoutInput()
+    {
+        await using var engine = new InProcessEngine();
+        var document = new Hex1bDocument("pop\nret");
+        var editor = new EditorState(document);
+        var provider = new CilDecorationProvider(new CilTokenizer(engine.Vocabulary));
+        var analysis = await engine.AnalyzeAsync(new AnalysisRequest(["pop", "ret"], 0, 0, document.Version),
+            TestContext.CancellationToken);
+        Assert.Contains(diagnostic => diagnostic.Code == "FLOW006", analysis.Diagnostics);
+        var changes = new ConcurrentQueue<int>();
+        var phase = 0;
+        Hex1bApp app = null!;
+        await using var terminal = Hex1bTerminal.CreateBuilder().WithHeadless().WithDimensions(40, 10)
+            .WithHex1bApp(options => options.EnableRenderCaching = true, instance =>
+            {
+                app = instance;
+                return ctx =>
+                {
+                    while (changes.TryDequeue(out var requested))
+                    {
+                        phase = requested;
+                        provider.Diagnostics = phase == 1 ? analysis.Diagnostics : [];
+                        provider.CommentOpenAtStart = phase == 3;
+                    }
+                    return ctx.VStack(v => [v.Editor(editor).Decorations(provider).FixedHeight(2), v.Text("phase " + phase)]);
+                };
+            }).Build();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
+        var run = terminal.RunAsync(cancellation.Token);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));
+        try
+        {
+            await auto.WaitUntilTextAsync("phase 0");
+            for (var requested = 1; requested <= 4; requested++)
+            {
+                changes.Enqueue(requested);
+                app.Invalidate();
+                await auto.WaitUntilTextAsync("phase " + requested);
+                using var snapshot = auto.CreateSnapshot();
+                var hit = Assert.ContainsSingle(snapshot.FindText("pop"));
+                var cell = snapshot.GetCell(hit.Column + 1, hit.Line);
+                Assert.AreEqual(requested == 1, (cell.Attributes & CellAttributes.Underline) != 0);
+                Assert.AreEqual(SpanPalette.Color(requested == 3 ? SpanStyle.Comment : SpanStyle.Opcode), cell.Foreground);
+                Assert.AreEqual("pop\nret", document.GetText());
+                Assert.AreEqual(0, editor.Cursor.Position.Value);
+            }
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+            try { await run; }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        }
+    }
+
     /// <summary>
     /// Separate documents with equal versions never reuse one another's lexical state or rendered spans.
     /// </summary>

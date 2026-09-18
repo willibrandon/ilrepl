@@ -85,8 +85,7 @@ public sealed partial record PromptWidget
             var line = (selected ? " ❯ " : "   ") + PaletteText.Column(item.Name, nameWidth)
                 + PaletteText.Column(item.Detail, detailWidth) + item.Description;
             var style = updating ? SpanStyle.Dim : selected ? SpanStyle.TopType : ItemStyle(item);
-            lines.Add(context.Interactable(ic => ic.ThemePanel(SpanPalette.Mutator(style),
-                    ic.Text(PaletteText.Clip(line, innerWidth))))
+            lines.Add(context.Interactable(_ => StyledLine(PaletteText.Clip(line, innerWidth), style))
                 .OnHoverChanged(args =>
                 {
                     if (args.IsHovered && Current())
@@ -113,10 +112,10 @@ public sealed partial record PromptWidget
             var shown = fit.DetailRows - 1;
             state.DetailScroll = Math.Clamp(state.DetailScroll, 0, Math.Max(0, wrapped.Count - shown));
             var title = wrapped.Count > shown ? $"detail {state.DetailScroll + 1}/{wrapped.Count - shown + 1}  PgUp/PgDn" : "detail";
-            lines.Add(context.ThemePanel(SpanPalette.Mutator(SpanStyle.Dim), context.Text(PaletteText.Clip(title, innerWidth))));
+            lines.Add(StyledLine(PaletteText.Clip(title, innerWidth), SpanStyle.Dim));
             foreach (var line in wrapped.Skip(state.DetailScroll).Take(shown))
             {
-                lines.Add(updating ? context.ThemePanel(SpanPalette.Mutator(SpanStyle.Dim), context.Text(line)) : context.Text(line));
+                lines.Add(StyledLine(line, updating ? SpanStyle.Dim : SpanStyle.Default));
             }
         }
 

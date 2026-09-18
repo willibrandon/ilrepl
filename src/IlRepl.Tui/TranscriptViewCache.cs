@@ -1,4 +1,3 @@
-using Hex1b;
 using Hex1b.Widgets;
 using IlRepl.Protocol;
 
@@ -47,7 +46,7 @@ internal sealed class TranscriptViewCache
             retained.Add(line);
             if (!_lines.TryGetValue(line, out var widget))
             {
-                widget = new TranscriptLineWidget(line, width).Cached(static _ => true);
+                widget = new TranscriptLineWidget(line, width).CacheRendering();
             }
 
             var rows = feedback.FlashTop >= 0 ? widget.Rows.Count : 0;

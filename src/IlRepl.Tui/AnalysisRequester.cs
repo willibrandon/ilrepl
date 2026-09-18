@@ -100,7 +100,6 @@ public sealed class AnalysisRequester(IReplEngine engine)
             && (published.Reply.Positions.Count > 0 || published.Key.Line == key.Line))
         {
             state.Analysis = published.Reply.At(key.Line);
-            state.Highlighter.Diagnostics = published.Reply.Diagnostics;
             state.PendingDiagnostic = null;
             _desired = null;
         }
