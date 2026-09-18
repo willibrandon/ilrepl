@@ -54,6 +54,11 @@ their machine identities only after reviewing the JSON artifacts. Explain hardwa
 the baseline change; never replace a baseline automatically or relax a target to hide a regression. CI retains
 `artifacts/responsiveness/` alongside its validation artifacts when measurement records exist.
 
+Reviewed raw samples are also retained under `tests/responsiveness-reference/<rid>/<UTC-run>/`, including measured failures. The archive
+format keeps the original record hash and every sample, timestamp, and process observation. It splits the generator and fixture hashes
+into separate fields without altering measured values. The baseline manifest records archive hashes, sample counts, machine and runtime
+identity, and exact source/package/fixture identity, so its evidence remains available independently of ignored local artifacts.
+
 The generated bootstrap catalog is checked separately:
 
 ```sh

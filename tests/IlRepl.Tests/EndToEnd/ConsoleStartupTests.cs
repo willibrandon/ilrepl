@@ -1,0 +1,149 @@
+using System.Text;
+using Hex1b;
+using Hex1b.Automation;
+using Hex1b.Input;
+using IlRepl.Processes;
+using IlRepl.Protocol;
+
+namespace IlRepl.Tests.EndToEnd;
+
+/// <summary>
+/// Verifies real console input and terminal-mode restoration around bounded startup capability discovery.
+/// </summary>
+[TestClass]
+[TestCategory("Interaction")]
+public sealed class ConsoleStartupTests
+{
+    /// <summary>
+    /// Supplies cancellation to child processes and terminal interaction.
+    /// </summary>
+    public TestContext TestContext { get; set; } = null!;
+
+    /// <summary>
+    /// Unicode keystrokes and bracketed multiline pastes arriving during discovery remain exact inert drafts and later execute.
+    /// </summary>
+    /// <param name="paste">Whether the early input is a bracketed multiline paste.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task Probe_PreservesEarlyUnicodeInput(bool paste)
+    {
+        var token = TestContext.CancellationToken;
+        using var files = new SessionWorkspaceFixture();
+        var source = "ldc.i4.s 42 // early λ日本" + (paste ? "\nret" : "");
+        var input = Encoding.UTF8.GetBytes(paste ? "\x1b[200~" + source + "\x1b[201~" : source);
+        var filter = new StartupInputFilter(input);
+        await using var terminal = Create(files, [RepoPaths.FrontEndAssembly, "--no-history"])
+            .AddPresentationFilter(filter).Build();
+        filter.Terminal = terminal;
+        var run = terminal.RunAsync(token);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(20));
+        await filter.Written.Task.WaitAsync(TimeSpan.FromSeconds(20), token);
+        await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("early λ日本")
+            && (paste ? snapshot.ContainsText("stack [int32]") || snapshot.ContainsText("stack before [int32]")
+                : snapshot.ContainsText("stack before []")));
+        await auto.Ctrl().KeyAsync(Hex1bKey.S, ct: token);
+        await auto.WaitUntilTextAsync("Save session");
+        await auto.Ctrl().KeyAsync(Hex1bKey.A, ct: token);
+        await auto.TypeAsync(files.SessionPath, ct: token);
+        await auto.EnterAsync(ct: token);
+        await auto.WaitUntilTextAsync("saved session ");
+        var saved = SessionCodec.Read(await File.ReadAllBytesAsync(files.SessionPath, token));
+        Assert.AreEqual(source, string.Join('\n', saved.Editor.Lines));
+        Assert.IsEmpty(saved.Entries, "Early input must remain in the editor until explicitly submitted.");
+        await auto.EnterAsync(ct: token);
+        if (!paste)
+        {
+            await auto.WaitUntilTextAsync("stack [int32]");
+            await auto.TypeAsync("ret", ct: token);
+            await auto.EnterAsync(ct: token);
+        }
+        await auto.WaitUntilTextAsync("= 42 : int32");
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
+        await auto.WaitUntilTextAsync("Save changes to ");
+        await auto.DownAsync(ct: token);
+        await auto.EnterAsync(ct: token);
+        Assert.AreEqual(0, await run.WaitAsync(token));
+    }
+
+    /// <summary>
+    /// Complete and independently acknowledged fragments of late graphics and background responses never edit the draft.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task Probe_LateProtocolRepliesDoNotBecomeInput()
+    {
+        var token = TestContext.CancellationToken;
+        using var files = new SessionWorkspaceFixture();
+        await using var terminal = Create(files,
+            [typeof(ConsoleStartupProbe).Assembly.Location, "--console-startup-probe", "editor", files.DirectoryPath]).Build();
+        var run = terminal.RunAsync(token);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(20));
+        await auto.WaitUntilTextAsync("il[1]>");
+        const string draft = "// retained λ日本";
+        await auto.TypeAsync(draft, ct: token);
+        await auto.WaitUntilTextAsync(draft);
+        await SendObservedAsync("\x1b_Gi=991122;OK\x1b\\\x1b]11;rgb:1111/2222/3333\x1b\\");
+        await SendObservedAsync("\x1b_Gi=991133;");
+        await SendObservedAsync("OK\x1b\\");
+        await SendObservedAsync("\x1b]11;rgb:abcd/");
+        await SendObservedAsync("1234/5678\x1b\\");
+        await auto.TypeAsync(" unchanged", ct: token);
+        await auto.WaitUntilTextAsync(draft + " unchanged");
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
+        await auto.WaitUntilTextAsync("console-mode-restored");
+        Assert.AreEqual(draft + " unchanged", await File.ReadAllTextAsync(Path.Combine(files.DirectoryPath, "draft.txt"), token));
+        await auto.TypeAsync("restored λ", ct: token);
+        await auto.EnterAsync(ct: token);
+        await auto.WaitUntilTextAsync("cooked-line:restored λ");
+        Assert.AreEqual(0, await run.WaitAsync(token));
+
+        async Task SendObservedAsync(string text)
+        {
+            var previous = Directory.EnumerateFiles(files.DirectoryPath, "*.read").ToHashSet(StringComparer.Ordinal);
+            var bytes = Encoding.UTF8.GetBytes(text);
+            await terminal.SendInputAsync(bytes, token);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+            while (!Directory.EnumerateFiles(files.DirectoryPath, "*.read")
+                .Where(path => !previous.Contains(path)).Any(path => File.ReadAllBytes(path).AsSpan().IndexOf(bytes) >= 0))
+            {
+                await Task.Delay(1, timeout.Token);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Successful entry, repeated entry, cancellation, and disposal preserve the original native console mode and cooked input.
+    /// </summary>
+    /// <param name="mode">Whether caller cancellation occurs before or during actual native raw-mode entry.</param>
+    [TestMethod]
+    [DataRow("normal")]
+    [DataRow("cancel-before")]
+    [DataRow("cancel-during")]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task Probe_RestoresConsoleMode(string mode)
+    {
+        var token = TestContext.CancellationToken;
+        using var files = new SessionWorkspaceFixture();
+        await using var terminal = Create(files,
+            [typeof(ConsoleStartupProbe).Assembly.Location, "--console-startup-probe", mode, files.DirectoryPath]).Build();
+        var run = terminal.RunAsync(token);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(20));
+        await auto.WaitUntilTextAsync("console-mode-restored");
+        await auto.TypeAsync("restored λ", ct: token);
+        await auto.EnterAsync(ct: token);
+        await auto.WaitUntilTextAsync("cooked-line:restored λ");
+        Assert.AreEqual(0, await run.WaitAsync(token));
+    }
+
+    private static Hex1bTerminalBuilder Create(SessionWorkspaceFixture files, string[] arguments) =>
+        Hex1bTerminal.CreateBuilder().WithPtyProcess(options =>
+        {
+            options.FileName = HostLocator.FindDotnet();
+            options.Arguments = arguments;
+            options.WorkingDirectory = files.DirectoryPath;
+            options.Environment = new Dictionary<string, string> { ["TERM"] = "xterm-256color", ["NO_COLOR"] = "" };
+        }).WithHeadless().WithDimensions(100, 30);
+}

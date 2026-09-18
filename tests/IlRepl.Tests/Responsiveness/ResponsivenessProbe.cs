@@ -81,8 +81,7 @@ internal static class ResponsivenessProbe
                 Record("prompt-editable", Stopwatch.GetElapsedTime(terminal.Started, prompt.Timestamp).TotalMilliseconds);
                 Record("first-edit-painted", Stopwatch.GetElapsedTime(terminal.Started, firstEdit).TotalMilliseconds);
                 await terminal.DraftAsync("ldc.i4.s 42\nret");
-                await terminal.CurrentAsync(frame => frame.Contains("stack ") && !frame.Contains("starting execution host")
-                    && !frame.Contains("host unavailable"));
+                await terminal.CurrentAsync(frame => frame.Contains("stack [int32]") || frame.Contains("stack before [int32]"));
                 await terminal.InputAsync("\r", frame => frame.Contains("= 42 : int32"));
                 launches.Add((terminal.Started, prompt.Timestamp, firstEdit, terminal.LastPainted));
                 Record("first-accepted-submission", Stopwatch.GetElapsedTime(terminal.Started, terminal.LastPainted).TotalMilliseconds);

@@ -126,6 +126,7 @@ public static partial class IlReplApp
         await using var terminal = Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, usePlatformClipboard: true,
             history: history, onPrompt: p => prompt = p, onFirstFrame: onFirstFrame)
             .WithMouse()
+            .WithPresentation(new ConsolePresentation())
             .Build();
         return await RunAsync(terminal, prompt, cancellationToken).ConfigureAwait(false);
     }

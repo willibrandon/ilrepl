@@ -20,6 +20,7 @@ internal static class Program
     {
         try
         {
+            if (args is ["--console-startup-probe", var mode, var directory]) return await ConsoleStartupProbe.RunAsync(mode, directory);
             if (args is ["--windows-console", ..]) return await WindowsConsoleProbe.RunAsync(args);
             if (await ResponsivenessProbe.TryRunAsync(args) ||
                 await PackagedSmoke.TryRunAsync(args) ||
