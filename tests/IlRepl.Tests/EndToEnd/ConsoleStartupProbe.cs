@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Text;
 using Hex1b;
 using IlRepl.Protocol;
 using IlRepl.Repl;
@@ -28,6 +29,10 @@ internal static partial class ConsoleStartupProbe
                 onPrompt: value => prompt = value).WithPresentation(new ObservedConsolePresentation(directory)).WithMouse().Build();
             await IlReplApp.RunAsync(terminal, prompt, token);
             await File.WriteAllTextAsync(Path.Combine(directory, "draft.txt"), prompt!.Text, token);
+        }
+        else if (mode.StartsWith("read-", StringComparison.Ordinal))
+        {
+            await ReadLifecycleAsync(mode, original, token);
         }
         else
         {
@@ -91,6 +96,74 @@ internal static partial class ConsoleStartupProbe
         var line = await Console.In.ReadLineAsync(token);
         Console.WriteLine("cooked-line:" + line);
         return line == "restored λ" ? 0 : 1;
+    }
+
+    private static async Task ReadLifecycleAsync(string mode, byte[] original, CancellationToken token)
+    {
+        await using var presentation = new ConsolePresentation();
+        await presentation.EnterRawModeAsync(token);
+        await presentation.ExitRawModeAsync(token);
+        RequireRestored(original);
+        await presentation.EnterRawModeAsync(token);
+        Console.WriteLine("raw-reader-ready");
+        await ReadTextAsync(presentation, "raw λ", token);
+
+        using var caller = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var pending = presentation.ReadInputAsync(caller.Token).AsTask();
+        if (pending.IsCompleted) throw new InvalidOperationException("The real console read was not pending.");
+        if (mode == "read-cancel")
+        {
+            await caller.CancelAsync();
+            await pending.WaitAsync(token);
+            pending = presentation.ReadInputAsync(token).AsTask();
+        }
+        var queued = presentation.ReadInputAsync(token).AsTask();
+        if (queued.IsCompleted) throw new InvalidOperationException("The second console read was not pending.");
+
+        if (mode == "read-dispose")
+        {
+            await Task.WhenAll(presentation.DisposeAsync().AsTask(), presentation.DisposeAsync().AsTask()).WaitAsync(token);
+        }
+        else if (mode == "read-exit-dispose")
+        {
+            await Task.WhenAll(presentation.ExitRawModeAsync(token).AsTask(), presentation.DisposeAsync().AsTask(),
+                presentation.DisposeAsync().AsTask()).WaitAsync(token);
+        }
+        else
+        {
+            await Task.WhenAll(presentation.ExitRawModeAsync(token).AsTask(), presentation.ExitRawModeAsync(token).AsTask());
+        }
+        if (!pending.IsCompleted || !queued.IsCompleted)
+            throw new InvalidOperationException("Console restoration returned before its readers settled.");
+        if (!(await pending).IsEmpty || !(await queued).IsEmpty)
+            throw new InvalidOperationException("A stopped reader consumed unexpected input.");
+        RequireRestored(original);
+
+        if (mode == "read-repeat")
+        {
+            await presentation.EnterRawModeAsync(token);
+            Console.WriteLine("repeated-reader-ready");
+            await ReadTextAsync(presentation, "again 日本", token);
+            pending = presentation.ReadInputAsync(token).AsTask();
+            await presentation.ExitRawModeAsync(token);
+            if (!pending.IsCompleted) throw new InvalidOperationException("Repeated restoration left an active reader.");
+            await pending;
+            RequireRestored(original);
+        }
+    }
+
+    private static async Task ReadTextAsync(ConsolePresentation presentation, string expected, CancellationToken token)
+    {
+        var bytes = new List<byte>();
+        var length = Encoding.UTF8.GetByteCount(expected);
+        while (bytes.Count < length)
+        {
+            var next = await presentation.ReadInputAsync(token);
+            if (next.IsEmpty) throw new InvalidOperationException("The raw console reader stopped before receiving its input.");
+            bytes.AddRange(next.ToArray());
+        }
+        if (Encoding.UTF8.GetString(bytes.ToArray()) != expected)
+            throw new InvalidOperationException("The real console reader changed its input.");
     }
 
     private static void RequireRestored(byte[] original)

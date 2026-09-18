@@ -138,6 +138,39 @@ public sealed class ConsoleStartupTests
         Assert.AreEqual(0, await run.WaitAsync(token));
     }
 
+    /// <summary>
+    /// Raw reads settle before restoration and disposal, and repeated entry still accepts exact Unicode input.
+    /// </summary>
+    /// <param name="mode">The real read cancellation, repeated-entry, or concurrent cleanup scenario.</param>
+    [TestMethod]
+    [DataRow("read-exit")]
+    [DataRow("read-dispose")]
+    [DataRow("read-exit-dispose")]
+    [DataRow("read-cancel")]
+    [DataRow("read-repeat")]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task Probe_SettlesReaderBeforeRestoringCookedInput(string mode)
+    {
+        var token = TestContext.CancellationToken;
+        using var files = new SessionWorkspaceFixture();
+        await using var terminal = Create(files,
+            [typeof(ConsoleStartupProbe).Assembly.Location, "--console-startup-probe", mode, files.DirectoryPath]).Build();
+        var run = terminal.RunAsync(token);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(20));
+        await auto.WaitUntilTextAsync("raw-reader-ready");
+        await auto.TypeAsync("raw λ", ct: token);
+        if (mode == "read-repeat")
+        {
+            await auto.WaitUntilTextAsync("repeated-reader-ready");
+            await auto.TypeAsync("again 日本", ct: token);
+        }
+        await auto.WaitUntilTextAsync("console-mode-restored");
+        await auto.TypeAsync("restored λ", ct: token);
+        await auto.EnterAsync(ct: token);
+        await auto.WaitUntilTextAsync("cooked-line:restored λ");
+        Assert.AreEqual(0, await run.WaitAsync(token));
+    }
+
     private static Hex1bTerminalBuilder Create(SessionWorkspaceFixture files, string[] arguments) =>
         Hex1bTerminal.CreateBuilder().WithPtyProcess(options =>
         {
