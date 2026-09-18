@@ -8,6 +8,11 @@ The initial baseline contains two Linux x64 runs of `f1dcf38` on a Ryzen 9 9950X
 10.0.11. Both use the same Native AOT package and generated fixtures, including the session-signature and Cecil core-library import
 cache changes. Measurements of later commits retain their own source and package identities.
 
+The combined-workload observation at `20260918T144856480` measures `b12e3d0`, including the terminal reply framing and diagnostic
+navigation corrections. It meets all existing budgets and retains its exact package and host hashes. The preceding attempt ended
+before writing its final record; its available process artifacts and log remain in `20260918T144148154`. These observations do not
+replace the two complete baseline runs.
+
 `ArchiveSchema` identifies this storage format. `Record` preserves every original startup timestamp, latency sample, percentile,
 process allocation, and memory observation. `Fixture` separates the original colon-delimited generator and content hashes into fields
 to keep generated data readable. `OriginalRecordSha256` identifies the original measurement artifact before that structural change.
