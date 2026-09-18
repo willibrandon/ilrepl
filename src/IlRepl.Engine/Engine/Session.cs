@@ -762,8 +762,22 @@ public sealed partial class Session
         // identity, and nothing references it yet.
         var sameSignature = replacing is not null && !_rebuilding && SameSignature(replacing.Signature, open.Signature);
         var trampoline = sameSignature ? replacing!.Trampoline : MethodTrampoline.Create(open.Signature);
-        var trampolines = _methods.Where(m => !ReferenceEquals(m, replacing)).ToDictionary(m => m.Signature.Name, m => m.Trampoline, StringComparer.Ordinal);
-        trampolines[name] = trampoline;
+        Dictionary<string, MethodTrampoline>? trampolines = null;
+        var map = new EmitMap(signature =>
+        {
+            // Emission runs synchronously before the session records change. Bodies with no
+            // session-method references do not need a copy of every existing trampoline.
+            if (trampolines is null)
+            {
+                trampolines = _methods.Where(method => !ReferenceEquals(method, replacing))
+                    .ToDictionary(method => method.Signature.Name, method => method.Trampoline, StringComparer.Ordinal);
+                trampolines[name] = trampoline;
+            }
+
+            return trampolines.TryGetValue(signature.Name, out var target)
+                ? target.Method
+                : throw new ReplException($"no method '{signature.Name}' is bound in the session");
+        });
         CompiledMethodVersion? version = null;
         Delegate? implementation = null;
         try
@@ -773,7 +787,7 @@ public sealed partial class Session
                 trampoline.PrepareBinding();
             }
 
-            version = DefinitionCompiler.CompileMethod(open.Signature, open.State, trampoline, trampolines,
+            version = DefinitionCompiler.CompileMappedMethod(open.Signature, open.State, trampoline, map,
                 !DeferActivation && MethodPreparation.IsSupported);
             if (!DeferActivation)
             {

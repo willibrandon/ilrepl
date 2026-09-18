@@ -21,7 +21,12 @@ public static class DefinitionCompiler
     /// <param name="prepare">True to ask the JIT to compile the body.</param>
     /// <returns>The version, not yet bound.</returns>
     /// <exception cref="ReplException">The emitter, the loader, or the JIT rejected the body.</exception>
-    public static CompiledMethodVersion CompileMethod(MethodSignature signature, CellState state, MethodTrampoline trampoline, IReadOnlyDictionary<string, MethodTrampoline> trampolines, bool prepare) =>
+    public static CompiledMethodVersion CompileMethod(
+        MethodSignature signature,
+        CellState state,
+        MethodTrampoline trampoline,
+        IReadOnlyDictionary<string, MethodTrampoline> trampolines,
+        bool prepare) =>
         CompileMethod(signature, state, trampoline, trampolines, prepare, null);
 
     /// <summary>
@@ -35,12 +40,46 @@ public static class DefinitionCompiler
     /// <param name="externals">Prototypes of families in the group, referenced by their assembly names, or null.</param>
     /// <returns>The version, not yet bound.</returns>
     /// <exception cref="ReplException">The emitter, the loader, or the JIT rejected the body.</exception>
-    public static CompiledMethodVersion CompileMethod(MethodSignature signature, CellState state, MethodTrampoline trampoline, IReadOnlyDictionary<string, MethodTrampoline> trampolines, bool prepare, IReadOnlyDictionary<Type, CecilWriter.ExternalPrototype>? externals)
+    public static CompiledMethodVersion CompileMethod(
+        MethodSignature signature,
+        CellState state,
+        MethodTrampoline trampoline,
+        IReadOnlyDictionary<string, MethodTrampoline> trampolines,
+        bool prepare,
+        IReadOnlyDictionary<Type, CecilWriter.ExternalPrototype>? externals)
     {
         ArgumentNullException.ThrowIfNull(signature);
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(trampoline);
         ArgumentNullException.ThrowIfNull(trampolines);
+        var map = new EmitMap(candidate => trampolines.TryGetValue(candidate.Name, out var target)
+            ? target.Method
+            : throw new ReplException($"no method '{candidate.Name}' is bound in the session"));
+        return CompileMappedMethod(signature, state, trampoline, map, prepare, externals);
+    }
+
+    /// <summary>
+    /// Compiles a method version using a session-method lookup evaluated only for references in its body.
+    /// </summary>
+    /// <param name="signature">The method's signature.</param>
+    /// <param name="state">The validated body.</param>
+    /// <param name="trampoline">The trampoline the version will be bound into.</param>
+    /// <param name="map">The identities to use while emitting the body.</param>
+    /// <param name="prepare">True to ask the JIT to compile the body.</param>
+    /// <param name="externals">Prototypes of families emitted in the same group, or null.</param>
+    /// <returns>The version, not yet bound.</returns>
+    internal static CompiledMethodVersion CompileMappedMethod(
+        MethodSignature signature,
+        CellState state,
+        MethodTrampoline trampoline,
+        EmitMap map,
+        bool prepare,
+        IReadOnlyDictionary<Type, CecilWriter.ExternalPrototype>? externals = null)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(trampoline);
+        ArgumentNullException.ThrowIfNull(map);
         state.ValidateMethodEnd();
         var name = signature.Name;
         var writer = new CecilWriter(SessionAssemblyKind.Methods);
@@ -72,7 +111,6 @@ public static class DefinitionCompiler
         }
 
         cell.Methods.Add(method);
-        var map = new EmitMap(s => trampolines.TryGetValue(s.Name, out var t) ? t.Method : throw new ReplException($"no method '{s.Name}' is bound in the session"));
         try
         {
             CecilBodyEmitter.Emit(method, state, writer, map);
