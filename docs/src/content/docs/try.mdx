@@ -4,6 +4,8 @@ description: ilrepl running in your browser on the .NET WebAssembly runtime.
 tableOfContents: false
 ---
 
+import browserAssets from '../../../public/try/asset-manifest.json';
+
 This is ilrepl itself, compiled to WebAssembly. Cells compile with Reflection.Emit on the Mono interpreter. Nothing leaves your browser.
 
 <div id="session-files" class="not-content" role="group" aria-label="Session controls"></div>
@@ -35,4 +37,4 @@ mul
 ret
 ```
 
-<script is:inline src="/try/main.js"></script>
+<script is:inline src={'/try/' + browserAssets.directory + '/main.js'}></script>

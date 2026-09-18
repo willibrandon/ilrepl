@@ -4,6 +4,9 @@
 
 using System.CommandLine;
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 var configurationOption = new Option<string>("--configuration", "-c") { Description = "The build configuration.", DefaultValueFactory = _ => "Release" };
 var outputOption = new Option<string>("--output") { Description = "Where the browser assets go, relative to the repository.", DefaultValueFactory = _ => "docs/public/try" };
@@ -38,7 +41,8 @@ root.SetAction(async (parseResult, cancellationToken) =>
         Directory.Delete(output, recursive: true);
     }
 
-    var framework = Path.Combine(output, "_framework");
+    var bundle = Path.Combine(output, "bundle");
+    var framework = Path.Combine(bundle, "_framework");
     Directory.CreateDirectory(framework);
 
     // GitHub Pages serves files as they are, so the pre-compressed variants only add weight.
@@ -56,14 +60,35 @@ root.SetAction(async (parseResult, cancellationToken) =>
 
     foreach (var name in PageFiles.Names)
     {
-        File.Copy(Path.Combine(wwwroot, name), Path.Combine(output, name), overwrite: true);
+        File.Copy(Path.Combine(wwwroot, name), Path.Combine(bundle, name), overwrite: true);
     }
 
     // The Greeter sample sits beside the page; the worker fetches it into the runtime's file
     // system so .load has an assembly to read in the browser.
-    var samples = Path.Combine(output, "samples");
+    var samples = Path.Combine(bundle, "samples");
     Directory.CreateDirectory(samples);
-    File.Copy(Path.Combine(repo, "samples", "Greeter", "bin", configuration, "net10.0", "Greeter.dll"), Path.Combine(samples, "Greeter.dll"), overwrite: true);
+    var sample = Path.Combine(repo, "samples", "Greeter", "bin", configuration, "net10.0", "Greeter.dll");
+    File.Copy(sample, Path.Combine(samples, "Greeter.dll"), overwrite: true);
+
+    // Version the complete import graph, including dotnet.js and its embedded assembly manifest.
+    // A page refresh cannot reliably invalidate the HTTP cache used by module workers.
+    using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+    foreach (var file in Directory.EnumerateFiles(bundle, "*", SearchOption.AllDirectories)
+        .OrderBy(file => Path.GetRelativePath(bundle, file).Replace('\\', '/'), StringComparer.Ordinal))
+    {
+        hash.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(bundle, file).Replace('\\', '/') + "\0"));
+        hash.AppendData(SHA256.HashData(await File.ReadAllBytesAsync(file, cancellationToken)));
+    }
+
+    var directory = "assets/" + Convert.ToHexStringLower(hash.GetHashAndReset());
+    Directory.CreateDirectory(Path.Combine(output, "assets"));
+    Directory.Move(bundle, Path.Combine(output, directory));
+    await using var manifest = File.Create(Path.Combine(output, "asset-manifest.json"));
+    await using var json = new Utf8JsonWriter(manifest);
+    json.WriteStartObject();
+    json.WriteString("directory", directory);
+    json.WriteEndObject();
+    await json.FlushAsync(cancellationToken);
 
     Console.WriteLine($"copied {copied} framework files to {output}");
     return 0;

@@ -5,6 +5,8 @@ import { expect, test } from '@playwright/test';
 
 const effect = 'SESSION_SMOKE_EXECUTED';
 const openNotice = 'Session opened. Nothing has run yet.';
+const browserAssets = JSON.parse(await readFile(new URL('../public/try/asset-manifest.json', import.meta.url), 'utf8'));
+const sampleUrl = new URL(`../public/try/${browserAssets.directory}/samples/Greeter.dll`, import.meta.url);
 
 function document(lines, draft = []) {
   return {
@@ -32,7 +34,7 @@ function experiment() {
 }
 
 async function embeddedExperiment() {
-  const image = await readFile(new URL('../public/try/samples/Greeter.dll', import.meta.url));
+  const image = await readFile(sampleUrl);
   const hash = createHash('sha256').update(image).digest('hex');
   const identity = randomUUID();
   const source = document([
@@ -338,13 +340,13 @@ for (const shortcut of [false, true]) {
   test(`${shortcut ? 'Ctrl+Q' : 'typed quit'} retires the old worker and starts exactly one empty session`, async ({ page, context }) => {
     await typeLine(page, 'ldc.i4.s 19');
     await expect(page.locator('#terminal')).toContainText('stack [int32]');
-    const previous = page.workers().find(worker => worker.url().endsWith('/try/worker.js'));
+    const previous = page.workers().find(worker => worker.url().endsWith('/worker.js'));
     expect(previous).toBeDefined();
     const count = await page.evaluate(() => window.ilreplSessionCount);
-    const requested = context.waitForEvent('request', request => request.url().endsWith('/try/worker.js'));
+    const requested = context.waitForEvent('request', request => request.url() === previous.url());
     const release = Promise.withResolvers();
     // Hold the real replacement script request so the outgoing worker's lifetime can be observed without sleeps.
-    await context.route('**/try/worker.js', async route => {
+    await context.route(previous.url(), async route => {
       await release.promise;
       await route.continue();
     });
@@ -484,7 +486,7 @@ test('shared samples retain their original image after the bundled sample change
   const sharedDocument = JSON.parse(gunzipSync(Buffer.from(link.split('#session=v1.')[1], 'base64url')));
   expect(sharedDocument.assets).toHaveLength(1);
   expect(sharedDocument.references[0].assets[0].hash).toMatch(/^[0-9a-f]{64}$/);
-  const original = await readFile(new URL('../public/try/samples/Greeter.dll', import.meta.url));
+  const original = await readFile(sampleUrl);
   expect(Buffer.from(sharedDocument.assets[0].image, 'base64')).toEqual(original);
   expect(sharedDocument.assets[0].hash).toBe(sharedDocument.references[0].assets[0].hash);
   // Change a real user string without changing the PE layout, as a later sample update might do.

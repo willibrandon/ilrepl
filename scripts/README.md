@@ -19,6 +19,8 @@ dotnet run --file scripts/Publish-NativeAot.cs -- --rid osx-arm64 --package-vers
 | `Publish-NativeAot.cs` | Publishes the Native AOT front-end for one runtime identifier, smoke-tests it, and packs the runtime-specific tool package. |
 
 The opcode reference generator builds the engine itself. The browser publish needs the `wasm-tools` workload.
+Its scripts, runtime, and samples share a content-hashed directory. The site reads the generated asset manifest at build time
+so a deployment uses one matching set of browser assets, including for visitors with an older runtime cached.
 
 After changing an example, run `dotnet run --file scripts/Highlight-Cil.cs -- --update`, review
 the changed transcripts, then run it with `--verify` to check them locally. Prompt numbers and

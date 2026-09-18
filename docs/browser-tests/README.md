@@ -1,5 +1,6 @@
 These smoke tests exercise session files and worker recovery in the live demo using Chromium.
 They run locally, separately from `dotnet test`, and are not part of CI.
+Deployment tests also keep the same browser context across a site update, with cached worker imports and saved command history.
 
 From the repository root, after installing the SDK's `wasm-tools` workload:
 
