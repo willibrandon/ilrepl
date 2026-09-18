@@ -97,6 +97,7 @@ internal static class RuntimeFlowAnalysis
             || instruction.Op == OpCodes.Jmp
             || instruction.Op == OpCodes.Localloc
             || instruction.Op.FlowControl is not (FlowControl.Next or FlowControl.Call)
+                && (instruction.Op != OpCodes.Ret || state.OpenBlockDepth != 0)
             || previous.Diagnostics.Any(diagnostic => diagnostic.Code is "FLOW020" or "FLOW021"))
         {
             return false;
