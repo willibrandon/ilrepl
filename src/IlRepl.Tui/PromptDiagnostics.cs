@@ -69,6 +69,14 @@ public static class PromptDiagnostics
             return state.Analysis is null ? state.PendingDiagnostic : null;
         }
 
+        return Display(diagnostic, diagnostics.Count);
+    }
+
+    /// <summary>
+    /// Formats a selected diagnostic without rechecking the identity of its analysis.
+    /// </summary>
+    internal static DiagnosticDisplay Display(AnalysisDiagnostic diagnostic, int count)
+    {
         var kind = diagnostic.Kind switch
         {
             AnalysisDiagnosticKind.Error => "error",
@@ -76,7 +84,6 @@ public static class PromptDiagnostics
             AnalysisDiagnosticKind.Unknown => "unknown",
             _ => "incomplete",
         };
-        var count = diagnostics.Count;
         var suffix = count > 1 ? $" ({count} findings; F8 next)" : "";
         var where = diagnostic.Explanation?.Source is { Kind: not AnalysisSourceKind.Document } source
             ? " at " + DiagnosticFormatter.Source(source) : $" on line {diagnostic.Location.Line + 1}";

@@ -30,6 +30,11 @@ public sealed partial class InProcessEngine
     public event Action<ExecutionProgress>? ProgressChanged;
 
     /// <summary>
+    /// Acknowledges operation transitions through an optional asynchronous host transport before execution continues.
+    /// </summary>
+    public Func<ExecutionProgress, Task>? ProgressPublisher { get; set; }
+
+    /// <summary>
     /// Requests cooperative cancellation only when the named operation is still running.
     /// </summary>
     public async Task<bool> InterruptAsync(string identity, CancellationToken cancellationToken)
@@ -48,7 +53,7 @@ public sealed partial class InProcessEngine
             cancellation = _operationCancellation.CancelAsync();
         }
 
-        ProgressChanged?.Invoke(progress);
+        await PublishProgressAsync(progress).ConfigureAwait(false);
         await cancellation.WaitAsync(cancellationToken).ConfigureAwait(false);
         return true;
     }
@@ -84,7 +89,7 @@ public sealed partial class InProcessEngine
             _ambientOperation.Value = operation;
             try
             {
-                ProgressChanged?.Invoke(started);
+                await PublishProgressAsync(started).ConfigureAwait(false);
                 operation.Token.ThrowIfCancellationRequested();
                 return await action(operation.Token).ConfigureAwait(false);
             }
@@ -101,7 +106,7 @@ public sealed partial class InProcessEngine
                     };
                 }
 
-                ProgressChanged?.Invoke(finished);
+                await PublishProgressAsync(finished).ConfigureAwait(false);
             }
         }
         finally
@@ -154,7 +159,13 @@ public sealed partial class InProcessEngine
             _progress = progress = active with { Sequence = ++_progressSequence, Phase = phase };
         }
 
+        PublishProgressAsync(progress).GetAwaiter().GetResult();
+    }
+
+    private Task PublishProgressAsync(ExecutionProgress progress)
+    {
         ProgressChanged?.Invoke(progress);
+        return ProgressPublisher?.Invoke(progress) ?? Task.CompletedTask;
     }
 
     private void PublishEditingSeed()

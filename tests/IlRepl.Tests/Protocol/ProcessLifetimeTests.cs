@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using IlRepl.Engine;
 using IlRepl.Processes;
@@ -155,6 +156,7 @@ public sealed partial class ProcessLifetimeTests
         using var files = new SessionWorkspaceFixture();
         var hostRecord = Path.Combine(files.DirectoryPath, "host");
         var descendants = Path.Combine(files.DirectoryPath, "processes");
+        var descendantsReady = Path.Combine(files.DirectoryPath, "descendants.ready");
         var start = new ProcessStartInfo(HostLocator.FindDotnet())
         {
             UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
@@ -167,55 +169,73 @@ public sealed partial class ProcessLifetimeTests
         var stdout = frontend.StandardOutput.ReadToEndAsync(token);
         var stderr = frontend.StandardError.ReadToEndAsync(token);
         Process? host = null;
+        OwnedProcessScope? hostScope = null;
+        string[]? records = null;
         try
         {
             string[] source =
             [
                 ".load " + LiteralParser.Escape(typeof(ComparisonDescendantSource).Assembly.Location),
-                "ldstr " + LiteralParser.Escape(hostRecord), "call int32 Environment::get_ProcessId()", "box int32",
+                "ldstr " + LiteralParser.Escape(hostRecord + ".pending"), "call int32 Environment::get_ProcessId()", "box int32",
                 "callvirt instance string Object::ToString()", "call void File::WriteAllText(string, string)",
+                "ldstr " + LiteralParser.Escape(hostRecord + ".pending"), "ldstr " + LiteralParser.Escape(hostRecord),
+                "call void File::Move(string, string)",
                 "ldstr " + LiteralParser.Escape(Environment.ProcessPath!), "ldstr " + LiteralParser.Escape(files.DirectoryPath),
-                "ldc.i4.1", "ldstr \"timeout\"", "ldc.i4.0",
+                "ldc.i4.1", "ldstr \"return\"", "ldc.i4.0",
                 "call int32 [IlRepl.Tests]IlRepl.Tests.Engine.ComparisonDescendantSource::Run(string, string, bool, string, bool)",
-                "ret",
+                "pop", "ldstr " + LiteralParser.Escape(descendantsReady + ".pending"), "ldstr \"ready\"",
+                "call void File::WriteAllText(string, string)", "ldstr " + LiteralParser.Escape(descendantsReady + ".pending"),
+                "ldstr " + LiteralParser.Escape(descendantsReady), "call void File::Move(string, string)",
+                "LOOP: br LOOP", "ret",
             ];
             foreach (var line in source) await frontend.StandardInput.WriteLineAsync(line.AsMemory(), token);
             await frontend.StandardInput.FlushAsync(token);
-            await WaitUntilAsync(() => File.Exists(hostRecord) && File.Exists(descendants)
-                && File.ReadAllLines(descendants).Length == 2, token);
-            host = Process.GetProcessById(int.Parse(await File.ReadAllTextAsync(hostRecord, token)));
-            var hostIdentity = host.Id + " " + host.StartTime.ToUniversalTime().Ticks;
+            await WaitUntilAsync(() => File.Exists(hostRecord), token);
+            host = Process.GetProcessById(int.Parse(await File.ReadAllTextAsync(hostRecord, token), CultureInfo.InvariantCulture));
+            hostScope = OwnedProcessGroup.Describe(host, "frontend-loss");
+            await WaitUntilAsync(() => File.Exists(descendantsReady), token);
+            records = await File.ReadAllLinesAsync(descendants, token);
+            Assert.HasCount(2, records);
+            Assert.IsFalse(IsExecuting(records[0]), "The intermediate parent must exit before the frontend is killed.");
+            Assert.IsTrue(IsExecuting(records[1]), "The orphaned descendant must be alive before the frontend is killed.");
             if (adoptionGap)
             {
                 var supervisorId = await ParentProcessIdAsync(host.Id, token);
                 using var supervisor = Process.GetProcessById(supervisorId);
-                var identity = supervisor.Id + " " + supervisor.StartTime.ToUniversalTime().Ticks;
+                var identity = supervisor.Id + " " + OwnedProcessGroup.GetStartIdentity(supervisor);
                 Assert.AreEqual(0, Signal(frontend.Id, OperatingSystem.IsMacOS() ? 17 : 19));
                 supervisor.Kill();
                 await WaitUntilAsync(() => !IsExecuting(identity), token);
             }
             frontend.Kill();
-            await frontend.WaitForExitAsync(token);
-            await WaitUntilAsync(() => !IsExecuting(hostIdentity), token);
-            await WaitUntilAsync(() => File.ReadAllLines(descendants).All(record => !IsExecuting(record)), token);
-            Assert.IsFalse(IsExecuting(hostIdentity));
-            foreach (var descendant in await File.ReadAllLinesAsync(descendants, token))
+            await OwnedProcessGroup.WaitForExitAsync(frontend, token);
+            await WaitUntilAsync(() => !OwnedProcessGroup.IsRunning(hostScope), token);
+            await WaitUntilAsync(() => records.All(record => !IsExecuting(record)), token);
+            Assert.IsFalse(OwnedProcessGroup.IsRunning(hostScope));
+            foreach (var descendant in records)
                 Assert.IsFalse(IsExecuting(descendant), descendant);
         }
         finally
         {
             if (!frontend.HasExited) frontend.Kill(entireProcessTree: true);
+            await OwnedProcessGroup.WaitForExitAsync(frontend, CancellationToken.None);
             if (host is not null)
             {
                 if (!host.HasExited) host.Kill(entireProcessTree: true);
+                if (hostScope is not null)
+                    await OwnedProcessGroup.WaitForExitAsync(host, hostScope, CancellationToken.None);
+                else
+                    await OwnedProcessGroup.WaitForExitAsync(host, CancellationToken.None);
                 host.Dispose();
             }
-            if (File.Exists(descendants))
-                foreach (var record in await File.ReadAllLinesAsync(descendants, CancellationToken.None))
-                {
-                    using var process = ComparisonDescendantSource.Open(record);
-                    if (process is { HasExited: false }) process.Kill(entireProcessTree: true);
-                }
+            records ??= File.Exists(descendants) ? await File.ReadAllLinesAsync(descendants, CancellationToken.None) : [];
+            foreach (var record in records)
+            {
+                using var process = ComparisonDescendantSource.Open(record);
+                if (process is null) continue;
+                if (!process.HasExited) process.Kill(entireProcessTree: true);
+                await OwnedProcessGroup.WaitForExitAsync(process, ReadIdentity(record), CancellationToken.None);
+            }
             await Task.WhenAll(stdout, stderr);
         }
     }
@@ -237,15 +257,13 @@ public sealed partial class ProcessLifetimeTests
     [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
     private static partial int Signal(int process, int signal);
 
-    private static bool IsExecuting(string identity)
+    private static bool IsExecuting(string identity) => OwnedProcessGroup.IsRunning(ReadIdentity(identity));
+
+    private static OwnedProcessScope ReadIdentity(string identity)
     {
-        using var process = ComparisonDescendantSource.Open(identity);
-        if (process is null || process.HasExited) return false;
-        if (!OperatingSystem.IsLinux()) return true;
-        var path = "/proc/" + process.Id + "/stat";
-        if (!File.Exists(path)) return false;
-        var status = File.ReadAllText(path);
-        return status[status.LastIndexOf(')') + 2] is not ('Z' or 'X');
+        var parts = identity.Split(' ');
+        return new OwnedProcessScope(identity, int.Parse(parts[0], CultureInfo.InvariantCulture),
+            long.Parse(parts[1], CultureInfo.InvariantCulture), null);
     }
 
     private static async Task SubmitAsync(HostProcessEngine engine, CancellationToken cancellationToken, params string[] lines)

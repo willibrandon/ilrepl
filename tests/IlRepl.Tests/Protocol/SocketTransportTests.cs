@@ -97,6 +97,7 @@ public sealed class SocketTransportTests
     /// <param name="mismatch">The invalid bootstrap field.</param>
     [TestMethod]
     [DataRow("version")]
+    [DataRow("previous version")]
     [DataRow("generation")]
     [DataRow("process")]
     public async Task InvalidBootstrap_IsRejectedBeforeTheRealHostConnects(string mismatch)
@@ -110,7 +111,8 @@ public sealed class SocketTransportTests
             await using var stream = new NetworkStream(impostor);
             var bootstrap = new byte[60];
             "ILRP"u8.CopyTo(bootstrap);
-            BinaryPrimitives.WriteInt32LittleEndian(bootstrap.AsSpan(4), mismatch == "version" ? 999 : 1);
+            var version = mismatch switch { "version" => 999, "previous version" => 1, _ => 2 };
+            BinaryPrimitives.WriteInt32LittleEndian(bootstrap.AsSpan(4), version);
             var credentials = listener.Secret.Split('.');
             Convert.FromHexString(credentials[0]).CopyTo(bootstrap, 8);
             var generation = mismatch == "generation" ? Guid.NewGuid() : Guid.ParseExact(credentials[1], "N");

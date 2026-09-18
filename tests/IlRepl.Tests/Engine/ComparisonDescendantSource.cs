@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using IlRepl.Protocol;
 
 namespace IlRepl.Tests.Engine;
 
@@ -69,7 +70,7 @@ public static partial class ComparisonDescendantSource
     /// <summary>
     /// Checks a recorded process without relying on its original parent remaining alive.
     /// </summary>
-    /// <param name="record">The process identifier and UTC creation ticks.</param>
+    /// <param name="record">The process identifier and stable kernel creation identity.</param>
     /// <returns>Whether the process is still running.</returns>
     public static bool IsRunning(string record)
     {
@@ -78,9 +79,9 @@ public static partial class ComparisonDescendantSource
     }
 
     /// <summary>
-    /// Opens the recorded process only when its creation time still matches, excluding reused process identifiers.
+    /// Opens the recorded process only when its kernel creation identity still matches, excluding reused process identifiers.
     /// </summary>
-    /// <param name="record">The process identifier and UTC creation ticks.</param>
+    /// <param name="record">The process identifier and stable kernel creation identity.</param>
     /// <returns>The matching process, or null when it has exited and its identifier is no longer assigned to it.</returns>
     public static Process? Open(string record)
     {
@@ -90,7 +91,7 @@ public static partial class ComparisonDescendantSource
             var process = Process.GetProcessById(int.Parse(parts[0], CultureInfo.InvariantCulture));
             try
             {
-                if (process.StartTime.ToUniversalTime().Ticks == long.Parse(parts[1], CultureInfo.InvariantCulture)) return process;
+                if (OwnedProcessGroup.GetStartIdentity(process) == long.Parse(parts[1], CultureInfo.InvariantCulture)) return process;
             }
             catch
             {
@@ -102,7 +103,9 @@ public static partial class ComparisonDescendantSource
             return null;
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException
-            || exception is Win32Exception && OperatingSystem.IsMacOS())
+            or FileNotFoundException or DirectoryNotFoundException
+            || exception is Win32Exception && OperatingSystem.IsMacOS()
+            || exception is IOException && OperatingSystem.IsLinux() && (exception.HResult & 0xffff) is 2 or 3)
         {
             return null;
         }

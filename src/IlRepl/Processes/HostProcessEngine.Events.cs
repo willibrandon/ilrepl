@@ -32,6 +32,12 @@ public sealed partial class HostProcessEngine : IReplClient, IHostedEngine, IPro
     /// <inheritdoc />
     Task IReplClient.ExecutionChangedAsync(ExecutionProgress progress, CancellationToken cancellationToken)
     {
+        ObserveProgress(progress);
+        return Task.CompletedTask;
+    }
+
+    private void ObserveProgress(ExecutionProgress progress)
+    {
         var previous = Progress;
         while (progress.Sequence > previous.Sequence)
         {
@@ -43,7 +49,6 @@ public sealed partial class HostProcessEngine : IReplClient, IHostedEngine, IPro
             }
             previous = observed;
         }
-        return Task.CompletedTask;
     }
 
     /// <inheritdoc />

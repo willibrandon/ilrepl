@@ -48,9 +48,6 @@ public sealed partial class HostServer
         }
     }
 
-    private async Task<HandleReply> WithStreamedOutputAsync(Task<HandleReply> pending) =>
-        WithStreamedOutput(await pending.ConfigureAwait(false));
-
     private HandleReply WithStreamedOutput(HandleReply reply)
     {
         lock (_outputLock)

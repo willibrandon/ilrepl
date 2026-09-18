@@ -335,8 +335,15 @@ public sealed partial class HostProcessEngine : IReplEngine
         ObjectDisposedException.ThrowIf(_disposed, this);
         try
         {
+            async Task<HandleReply> InvokeAndObserveAsync(CancellationToken token)
+            {
+                var response = await call(token).ConfigureAwait(false);
+                if (response.CompletionProgress is { } progress) ObserveProgress(progress);
+                return response;
+            }
+
             var reply = mutation
-                ? await InvokeMutationAsync(call, cancellationToken).ConfigureAwait(false)
+                ? await InvokeMutationAsync(InvokeAndObserveAsync, cancellationToken).ConfigureAwait(false)
                 : await InvokeInspectionAsync(call, cancellationToken).ConfigureAwait(false);
             Status = reply.Status;
             return reply;

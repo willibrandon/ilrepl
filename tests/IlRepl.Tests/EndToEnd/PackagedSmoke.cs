@@ -93,6 +93,11 @@ internal static class PackagedSmoke
         await SubmitAsync(auto, "add", cancellationToken);
         await SubmitAsync(auto, "ret", cancellationToken);
         await auto.WaitUntilTextAsync("= 43 : int32");
+        await auto.TypeAsync("// unsent after completion", ct: cancellationToken);
+        await auto.WaitUntilTextAsync("// unsent after completion");
+        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: cancellationToken);
+        await auto.WaitUntilNoTextAsync("// unsent after completion");
+        Assert.IsFalse(run.IsCompleted, "After completed execution, Ctrl+C must clear the draft and retain the frontend.");
         var saved = Path.Combine(directory, "retained.ilrepl.json");
         await SubmitAsync(auto, ".session save " + LiteralParser.Escape(saved) + " --embed", cancellationToken);
         await auto.WaitUntilAsync(_ => File.Exists(saved));

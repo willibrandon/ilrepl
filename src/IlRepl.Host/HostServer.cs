@@ -39,16 +39,18 @@ public sealed partial class HostServer : IReplHost, IAsyncDisposable
 
     private readonly InProcessEngine _engine;
     private readonly ReplCore _core;
-    private IReplClient? _client;
+    private readonly IReplClient? _client;
 
     /// <summary>
     /// Initializes a server for the given REPL.
     /// </summary>
     /// <param name="core">The REPL to serve.</param>
-    public HostServer(ReplCore core)
+    /// <param name="client">The connected frontend that acknowledges source and execution progress.</param>
+    public HostServer(ReplCore core, IReplClient? client = null)
     {
         ArgumentNullException.ThrowIfNull(core);
         _core = core;
+        _client = client;
         _engine = new InProcessEngine(core,
             (package, token) => ProcessComparisonRunner.RunAsync(package, RegisterProcessAsync, token),
             (package, token) => ProcessNativeRunner.RunAsync(package, RegisterProcessAsync, token));
@@ -56,8 +58,7 @@ public sealed partial class HostServer : IReplHost, IAsyncDisposable
         _engine.WorkspaceCheckpoint = checkpoint => PublishWorkspaceAsync(checkpoint, CancellationToken.None).GetAwaiter().GetResult();
         core.OutputReceived = PublishOutput;
         core.Transcript.LineAdded += RetainOutputPrefix;
-        _engine.ProgressChanged += progress => _client?.ExecutionChangedAsync(progress, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        _engine.ProgressPublisher = PublishProgressAsync;
         core.BeforeExecution = () => PublishCheckpoint(executing: true);
         core.SourceCheckpoint = () => PublishCheckpoint(executing: false);
     }
@@ -83,7 +84,7 @@ public sealed partial class HostServer : IReplHost, IAsyncDisposable
 
     /// <inheritdoc/>
     public Task<HandleReply> HandleSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken) =>
-        WithStreamedOutputAsync(_engine.HandleSourceAsync(line, location, cancellationToken));
+        HandleWithCompletionAsync(() => _engine.HandleSourceAsync(line, location, cancellationToken));
 
     /// <inheritdoc/>
     public Task<HandleReply> CompareAsync(string identity, CancellationToken cancellationToken) =>
@@ -97,7 +98,7 @@ public sealed partial class HostServer : IReplHost, IAsyncDisposable
     public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(line);
-        return WithStreamedOutputAsync(_engine.HandleAsync(line, cancellationToken));
+        return HandleWithCompletionAsync(() => _engine.HandleAsync(line, cancellationToken));
     }
 
     /// <inheritdoc />
@@ -150,7 +151,7 @@ public sealed partial class HostServer : IReplHost, IAsyncDisposable
         Console.OutputEncoding = new UTF8Encoding(false);
 
         using var rpc = new JsonRpc(RpcTransport.CreateHandler(connection, connection));
-        var server = new HostServer(new ReplCore()) { _client = rpc.Attach<IReplClient>() };
+        var server = new HostServer(new ReplCore(), rpc.Attach<IReplClient>());
         rpc.AddLocalRpcTarget(RpcTargetMetadata.FromShape<IReplHost>(), server, null);
         rpc.StartListening();
         using var registration = cancellationToken.Register(rpc.Dispose);

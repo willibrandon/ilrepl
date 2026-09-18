@@ -9,7 +9,6 @@
     <IncludeIlReplHostInOutput>true</IncludeIlReplHostInOutput>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>$(NoWarn);MSTESTEXP</NoWarn>
-    <IncludeIlReplHostInOutput>true</IncludeIlReplHostInOutput>
     <IlReplHostPublishReadyToRun>true</IlReplHostPublishReadyToRun>
   </PropertyGroup>
 

@@ -32,7 +32,7 @@ jobs:
           - name: macOS Arm64
             os: macos-26
             artifact: macos-arm64
-            timeout: 40
+            timeout: 45
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout || 30 }}
 

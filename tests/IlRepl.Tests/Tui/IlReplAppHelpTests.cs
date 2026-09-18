@@ -1,6 +1,8 @@
 using System.Text;
+using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
+using Hex1b.Nodes;
 using IlRepl.Engine;
 using IlRepl.Protocol;
 using IlRepl.Tui;
@@ -135,36 +137,55 @@ public sealed class IlReplAppHelpTests
         await using var engine = await HostPaths.StartEngineAsync(ct);
         var transcript = new Transcript();
         PromptState prompt = null!;
+        Hex1bApp app = null!;
         var publishedSequence = 0;
         var adapter = new ScriptedPresentationAdapter(80, 24);
-        await using var terminal = IlReplApp.Configure(Hex1b.Hex1bTerminal.CreateBuilder(), engine, transcript,
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, onApp: value => app = value,
             onPrompt: state =>
             {
                 prompt = state;
                 state.DocumentationTargetChanged = (_, sequence, _) => Volatile.Write(ref publishedSequence, sequence);
             }).WithPresentation(adapter).Build();
-        var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
-        await auto.WaitUntilTextAsync("il[1]>");
-        await auto.TypeAsync("constr", ct: ct);
-        await auto.WaitUntilTextAsync("opcodes");
-        await auto.KeyAsync(Hex1bKey.F1, ct: ct);
-        await auto.WaitUntilAsync(snapshot => snapshot.GetLine(0).StartsWith("help ·", StringComparison.Ordinal));
-        var undo = prompt.Editor.History.UndoCount;
-        Assert.IsGreaterThan(0, undo);
+        using var terminalCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var run = terminal.RunAsync(terminalCancellation.Token);
+        try
+        {
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+            await auto.WaitUntilTextAsync("il[1]>");
+            await auto.TypeAsync("constr", ct: ct);
+            await auto.WaitUntilTextAsync("opcodes");
+            await auto.KeyAsync(Hex1bKey.F1, ct: ct);
+            await auto.WaitUntilAsync(snapshot => snapshot.GetLine(0).StartsWith("help ·", StringComparison.Ordinal)
+                || snapshot.ContainsText("APPLICATION ERROR"));
+            if (IlReplApp.FindNode<RescueNode>(app) is { HasError: true } rescue)
+                Assert.Fail(rescue.ErrorPhase + ": " + rescue.Exception);
+            var undo = prompt.Editor.History.UndoCount;
+            Assert.IsGreaterThan(0, undo);
 
-        using var queued = await new Hex1bTerminalInputSequenceBuilder().Key(toggle ? Hex1bKey.F1 : Hex1bKey.Escape)
-            .Type("ained. ").Build().ApplyAsync(terminal, ct);
-        await auto.WaitUntilAsync(snapshot => !snapshot.GetLine(0).StartsWith("help ·", StringComparison.Ordinal)
-            && prompt.Text == "constrained. ",
-            description: "all text queued behind the closing key reaches the editor");
+            using var queued = await new Hex1bTerminalInputSequenceBuilder().Key(toggle ? Hex1bKey.F1 : Hex1bKey.Escape)
+                .Type("ained. ").Build().ApplyAsync(terminal, ct);
+            await auto.WaitUntilAsync(snapshot => !snapshot.GetLine(0).StartsWith("help ·", StringComparison.Ordinal)
+                && prompt.Text == "constrained. ",
+                description: "all text queued behind the closing key reaches the editor");
 
-        Assert.AreEqual(2, Volatile.Read(ref publishedSequence));
-        Assert.AreEqual("constrained. ".Length, prompt.Editor.Cursor.Position.Value);
-        Assert.IsGreaterThanOrEqualTo(undo, prompt.Editor.History.UndoCount);
-        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
-        await run;
-        await IlReplApp.SettleAsync(prompt);
+            Assert.AreEqual(2, Volatile.Read(ref publishedSequence));
+            Assert.AreEqual("constrained. ".Length, prompt.Editor.Cursor.Position.Value);
+            Assert.IsGreaterThanOrEqualTo(undo, prompt.Editor.History.UndoCount);
+            await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+            await run;
+        }
+        finally
+        {
+            await terminalCancellation.CancelAsync();
+            try
+            {
+                await run;
+            }
+            catch (OperationCanceledException) when (terminalCancellation.IsCancellationRequested)
+            {
+            }
+            await IlReplApp.SettleAsync(prompt);
+        }
         Assert.IsEmpty(AppTest.Echoes(transcript));
     }
 
