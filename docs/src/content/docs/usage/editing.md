@@ -58,7 +58,8 @@ buffer, typing replaces the selection, and Ctrl+C copies it. When idle, Ctrl+C w
 the buffer and leaves an empty prompt open. Use Ctrl+Q or `.quit` to leave.
 
 Editing remains available while the execution host starts, runs code, or restarts. Input typed during startup
-stays in the editor until you submit it after the host is ready. Completion and stack analysis do not wait for a running cell.
+stays in the editor until you submit it after the host is ready. Completion and diagnostics use the last accepted source while a cell runs.
+You can prepare the next draft without running it; accepting a suggestion only edits that draft.
 
 During execution, Ctrl+C requests interruption. If work cannot stop promptly, ilrepl shows a notice before accepting
 another Ctrl+C as permission to restart the runtime. See [Keyboard](/reference/keyboard/) and
@@ -218,7 +219,7 @@ Completion reads what you have written earlier in the buffer, including method p
 types that have not been submitted yet.
 
 While new matches are being checked, the previous rows stay dimmed under an `updating` title.
-They cannot be accepted until the new results arrive.
+Arrow selection and detail scrolling remain available. Insertion waits for the new results.
 If running code loads another assembly in the background, the prompt refreshes its suggestions
 without an edit. Types whose short names become ambiguous are offered with qualified names.
 Accepting a suggestion during that refresh waits for a matching current result. Editing or

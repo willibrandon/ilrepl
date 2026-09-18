@@ -19,6 +19,93 @@ public sealed class HostInteractionTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
+    /// A real running cell leaves completion acceptance and current draft diagnostics available without submitting the draft.
+    /// </summary>
+    /// <param name="enter">Whether to accept a selected operand with Enter instead of Tab.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task RunningCell_AllowsCompletionAndAnalysis(bool enter)
+    {
+        var token = TestContext.CancellationToken;
+        using var files = new SessionWorkspaceFixture();
+        var release = Path.Combine(files.DirectoryPath, "release");
+        await using var controller = await SessionWorkspaceFixture.StartAsync(token);
+        string[] source =
+        [
+            ".method void WaitForRelease() {",
+            "ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"entered\"",
+            "call void File::WriteAllText(string, string)",
+            "WAIT: ldstr " + LiteralParser.Escape(release), "call bool File::Exists(string)", "brfalse WAIT", "ret", "}",
+            "call void WaitForRelease()",
+        ];
+        foreach (var line in source) Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded, line);
+        PromptState? prompt = null;
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = AppTest.Build(controller, transcript,
+            configure: builder => builder.WithPresentation(adapter), onPrompt: value => prompt = value);
+        var run = IlReplApp.RunAsync(terminal, prompt, token);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        try
+        {
+            await auto.WaitUntilTextAsync("il[");
+            await auto.TypeAsync(".run", ct: token);
+            await auto.EnterAsync(ct: token);
+            await auto.WaitUntilAsync(_ => File.Exists(files.MarkerPath) && prompt!.Submission is { IsRunning: true });
+            const string expected = "call Environment::get_CurrentManagedThreadId()";
+            await auto.TypeAsync("call Environment::get_CurrentManagedTh", ct: token);
+            await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("members 1/1")
+                && PromptWidget.Candidates(prompt!, controller.Catalog).Count == 1);
+            if (enter)
+            {
+                await auto.DownAsync(ct: token);
+                await auto.WaitUntilTextAsync("Enter accepts");
+                await auto.EnterAsync(ct: token);
+            }
+            else await auto.TabAsync(ct: token);
+            await auto.WaitUntilAsync(snapshot => prompt!.Text == expected && !snapshot.ContainsText("members"));
+            Assert.IsTrue(prompt!.Submission is { IsRunning: true });
+            Assert.IsEmpty(prompt.Pending);
+
+            await auto.Ctrl().KeyAsync(Hex1bKey.A, ct: token);
+            await adapter.PasteAsync("add");
+            await auto.WaitUntilAsync(snapshot => prompt.Text == "add" && snapshot.ContainsText("stack underflow")
+                && PromptDiagnostics.Visible(prompt).Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error));
+            await auto.Ctrl().KeyAsync(Hex1bKey.A, ct: token);
+            await adapter.PasteAsync("ldc.i4.s 42\nret");
+            await auto.WaitUntilAsync(snapshot => prompt.Analysis?.Stack?.Render() == "[int32]"
+                && prompt.Highlighter.Diagnostics.Count == 0 && !snapshot.ContainsText("stack underflow"));
+            Assert.IsTrue(prompt.Submission is { IsRunning: true });
+            Assert.IsEmpty(prompt.Pending);
+            Assert.AreEqual("ldc.i4.s 42\nret", prompt.Text);
+
+            await File.WriteAllTextAsync(release, "release", token);
+            await auto.WaitUntilAsync(_ => !prompt.Busy);
+            Assert.AreEqual("ldc.i4.s 42\nret", prompt.Text);
+            Assert.AreEqual(0, controller.Status.Instructions, "The draft must not execute when the first cell finishes.");
+            await auto.EnterAsync(ct: token);
+            await auto.WaitUntilTextAsync("= 42 : int32");
+            await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
+            await run.WaitAsync(token);
+        }
+        catch
+        {
+            TestContext.WriteLine($"Runtime revision {controller.Status.Revision}, assembly version {controller.AssemblyVersion}; "
+                + $"palette {prompt?.Palette}, pending {prompt?.Requester?.PendingKey}, "
+                + $"reply revision {prompt?.Completions?.Reply.Revision}, "
+                + $"reply assembly {prompt?.Completions?.Reply.AssemblyVersion}");
+            throw;
+        }
+        finally
+        {
+            await File.WriteAllTextAsync(release, "release", CancellationToken.None);
+            await terminal.DisposeAsync();
+        }
+    }
+
+    /// <summary>
     /// The prompt accepts editing before the host connects and never submits retained input when readiness arrives.
     /// </summary>
     [TestMethod]

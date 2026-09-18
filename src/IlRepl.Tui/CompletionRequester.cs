@@ -73,7 +73,7 @@ public sealed class CompletionRequester
     /// <param name="state">The prompt.</param>
     /// <param name="snapshot">The retained rows.</param>
     /// <returns>Whether every local query component is still current.</returns>
-    public bool Matches(PromptState state, CompletionSnapshot snapshot) => !_stopped && !_watchFailed && !state.Busy
+    public bool Matches(PromptState state, CompletionSnapshot snapshot) => !_stopped && !_watchFailed
         && snapshot.Key.SameQuery(CurrentKey(state)) && snapshot.Reply.Revision == _engine.Status.Revision
         && snapshot.Reply.AssemblyVersion == _engine.AssemblyVersion;
 
@@ -101,12 +101,6 @@ public sealed class CompletionRequester
         {
             Cancel(state);
             state.Palette = PaletteMode.Faulted;
-            return;
-        }
-
-        if (state.Busy)
-        {
-            Cancel(state);
             return;
         }
 
@@ -235,7 +229,7 @@ public sealed class CompletionRequester
     /// Allows a displayed candidate to be requested again only while its complete editing context remains unchanged.
     /// </summary>
     internal bool CanRebind(PromptState state, CompletionSnapshot snapshot, CompletionItem item) =>
-        !state.Busy && !state.PaletteDismissed && snapshot.Reply.Items.Contains(item)
+        !state.PaletteDismissed && snapshot.Reply.Items.Contains(item)
         && new CompletionAcceptance(snapshot.Key, item).Matches(CurrentKey(state));
 
     /// <summary>
@@ -269,7 +263,7 @@ public sealed class CompletionRequester
         }
 
         _pending = null;
-        if (!result.Key.SameQuery(CurrentKey(state)) || state.Busy)
+        if (!result.Key.SameQuery(CurrentKey(state)))
         {
             LastAnswered = null;
             return;
@@ -299,6 +293,18 @@ public sealed class CompletionRequester
             state.Palette = PaletteMode.Closed;
             state.Invalidate?.Invoke();
             return;
+        }
+
+        if (state.PendingDisplay is { } display && display.Visible() is { Count: > 0 } visible)
+        {
+            var selected = visible[Math.Clamp(state.SelectedIndex, 0, visible.Count - 1)];
+            var selection = new CompletionAcceptance(display.Key, selected);
+            if (selection.Matches(CurrentKey(state)))
+            {
+                var index = snapshot.Visible().ToList().FindIndex(selection.Selects);
+                if (index >= 0) state.SelectedIndex = index;
+                else state.DetailScroll = 0;
+            }
         }
 
         LastAnswered = result.Key with { Cursor = null };

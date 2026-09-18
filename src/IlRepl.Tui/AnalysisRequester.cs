@@ -29,7 +29,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
     /// </summary>
     internal IReadOnlyList<AnalysisDiagnostic> Diagnostics(PromptState state)
     {
-        if (!state.Busy && _published is { } published && published.Key.Text == state.Text
+        if (_published is { } published && published.Key.Text == state.Text
             && published.Key.Version == state.Editor.Document.Version && published.Key.Revision == _engine.Status.Revision
             && published.Key.AssemblyVersion == _engine.AssemblyVersion)
         {
@@ -58,16 +58,6 @@ public sealed class AnalysisRequester(IReplEngine engine)
 
         var key = new AnalysisRequestKey(state.Text, state.Editor.Document.Version, state.CaretLine - 1, state.CaretColumn,
             _engine.Status.Revision, _engine.AssemblyVersion);
-        if (state.Busy)
-        {
-            Cancel();
-            state.Analysis = null;
-            state.PendingDiagnostic = null;
-            state.Highlighter.Diagnostics = [];
-            _completed.Clear();
-            return;
-        }
-
         if (key != _current)
         {
             var sameDocument = _current?.SameDocument(key) == true;

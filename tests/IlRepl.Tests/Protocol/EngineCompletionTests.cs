@@ -57,6 +57,7 @@ public sealed class EngineCompletionTests
     [DataRow(true)]
     public async Task Paging_RejectsMutationAndPreservesOrder(bool useHost)
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
         await using var engine = useHost
             ? (IReplEngine)await HostPaths.StartEngineAsync(TestContext.CancellationToken) : new InProcessEngine();
         const string line = "call string::";

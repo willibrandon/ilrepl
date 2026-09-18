@@ -398,25 +398,34 @@ public sealed class SessionTerminalTests
         }, token);
         File.Delete(files.SessionPath);
         Directory.CreateDirectory(files.SessionPath);
+        Hex1bApp? app = null;
         PromptState? prompt = null;
         var transcript = new Transcript();
-        await using var terminal = AppTest.Build(engine, transcript, onPrompt: value => prompt = value);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript,
+            onApp: value => app = value, onPrompt: value => prompt = value).WithHeadless().WithDimensions(100, 30).Build();
         var run = terminal.RunAsync(token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync("// preserved draft", ct: token);
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
         await auto.WaitUntilTextAsync("Save changes to ");
+        var failedDialog = prompt!.SessionDialog;
+        Assert.IsNotNull(failedDialog);
         await auto.EnterAsync(ct: token);
-        await auto.WaitUntilAsync(_ => prompt?.SessionDialog is null && !prompt!.Busy
+        await auto.WaitUntilAsync(screen => prompt.SessionDialog is null && !prompt.Busy && app?.FocusedNode is EditorNode
+            && !screen.ContainsText("Save changes to ") && screen.ContainsText("// preserved draft")
             && transcript.Lines.Any(line => line.Kind == LineKind.Error));
         Assert.IsFalse(run.IsCompleted);
         Assert.AreEqual("// preserved draft", prompt!.Text);
         Assert.Contains(line => line.Kind == LineKind.Error && line.PlainText.Contains(files.SessionPath, StringComparison.Ordinal),
             transcript.Lines);
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
-        await auto.WaitUntilTextAsync("Save changes to ");
+        await auto.WaitUntilAsync(screen => prompt.SessionDialog is { Submitted: false } dialog
+            && !ReferenceEquals(failedDialog, dialog) && app?.FocusedNode is ButtonNode { Label: "Save" }
+            && screen.ContainsText("Save changes to "));
+        Assert.AreNotSame(failedDialog, prompt.SessionDialog);
         await auto.KeyAsync(Hex1bKey.DownArrow, ct: token);
+        await auto.WaitUntilAsync(_ => app?.FocusedNode is ButtonNode { Label: "Discard" });
         await auto.EnterAsync(ct: token);
         await run.WaitAsync(AppTest.Timeout, token);
     }

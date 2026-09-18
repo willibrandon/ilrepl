@@ -660,7 +660,8 @@ public static partial class IlReplApp
             following.ScrollToBottom();
         }
         var (openDepth, commentOpen) = prompt.Expected(status);
-        var enter = prompt.Busy ? EnterAction.Busy : PromptWidget.EnterActionFor(prompt, candidates > 0 && fit.PaletteRows > 0, openDepth, commentOpen);
+        var enter = PromptWidget.EnterActionFor(prompt, candidates > 0 && fit.PaletteRows > 0, openDepth, commentOpen);
+        if (prompt.Busy && enter != EnterAction.AcceptCompletion) enter = EnterAction.Busy;
         // The scrollbar takes the last column of the transcript panel.
         var lineWidth = size.Width > 1 ? size.Width - 1 : 0;
         var root = ctx.VStack(v =>

@@ -49,6 +49,10 @@ public sealed class ObservedBindingTests
             Assert.AreNotEqual(RuntimeDefinitions.AssemblyInstance(first), retained.FieldType.Definition.Assembly);
             Assert.AreEqual(calls, requesterContext.Calls);
             Assert.IsTrue(source.Fields(handle, before).Single().FieldType.HasUnresolved, "Existing snapshots retain their own graph.");
+            var extended = before.WithAssemblies([(second, AssemblySymbolSource.For(second)!)]);
+            Assert.IsTrue(source.Fields(handle, extended).Single().FieldType.HasUnresolved,
+                "An assembly-only refresh preserves the accepted graph instead of importing later runtime observations.");
+            Assert.AreEqual(calls, requesterContext.Calls);
         }
         finally
         {

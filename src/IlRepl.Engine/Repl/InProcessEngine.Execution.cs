@@ -1,3 +1,4 @@
+using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
 
@@ -165,7 +166,8 @@ public sealed partial class InProcessEngine
             return;
         }
 
-        var captured = _core.CaptureEditingSeed() with { AssemblyVersion = AssemblyVersion };
+        var version = AssemblyVersion;
+        var captured = _core.CaptureEditingSeed() with { AssemblyVersion = version };
         lock (_snapshotLock)
         {
             var previous = _publishedSeed;
@@ -178,20 +180,20 @@ public sealed partial class InProcessEngine
     private EditingSeed CapturePublishedSeed()
     {
         // Only tracked editing tasks capture here; disposal retains the published seed until those tasks have settled.
-        if (_publishedSeed.AssemblyVersion != AssemblyVersion && _gate.Wait(0))
-        {
-            try
-            {
-                PublishEditingSeed();
-            }
-            finally
-            {
-                _gate.Release();
-            }
-        }
-
         lock (_snapshotLock)
         {
+            // Keep source frozen while user code runs; only newly searchable metadata can join its independently owned catalog.
+            var version = AssemblyVersion;
+            if (_publishedSeed.AssemblyVersion != version)
+            {
+                var previous = _publishedSeed;
+                _publishedSeed = previous with
+                {
+                    Snapshot = previous.Snapshot.WithProcessAssemblies(ProcessAssemblies.Current), AssemblyVersion = version,
+                };
+                previous.Dispose();
+            }
+
             return _publishedSeed.Lease();
         }
     }

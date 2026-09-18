@@ -58,7 +58,8 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
         ArgumentNullException.ThrowIfNull(core);
         _core = core;
         _execution = OperatingSystem.IsBrowser() ? null : new ExecutionThread();
-        _publishedSeed = core.CaptureEditingSeed() with { AssemblyVersion = AssemblyVersion };
+        var version = AssemblyVersion;
+        _publishedSeed = core.CaptureEditingSeed() with { AssemblyVersion = version };
         _completion = new OperandCompleter(CapturePublishedSeed);
         _core.PhaseChanged = ReportPhase;
         _comparisonRunner = comparisonRunner;

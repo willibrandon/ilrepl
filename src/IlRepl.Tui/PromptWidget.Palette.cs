@@ -19,8 +19,10 @@ public sealed partial record PromptWidget
     {
         var candidates = Candidates(state, catalog);
         return candidates.Count != 0 ? candidates
-            : state.Palette == PaletteMode.Requested && !state.Busy && (state.Requester is { IsPending: true } || state.MoreCompletions)
-                && state.PendingDisplay is { } display ? display.Visible() : [];
+            : state.Palette == PaletteMode.Requested && (state.Requester is { IsPending: true } || state.MoreCompletions)
+                && state.PendingDisplay is { } display ? display.Visible()
+            : state.Palette == PaletteMode.Open && state.Completions is { Reply.Items.Count: > 0 } previous
+                && state.Requester?.CanRebind(state, previous, previous.Reply.Items[0]) == true ? previous.Visible() : [];
     }
 
     /// <summary>

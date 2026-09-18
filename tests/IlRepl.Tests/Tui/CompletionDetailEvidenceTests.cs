@@ -87,6 +87,79 @@ public sealed class CompletionDetailEvidenceTests
         }
     }
 
+    /// <summary>
+    /// Visible completion rows keep selection and detail navigation while a genuine assembly refresh reply is held.
+    /// </summary>
+    [TestMethod]
+    public async Task OperandDetail_AssemblyRefreshPreservesNavigation()
+    {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        var ct = TestContext.CancellationToken;
+        await using var engine = new CompletionEngine();
+        await engine.PrimeAsync(ct);
+        foreach (var name in new[] { "ReviewNavigateAlpha", "ReviewNavigateBeta" })
+        {
+            foreach (var line in new[] { $".method void {name}(string text, int32 count, int64 ticks, float64 amount) {{", "ret", "}" })
+                Assert.IsTrue((await engine.HandleAsync(line, ct)).Succeeded, line);
+        }
+        const string original = "call ReviewNavigate";
+        const string effect = "Stack effect: [string, int32, int64, float64] → []";
+        var recorder = new FrameRecorder();
+        var adapter = new ScriptedPresentationAdapter(48, 12);
+        PromptState prompt = null!;
+        await using var terminal = AppTest.Build(engine, new Transcript(), width: 48, height: 12,
+            configure: builder => builder.WithPresentation(adapter).AddPresentationFilter(recorder), onPrompt: value => prompt = value);
+        recorder.Terminal = terminal;
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var run = terminal.RunAsync(cancellation.Token);
+        try
+        {
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+            await auto.WaitUntilTextAsync("il[3]>");
+            await adapter.PasteAsync(original);
+            await auto.WaitUntilAsync(_ => engine.Calls is [.., var latest] && latest.Request.Lines[0] == original);
+            engine.Calls[^1].Release.SetResult();
+            await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("detail")
+                && PromptWidget.Candidates(prompt, engine.Catalog).Count == 2);
+            var before = engine.Status;
+            var caret = prompt.Editor.Cursor.Position;
+            var firstCall = engine.Calls.Count;
+            CompletionEngine.ChangeAssemblies();
+            await auto.WaitUntilAsync(snapshot => engine.Calls.Count > firstCall && snapshot.ContainsText("updating types"));
+            await auto.DownAsync(ct: ct);
+            await auto.WaitUntilAsync(_ => prompt.SelectedIndex == 1 && prompt.PaletteNavigated);
+            Assert.AreEqual(original, prompt.Text, "Down navigates the visible palette instead of history during refresh.");
+            await auto.UpAsync(ct: ct);
+            await auto.WaitUntilAsync(_ => prompt.SelectedIndex == 0);
+            Assert.AreEqual(original, prompt.Text, "Up navigates the visible palette instead of history during refresh.");
+            var rows = PromptWidget.DetailLines(prompt, engine.Catalog, 48);
+            var target = rows.ToList().FindIndex(row => row.StartsWith("Stack effect:", StringComparison.Ordinal));
+            Assert.IsGreaterThan(0, target);
+            for (var index = 0; index < target; index++) await auto.KeyAsync(Hex1bKey.PageDown, ct: ct);
+            await auto.WaitUntilAsync(_ => prompt.DetailScroll == target && recorder.Frames is [.., var frame]
+                && DetailText(frame).Contains(effect, StringComparison.Ordinal));
+            await auto.KeyAsync(Hex1bKey.PageUp, ct: ct);
+            await auto.WaitUntilAsync(_ => prompt.DetailScroll == target - 1);
+            Assert.AreEqual(caret, prompt.Editor.Cursor.Position);
+            engine.Calls[^1].Release.SetResult();
+            await auto.WaitUntilAsync(snapshot => prompt.Requester?.IsPending == false && snapshot.ContainsText("types 1/2")
+                && !snapshot.ContainsText("updating"));
+            Assert.AreEqual(target - 1, prompt.DetailScroll);
+            Assert.AreEqual(original, prompt.Text);
+            Assert.AreEqual(before, engine.Status);
+            await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+            await run;
+        }
+        finally
+        {
+            foreach (var call in engine.Calls) call.Release.TrySetResult();
+            await cancellation.CancelAsync();
+            try { await run; }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            await IlReplApp.SettleAsync(prompt);
+        }
+    }
+
     private static string DetailText(Frame frame)
     {
         var rows = frame.Lines.SkipWhile(line => !line.StartsWith("│detail", StringComparison.Ordinal)).Skip(1)

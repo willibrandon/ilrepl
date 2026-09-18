@@ -206,18 +206,17 @@ public sealed partial record PromptWidget(
         b.Key(Hex1bKey.F8).Action(_ => PromptDiagnostics.Move(state, false), "Next diagnostic");
         b.Shift().Key(Hex1bKey.F8).Action(_ => PromptDiagnostics.Move(state, true), "Previous diagnostic");
         // The builder runs for every key, so what it reads here is the state that key meets.
-        var candidates = Candidates(state, Catalog);
+        var candidates = DisplayCandidates(state, Catalog);
         var paletteVisible = candidates.Count > 0 && Fit.PaletteRows > 0;
-        var displayed = DisplayCandidates(state, Catalog);
         var predictionVisible = PredictionFor(state, Catalog) is not null;
         var onFirst = state.CaretLine <= 1;
         var onLast = state.CaretLine >= state.LineCount;
 
         b.Remove(EditorWidget.InsertNewline);
-        b.Key(Hex1bKey.Enter).Action(_ => Enter(state, displayed,
+        b.Key(Hex1bKey.Enter).Action(_ => Enter(state, candidates,
             EnterActionFor(state, paletteVisible, OpenDepth, CommentOpen)), "Send or continue");
         b.Remove(EditorWidget.InsertTab);
-        b.Key(Hex1bKey.Tab).Action(_ => Tab(state, displayed, displayed.Count > 0 && Fit.PaletteRows > 0), "Complete or indent");
+        b.Key(Hex1bKey.Tab).Action(_ => Tab(state, candidates, paletteVisible), "Complete or indent");
         b.Remove(Hex1bKey.Escape);
         b.Key(Hex1bKey.Escape).Action(_ =>
         {
@@ -281,7 +280,7 @@ public sealed partial record PromptWidget(
         if (predictionVisible)
         {
             b.Remove(EditorWidget.MoveRight);
-            b.Key(Hex1bKey.RightArrow).Action(_ => Accept(state, displayed), "Accept prediction");
+            b.Key(Hex1bKey.RightArrow).Action(_ => Accept(state, candidates), "Accept prediction");
         }
 
         if (paletteVisible && Fit.DetailRows > 0)

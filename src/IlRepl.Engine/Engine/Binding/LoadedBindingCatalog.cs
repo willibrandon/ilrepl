@@ -68,6 +68,39 @@ public sealed class LoadedBindingCatalog
     }
 
     /// <summary>
+    /// Extends captured bindings with newly searchable assemblies without rereading the owning session's runtime bindings.
+    /// </summary>
+    internal LoadedBindingCatalog WithAssemblies(IReadOnlyList<(Assembly Assembly, AssemblySymbolSource Source)> assemblies)
+    {
+        var added = new LoadedBindingCatalog(assemblies);
+        var combined = new LoadedBindingCatalog([]);
+        foreach (var catalog in new[] { this, added })
+        {
+            foreach (var source in catalog.Sources)
+            {
+                if (!combined._byInstance.TryAdd(source.Instance, source)) continue;
+                combined._sources.Add(source);
+                combined._contexts.Add(source.Instance, catalog._contexts[source.Instance]);
+                combined._observedTypes.Add(source.Instance, catalog._observedTypes[source.Instance]);
+                if (catalog._ownedReferences.TryGetValue(source.Instance, out var owned))
+                {
+                    combined._ownedReferences.Add(source.Instance, owned);
+                }
+
+                if (!combined._byName.TryGetValue(source.Name, out var same))
+                {
+                    same = [];
+                    combined._byName.Add(source.Name, same);
+                }
+
+                same.Add(source);
+            }
+        }
+
+        return combined;
+    }
+
+    /// <summary>
     /// The sources, in search order.
     /// </summary>
     public IReadOnlyList<AssemblySymbolSource> Sources => _sources;

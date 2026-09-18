@@ -299,10 +299,10 @@ public sealed class CompletionRequesterTests
     }
 
     /// <summary>
-    /// Busy submission cancels preview work and the same source is queried after submission and obsolete delivery settle.
+    /// A current bound preview remains usable while a submission is pending and remains current after it settles.
     /// </summary>
     [TestMethod]
-    public async Task Refresh_BusySubmission_RetriesWhenSettled()
+    public async Task Refresh_BusySubmission_PreservesCurrentPreview()
     {
         if (await IsolatedTestProcess.RunAsync(TestContext)) return;
         await using var engine = new CompletionEngine();
@@ -310,20 +310,31 @@ public sealed class CompletionRequesterTests
         var state = State(engine, "call Console::Wr");
         var requester = state.Requester!;
         requester.Refresh(state);
-        state.Submission = new Submission(engine, [], 0, false, _ => Task.CompletedTask, _ => { });
-        requester.Refresh(state);
-        Assert.IsTrue(engine.Calls[0].Cancellation.IsCancellationRequested);
-        Assert.IsEmpty(PromptWidget.Candidates(state, engine.Catalog));
-        requester.Refresh(state);
-        Assert.HasCount(1, engine.Calls);
-        await state.Submission.Completion;
-        state.Submission = null;
-        engine.Calls[0].Release.SetResult();
-        await WaitAsync(() => { requester.Refresh(state); return engine.Calls.Count == 2; });
-        await ReleaseAsync(engine, state, 1);
-        Assert.AreEqual(PaletteMode.Open, state.Palette);
-        Assert.IsEmpty(state.Events);
-        await requester.SettleAsync(TimeSpan.FromSeconds(2));
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        state.Submission = new Submission(engine, [], 0, false, ct => release.Task.WaitAsync(ct), _ => { });
+        try
+        {
+            requester.Refresh(state);
+            Assert.IsFalse(engine.Calls[0].Cancellation.IsCancellationRequested);
+            Assert.IsFalse(state.Submission.Completion.IsCompleted);
+            await ReleaseAsync(engine, state, 0);
+            Assert.AreEqual(PaletteMode.Open, state.Palette);
+            Assert.Contains(item => item.Name.StartsWith("Write", StringComparison.Ordinal),
+                PromptWidget.Candidates(state, engine.Catalog));
+            release.TrySetResult();
+            await state.Submission.Completion;
+            state.Submission = null;
+            requester.Refresh(state);
+            Assert.HasCount(1, engine.Calls);
+            Assert.AreEqual(PaletteMode.Open, state.Palette);
+            Assert.IsEmpty(state.Events);
+        }
+        finally
+        {
+            release.TrySetResult();
+            if (state.Submission is { } pending) await pending.Completion;
+            await requester.SettleAsync(TimeSpan.FromSeconds(2));
+        }
     }
 
     /// <summary>
@@ -376,6 +387,9 @@ public sealed class CompletionRequesterTests
         CompletionEngine.ChangeAssemblies();
         Assert.IsFalse(requester.Matches(state, old));
         Assert.IsNull(CompletionEdit.For(state, old.Reply.Items[0]));
+        Assert.IsEmpty(PromptWidget.Candidates(state, engine.Catalog));
+        Assert.AreSequenceEqual(old.Visible(), PromptWidget.DisplayCandidates(state, engine.Catalog),
+            "Visible navigation remains available between the assembly event and the next frame's refresh.");
         Assert.AreEqual(EnterAction.AcceptCompletion,
             PromptWidget.EnterActionFor(state, paletteVisible: false, openDepth: 0, commentOpen: false));
         state.PaletteDismissed = true;
