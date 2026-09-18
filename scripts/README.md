@@ -10,7 +10,7 @@ dotnet run --file scripts/Generate-BootstrapCatalog.cs
 dotnet run --file scripts/Generate-BootstrapCatalog.cs -- --check
 dotnet run --file scripts/Generate-OpcodeReference.cs
 dotnet run --file scripts/Publish-Wasm.cs
-dotnet run --file scripts/Publish-NativeAot.cs -- --rid osx-arm64 --package-version 0.4.1
+dotnet run --file scripts/Publish-NativeAot.cs -- --rid osx-arm64 --package-version 0.5.0
 ```
 
 | App | Purpose |
