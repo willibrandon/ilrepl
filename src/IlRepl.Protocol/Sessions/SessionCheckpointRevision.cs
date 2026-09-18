@@ -8,4 +8,6 @@ namespace IlRepl.Protocol;
 /// <param name="CellsKept">The unchanged historical-cell prefix.</param>
 /// <param name="ReferencesKept">The unchanged dependency-manifest prefix.</param>
 /// <param name="AssetsKept">The unchanged embedded-image prefix.</param>
-public sealed record SessionCheckpointRevision(long Sequence, int EntriesKept, int CellsKept, int ReferencesKept, int AssetsKept);
+/// <param name="SourceKept">The unchanged source-line prefix within the first changed entry.</param>
+public sealed record SessionCheckpointRevision(
+    long Sequence, int EntriesKept, int CellsKept, int ReferencesKept, int AssetsKept, int SourceKept = 0);

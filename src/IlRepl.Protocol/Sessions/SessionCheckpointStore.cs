@@ -16,18 +16,25 @@ public sealed class SessionCheckpointStore
     public SessionReply Encode(SessionReply checkpoint)
     {
         var document = checkpoint.Document;
+        var entriesKept = Prefix(_previous.Entries, document.Entries, SessionCheckpointDelta.EntryEquals);
+        var sourceKept = entriesKept < Math.Min(_previous.Entries.Length, document.Entries.Length)
+            && _previous.Entries[entriesKept].Identity == document.Entries[entriesKept].Identity
+                ? Prefix(_previous.Entries[entriesKept].Source, document.Entries[entriesKept].Source,
+                    static (left, right) => left == right) : 0;
         var delta = new SessionCheckpointRevision(++_sequence,
-            Prefix(_previous.Entries, document.Entries, SessionCheckpointDelta.EntryEquals),
+            entriesKept,
             Prefix(_previous.Cells, document.Cells, SessionCheckpointDelta.CellEquals),
             Prefix(_previous.References, document.References),
-            Prefix(_previous.Assets, document.Assets));
+            Prefix(_previous.Assets, document.Assets), sourceKept);
+        var entries = document.Entries[entriesKept..];
+        if (sourceKept != 0) entries[0] = entries[0] with { Source = entries[0].Source[sourceKept..] };
         _previous = document;
         return checkpoint with
         {
             CheckpointDelta = delta,
             Document = document with
             {
-                Entries = document.Entries[delta.EntriesKept..], Cells = document.Cells[delta.CellsKept..],
+                Entries = entries, Cells = document.Cells[delta.CellsKept..],
                 References = document.References[delta.ReferencesKept..], Assets = document.Assets[delta.AssetsKept..],
             },
         };
@@ -50,7 +57,7 @@ public sealed class SessionCheckpointStore
         var changes = checkpoint.Document;
         var document = changes with
         {
-            Entries = Join(_previous.Entries, changes.Entries, delta.EntriesKept),
+            Entries = JoinEntries(_previous.Entries, changes.Entries, delta),
             Cells = Join(_previous.Cells, changes.Cells, delta.CellsKept),
             References = Join(_previous.References, changes.References, delta.ReferencesKept),
             Assets = Join(_previous.Assets, changes.Assets, delta.AssetsKept),
@@ -66,6 +73,18 @@ public sealed class SessionCheckpointStore
         while (common < Math.Min(previous.Length, current.Length) && (ReferenceEquals(previous[common], current[common])
             || (equals?.Invoke(previous[common], current[common]) ?? false))) common++;
         return common;
+    }
+
+    private static SessionEntry[] JoinEntries(SessionEntry[] previous, SessionEntry[] changes, SessionCheckpointRevision delta)
+    {
+        if (delta.SourceKept == 0) return Join(previous, changes, delta.EntriesKept);
+        if (delta.SourceKept < 0 || delta.EntriesKept < 0 || delta.EntriesKept >= previous.Length || changes.Length == 0
+            || previous[delta.EntriesKept].Identity != changes[0].Identity)
+            throw new InvalidDataException("invalid execution checkpoint source prefix");
+        var source = Join(previous[delta.EntriesKept].Source, changes[0].Source, delta.SourceKept);
+        var entries = Join(previous, changes, delta.EntriesKept);
+        entries[delta.EntriesKept] = changes[0] with { Source = source };
+        return entries;
     }
 
     private static T[] Join<T>(T[] previous, T[] changes, int kept)

@@ -164,10 +164,8 @@ public sealed class HostCompletionTests
     public async Task Load_FlushesPrecedingCompletionBeforeStartingDependencyWork()
     {
         var token = TestContext.CancellationToken;
-        using var fixture = new SessionDependencyFixture();
-        fixture.WritePackage(fixture.AssemblyName, "1.0.0", 42);
-        var path = Path.Combine(fixture.DirectoryPath, fixture.AssemblyName + ".dll");
-        await File.WriteAllBytesAsync(path, fixture.PackageImage(fixture.AssemblyName, "1.0.0"), token);
+        // The real host runs in this process, so its mapped assembly needs a build-owned lifetime on Windows.
+        var path = SampleHost.Samples.GreeterDll;
         await using var connection = new HostProgressConnection(new ReplCore());
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -198,8 +196,8 @@ public sealed class HostCompletionTests
             Assert.AreNotEqual(connection.Progress.First().Identity, reply.CompletionProgress.Identity);
             Assert.AreSequenceEqual(connection.Progress.Select(progress => progress.Sequence).Order(),
                 connection.Progress.Select(progress => progress.Sequence));
-            Assert.IsTrue((await connection.Proxy.HandleAsync(
-                "call int32 [" + fixture.AssemblyName + "]DependencySamples.Values::Read()", token)).Succeeded);
+            foreach (var line in new[] { "ldc.i4.s 20", "ldc.i4.s 22", "call int32 [Greeter]Greeter.Hello::Add(int32, int32)" })
+                Assert.IsTrue((await connection.Proxy.HandleAsync(line, token)).Succeeded);
             var result = await connection.Proxy.HandleAsync("ret", token);
             Assert.Contains(line => line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal), result.Lines);
         }
