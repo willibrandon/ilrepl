@@ -653,17 +653,11 @@ public sealed partial class Session
             throw new ReplException($"'{signature.Name}' already belongs to an edit; choose another method name");
         }
 
-        var replacing = _methods.FirstOrDefault(m => m.Signature.Name == signature.Name);
-        var table = new List<MethodSignature>(signatures);
-        var index = table.FindIndex(s => s.Name == signature.Name);
-        if (index < 0)
-        {
-            table.Add(signature);
-        }
-        else
-        {
-            table[index] = signature;
-        }
+        var index = _methods.FindIndex(method => method.Signature.Name == signature.Name);
+        var replacing = index < 0 ? null : _methods[index];
+        var table = new MethodSignature[signatures.Length + (index < 0 ? 1 : 0)];
+        signatures.CopyTo(table, 0);
+        table[index < 0 ? signatures.Length : index] = signature;
 
         if (replacing is not null && !_rebuilding)
         {

@@ -97,12 +97,14 @@ public sealed partial class SessionFileStore
     {
         await using var input = new FileStream(path, FileMode.Open, FileAccess.Read,
             FileShare.Read | FileShare.Delete, 8192, useAsync: true);
-        if (input.Length > SessionCodec.FileLimit)
+        var length = input.Length;
+        if (length > SessionCodec.FileLimit)
         {
             throw new InvalidDataException("the session or dependency exceeds the 64 MiB file limit");
         }
 
-        using var output = new MemoryStream();
+        cancellationToken.ThrowIfCancellationRequested();
+        using var output = new MemoryStream((int)length);
         var buffer = new byte[8192];
         int read;
         while ((read = await input.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) != 0)
