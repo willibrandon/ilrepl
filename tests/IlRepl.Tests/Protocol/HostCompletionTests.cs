@@ -100,9 +100,12 @@ public sealed class HostCompletionTests
     /// <summary>
     /// Cooperative cancellation acknowledges final progress before its cancelled RPC reply and leaves later source executable.
     /// </summary>
+    /// <param name="retained">Whether the frontend retains this source until its next checkpoint.</param>
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
     [Timeout(30_000, CooperativeCancellation = true)]
-    public async Task CancellationReply_AcknowledgesCompletionBeforePropagating()
+    public async Task CancellationReply_AcknowledgesCompletionBeforePropagating(bool retained)
     {
         var token = TestContext.CancellationToken;
         await using var connection = new HostProgressConnection(new ReplCore());
@@ -124,7 +127,10 @@ public sealed class HostCompletionTests
             }
             return Task.CompletedTask;
         };
-        var pending = connection.Proxy.HandleAsync("ldc.i4.s 99", CancellationToken.None);
+        var pending = retained
+            ? connection.Proxy.HandleRetainedSourceAsync("ldc.i4.s 99", new AnalysisLocation("paste", 0, 0, 11),
+                CancellationToken.None)
+            : connection.Proxy.HandleAsync("ldc.i4.s 99", CancellationToken.None);
         try
         {
             var active = await started.Task.WaitAsync(token);

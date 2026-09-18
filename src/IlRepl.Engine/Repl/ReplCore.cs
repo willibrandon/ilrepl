@@ -132,8 +132,10 @@ public sealed partial class ReplCore : IDisposable
     /// <param name="line">The submitted source.</param>
     /// <param name="location">The editor source identity.</param>
     /// <param name="cancellationToken">Cancels engine-owned work before its commit boundary.</param>
+    /// <param name="deferCheckpoint">Whether the frontend retains this provisional source until the next checkpoint.</param>
     /// <returns>The source acceptance and exit result.</returns>
-    internal HandleResult HandleCancellable(string line, AnalysisLocation? location, CancellationToken cancellationToken)
+    internal HandleResult HandleCancellable(string line, AnalysisLocation? location, CancellationToken cancellationToken,
+        bool deferCheckpoint = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var previous = _cancellationToken;
@@ -142,7 +144,7 @@ public sealed partial class ReplCore : IDisposable
         try
         {
             var result = RecordInput(line, location);
-            SourceCheckpoint?.Invoke();
+            if (!deferCheckpoint || !result.Succeeded || Session.Generation != mark.Generation) SourceCheckpoint?.Invoke();
             return result;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

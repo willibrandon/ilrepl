@@ -86,6 +86,10 @@ public sealed partial class HostServer : IReplHost, IAsyncDisposable
     public Task<HandleReply> HandleSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken) =>
         HandleWithCompletionAsync(() => _engine.HandleSourceAsync(line, location, cancellationToken));
 
+    /// <inheritdoc />
+    public Task<HandleReply> HandleRetainedSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken) =>
+        HandleWithCompletionAsync(() => _engine.HandleRetainedSourceAsync(line, location, cancellationToken));
+
     /// <inheritdoc/>
     public Task<HandleReply> CompareAsync(string identity, CancellationToken cancellationToken) =>
         _engine.CompareAsync(identity, cancellationToken);

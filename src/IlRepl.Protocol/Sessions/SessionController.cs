@@ -222,9 +222,13 @@ public sealed partial class SessionController : IReplEngine
                 }, cancellationToken)
                     .ConfigureAwait(false);
             }
-            reply = location is null ? await _engine.HandleAsync(line, cancellationToken).ConfigureAwait(false)
-                : await _engine.HandleSourceAsync(line, location, cancellationToken).ConfigureAwait(false);
-            _checkpointPendingInput = PendingInput;
+            if (location is not null && !boundary && _engine is IHostedEngine hosted && CanDeferCheckpoint(line))
+                reply = await hosted.HandleRetainedSourceAsync(line, location, cancellationToken).ConfigureAwait(false);
+            else
+                reply = location is null ? await _engine.HandleAsync(line, cancellationToken).ConfigureAwait(false)
+                    : await _engine.HandleSourceAsync(line, location, cancellationToken).ConfigureAwait(false);
+            // Hosted input remains paired with the source revision that actually acknowledged it.
+            if (_engine is not IHostedEngine) _checkpointPendingInput = PendingInput;
             reply = SuppressStreamedOutput(reply);
             if (reply.AssemblyExport is { } export && ExportAsync is { } exportAssembly)
             {
@@ -514,6 +518,26 @@ public sealed partial class SessionController : IReplEngine
             && (text.StartsWith('.') || text.StartsWith('}') || text == "ret" || text.StartsWith("ret ", StringComparison.Ordinal)));
     }
 
+    private bool CanDeferCheckpoint(string line)
+    {
+        if (!_checkpointBatch || PendingInput.Length == 0 || Status.OpenMethod is null) return false;
+        var retained = _checkpointPendingInput;
+        var consumed = retained.Length - PendingInput.Length;
+        if (consumed < 1 || retained[consumed - 1] != line
+            || !retained.AsSpan(consumed).SequenceEqual(PendingInput)) return false;
+
+        // End the batch before comments, declarations, labels, commands, or closing braces can change its interpretation.
+        var comment = Status.Mark.InBlockComment;
+        return IsInstruction(line, ref comment) && IsInstruction(PendingInput[0], ref comment);
+    }
+
+    private bool IsInstruction(string line, ref bool comment)
+    {
+        if (CilLexer.Classify(line, ref comment, out var text) != SourceLineKind.Text) return false;
+        var end = text.AsSpan().IndexOfAny(' ', '\t');
+        return Vocabulary.Opcodes.ContainsKey(end < 0 ? text : text[..end]);
+    }
+
     /// <inheritdoc />
     public async Task<HandleReply> CompareAsync(string identity, CancellationToken cancellationToken)
     {
@@ -537,6 +561,8 @@ public sealed partial class SessionController : IReplEngine
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            // Withdrawn source no longer matches the retained tail, so the next accepted line must checkpoint.
+            _checkpointBatch = false;
             var reply = await _engine.RollbackAsync(mark, cancellationToken).ConfigureAwait(false);
             await CheckpointAsync(cancellationToken).ConfigureAwait(false);
             return reply;

@@ -153,7 +153,18 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
     public Task<HandleReply> HandleSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken) =>
         HandleLineAsync(line, location, cancellationToken);
 
-    private async Task<HandleReply> HandleLineAsync(string line, AnalysisLocation? location, CancellationToken cancellationToken)
+    /// <summary>
+    /// Handles retained source without publishing a redundant checkpoint unless execution or failure crosses a boundary.
+    /// </summary>
+    /// <param name="line">Source still retained by the frontend.</param>
+    /// <param name="location">Its location in the submitting document.</param>
+    /// <param name="cancellationToken">Cancels the operation.</param>
+    /// <returns>The accepted source and current status.</returns>
+    public Task<HandleReply> HandleRetainedSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken) =>
+        HandleLineAsync(line, location, cancellationToken, deferCheckpoint: true);
+
+    private async Task<HandleReply> HandleLineAsync(string line, AnalysisLocation? location, CancellationToken cancellationToken,
+        bool deferCheckpoint = false)
     {
         ArgumentNullException.ThrowIfNull(line);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -162,7 +173,7 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
         var reply = await ExecuteOperationAsync("submission", operation =>
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var result = _core.HandleCancellable(line, location, operation);
+            var result = _core.HandleCancellable(line, location, operation, deferCheckpoint);
             var reply = Reply(result);
             if (result.ComparisonPackage is { } package)
             {

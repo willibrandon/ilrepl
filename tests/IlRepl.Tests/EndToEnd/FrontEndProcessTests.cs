@@ -400,11 +400,15 @@ public sealed class FrontEndProcessTests
         Assert.HasCount(200, lines);
         await terminal.SendInputAsync(Encoding.UTF8.GetBytes("\x1b[200~" + string.Join('\n', lines) + "\n\x1b[201~"), ct);
         await auto.WaitUntilTextAsync("Enter sends 200 lines");
+        var initialHeap = GC.GetTotalMemory(forceFullCollection: false);
+        var initialPause = GC.GetTotalPauseDuration();
         var watch = Stopwatch.StartNew();
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("end of method Big");
         watch.Stop();
         TestContext.WriteLine($"200 lines through the host in {watch.Elapsed.TotalSeconds:F2} s");
+        TestContext.WriteLine($"Observer heap before submission: {initialHeap / (1024 * 1024)} MiB; "
+            + $"GC pause during submission: {(GC.GetTotalPauseDuration() - initialPause).TotalMilliseconds:F2} ms");
         Assert.IsLessThan(TimeSpan.FromSeconds(5), watch.Elapsed, $"took {watch.Elapsed}");
         await auto.TypeAsync("call int32 Big()", ct: ct);
         await auto.EnterAsync(ct: ct);

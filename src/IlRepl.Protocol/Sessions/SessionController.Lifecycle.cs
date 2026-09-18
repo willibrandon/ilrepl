@@ -310,7 +310,7 @@ public sealed partial class SessionController : IInterruptibleEngine
         var editor = Editor;
         string[] prefix = [.. _checkpointPendingInput, .. QueuedInput];
         if (prefix.Length == 0) return editor;
-        var offset = string.Join('\n', prefix).Length + 1;
+        var offset = string.Join('\n', prefix).Length + (editor.Lines.Length == 0 ? 0 : 1);
         return editor with { Lines = [.. prefix, .. editor.Lines], Caret = editor.Caret + offset, Anchor = editor.Anchor + offset };
     }
 

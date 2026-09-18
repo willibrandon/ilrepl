@@ -59,6 +59,11 @@ internal sealed class HostProgressConnection : IReplClient, IAsyncDisposable
     /// </summary>
     internal Func<ExecutionProgress, Task>? AcknowledgeProgress { get; set; }
 
+    /// <summary>
+    /// An optional acknowledgement barrier applied after the source revision is reconstructed and recorded.
+    /// </summary>
+    internal Func<SessionReply, Task>? AcknowledgeCheckpoint { get; set; }
+
     /// <inheritdoc />
     public async Task ExecutionChangedAsync(ExecutionProgress progress, CancellationToken cancellationToken)
     {
@@ -68,11 +73,12 @@ internal sealed class HostProgressConnection : IReplClient, IAsyncDisposable
     }
 
     /// <inheritdoc />
-    public Task CheckpointAsync(SessionReply checkpoint, CancellationToken cancellationToken)
+    public async Task CheckpointAsync(SessionReply checkpoint, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (_checkpoints.Apply(checkpoint) is { } accepted) Checkpoints.Enqueue(accepted);
-        return Task.CompletedTask;
+        if (_checkpoints.Apply(checkpoint) is not { } accepted) return;
+        Checkpoints.Enqueue(accepted);
+        if (AcknowledgeCheckpoint is { } acknowledge) await acknowledge(accepted).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
