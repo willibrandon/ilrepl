@@ -43,7 +43,7 @@
   },
   "blocks": {
     "04fe6f99c4ed389e4ee9cd854759d69f0b4fee24583915a93d161ad2bad7177b": {
-      "where": "usage/sessions.md:110",
+      "where": "usage/sessions.md:125",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -86,7 +86,7 @@
       ]
     },
     "0602b5e9d811baa36bfdd6a7652ee032c41f7d3d44d07e9f86da235ed7b28ffe": {
-      "where": "try.mdx:34",
+      "where": "try.mdx:42",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -1578,7 +1578,7 @@
       ]
     },
     "1a771f7dca99348f8213e79675e4ff747d4691e7680e9e285704ce51a0077bfa": {
-      "where": "usage/editing-methods.md:309",
+      "where": "usage/editing-methods.md:308",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -5513,7 +5513,7 @@
       ]
     },
     "47e43950b6eedd94267f5ac421769451c5f2d7c1df1392fb81d22dfe4a20e067": {
-      "where": "usage/editing.md:140",
+      "where": "usage/editing.md:148",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -5784,7 +5784,7 @@
       ]
     },
     "50e97167e6fd96a373ea16473b38a469d8fc49b1d10aeddcda49d7618d3e4443": {
-      "where": "usage/editing.md:193",
+      "where": "usage/editing.md:202",
       "language": "ilrepl",
       "editor": true,
       "lines": [
@@ -5964,7 +5964,7 @@
       ]
     },
     "539471ce5c1aa044c4f535d71d857b1ec0c0d8719b05f09bd7bc2b2af37ace60": {
-      "where": "usage/disassembly.md:213",
+      "where": "usage/disassembly.md:211",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -7019,7 +7019,7 @@
       ]
     },
     "55caf7175963e9083e2c5de6b3f37bc5142722bd522ca18c98bcc1e34574cca0": {
-      "where": "usage/editing.md:231",
+      "where": "usage/editing.md:241",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -9614,7 +9614,7 @@
       ]
     },
     "5a701d61891036bbe524226e7064b09efcdfe7fe9cffc614744b31edd12d96dd": {
-      "where": "usage/editing.md:86",
+      "where": "usage/editing.md:94",
       "language": "ilrepl",
       "editor": true,
       "lines": [
@@ -9851,7 +9851,7 @@
       ]
     },
     "5f2fe6b2d99e1e670709cab1775d990cb6e23af27158914fc39985a54536e3db": {
-      "where": "usage/editing-methods.md:278",
+      "where": "usage/editing-methods.md:277",
       "language": "cil",
       "editor": true,
       "lines": [
@@ -12526,7 +12526,7 @@
       ]
     },
     "7dd2ce1c0c9aaf2cb73c39d280c2b1baf9998aad849e7fd76010e6e283e02607": {
-      "where": "usage/editing.md:180",
+      "where": "usage/editing.md:189",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -15954,7 +15954,7 @@
       ]
     },
     "b065b4a8d5733b9a901af009ad66b8742a8599243578735e69772a5e6e2e90cc": {
-      "where": "usage/editing.md:113",
+      "where": "usage/editing.md:121",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -16609,7 +16609,7 @@
       ]
     },
     "b83977eb881ec33dfd6edff32b52ac912ec7379628f361663cb57d1e62f41dc0": {
-      "where": "usage/editing.md:174",
+      "where": "usage/editing.md:183",
       "language": "ilrepl",
       "editor": true,
       "lines": [
@@ -17629,7 +17629,7 @@
       ]
     },
     "c23f73077407d9562051d9ea3325dfc08fc8d4616b554030c86662011659768f": {
-      "where": "usage/saving-cells.md:64",
+      "where": "usage/saving-cells.md:67",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -20012,7 +20012,7 @@
       ]
     },
     "e205daa0861c38063d43aea43e68d19926214d0d5979522ffeb217fa2e739270": {
-      "where": "usage/editing.md:123",
+      "where": "usage/editing.md:131",
       "language": "ilrepl",
       "editor": true,
       "lines": [
@@ -20680,7 +20680,7 @@
       ]
     },
     "f31f0102b94a3b3f70d8c9e88d187b97fe6093d8caca77b197215dbafad9b6eb": {
-      "where": "usage/disassembly.md:265",
+      "where": "usage/disassembly.md:263",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -20937,7 +20937,7 @@
       ]
     },
     "f7f684a12c94104188cd95a380cac86d7a4cac98fe4ee6bc45ea5cb14d893e76": {
-      "where": "usage/native-code.md:150",
+      "where": "usage/native-code.md:149",
       "language": "ilrepl-native",
       "editor": false,
       "lines": [
@@ -20980,7 +20980,7 @@
       ]
     },
     "f836de1ec82b8d658ad437ad3f7fc5e48eec1a0d198f0a0c40c60138ce9f9eb4": {
-      "where": "usage/editing.md:164",
+      "where": "usage/editing.md:173",
       "language": "ilrepl",
       "editor": false,
       "lines": [
@@ -21067,7 +21067,7 @@
       ]
     },
     "f85aafeb152f54a65f340566dc47c873c128a17550ffa98195faadfb8406fd97": {
-      "where": "usage/sessions.md:96",
+      "where": "usage/sessions.md:111",
       "language": "cil",
       "editor": true,
       "lines": [
