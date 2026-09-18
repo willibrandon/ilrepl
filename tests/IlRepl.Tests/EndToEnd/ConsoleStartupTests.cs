@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Hex1b;
 using Hex1b.Automation;
@@ -20,20 +21,20 @@ public sealed class ConsoleStartupTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
-    /// Unicode keystrokes and bracketed multiline pastes arriving during discovery remain exact inert drafts and later execute.
+    /// Unicode input during capability probing or alternate-screen entry remains an exact inert draft and later executes.
     /// </summary>
     /// <param name="paste">Whether the early input is a bracketed multiline paste.</param>
+    /// <param name="atTuiEntry">Whether input arrives at alternate-screen entry instead of the Unix capability probe.</param>
     [TestMethod]
-    [DataRow(false)]
-    [DataRow(true)]
+    [DynamicData(nameof(EarlyInputModes))]
     [Timeout(60_000, CooperativeCancellation = true)]
-    public async Task Probe_PreservesEarlyUnicodeInput(bool paste)
+    public async Task Probe_PreservesEarlyUnicodeInput(bool paste, bool atTuiEntry)
     {
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
         var source = "ldc.i4.s 42 // early λ日本" + (paste ? "\nret" : "");
         var input = Encoding.UTF8.GetBytes(paste ? "\x1b[200~" + source + "\x1b[201~" : source);
-        var filter = new StartupInputFilter(input);
+        var filter = new StartupInputFilter(input, atTuiEntry);
         await using var terminal = Create(files, [RepoPaths.FrontEndAssembly, "--no-history"])
             .AddPresentationFilter(filter).Build();
         filter.Terminal = terminal;
@@ -68,6 +69,18 @@ public sealed class ConsoleStartupTests
     }
 
     /// <summary>
+    /// Exercises alternate-screen entry everywhere and capability probing where the actual console driver performs it.
+    /// </summary>
+    public static IEnumerable<(bool Paste, bool AtTuiEntry)> EarlyInputModes()
+    {
+        for (var paste = 0; paste < 2; paste++)
+        {
+            if (!OperatingSystem.IsWindows()) yield return (paste != 0, false);
+            yield return (paste != 0, true);
+        }
+    }
+
+    /// <summary>
     /// Complete and independently acknowledged fragments of late graphics and background responses never edit the draft.
     /// </summary>
     [TestMethod]
@@ -85,6 +98,7 @@ public sealed class ConsoleStartupTests
         await auto.TypeAsync(draft, ct: token);
         await auto.WaitUntilTextAsync(draft);
         await SendObservedAsync("\x1b_Gi=991122;OK\x1b\\\x1b]11;rgb:1111/2222/3333\x1b\\");
+        await SendObservedAsync("\x1b_Gi=991144;ERROR:" + new string('x', 600) + "\x1b\\", requireMultipleReads: true);
         await SendObservedAsync("\x1b_Gi=991133;");
         await SendObservedAsync("OK\x1b\\");
         await SendObservedAsync("\x1b]11;rgb:abcd/");
@@ -99,16 +113,26 @@ public sealed class ConsoleStartupTests
         await auto.WaitUntilTextAsync("cooked-line:restored λ");
         Assert.AreEqual(0, await run.WaitAsync(token));
 
-        async Task SendObservedAsync(string text)
+        async Task SendObservedAsync(string text, bool requireMultipleReads = false)
         {
             var previous = Directory.EnumerateFiles(files.DirectoryPath, "*.read").ToHashSet(StringComparer.Ordinal);
             var bytes = Encoding.UTF8.GetBytes(text);
             await terminal.SendInputAsync(bytes, token);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
             timeout.CancelAfter(TimeSpan.FromSeconds(10));
-            while (!Directory.EnumerateFiles(files.DirectoryPath, "*.read")
-                .Where(path => !previous.Contains(path)).Any(path => File.ReadAllBytes(path).AsSpan().IndexOf(bytes) >= 0))
+            while (true)
             {
+                var paths = Directory.EnumerateFiles(files.DirectoryPath, "*.read").Where(path => !previous.Contains(path))
+                    .OrderBy(path => int.Parse(Path.GetFileNameWithoutExtension(path), CultureInfo.InvariantCulture))
+                    .ToArray();
+                var received = paths.SelectMany(File.ReadAllBytes).ToArray();
+                if (received.Length >= bytes.Length)
+                {
+                    Assert.AreSequenceEqual(bytes, received, "The actual console reader must preserve every protocol byte in order.");
+                    if (requireMultipleReads) Assert.IsGreaterThan(1, paths.Length, "The long reply must span real console reads.");
+                    break;
+                }
+                Assert.AreSequenceEqual(bytes[..received.Length], received, "Observed raw chunks must match the sent prefix.");
                 await Task.Delay(1, timeout.Token);
             }
         }

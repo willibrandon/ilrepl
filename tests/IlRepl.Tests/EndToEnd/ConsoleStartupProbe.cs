@@ -71,6 +71,16 @@ internal static partial class ConsoleStartupProbe
                 await using var presentation = new ConsolePresentation();
                 try { await presentation.EnterRawModeAsync(cancellation.Token); }
                 catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { cancelled = true; }
+                if (OperatingSystem.IsWindows() && mode == "cancel-during" && !cancelled)
+                {
+                    // The Windows driver has no asynchronous capability probe. Keep its entered native mode observable
+                    // until cancellation is acknowledged, then prove that the cancelled caller cannot re-enter it.
+                    monitor!.Join();
+                    if (!cancellation.IsCancellationRequested || CaptureMode().SequenceEqual(original))
+                        throw new InvalidOperationException("Windows raw-mode cancellation was not observed.");
+                    try { await presentation.EnterRawModeAsync(cancellation.Token); }
+                    catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { cancelled = true; }
+                }
                 if (mode == "normal")
                 {
                     if (CaptureMode().SequenceEqual(original)) throw new InvalidOperationException("Raw mode was never entered.");

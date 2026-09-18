@@ -4,9 +4,9 @@ using Hex1b.Tokens;
 namespace IlRepl.Tests.EndToEnd;
 
 /// <summary>
-/// Sends real terminal input when the child first queries graphics support, before presenting its first editor frame.
+/// Sends real input at capability probing or alternate-screen entry before the child's initial editor frame.
 /// </summary>
-internal sealed class StartupInputFilter(byte[] input) : IHex1bTerminalPresentationFilter
+internal sealed class StartupInputFilter(byte[] input, bool atTuiEntry) : IHex1bTerminalPresentationFilter
 {
     private bool _sent;
 
@@ -29,7 +29,7 @@ internal sealed class StartupInputFilter(byte[] input) : IHex1bTerminalPresentat
         IReadOnlyList<AppliedToken> appliedTokens, TimeSpan elapsed, CancellationToken ct = default)
     {
         var tokens = appliedTokens.Select(item => item.Token).ToArray();
-        if (!_sent && tokens.Any(token => token is KgpToken))
+        if (!_sent && tokens.Any(token => atTuiEntry ? token is PrivateModeToken { Mode: 1049, Enable: true } : token is KgpToken))
         {
             _sent = true;
             await Terminal.SendInputAsync(input, ct);
