@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using IlRepl.Processes;
 using IlRepl.Protocol;
+using Microsoft.Win32.SafeHandles;
 
 namespace IlRepl.Tests.EndToEnd;
 
@@ -31,7 +32,7 @@ internal static partial class WindowsConsoleProbe
                 InstallHandler();
                 var start = new ProcessStartInfo(HostLocator.FindDotnet()) { UseShellExecute = false, RedirectStandardError = true };
                 foreach (var argument in args[3..]) start.ArgumentList.Add(argument);
-                using var frontend = Process.Start(start) ?? throw new InvalidOperationException("The frontend did not start.");
+                using var frontend = StartFrontend(start);
                 var errors = frontend.StandardError.ReadToEndAsync();
                 Publish(args[2], frontend.Id.ToString(CultureInfo.InvariantCulture));
                 try
@@ -79,6 +80,31 @@ internal static partial class WindowsConsoleProbe
         if (SetConsoleCtrlHandler(&HandleControl, 1) == 0) throw new Win32Exception(Marshal.GetLastPInvokeError());
     }
 
+    private static Process StartFrontend(ProcessStartInfo start)
+    {
+        // ConPTY attachment does not replace inherited redirected handles. Redirecting stderr makes Process.Start
+        // explicitly copy those handles, so bind stdin/stdout to this launcher's actual attached console first.
+        using var input = File.OpenHandle(@"\\.\CONIN$", FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
+        using var output = File.OpenHandle(@"\\.\CONOUT$", FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
+        if (GetConsoleMode(input, out _) == 0 || GetConsoleMode(output, out _) == 0)
+            throw new Win32Exception(Marshal.GetLastPInvokeError(), "The launcher must use its attached console.");
+        if (SetHandleInformation(input, 1, 1) == 0 || SetHandleInformation(output, 1, 1) == 0)
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        using var originalInput = new SafeFileHandle(GetStdHandle(-10), ownsHandle: false);
+        using var originalOutput = new SafeFileHandle(GetStdHandle(-11), ownsHandle: false);
+        try
+        {
+            if (SetStdHandle(-10, input) == 0 || SetStdHandle(-11, output) == 0)
+                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            return Process.Start(start) ?? throw new InvalidOperationException("The frontend did not start.");
+        }
+        finally
+        {
+            _ = SetStdHandle(-10, originalInput);
+            _ = SetStdHandle(-11, originalOutput);
+        }
+    }
+
     private static void Publish(string path, string contents)
     {
         var temporary = path + ".pending";
@@ -105,6 +131,18 @@ internal static partial class WindowsConsoleProbe
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     private static partial int AttachConsole(uint processId);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    private static partial nint GetStdHandle(int standardHandle);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    private static partial int SetStdHandle(int standardHandle, SafeFileHandle handle);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    private static partial int GetConsoleMode(SafeFileHandle handle, out uint mode);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    private static partial int SetHandleInformation(SafeFileHandle handle, uint mask, uint flags);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     private static partial int FreeConsole();

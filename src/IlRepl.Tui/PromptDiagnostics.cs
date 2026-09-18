@@ -32,6 +32,11 @@ public static class PromptDiagnostics
     {
         ArgumentNullException.ThrowIfNull(state);
         var diagnostics = state.Analyzer is { } analyzer ? analyzer.Diagnostics(state) : state.Analysis?.Diagnostics ?? [];
+        return Visible(state, diagnostics);
+    }
+
+    private static IReadOnlyList<AnalysisDiagnostic> Visible(PromptState state, IReadOnlyList<AnalysisDiagnostic> diagnostics)
+    {
         if (!CompletionOwnsCaret(state))
         {
             return diagnostics;
@@ -107,7 +112,8 @@ public static class PromptDiagnostics
     {
         ArgumentNullException.ThrowIfNull(state);
         state.Analyzer?.Refresh(state);
-        var positions = Visible(state).Where(d => d.Explanation?.Source is null or { Kind: AnalysisSourceKind.Document })
+        var diagnostics = state.Analyzer is { } analyzer ? Visible(state, analyzer.NavigationDiagnostics(state)) : Visible(state);
+        var positions = diagnostics.Where(d => d.Explanation?.Source is null or { Kind: AnalysisSourceKind.Document })
             .Select(d => d.Location).Where(location => location.Line >= 0 && location.Line < state.LineCount && location.Offset is null)
             .Distinct().OrderBy(location => location.Line).ThenBy(location => location.Start).ToArray();
         if (positions.Length == 0)

@@ -4,6 +4,10 @@ These JSON archives retain the actual samples from packaged Native AOT reference
 start. Each record names the measured source commit, package executable hash, generated workload hashes, machine, runtime, and SDK.
 These are observations on the recorded machine, not portable performance guarantees.
 
+The initial baseline contains two Linux x64 runs of `f1dcf38` on a Ryzen 9 9950X running Debian 13, with SDK 10.0.400 and runtime
+10.0.11. Both use the same Native AOT package and generated fixtures, including the session-signature and Cecil core-library import
+cache changes. Measurements of later commits retain their own source and package identities.
+
 `ArchiveSchema` identifies this storage format. `Record` preserves every original startup timestamp, latency sample, percentile,
 process allocation, and memory observation. `Fixture` separates the original colon-delimited generator and content hashes into fields
 to keep generated data readable. `OriginalRecordSha256` identifies the original measurement artifact before that structural change.

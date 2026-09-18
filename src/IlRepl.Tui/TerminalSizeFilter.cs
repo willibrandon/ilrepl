@@ -36,6 +36,11 @@ public sealed class TerminalSizeFilter : IHex1bTerminalPresentationFilter
     /// </summary>
     internal event Action? FirstFrameRendered;
 
+    /// <summary>
+    /// Delivers an already-disambiguated Escape in the terminal's original input order.
+    /// </summary>
+    internal event Action? EscapePressed;
+
     /// <inheritdoc />
     public ValueTask OnSessionStartAsync(int width, int height, DateTimeOffset timestamp, CancellationToken ct = default)
     {
@@ -44,7 +49,8 @@ public sealed class TerminalSizeFilter : IHex1bTerminalPresentationFilter
     }
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlyList<AnsiToken>> OnOutputAsync(IReadOnlyList<AppliedToken> appliedTokens, TimeSpan elapsed, CancellationToken ct = default)
+    public ValueTask<IReadOnlyList<AnsiToken>> OnOutputAsync(
+        IReadOnlyList<AppliedToken> appliedTokens, TimeSpan elapsed, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(appliedTokens);
         OutputObserved?.Invoke(appliedTokens);
@@ -68,7 +74,13 @@ public sealed class TerminalSizeFilter : IHex1bTerminalPresentationFilter
     }
 
     /// <inheritdoc />
-    public ValueTask OnInputAsync(IReadOnlyList<AnsiToken> tokens, TimeSpan elapsed, CancellationToken ct = default) => ValueTask.CompletedTask;
+    public ValueTask OnInputAsync(IReadOnlyList<AnsiToken> tokens, TimeSpan elapsed, CancellationToken ct = default)
+    {
+        // The console adapter returns this marker as its own read after joining the Escape ambiguity read.
+        // Decline mixed token batches, where injection here could overtake preceding ordinary input.
+        if (tokens is [OscToken { Command: "7777", Payload: "ilrepl-escape" }]) EscapePressed?.Invoke();
+        return ValueTask.CompletedTask;
+    }
 
     /// <inheritdoc />
     public ValueTask OnResizeAsync(int width, int height, TimeSpan elapsed, CancellationToken ct = default)

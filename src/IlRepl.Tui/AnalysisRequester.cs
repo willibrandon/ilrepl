@@ -39,6 +39,20 @@ public sealed class AnalysisRequester(IReplEngine engine)
     }
 
     /// <summary>
+    /// Keeps published source locations usable across catalog refreshes without carrying them into changed source or runtimes.
+    /// </summary>
+    internal IReadOnlyList<AnalysisDiagnostic> NavigationDiagnostics(PromptState state)
+    {
+        if (_published is { } published && published.Key.Text == state.Text
+            && published.Key.Version == state.Editor.Document.Version && published.Key.Revision == _engine.Status.Revision
+            && (_engine is not SessionController || published.Key.AssemblyVersion >> 32 == _engine.AssemblyVersion >> 32))
+        {
+            return published.Reply.Diagnostics;
+        }
+        return [];
+    }
+
+    /// <summary>
     /// Applies completed work and coalesces source changes once per render while projecting caret moves locally.
     /// </summary>
     /// <param name="state">The prompt on the render thread.</param>
@@ -122,6 +136,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
         _minimumRequestId = ++_nextRequestId;
         _desired = null;
         _current = null;
+        _published = null;
     }
 
     /// <summary>

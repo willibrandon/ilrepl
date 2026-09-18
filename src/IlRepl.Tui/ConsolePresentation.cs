@@ -15,9 +15,15 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
     private readonly SemaphoreSlim _lifecycle = new(1, 1);
     private readonly SemaphoreSlim _reader = new(1, 1);
     private readonly List<Task<ReadOnlyMemory<byte>>> _reads = [];
+    private readonly TerminalReplyBuffer _input = new();
     private CancellationTokenSource? _rawMode;
     private Task? _disposal;
     private bool _disposed;
+
+    /// <summary>
+    /// Observes actual native read boundaries before terminal replies are framed.
+    /// </summary>
+    internal Action<ReadOnlyMemory<byte>>? InputObserved { get; set; }
 
     /// <inheritdoc />
     public int Width => _inner.Width;
@@ -75,7 +81,37 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
             try
             {
                 await _reader.WaitAsync(cancellation.Token).ConfigureAwait(false);
-                try { return await _inner.ReadInputAsync(cancellation.Token).ConfigureAwait(false); }
+                try
+                {
+                    while (true)
+                    {
+                        var buffered = _input.ReadBuffered();
+                        if (!buffered.IsEmpty) return buffered;
+                        using var escape = _input.NeedsEscapeTimeout
+                            ? CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token) : null;
+                        escape?.CancelAfter(TimeSpan.FromMilliseconds(50));
+                        ReadOnlyMemory<byte> bytes;
+                        try
+                        {
+                            bytes = await _inner.ReadInputAsync(escape?.Token ?? cancellation.Token).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException) when (escape is { IsCancellationRequested: true }
+                            && !cancellation.IsCancellationRequested)
+                        {
+                            return _input.FlushEscape();
+                        }
+                        if (bytes.IsEmpty)
+                        {
+                            // The native driver polls at most every 100 ms. Join that read before returning Escape,
+                            // encoded unambiguously so Hex1b does not add its own second 50 ms timeout.
+                            return escape is { IsCancellationRequested: true } && !cancellation.IsCancellationRequested
+                                ? _input.FlushEscape() : ReadOnlyMemory<byte>.Empty;
+                        }
+                        InputObserved?.Invoke(bytes);
+                        var framed = _input.Append(bytes);
+                        if (!framed.IsEmpty) return framed;
+                    }
+                }
                 finally { _reader.Release(); }
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
@@ -157,7 +193,11 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
                 }
             }
         }
-        finally { await _inner.ExitRawModeAsync(CancellationToken.None).ConfigureAwait(false); }
+        finally
+        {
+            _input.Reset();
+            await _inner.ExitRawModeAsync(CancellationToken.None).ConfigureAwait(false);
+        }
     }
 
     /// <inheritdoc />

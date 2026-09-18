@@ -103,9 +103,16 @@ public sealed class ConsoleStartupTests
         await SendFragmentedAsync("\x1b]11;rgb:abcd/", "1234/5678\x1b\\");
         await auto.TypeAsync(" unchanged", ct: token);
         await auto.WaitUntilTextAsync(draft + " unchanged");
+        await auto.KeyAsync(Hex1bKey.F1, ct: token);
+        await auto.WaitUntilAsync(snapshot => snapshot.GetLine(0).Trim().Equals("help", StringComparison.Ordinal));
+        await auto.KeyAsync(Hex1bKey.Escape, ct: token);
+        await auto.WaitUntilAsync(snapshot => !snapshot.GetLine(0).Trim().Equals("help", StringComparison.Ordinal)
+            && snapshot.ContainsText(draft + " unchanged"));
+        await auto.TypeAsync(" after λ", ct: token);
+        await auto.WaitUntilTextAsync(draft + " unchanged after λ");
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
         await auto.WaitUntilTextAsync("console-mode-restored");
-        Assert.AreEqual(draft + " unchanged", await File.ReadAllTextAsync(Path.Combine(files.DirectoryPath, "draft.txt"), token));
+        Assert.AreEqual(draft + " unchanged after λ", await File.ReadAllTextAsync(Path.Combine(files.DirectoryPath, "draft.txt"), token));
         await auto.TypeAsync("restored λ", ct: token);
         await auto.EnterAsync(ct: token);
         await AssertCookedLineAsync(auto, files, run, token);

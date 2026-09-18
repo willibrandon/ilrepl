@@ -155,13 +155,9 @@ public sealed class HostInteractionTests
     public async Task Loop_RequiresDisplayedConfirmationAndPreservesDraft(bool queueInput, string body)
     {
         var token = TestContext.CancellationToken;
+        using var files = new SessionWorkspaceFixture();
         var host = await HostPaths.StartEngineAsync(token);
         await using var controller = new SessionController(host, async ct => await HostPaths.StartEngineAsync(ct));
-        var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        controller.ProgressChanged += progress =>
-        {
-            if (progress.Phase == ExecutionPhase.UserCode && progress.IsRunning) running.TrySetResult();
-        };
         PromptState? prompt = null;
         await using var terminal = AppTest.Build(controller, new Transcript(), width: 120, onPrompt: state => prompt = state);
         var run = IlReplApp.RunAsync(terminal, prompt, token);
@@ -173,10 +169,14 @@ public sealed class HostInteractionTests
             "finally" => [".try {", "leave DONE", "} finally {", "LOOP: br LOOP", "endfinally", "}", "DONE: ret"],
             _ => ["LOOP: br LOOP"],
         };
-        await AppTest.TypeLinesAsync(auto, [".method void WaitForever() {", .. instructions, "}"], token);
+        await AppTest.TypeLinesAsync(auto,
+        [
+            ".method void WaitForever() {", "ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"running\"",
+            "call void File::WriteAllText(string, string)", .. instructions, "}",
+        ], token);
         await auto.WaitUntilTextAsync("end of method WaitForever");
         await AppTest.TypeLinesAsync(auto, ["call void WaitForever()", "ret"], token);
-        await running.Task.WaitAsync(token);
+        await auto.WaitUntilAsync(_ => File.Exists(files.MarkerPath));
         if (queueInput)
         {
             await auto.TypeAsync("ldc.i4 73", ct: token);

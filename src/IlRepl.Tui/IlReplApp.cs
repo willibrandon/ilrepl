@@ -91,6 +91,7 @@ public static partial class IlReplApp
                     if (adapter is Hex1bAppWorkloadAdapter workload)
                     {
                         workload.EnableMouse = options.EnableMouse;
+                        size.EscapePressed += () => workload.TryWriteInputEvent(Hex1bKeyEvent.Plain(Hex1bKey.Escape));
                     }
 
                     prompt.PasteInput = new PromptInputReader(adapter.InputEvents, input => FilterPromptInput(prompt, input));
