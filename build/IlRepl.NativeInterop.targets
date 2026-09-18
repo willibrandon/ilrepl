@@ -1,0 +1,66 @@
+<Project>
+  <!-- Hex1b 0.167.0 supplies glibc binaries only. Build its pinned helper with the target musl toolchain. -->
+  <PropertyGroup>
+    <_IlReplNativeInteropRid>$(RuntimeIdentifier)</_IlReplNativeInteropRid>
+    <_IlReplNativeInteropRid Condition="'$(_IlReplNativeInteropRid)' == '' or '$(_IlReplNativeInteropRid)' == 'any'"
+      >$(NETCoreSdkRuntimeIdentifier)</_IlReplNativeInteropRid>
+  </PropertyGroup>
+
+  <Target Name="PrepareMuslNativeInterop">
+    <Error Condition="'$(_IlReplNativeInteropRid)' != '$(NETCoreSdkRuntimeIdentifier)'"
+           Text="Build $(_IlReplNativeInteropRid) inside the matching Alpine .NET SDK image with build-base installed." />
+    <PropertyGroup>
+      <_IlReplNativeInteropBase>$(IntermediateOutputPath)native-interop/$(MSBuildProjectName)/</_IlReplNativeInteropBase>
+      <_IlReplNativeInteropDirectory
+        >$(_IlReplNativeInteropBase)$(Configuration)/$(_IlReplNativeInteropRid)/</_IlReplNativeInteropDirectory>
+      <_IlReplNativeInteropSource>$(MSBuildThisFileDirectory)native/hex1b/hex1binterop.c</_IlReplNativeInteropSource>
+      <_IlReplNativeInteropAssetRid>$(_IlReplNativeInteropRid.Replace('linux-musl-', 'linux-'))</_IlReplNativeInteropAssetRid>
+      <_IlReplNativeInteropRelativePath
+        >runtimes/$(_IlReplNativeInteropAssetRid)/native/libhex1binterop.so</_IlReplNativeInteropRelativePath>
+      <_IlReplNativeInteropRelativePath Condition="'$(RuntimeIdentifier)' != '' and '$(RuntimeIdentifier)' != 'any'"
+        >libhex1binterop.so</_IlReplNativeInteropRelativePath>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="BuildMuslNativeInterop"
+          DependsOnTargets="PrepareMuslNativeInterop"
+          Condition="$(_IlReplNativeInteropRid.StartsWith('linux-musl-')) and '$(DesignTimeBuild)' != 'true'"
+          Inputs="$(_IlReplNativeInteropSource);$(MSBuildThisFileFullPath)"
+          Outputs="$(_IlReplNativeInteropDirectory)libhex1binterop.so">
+    <MakeDir Directories="$(_IlReplNativeInteropDirectory)" />
+    <Exec Command="cc -O2 -fPIC -shared -o &quot;$(_IlReplNativeInteropDirectory)libhex1binterop.so&quot;
+      &quot;$(_IlReplNativeInteropSource)&quot; -lutil" />
+    <ItemGroup>
+      <FileWrites Include="$(_IlReplNativeInteropDirectory)libhex1binterop.so" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CopyMuslNativeInteropToOutput"
+          AfterTargets="CopyFilesToOutputDirectory"
+          DependsOnTargets="BuildMuslNativeInterop"
+          Condition="$(_IlReplNativeInteropRid.StartsWith('linux-musl-')) and '$(DesignTimeBuild)' != 'true'">
+    <!-- Match the native asset path in a portable deps.json or the root of a RID-specific output. -->
+    <Copy SourceFiles="$(_IlReplNativeInteropDirectory)libhex1binterop.so"
+          DestinationFiles="$(TargetDir)$(_IlReplNativeInteropRelativePath)"
+          SkipUnchangedFiles="true" />
+    <ItemGroup>
+      <FileWrites Include="$(TargetDir)$(_IlReplNativeInteropRelativePath)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CopyMuslNativeInteropToPublish"
+          AfterTargets="Publish"
+          DependsOnTargets="BuildMuslNativeInterop"
+          Condition="$(_IlReplNativeInteropRid.StartsWith('linux-musl-')) and '$(DesignTimeBuild)' != 'true'">
+    <!-- Tool packing consumes the finished publish directory, so both distributions receive the matching native helper. -->
+    <Copy SourceFiles="$(_IlReplNativeInteropDirectory)libhex1binterop.so"
+          DestinationFiles="$(PublishDir)$(_IlReplNativeInteropRelativePath)"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)native/hex1b/LICENSE"
+          DestinationFiles="$(PublishDir)licenses/Hex1b.LICENSE"
+          SkipUnchangedFiles="true" />
+    <ItemGroup>
+      <FileWrites Include="$(PublishDir)$(_IlReplNativeInteropRelativePath);$(PublishDir)licenses/Hex1b.LICENSE" />
+    </ItemGroup>
+  </Target>
+</Project>

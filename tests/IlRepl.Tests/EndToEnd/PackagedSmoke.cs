@@ -47,10 +47,10 @@ internal static class PackagedSmoke
     /// <returns>Completion after the frontend exits successfully.</returns>
     internal static async Task InterruptAndRestartAsync(string executable, string directory, CancellationToken cancellationToken)
     {
-        await using var terminal = CreateTerminal(executable, directory);
+        await using var terminal = CreateTerminal(executable, directory, out var diagnosticsPath);
         var run = terminal.RunAsync(cancellationToken);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
-        await auto.WaitUntilTextAsync("il[1]>");
+        await WaitForStartupAsync(auto, run, "il[1]>", diagnosticsPath, cancellationToken);
         await auto.WaitUntilNoTextAsync("starting execution host");
         await SubmitAsync(auto, ".method int32 Answer() {", cancellationToken);
         await SubmitAsync(auto, "ldc.i4 42", cancellationToken);
@@ -107,11 +107,11 @@ internal static class PackagedSmoke
 
     private static async Task OfflineSaveAsync(string executable, string directory, CancellationToken cancellationToken)
     {
-        await using var terminal = CreateTerminal(executable, directory,
+        await using var terminal = CreateTerminal(executable, directory, out var diagnosticsPath,
             new Dictionary<string, string> { ["ILREPL_HOST_PATH"] = Path.Combine(directory, "missing-host.dll") });
         var run = terminal.RunAsync(cancellationToken);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
-        await auto.WaitUntilTextAsync("host unavailable");
+        await WaitForStartupAsync(auto, run, "host unavailable", diagnosticsPath, cancellationToken);
         var saved = Path.Combine(directory, "offline.ilrepl.json");
         await SubmitAsync(auto, ".session save " + LiteralParser.Escape(saved) + " --embed", cancellationToken);
         await auto.WaitUntilAsync(_ => File.Exists(saved));
@@ -124,10 +124,10 @@ internal static class PackagedSmoke
 
     private static async Task SupervisorAdoptionAsync(string executable, string directory, CancellationToken cancellationToken)
     {
-        await using var terminal = CreateTerminal(executable, directory);
+        await using var terminal = CreateTerminal(executable, directory, out var diagnosticsPath);
         var run = terminal.RunAsync(cancellationToken);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
-        await auto.WaitUntilTextAsync("il[1]>");
+        await WaitForStartupAsync(auto, run, "il[1]>", diagnosticsPath, cancellationToken);
         await auto.WaitUntilNoTextAsync("starting execution host");
         var identity = Path.Combine(directory, "runtime-before-adoption");
         var release = Path.Combine(directory, "release-adoption");
@@ -178,29 +178,66 @@ internal static class PackagedSmoke
         return int.Parse(result.StandardOutput.Trim());
     }
 
-    private static Hex1bTerminal CreateTerminal(string executable, string directory,
-        IReadOnlyDictionary<string, string>? environment = null) => Hex1bTerminal.CreateBuilder()
-        .WithPtyProcess(options =>
+    private static Hex1bTerminal CreateTerminal(string executable, string directory, out string diagnosticsPath,
+        IReadOnlyDictionary<string, string>? environment = null)
+    {
+        var stderr = Path.Combine(directory, "frontend-" + Guid.NewGuid().ToString("N") + ".stderr");
+        diagnosticsPath = stderr;
+        return Hex1bTerminal.CreateBuilder()
+            .WithPtyProcess(options =>
+            {
+                var managed = Path.GetExtension(executable).Equals(".dll", StringComparison.OrdinalIgnoreCase);
+                options.FileName = managed ? HostLocator.FindDotnet() : executable;
+                options.Arguments = managed ? [executable, "--no-history"] : ["--no-history"];
+                options.WorkingDirectory = directory;
+                options.Environment = new Dictionary<string, string> { ["TERM"] = "xterm-256color", ["NO_COLOR"] = "" };
+                if (environment is not null)
+                {
+                    foreach (var (name, value) in environment) options.Environment[name] = value;
+                }
+                if (!OperatingSystem.IsWindows())
+                {
+                    // Retain startup exceptions independently of the PTY pump, which can stop before final output is applied.
+                    const string launch = "ilrepl_smoke_stderr=$1; shift; exec \"$@\" 2> \"$ilrepl_smoke_stderr\"";
+                    options.Arguments = [.. options.Environment.Select(pair => pair.Key + "=" + pair.Value),
+                        "/bin/sh", "-c", launch, "ilrepl-smoke", stderr, options.FileName, .. options.Arguments];
+                    options.FileName = "/usr/bin/env";
+                }
+            })
+            .WithHeadless()
+            .WithDimensions(120, 35)
+            .Build();
+    }
+
+    private static async Task WaitForStartupAsync(Hex1bTerminalAutomator auto, Task<int> run, string expected,
+        string diagnosticsPath, CancellationToken cancellationToken)
+    {
+        if (OperatingSystem.IsWindows())
         {
-            var managed = Path.GetExtension(executable).Equals(".dll", StringComparison.OrdinalIgnoreCase);
-            options.FileName = managed ? HostLocator.FindDotnet() : executable;
-            options.Arguments = managed ? [executable, "--no-history"] : ["--no-history"];
-            options.WorkingDirectory = directory;
-            options.Environment = new Dictionary<string, string> { ["TERM"] = "xterm-256color", ["NO_COLOR"] = "" };
-            if (environment is not null)
+            await auto.WaitUntilTextAsync(expected);
+            return;
+        }
+        try
+        {
+            await auto.WaitUntilAsync(snapshot => run.IsCompleted || snapshot.ContainsText(expected),
+                description: "the frontend displays " + expected + " or exits");
+            if (run.IsCompleted)
+                throw new InvalidOperationException($"The frontend exited with code {await run} before displaying {expected}.");
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            var error = "No stderr file was created.";
+            try
             {
-                foreach (var (name, value) in environment) options.Environment[name] = value;
+                if (File.Exists(diagnosticsPath)) error = await File.ReadAllTextAsync(diagnosticsPath, cancellationToken);
             }
-            if (!OperatingSystem.IsWindows())
+            catch (Exception diagnosticError) when (diagnosticError is IOException or UnauthorizedAccessException)
             {
-                options.Arguments = [.. options.Environment.Select(pair => pair.Key + "=" + pair.Value),
-                    options.FileName, .. options.Arguments];
-                options.FileName = "/usr/bin/env";
+                error = "Could not read startup stderr: " + diagnosticError.Message;
             }
-        })
-        .WithHeadless()
-        .WithDimensions(120, 35)
-        .Build();
+            throw new InvalidOperationException("Packaged frontend startup failed. Standard error:\n" + error, exception);
+        }
+    }
 
     private static async Task SubmitAsync(Hex1bTerminalAutomator auto, string line, CancellationToken cancellationToken)
     {

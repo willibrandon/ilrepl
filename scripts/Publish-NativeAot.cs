@@ -3,6 +3,7 @@
 #:package System.CommandLine
 
 using System.CommandLine;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Reflection.PortableExecutable;
@@ -70,6 +71,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
     }
     var publishedHost = ReadReadyToRunHost(publishDirectory, rid);
     if (publishedHost is null) return 1;
+    var publishedTerminalHelper = ReadTerminalHelperHash(publishDirectory, rid);
     if (buildOnly) return 0;
 
     var executable = Path.Combine(publishDirectory, OperatingSystem.IsWindows() ? "ilrepl.exe" : "ilrepl");
@@ -99,7 +101,8 @@ root.SetAction(async (parseResult, cancellationToken) =>
     var checkedPackages = new List<Dictionary<string, string>>();
     if (smokeOnly)
     {
-        await WriteEvidenceAsync(artifacts, rid, publishedHash, publishedHost, checkedPackages, cancellationToken);
+        await WriteEvidenceAsync(artifacts, rid, publishedHash, publishedHost, publishedTerminalHelper,
+            checkedPackages, cancellationToken);
         return 0;
     }
 
@@ -129,6 +132,12 @@ root.SetAction(async (parseResult, cancellationToken) =>
             }
             var packagedHost = ReadReadyToRunHost(packagedDirectory, rid);
             if (packagedHost is null) return 1;
+            var packagedTerminalHelper = ReadTerminalHelperHash(packagedDirectory, rid);
+            if (packagedTerminalHelper != publishedTerminalHelper)
+            {
+                Console.Error.WriteLine("the packaged terminal helper differs from the validated published helper");
+                return 1;
+            }
             if (!await SmokePublishedAsync(repo, packagedDirectory, packagedExecutable, cancellationToken)) return 1;
             var packageEvidence = new Dictionary<string, string>(packagedHost)
             {
@@ -137,6 +146,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
                 ["executableSha256"] = Convert.ToHexString(
                     SHA256.HashData(await File.ReadAllBytesAsync(packagedExecutable, cancellationToken))),
             };
+            if (packagedTerminalHelper is not null) packageEvidence["terminalHelperSha256"] = packagedTerminalHelper;
             checkedPackages.Add(packageEvidence);
             Console.WriteLine($"packed and validated {Path.GetFileName(package)}");
         }
@@ -150,7 +160,8 @@ root.SetAction(async (parseResult, cancellationToken) =>
         Console.Error.WriteLine("the expected runtime-specific package was not produced");
         return 1;
     }
-    await WriteEvidenceAsync(artifacts, rid, publishedHash, publishedHost, checkedPackages, cancellationToken);
+    await WriteEvidenceAsync(artifacts, rid, publishedHash, publishedHost, publishedTerminalHelper,
+        checkedPackages, cancellationToken);
 
     return 0;
 });
@@ -231,8 +242,15 @@ static Dictionary<string, string>? ReadReadyToRunHost(string directory, string r
     return evidence;
 }
 
+static string? ReadTerminalHelperHash(string directory, string rid)
+{
+    if (!rid.StartsWith("linux-", StringComparison.Ordinal)) return null;
+    using var stream = File.OpenRead(Path.Combine(directory, "libhex1binterop.so"));
+    return Convert.ToHexString(SHA256.HashData(stream));
+}
+
 static async Task WriteEvidenceAsync(string artifacts, string rid, string publishedHash, Dictionary<string, string> publishedHost,
-    List<Dictionary<string, string>> packages, CancellationToken cancellationToken)
+    string? terminalHelperHash, List<Dictionary<string, string>> packages, CancellationToken cancellationToken)
 {
     Directory.CreateDirectory(artifacts);
     await using var file = File.Create(Path.Combine(artifacts, "smoke-results.json"));
@@ -247,6 +265,7 @@ static async Task WriteEvidenceAsync(string artifacts, string rid, string publis
         ? RuntimeInformation.RuntimeIdentifier.StartsWith("linux-musl-", StringComparison.Ordinal) ? "musl" : "glibc" : null);
     writer.WriteString("commit", Environment.GetEnvironmentVariable("GITHUB_SHA"));
     writer.WriteString("publishedExecutableSha256", publishedHash);
+    writer.WriteString("publishedTerminalHelperSha256", terminalHelperHash);
     writer.WriteBoolean("completed", true);
     writer.WriteStartObject("publishedHost");
     foreach (var (name, value) in publishedHost) writer.WriteString(name, value);
@@ -394,7 +413,13 @@ static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory,
         Directory.CreateDirectory(runtimeOnly);
         var muxerName = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
         var muxer = Path.Combine(runtimeOnly, muxerName);
-        File.Copy(Path.Combine(installedRoot, muxerName), muxer);
+        var installedMuxer = Path.Combine(installedRoot, muxerName);
+        CopyRuntimeFile(installedMuxer, muxer);
+        if (OperatingSystem.IsWindows())
+        {
+            Console.WriteLine($"runtime-only muxer attributes: installed {File.GetAttributes(installedMuxer)}, "
+                + $"copied {File.GetAttributes(muxer)}");
+        }
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(muxer, File.GetUnixFileMode(Path.Combine(installedRoot, muxerName)));
@@ -451,7 +476,7 @@ static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory,
     }
     finally
     {
-        Directory.Delete(directory, recursive: true);
+        DeleteRuntimeDirectory(directory);
     }
 }
 
@@ -482,12 +507,58 @@ static void CopyDirectory(string source, string destination)
     Directory.CreateDirectory(destination);
     foreach (var file in Directory.EnumerateFiles(source))
     {
-        File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
+        CopyRuntimeFile(file, Path.Combine(destination, Path.GetFileName(file)));
     }
 
     foreach (var directory in Directory.EnumerateDirectories(source))
     {
         CopyDirectory(directory, Path.Combine(destination, Path.GetFileName(directory)));
+    }
+}
+
+static void CopyRuntimeFile(string source, string destination)
+{
+    File.Copy(source, destination);
+    if (OperatingSystem.IsWindows())
+        File.SetAttributes(destination, File.GetAttributes(destination) & ~FileAttributes.ReadOnly);
+}
+
+static void DeleteRuntimeDirectory(string directory)
+{
+    try
+    {
+        Directory.Delete(directory, recursive: true);
+    }
+    catch (Exception exception) when (OperatingSystem.IsWindows() && exception is IOException or UnauthorizedAccessException)
+    {
+        try
+        {
+            Console.Error.WriteLine($"runtime-only fixture cleanup failed (0x{exception.HResult:X8}): {directory}");
+            var muxer = Path.Combine(directory, "runtime-only", "dotnet.exe");
+            if (File.Exists(muxer)) Console.Error.WriteLine($"remaining muxer attributes: {File.GetAttributes(muxer)}");
+            var prefix = directory + Path.DirectorySeparatorChar;
+            foreach (var process in Process.GetProcesses())
+            {
+                using (process)
+                {
+                    try
+                    {
+                        var image = process.MainModule?.FileName;
+                        if (image?.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) == true)
+                            Console.Error.WriteLine($"runtime-only fixture process: {process.Id} {image}");
+                    }
+                    catch (Exception inspection) when (inspection is Win32Exception or InvalidOperationException)
+                    {
+                        // Processes may exit or deny inspection while diagnostics are collected.
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Best-effort diagnostics must never replace the original cleanup failure.
+        }
+        throw;
     }
 }
 
