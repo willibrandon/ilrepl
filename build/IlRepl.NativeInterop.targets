@@ -28,8 +28,8 @@
           Inputs="$(_IlReplNativeInteropSource);$(MSBuildThisFileFullPath)"
           Outputs="$(_IlReplNativeInteropDirectory)libhex1binterop.so">
     <MakeDir Directories="$(_IlReplNativeInteropDirectory)" />
-    <Exec Command="cc -O2 -fPIC -shared -o &quot;$(_IlReplNativeInteropDirectory)libhex1binterop.so&quot;
-      &quot;$(_IlReplNativeInteropSource)&quot; -lutil" />
+    <Exec WorkingDirectory="$(_IlReplNativeInteropDirectory)"
+          Command="cc -O2 -fPIC -shared -o libhex1binterop.so &quot;$(_IlReplNativeInteropSource)&quot; -lutil" />
     <ItemGroup>
       <FileWrites Include="$(_IlReplNativeInteropDirectory)libhex1binterop.so" />
     </ItemGroup>

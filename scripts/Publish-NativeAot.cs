@@ -414,7 +414,7 @@ static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory,
         var muxerName = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
         var muxer = Path.Combine(runtimeOnly, muxerName);
         var installedMuxer = Path.Combine(installedRoot, muxerName);
-        CopyRuntimeFile(installedMuxer, muxer);
+        File.Copy(installedMuxer, muxer);
         if (OperatingSystem.IsWindows())
         {
             Console.WriteLine($"runtime-only muxer attributes: installed {File.GetAttributes(installedMuxer)}, "
@@ -507,20 +507,13 @@ static void CopyDirectory(string source, string destination)
     Directory.CreateDirectory(destination);
     foreach (var file in Directory.EnumerateFiles(source))
     {
-        CopyRuntimeFile(file, Path.Combine(destination, Path.GetFileName(file)));
+        File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
     }
 
     foreach (var directory in Directory.EnumerateDirectories(source))
     {
         CopyDirectory(directory, Path.Combine(destination, Path.GetFileName(directory)));
     }
-}
-
-static void CopyRuntimeFile(string source, string destination)
-{
-    File.Copy(source, destination);
-    if (OperatingSystem.IsWindows())
-        File.SetAttributes(destination, File.GetAttributes(destination) & ~FileAttributes.ReadOnly);
 }
 
 static void DeleteRuntimeDirectory(string directory)
@@ -551,6 +544,18 @@ static void DeleteRuntimeDirectory(string directory)
                     {
                         // Processes may exit or deny inspection while diagnostics are collected.
                     }
+                }
+            }
+            var handleTool = Environment.GetEnvironmentVariable("ILREPL_SMOKE_HANDLE_PATH");
+            if (handleTool is not null && File.Exists(handleTool))
+            {
+                var start = new ProcessStartInfo(handleTool) { UseShellExecute = false };
+                foreach (var argument in new[] { "-accepteula", "-nobanner", "-a", directory }) start.ArgumentList.Add(argument);
+                using var handles = Process.Start(start);
+                if (handles is not null && !handles.WaitForExit(15_000))
+                {
+                    handles.Kill(entireProcessTree: true);
+                    handles.WaitForExit();
                 }
             }
         }

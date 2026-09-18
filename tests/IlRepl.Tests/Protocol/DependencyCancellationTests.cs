@@ -63,7 +63,9 @@ public sealed class DependencyCancellationTests
             new XElement("ParameterGroup", new XElement("Marker", new XAttribute("Required", "true")),
                 new XElement("Release", new XAttribute("Required", "true"))),
             new XElement("Task", new XElement("Code", new XAttribute("Type", "Fragment"), new XAttribute("Language", "cs"),
-                new XCData("System.IO.File.WriteAllText(Marker, System.Diagnostics.Process.GetCurrentProcess().Id.ToString());"
+                new XCData("System.IO.File.WriteAllText(Marker + \".pending\","
+                    + "System.Diagnostics.Process.GetCurrentProcess().Id.ToString());"
+                    + "System.IO.File.Move(Marker + \".pending\", Marker);"
                     + "while (!System.IO.File.Exists(Release)) System.Threading.Thread.Yield();")))));
         xml.Root.Add(new XElement("Target", new XAttribute("Name", "AwaitInterrupt"), new XAttribute("BeforeTargets", "CoreCompile"),
             new XElement("AwaitCancellationGate", new XAttribute("Marker", marker), new XAttribute("Release", release))));

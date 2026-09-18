@@ -41,8 +41,9 @@ The default command writes packages under `artifacts/native-aot/<rid>/packages`.
 beside the publish directory, recording the validated RID, ReadyToRun machine, and frontend, host, and package hashes.
 Smoke-only results contain no package entries. Extracted packages undergo the same host image and behavior checks.
 Linux evidence also records the terminal helper hash and requires the packaged helper to match the published copy.
-Runtime-only smoke fixtures clear read-only attributes on their copied Windows files. Cleanup failures retain the error,
-file attributes, and any observable process paths still using the fixture.
+Windows runtime-only cleanup failures retain the error, file attributes, and observable process paths still using the fixture.
+CI also supplies Microsoft's [Handle](https://learn.microsoft.com/sysinternals/downloads/handle) through `ILREPL_SMOKE_HANDLE_PATH`
+to report matching open handles when cleanup fails. This diagnostic never closes handles or changes the validation result.
 
 The opcode reference generator builds the engine itself. The browser publish needs the `wasm-tools` workload.
 Its scripts, runtime, and samples share a content-hashed directory. The site reads the generated asset manifest at build time

@@ -127,6 +127,18 @@ jobs:
         with:
           dotnet-version: '10.0.400'
 
+      - name: Prepare Windows file-lock diagnostics
+        if: startsWith(matrix.rid, 'win-')
+        shell: pwsh
+        run: |
+          $ilreplHandleDirectory = Join-Path $env:RUNNER_TEMP 'ilrepl-handle'
+          $ilreplHandleArchive = "$ilreplHandleDirectory.zip"
+          Invoke-WebRequest 'https://download.sysinternals.com/files/Handle.zip' -OutFile $ilreplHandleArchive -TimeoutSec 30
+          Expand-Archive $ilreplHandleArchive $ilreplHandleDirectory
+          $ilreplHandleName = if ('${{ matrix.rid }}' -eq 'win-arm64') { 'handle64a.exe' } else { 'handle64.exe' }
+          $ilreplHandlePath = Join-Path $ilreplHandleDirectory $ilreplHandleName
+          "ILREPL_SMOKE_HANDLE_PATH=$ilreplHandlePath" >> $env:GITHUB_ENV
+
       - name: Publish, smoke test, and pack
         if: ${{ !startsWith(matrix.rid, 'linux-musl-') }}
         run: dotnet run --file scripts/Publish-NativeAot.cs -- --rid ${{ matrix.rid }} --package-version 0.0.0-ci
