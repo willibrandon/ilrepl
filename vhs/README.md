@@ -10,6 +10,8 @@ vhs vhs/quick-start.tape
 
 Both tapes capture the running terminal at 1200 × 600 with the same font, padding, theme,
 and window bar as dotsider. `--no-history` keeps existing history out of the recording.
+The prompt opens before the execution host is ready. Both tapes wait for the status bar
+to start with the empty stack before showing the terminal and sending instructions.
 
 `readme.tape` writes `assets/ilrepl.png`, used by the README and the editing page.
 `quick-start.tape` writes `docs/public/quick-start.gif`. Its roughly 24-second loop uses

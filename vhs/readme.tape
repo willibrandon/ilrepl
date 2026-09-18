@@ -18,6 +18,7 @@ Hide
 Type "src/IlRepl/bin/Debug/net10.0/ilrepl --no-history"
 Enter
 Wait+Screen /il\[1\]>/
+Wait+Screen /(?m)^stack (before )?\[\]/
 Show
 
 Type "ldc.i4 6"
