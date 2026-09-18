@@ -13,6 +13,10 @@ navigation corrections. It meets all existing budgets and retains its exact pack
 before writing its final record; its available process artifacts and log remain in `20260918T144148154`. These observations do not
 replace the two complete baseline runs.
 
+The combined-workload observation at `20260918T164312150` measures `0523005`, including acknowledged completion delivery and the
+help refresh fix. It meets all existing budgets and retains the matching package, host, and fixture identities. It is an additional
+observation; the two complete baseline runs remain unchanged.
+
 `ArchiveSchema` identifies this storage format. `Record` preserves every original startup timestamp, latency sample, percentile,
 process allocation, and memory observation. `Fixture` separates the original colon-delimited generator and content hashes into fields
 to keep generated data readable. `OriginalRecordSha256` identifies the original measurement artifact before that structural change.
