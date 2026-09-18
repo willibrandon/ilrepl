@@ -230,8 +230,8 @@ public sealed class SessionDocumentTests
     /// <param name="line">The source at the completion caret.</param>
     /// <param name="expected">The exact offered words.</param>
     [TestMethod]
-    [DataRow(".session ", "cell,cells,open,restore,run,save")]
-    [DataRow(".session re", "restore")]
+    [DataRow(".session ", "cell,cells,open,restart,restore,run,save")]
+    [DataRow(".session re", "restart,restore")]
     [DataRow(".session save --e", "--embed")]
     [DataRow(".session open --f", "--force")]
     [DataRow(".session restore --b", "--build")]

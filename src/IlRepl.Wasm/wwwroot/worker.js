@@ -45,6 +45,8 @@ try {
   const exports = await getAssemblyExports(config.mainAssemblyName);
   self.__ilreplSignalInput = exports.IlRepl.Wasm.WasmPresentationAdapter.SignalInputAvailable;
   self.__ilreplWorkspace = exports.IlRepl.Wasm.BrowserWorkspace.ExecuteAsync;
+  // This export exists only when the browser conformance build is explicitly requested.
+  self.__ilreplConformance = exports.IlRepl.Wasm.BrowserConformance?.Execute;
   await runMain();
 } catch (err) {
   self.postMessage({ type: 'error', message: err.toString(), stack: err.stack });

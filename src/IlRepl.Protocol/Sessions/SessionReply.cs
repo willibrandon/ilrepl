@@ -9,12 +9,17 @@ namespace IlRepl.Protocol;
 public sealed record SessionReply
 {
     /// <summary>
+    /// The changed-tail metadata used only for acknowledged host notifications, never stored in a session file.
+    /// </summary>
+    public SessionCheckpointRevision? CheckpointDelta { get; init; }
+
+    /// <summary>
     /// The captured or reconstructed document.
     /// </summary>
     public SessionDocument Document { get; init; } = new();
 
     /// <summary>
-    /// The associated desktop path or browser download name.
+    /// The associated session file path or download name.
     /// </summary>
     public string? Path { get; init; } = null;
 
@@ -42,6 +47,11 @@ public sealed record SessionReply
     /// Original source at the acknowledged execution boundary.
     /// </summary>
     public string[] PendingSource { get; init; } = [];
+
+    /// <summary>
+    /// Argument, local, and type argument declarations needed to recall an interrupted cell without its runtime values.
+    /// </summary>
+    public string[] PendingInputs { get; init; } = [];
 
     /// <summary>
     /// The conventional process exit code for a host operation that could not read its requested input.

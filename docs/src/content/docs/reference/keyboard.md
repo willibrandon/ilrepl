@@ -20,17 +20,22 @@ description: Keys in the terminal UI.
 | Ctrl+Z, Ctrl+Y | Undo and redo. |
 | Ctrl+L | Clear the transcript. |
 | Shift+Up | On an empty prompt, select the last transcript line. Shift+Up and Shift+Down extend the selection, y copies it, and Escape or a click ends it. Dragging with the mouse selects as well. |
-| Ctrl+C | Copy the selection; otherwise clear the buffer, or cancel a block that is going by; otherwise quit. |
+| Ctrl+C | Copy a selection, interrupt running work, or clear idle input. An empty prompt stays open. |
 | Ctrl+S | Save the session; ask for a path on the first save. |
 | Ctrl+O | Choose a session to open without execution. |
+| Alt+R | Retry process supervision when a recovery notice offers it; keep the current runtime. |
 | Ctrl+Q | Quit; offer Save, Discard, and Cancel for a modified file-associated session. |
 
 In the Save changes dialog, Up and Down or Shift+Tab and Tab move between Save, Discard, and Cancel.
 Navigation wraps at either end. Enter confirms the focused choice; Escape cancels.
 
-In the browser, selection and copy are the terminal's own: drag to select and press y, Cmd+C, or
-Ctrl+C to copy. Shift+Up and Ctrl+C's copy of a buffer selection belong to the desktop.
-Ctrl+S downloads a session and Ctrl+O opens the page's file picker while the browser terminal has focus.
+While work is running, the first Ctrl+C requests cancellation and keeps the runtime.
+Package restores and builds show `Cancelling` while they stop. If user IL cannot stop, a notice offers a runtime restart.
+Only another Ctrl+C after that notice confirms the restart. An infinite loop needs this confirmation.
+Repeated presses after work finishes do not quit the application.
+
+A restart retains source, definitions, edits, history, and the draft, but discards objects and static field values.
+You can also use `.session restart`. [Session replay](/usage/sessions/#run-and-recall) has its own immediate-stop behavior.
 
 The palette opens on an opcode or command prefix, then follows the operand being edited. A type
 name leads to its members after `::`; field instructions offer fields, `ldloc` and `ldarg` offer

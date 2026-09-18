@@ -17,7 +17,7 @@ public static partial class ComparisonDescendantSource
     /// <param name="records">The test-owned directory containing process and readiness records.</param>
     /// <param name="grandchild">Whether an intermediate child exits before the comparison worker.</param>
     /// <param name="mode">The way the compared method ends.</param>
-    /// <param name="escape">Whether the child creates a new Unix session.</param>
+    /// <param name="escape">Whether the child leaves the inherited Unix session or Windows console.</param>
     /// <returns>The normal result, or a distinct value if the previous side left a live descendant.</returns>
     public static int Run(string executable, string records, bool grandchild, string mode, bool escape)
     {
@@ -50,11 +50,15 @@ public static partial class ComparisonDescendantSource
     /// <param name="record">The process record path.</param>
     /// <param name="ready">The readiness path for the leaf process.</param>
     /// <param name="grandchild">Whether this process should launch a leaf and then exit.</param>
-    /// <param name="escape">Whether the child creates a new Unix session.</param>
+    /// <param name="escape">Whether the child leaves the inherited Unix session or Windows console.</param>
     /// <returns>The started process.</returns>
     public static Process Start(string executable, string record, string ready, bool grandchild, bool escape)
     {
-        var start = new ProcessStartInfo(executable) { UseShellExecute = false };
+        var start = new ProcessStartInfo(executable)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = escape && OperatingSystem.IsWindows(),
+        };
         start.Environment["ILREPL_DESCENDANT_RECORD"] = record;
         start.Environment["ILREPL_DESCENDANT_READY"] = ready;
         start.Environment["ILREPL_DESCENDANT_BRANCH"] = grandchild.ToString();
@@ -97,7 +101,8 @@ public static partial class ComparisonDescendantSource
             process.Dispose();
             return null;
         }
-        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException
+            || exception is Win32Exception && OperatingSystem.IsMacOS())
         {
             return null;
         }

@@ -27,7 +27,7 @@ public static class Completer
             "run the original and edit from the same explicit starting conditions", true),
         new(".undo", "", "remove the last line of the cell", false),
         new(".clear", "", "drop the cell, keep declarations", false),
-        new(".session", "[save|open|restore|cells|cell|run]", "save, reopen, inspect, and explicitly run an experiment", true),
+        new(".session", "[save|open|restore|cells|cell|run|restart]", "save, reopen, inspect, run, or restart an experiment", true),
         new(".reset", "", "drop the cell, declarations, methods, and types", false),
         new(".il", "", "render the cell, its methods, and its types as ILAsm", false),
         new(".save", "<path.dll | path.ilrepl.json>", "export an assembly or save an editable session", true),

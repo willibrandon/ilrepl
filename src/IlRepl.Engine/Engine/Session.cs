@@ -569,22 +569,38 @@ public sealed partial class Session
     /// <returns>The result.</returns>
     /// <exception cref="ReplException">The cell is incomplete, a method block is open, or the runtime rejected it.</exception>
     /// <exception cref="CellException">The cell threw.</exception>
-    public CellResult Run()
-    {
-        using var capture = new ConsoleCapture();
-        var isVoid = _cell.Stack.Count == 0 && !_cell.ReturnsValue;
-        var compiled = CellCompiler.Compile(this);
-        RecordActivation(compiled);
-        var typeArguments = TypeArguments;
-        ClearCell();
-        CellsRun++;
-        Submissions++;
+    public CellResult Run() => RunCancellable(null, null, CancellationToken.None);
 
-        var stopwatch = Stopwatch.StartNew();
+    /// <summary>
+    /// Compiles cooperatively and marks the boundary before invoking arbitrary user IL.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels preparation before invocation.</param>
+    /// <param name="beforeInvoke">Publishes the transition into user execution.</param>
+    /// <param name="output">Streams captured user output, when supplied.</param>
+    /// <returns>The value and captured output from the cell.</returns>
+    internal CellResult RunCancellable(Action? beforeInvoke, Action<string, bool>? output, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var capture = new ConsoleCapture(output);
+        var isVoid = _cell.Stack.Count == 0 && !_cell.ReturnsValue;
+        var compiled = CellCompiler.CompileForExecution(this, cancellationToken);
+        var stopwatch = new Stopwatch();
         object? value;
         try
         {
-            value = compiled.Invoke(typeArguments);
+            cancellationToken.ThrowIfCancellationRequested();
+            var typeArguments = TypeArguments;
+            beforeInvoke?.Invoke();
+            cancellationToken.ThrowIfCancellationRequested();
+            RecordActivation(compiled);
+            Activate();
+            var invocation = compiled with { ArgumentValues = compiled.InvocationArguments.Select(argument => argument.ExecutionValue())
+                .ToArray() };
+            ClearCell();
+            CellsRun++;
+            Submissions++;
+            stopwatch.Start();
+            value = invocation.Invoke(typeArguments);
         }
         catch (CellException exception)
         {
@@ -611,6 +627,14 @@ public sealed partial class Session
     /// <param name="path">The output path.</param>
     /// <exception cref="ReplException">The cell is incomplete, a method block is open, or the runtime rejected it.</exception>
     public void Save(string path) => AssemblyExporter.Save(this, path);
+
+    /// <summary>
+    /// Exports the current cell and declarations with cancellation before atomically replacing the destination.
+    /// </summary>
+    /// <param name="path">The destination assembly filename.</param>
+    /// <param name="cancellationToken">Cancels export before publication.</param>
+    internal void SaveCancellable(string path, CancellationToken cancellationToken)
+        => AssemblyExporter.SaveCancellable(this, path, cancellationToken);
 
     /// <summary>
     /// Renders the session methods and the current cell as ILAsm source.

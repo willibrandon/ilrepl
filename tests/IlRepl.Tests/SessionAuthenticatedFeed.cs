@@ -16,6 +16,8 @@ internal sealed class SessionAuthenticatedFeed : IAsyncDisposable
     private readonly Task _server;
     private int _authorized;
     private int _unauthorized;
+    private readonly TaskCompletionSource _packageRequested = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _packagePermit = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
     /// Starts an isolated loopback source with no external network or process-wide configuration.
@@ -69,6 +71,21 @@ internal sealed class SessionAuthenticatedFeed : IAsyncDisposable
     /// </summary>
     public int UnauthorizedRequests => Volatile.Read(ref _unauthorized);
 
+    /// <summary>
+    /// Holds an actual authenticated package response until released or disposed by a cancellation regression.
+    /// </summary>
+    public bool HoldPackage { get; set; }
+
+    /// <summary>
+    /// Completes once the real NuGet client requests the package archive.
+    /// </summary>
+    public Task PackageRequested => _packageRequested.Task;
+
+    /// <summary>
+    /// Allows the held real package response to finish.
+    /// </summary>
+    public void ReleasePackage() => _packagePermit.TrySetResult();
+
     private async Task ServeAsync()
     {
         try
@@ -105,6 +122,11 @@ internal sealed class SessionAuthenticatedFeed : IAsyncDisposable
                 else Interlocked.Increment(ref _unauthorized);
                 var target = request.Split(' ')[1];
                 var found = _resources.TryGetValue(target, out var resource);
+                if (authenticated && target.EndsWith(".nupkg", StringComparison.Ordinal) && HoldPackage)
+                {
+                    _packageRequested.TrySetResult();
+                    await _packagePermit.Task.WaitAsync(_stop.Token);
+                }
                 var status = !authenticated ? "401 Unauthorized" : found ? "200 OK" : "404 Not Found";
                 var body = authenticated && found ? resource! : [];
                 var headerText = "HTTP/1.1 " + status + "\r\nContent-Length: " + body.Length + "\r\nConnection: close\r\n"

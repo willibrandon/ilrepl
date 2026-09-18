@@ -4,9 +4,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// An engine that answers only when the test lets it: each line waits for one permit before it
-/// reaches the real engine, so a test can hold a submission in flight, watch the screen, press
-/// keys, and then let the lines through one at a time.
+/// Gates real engine invocation and completed replies independently to exercise cancellation and committed-result races.
 /// </summary>
 internal sealed class DelayedEngine : IReplEngine
 {
@@ -14,6 +12,10 @@ internal sealed class DelayedEngine : IReplEngine
     private readonly Channel<bool> _permits = Channel.CreateUnbounded<bool>();
     private readonly List<string> _handled = [];
     private readonly Lock _lock = new();
+    private readonly TaskCompletionSource _replyPermit = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private SessionStatus _status;
+    private int _holdReplyAt;
+    private int _replyWaiting;
 
     /// <summary>
     /// Initializes a gate in front of an engine.
@@ -22,6 +24,7 @@ internal sealed class DelayedEngine : IReplEngine
     public DelayedEngine(IReplEngine inner)
     {
         _inner = inner;
+        _status = inner.Status;
     }
 
     /// <summary>
@@ -52,7 +55,7 @@ internal sealed class DelayedEngine : IReplEngine
     public CilVocabulary Vocabulary => _inner.Vocabulary;
 
     /// <inheritdoc />
-    public SessionStatus Status => _inner.Status;
+    public SessionStatus Status => Volatile.Read(ref _status);
 
     /// <inheritdoc/>
     public long AssemblyVersion => _inner.AssemblyVersion;
@@ -82,6 +85,22 @@ internal sealed class DelayedEngine : IReplEngine
         }
     }
 
+    /// <summary>
+    /// Holds one genuine completed response until the test acknowledges its delivery.
+    /// </summary>
+    /// <param name="count">The one-based handled call whose response is held.</param>
+    public void HoldReplyAt(int count) => Volatile.Write(ref _holdReplyAt, count);
+
+    /// <summary>
+    /// Whether a real completed engine response is waiting for frontend delivery.
+    /// </summary>
+    public bool ReplyWaiting => Volatile.Read(ref _replyWaiting) != 0;
+
+    /// <summary>
+    /// Delivers the held completed response even if cancellation arrived after its commit.
+    /// </summary>
+    public void ReleaseReply() => _replyPermit.TrySetResult();
+
     /// <inheritdoc />
     public async Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
     {
@@ -96,17 +115,34 @@ internal sealed class DelayedEngine : IReplEngine
         }
 
         var reply = await _inner.HandleAsync(line, cancellationToken).ConfigureAwait(false);
+        int count;
         lock (_lock)
         {
             _handled.Add(line);
+            count = _handled.Count;
         }
-
+        if (count == Volatile.Read(ref _holdReplyAt))
+        {
+            Volatile.Write(ref _replyWaiting, 1);
+            try { await _replyPermit.Task.ConfigureAwait(false); }
+            finally { Volatile.Write(ref _replyWaiting, 0); }
+        }
+        Volatile.Write(ref _status, reply.Status);
         return reply;
     }
 
     /// <inheritdoc />
-    public Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken) => _inner.RollbackAsync(mark, cancellationToken);
+    public async Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken)
+    {
+        var reply = await _inner.RollbackAsync(mark, cancellationToken).ConfigureAwait(false);
+        Volatile.Write(ref _status, reply.Status);
+        return reply;
+    }
 
     /// <inheritdoc />
-    public ValueTask DisposeAsync() => _inner.DisposeAsync();
+    public ValueTask DisposeAsync()
+    {
+        ReleaseReply();
+        return _inner.DisposeAsync();
+    }
 }

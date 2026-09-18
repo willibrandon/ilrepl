@@ -89,7 +89,7 @@ SKIP: pop
 ```
 
 The diagnostic names both incoming paths. `SKIP: pop` is refused when submitted, and the terminal
-returns the block for correction. The same check runs in the browser, before calling the method.
+returns the block for correction.
 
 A bracketed stack is known, `unreachable` means no established path reaches the line, and `?`
 means analysis lacks information. `invalid` follows a definite stack error. An incomplete target

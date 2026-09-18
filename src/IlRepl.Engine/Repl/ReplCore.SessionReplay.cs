@@ -36,6 +36,7 @@ public sealed partial class ReplCore
         }
 
         using var validation = new ReplCore(new Session { DeferActivation = true }, ColdOptions());
+        validation._cancellationToken = cancellationToken;
         var diagnostics = validation.ReopenSession(document);
         if (diagnostics.Length != 0)
         {
@@ -77,6 +78,7 @@ public sealed partial class ReplCore
         // Validate every historical run boundary too; reopening itself intentionally permits unfinished source.
         using (var preflight = new ReplCore(new Session { DeferActivation = true }, ColdOptions()))
         {
+            preflight._cancellationToken = cancellationToken;
             preflight._references.AddRange(replay.References);
             foreach (var asset in replay.Assets)
             {

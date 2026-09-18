@@ -183,10 +183,10 @@ printf 'ldstr "piped"\nret\n' | ilrepl --no-color
 
 ## How it works
 
-Reflection.Emit needs a JIT, and the Native AOT front-end has none, so ilrepl is two processes:
-the front-end owns the terminal UI, the transcript, and the opcode catalog; the host owns the
-session and completes operands from the unsent buffer over JSON-RPC. The same engine runs in the browser on the docs
-site, where the .NET runtime is compiled to WebAssembly.
+Reflection.Emit needs a JIT, so the Native AOT frontend runs user IL in a separate execution host.
+The frontend owns the terminal, transcript, and retained source. It communicates directly with
+the host over a private Unix domain socket on Windows, Linux, and macOS. On Unix, a separate
+lifetime supervisor tracks execution processes and stops them if the frontend exits.
 
 ## Building
 
@@ -204,9 +204,13 @@ in-process on the real JIT, the sample library in `samples/Greeter`, every trans
 `samples/Transcripts`, the terminal UI on a headless terminal emulator, and the front-end as a
 process in a PTY.
 
-Repository utilities are file-based apps under `scripts/`:
+The [responsiveness validation guide](tests/responsiveness-validation.md) describes packaged
+terminal reference measurements and generated stress fixtures.
+
+Repository utilities are file-based apps documented in [scripts/README.md](scripts/README.md):
 
 ```sh
+dotnet run --file scripts/Generate-BootstrapCatalog.cs -- --check
 dotnet run --file scripts/Generate-OpcodeReference.cs
 dotnet run --file scripts/Publish-Wasm.cs
 dotnet run --file scripts/Publish-NativeAot.cs -- --rid osx-arm64 --package-version 0.4.1

@@ -4,11 +4,13 @@ using Hex1b.Tokens;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// A presentation filter that only listens: it records the terminal's size at session start and
-/// on every resize, so the layout can fold long lines at the width they will be shown in.
+/// Tracks terminal dimensions and observes rendered interruption notices before removing their private acknowledgement markers.
 /// </summary>
 public sealed class TerminalSizeFilter : IHex1bTerminalPresentationFilter
 {
+    private bool _frameStarted;
+    private bool _firstFrameRendered;
+
     /// <summary>
     /// The current width in columns, or zero before the session has started.
     /// </summary>
@@ -24,6 +26,16 @@ public sealed class TerminalSizeFilter : IHex1bTerminalPresentationFilter
     /// </summary>
     public event Action? Changed;
 
+    /// <summary>
+    /// Observes the tokens that reached the terminal presentation pipeline after rendering.
+    /// </summary>
+    internal event Action<IReadOnlyList<AppliedToken>>? OutputObserved;
+
+    /// <summary>
+    /// Announces the first complete synchronized frame after the terminal has applied its rendered cells.
+    /// </summary>
+    internal event Action? FirstFrameRendered;
+
     /// <inheritdoc />
     public ValueTask OnSessionStartAsync(int width, int height, DateTimeOffset timestamp, CancellationToken ct = default)
     {
@@ -35,7 +47,24 @@ public sealed class TerminalSizeFilter : IHex1bTerminalPresentationFilter
     public ValueTask<IReadOnlyList<AnsiToken>> OnOutputAsync(IReadOnlyList<AppliedToken> appliedTokens, TimeSpan elapsed, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(appliedTokens);
-        return ValueTask.FromResult<IReadOnlyList<AnsiToken>>(appliedTokens.Select(t => t.Token).ToList());
+        OutputObserved?.Invoke(appliedTokens);
+        if (!_firstFrameRendered)
+        {
+            foreach (var applied in appliedTokens)
+            {
+                if (applied.Token is not PrivateModeToken { Mode: 2026 } frame) continue;
+                if (frame.Enable) _frameStarted = true;
+                else if (_frameStarted)
+                {
+                    _firstFrameRendered = true;
+                    FirstFrameRendered?.Invoke();
+                    break;
+                }
+            }
+        }
+        return ValueTask.FromResult<IReadOnlyList<AnsiToken>>(appliedTokens.Select(t => t.Token)
+            .Where(token => token is not OscToken { Command: "7777" } marker
+                || !marker.Payload.StartsWith("ilrepl-interrupt:", StringComparison.Ordinal)).ToList());
     }
 
     /// <inheritdoc />

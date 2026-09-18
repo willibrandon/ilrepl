@@ -54,8 +54,15 @@ il[2]> ret
 
 Up and Down move through the lines of the buffer and reach history only from its first and last
 line; Ctrl+P and Ctrl+N walk history from any line. Shift with the arrows selects inside the
-buffer, typing replaces the selection, and on the desktop Ctrl+C copies it. Ctrl+C with nothing
-selected clears the buffer, and on an empty buffer it quits.
+buffer, typing replaces the selection, and Ctrl+C copies it. When idle, Ctrl+C without a selection clears
+the buffer and leaves an empty prompt open. Use Ctrl+Q or `.quit` to leave.
+
+Editing remains available while the execution host starts, runs code, or restarts. Input typed during startup
+stays in the editor until you submit it after the host is ready. Completion and stack analysis do not wait for a running cell.
+
+During execution, Ctrl+C requests interruption. If work cannot stop promptly, ilrepl shows a notice before accepting
+another Ctrl+C as permission to restart the runtime. See [Keyboard](/reference/keyboard/) and
+[Restart and recovery](/usage/sessions/#restart-and-recovery).
 
 ## Checking the stack
 
@@ -203,8 +210,7 @@ History is kept between runs in `~/.config/ilrepl/history`, or under `$XDG_CONFI
 that is set, and under `LocalApplicationData` on Windows. The file is the one pgcli writes: a
 `#` line with the time, then each line of the entry after a `+`. It is only ever appended to,
 under a lock file beside it, so two sessions never write over each other; the newest thousand
-entries are loaded. `--no-history` runs without it. In the browser the live session keeps its
-history in the browser's own database, which every tab shares.
+entries are loaded. `--no-history` runs without it.
 
 ## Completion
 
@@ -215,6 +221,8 @@ While new matches are being checked, the previous rows stay dimmed under an `upd
 They cannot be accepted until the new results arrive.
 If running code loads another assembly in the background, the prompt refreshes its suggestions
 without an edit. Types whose short names become ambiguous are offered with qualified names.
+Accepting a suggestion during that refresh waits for a matching current result. Editing or
+moving the caret cancels the pending completion.
 
 The palette shows each overload with its stack effect and full signature:
 

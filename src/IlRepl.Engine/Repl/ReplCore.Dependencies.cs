@@ -71,6 +71,7 @@ public sealed partial class ReplCore
         var previousCount = -1;
         while (previousCount != affectedReferences.Count + replaced.Count)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             previousCount = affectedReferences.Count + replaced.Count;
             affectedReferences.UnionWith(graphs.Where(reference => reference.Dependencies.Any(affectedReferences.Contains)
                 || reference.Assets.Any(asset => asset.Kind is "managed" or "satellite"
@@ -96,7 +97,7 @@ public sealed partial class ReplCore
 
         using (var candidate = new ReplCore(new Session(), ColdOptions()))
         {
-            var problems = candidate.ReopenSession(document);
+            var problems = candidate.WithCancellation(() => candidate.ReopenSession(document), _cancellationToken);
             if (problems.Length != 0)
             {
                 throw new ReplException(string.Join(Environment.NewLine, problems));
@@ -110,18 +111,21 @@ public sealed partial class ReplCore
         _references.AddRange(document.References);
         foreach (var asset in document.Assets)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             _assets[asset.Hash] = asset;
         }
 
         _document = _document with { PackageLock = document.PackageLock };
         foreach (var entry in document.Entries.Where(entry => !_sourceEntries.Any(existing => existing.Identity == entry.Identity)))
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             _sourceEntries.Add(entry);
         }
 
         var visited = new HashSet<string>(StringComparer.Ordinal);
         foreach (var reference in document.References.Where(reference => reference.Origin != "baseline"))
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             RestoreReference(reference, visited);
         }
     }
@@ -152,6 +156,7 @@ public sealed partial class ReplCore
     {
         foreach (var reference in Session.ActivatedReferences.Where(names.Contains))
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             yield return "activated runtime binding " + reference;
         }
 
@@ -159,11 +164,13 @@ public sealed partial class ReplCore
             || assembly.GetReferencedAssemblies().Any(reference => names.Contains(reference.Name!));
         foreach (var method in Session.Methods.Where(method => Uses(method.Version.Definition.Assembly)))
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             yield return "method " + method.Signature.Name;
         }
 
         foreach (var type in Session.Types.Where(type => type.Definition is { } definition && Uses(definition.Assembly)))
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             yield return "type " + type.Declaration.Name;
         }
 
@@ -177,6 +184,7 @@ public sealed partial class ReplCore
             || (type.IsGenericType && type.GetGenericArguments().Any(UsesType));
         foreach (var state in new[] { Session.Cell, Session.State }.Distinct())
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             if (state.Arguments.Any(argument => UsesType(argument.Type)) || state.Locals.Any(local => UsesType(local.Type))
                 || state.Entries.Any(entry => entry.Instruction?.Operand switch
                 {
@@ -201,6 +209,7 @@ public sealed partial class ReplCore
         var images = document.Assets.ToDictionary(asset => asset.Hash, asset => asset.Image, StringComparer.Ordinal);
         foreach (var reference in document.References.Where(reference => reference.Origin != "baseline"))
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             foreach (var asset in reference.Assets.Where(asset => asset.Kind is "managed" or "satellite"))
             {
                 if (!images.TryGetValue(asset.Hash, out var image))

@@ -10,7 +10,7 @@ namespace IlRepl.Repl;
 public sealed partial class OperandCompleter : IDisposable
 {
     private static readonly CaretClassifier Classifier = new(new CilTokenizer(CilVocabularyBuilder.Vocabulary));
-    private readonly Session _session;
+    private readonly Session? _session;
     private readonly Func<EditingSeed> _captureSeed;
     private readonly Guid _identity = Guid.NewGuid();
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -22,6 +22,11 @@ public sealed partial class OperandCompleter : IDisposable
     private long[] _assemblies = [];
     private long _bindingEpoch;
     private bool _disposed;
+    private EditingSeed? _preparedSeed;
+    private long _snapshotRevision = -1;
+    private long _snapshotAssemblyVersion;
+
+    private long Revision => _session?.CompletionRevision ?? _snapshotRevision;
 
     /// <summary>
     /// Initializes completion and subscribes to every semantic mutation of its owning session.
@@ -31,12 +36,23 @@ public sealed partial class OperandCompleter : IDisposable
     {
     }
 
+    /// <summary>
+    /// Captures accepted source from a session whose mutations the caller serializes with completion.
+    /// </summary>
     internal OperandCompleter(Session session, Func<EditingSeed> captureSeed)
     {
         ArgumentNullException.ThrowIfNull(session);
         _session = session;
         _captureSeed = captureSeed;
         _session.CompletionChanged += Invalidate;
+    }
+
+    /// <summary>
+    /// Completes against separately owned immutable snapshots while the live session continues executing.
+    /// </summary>
+    internal OperandCompleter(Func<EditingSeed> captureSeed)
+    {
+        _captureSeed = captureSeed;
     }
 
     /// <summary>
@@ -61,10 +77,10 @@ public sealed partial class OperandCompleter : IDisposable
             if (request.Cursor is not null)
             {
                 if (_query is not { } existing || existing.Cursor != request.Cursor
-                    || !existing.Identity.Document.Equals(document) || existing.Identity.Revision != _session.CompletionRevision
+                    || !existing.Identity.Document.Equals(document) || existing.Identity.Revision != Revision
                     || existing.Identity.BindingEpoch != _bindingEpoch)
                 {
-                    return CompletionReply.CursorRejected(_session.CompletionRevision, _bindingEpoch);
+                    return CompletionReply.CursorRejected(Revision, _bindingEpoch) with { AssemblyVersion = _snapshotAssemblyVersion };
                 }
 
                 _activeEditing = _editing;
@@ -75,7 +91,9 @@ public sealed partial class OperandCompleter : IDisposable
             {
                 await Task.Yield();
                 token.ThrowIfCancellationRequested();
-                _editing = new EditingSession(_captureSeed());
+                var seed = _preparedSeed ?? _captureSeed();
+                _preparedSeed = null;
+                _editing = new EditingSession(seed, token);
             }
 
             _activeEditing = _editing;
@@ -84,19 +102,15 @@ public sealed partial class OperandCompleter : IDisposable
             {
                 _query = null;
                 PruneContinuations(document);
-                return CompletionReply.Empty(_session.CompletionRevision, _bindingEpoch);
+                return CompletionReply.Empty(Revision, _bindingEpoch) with { AssemblyVersion = _snapshotAssemblyVersion };
             }
 
-            foreach (var source in view.Snapshot.Catalog.Sources)
-            {
-                await source.WarmIndexAsync(token).ConfigureAwait(false);
-            }
             var site = Classifier.Classify(document.Lines[document.Line], document.Caret, view.InBlockComment);
             if (!site.IsOperand)
             {
                 _query = null;
                 PruneContinuations(document);
-                return CompletionReply.Empty(_session.CompletionRevision, _bindingEpoch);
+                return CompletionReply.Empty(Revision, _bindingEpoch) with { AssemblyVersion = _snapshotAssemblyVersion };
             }
 
             if (site.Owner is ".dis" or ".disassemble" or ".edit")
@@ -152,7 +166,10 @@ public sealed partial class OperandCompleter : IDisposable
         }
 
         _disposed = true;
-        _session.CompletionChanged -= Invalidate;
+        if (_session is not null)
+        {
+            _session.CompletionChanged -= Invalidate;
+        }
         Invalidate();
     }
 
@@ -218,7 +235,10 @@ public sealed partial class OperandCompleter : IDisposable
         query.Cursor = hasMore ? Guid.NewGuid().ToString("N") : null;
         return new CompletionReply(query.Kind, query.Identity.Site.ReplaceStart, query.Identity.Site.ReplaceLength,
             items, query.Cursor, hasMore ? query.Confirmed + query.Candidates.Count - query.Position : query.Confirmed,
-            hasMore, query.Identity.Revision, query.Id, query.Identity.BindingEpoch, query.Owners);
+            hasMore, query.Identity.Revision, query.Id, query.Identity.BindingEpoch, query.Owners)
+        {
+            AssemblyVersion = _snapshotAssemblyVersion,
+        };
     }
 
     private GenericCompletionTarget? SelectedGeneric(CompletionDocumentKey document, CompletionSite site, EditingView view)
@@ -255,11 +275,30 @@ public sealed partial class OperandCompleter : IDisposable
     private bool AnchorValid(CompletionDocumentKey document, ContinuationAnchor anchor) =>
         anchor.Line >= 0 && anchor.Line < document.Lines.Count && anchor.Start >= 0 && anchor.End >= anchor.Start
         && anchor.End <= document.Lines[anchor.Line].Length && _continuations.TryGetValue(anchor.Token, out var continuation)
-        && continuation.Revision == _session.CompletionRevision && continuation.BindingEpoch == _bindingEpoch
+        && continuation.Revision == Revision && continuation.BindingEpoch == _bindingEpoch
         && document.Lines[anchor.Line].AsSpan(anchor.Start, anchor.End - anchor.Start).SequenceEqual(continuation.Text);
 
     private void RefreshCatalog()
     {
+        if (_session is null)
+        {
+            var seed = _captureSeed();
+            if (_snapshotRevision != seed.Revision || _snapshotAssemblyVersion != seed.AssemblyVersion)
+            {
+                Invalidate();
+                _snapshotRevision = seed.Revision;
+                _snapshotAssemblyVersion = seed.AssemblyVersion;
+                _bindingEpoch++;
+                _preparedSeed = seed;
+            }
+            else
+            {
+                seed.Dispose();
+            }
+
+            return;
+        }
+
         var assemblies = AssemblySequence();
         if (!assemblies.SequenceEqual(_assemblies))
         {
@@ -271,7 +310,7 @@ public sealed partial class OperandCompleter : IDisposable
 
     private long[] AssemblySequence()
     {
-        var assemblies = _session.Resolver.Assemblies
+        var assemblies = _session!.Resolver.Assemblies
             .Concat(_session.Types.Where(type => type.Definition is not null).Select(type => type.Definition!.Assembly))
             .Concat(_session.Methods.SelectMany(method => new[]
                 { method.Trampoline.Definition.Assembly, method.Version.Definition.Assembly })).Distinct().ToList();
@@ -296,6 +335,8 @@ public sealed partial class OperandCompleter : IDisposable
         _activeCancellation?.Cancel();
         _query = null;
         _continuations.Clear();
+        _preparedSeed?.Dispose();
+        _preparedSeed = null;
         if (_editing is { } editing && !ReferenceEquals(editing, _activeEditing))
         {
             editing.Dispose();

@@ -38,13 +38,35 @@ public sealed class BatchRunner
     public async Task<int> RunAsync(IEnumerable<string> lines, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(lines);
+        using var enumerator = lines.GetEnumerator();
+        return await RunCoreAsync(_ => ValueTask.FromResult(enumerator.MoveNext() ? enumerator.Current : null),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads interactive or piped batch input without trapping cancellation inside a synchronous console read.
+    /// </summary>
+    /// <param name="input">The input reader, owned by its caller.</param>
+    /// <param name="cancellationToken">Cancels pending input and subsequent execution.</param>
+    /// <returns>The completed batch exit code.</returns>
+    public Task<int> RunInputAsync(TextReader input, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        return RunCoreAsync(async token => await Task.Run(() => input.ReadLineAsync(token).AsTask(), CancellationToken.None)
+            .WaitAsync(token).ConfigureAwait(false), cancellationToken);
+    }
+
+    private async Task<int> RunCoreAsync(Func<CancellationToken, ValueTask<string?>> readLine, CancellationToken cancellationToken)
+    {
         var ok = true;
         var sourceIdentity = Guid.NewGuid().ToString("N");
         var lineIndex = 0;
         var suppliedSource = false;
         var suppliedInstructions = false;
-        foreach (var line in lines)
+        cancellationToken.ThrowIfCancellationRequested();
+        while (await readLine(cancellationToken).ConfigureAwait(false) is { } line)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var before = _engine.Status;
             var comment = before.Mark.InBlockComment;
             var kind = CilLexer.Classify(line, ref comment, out var text);
@@ -74,7 +96,7 @@ public sealed class BatchRunner
             }
             var command = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
             if (kind == SourceLineKind.Text && command is ".show" or ".list" or ".ls" or ".il"
-                or ".dis" or ".disassemble" or ".diff" or ".jit") suppliedInstructions = false;
+                or ".dis" or ".disassemble" or ".diff" or ".jit" or ".save" or ".session") suppliedInstructions = false;
             ok &= reply.Succeeded;
             Write(reply);
             if (reply.PendingComparison is { } comparison)
@@ -96,6 +118,7 @@ public sealed class BatchRunner
             }
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         var status = _engine.Status;
         if (!suppliedSource)
         {

@@ -60,6 +60,7 @@ Directives are part of the cell. Commands act on the session.
 | `.session` | Show the associated file, changes, runtime, and dependencies. |
 | `.session save [path] [--embed]` | Save editable source, drafts, and historical results; optionally embed dependencies. |
 | `.session open <path> [--force]` | Reopen in a fresh runtime without execution; `--force` permits discarding modified source. |
+| `.session restart` | Reconstruct retained source in a fresh runtime without replaying cells. |
 | `.session restore [--build]` | Recover locked dependencies; `--build` permits project evaluation and builds. |
 | `.session cells` | List retained prompt numbers and historical output. |
 | `.session cell <number>` | Recall source and its input declarations without running it. |

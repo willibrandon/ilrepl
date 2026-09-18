@@ -24,11 +24,19 @@ Click into the terminal and type. Enter continues a block while its braces are o
 
 Open, Download, and Share keep your experiment as editable source. Opening a file or link does not run it; use Run all when ready.
 Ctrl+S downloads and Ctrl+O opens the file picker while the terminal has focus.
-Share links include source and required dependencies. Larger experiments download as session files.
+Downloads include available dependency images; `--embed` is already applied here. Package restore and project builds
+require desktop ilrepl. `.save example.dll` downloads an assembly without running it. The browser chooses its location;
+a directory in the supplied name does not select a folder on your computer.
+
+Share links contain source and dependency images, including the bundled sample. Nothing is uploaded to the documentation server.
+Links longer than 16 KiB fall back to a session download. Expanded links are limited to 1 MiB and imported files to 8 MiB.
+Session files created in the terminal can be up to 64 MiB. If clipboard access is unavailable, the page displays the link for copying.
 
 Ctrl+Q ends the session and a fresh one starts in its place. The restart button reopens retained source in a fresh runtime without
 executing it. The page also recovers source and the editor draft if a cell stops responding. Previous results remain historical text.
-See [Saving and sharing sessions](/usage/sessions/) for dependency and runtime limits.
+The old runtime stops before its replacement starts. Input typed during replacement stays in the editor, and Enter
+creates a new line. Press Enter again after the session is ready to submit it. Objects and static values are lost.
+See [Saving and sharing sessions](/usage/sessions/) for the terminal's session commands and dependency handling.
 
 ```cil
 ldc.i4 6

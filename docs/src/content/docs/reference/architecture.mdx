@@ -1,28 +1,33 @@
 ---
 title: How it works
-description: Two processes, one protocol, and a replayable cell.
+description: The terminal frontend, execution host, and retained source workspace.
 ---
 
 import ProcessDiagram from '../../../components/ProcessDiagram.astro';
 import CellDiagram from '../../../components/CellDiagram.astro';
 
-Reflection.Emit needs a JIT, and the Native AOT front-end has none. ilrepl is therefore two
-processes.
+Reflection.Emit needs a JIT, so ilrepl separates the Native AOT terminal frontend from a framework-dependent execution host.
 
 <ProcessDiagram />
 
-The front-end owns the transcript and rendering. It completes the first word from a catalog
-the host sends once and asks the host for operand candidates as the caret moves. Each request
-carries the buffer and caret. Shared parsers and binding rules replay the earlier lines into
-independent symbols, reading loaded metadata without compiling definitions or running user code.
-Replies carry document and session identities so an outdated edit cannot be accepted.
-The processes talk JSON-RPC with StreamJsonRpc over the host's standard streams. Console output
-from a cell is captured inside the host, so the channel is never mixed with what the cell prints.
+The frontend owns the editor, transcript, and acknowledged source workspace. An embedded opcode and command catalog
+makes the prompt editable before the host connects. Operand completion and analysis read immutable metadata snapshots
+without waiting for a running cell. Caret movement reuses analysis of the same source.
 
-The same engine runs in the browser on the [live session](/try/) page, where the .NET
-runtime is compiled to WebAssembly and the Hex1b UI renders into xterm.js. Nothing there talks
-to a server. Shared control-flow checks run before a definition closes on both runtimes. Mono
-cannot perform the desktop's additional JIT preparation, so remaining runtime checks wait for a call.
+JSON-RPC travels directly between the frontend and host over a private Unix domain socket on Windows, Linux, and macOS.
+User console output streams separately from replies, so a long-running cell can print before it returns.
+Replies carry document and runtime identities to prevent stale results from replacing current ones.
+
+Cells run on one persistent thread with an explicitly requested 8 MiB stack. Thread-static values, thread-local values,
+culture, and the thread name persist between cells. The operating system and runtime still determine usable stack space;
+unbounded recursion can overflow it.
+
+On Unix, a separate lifetime supervisor launches and tracks execution process groups. It does not relay RPC or console output.
+If the supervisor exits, the frontend can start a replacement and adopt the existing groups without replacing a healthy host.
+Windows uses a job owned by the frontend. Losing the frontend stops its execution processes even when user code never returns.
+
+Before entering user code, the host waits for the frontend to acknowledge the source checkpoint.
+Recovery reconstructs definitions and edits without replaying cells. See [Restart and recovery](/usage/sessions/#restart-and-recovery).
 
 ## The cell
 
@@ -67,7 +72,7 @@ load context never binds the wrong one, and `.reset` unloads what the session he
 through the same parser, stack checks, and writer as other methods. A successful revision updates
 dependent callers; a failed one leaves the previous version in place.
 
-`.compare` runs each version in a fresh process, or a fresh worker in the browser. Both start with the
+`.compare` runs each version in a fresh process. Both start with the
 same inputs. The report compares their arguments, results, exceptions, and console output. Previously
 run cells are not replayed, and ending a comparison leaves the session available.
 
@@ -84,7 +89,6 @@ for compilation settings, execution boundaries, and comparison behavior.
 | --- | --- |
 | `IlRepl.Protocol` | The transcript model, completion requests and pages, the caret classifier, and the JSON-RPC contract. |
 | `IlRepl.Engine` | Parsing, resolution, simulation, compilation, the session, and the REPL core. |
-| `IlRepl.Host` | Serves the engine over standard streams. |
+| `IlRepl.Host` | Runs user IL and serves the engine over a direct socket connection. |
 | `IlRepl.Tui` | The Hex1b widgets: transcript, prompt with completion palette, status bar. |
 | `IlRepl` | The tool: command line, host client, batch mode. |
-| `IlRepl.Wasm` | The browser build used by the docs. |

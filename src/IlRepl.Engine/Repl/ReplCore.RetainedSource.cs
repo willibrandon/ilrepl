@@ -37,6 +37,7 @@ public sealed partial class ReplCore
         var supplied = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var line in cell.Source)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             _ = CilLexer.Classify(line, ref comment, out var text);
             var directive = text.Split([' ', '\t', '('], 2)[0];
             if (directive is ".method" or ".class" or ".edit") break;
@@ -50,6 +51,7 @@ public sealed partial class ReplCore
         var missing = new List<string>();
         foreach (var line in cell.Inputs.Reverse().Select(line => NormalizeDeclaration(line)!))
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             if (supplied.GetValueOrDefault(line) is > 0 and var count) supplied[line] = count - 1;
             else missing.Add(line);
         }
@@ -57,6 +59,7 @@ public sealed partial class ReplCore
         missing.Reverse();
         foreach (var line in missing.Concat(cell.Source))
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             var previousComment = comment;
             _ = CilLexer.Classify(line, ref comment, out var text);
             var directive = text.Split([' ', '\t', '('], 2)[0];
@@ -221,6 +224,7 @@ public sealed partial class ReplCore
 
     private void RestoreTrackedEntry(SessionEntry entry)
     {
+        _cancellationToken.ThrowIfCancellationRequested();
         if (entry.Source.Length > 1 && entry.Kind is SessionEntryKind.Source or SessionEntryKind.EditSource or SessionEntryKind.Rejected)
         {
             foreach (var line in entry.Source)

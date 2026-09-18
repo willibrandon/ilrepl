@@ -70,4 +70,9 @@ public enum SessionOperation
     /// </summary>
     Quit,
 
+    /// <summary>
+    /// Reconstruct acknowledged source in a fresh runtime without replaying cells.
+    /// </summary>
+    Restart,
+
 }

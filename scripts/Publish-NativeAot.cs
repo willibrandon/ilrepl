@@ -4,7 +4,10 @@
 
 using System.CommandLine;
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Xml.Linq;
 
 var ridOption = new Option<string>("--rid") { Description = "The runtime identifier to publish for.", Required = true };
@@ -13,12 +16,26 @@ var versionOption = new Option<string>("--package-version")
     Description = "The package version, with or without a leading v.",
     DefaultValueFactory = _ => "0.4.1",
 };
-var outputOption = new Option<string>("--output") { Description = "The artifacts directory, relative to the repository.", DefaultValueFactory = _ => "artifacts/native-aot" };
-var root = new RootCommand("Publishes the Native AOT front-end for one runtime identifier, smoke-tests it, and packs the runtime-specific tool package.")
+var outputOption = new Option<string>("--output")
+{
+    Description = "The artifacts directory, relative to the repository.",
+    DefaultValueFactory = _ => "artifacts/native-aot",
+};
+var buildOnlyOption = new Option<bool>("--build-only")
+{
+    Description = "Publish without executing checks or producing a distributable package.",
+};
+var smokeOnlyOption = new Option<bool>("--smoke-only")
+{
+    Description = "Validate the existing published files without rebuilding or packing them.",
+};
+var root = new RootCommand("Publishes and validates the Native AOT frontend and its runtime-specific tool package.")
 {
     ridOption,
     versionOption,
     outputOption,
+    buildOnlyOption,
+    smokeOnlyOption,
 };
 
 root.SetAction(async (parseResult, cancellationToken) =>
@@ -30,12 +47,27 @@ root.SetAction(async (parseResult, cancellationToken) =>
     var publishDirectory = Path.Combine(artifacts, "publish");
     var packagesDirectory = Path.Combine(artifacts, "packages");
     var project = Path.Combine(repo, "src", "IlRepl", "IlRepl.csproj");
-
-    var publish = await RunAsync(repo, "dotnet", ["publish", project, "-c", "Release", "-r", rid, "-o", publishDirectory, $"-p:Version={version}", "--nologo", "-v", "quiet"], cancellationToken);
-    if (publish != 0)
+    var buildOnly = parseResult.GetValue(buildOnlyOption);
+    var smokeOnly = parseResult.GetValue(smokeOnlyOption);
+    if (buildOnly && smokeOnly)
     {
-        return publish;
+        Console.Error.WriteLine("--build-only and --smoke-only cannot be combined");
+        return 1;
     }
+    if (!buildOnly && !CanRunHere(rid))
+    {
+        Console.Error.WriteLine($"{rid} must be validated on a matching OS, architecture, and libc; current runtime is "
+            + RuntimeInformation.RuntimeIdentifier + ". Use --build-only for publishing without validation.");
+        return 1;
+    }
+
+    if (!smokeOnly)
+    {
+        var publish = await RunAsync(repo, "dotnet", ["publish", project, "-c", "Release", "-r", rid, "-o", publishDirectory,
+            $"-p:Version={version}", "--nologo", "-v", "quiet"], cancellationToken);
+        if (publish != 0) return publish;
+    }
+    if (buildOnly) return 0;
 
     var executable = Path.Combine(publishDirectory, OperatingSystem.IsWindows() ? "ilrepl.exe" : "ilrepl");
     if (!File.Exists(executable))
@@ -59,34 +91,17 @@ root.SetAction(async (parseResult, cancellationToken) =>
         return 1;
     }
 
-    // The smoke test only runs when the build machine can execute the binary.
-    if (CanRunHere(rid))
+    if (!await SmokePublishedAsync(repo, publishDirectory, executable, cancellationToken)) return 1;
+    var publishedHash = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(executable, cancellationToken)));
+    var checkedPackages = new List<Dictionary<string, string>>();
+    if (smokeOnly)
     {
-        var smoke = await CaptureAsync(publishDirectory, executable, ["--no-color", "-e", "ldc.i4 6; ldc.i4 7; mul; ret"], cancellationToken);
-        if (smoke.ExitCode != 0 || !smoke.Output.Contains("= 42 : int32", StringComparison.Ordinal))
-        {
-            Console.Error.WriteLine("smoke test failed:\n" + smoke.Output);
-            return 1;
-        }
-
-        var diagnostic = await CaptureAsync(publishDirectory, executable,
-            ["--no-color", "-e", "ldstr \"text\"; call int32 System.Math::Abs(int32)"], cancellationToken);
-        if (diagnostic.ExitCode == 0 || !diagnostic.Output.Contains("Expected:", StringComparison.Ordinal)
-            || !diagnostic.Output.Contains("actual string", StringComparison.Ordinal)
-            || !diagnostic.Output.Contains("ldstr \"text\"", StringComparison.Ordinal))
-        {
-            Console.Error.WriteLine("diagnostic smoke test failed:\n" + diagnostic.Output);
-            return 1;
-        }
-
-        Console.WriteLine($"smoke test passed for {rid}");
-        if (!await SmokeSessionsAsync(repo, publishDirectory, executable, cancellationToken))
-        {
-            return 1;
-        }
+        await WriteEvidenceAsync(artifacts, rid, publishedHash, checkedPackages, cancellationToken);
+        return 0;
     }
 
-    var pack = await RunAsync(repo, "dotnet", ["pack", project, "-c", "Release", "-r", rid, "-o", packagesDirectory, $"-p:Version={version}", $"-p:PackageVersion={version}", "--nologo", "-v", "quiet"], cancellationToken);
+    var pack = await RunAsync(repo, "dotnet", ["pack", project, "-c", "Release", "-r", rid, "-o", packagesDirectory,
+        $"-p:Version={version}", $"-p:PackageVersion={version}", "--nologo", "-v", "quiet"], cancellationToken);
     if (pack != 0)
     {
         return pack;
@@ -94,8 +109,41 @@ root.SetAction(async (parseResult, cancellationToken) =>
 
     foreach (var package in Directory.GetFiles(packagesDirectory, "*.nupkg"))
     {
-        Console.WriteLine($"packed {Path.GetFileName(package)}");
+        if (Path.GetFileName(package) != $"ilrepl.{rid}.{version}.nupkg") continue;
+        var unpacked = Directory.CreateTempSubdirectory("ilrepl-packaged-").FullName;
+        try
+        {
+            ZipFile.ExtractToDirectory(package, unpacked);
+            var settings = Directory.GetFiles(unpacked, "DotnetToolSettings.xml", SearchOption.AllDirectories).Single();
+            var packagedDirectory = Path.GetDirectoryName(settings)!;
+            var entry = XDocument.Load(settings).Descendants("Command").Single().Attribute("EntryPoint")!.Value;
+            var packagedExecutable = Path.Combine(packagedDirectory, entry);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(packagedExecutable, File.GetUnixFileMode(packagedExecutable)
+                    | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+            }
+            if (!await SmokePublishedAsync(repo, packagedDirectory, packagedExecutable, cancellationToken)) return 1;
+            checkedPackages.Add(new Dictionary<string, string>
+            {
+                ["package"] = Path.GetFileName(package),
+                ["packageSha256"] = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(package, cancellationToken))),
+                ["executableSha256"] = Convert.ToHexString(
+                    SHA256.HashData(await File.ReadAllBytesAsync(packagedExecutable, cancellationToken))),
+            });
+            Console.WriteLine($"packed and validated {Path.GetFileName(package)}");
+        }
+        finally
+        {
+            Directory.Delete(unpacked, recursive: true);
+        }
     }
+    if (checkedPackages.Count == 0)
+    {
+        Console.Error.WriteLine("the expected runtime-specific package was not produced");
+        return 1;
+    }
+    await WriteEvidenceAsync(artifacts, rid, publishedHash, checkedPackages, cancellationToken);
 
     return 0;
 });
@@ -104,9 +152,70 @@ return await root.Parse(args).InvokeAsync();
 
 static bool CanRunHere(string rid)
 {
-    var arch = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant();
-    var os = OperatingSystem.IsWindows() ? "win" : OperatingSystem.IsMacOS() ? "osx" : "linux";
+    var arch = RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant();
+    var os = OperatingSystem.IsWindows() ? "win" : OperatingSystem.IsMacOS() ? "osx"
+        : RuntimeInformation.RuntimeIdentifier.StartsWith("linux-musl-", StringComparison.Ordinal) ? "linux-musl" : "linux";
     return rid == $"{os}-{arch}";
+}
+
+static async Task WriteEvidenceAsync(string artifacts, string rid, string publishedHash,
+    List<Dictionary<string, string>> packages, CancellationToken cancellationToken)
+{
+    Directory.CreateDirectory(artifacts);
+    await using var file = File.Create(Path.Combine(artifacts, "smoke-results.json"));
+    await using var writer = new Utf8JsonWriter(file, new JsonWriterOptions { Indented = true });
+    writer.WriteStartObject();
+    writer.WriteNumber("schemaVersion", 1);
+    writer.WriteString("targetRid", rid);
+    writer.WriteString("actualRuntimeIdentifier", RuntimeInformation.RuntimeIdentifier);
+    writer.WriteString("architecture", RuntimeInformation.OSArchitecture.ToString());
+    writer.WriteString("runtime", Environment.Version.ToString());
+    writer.WriteString("libc", OperatingSystem.IsLinux()
+        ? RuntimeInformation.RuntimeIdentifier.StartsWith("linux-musl-", StringComparison.Ordinal) ? "musl" : "glibc" : null);
+    writer.WriteString("commit", Environment.GetEnvironmentVariable("GITHUB_SHA"));
+    writer.WriteString("publishedExecutableSha256", publishedHash);
+    writer.WriteBoolean("completed", true);
+    writer.WriteStartArray("packages");
+    foreach (var package in packages)
+    {
+        writer.WriteStartObject();
+        foreach (var (name, value) in package) writer.WriteString(name, value);
+        writer.WriteEndObject();
+    }
+    writer.WriteEndArray();
+    writer.WriteEndObject();
+    await writer.FlushAsync(cancellationToken);
+}
+
+static async Task<bool> SmokePublishedAsync(string repo, string publishDirectory, string executable,
+    CancellationToken cancellationToken)
+{
+    var smoke = await CaptureAsync(publishDirectory, executable, ["--no-color", "-e", "ldc.i4 6; ldc.i4 7; mul; ret"], cancellationToken);
+    if (smoke.ExitCode != 0 || !smoke.Output.Contains("= 42 : int32", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("smoke test failed:\n" + smoke.Output);
+        return false;
+    }
+
+    var diagnostic = await CaptureAsync(publishDirectory, executable,
+        ["--no-color", "-e", "ldstr \"text\"; call int32 System.Math::Abs(int32)"], cancellationToken);
+    if (diagnostic.ExitCode == 0 || !diagnostic.Output.Contains("Expected:", StringComparison.Ordinal)
+        || !diagnostic.Output.Contains("actual string", StringComparison.Ordinal)
+        || !diagnostic.Output.Contains("ldstr \"text\"", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("diagnostic smoke test failed:\n" + diagnostic.Output);
+        return false;
+    }
+
+    Console.WriteLine("arithmetic and diagnostic smoke passed");
+    if (!await SmokeSessionsAsync(repo, publishDirectory, executable, cancellationToken))
+    {
+        return false;
+    }
+    var packaged = await RunAsync(repo, "dotnet",
+        ["run", "--project", Path.Combine(repo, "tests", "IlRepl.Tests", "IlRepl.Tests.csproj"), "-c", "Release", "--",
+            "--packaged-smoke", executable], cancellationToken);
+    return packaged == 0;
 }
 
 static async Task<int> RunAsync(string workingDirectory, string fileName, string[] arguments, CancellationToken cancellationToken)
@@ -118,8 +227,19 @@ static async Task<int> RunAsync(string workingDirectory, string fileName, string
     }
 
     using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"{fileName} did not start");
-    await process.WaitForExitAsync(cancellationToken);
-    return process.ExitCode;
+    try
+    {
+        await process.WaitForExitAsync(cancellationToken);
+        return process.ExitCode;
+    }
+    finally
+    {
+        if (!process.HasExited)
+        {
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync(CancellationToken.None);
+        }
+    }
 }
 
 static async Task<(int ExitCode, string Output)> CaptureAsync(string workingDirectory, string fileName, string[] arguments,
@@ -146,12 +266,26 @@ static async Task<(int ExitCode, string Output)> CaptureAsync(string workingDire
         }
     }
 
+    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    timeout.CancelAfter(TimeSpan.FromSeconds(60));
     using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"{fileName} did not start");
     process.StandardInput.Close();
-    var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
-    var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
-    await process.WaitForExitAsync(cancellationToken);
-    return (process.ExitCode, await stdout + await stderr);
+    var stdout = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+    var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
+    try
+    {
+        await process.WaitForExitAsync(timeout.Token);
+        await Task.WhenAll(stdout, stderr).WaitAsync(timeout.Token);
+        return (process.ExitCode, await stdout + await stderr);
+    }
+    finally
+    {
+        if (!process.HasExited)
+        {
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync(CancellationToken.None);
+        }
+    }
 }
 
 static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory, string executable, CancellationToken cancellationToken)
@@ -206,15 +340,22 @@ static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory,
         }
 
         var save = await CaptureAsync(directory, executable, ["--no-color", "-e",
-            ".load nuget:IlRepl.SessionSmoke; ldc.i4 6; ldc.i4 7; call Greeter.Ops::Multiply(int32, int32); "
-                + ".session save example.ilrepl.json --embed"], cancellationToken, environment);
+            ".load nuget:IlRepl.SessionSmoke; ldstr \"executions\"; ldstr \"run\"; "
+                + "call void System.IO.File::AppendAllText(string, string); "
+                + "ldc.i4 6; ldc.i4 7; call Greeter.Ops::Multiply(int32, int32); "
+                + ".run; .session save example.ilrepl.json --embed"], cancellationToken, environment);
+        var marker = Path.Combine(directory, "executions");
+        var savedExecutions = File.Exists(marker) ? await File.ReadAllTextAsync(marker, cancellationToken) : "";
         var open = await CaptureAsync(directory, executable,
             ["--no-color", "--batch", "example.ilrepl.json"], cancellationToken, environment);
+        var openedExecutions = File.Exists(marker) ? await File.ReadAllTextAsync(marker, cancellationToken) : "";
         var run = await CaptureAsync(directory, executable,
             ["--no-color", "example.ilrepl.json", "--run"], cancellationToken, environment);
+        var replayedExecutions = File.Exists(marker) ? await File.ReadAllTextAsync(marker, cancellationToken) : "";
         if (save.ExitCode != 0 || !save.Output.Contains("= 42 : int32", StringComparison.Ordinal)
             || open.ExitCode != 0 || !open.Output.Contains("Session opened. Nothing has run yet.", StringComparison.Ordinal)
-            || open.Output.Contains("= 42 : int32", StringComparison.Ordinal)
+            || !open.Output.Contains("saved session history (no code executed)", StringComparison.Ordinal)
+            || savedExecutions != "run" || openedExecutions != "run" || replayedExecutions != "runrun"
             || run.ExitCode != 0 || !run.Output.Contains("= 42 : int32", StringComparison.Ordinal))
         {
             Console.Error.WriteLine("session/runtime-only package smoke failed:\n" + save.Output + open.Output + run.Output);

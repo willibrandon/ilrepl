@@ -1,6 +1,6 @@
 using System.IO.Compression;
 using System.Xml.Linq;
-using IlRepl.Hosting;
+using IlRepl.Processes;
 using IlRepl.Protocol;
 using Mono.Cecil;
 using Mono.Cecil.Cil;

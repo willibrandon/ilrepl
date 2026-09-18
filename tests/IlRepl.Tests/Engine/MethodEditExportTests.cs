@@ -8,8 +8,14 @@ namespace IlRepl.Tests.Engine;
 /// Saved images and independently assembled source execute complete imported method families.
 /// </summary>
 [TestClass]
+[TestCategory("ExportConformance")]
 public sealed class MethodEditExportTests
 {
+    /// <summary>
+    /// Supplies cancellation to independent export processes.
+    /// </summary>
+    public TestContext TestContext { get; set; } = null!;
+
     /// <summary>
     /// IL inspection preserves a pending cell while saved output still requires complete control flow.
     /// </summary>
@@ -54,7 +60,7 @@ public sealed class MethodEditExportTests
     [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
-    public void Export_FrameworkEditRunsFromIndependentAssembly(bool source)
+    public async Task Export_FrameworkEditRunsFromIndependentAssembly(bool source)
     {
         var session = new Session();
         var edit = session.PrepareEdit("int32 Math::Max(int32, int32)", "Maximum");
@@ -63,6 +69,7 @@ public sealed class MethodEditExportTests
         session.AddLine("ldc.i4.s 42");
         session.AddLine("call Maximum");
         var image = source ? IlasmLocator.Assemble(session.ToIlAsm()) : AssemblyExporter.Write(session, "maximum");
+        await VerifyIsolatedAsync(image);
         var context = new AssemblyLoadContext("edited-export", isCollectible: true);
         try
         {
@@ -86,7 +93,7 @@ public sealed class MethodEditExportTests
     [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
-    public void Export_PrivateClosureRetainsInitializationAndExceptionRegions(bool source)
+    public async Task Export_PrivateClosureRetainsInitializationAndExceptionRegions(bool source)
     {
         var session = IlLines.Load(
             ".class public Calculator {",
@@ -103,6 +110,7 @@ public sealed class MethodEditExportTests
         session.AddLine("ldc.i4.s 41");
         session.AddLine("call Calculation");
         var image = source ? IlasmLocator.Assemble(session.ToIlAsm()) : AssemblyExporter.Write(session, "closure");
+        await VerifyIsolatedAsync(image);
         var context = new AssemblyLoadContext("closure-export", isCollectible: true);
         try
         {
@@ -117,6 +125,28 @@ public sealed class MethodEditExportTests
         finally
         {
             context.Unload();
+        }
+    }
+
+    private async Task VerifyIsolatedAsync(byte[] image)
+    {
+        var roundTrip = IldasmLocator.RoundTrip(image);
+        Assert.AreSequenceEqual(ExportMetadata.Read(image), ExportMetadata.Read(roundTrip));
+        using var execution = new ExportExecution();
+        foreach (var artifact in new[] { image, roundTrip })
+        {
+            using var verifier = new IlVerificationOracle();
+            Assert.IsEmpty(verifier.Verify(artifact));
+            foreach (var profile in new[] { "deterministic", "tiered" })
+            {
+                var observed = await execution.RunAsync(artifact, "IlRepl.Cell", "Run", profile,
+                    cancellationToken: TestContext.CancellationToken);
+                Assert.IsNull(observed.ExceptionType);
+                Assert.AreEqual(typeof(int).AssemblyQualifiedName, observed.Result.Type);
+                Assert.AreEqual(42, observed.Result.Value.GetInt32());
+                Assert.AreEqual("", observed.StandardOutput);
+                Assert.AreEqual("", observed.StandardError);
+            }
         }
     }
 }

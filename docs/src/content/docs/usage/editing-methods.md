@@ -184,19 +184,18 @@ complete match gives the script exit code 1.
 
 ## Starting state and limits
 
-Each comparison starts two clean processes on desktop or two workers in the browser. Both load the
+Each comparison starts two clean processes. Both load the
 declarations and run their initializers. Previous cells are not rerun. The original keeps the method
 and dependency versions from when you opened the edit.
-Desktop comparisons stop background child processes when each side ends.
+Comparisons stop background child processes when each side ends.
 
 Both sides get the same culture, environment, stdin, and working path. Each run starts with fresh files.
 Use `--stdin "text\n"` for console input and `--files directory` to supply the files.
-Desktop comparisons also supply that input to `Console.OpenStandardInput()` and native stdin readers.
+Comparisons also supply that input to `Console.OpenStandardInput()` and native stdin readers.
 
 Files, directories, and relative symlinks keep their captured timestamps. Links outside the supplied directory are rejected.
 File attributes and Unix permission modes are also kept.
 If the filesystem cannot restore the captured metadata, the comparison reports a setup failure.
-Browser paths refer to its virtual filesystem.
 
 The timeout is 30 seconds per side, starting after runtime startup. Change it with `--timeout 500ms`,
 `--timeout 30s`, or `--timeout 2m`. Cancellation, timeouts, crashes, and output limits end the comparison

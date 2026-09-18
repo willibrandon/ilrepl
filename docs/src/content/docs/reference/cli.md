@@ -21,8 +21,13 @@ ilrepl [options] [script]
 | `--help` | Print the options. |
 
 The exit code is 0 when every line succeeded, 1 for source, document, dependency, or execution failures, 2 for an unreadable input path,
-and 3 when the host could not be started. Input that ends inside a `.method`, `.class`, or `.edit` block is an error;
+3 when the host cannot start or exits unexpectedly, and 130 when execution is interrupted.
+An unexpected host exit is a failure even when user code exits with code 0.
+Input that ends inside a `.method`, `.class`, or `.edit` block is an error;
 close it with `}` first.
+
+Ctrl+C during a script, `--eval`, piped input, or `--run` stops its processes and exits with code 130.
+Output already received is written before exit. Remaining input is not executed, and batch mode does not restart the runtime.
 
 Reopened source and drafts stay inert at batch EOF. Use `--run` or `.session run` to execute a saved experiment.
 See [Saving and sharing sessions](/usage/sessions/).

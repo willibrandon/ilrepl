@@ -33,8 +33,11 @@ public static partial class IlReplApp
     /// <param name="onPrompt">Called with the prompt's state, so a host can settle it with <see cref="SettleAsync"/> once the app has stopped.</param>
     /// <param name="history">Where history is kept between runs, or null to keep it for this run only.</param>
     /// <param name="ownSelection">True when the app selects and copies transcript text itself; false where the terminal does, as in the browser, and the wheel is all the mouse brings.</param>
+    /// <param name="onFirstFrame">Called once the terminal has applied the first complete frame containing the focused prompt.</param>
     /// <returns>The same builder, for chaining.</returns>
-    public static Hex1bTerminalBuilder Configure(Hex1bTerminalBuilder builder, IReplEngine engine, Transcript transcript, bool usePlatformClipboard = false, Action<Hex1bApp>? onApp = null, IHistoryStore? history = null, Action<PromptState>? onPrompt = null, bool ownSelection = true)
+    public static Hex1bTerminalBuilder Configure(Hex1bTerminalBuilder builder, IReplEngine engine, Transcript transcript,
+        bool usePlatformClipboard = false, Action<Hex1bApp>? onApp = null, IHistoryStore? history = null,
+        Action<PromptState>? onPrompt = null, bool ownSelection = true, Action? onFirstFrame = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(engine);
@@ -67,6 +70,9 @@ public static partial class IlReplApp
             }
         }
 
+        ConfigureInterruption(prompt, engine);
+        size.OutputObserved += tokens => ObserveInterruptNotice(prompt, tokens);
+        size.FirstFrameRendered += onFirstFrame;
         onPrompt?.Invoke(prompt);
         return builder
             .AddPresentationFilter(size)
@@ -79,10 +85,10 @@ public static partial class IlReplApp
                         workload.EnableMouse = options.EnableMouse;
                     }
 
-                    prompt.PasteInput = new PromptInputReader(adapter.InputEvents, input => prompt.FilterInput?.Invoke(input) == true);
-                    options.WorkloadAdapter = new PromptInputAdapter(adapter, prompt.PasteInput);
+                    prompt.PasteInput = new PromptInputReader(adapter.InputEvents, input => FilterPromptInput(prompt, input));
+                    options.WorkloadAdapter = new PromptInputAdapter(adapter, prompt.PasteInput, prompt.Interruption.TakeFrameMarker);
                     // The prompt paints its own caret cell, so no hardware caret follows the mouse,
-                    // and Ctrl+C is the prompt's: it copies, clears, or quits.
+                    // and Ctrl+C belongs to the prompt's copy, interrupt, and clear bindings.
                     options.EnableDefaultCtrlCExit = false;
                     options.Theme = Hex1bThemes.Default.Clone()
                         .Set(MouseTheme.ShowCursor, false)
@@ -109,13 +115,16 @@ public static partial class IlReplApp
     /// <param name="engine">The engine that handles lines.</param>
     /// <param name="history">Where history is kept between runs, or null to keep it for this run only.</param>
     /// <param name="cancellationToken">Cancels the run.</param>
+    /// <param name="onFirstFrame">Called once the terminal has applied its first complete prompt frame.</param>
     /// <returns>The process exit code.</returns>
-    public static async Task<int> RunAsync(IReplEngine engine, IHistoryStore? history, CancellationToken cancellationToken)
+    public static async Task<int> RunAsync(IReplEngine engine, IHistoryStore? history, CancellationToken cancellationToken,
+        Action? onFirstFrame = null)
     {
         ArgumentNullException.ThrowIfNull(engine);
         var transcript = new Transcript { MaxLines = 1000 };
         PromptState? prompt = null;
-        await using var terminal = Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, usePlatformClipboard: true, history: history, onPrompt: p => prompt = p)
+        await using var terminal = Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, usePlatformClipboard: true,
+            history: history, onPrompt: p => prompt = p, onFirstFrame: onFirstFrame)
             .WithMouse()
             .Build();
         return await RunAsync(terminal, prompt, cancellationToken).ConfigureAwait(false);
@@ -342,6 +351,14 @@ public static partial class IlReplApp
 
     private static void StartSubmission(PromptState prompt, IReplEngine engine, string text)
     {
+        if (engine is SessionController { RuntimeState: not SessionRuntimeState.Ready } unavailable
+            && !unavailable.CanHandleWithoutRuntime(text))
+        {
+            prompt.SetText(text, text.Length);
+            prompt.Post(SubmissionEvent.Reply([TranscriptLine.Of(LineKind.Info,
+                "  input retained; submit it when the execution host is ready", SpanStyle.Dim)]));
+            return;
+        }
         if (engine is SessionController controller)
         {
             controller.Editor = new SessionEditor();
@@ -353,6 +370,7 @@ public static partial class IlReplApp
         {
             // Sent after the one in flight; nothing typed is lost and nothing runs out of order.
             prompt.Pending.Enqueue(text);
+            if (engine is SessionController queued) queued.QueuedInput = [.. prompt.Pending.SelectMany(value => value.Split('\n'))];
             return;
         }
 
@@ -368,6 +386,7 @@ public static partial class IlReplApp
         prompt.Submission = null;
         if (prompt.Pending.TryDequeue(out var next))
         {
+            if (engine is SessionController queued) queued.QueuedInput = [.. prompt.Pending.SelectMany(value => value.Split('\n'))];
             StartSubmission(prompt, engine, next);
         }
     }
@@ -376,6 +395,13 @@ public static partial class IlReplApp
     {
         while (prompt.Events.TryDequeue(out var e))
         {
+            if (e.RuntimeEpoch is { } epoch && engine is SessionController controller
+                && (epoch != engine.AssemblyVersion >> 32 || controller.RuntimeState == SessionRuntimeState.Restarting))
+            {
+                if (prompt.Submission?.Identity == e.SubmissionIdentity) prompt.Submission = null;
+                continue;
+            }
+            if (e.Output is { } output) transcript.AppendOutput(output);
             if (prompt.SessionDialog is { Submitted: true } && !e.SessionQuit
                 && e.Kind is SubmissionEventKind.Completed or SubmissionEventKind.Refused or SubmissionEventKind.Failed
                     or SubmissionEventKind.Cancelled or SubmissionEventKind.SessionDocument or SubmissionEventKind.EditDocument)
@@ -431,6 +457,7 @@ public static partial class IlReplApp
                     prompt.Submission = null;
                     if (e.SessionEditor is { } editor)
                     {
+                        if (e.RuntimeRecovery) prompt.Pending.Clear();
                         if (prompt.Pending.Count != 0)
                         {
                             var pending = string.Join('\n', prompt.Pending);
@@ -534,28 +561,6 @@ public static partial class IlReplApp
         }
     }
 
-    private static Hex1bWidget[] TranscriptLines(Transcript transcript, int lineWidth, YankFeedback feedback)
-    {
-        var widgets = new Hex1bWidget[transcript.Lines.Count];
-        var row = 0;
-        for (var i = 0; i < widgets.Length; i++)
-        {
-            var line = transcript.Lines[i];
-            var flash = false;
-            if (feedback.FlashTop >= 0)
-            {
-                // Only while something is flashing are the rows counted, to know which lines it covers.
-                var rows = TranscriptLineFolder.Fold(line.Spans, lineWidth).Count;
-                flash = feedback.Covers(row, rows);
-                row += rows;
-            }
-
-            widgets[i] = new TranscriptLineWidget(line, lineWidth, flash);
-        }
-
-        return widgets;
-    }
-
     private static VStackWidget BuildRoot(RootContext ctx, Hex1bApp app, IReplEngine engine, Transcript transcript, TerminalSizeFilter size, YankFeedback feedback, PromptState prompt, bool usePlatformClipboard, bool ownSelection)
     {
         // Whatever the submission worker and the paste handler posted since the last frame is
@@ -564,9 +569,10 @@ public static partial class IlReplApp
         Drain(prompt, transcript, engine, app);
         var dialog = prompt.SessionDialog;
 
-        if (engine is SessionController session && !prompt.Busy)
+        if (engine is SessionController session)
         {
             session.Editor = CaptureEditor(prompt);
+            session.QueuedInput = [.. prompt.Pending.SelectMany(value => value.Split('\n'))];
         }
         prompt.Requester?.Refresh(prompt);
         prompt.Analyzer?.Refresh(prompt);
@@ -587,10 +593,9 @@ public static partial class IlReplApp
 
         prompt.DocumentationTargetChanged?.Invoke(null, prompt.HelpInputSequence, false);
 
-        // The prompt is the only place input goes. A click on the scrollbar still focuses the
-        // transcript panel, so focus is pulled back on the next render as a last resort; clicks
-        // and wheel notches over the transcript itself are handed back at once, below.
-        if (dialog is null && app.FocusedNode is not null and not EditorNode)
+        // Resolve focus after reconciliation: adding or removing a notice can replace the editor
+        // node even while the previous tree still reports that its old editor has focus.
+        if (dialog is null)
         {
             app.RequestFocus(node => node is EditorNode);
         }
@@ -630,7 +635,17 @@ public static partial class IlReplApp
         var displayCandidates = PromptWidget.DisplayCandidates(prompt, engine.Catalog).Count;
         var detailLines = PromptWidget.DetailLines(prompt, engine.Catalog, size.Width).Count;
         var diagnosticLines = PromptDiagnostics.Lines(prompt, size.Width).Count;
-        var fit = PromptLayout.Fit(size.Height, prompt.LineCount, displayCandidates, detailLines, diagnosticLines);
+        var interruptNotice = prompt.Interruption.BuildNotice(InterruptTime);
+        var supervisionNotice = engine is IProcessSupervision supervised ? supervised.Supervision switch
+        {
+            { Restoring: true } => "Restoring process supervision; your runtime remains available",
+            { Degraded: true } => "Process supervision unavailable; press Alt+R to retry without restarting",
+            _ => null,
+        } : null;
+        var noticeWidth = Math.Max(1, size.Width);
+        var noticeRows = (interruptNotice is null ? 0 : (interruptNotice.Length + noticeWidth - 1) / noticeWidth)
+            + (supervisionNotice is null ? 0 : (supervisionNotice.Length + noticeWidth - 1) / noticeWidth);
+        var fit = PromptLayout.Fit(size.Height - noticeRows, prompt.LineCount, displayCandidates, detailLines, diagnosticLines);
         if (fit.EditorRows != prompt.LastEditorRows)
         {
             // The transcript keeps its newest rows in view while the editor takes or gives back
@@ -667,7 +682,7 @@ public static partial class IlReplApp
                 v.VScrollPanel(sv =>
                     [
                         ownSelection
-                            ? sv.SelectionPanel(sv.VStack(lines => TranscriptLines(transcript, lineWidth, feedback)))
+                            ? sv.SelectionPanel(sv.VStack(lines => prompt.TranscriptView.Get(transcript, lineWidth, feedback)))
                                 .OnCopy((SelectionPanelCopyEventArgs args) =>
                                 {
                                     ClipboardWriter.Copy(app, args.Text, usePlatformClipboard);
@@ -681,7 +696,7 @@ public static partial class IlReplApp
                                     b.Shift().Key(Hex1bKey.UpArrow).OverridesCapture().Triggers(SelectionPanelWidget.CopyModeUp);
                                     b.Shift().Key(Hex1bKey.DownArrow).OverridesCapture().Triggers(SelectionPanelWidget.CopyModeDown);
                                 })
-                            : sv.VStack(lines => TranscriptLines(transcript, lineWidth, feedback)),
+                            : sv.VStack(lines => prompt.TranscriptView.Get(transcript, lineWidth, feedback)),
                     ], showScrollbar: true)
                     .InputBindings(b =>
                     {
@@ -711,6 +726,8 @@ public static partial class IlReplApp
                     .Follow()
                     .Fill(),
                 v.Separator(),
+                .. interruptNotice is null ? Array.Empty<Hex1bWidget>() : [v.Text(interruptNotice).Wrap()],
+                .. supervisionNotice is null ? Array.Empty<Hex1bWidget>() : [v.Text(supervisionNotice).Wrap()],
                 promptWidget,
                 v.InfoBar(s =>
                 {
@@ -734,6 +751,11 @@ public static partial class IlReplApp
                     else if (prompt.LineCount > 1)
                     {
                         facts.Add($"editing {prompt.LineCount} lines");
+                    }
+                    if (engine is SessionController runtime && runtime.RuntimeState != SessionRuntimeState.Ready)
+                    {
+                        facts.Insert(0, runtime.RuntimeState == SessionRuntimeState.Starting ? "starting execution host"
+                            : runtime.RuntimeState == SessionRuntimeState.Restarting ? "restarting runtime" : "host unavailable");
                     }
 
                     // The open blocks lead, because every fact after them describes the innermost one:
@@ -825,6 +847,13 @@ public static partial class IlReplApp
                     _ = RunSessionActionAsync(prompt, controllerForKeys, SessionOperation.Open);
                 }, "Open session");
             }
+            if (engine is IProcessSupervision { Supervision.Degraded: true } supervision)
+            {
+                b.Alt().Key(Hex1bKey.R).Action(context =>
+                {
+                    _ = RetrySupervisionAsync(prompt, supervision);
+                }, "Retry process supervision");
+            }
             b.Ctrl().Key(Hex1bKey.L).Action(_ =>
             {
                 transcript.Clear();
@@ -893,8 +922,10 @@ public static partial class IlReplApp
         // already being drawn is still drained on the next one.
         var again = prompt.RowsChanged;
         prompt.RowsChanged = false;
+        var changingRuntime = engine is SessionController
+            { RuntimeState: SessionRuntimeState.Starting or SessionRuntimeState.Restarting };
         return prompt.Busy || prompt.Requester?.IsPending == true || prompt.Analyzer?.IsPending == true
-            || prompt.MoreCompletions || !prompt.Events.IsEmpty || again
+            || prompt.MoreCompletions || !prompt.Events.IsEmpty || again || changingRuntime
             ? root.RedrawAfter(16) : root;
     }
 }

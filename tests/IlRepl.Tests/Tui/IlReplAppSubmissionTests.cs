@@ -9,8 +9,7 @@ using IlRepl.Tui;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// A block goes to the engine line by line on a worker, so the screen, the keys, and the window
-/// keep working while it is in flight. A gated engine holds the submission wherever a test wants.
+/// Verifies responsive editing and submission ordering with a real engine paused at controlled execution boundaries.
 /// </summary>
 [TestClass]
 public sealed class IlReplAppSubmissionTests
@@ -185,8 +184,7 @@ public sealed class IlReplAppSubmissionTests
     }
 
     /// <summary>
-    /// Ctrl+C during a block waits for the line in flight, withdraws the block, and leaves its text
-    /// in the editor.
+    /// Ctrl+C during a block settles the current line, withdraws the block, and restores its text to the editor.
     /// </summary>
     [TestMethod]
     public async Task Submit_CtrlC_CancelsAndKeepsRemainder()
@@ -203,12 +201,10 @@ public sealed class IlReplAppSubmissionTests
         engine.Allow(2);
         await auto.WaitUntilTextAsync("sending 2/6");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
-        await auto.WaitUntilTextAsync("cancelling 2/6");
-        engine.Allow(1);
         await auto.WaitUntilTextAsync("method Twice abandoned; the block is back in the editor");
         await auto.WaitUntilTextAsync("editing 6 lines");
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 5) == "  ...> }" && !s.ContainsText("sending"), description: "the whole block is back");
-        Assert.HasCount(3, engine.Handled, "the line in flight was answered before the cancel took effect");
+        Assert.HasCount(2, engine.Handled, "cancellation stops the pending line before it reaches the real engine");
         Assert.AreEqual(0, engine.Status.OpenDepth);
         Assert.IsFalse(terminal.CreateSnapshot().ContainsText("method Twice │"), "no method is open");
 
@@ -217,26 +213,36 @@ public sealed class IlReplAppSubmissionTests
     }
 
     /// <summary>
-    /// A transport failure mid-block prints the error, withdraws the block, and keeps its text.
+    /// Actual transport loss after three acknowledgements prints the error and preserves every source line and acknowledged echo.
     /// </summary>
     [TestMethod]
-    public async Task Submit_EngineThrows_KeepsRemainderAndShowsError()
+    public async Task Submit_HostExitsAfterThreeLines_KeepsRemainderAndShowsError()
     {
         var ct = TestContext.CancellationToken;
-        await using var engine = new FaultingEngine(new InProcessEngine(), failAt: 3);
+        var host = await HostPaths.StartEngineAsync(ct);
+        await using var engine = new DelayedEngine(host);
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_twice, ct);
-        await auto.WaitUntilTextAsync("engine error: the host has exited");
-        await auto.WaitUntilTextAsync("method Twice abandoned; the block is back in the editor");
+        engine.Allow(3);
+        await auto.WaitUntilTextAsync("sending 3/6");
+        using var process = Process.GetProcessById(host.ProcessId);
+        process.Kill();
+        await process.WaitForExitAsync(ct);
+        engine.Allow(1);
+        await auto.WaitUntilTextAsync("engine error:");
         await auto.WaitUntilTextAsync("editing 6 lines");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 3) == "  ...>   mul" && !s.ContainsText("sending"), description: "the whole block is back");
-        Assert.AreSequenceEqual(["il[1]> .method int32 Twice(int32 n) {", "il[1]>   ldarg n", "il[1]>   ldc.i4 2"], AppTest.Echoes(transcript));
-        Assert.AreEqual(0, engine.Status.OpenDepth);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {"
+            && AppTest.PromptRow(s, 3) == "  ...>   mul" && AppTest.PromptRow(s, 5) == "  ...> }" && !s.ContainsText("sending"),
+            description: "the whole block is back");
+        Assert.AreSequenceEqual(["il[1]> .method int32 Twice(int32 n) {", "il[1]>   ldarg n", "il[1]>   ldc.i4 2"],
+            AppTest.Echoes(transcript));
+        Assert.HasCount(3, engine.Handled);
+        Assert.IsTrue(process.HasExited, "No open block remains in an executing runtime after the real host has exited.");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -271,8 +277,7 @@ public sealed class IlReplAppSubmissionTests
     }
 
     /// <summary>
-    /// Ctrl+Q quits even while a block is in flight, and settling afterwards waits for the line
-    /// with the engine and sends nothing more.
+    /// Ctrl+Q stops the app while a block is in flight, then settles its current line without sending further input.
     /// </summary>
     [TestMethod]
     public async Task Submit_Quit_StopsApp()
@@ -287,22 +292,23 @@ public sealed class IlReplAppSubmissionTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_twice, ct);
+        engine.HoldReplyAt(2);
         engine.Allow(2);
-        await auto.WaitUntilTextAsync("sending 2/6");
+        await auto.WaitUntilAsync(_ => engine.ReplyWaiting, description: "the second real response is ready but not delivered");
+        await auto.WaitUntilTextAsync("sending 1/6");
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run.WaitAsync(AppTest.Timeout, ct);
 
         var settle = IlReplApp.SettleAsync(prompt!);
         Assert.IsFalse(settle.IsCompleted, "the line in flight is still with the engine");
-        engine.Allow(1);
+        engine.ReleaseReply();
         await settle.WaitAsync(AppTest.Timeout, ct);
-        Assert.HasCount(3, engine.Handled, "the line in flight went by and nothing after it");
+        Assert.HasCount(2, engine.Handled, "the line in flight went by and nothing after it");
         Assert.AreEqual(0, engine.Waiting);
     }
 
     /// <summary>
-    /// Ctrl+C between two top-level lines keeps the line that had not started: it comes back to
-    /// the editor, nothing is withdrawn, and the lines that went by stay.
+    /// Ctrl+C between top-level lines restores unsent text while preserving accepted lines.
     /// </summary>
     [TestMethod]
     public async Task Submit_CtrlC_BetweenTopLevelLines_KeepsTheUnsentLine()
@@ -322,11 +328,11 @@ public sealed class IlReplAppSubmissionTests
         engine.Allow(1);
         await auto.WaitUntilTextAsync("sending 1/3");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
-        await auto.WaitUntilTextAsync("cancelling 1/3");
-        engine.Allow(1);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 3" && !s.ContainsText("cancelling"), description: "the line that had not started is back");
-        await auto.WaitUntilTextAsync("stack before [int32, int32]");
-        Assert.HasCount(2, engine.Handled);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 2"
+            && AppTest.PromptRow(s, 1) == "  ...> ldc.i4 3" && !s.ContainsText("cancelling"),
+            description: "both unexecuted lines return in source order");
+        await auto.WaitUntilTextAsync("stack before [int32]");
+        Assert.HasCount(1, engine.Handled);
         Assert.DoesNotContain(l => l.PlainText.Contains("withdrawn", StringComparison.Ordinal), transcript.Lines, "nothing was withdrawn");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -353,11 +359,9 @@ public sealed class IlReplAppSubmissionTests
         await AppTest.TypeLinesAsync(auto, ["nop"], ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && s.ContainsText("sending 2/6"), description: "the line is queued behind the block");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
-        await auto.WaitUntilTextAsync("cancelling 2/6");
-        engine.Allow(1);
         await auto.WaitUntilTextAsync("method Twice abandoned; the block is back in the editor");
         await auto.WaitUntilAsync(s => s.ContainsText("editing 7 lines") && AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 6) == "  ...> nop", description: "the block and the queued line are both back");
-        Assert.HasCount(3, engine.Handled);
+        Assert.HasCount(2, engine.Handled);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -396,14 +400,14 @@ public sealed class IlReplAppSubmissionTests
     }
 
     /// <summary>
-    /// A failure nobody planned for, from the engine or the store, still hands the unsent text
-    /// back and withdraws the block in flight.
+    /// An unexpected application exception returns all source to the editor and successfully withdraws the surviving engine's block.
     /// </summary>
     [TestMethod]
     public async Task Submit_EngineThrowsUnexpectedly_KeepsRemainderAndShowsError()
     {
         var ct = TestContext.CancellationToken;
-        await using var engine = new FaultingEngine(new InProcessEngine(), failAt: 3, () => new InvalidOperationException("the engine lost its footing"));
+        await using var engine = new FaultingEngine(new InProcessEngine(), failAt: 3,
+            () => new InvalidOperationException("the engine lost its footing"));
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
@@ -448,8 +452,6 @@ public sealed class IlReplAppSubmissionTests
         await auto.BackspaceAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "the buffer is empty again");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
-        await auto.WaitUntilTextAsync("cancelling 2/6");
-        engine.Allow(1);
         await auto.WaitUntilTextAsync("method Twice abandoned; the block is back in the editor");
         await auto.WaitUntilAsync(s => s.ContainsText("editing 7 lines") && AppTest.PromptRow(s, 5) == "  ...> }" && AppTest.PromptRow(s, 6) == "  ...>", description: "the block is back with the blank run after it");
         await auto.WaitUntilTextAsync("Enter sends 7 lines");
@@ -464,8 +466,7 @@ public sealed class IlReplAppSubmissionTests
     }
 
     /// <summary>
-    /// A run cancelled by the token still settles: the line with the engine is waited for and
-    /// nothing after it is sent.
+    /// Token cancellation settles the current line without sending any subsequent input.
     /// </summary>
     [TestMethod]
     public async Task Submit_Cancelled_SettlesBeforeReturning()
@@ -481,12 +482,15 @@ public sealed class IlReplAppSubmissionTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_twice, ct);
+        engine.HoldReplyAt(2);
         engine.Allow(2);
-        await auto.WaitUntilTextAsync("sending 2/6");
+        await auto.WaitUntilAsync(_ => engine.ReplyWaiting, description: "the second real response is ready but not delivered");
+        await auto.WaitUntilTextAsync("sending 1/6");
         await cancel.CancelAsync();
-        await auto.WaitUntilAsync(_ => prompt!.Submission is { CancelRequested: true } && engine.Waiting == 1, description: "the run has asked the worker to stop and waits for the line with the engine");
+        await auto.WaitUntilAsync(_ => prompt!.Submission is { CancelRequested: true } && engine.ReplyWaiting,
+            description: "the run has asked the worker to stop and waits for the real completed response");
         Assert.IsFalse(run.IsCompleted, "the run waits for the line in flight");
-        engine.Allow(1);
+        engine.ReleaseReply();
         try
         {
             await run.WaitAsync(AppTest.Timeout, ct);
@@ -496,7 +500,7 @@ public sealed class IlReplAppSubmissionTests
             // The token ended the run; what matters is what was settled first.
         }
 
-        Assert.HasCount(3, engine.Handled, "the line in flight went by and nothing after it");
+        Assert.HasCount(2, engine.Handled, "the line in flight went by and nothing after it");
         Assert.AreEqual(0, engine.Waiting);
     }
 }

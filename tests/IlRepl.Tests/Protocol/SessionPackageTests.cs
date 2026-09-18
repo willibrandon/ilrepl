@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using IlRepl.Hosting;
+using IlRepl.Processes;
 using IlRepl.Protocol;
 using Mono.Cecil;
 

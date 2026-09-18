@@ -3,7 +3,7 @@ namespace IlRepl.Protocol;
 /// <summary>
 /// The scrollback of a session. Old lines are dropped once <see cref="MaxLines"/> is exceeded.
 /// </summary>
-public sealed class Transcript
+public sealed partial class Transcript
 {
     private readonly List<TranscriptLine> _lines = [];
 

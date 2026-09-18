@@ -650,3 +650,200 @@ test('browser import accepts its 8 MiB boundary and rejects the next byte withou
   expect(retained.entries).toEqual([]);
   expect(retained.assets).toEqual([]);
 });
+
+test('restart retires execution before boot and replays replacement input without submitting it', async ({ page, context }) => {
+  await focus(page);
+  await page.keyboard.type('// retained Ω');
+  const previous = page.workers().find(worker => worker.url().endsWith('/worker.js'));
+  expect(previous).toBeDefined();
+  const count = await page.evaluate(() => window.ilreplSessionCount);
+  const requested = context.waitForEvent('request', request => request.url() === previous.url());
+  const release = Promise.withResolvers();
+  await context.route(previous.url(), async route => {
+    await release.promise;
+    await route.continue();
+  });
+  try {
+    await page.getByRole('button', { name: 'Restart the session', exact: true }).click();
+    await requested;
+    await expect.poll(() => page.workers().includes(previous)).toBe(false);
+    expect(await page.evaluate(() => window.ilreplReady)).toBe(false);
+    await focus(page);
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('ldc.i4.s 42');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('ret');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('// replacement Δ');
+    // A second request shares the in-progress replacement rather than creating another runtime.
+    await page.getByRole('button', { name: 'Restart the session', exact: true }).click();
+  } finally {
+    release.resolve();
+  }
+  await ready(page, count + 1);
+  const restored = await download(page);
+  expect(restored.editor.lines).toEqual(['// retained Ω', 'ldc.i4.s 42', 'ret', '// replacement Δ']);
+  expect(restored.entries).toEqual([]);
+  expect(restored.cells).toEqual([]);
+  expect(await outputCount(page, '= 42 : int32')).toBe(0);
+  expect(await page.evaluate(() => window.ilreplSessionCount)).toBe(count + 1);
+});
+
+for (const action of ['Download', 'Run all']) {
+  test(`retiring a worker settles pending ${action} without changing the replacement`, async ({ page }) => {
+    await typeLine(page, 'LOOP: br LOOP');
+    await expect(page.locator('#terminal')).toContainText('1 instruction');
+    await typeLine(page, 'ret');
+    await expect.poll(() => page.evaluate(() => window.ilreplWorkspaceState.pendingSubmission)).toBe(1);
+    const previous = page.workers().find(worker => worker.url().endsWith('/worker.js'));
+    const count = await page.evaluate(() => window.ilreplSessionCount);
+    const downloads = [];
+    page.on('download', value => downloads.push(value));
+    await page.getByRole('button', { name: action, exact: true }).click();
+    await page.getByRole('button', { name: 'Restart the session', exact: true }).click();
+    await ready(page, count + 1);
+    await expect.poll(() => page.workers().includes(previous)).toBe(false);
+    await expect(page.locator('#session-file-message')).not.toContainText('downloaded');
+    expect(downloads).toEqual([]);
+    const restored = await download(page);
+    expect(restored.interruptions).toHaveLength(1);
+    expect(restored.cells.find(cell => cell.number === 1)?.state).toBe('interrupted');
+    expect(restored.entries.flatMap(entry => entry.source)).toContain('LOOP: br LOOP');
+  });
+}
+
+test('assembly save downloads a managed PE instead of leaving the image in the worker filesystem', async ({ page }) => {
+  await typeLine(page, '.method int32 Answer() {');
+  await typeLine(page, 'ldc.i4.s 42');
+  await typeLine(page, 'ret');
+  await typeLine(page, '}');
+  const downloading = page.waitForEvent('download');
+  await typeLine(page, '.save browser-answer.dll');
+  const result = await downloading;
+  expect(result.suggestedFilename()).toBe('browser-answer.dll');
+  const bytes = await readFile(await result.path());
+  expect(bytes.subarray(0, 2).toString('ascii')).toBe('MZ');
+  const pe = bytes.readUInt32LE(0x3c);
+  expect(bytes.subarray(pe, pe + 4)).toEqual(Buffer.from([0x50, 0x45, 0, 0]));
+  expect(bytes.includes(Buffer.from('Answer\0'))).toBe(true);
+  expect(bytes.includes(Buffer.from('browser-answer\0'))).toBe(true);
+  const runtime = page.workers().find(worker => worker.url().endsWith('/worker.js'));
+  expect(await runtime.evaluate(image => self.__ilreplConformance(image, 'IlRepl.Cell', 'Answer'),
+    bytes.toString('base64'))).toBe(42);
+  await expect(page.locator('#terminal')).toContainText('downloaded browser-answer.dll');
+  await expect(page.locator('#session-file-message')).toHaveText('Assembly downloaded.');
+  await typeLine(page, 'call int32 Answer()');
+  await typeLine(page, 'ret');
+  await expect.poll(() => outputCount(page, '= 42 : int32')).toBe(1);
+});
+
+test('replacement rejects input and acknowledgements belonging to a retired generation', async ({ page }) => {
+  const oldGeneration = await page.evaluate(() => window.ilreplGeneration);
+  const count = await page.evaluate(() => window.ilreplSessionCount);
+  await page.getByRole('button', { name: 'Restart the session', exact: true }).click();
+  await ready(page, count + 1);
+  await focus(page);
+  await page.keyboard.type('// current Ω');
+  const runtime = page.workers().find(worker => worker.url().endsWith('/worker.js'));
+  expect(runtime).toBeDefined();
+  await runtime.evaluate(generation => {
+    self.onmessage({ data: { type: 'input', generation, sequence: 1, data: btoa('.quit\r') } });
+    self.onmessage({ data: { type: 'workspace-ack', generation, identity: 1 } });
+    self.onmessage({ data: { type: 'input', sequence: 1, data: btoa('.quit\r') } });
+  }, oldGeneration);
+  const retained = await download(page);
+  expect(retained.editor.lines).toEqual(['// current Ω']);
+  expect(retained.entries).toEqual([]);
+  expect(await page.evaluate(() => window.ilreplSessionCount)).toBe(count + 1);
+  expect(await page.evaluate(() => window.ilreplWorkspaceState.pendingInput)).toBe(0);
+});
+
+test('manual restart supersedes scheduled watchdog recovery without starting a second replacement', async ({ page, context }) => {
+  await typeLine(page, 'LOOP: br LOOP');
+  await typeLine(page, 'ret');
+  await expect.poll(() => page.evaluate(() => window.ilreplWorkspaceState.pendingSubmission)).toBe(1);
+  const previous = page.workers().find(worker => worker.url().endsWith('/worker.js'));
+  const count = await page.evaluate(() => window.ilreplSessionCount);
+  const requested = context.waitForEvent('request', request => request.url() === previous.url());
+  const release = Promise.withResolvers();
+  await context.route(previous.url(), async route => {
+    await release.promise;
+    await route.continue();
+  });
+  try {
+    await expect.poll(() => page.evaluate(() => window.ilreplLastRestart), { timeout: 45_000 }).toBe('hung');
+    await page.getByRole('button', { name: 'Restart the session', exact: true }).click();
+    await requested;
+    expect(await page.evaluate(() => window.ilreplWorkspaceState.restartScheduled)).toBe(false);
+    await expect.poll(() => page.workers().includes(previous)).toBe(false);
+    await focus(page);
+    await page.keyboard.type('// watchdog replacement');
+  } finally {
+    release.resolve();
+  }
+  await ready(page, count + 1);
+  const restored = await download(page);
+  expect(restored.interruptions).toHaveLength(1);
+  expect(restored.editor.lines.join('\n')).toContain('// watchdog replacement');
+  expect(await page.evaluate(() => window.ilreplSessionCount)).toBe(count + 1);
+});
+
+test('typed session restart delegates replacement to the page and preserves accepted definitions', async ({ page }) => {
+  await typeLine(page, '.method int32 Answer() {');
+  await typeLine(page, 'ldc.i4.s 42');
+  await typeLine(page, 'ret');
+  await typeLine(page, '}');
+  const previous = page.workers().find(worker => worker.url().endsWith('/worker.js'));
+  const count = await page.evaluate(() => window.ilreplSessionCount);
+  await typeLine(page, '.session restart');
+  await ready(page, count + 1);
+  await expect.poll(() => page.workers().includes(previous)).toBe(false);
+  await expect(page.locator('#terminal')).not.toContainText(openNotice);
+  await typeLine(page, 'call int32 Answer()');
+  await typeLine(page, 'ret');
+  await expect.poll(() => outputCount(page, '= 42 : int32')).toBe(1);
+  expect(await page.evaluate(() => window.ilreplSessionCount)).toBe(count + 1);
+});
+
+test('a download acknowledgement marks only its captured document as saved', async ({ page }) => {
+  const runtime = page.workers().find(worker => worker.url().endsWith('/worker.js'));
+  await focus(page);
+  await page.keyboard.type('// first document');
+  const first = await runtime.evaluate(() => self.__ilreplWorkspace('capture', ''));
+  await page.keyboard.type(' changed');
+  const second = await runtime.evaluate(() => self.__ilreplWorkspace('capture', ''));
+  expect(JSON.parse(first).editor.lines).toEqual(['// first document']);
+  expect(JSON.parse(second).editor.lines).toEqual(['// first document changed']);
+  await runtime.evaluate(document => self.__ilreplWorkspace('saved', JSON.stringify({
+    path: 'first.ilrepl.json', document,
+  })), first);
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Open', exact: true }).click();
+  await (await chooser).setFiles({
+    name: 'replacement.ilrepl.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(document([]))),
+  });
+  await expect(page.getByRole('dialog')).toContainText('Save changes');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const retained = await download(page);
+  expect(retained.editor.lines).toEqual(['// first document changed']);
+});
+
+test('a file read completing after Restart cannot replace the newer runtime', async ({ page }) => {
+  await focus(page);
+  await page.keyboard.type('// keep this draft');
+  const count = await page.evaluate(() => window.ilreplSessionCount);
+  await page.locator('#session-files input[type=file]').evaluate((picker, source) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([source], 'stale.ilrepl.json', { type: 'application/json' }));
+    picker.files = transfer.files;
+    // Real File.text() completes asynchronously; Restart retires its generation in this same browser task.
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('session-restart').click();
+  }, JSON.stringify(document(['ldc.i4.s 99'])));
+  await ready(page, count + 1);
+  const retained = await download(page);
+  expect(retained.entries).toEqual([]);
+  expect(retained.editor.lines).toEqual(['// keep this draft']);
+  expect(await page.evaluate(() => window.ilreplSessionCount)).toBe(count + 1);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});

@@ -1,5 +1,5 @@
 <Project>
-  <!-- Hex1b 0.165.0 supplies glibc binaries only. Compile its matching PTY helper for tests running on musl. -->
+  <!-- Hex1b 0.167.0 supplies glibc binaries only. Compile its matching PTY helper for tests running on musl. -->
   <Target Name="PrepareMuslPtyTestHelper">
     <PropertyGroup>
       <PtyNativeDirectory>$(IntermediateOutputPath)pty/$(NETCoreSdkRuntimeIdentifier)/</PtyNativeDirectory>

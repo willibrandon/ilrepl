@@ -10,6 +10,11 @@ namespace IlRepl.Repl;
 public sealed record HandleResult(bool Succeeded, bool QuitRequested)
 {
     /// <summary>
+    /// An assembly awaiting delivery through the frontend's export destination.
+    /// </summary>
+    public AssemblyExportResult? AssemblyExport { get; init; }
+
+    /// <summary>
     /// The typed session action awaiting frontend coordination.
     /// </summary>
     public SessionAction? SessionAction { get; init; }

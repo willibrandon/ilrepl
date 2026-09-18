@@ -37,12 +37,32 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Setup .NET
+        if: ${{ !startsWith(matrix.rid, 'linux-musl-') }}
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.400'
 
       - name: Publish, smoke test, and pack
+        if: ${{ !startsWith(matrix.rid, 'linux-musl-') }}
         run: dotnet run --file scripts/Publish-NativeAot.cs -- --rid ${{ matrix.rid }} --package-version ${{ github.ref_name }}
+
+      - name: Publish, smoke test, and pack inside Alpine
+        if: startsWith(matrix.rid, 'linux-musl-')
+        run: >-
+          docker run --rm
+          -v "$PWD:/repo" -w /repo
+          mcr.microsoft.com/dotnet/sdk:10.0.400-alpine3.23
+          sh -c 'apk add --no-cache build-base clang lld zlib-dev icu-libs libstdc++ &&
+          dotnet run --file scripts/Publish-NativeAot.cs --
+          --rid ${{ matrix.rid }} --package-version ${{ github.ref_name }}'
+
+      - name: Upload packaged validation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: packaged-validation-${{ matrix.rid }}
+          path: artifacts/native-aot/${{ matrix.rid }}/smoke-results.json
+          if-no-files-found: error
 
       - name: Upload binaries
         uses: actions/upload-artifact@v7

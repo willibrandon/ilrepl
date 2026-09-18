@@ -1,7 +1,7 @@
 # Hex1b PTY helper
 
 `hex1binterop.c` and `LICENSE` are copied from Hex1b commit
-`39947cb9455dd39b8de6326c643baaf4e4324962`, the source of our pinned 0.165.0 package.
+`6eea363f96a54f7c4029af806969094c6929b72a`, the source of our pinned 0.167.0 package.
 Only trailing whitespace has been removed.
 
 That package ships glibc Linux libraries. Its Arm64 library requires the glibc loader,

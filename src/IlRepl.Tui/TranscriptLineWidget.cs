@@ -7,8 +7,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Renders one transcript line as one or more rows of styled runs, folded to the width the
-/// terminal reported, so long output is read in full instead of being cut off at the edge.
+/// Renders complete styled transcript text as cached rows folded to the terminal width.
 /// </summary>
 /// <param name="Line">The line to render.</param>
 /// <param name="Width">The width in columns to fold at, or zero or less to leave the line whole.</param>
@@ -16,6 +15,23 @@ namespace IlRepl.Tui;
 public sealed record TranscriptLineWidget(TranscriptLine Line, int Width, bool Flash = false) : Hex1bWidget
 {
     private static readonly Hex1bColor s_flashBackground = Hex1bColor.FromRgb(46, 92, 60);
+    private (TranscriptLine Line, int Width, IReadOnlyList<IReadOnlyList<TranscriptSpan>> Rows)? _folded;
+
+    /// <summary>
+    /// The folded rows, retained across reconciliation and rebuilt when a record copy changes its line or width.
+    /// </summary>
+    internal IReadOnlyList<IReadOnlyList<TranscriptSpan>> Rows
+    {
+        get
+        {
+            if (_folded is not { } folded || !ReferenceEquals(folded.Line, Line) || folded.Width != Width)
+            {
+                _folded = (Line, Width, TranscriptLineFolder.Fold(Line.Spans, Width));
+            }
+
+            return _folded.Value.Rows;
+        }
+    }
 
     /// <summary>
     /// Builds the rows.
@@ -25,7 +41,7 @@ public sealed record TranscriptLineWidget(TranscriptLine Line, int Width, bool F
     protected override Hex1bWidget Build(CompositionContext ctx)
     {
         ArgumentNullException.ThrowIfNull(ctx);
-        var rows = TranscriptLineFolder.Fold(Line.Spans, Width);
+        var rows = Rows;
         var content = rows.Count == 1
             ? Row(ctx, rows[0])
             : ctx.VStack(v => rows.Select(row => Row(v, row)).ToArray());

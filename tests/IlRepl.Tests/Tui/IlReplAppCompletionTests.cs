@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
 using IlRepl.Protocol;
@@ -189,93 +190,85 @@ public sealed class IlReplAppCompletionTests
         Assert.DoesNotContain(LineKind.Error, transcript.Lines.Select(line => line.Kind));
     }
     /// <summary>
-    /// Every part of a long signature remains reachable without changing the editor or selected member.
+    /// Every part of a real long method signature remains reachable without changing the editor or selected member.
     /// </summary>
     [TestMethod]
     public async Task Operand_LongSignature_ScrollsThroughTheWholeDetail()
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
         var ct = TestContext.CancellationToken;
-        await using var engine = new CompletionEngine();
-        var signature = string.Join("\n", Enumerable.Range(0, 80).Select(index => "signature part " + index));
-        engine.Immediate = new CompletionReply(CompletionKind.Members, 5, 11,
-            [new CompletionItem("WriteLine", "[] → void", "Console", false)
-            {
-                Kind = CompletionKind.Members, Insert = "Console::WriteLine()", FullDetail = signature,
-            }], null, 1, false, engine.Status.Revision, "long-signature", 1, []);
+        await using var engine = new CompletionEngine { HoldCompletion = false };
+        CompletionEngine.LoadLongSignature();
+        await engine.PrimeAsync(ct);
         PromptState prompt = null!;
-        await using var terminal = AppTest.Build(engine, new Transcript(), width: 60, height: 20,
-            onPrompt: value => prompt = value);
+        var adapter = new ScriptedPresentationAdapter(60, 20);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, new Transcript(),
+            onPrompt: value => prompt = value).WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");
-        await auto.TypeAsync("call Console::Wr", ct: ct);
-        await auto.WaitUntilTextAsync("signature part 0");
-        for (var index = 0; index < 80; index++)
-        {
-            await auto.KeyAsync(Hex1bKey.PageDown, ct: ct);
-        }
-
-        await auto.WaitUntilTextAsync("signature part 79");
-        Assert.AreEqual("call Console::Wr", prompt.Text);
+        const string source = "call LongSignatureFixture.Methods::Us";
+        await adapter.PasteAsync(source);
+        await auto.WaitUntilTextAsync("SignaturePart00");
+        for (var index = 0; index < 80; index++) await auto.KeyAsync(Hex1bKey.PageDown, ct: ct);
+        await auto.WaitUntilTextAsync("SignaturePart79");
+        Assert.AreEqual(source, prompt.Text);
         Assert.AreEqual(0, prompt.SelectedIndex);
-        for (var index = 0; index < 80; index++)
-        {
-            await auto.KeyAsync(Hex1bKey.PageUp, ct: ct);
-        }
-
-        await auto.WaitUntilTextAsync("signature part 0");
+        for (var index = 0; index < 80; index++) await auto.KeyAsync(Hex1bKey.PageUp, ct: ct);
+        await auto.WaitUntilTextAsync("SignaturePart00");
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
         await IlReplApp.SettleAsync(prompt);
     }
 
     /// <summary>
-    /// Empty replacement pages preserve the palette in every rendered frame while disabling the retained rows.
+    /// Real replacement pages preserve the palette in every rendered frame while stale rows remain disabled.
     /// </summary>
     [TestMethod]
-    public async Task Operand_EmptyReplacementPages_KeepPaletteVisible()
+    public async Task Operand_ReplacementPages_KeepPaletteVisible()
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
         var ct = TestContext.CancellationToken;
         await using var engine = new CompletionEngine();
+        await engine.PrimeAsync(ct);
         PromptState prompt = null!;
         var recorder = new FrameRecorder();
-        await using var terminal = AppTest.Build(engine, new Transcript(),
-            configure: builder => builder.AddPresentationFilter(recorder), onPrompt: value => prompt = value);
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, new Transcript(),
+            onPrompt: value => prompt = value).WithPresentation(adapter).AddPresentationFilter(recorder).Build();
         recorder.Terminal = terminal;
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");
-        const string prefix = "call Console::W";
-        await auto.TypeAsync(prefix, ct: ct);
-        await auto.WaitUntilAsync(_ => engine.Calls.LastOrDefault()?.Request.Lines[0] == prefix,
-            description: "the first operand request arrives");
-        var item = new CompletionItem("WriteLine", "[] → void", "Console", false)
-        {
-            Kind = CompletionKind.Members, Insert = "Console::WriteLine()",
-        };
-        var reply = new CompletionReply(CompletionKind.Members, 5, 10, [item], null, 1, false,
-            engine.Status.Revision, "initial", 1, []);
-        engine.Calls[^1].Answer.SetResult(reply);
-        await auto.WaitUntilTextAsync("members");
+        const string prefix = "call string::Su";
+        await adapter.PasteAsync(prefix);
+        await auto.WaitUntilAsync(_ => engine.Calls is [.., var latest] && latest.Request.Lines[0] == prefix);
+        engine.Calls[^1].Release.SetResult();
+        await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("members") && prompt.Completions is not null);
+        var item = prompt.Completions!.Reply.Items[0];
         var firstFrame = recorder.Count;
-        await auto.TypeAsync("r", ct: ct);
-        await auto.WaitUntilAsync(_ => engine.Calls[^1].Request.Lines[0] == prefix + "r",
-            description: "the replacement request arrives");
-        reply = reply with { ReplaceLength = 11, QueryId = "replacement" };
-        for (var page = 2; page <= 3; page++)
+        await auto.BackspaceAsync(ct: ct);
+        await auto.BackspaceAsync(ct: ct);
+        await auto.WaitUntilAsync(_ =>
         {
-            var cursor = "page-" + page;
-            engine.Calls[^1].Answer.SetResult(reply with { Items = [], Cursor = cursor, TotalIsProvisional = true });
-            await auto.WaitUntilAsync(_ => engine.Calls[^1].Request.Cursor == cursor,
-                description: "the empty page is followed");
-            await auto.WaitUntilTextAsync("updating members");
-            Assert.IsEmpty(PromptWidget.Candidates(prompt, engine.Catalog));
-            Assert.IsNull(CompletionEdit.For(prompt, item));
-        }
-
-        engine.Calls[^1].Answer.SetResult(reply);
-        await auto.WaitUntilAsync(_ => PromptWidget.Candidates(prompt, engine.Catalog).Count == 1,
-            description: "the replacement row becomes current");
+            foreach (var call in engine.Calls.Where(call => call.Cancellation.IsCancellationRequested))
+                call.Release.TrySetResult();
+            return engine.Calls[^1].Request.Lines[0] == "call string::";
+        });
+        await auto.WaitUntilTextAsync("updating members");
+        Assert.IsEmpty(PromptWidget.Candidates(prompt, engine.Catalog));
+        Assert.IsNull(CompletionEdit.For(prompt, item));
+        engine.Calls[^1].Release.SetResult();
+        await auto.WaitUntilAsync(_ => prompt.Completions is { Reply.Items.Count: CompletionReply.PageSize });
+        var cursor = prompt.Completions!.Reply.Cursor;
+        Assert.IsNotNull(cursor);
+        await auto.KeyAsync(Hex1bKey.End, ct: ct);
+        prompt.Requester!.RequestMore(prompt);
+        prompt.Invalidate?.Invoke();
+        await auto.WaitUntilAsync(_ => engine.Calls[^1].Request.Cursor == cursor);
+        Assert.IsNotEmpty(PromptWidget.Candidates(prompt, engine.Catalog));
+        engine.Calls[^1].Release.SetResult();
+        await auto.WaitUntilAsync(_ => prompt.Completions!.Reply.Items.Count > CompletionReply.PageSize);
         Assert.IsTrue(recorder.Since(firstFrame).All(frame => frame.Contains("members")));
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -283,47 +276,106 @@ public sealed class IlReplAppCompletionTests
     }
 
     /// <summary>
-    /// An assembly refresh keeps old rows visible but disabled until their replacements arrive.
+    /// A genuine assembly refresh keeps old rows visible but disabled until their real replacements arrive.
     /// </summary>
     [TestMethod]
     public async Task Operand_AssemblyRefresh_KeepsPaletteVisible()
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
         var ct = TestContext.CancellationToken;
         await using var engine = new CompletionEngine();
+        await engine.PrimeAsync(ct);
         PromptState prompt = null!;
         var recorder = new FrameRecorder();
-        await using var terminal = AppTest.Build(engine, new Transcript(),
-            configure: builder => builder.AddPresentationFilter(recorder), onPrompt: value => prompt = value);
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, new Transcript(),
+            onPrompt: value => prompt = value).WithPresentation(adapter).AddPresentationFilter(recorder).Build();
         recorder.Terminal = terminal;
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");
         const string prefix = "call Console::W";
-        await auto.TypeAsync(prefix, ct: ct);
-        await auto.WaitUntilAsync(_ => engine.Calls.LastOrDefault()?.Request.Lines[0] == prefix,
-            description: "the first operand request arrives");
-        var item = new CompletionItem("WriteLine", "[] → void", "Console", false)
-        {
-            Kind = CompletionKind.Members, Insert = "Console::WriteLine()",
-        };
-        var reply = new CompletionReply(CompletionKind.Members, 5, 10, [item], null, 1, false,
-            engine.Status.Revision, "initial", 1, []) { AssemblyVersion = engine.AssemblyVersion };
-        engine.Calls[^1].Answer.SetResult(reply);
-        await auto.WaitUntilTextAsync("members");
+        await adapter.PasteAsync(prefix);
+        await auto.WaitUntilAsync(_ => engine.Calls is [.., var latest] && latest.Request.Lines[0] == prefix);
+        engine.Calls[^1].Release.SetResult();
+        await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("members") && prompt.Completions is not null);
+        var item = prompt.Completions!.Reply.Items[0];
         var firstFrame = recorder.Count;
         var firstCall = engine.Calls.Count;
-        engine.ChangeAssemblies();
-        await auto.WaitUntilAsync(_ => engine.Calls.Count > firstCall,
-            description: "the changed assembly catalog starts a replacement request");
+        CompletionEngine.ChangeAssemblies();
+        await auto.WaitUntilAsync(_ => engine.Calls.Count > firstCall);
         await auto.WaitUntilTextAsync("updating members");
         Assert.IsEmpty(PromptWidget.Candidates(prompt, engine.Catalog));
         Assert.IsNull(CompletionEdit.For(prompt, item));
-        reply = reply with { QueryId = "replacement", AssemblyVersion = engine.AssemblyVersion };
-        engine.Calls[^1].Answer.SetResult(reply);
-        await auto.WaitUntilAsync(_ => PromptWidget.Candidates(prompt, engine.Catalog).Count == 1,
-            description: "the replacement row becomes current");
+        engine.Calls[^1].Release.SetResult();
+        await auto.WaitUntilAsync(_ => PromptWidget.Candidates(prompt, engine.Catalog).Count > 0);
         Assert.IsTrue(recorder.Since(firstFrame).All(frame => frame.Contains("members")));
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+        await IlReplApp.SettleAsync(prompt);
+    }
+
+    /// <summary>
+    /// Every acceptance input waits for a confirmed replacement of visible rows during a real assembly refresh.
+    /// </summary>
+    /// <param name="acceptance">The actual terminal input selecting the visible candidate.</param>
+    [TestMethod]
+    [DataRow("tab")]
+    [DataRow("enter")]
+    [DataRow("right")]
+    [DataRow("click")]
+    public async Task Operand_AcceptDuringAssemblyRefresh_AcceptsFreshBinding(string acceptance)
+    {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        var ct = TestContext.CancellationToken;
+        await using var engine = new CompletionEngine();
+        await engine.PrimeAsync(ct);
+        PromptState prompt = null!;
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, new Transcript(),
+            onPrompt: value => prompt = value).WithPresentation(adapter).WithMouse().Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        await auto.WaitUntilTextAsync("il[1]>");
+        const string prefix = "call Environment::get_CurrentManagedTh";
+        await adapter.PasteAsync(prefix);
+        await auto.WaitUntilAsync(_ => engine.Calls is [.., var latest] && latest.Request.Lines[0] == prefix);
+        engine.Calls[^1].Release.SetResult();
+        await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("members 1/1") && prompt.Completions is not null);
+        if (acceptance == "enter")
+        {
+            await auto.DownAsync(ct: ct);
+            await auto.WaitUntilTextAsync("Enter accepts");
+        }
+        var selected = prompt.Completions!.Reply.Items.Single();
+        var firstCall = engine.Calls.Count;
+        CompletionEngine.ChangeAssemblies();
+        await auto.WaitUntilAsync(_ => engine.Calls.Count > firstCall);
+        await auto.WaitUntilTextAsync("updating members");
+        switch (acceptance)
+        {
+            case "enter": await auto.EnterAsync(ct: ct); break;
+            case "right": await auto.RightAsync(ct: ct); break;
+            case "click":
+                using (var snapshot = terminal.CreateSnapshot())
+                {
+                    var row = Enumerable.Range(0, snapshot.Height).First(index => snapshot.GetLine(index)
+                        .Contains("get_CurrentManagedThreadId()", StringComparison.Ordinal));
+                    await auto.ClickAtAsync(5, row, ct: ct);
+                }
+                break;
+            default: await auto.TabAsync(ct: ct); break;
+        }
+        await auto.WaitUntilAsync(_ => prompt.Requester!.HasPendingAcceptance);
+        Assert.AreEqual(prefix, prompt.Text);
+        Assert.IsNull(CompletionEdit.For(prompt, selected));
+        engine.Calls[^1].Release.SetResult();
+        await auto.WaitUntilAsync(snapshot => prompt.Text == "call Environment::get_CurrentManagedThreadId()"
+            && !snapshot.ContainsText("members"));
+        await auto.Ctrl().KeyAsync(Hex1bKey.Z, ct: ct);
+        await auto.WaitUntilAsync(_ => prompt.Text == prefix);
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        foreach (var call in engine.Calls) call.Release.TrySetResult();
         await run;
         await IlReplApp.SettleAsync(prompt);
     }

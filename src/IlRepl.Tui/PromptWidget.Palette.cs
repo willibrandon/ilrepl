@@ -73,7 +73,7 @@ public sealed partial record PromptWidget
             Math.Max(1, innerWidth / 4));
         var version = state.Editor.Document.Version;
         var caret = state.Editor.Cursor.Position;
-        var snapshot = state.Completions;
+        var snapshot = state.PendingDisplay ?? state.Completions;
         var updating = state.PendingDisplay is not null;
         var lines = new List<Hex1bWidget>();
         foreach (var (item, offset) in candidates.Skip(first).Take(rows).Select((item, index) => (item, index)))
@@ -83,12 +83,6 @@ public sealed partial record PromptWidget
             var line = (selected ? " ❯ " : "   ") + PaletteText.Column(item.Name, nameWidth)
                 + PaletteText.Column(item.Detail, detailWidth) + item.Description;
             var style = updating ? SpanStyle.Dim : selected ? SpanStyle.TopType : ItemStyle(item);
-            if (updating)
-            {
-                lines.Add(context.ThemePanel(SpanPalette.Mutator(style), context.Text(PaletteText.Clip(line, innerWidth))));
-                continue;
-            }
-
             lines.Add(context.Interactable(ic => ic.ThemePanel(SpanPalette.Mutator(style),
                     ic.Text(PaletteText.Clip(line, innerWidth))))
                 .OnHoverChanged(args =>
@@ -102,7 +96,7 @@ public sealed partial record PromptWidget
                 })
                 .OnClick(args =>
                 {
-                    if (Current())
+                    if (Current() || snapshot is not null && state.Requester?.CanRebind(state, snapshot, item) == true)
                     {
                         state.SelectedIndex = index;
                         Accept(state, candidates);

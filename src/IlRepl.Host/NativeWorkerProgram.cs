@@ -28,7 +28,8 @@ internal static class NativeWorkerProgram
     {
         if (arguments.Length != 4) return 64;
         var root = arguments[3];
-        ComparisonProcessGroup.PrepareWorker();
+        OwnedProcessGroup.PrepareWorker();
+        WorkerOwnerWatchdog.Start();
         await File.WriteAllTextAsync(Path.Combine(root, "group-ready"), "ready").ConfigureAwait(false);
         await WaitForAsync(Path.Combine(root, "start")).ConfigureAwait(false);
         Console.OutputEncoding = new UTF8Encoding(false);

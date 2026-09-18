@@ -145,14 +145,15 @@ public sealed class ComparisonDescendantTests
         }
 
         var ready = Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_READY")!;
-        if (bool.Parse(Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_ESCAPE")!))
-            ComparisonDescendantSource.EscapeProcessGroup();
+        var escape = bool.Parse(Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_ESCAPE")!);
+        if (escape) ComparisonDescendantSource.EscapeProcessGroup();
         using var process = Process.GetCurrentProcess();
         File.AppendAllText(record, Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + " "
             + process.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture) + Environment.NewLine);
         if (bool.Parse(Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_BRANCH")!))
         {
-            using var leaf = ComparisonDescendantSource.Start(Environment.ProcessPath!, record, ready, false, false);
+            using var leaf = ComparisonDescendantSource.Start(Environment.ProcessPath!, record, ready, false,
+                escape && OperatingSystem.IsWindows());
             while (!File.Exists(ready)) await Task.Delay(10);
             Environment.Exit(0);
         }

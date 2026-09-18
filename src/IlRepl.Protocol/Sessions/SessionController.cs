@@ -25,6 +25,7 @@ public sealed partial class SessionController : IReplEngine
     {
         _engine = engine;
         _start = start;
+        ObserveEngine(engine);
     }
 
     /// <summary>
@@ -43,7 +44,7 @@ public sealed partial class SessionController : IReplEngine
     private SessionEditor _editor = new();
 
     /// <summary>
-    /// Retains browser editor changes independently of source execution and worker responsiveness.
+    /// Retains editor changes independently of source execution and runtime responsiveness.
     /// </summary>
     public Action<SessionEditor>? EditorChanged { get; set; }
 
@@ -51,6 +52,11 @@ public sealed partial class SessionController : IReplEngine
     /// Submitted lines still awaiting acceptance, retained as an unsent draft only in recovery checkpoints.
     /// </summary>
     public string[] PendingInput { get; set; } = [];
+
+    /// <summary>
+    /// Additional submitted buffers awaiting the current submission, retained in typing order during runtime recovery.
+    /// </summary>
+    public string[] QueuedInput { get; set; } = [];
 
     /// <summary>
     /// Requests a path interactively, or remains null for noninteractive batch operation.
@@ -97,10 +103,12 @@ public sealed partial class SessionController : IReplEngine
             return AssemblyVersion;
         }
 
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _replacement.Token);
+        var (engine, epoch, cancellation) = CaptureRuntime(cancellationToken);
+        using var linked = cancellation;
+        if ((version >> 32) != epoch) return AssemblyVersion;
         try
         {
-            await _engine.WaitForAssembliesAsync(version & uint.MaxValue, linked.Token).ConfigureAwait(false);
+            await engine.WaitForAssembliesAsync(version & uint.MaxValue, linked.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -113,19 +121,21 @@ public sealed partial class SessionController : IReplEngine
     /// <inheritdoc />
     public async Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken)
     {
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _replacement.Token);
-        var reply = await _engine.CompleteAsync(request, linked.Token).ConfigureAwait(false);
+        var (engine, epoch, cancellation) = CaptureRuntime(cancellationToken);
+        using var linked = cancellation;
+        var reply = await engine.CompleteAsync(request, linked.Token).ConfigureAwait(false);
         linked.Token.ThrowIfCancellationRequested();
-        return reply with { AssemblyVersion = AssemblyVersion };
+        return reply with { AssemblyVersion = (epoch << 32) | (reply.AssemblyVersion & uint.MaxValue) };
     }
 
     /// <inheritdoc />
     public async Task<AnalysisReply> AnalyzeAsync(AnalysisRequest request, CancellationToken cancellationToken)
     {
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _replacement.Token);
-        var reply = await _engine.AnalyzeAsync(request, linked.Token).ConfigureAwait(false);
+        var (engine, epoch, cancellation) = CaptureRuntime(cancellationToken);
+        using var linked = cancellation;
+        var reply = await engine.AnalyzeAsync(request, linked.Token).ConfigureAwait(false);
         linked.Token.ThrowIfCancellationRequested();
-        return reply with { AssemblyVersion = AssemblyVersion };
+        return reply with { AssemblyVersion = (epoch << 32) | (reply.AssemblyVersion & uint.MaxValue) };
     }
 
     /// <inheritdoc />
@@ -139,12 +149,48 @@ public sealed partial class SessionController : IReplEngine
     private async Task<HandleReply> HandleCoreAsync(string line, AnalysisLocation? location, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        SessionAction? frontend;
+        try { frontend = FrontendAction(line); }
+        catch (ArgumentException exception)
+        {
+            var failure = Failure(exception.Message);
+            return failure with { Lines = [CommandEcho(line), .. failure.Lines] };
+        }
+        if (frontend?.Operation == SessionOperation.Restart && ExternalActionAsync is null)
+        {
+            var echo = CommandEcho(line);
+            _checkpointPendingInput = PendingInput;
+            var restarted = await RestartAsync(cancellationToken).ConfigureAwait(false);
+            return RecoveryCompleted is null ? restarted.Reply with { Lines = [echo, .. restarted.Reply.Lines] }
+                : restarted.Reply with { Lines = [], SessionEditor = null };
+        }
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
         cancellationToken = linked.Token;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         HandleReply? reply = null;
         try
         {
+            if (frontend is not null)
+            {
+                reply = new HandleReply(true, false, [CommandEcho(line)], Status);
+                BeginFrontendOutput(reply.Lines);
+                var handled = await PerformAsync(new SessionRequest { Action = frontend, Editor = Editor }, cancellationToken)
+                    .ConfigureAwait(false);
+                handled = handled with { Reply = SuppressStreamedOutput(handled.Reply) };
+                Workspace = handled;
+                if (handled.Reply.SessionEditor is { } restored) Editor = restored;
+                await CheckpointAsync(cancellationToken).ConfigureAwait(false);
+                return handled.Reply with { Lines = [.. UnstreamedFrontendOutput(reply.Lines), .. handled.Reply.Lines] };
+            }
+            if (RuntimeState != SessionRuntimeState.Ready)
+            {
+                if (line.Trim() is ".help" or ".h" or "?")
+                {
+                    var help = LocalHelp();
+                    return help with { Lines = [CommandEcho(line), .. help.Lines] };
+                }
+                return Failure("host unavailable; keep editing, save with .session save, or use .session restart");
+            }
             var boundary = RequiresCheckpoint(line);
             if (PublishCheckpointAsync is { } beforeExecution && (!_checkpointBatch || boundary))
             {
@@ -162,12 +208,24 @@ public sealed partial class SessionController : IReplEngine
             }
             reply = location is null ? await _engine.HandleAsync(line, cancellationToken).ConfigureAwait(false)
                 : await _engine.HandleSourceAsync(line, location, cancellationToken).ConfigureAwait(false);
+            _checkpointPendingInput = PendingInput;
+            reply = SuppressStreamedOutput(reply);
+            if (reply.AssemblyExport is { } export && ExportAsync is { } exportAssembly)
+            {
+                await exportAssembly(export, cancellationToken).ConfigureAwait(false);
+                reply = reply with { AssemblyExport = null };
+            }
             if (reply.SessionAction is { } action)
             {
+                BeginFrontendOutput(reply.Lines);
                 var result = await PerformAsync(new SessionRequest { Action = action, Editor = Editor }, cancellationToken)
                     .ConfigureAwait(false);
+                result = result with { Reply = SuppressStreamedOutput(result.Reply) };
                 Workspace = result;
-                reply = result.Reply with { Lines = [.. reply.Lines, .. result.Reply.Lines], SessionAction = null };
+                reply = result.Reply with
+                {
+                    Lines = [.. UnstreamedFrontendOutput(reply.Lines), .. result.Reply.Lines], SessionAction = null,
+                };
             }
             else if (reply.Quit && !await CanLeaveAsync(quitting: true, force: false, cancellationToken).ConfigureAwait(false))
             {
@@ -179,24 +237,27 @@ public sealed partial class SessionController : IReplEngine
                 Editor = editor;
             }
 
-            _checkpointBatch = PublishCheckpointAsync is not null && PendingInput.Length != 0 && reply.Succeeded
+            _checkpointBatch = (PublishCheckpointAsync is not null || _engine is IHostedEngine)
+                && PendingInput.Length != 0 && reply.Succeeded
                 && reply.SessionEditor is null && !reply.Quit;
             if (!_checkpointBatch || boundary) await CheckpointAsync(cancellationToken).ConfigureAwait(false);
             return reply;
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException or ReplEngineException)
         {
+            if (!RecoverHostFailures && exception is ReplEngineException { ExitCode: 3 }) throw;
             _checkpointBatch = false;
             var failed = Failure(exception.Message);
-            return failed with { Quit = _disposed, Lines = [.. reply?.Lines ?? [], .. failed.Lines],
+            return failed with { Quit = _disposed, Lines = [.. UnstreamedFrontendOutput(reply?.Lines ?? []), .. failed.Lines],
                 Diagnostics = reply?.Diagnostics ?? [] };
         }
         catch (OperationCanceledException) when (_disposed)
         {
-            return new HandleReply(false, true, reply?.Lines ?? [], Status);
+            return new HandleReply(false, true, UnstreamedFrontendOutput(reply?.Lines ?? []), Status);
         }
         finally
         {
+            EndFrontendOutput();
             _gate.Release();
         }
     }
@@ -205,6 +266,11 @@ public sealed partial class SessionController : IReplEngine
     public async Task<SessionReply> SessionAsync(SessionRequest request, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        if (request.Action.Operation == SessionOperation.Restart && ExternalActionAsync is null)
+        {
+            Editor = request.Editor;
+            return await RestartAsync(cancellationToken).ConfigureAwait(false);
+        }
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
         cancellationToken = linked.Token;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -212,6 +278,7 @@ public sealed partial class SessionController : IReplEngine
         {
             Editor = request.Editor;
             var result = await PerformAsync(request, cancellationToken).ConfigureAwait(false);
+            result = result with { Reply = SuppressStreamedOutput(result.Reply) };
             Workspace = result;
             if (result.Reply.SessionEditor is { } editor)
             {
@@ -277,6 +344,11 @@ public sealed partial class SessionController : IReplEngine
             request = request with { Action = action };
         }
 
+        if (RuntimeState != SessionRuntimeState.Ready)
+        {
+            return await PerformOfflineAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+
         if (action.Operation is SessionOperation.Open or SessionOperation.Hydrate or SessionOperation.Run or SessionOperation.Restore
             || (action.Operation == SessionOperation.Load && action.Reload))
         {
@@ -337,12 +409,7 @@ public sealed partial class SessionController : IReplEngine
             }
 
             var previous = _engine;
-            _engine = candidate;
-            Interlocked.Increment(ref _epoch);
-            var previousCancellation = _replacement;
-            _replacement = new CancellationTokenSource();
-            await previousCancellation.CancelAsync().ConfigureAwait(false);
-            previousCancellation.Dispose();
+            await InstallEngineAsync(candidate).ConfigureAwait(false);
             await previous.DisposeAsync().ConfigureAwait(false);
             return result;
         }
@@ -384,6 +451,15 @@ public sealed partial class SessionController : IReplEngine
 
     private async Task<SessionReply> CaptureAsync(CancellationToken cancellationToken)
     {
+        if (RuntimeState != SessionRuntimeState.Ready)
+        {
+            var retained = Workspace ?? new SessionReply();
+            return retained with
+            {
+                Dirty = retained.Dirty || !SameEditorText(retained.Document.Editor, Editor),
+                Document = retained.Document with { Editor = Editor },
+            };
+        }
         Workspace = await _engine.SessionAsync(new SessionRequest
         {
             Action = new SessionAction { Operation = SessionOperation.Capture },
@@ -394,6 +470,10 @@ public sealed partial class SessionController : IReplEngine
 
     private async Task CheckpointAsync(CancellationToken cancellationToken)
     {
+        if (_engine is IHostedEngine && PublishCheckpointAsync is null)
+        {
+            return;
+        }
         if (PublishCheckpointAsync is { } publish)
         {
             var captured = await CaptureAsync(cancellationToken).ConfigureAwait(false);
@@ -466,6 +546,15 @@ public sealed partial class SessionController : IReplEngine
     {
         _disposed = true;
         await _lifetime.CancelAsync().ConfigureAwait(false);
+        await Initialization.ConfigureAwait(false);
+        _startupCancellation?.Dispose();
+        Task<SessionReply>? restart;
+        lock (_lifecycleLock) { restart = _restartTask; }
+        if (restart is not null)
+        {
+            try { await restart.ConfigureAwait(false); }
+            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        }
         CancelExecution();
         await _replacement.CancelAsync().ConfigureAwait(false);
         await _engine.DisposeAsync().ConfigureAwait(false);

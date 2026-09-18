@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "fixture": "responsiveness-v1",
+  "configuration": "Release NativeAOT",
+  "minimumStartupSamples": 30,
+  "minimumInteractionSamples": 1000,
+  "targetsMilliseconds": {
+    "prompt-editable": { "p95": 200 },
+    "first-accepted-submission": { "p95": 1500 },
+    "input-painted": { "p95": 50, "p99": 100 },
+    "caret-painted": { "p95": 50, "p99": 100 },
+    "warm-completion": { "p95": 150 },
+    "cold-completion": { "p95": 1000 }
+  },
+  "references": []
+}

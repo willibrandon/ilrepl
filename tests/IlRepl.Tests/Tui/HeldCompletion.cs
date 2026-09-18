@@ -3,14 +3,15 @@ using IlRepl.Protocol;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// Retains one scripted reply independently of cancellation to exercise late host responses.
+/// Retains a real completed or computing response until its delivery permit is released.
 /// </summary>
 /// <param name="Request">The submitted document.</param>
-/// <param name="Cancellation">The request's cancellation token.</param>
-internal sealed record HeldCompletion(CompletionRequest Request, CancellationToken Cancellation)
+/// <param name="Cancellation">The caller's cancellation token, deliberately independent of delivery.</param>
+/// <param name="Prepared">The actual engine computation.</param>
+internal sealed record HeldCompletion(CompletionRequest Request, Task<CompletionReply> Prepared, CancellationToken Cancellation)
 {
     /// <summary>
-    /// The independently releasable response.
+    /// Allows the real response to reach its requester.
     /// </summary>
-    public TaskCompletionSource<CompletionReply> Answer { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 }

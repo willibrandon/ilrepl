@@ -8,8 +8,7 @@ using IlRepl.Tui;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// Editing a block in the real prompt: indentation, comments, selection, history, the palette,
-/// and the colours a line wears before and after Enter.
+/// Verifies block editing, indentation, comments, selection, history, completion, and syntax colours in the real prompt.
 /// </summary>
 [TestClass]
 public sealed class IlReplAppBlockTests
@@ -620,10 +619,10 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// Ctrl+C clears a buffer that has text and quits when the buffer is empty.
+    /// Ctrl+C clears a buffer and leaves an empty prompt running until an explicit quit.
     /// </summary>
     [TestMethod]
-    public async Task CtrlC_ClearsBufferThenQuits()
+    public async Task CtrlC_ClearsBufferAndNeverQuits()
     {
         var ct = TestContext.CancellationToken;
         await using var engine = new InProcessEngine();
@@ -642,6 +641,11 @@ public sealed class IlReplAppBlockTests
         Assert.IsFalse(run.IsCompleted, "clearing does not quit");
         Assert.IsEmpty(AppTest.Echoes(transcript), "nothing went to the engine");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
+        await auto.TypeAsync("ldc.i4.1", ct: ct);
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).Contains("ldc.i4.1", StringComparison.Ordinal),
+            description: "the empty-prompt interrupt leaves the editor usable");
+        Assert.IsFalse(run.IsCompleted);
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
 

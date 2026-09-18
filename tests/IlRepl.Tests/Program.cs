@@ -1,4 +1,6 @@
+using IlRepl.Tests.EndToEnd;
 using IlRepl.Tests.Engine;
+using IlRepl.Tests.Responsiveness;
 using IlRepl.Tests.Tui;
 using Microsoft.Testing.Platform.Builder;
 
@@ -18,7 +20,12 @@ internal static class Program
     {
         try
         {
-            if (await SessionCredentialProvider.TryRunAsync(args) ||
+            if (args is ["--windows-console", ..]) return await WindowsConsoleProbe.RunAsync(args);
+            if (await ResponsivenessProbe.TryRunAsync(args) ||
+                await PackagedSmoke.TryRunAsync(args) ||
+                await ExportBrowserCorpus.TryRunAsync(args) ||
+                await ExportProbe.TryRunAsync(args) ||
+                await SessionCredentialProvider.TryRunAsync(args) ||
                 await HistoryProbes.TryRunAsync() ||
                 await ActivationEditTests.TryRunFileActivationProbeAsync() ||
                 await ComparisonDescendantTests.TryRunDescendantProbeAsync())

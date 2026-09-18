@@ -136,6 +136,28 @@ public sealed class BindingSnapshot : IDisposable
         };
 
     /// <summary>
+    /// Takes an independent metadata lease over the same immutable committed binding context.
+    /// </summary>
+    internal BindingSnapshot Lease()
+    {
+        var snapshot = WithContext(Types, SessionMethods, Generics, Locals, Arguments, Access, ThisIndex, Inspecting);
+        try
+        {
+            foreach (var source in Catalog.Sources)
+            {
+                snapshot._leases.Add(source.Lease());
+            }
+
+            return snapshot;
+        }
+        catch
+        {
+            snapshot.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Captures the context of a session's current body.
     /// </summary>
     /// <param name="session">The session.</param>

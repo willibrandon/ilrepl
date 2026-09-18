@@ -123,12 +123,49 @@ public sealed partial class ReplCore : IDisposable
     /// <param name="line">The line.</param>
     /// <param name="location">The optional editor source identity.</param>
     /// <returns>Whether it succeeded and whether the user asked to leave.</returns>
-    public HandleResult Handle(string line, AnalysisLocation? location = null)
-        => RecordInput(line, location);
+    public HandleResult Handle(string line, AnalysisLocation? location = null) =>
+        HandleCancellable(line, location, CancellationToken.None);
+
+    /// <summary>
+    /// Handles one input line with cooperative cancellation of engine-owned work.
+    /// </summary>
+    /// <param name="line">The submitted source.</param>
+    /// <param name="location">The editor source identity.</param>
+    /// <param name="cancellationToken">Cancels engine-owned work before its commit boundary.</param>
+    /// <returns>The source acceptance and exit result.</returns>
+    internal HandleResult HandleCancellable(string line, AnalysisLocation? location, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var previous = _cancellationToken;
+        var mark = Session.Mark() with { EchoStack = Options.EchoStack, ShowTiming = Options.ShowTiming };
+        _cancellationToken = cancellationToken;
+        try
+        {
+            var result = RecordInput(line, location);
+            SourceCheckpoint?.Invoke();
+            return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            PhaseChanged?.Invoke(ExecutionPhase.Cleanup);
+            _cancellationToken = CancellationToken.None;
+            if (Session.Generation == mark.Generation)
+            {
+                Rollback(mark);
+            }
+            SourceCheckpoint?.Invoke();
+            throw;
+        }
+        finally
+        {
+            _cancellationToken = previous;
+        }
+    }
 
     private HandleResult HandleCore(string line, AnalysisLocation? location)
     {
         ArgumentNullException.ThrowIfNull(line);
+        _cancellationToken.ThrowIfCancellationRequested();
         var normalized = Session.Normalize(line) with { Location = location };
         return HandleNormalized(normalized);
     }
@@ -338,29 +375,39 @@ public sealed partial class ReplCore : IDisposable
             return;
         }
 
-        var result = Session.Run();
-        AddOutput(result.StandardOutput, SpanStyle.Output);
-        AddOutput(result.StandardError, SpanStyle.Error);
-
-        using var formatting = new ConsoleCapture();
-        var spans = new List<TranscriptSpan> { new("  = ", SpanStyle.Dim) };
-        if (result.IsVoid)
+        _cancellationToken.ThrowIfCancellationRequested();
+        BeforeExecution?.Invoke();
+        _cancellationToken.ThrowIfCancellationRequested();
+        try
         {
-            spans.Add(new TranscriptSpan("(void)", SpanStyle.Dim));
-        }
-        else
-        {
-            spans.AddRange(ValueFormatter.FormatWithType(result.Value));
-        }
+            var result = Session.RunCancellable(() => PhaseChanged?.Invoke(ExecutionPhase.UserCode), OutputReceived, _cancellationToken);
+            AddOutput(result.StandardOutput, SpanStyle.Output);
+            AddOutput(result.StandardError, SpanStyle.Error);
 
-        if (Options.ShowTiming)
-        {
-            spans.Add(new TranscriptSpan("   " + Elapsed(result.Elapsed), SpanStyle.Dim));
-        }
+            using var formatting = new ConsoleCapture(OutputReceived);
+            var spans = new List<TranscriptSpan> { new("  = ", SpanStyle.Dim) };
+            if (result.IsVoid)
+            {
+                spans.Add(new TranscriptSpan("(void)", SpanStyle.Dim));
+            }
+            else
+            {
+                spans.AddRange(ValueFormatter.FormatWithType(result.Value));
+            }
 
-        AddOutput(formatting.StandardOutput, SpanStyle.Output);
-        AddOutput(formatting.StandardError, SpanStyle.Error);
-        Transcript.Add(new TranscriptLine(LineKind.Result, spans));
+            if (Options.ShowTiming)
+            {
+                spans.Add(new TranscriptSpan("   " + Elapsed(result.Elapsed), SpanStyle.Dim));
+            }
+
+            AddOutput(formatting.StandardOutput, SpanStyle.Output);
+            AddOutput(formatting.StandardError, SpanStyle.Error);
+            Transcript.Add(new TranscriptLine(LineKind.Result, spans));
+        }
+        finally
+        {
+            PhaseChanged?.Invoke(ExecutionPhase.Cleanup);
+        }
     }
 
     private void AddOutput(string text, SpanStyle style)
@@ -719,7 +766,19 @@ public sealed partial class ReplCore : IDisposable
             case ".save":
                 RequireNoOpenBlock();
                 argument = UnquotePath(argument);
-                Session.Save(argument);
+                if (OperatingSystem.IsBrowser())
+                {
+                    ArgumentException.ThrowIfNullOrWhiteSpace(argument);
+                    var name = Path.GetFileName(argument.Replace('\\', '/'));
+                    ArgumentException.ThrowIfNullOrWhiteSpace(name);
+                    var image = AssemblyExporter.WriteCancellable(Session, Path.GetFileNameWithoutExtension(name), _cancellationToken);
+                    Note("downloaded " + name);
+                    return new HandleResult(true, false)
+                    {
+                        AssemblyExport = new AssemblyExportResult { Path = name, Image = image },
+                    };
+                }
+                Session.SaveCancellable(argument, _cancellationToken);
                 {
                     var parts = new List<string> { "IlRepl.Cell.Run" };
                     if (Session.Methods.Count > 0)

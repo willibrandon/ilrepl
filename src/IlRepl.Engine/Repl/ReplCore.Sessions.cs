@@ -34,6 +34,12 @@ public sealed partial class ReplCore
     public bool ReferenceActions { get; set; }
 
     /// <summary>
+    /// The argument, local, and generic declarations required to reconstruct the current cell without runtime values.
+    /// </summary>
+    public string[] PendingInputDeclarations => Session.DeclarationLines
+        .Concat(_typeArgumentsSource is { } typeArguments ? [typeArguments] : []).ToArray();
+
+    /// <summary>
     /// Captures editable source and historical output with a matching frontend editor snapshot.
     /// </summary>
     /// <param name="editor">The unsent editor document.</param>
@@ -41,6 +47,7 @@ public sealed partial class ReplCore
     public SessionDocument CaptureSession(SessionEditor editor)
     {
         ArgumentNullException.ThrowIfNull(editor);
+        _cancellationToken.ThrowIfCancellationRequested();
         FlushSourceEntry();
         return _document with
         {
@@ -70,7 +77,9 @@ public sealed partial class ReplCore
     /// <returns>Source and dependency findings that did not discard the document.</returns>
     public string[] ReopenSession(SessionDocument document)
     {
+        _cancellationToken.ThrowIfCancellationRequested();
         SessionCodec.Validate(document);
+        _cancellationToken.ThrowIfCancellationRequested();
         if (_sourceEntries.Count != 0 || Session.Submissions != 0)
         {
             throw new ReplException("session open requires a fresh execution host");
@@ -81,6 +90,7 @@ public sealed partial class ReplCore
         _references.AddRange(document.References);
         foreach (var asset in document.Assets)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             _assets.Add(asset.Hash, asset);
         }
 
@@ -89,6 +99,7 @@ public sealed partial class ReplCore
         PrepareReferenceImages(document, problems);
         foreach (var entry in document.Entries)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 RestoreTrackedEntry(entry);
@@ -115,8 +126,7 @@ public sealed partial class ReplCore
         var operation = ReplLineDispatcher.Classify(normalized, Session.OpenMethod is not null,
             Session.State.HasPendingLabels, Session.State.OpenBlockDepth > 0);
         var number = CellNumber;
-        var inputDeclarations = Session.DeclarationLines.Concat(_typeArgumentsSource is { } typeArguments ? [typeArguments] : [])
-            .ToArray();
+        var inputDeclarations = PendingInputDeclarations;
         var editing = _editBlock is not null;
         var runs = !editing && (operation.Kind == ReplLineKind.RetRuns || operation.Command == ".run"
             || (operation.Kind == ReplLineKind.Blank && !Session.State.IsEmpty && Session.OpenDepth == 0));
@@ -315,6 +325,7 @@ public sealed partial class ReplCore
     {
         foreach (var line in entry.Source)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             var normalized = Session.Normalize(line);
             if (entry.Kind == SessionEntryKind.Rejected) Session.Forget(normalized);
         }
@@ -354,6 +365,7 @@ public sealed partial class ReplCore
 
         foreach (var dependency in reference.Dependencies)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             RestoreReference(_references.Single(candidate => candidate.Identity == dependency), visited);
         }
 
@@ -390,6 +402,7 @@ public sealed partial class ReplCore
 
         foreach (var native in reference.Assets.Where(asset => asset.Kind == "native"))
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             if (native.Path is not { } path || !File.Exists(path))
             {
                 throw new ReplException($"native dependency '{native.Name}' is unavailable on this runtime; "
@@ -401,6 +414,7 @@ public sealed partial class ReplCore
 
         foreach (var asset in reference.Assets.Where(asset => asset.Kind is "managed" or "satellite"))
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             byte[] image;
             if (_assets.TryGetValue(asset.Hash, out var embedded))
             {

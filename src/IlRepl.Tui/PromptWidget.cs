@@ -191,7 +191,7 @@ public sealed partial record PromptWidget(
 
         var candidates = Candidates(state, catalog);
         var best = candidates.Count == 0 ? null : candidates[Math.Clamp(state.SelectedIndex, 0, candidates.Count - 1)];
-        return best is null ? null : CompletionEdit.For(state, best)?.Prediction(state);
+        return best is null ? CompletionEdit.PendingPrediction(state) : CompletionEdit.For(state, best)?.Prediction(state);
     }
 
     private void Bind(InputBindingsBuilder b, PromptState state)
@@ -208,15 +208,16 @@ public sealed partial record PromptWidget(
         // The builder runs for every key, so what it reads here is the state that key meets.
         var candidates = Candidates(state, Catalog);
         var paletteVisible = candidates.Count > 0 && Fit.PaletteRows > 0;
+        var displayed = DisplayCandidates(state, Catalog);
         var predictionVisible = PredictionFor(state, Catalog) is not null;
         var onFirst = state.CaretLine <= 1;
         var onLast = state.CaretLine >= state.LineCount;
 
         b.Remove(EditorWidget.InsertNewline);
-        b.Key(Hex1bKey.Enter).Action(_ => Enter(state, candidates,
+        b.Key(Hex1bKey.Enter).Action(_ => Enter(state, displayed,
             EnterActionFor(state, paletteVisible, OpenDepth, CommentOpen)), "Send or continue");
         b.Remove(EditorWidget.InsertTab);
-        b.Key(Hex1bKey.Tab).Action(_ => Tab(state, candidates, paletteVisible), "Complete or indent");
+        b.Key(Hex1bKey.Tab).Action(_ => Tab(state, displayed, displayed.Count > 0 && Fit.PaletteRows > 0), "Complete or indent");
         b.Remove(Hex1bKey.Escape);
         b.Key(Hex1bKey.Escape).Action(_ =>
         {
@@ -240,6 +241,7 @@ public sealed partial record PromptWidget(
             b.Remove(EditorWidget.MoveUp);
             b.Key(Hex1bKey.UpArrow).Action(_ =>
             {
+                state.Requester?.CancelAcceptance();
                 if (paletteVisible)
                 {
                     state.SelectedIndex = Math.Max(0, state.SelectedIndex - 1);
@@ -258,6 +260,7 @@ public sealed partial record PromptWidget(
             b.Remove(EditorWidget.MoveDown);
             b.Key(Hex1bKey.DownArrow).Action(_ =>
             {
+                state.Requester?.CancelAcceptance();
                 if (paletteVisible)
                 {
                     state.SelectedIndex = Math.Min(candidates.Count - 1, state.SelectedIndex + 1);
@@ -278,7 +281,7 @@ public sealed partial record PromptWidget(
         if (predictionVisible)
         {
             b.Remove(EditorWidget.MoveRight);
-            b.Key(Hex1bKey.RightArrow).Action(_ => Accept(state, candidates), "Accept prediction");
+            b.Key(Hex1bKey.RightArrow).Action(_ => Accept(state, displayed), "Accept prediction");
         }
 
         if (paletteVisible && Fit.DetailRows > 0)
@@ -292,7 +295,7 @@ public sealed partial record PromptWidget(
         b.Ctrl().Key(Hex1bKey.P).Action(_ => HistoryBack(state), "Previous entry");
         b.Ctrl().Key(Hex1bKey.N).Action(_ => HistoryForward(state), "Next entry");
         b.Ctrl().Key(Hex1bKey.U).Action(_ => DeleteToLineStart(state), "Delete to the start of the line");
-        b.Ctrl().Key(Hex1bKey.C).Action(c => CtrlC(state, c), "Copy, clear, or quit");
+        b.Ctrl().Key(Hex1bKey.C).Action(_ => CtrlC(state), "Copy, interrupt, or clear");
     }
 
     private void Enter(PromptState state, IReadOnlyList<CompletionItem> candidates, EnterAction enter)
@@ -344,27 +347,10 @@ public sealed partial record PromptWidget(
         }
 
         var item = candidates[Math.Clamp(state.SelectedIndex, 0, candidates.Count - 1)];
-        if (CompletionEdit.For(state, item) is not { } edit)
-        {
-            return;
-        }
-
-        edit.Apply(state);
-        if (item.Continuation is { } token)
-        {
-            state.Anchors.Add(edit.Range.Start.Value, edit.Range.Start.Value + (edit.CaretOffset ?? edit.Text.Length), token);
-        }
-
-        state.PaletteDismissed = true;
-        state.PaletteNavigated = false;
-        state.Prediction.Hide();
-        if (item.Continues)
-        {
-            state.Requester?.Request(state);
-        }
+        if (!CompletionEdit.Accept(state, item)) state.Requester?.QueueAcceptance(state, item);
     }
 
-    private void CtrlC(PromptState state, InputBindingActionContext context)
+    private void CtrlC(PromptState state)
     {
         // Where the terminal copies itself there is no handler, and a selection clears like any buffer.
         if (CopyHandler is { } copy && state.Editor.Cursor.HasSelection && !state.SelectionIsReturned)
@@ -372,6 +358,8 @@ public sealed partial record PromptWidget(
             copy(state.Editor.Document.GetText(state.Editor.Cursor.SelectionRange));
             return;
         }
+
+        if (state.Interrupt?.Invoke() == true) return;
 
         if (state.Busy)
         {
@@ -391,7 +379,6 @@ public sealed partial record PromptWidget(
             return;
         }
 
-        context.RequestStop();
     }
 
     // Ctrl+U as readline and prompt_toolkit have it: the line is cut from the caret back to
