@@ -158,7 +158,7 @@ public static partial class BrowserWorkspace
             if (request.Action.Operation is SessionOperation.Load or SessionOperation.Restore)
             {
                 var operation = request.Action.Operation == SessionOperation.Load ? "load the dependency" : "restore the session";
-                throw new ReplEngineException("use desktop ilrepl to " + operation
+                throw new ReplEngineException("use terminal ilrepl to " + operation
                     + ", then run .session save example.ilrepl.json --embed and use the page's Open button to open that file");
             }
 
@@ -267,7 +267,7 @@ public static partial class BrowserWorkspace
         {
             if (!value.StartsWith('#') && Encoding.UTF8.GetByteCount(value) > BrowserFileLimit)
             {
-                throw new InvalidDataException("browser session files are limited to 8 MiB; open larger files with desktop ilrepl");
+                throw new InvalidDataException("browser session files are limited to 8 MiB; open larger files with terminal ilrepl");
             }
 
             var document = value.StartsWith('#') ? SessionCodec.ReadFragment(value) : SessionCodec.Read(Encoding.UTF8.GetBytes(value));

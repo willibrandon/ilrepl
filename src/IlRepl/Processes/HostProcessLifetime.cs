@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using IlRepl.Protocol;
 using StreamJsonRpc;
 
@@ -24,6 +25,7 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
     private bool _stopping;
     private readonly object _stopLock = new();
     private Task? _stopTask;
+    private Task? _disposeTask;
     private readonly string? _supervisorAssemblyPath;
 
     /// <summary>
@@ -221,7 +223,13 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
     /// <param name="identity">The runtime scope identity.</param>
     /// <param name="cancellationToken">Cancels the wait for the ownership gate.</param>
     /// <returns>Completion after every owned group has stopped.</returns>
-    internal async Task StopAsync(string identity, CancellationToken cancellationToken)
+    internal Task StopAsync(string identity, CancellationToken cancellationToken)
+    {
+        lock (_stopLock)
+            return _disposeTask is { } disposal ? disposal.WaitAsync(cancellationToken) : StopCoreAsync(identity, cancellationToken);
+    }
+
+    private async Task StopCoreAsync(string identity, CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -261,17 +269,23 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
     {
         if (!_diagnosticOwners.TryRemove(identity, out var original)) return null;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        int? code = null;
         try
         {
-            var code = original.Process.HasExited ? null
+            code = original.Rpc.Completion.IsCompleted || original.Process.HasExited ? null
                 : await original.Service.ExitCodeAsync(identity, original.Epoch, timeout.Token).ConfigureAwait(false);
-            await original.DrainDiagnosticsAsync(timeout.Token).ConfigureAwait(false);
-            return code;
         }
-        catch (Exception exception) when (exception is ConnectionLostException or OperationCanceledException or ObjectDisposedException)
+        catch (Exception exception) when (exception is ConnectionLostException or OperationCanceledException or InvalidOperationException)
         {
-            return null;
         }
+        try
+        {
+            await original.DrainDiagnosticsAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is ConnectionLostException or OperationCanceledException or InvalidOperationException)
+        {
+        }
+        return code;
     }
 
     private void SetState(ProcessSupervisionState state)
@@ -288,7 +302,7 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
     public Task TerminateAsync(CancellationToken cancellationToken)
     {
         Task stopped;
-        lock (_stopLock) stopped = _stopTask ??= StopAllAsync();
+        lock (_stopLock) stopped = _disposeTask ?? (_stopTask ??= StopAllAsync());
         return stopped.WaitAsync(cancellationToken);
     }
 
@@ -303,25 +317,45 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
             roots = [.. _scopes.Values.Where(scope => scope.ParentIdentity is null)];
         }
         finally { _gate.Release(); }
-        foreach (var scope in roots) await StopAsync(scope.Identity, CancellationToken.None).ConfigureAwait(false);
+        foreach (var scope in roots) await StopCoreAsync(scope.Identity, CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (_disposed) return;
-        await TerminateAsync(CancellationToken.None).ConfigureAwait(false);
+        lock (_stopLock)
+        {
+            if (_disposeTask is not null) return new ValueTask(_disposeTask);
+            _disposed = true;
+            return new ValueTask(_disposeTask = DisposeCoreAsync(_stopTask ??= StopAllAsync()));
+        }
+    }
+
+    private async Task DisposeCoreAsync(Task stopped)
+    {
+        await stopped.ConfigureAwait(false);
         await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         SupervisorConnection[] connections;
         try
         {
-            if (_disposed) return;
-            _disposed = true;
             connections = [.. _connections];
         }
         finally { _gate.Release(); }
-        foreach (var connection in connections) await connection.DisposeAsync().ConfigureAwait(false);
-        _lifetime.Dispose();
-        _gate.Dispose();
+        List<Exception> failures = [];
+        try
+        {
+            foreach (var connection in connections)
+            {
+                try { await connection.DisposeAsync().ConfigureAwait(false); }
+                catch (Exception exception) { failures.Add(exception); }
+            }
+        }
+        finally
+        {
+            _lifetime.Dispose();
+            _gate.Dispose();
+        }
+        if (failures.Count == 1) ExceptionDispatchInfo.Capture(failures[0]).Throw();
+        if (failures.Count > 1) throw new AggregateException(failures);
     }
 }

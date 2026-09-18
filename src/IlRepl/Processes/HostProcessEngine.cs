@@ -53,6 +53,8 @@ public sealed partial class HostProcessEngine : IReplEngine
     private readonly DiagnosticTail _stderr;
     private readonly LocalSocketListener _listener;
     private readonly Stream _connection;
+    private readonly object _disposeLock = new();
+    private Task? _disposeTask;
     private bool _disposed;
     private long _assemblyVersion;
 
@@ -347,34 +349,43 @@ public sealed partial class HostProcessEngine : IReplEngine
     }
 
     /// <summary>
-    /// Closes the connection and waits briefly for the host to exit.
+    /// Closes the connection and shares complete host cleanup with every concurrent caller.
     /// </summary>
     /// <returns>A task that completes when the host is gone.</returns>
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (_disposed)
-        {
-            return;
-        }
+        lock (_disposeLock) return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+    }
 
+    private async Task DisposeCoreAsync()
+    {
         _disposed = true;
         Interlocked.Exchange(ref _expectedExit, 1);
-        _rpc.Dispose();
-        await _connection.DisposeAsync().ConfigureAwait(false);
-        _listener.Dispose();
         try
         {
-            using var grace = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            try { await OwnedProcessGroup.WaitForExitAsync(_scope, grace.Token).ConfigureAwait(false); }
-            catch (OperationCanceledException) { }
-            await _lifetime.StopAsync(_scope.Identity, CancellationToken.None).ConfigureAwait(false);
-            await OwnedProcessGroup.WaitForExitAsync(_scope, CancellationToken.None).ConfigureAwait(false);
-            await _exit.Task.ConfigureAwait(false);
+            try
+            {
+                _rpc.Dispose();
+                await _connection.DisposeAsync().ConfigureAwait(false);
+            }
+            finally { _listener.Dispose(); }
         }
         finally
         {
-            _process.Dispose();
-            if (_ownsLifetime) await _lifetime.DisposeAsync().ConfigureAwait(false);
+            try
+            {
+                using var grace = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                try { await OwnedProcessGroup.WaitForExitAsync(_scope, grace.Token).ConfigureAwait(false); }
+                catch (OperationCanceledException) { }
+                await _lifetime.StopAsync(_scope.Identity, CancellationToken.None).ConfigureAwait(false);
+                await OwnedProcessGroup.WaitForExitAsync(_scope, CancellationToken.None).ConfigureAwait(false);
+                await _exit.Task.ConfigureAwait(false);
+            }
+            finally
+            {
+                _process.Dispose();
+                if (_ownsLifetime) await _lifetime.DisposeAsync().ConfigureAwait(false);
+            }
         }
     }
 

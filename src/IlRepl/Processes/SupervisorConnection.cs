@@ -117,7 +117,10 @@ internal sealed class SupervisorConnection : IAsyncDisposable
     /// <returns>Completion after the pipe boundary or final EOF.</returns>
     internal async Task DrainDiagnosticsAsync(CancellationToken cancellationToken)
     {
-        if (Process.HasExited)
+        bool exited;
+        try { exited = Rpc.Completion.IsCompleted || Process.HasExited; }
+        catch (InvalidOperationException) { exited = true; }
+        if (exited)
         {
             await _drained.WaitAsync(cancellationToken).ConfigureAwait(false);
             return;
@@ -131,15 +134,28 @@ internal sealed class SupervisorConnection : IAsyncDisposable
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        Rpc.Dispose();
-        await _stream.DisposeAsync().ConfigureAwait(false);
-        _listener.Dispose();
         try
         {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            await Process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            try
+            {
+                Rpc.Dispose();
+                await _stream.DisposeAsync().ConfigureAwait(false);
+            }
+            finally { _listener.Dispose(); }
         }
-        catch (OperationCanceledException) { Process.Kill(); }
-        Process.Dispose();
+        finally
+        {
+            try
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                try { await Process.WaitForExitAsync(timeout.Token).ConfigureAwait(false); }
+                catch (OperationCanceledException)
+                {
+                    Process.Kill();
+                    await Process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+            }
+            finally { Process.Dispose(); }
+        }
     }
 }

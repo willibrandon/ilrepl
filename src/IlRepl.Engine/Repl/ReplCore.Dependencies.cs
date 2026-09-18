@@ -28,7 +28,7 @@ public sealed partial class ReplCore
 
         if (!Options.SupportsDependencyRestore && reference.Assets.Any(asset => asset.Kind == "native"))
         {
-            return "native dependencies require desktop ilrepl";
+            return "native dependencies require terminal ilrepl";
         }
 
         var resolved = reference.Assets.Length != 0 || reference.Origin == "package" || HasLoadedReference(reference);
@@ -150,7 +150,7 @@ public sealed partial class ReplCore
     private string DependencyRecoveryHint(bool changed = false) => Options.SupportsDependencyRestore
         ? changed ? "use .load to adopt its new contents" : "use .session restore"
         : (changed ? "reload" : "restore")
-            + " dependencies in desktop ilrepl, save with .session save --embed, then open that file in this demo";
+            + " dependencies in terminal ilrepl, save with .session save --embed, then open that file in this demo";
 
     private IEnumerable<string> ReferenceUsers(HashSet<string> names)
     {

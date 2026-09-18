@@ -20,7 +20,7 @@ public sealed partial class InProcessEngine
     public Action<SessionReply>? WorkspaceCheckpoint { get; set; }
 
     /// <summary>
-    /// Coordinates storage and dependency tooling supplied by a desktop host.
+    /// Coordinates storage and dependency tooling supplied by the execution host.
     /// </summary>
     public Func<SessionRequest, CancellationToken, Task<SessionReply>>? SessionTooling
     {
@@ -42,7 +42,7 @@ public sealed partial class InProcessEngine
             if (SessionTooling is null)
             {
                 throw new ReplEngineException(request.Action.Operation is SessionOperation.Load or SessionOperation.Restore
-                    ? "load or restore dependencies in desktop ilrepl, save with .session save --embed, then open the file in the demo"
+                    ? "load or restore dependencies in terminal ilrepl, save with .session save --embed, then open the file in the demo"
                     : "this environment uses Open and Download controls for session files");
             }
 

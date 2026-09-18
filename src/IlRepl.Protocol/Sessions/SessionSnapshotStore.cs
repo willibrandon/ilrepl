@@ -1,7 +1,7 @@
 namespace IlRepl.Protocol;
 
 /// <summary>
-/// Saves source snapshots with identical portable paths, dependency caches, and atomic replacement in every desktop state.
+/// Saves source snapshots with identical portable paths, dependency caches, and atomic replacement in every terminal runtime state.
 /// </summary>
 public static partial class SessionSnapshotStore
 {
@@ -24,7 +24,7 @@ public static partial class SessionSnapshotStore
     /// <param name="path">The destination path.</param>
     /// <param name="document">The captured source and editor state.</param>
     /// <param name="embed">Whether to embed all available dependency images.</param>
-    /// <param name="cacheDirectory">The desktop asset cache used for later recovery.</param>
+    /// <param name="cacheDirectory">The local asset cache used for later recovery.</param>
     /// <param name="cancellationToken">Cancels preparation and writing before atomic replacement.</param>
     /// <returns>The absolute associated session path.</returns>
     public static async Task<string> WriteAsync(string path, SessionDocument document, bool embed, string cacheDirectory,

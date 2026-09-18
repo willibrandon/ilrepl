@@ -3,7 +3,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Host;
 
 /// <summary>
-/// Stores desktop session documents atomically and resolves their verified dependency images.
+/// Stores local session documents atomically and resolves their verified dependency images.
 /// </summary>
 public sealed partial class SessionFileStore
 {
@@ -24,7 +24,7 @@ public sealed partial class SessionFileStore
     /// </summary>
     /// <param name="path">The requested session file.</param>
     /// <param name="cancellationToken">Cancels file reads.</param>
-    /// <returns>A source document with verified available images and absolute desktop locators.</returns>
+    /// <returns>A source document with verified available images and absolute local locators.</returns>
     public async Task<SessionDocument> ReadAsync(string path, CancellationToken cancellationToken)
     {
         var fullPath = Path.GetFullPath(path);

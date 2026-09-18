@@ -46,7 +46,7 @@ public static partial class SessionSnapshotStore
     /// <summary>
     /// Reads private recovery hints without placing machine-specific paths in a shared session document.
     /// </summary>
-    /// <param name="cacheDirectory">The desktop asset cache containing private locator records.</param>
+    /// <param name="cacheDirectory">The local asset cache containing private locator records.</param>
     /// <param name="reference">The reference whose origin, identity, and hashes identify its record.</param>
     /// <returns>Available private locators, or an empty map when the cache is unavailable or malformed.</returns>
     public static Dictionary<string, string> ReadLocators(string cacheDirectory, SessionReference reference)

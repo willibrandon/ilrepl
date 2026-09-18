@@ -16,7 +16,7 @@ public static partial class ComparisonWorker
         {
             if (OperatingSystem.IsBrowser())
             {
-                throw new ReplException("native dependencies cannot run in the browser; open this session in desktop ilrepl");
+                throw new ReplException("native dependencies cannot run in the browser; open this session in terminal ilrepl");
             }
 
             if (string.IsNullOrWhiteSpace(library.Name) || library.Name is "." or ".."

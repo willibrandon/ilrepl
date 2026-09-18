@@ -108,17 +108,17 @@ public sealed class SessionDependencyDiagnosticTests
         }
         else
         {
-            Assert.Contains("desktop ilrepl", diagnostic);
+            Assert.Contains("terminal ilrepl", diagnostic);
             Assert.DoesNotContain("use .session restore", diagnostic);
             Assert.DoesNotContain("use .load", diagnostic);
-            if (kind == "native") Assert.Contains("run this experiment in desktop ilrepl", diagnostic);
+            if (kind == "native") Assert.Contains("run this experiment in terminal ilrepl", diagnostic);
             else Assert.Contains("save with .session save --embed, then open that file in this demo", diagnostic);
         }
 
         Assert.Contains(line => line.Kind == LineKind.Error && line.PlainText == "  " + diagnostic, opened.Reply.Lines);
         Assert.AreSequenceEqual(SessionCodec.Write(document), SessionCodec.Write(opened.Document));
         var status = core.ReferenceStatus(reference);
-        Assert.Contains(!canRestore ? "desktop ilrepl" : "use .session restore", status);
+        Assert.Contains(!canRestore ? "terminal ilrepl" : "use .session restore", status);
         Assert.DoesNotContain("available", status);
         using var replay = new ReplCore(new Session(), options);
         var runError = Assert.ThrowsExactly<ReplException>(() => replay.RunSession(document, [], TestContext.CancellationToken));

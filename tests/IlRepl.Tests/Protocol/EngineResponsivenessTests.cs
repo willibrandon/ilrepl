@@ -62,6 +62,49 @@ public sealed class EngineResponsivenessTests
     }
 
     /// <summary>
+    /// Concurrent and repeated disposal await the actual running cell and release its loaded references exactly once.
+    /// </summary>
+    [TestMethod]
+    [Timeout(15_000, CooperativeCancellation = true)]
+    public async Task ConcurrentDisposal_WaitsForExecutingCellAndReferenceCleanup()
+    {
+        var core = new ReplCore();
+        core.Session.Resolver.LoadImage(ModuleInitializerFixture.Create(false));
+        await using var engine = new InProcessEngine(core);
+        using var permit = new ExecutionPermit();
+        var name = ExecutionThreadFixture.Register(permit);
+        Task<HandleReply>? running = null;
+        try
+        {
+            Assert.IsTrue((await engine.HandleAsync("ldstr \"" + name + "\"", TestContext.CancellationToken)).Succeeded);
+            Assert.IsTrue((await engine.HandleAsync("call int32 IlRepl.Tests.Protocol.ExecutionThreadFixture::Wait(string)",
+                TestContext.CancellationToken)).Succeeded);
+            running = engine.HandleAsync("ret", TestContext.CancellationToken);
+            await permit.Entered.Task.WaitAsync(TestContext.CancellationToken);
+            var first = engine.DisposeAsync().AsTask();
+            var second = engine.DisposeAsync().AsTask();
+            Assert.IsFalse(first.IsCompleted, "Cleanup must wait until actual executing user code returns.");
+            Assert.IsFalse(second.IsCompleted, "Every disposal caller must observe the same cleanup boundary.");
+            Assert.IsNotEmpty(core.Session.Resolver.LoadedAssemblies);
+            permit.Release();
+            var reply = await running;
+            Assert.IsTrue(reply.Succeeded);
+            Assert.Contains(line => line.Kind == LineKind.Result && line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal),
+                reply.Lines);
+            await Task.WhenAll(first, second).WaitAsync(TestContext.CancellationToken);
+            Assert.IsEmpty(core.Session.Resolver.LoadedAssemblies);
+            await engine.DisposeAsync();
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => engine.HandleAsync("nop", TestContext.CancellationToken));
+        }
+        finally
+        {
+            permit.Release();
+            if (running is not null) await running;
+            ExecutionThreadFixture.Unregister(name);
+        }
+    }
+
+    /// <summary>
     /// Cooperative host tooling shares cancellation and identity with nested synchronous engine mutations.
     /// </summary>
     [TestMethod]

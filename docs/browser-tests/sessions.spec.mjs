@@ -419,7 +419,7 @@ test('typed file commands download or explain the page picker', async ({ page })
     ['.session restore', 'restore the session'],
   ]) {
     await typeLine(page, command);
-    await expect.poll(transcript).toContain('use desktop ilrepl to ' + operation);
+    await expect.poll(transcript).toContain('use terminal ilrepl to ' + operation);
     await expect.poll(transcript).toContain('.session save example.ilrepl.json --embed');
     await expect.poll(transcript).toContain("use the page's Open button to open that file");
   }
@@ -573,7 +573,7 @@ for (const origin of ['package', 'project']) {
       source: [origin === 'package' ? '.load nuget:Unavailable.Package,1.2.3' : '.load ../Unavailable/Unavailable.csproj'],
     });
     await open(page, source, `${origin}.ilrepl.json`);
-    await expect.poll(() => terminalText(page)).toContain('desktop ilrepl');
+    await expect.poll(() => terminalText(page)).toContain('terminal ilrepl');
     await expect.poll(() => terminalText(page)).toContain('--embed');
     expect(await outputCount(page, effect)).toBe(0);
     await focus(page);
@@ -587,7 +587,7 @@ for (const origin of ['package', 'project']) {
     const count = await page.evaluate(() => window.ilreplSessionCount);
     await page.getByRole('button', { name: 'Run all', exact: true }).click();
     await ready(page, count + 1);
-    await expect(page.locator('#session-file-message')).toContainText('desktop ilrepl');
+    await expect(page.locator('#session-file-message')).toContainText('terminal ilrepl');
     await expect(page.locator('#session-file-message')).toContainText('--embed');
     expect(await outputCount(page, effect)).toBe(0);
     const retained = await download(page);
@@ -630,7 +630,7 @@ test('browser import accepts its 8 MiB boundary and rejects the next byte withou
     name: 'oversized.ilrepl.json', mimeType: 'application/json', buffer: Buffer.concat([boundary, Buffer.from(' ')]),
   });
   await expect(page.locator('#session-file-message')).toContainText('Browser session files are limited to 8 MiB');
-  await expect(page.locator('#session-file-message')).toContainText('desktop ilrepl');
+  await expect(page.locator('#session-file-message')).toContainText('terminal ilrepl');
   expect(await page.evaluate(() => window.ilreplSessionCount)).toBe(count + 1);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const runtime = page.workers().find(worker => worker.url().endsWith('/worker.js'));
@@ -644,7 +644,7 @@ test('browser import accepts its 8 MiB boundary and rejects the next byte withou
     }
   }, boundary.toString('utf8') + ' ');
   expect(diagnostic).toContain('browser session files are limited to 8 MiB');
-  expect(diagnostic).toContain('desktop ilrepl');
+  expect(diagnostic).toContain('terminal ilrepl');
   const retained = await download(page);
   expect(retained.editor.lines).toEqual(source.editor.lines);
   expect(retained.entries).toEqual([]);

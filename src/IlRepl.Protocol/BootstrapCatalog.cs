@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace IlRepl.Protocol;
 
 /// <summary>
-/// Supplies generated engine vocabulary and initial status before a desktop host finishes starting.
+/// Supplies generated engine vocabulary and initial status before the execution host finishes starting.
 /// </summary>
 public static partial class BootstrapCatalog
 {

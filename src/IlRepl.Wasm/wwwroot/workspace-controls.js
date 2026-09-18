@@ -112,7 +112,7 @@ export function createWorkspaceControls({ getWorker, getGeneration, getCheckpoin
     const owner = current();
     try {
       if (file.size > 8 * 1024 * 1024) {
-        throw new Error('Browser session files are limited to 8 MiB. Open larger files with desktop ilrepl.');
+        throw new Error('Browser session files are limited to 8 MiB. Open larger files with terminal ilrepl.');
       }
       const text = await file.text();
       assertCurrent(owner);

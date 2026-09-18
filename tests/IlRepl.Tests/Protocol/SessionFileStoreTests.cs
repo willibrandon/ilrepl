@@ -5,7 +5,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Tests.Protocol;
 
 /// <summary>
-/// Desktop session storage preserves source files and uses atomic documents with verified portable dependency assets.
+/// Local session storage preserves source files and uses atomic documents with verified portable dependency assets.
 /// </summary>
 [TestClass]
 public sealed class SessionFileStoreTests

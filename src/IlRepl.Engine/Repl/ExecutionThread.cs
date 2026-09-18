@@ -13,7 +13,7 @@ internal sealed class ExecutionThread : IAsyncDisposable
     private readonly Thread _thread;
 
     /// <summary>
-    /// Creates the desktop execution thread with the same explicit stack reservation on every supported platform.
+    /// Creates the execution thread with the same explicit stack reservation on every supported platform.
     /// </summary>
     internal ExecutionThread()
     {

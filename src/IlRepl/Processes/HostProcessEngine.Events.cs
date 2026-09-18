@@ -61,7 +61,13 @@ public sealed partial class HostProcessEngine : IReplClient, IHostedEngine, IPro
     }
 
     /// <inheritdoc />
-    public async Task TerminateAsync(CancellationToken cancellationToken)
+    public Task TerminateAsync(CancellationToken cancellationToken)
+    {
+        lock (_disposeLock)
+            return _disposeTask is { } disposal ? disposal.WaitAsync(cancellationToken) : TerminateCoreAsync(cancellationToken);
+    }
+
+    private async Task TerminateCoreAsync(CancellationToken cancellationToken)
     {
         Interlocked.Exchange(ref _expectedExit, 1);
         try

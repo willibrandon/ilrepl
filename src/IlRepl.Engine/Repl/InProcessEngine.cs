@@ -25,6 +25,7 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
     private bool _disposed;
     private readonly Lock _analysisLock = new();
     private readonly HashSet<Task> _analyses = [];
+    private Task? _disposeTask;
     private AnalyzedDocument? _analysisCache;
     private readonly Func<ComparisonPackage, CancellationToken, Task<ComparisonReply>>? _comparisonRunner;
     private (ComparisonTicket Ticket, ComparisonPackage Package, MethodEdit Edit)? _preparedComparison;
@@ -298,17 +299,20 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
 
     private void CancelWarmup() => _warmupCancellation.Cancel();
 
-    /// <inheritdoc />
-    public async ValueTask DisposeAsync()
+    /// <summary>
+    /// Shares completion of analysis, metadata, and execution-thread cleanup with every concurrent disposal caller.
+    /// </summary>
+    /// <returns>The shared cleanup operation.</returns>
+    public ValueTask DisposeAsync()
+    {
+        lock (_analysisLock) return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+    }
+
+    private async Task DisposeCoreAsync()
     {
         Task[] analyses;
         lock (_analysisLock)
         {
-            if (_disposed)
-            {
-                return;
-            }
-
             _disposed = true;
             _analysisCache = null;
             analyses = [.. _analyses];

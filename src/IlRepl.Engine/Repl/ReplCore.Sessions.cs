@@ -29,7 +29,7 @@ public sealed partial class ReplCore
     public IReadOnlyList<SessionReference> References => _references;
 
     /// <summary>
-    /// Routes local file references through the desktop host's verified dependency tooling when available.
+    /// Routes local file references through the execution host's verified dependency tooling when available.
     /// </summary>
     public bool ReferenceActions { get; set; }
 
@@ -406,7 +406,7 @@ public sealed partial class ReplCore
             if (native.Path is not { } path || !File.Exists(path))
             {
                 throw new ReplException($"native dependency '{native.Name}' is unavailable on this runtime; "
-                    + (Options.SupportsDependencyRestore ? DependencyRecoveryHint() : "run this experiment in desktop ilrepl"));
+                    + (Options.SupportsDependencyRestore ? DependencyRecoveryHint() : "run this experiment in terminal ilrepl"));
             }
 
             Session.Resolver.RegisterNative(Path.GetFileName(native.Name), path);
