@@ -159,8 +159,9 @@ il[3]> }
   end of method Half
 ```
 
-Ctrl+C while a block is going by waits for the line in flight, withdraws the block, and leaves
-its text in the editor. A block whose last line has already been accepted stays.
+Ctrl+C requests cancellation of the line in flight. Once it stops, ilrepl withdraws provisional
+input and returns its text to the editor. Completed cells and definitions stay applied. If user
+code cannot stop, confirm the runtime restart only after its notice appears; see [Keyboard](/reference/keyboard/).
 
 ## Comments and blank lines
 

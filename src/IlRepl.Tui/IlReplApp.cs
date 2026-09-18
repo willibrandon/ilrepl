@@ -18,6 +18,11 @@ namespace IlRepl.Tui;
 public static partial class IlReplApp
 {
     /// <summary>
+    /// The terminal's retained transcript rows and the matching restored-history presentation limit.
+    /// </summary>
+    public const int TranscriptLineLimit = 1000;
+
+    /// <summary>
     /// The banner shown at the top of an empty transcript.
     /// </summary>
     public const string Banner = "ilrepl  type IL, watch the stack, ret runs the cell.  .help for more";
@@ -61,6 +66,7 @@ public static partial class IlReplApp
         ConfigureInterruption(prompt, engine);
         if (engine is SessionController controller)
         {
+            controller.HistoryLineLimit = Math.Max(0, transcript.MaxLines);
             ConfigureSessions(prompt, controller);
             if (controller.Workspace is { } workspace)
             {
@@ -123,7 +129,7 @@ public static partial class IlReplApp
         Action? onFirstFrame = null)
     {
         ArgumentNullException.ThrowIfNull(engine);
-        var transcript = new Transcript { MaxLines = 1000 };
+        var transcript = new Transcript { MaxLines = TranscriptLineLimit };
         PromptState? prompt = null;
         await using var terminal = Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, usePlatformClipboard: true,
             history: history, onPrompt: p => prompt = p, onFirstFrame: onFirstFrame)

@@ -12,8 +12,9 @@ public sealed partial class SessionController
     /// </summary>
     /// <param name="start">The factory shared by initial startup and explicit runtime replacement.</param>
     /// <param name="initialRequest">An optional session document to open after the first host connects.</param>
-    public SessionController(Func<CancellationToken, Task<IReplEngine>> start, SessionRequest? initialRequest = null)
-        : this(new InactiveEngine(), start)
+    /// <param name="historyLineLimit">The history row limit established before startup, or zero for unlimited output.</param>
+    public SessionController(Func<CancellationToken, Task<IReplEngine>> start, SessionRequest? initialRequest = null,
+        int historyLineLimit = 0) : this(new InactiveEngine(), start, historyLineLimit)
     {
         _runtimeState = SessionRuntimeState.Starting;
         _startupCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
@@ -37,7 +38,10 @@ public sealed partial class SessionController
         {
             candidate = await _start(cancellationToken).ConfigureAwait(false);
             var opened = initialRequest is null ? null
-                : await candidate.SessionAsync(initialRequest, cancellationToken).ConfigureAwait(false);
+                : await candidate.SessionAsync(initialRequest with
+                {
+                    HistoryLineLimit = initialRequest.HistoryLineLimit ?? HistoryLineLimit,
+                }, cancellationToken).ConfigureAwait(false);
             await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {

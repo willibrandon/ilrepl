@@ -109,9 +109,10 @@ public sealed class MethodTrampoline
         cell.Fields.Add(field);
 
         var bind = new MethodDefinition("Bind", MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig, writer.Module.TypeSystem.Void);
-        bind.Parameters.Add(new ParameterDefinition("impl", ParameterAttributes.None, delegateType));
+        bind.Parameters.Add(new ParameterDefinition("impl", ParameterAttributes.None, writer.Import(typeof(Delegate))));
         var il = bind.Body.GetILProcessor();
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, delegateType);
         il.Emit(OpCodes.Volatile);
         il.Emit(OpCodes.Stsfld, field);
         il.Emit(OpCodes.Ret);
@@ -137,15 +138,8 @@ public sealed class MethodTrampoline
         var loadedDelegate = type.GetNestedType(signature.Name + "Delegate") ?? throw new ReplException($"the trampoline for {signature.Name} has no delegate type");
         var loadedBind = type.GetMethod("Bind", BindingFlags.NonPublic | BindingFlags.Static) ?? throw new ReplException($"the trampoline for {signature.Name} has no binder");
 
-        // Binding must not go through reflection once a commit is under way, so the typed Bind
-        // is wrapped once here into a delegate that takes any delegate of the right type.
-        return new MethodTrampoline(signature, definition, loaded, loadedDelegate, () =>
-        {
-            var typed = loadedBind.CreateDelegate(typeof(Action<>).MakeGenericType(loadedDelegate));
-            var shim = typeof(MethodTrampoline).GetMethod(nameof(BindCore), BindingFlags.NonPublic | BindingFlags.Static)!
-                .MakeGenericMethod(loadedDelegate);
-            return (Action<Delegate>)shim.CreateDelegate(typeof(Action<Delegate>), typed);
-        });
+        // The emitted cast preserves type safety without a separate generic binder instantiation for every method.
+        return new MethodTrampoline(signature, definition, loaded, loadedDelegate, loadedBind.CreateDelegate<Action<Delegate>>);
     }
 
     /// <summary>
@@ -182,5 +176,4 @@ public sealed class MethodTrampoline
         }
     }
 
-    private static void BindCore<T>(Action<T> bind, Delegate implementation) where T : Delegate => bind((T)implementation);
 }

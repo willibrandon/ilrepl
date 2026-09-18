@@ -123,6 +123,7 @@ public sealed partial class SessionController
                     Action = new SessionAction { Operation = SessionOperation.Hydrate, Path = request.Action.Path },
                     Document = source,
                     Editor = source.Editor, Modified = true,
+                    HistoryLineLimit = request.HistoryLineLimit ?? HistoryLineLimit,
                 }, cancellationToken).ConfigureAwait(false);
                 var notice = _runningExit is null ? "session run cancelled" : "session run interrupted by host exit";
                 return (recovered, reply with { Reply = reply.Reply with { Succeeded = false,

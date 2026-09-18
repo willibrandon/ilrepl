@@ -40,6 +40,7 @@ public sealed partial class HostServer
         _checkpointPath = workspace.Path;
         _checkpointDirty = workspace.Dirty;
         _lastCheckpoint = workspace.Document;
-        await client.CheckpointAsync(_checkpoints.Encode(workspace), cancellationToken).ConfigureAwait(false);
+        var checkpoint = workspace with { Reply = workspace.Reply with { Lines = [] } };
+        await client.CheckpointAsync(_checkpoints.Encode(checkpoint), cancellationToken).ConfigureAwait(false);
     }
 }

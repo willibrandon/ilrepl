@@ -101,7 +101,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
             {
                 Action = new SessionAction { Operation = SessionOperation.Open, Path = sessionFile.FullName },
             };
-            await using var interactive = new SessionController(StartInteractiveAsync, initialRequest);
+            await using var interactive = new SessionController(StartInteractiveAsync, initialRequest, IlReplApp.TranscriptLineLimit);
             var history = noHistory ? null : new FileHistoryStore(FileHistoryStore.DefaultPath());
             _ = BootstrapCatalog.Hello;
             measurements.Mark("catalog-ready");

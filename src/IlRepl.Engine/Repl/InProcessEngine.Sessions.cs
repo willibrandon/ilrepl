@@ -36,6 +36,7 @@ public sealed partial class InProcessEngine
     public async Task<SessionReply> SessionAsync(SessionRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (request.HistoryLineLimit is < 0) throw new ArgumentOutOfRangeException(nameof(request), "history limits cannot be negative");
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (request.Action.Operation is SessionOperation.Save or SessionOperation.Open or SessionOperation.Restore or SessionOperation.Load)
         {
@@ -94,7 +95,8 @@ public sealed partial class InProcessEngine
             var document = request.Document ?? throw new ReplException("no session document was supplied");
             _sessionDiagnostics = _core.ReopenSession(document);
             _sessionPath = action.Path;
-            _savedSessionHash = request.Modified ? null : DocumentHash(_core.CaptureSession(document.Editor));
+            var restored = _core.CaptureSession(document.Editor);
+            _savedSessionHash = request.Modified ? null : DocumentHash(restored);
             if (request.AnnounceOpen)
             {
                 _core.Transcript.Add(LineKind.Info,
@@ -119,11 +121,15 @@ public sealed partial class InProcessEngine
             }
 
             var reply = Reply(new HandleResult(true, false));
-            return CaptureReply(document.Editor) with
+            return new SessionReply
             {
+                Document = restored,
+                Path = _sessionPath,
+                Dirty = request.Modified && IsDirty(restored),
+                Diagnostics = _sessionDiagnostics,
                 Reply = reply with
                 {
-                    Lines = [.. reply.Lines, .. ReplCore.RenderSessionHistory(document)],
+                    Lines = [.. reply.Lines, .. ReplCore.RenderSessionHistoryTail(document, request.HistoryLineLimit.GetValueOrDefault())],
                     SessionEditor = document.Editor,
                 },
             };

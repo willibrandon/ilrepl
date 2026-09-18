@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using System.Text;
 
 namespace IlRepl.Protocol;
 
@@ -15,7 +16,7 @@ internal static class SocketDirectory
     internal static string Create()
     {
         var root = Path.GetTempPath();
-        if (!OperatingSystem.IsWindows() && root.Length > 55) root = "/tmp";
+        if (!OperatingSystem.IsWindows() && Encoding.UTF8.GetByteCount(root) > 55) root = "/tmp";
         var path = Path.Combine(root, "ilr-" + Guid.NewGuid().ToString("N")[..16]);
         if (OperatingSystem.IsWindows())
         {

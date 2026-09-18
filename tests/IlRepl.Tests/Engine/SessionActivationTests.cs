@@ -1,5 +1,6 @@
 using System.Text.Json;
 using IlRepl.Engine;
+using IlRepl.Repl;
 using IlRepl.Tests.Shared;
 
 namespace IlRepl.Tests.Engine;
@@ -10,6 +11,26 @@ namespace IlRepl.Tests.Engine;
 [TestClass]
 public sealed class SessionActivationTests
 {
+    /// <summary>
+    /// An incompatible implementation delegate is rejected without replacing the last callable method body.
+    /// </summary>
+    [TestMethod]
+    public void Trampoline_BindRejectsUnrelatedDelegateWithoutChangingImplementation()
+    {
+        using var core = new ReplCore();
+        var session = core.Session;
+        Submit(session,
+            ".method int32 First() { ldc.i4.s 42; ret }",
+            ".method int32 Second() { ldc.i4.s 43; ret }");
+        var first = session.Methods.Single(method => method.Signature.Name == "First");
+        var second = session.Methods.Single(method => method.Signature.Name == "Second");
+        Assert.ThrowsExactly<InvalidCastException>(() => first.Trampoline.Bind(second.Version.Implementation));
+        session.AddLine("call First");
+        Assert.AreEqual(42, session.Run().Value);
+        session.AddLine("call Second");
+        Assert.AreEqual(43, session.Run().Value);
+    }
+
     /// <summary>
     /// Retaining method metadata leaves its module initializer untouched until the execution delegate is requested.
     /// </summary>

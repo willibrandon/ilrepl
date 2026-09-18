@@ -15,17 +15,33 @@ public sealed partial class SessionController : IReplEngine
     private readonly Lock _disposeLock = new();
     private Task? _disposeTask;
     private bool _checkpointBatch;
+    private int _historyLineLimit;
 
     /// <summary>
     /// Wraps the first engine and a factory that creates a fresh execution runtime.
     /// </summary>
     /// <param name="engine">The initial engine.</param>
     /// <param name="start">The replacement engine factory.</param>
-    public SessionController(IReplEngine engine, Func<CancellationToken, Task<IReplEngine>> start)
+    /// <param name="historyLineLimit">The historical presentation row limit, or zero for unlimited output.</param>
+    public SessionController(IReplEngine engine, Func<CancellationToken, Task<IReplEngine>> start, int historyLineLimit = 0)
     {
+        HistoryLineLimit = historyLineLimit;
         _engine = engine;
         _start = start;
         ObserveEngine(engine);
+    }
+
+    /// <summary>
+    /// Limits restored presentation history without limiting the retained source journal; zero keeps every row.
+    /// </summary>
+    public int HistoryLineLimit
+    {
+        get => Volatile.Read(ref _historyLineLimit);
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(value);
+            Volatile.Write(ref _historyLineLimit, value);
+        }
     }
 
     /// <summary>
@@ -296,6 +312,7 @@ public sealed partial class SessionController : IReplEngine
 
     private async Task<SessionReply> PerformAsync(SessionRequest request, CancellationToken cancellationToken)
     {
+        request = request with { HistoryLineLimit = request.HistoryLineLimit ?? HistoryLineLimit };
         if (ExternalActionAsync is { } external)
         {
             var current = await _engine.SessionAsync(new SessionRequest

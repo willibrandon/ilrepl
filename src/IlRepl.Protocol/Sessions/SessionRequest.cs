@@ -39,6 +39,11 @@ public sealed record SessionRequest
     public bool AnnounceOpen { get; init; } = true;
 
     /// <summary>
+    /// The maximum historical presentation rows, with zero unlimited and null using the frontend's configured limit.
+    /// </summary>
+    public int? HistoryLineLimit { get; init; }
+
+    /// <summary>
     /// Additive format fields retained when a supported document is saved again.
     /// </summary>
     [JsonExtensionData]

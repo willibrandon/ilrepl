@@ -239,6 +239,7 @@ public sealed partial class SessionController : IInterruptibleEngine
                 {
                     Action = new SessionAction { Operation = SessionOperation.Hydrate, Path = retained.Path },
                     Document = retained.Document, Editor = retained.Document.Editor, Modified = retained.Dirty,
+                    HistoryLineLimit = HistoryLineLimit,
                 }, cancellationToken).ConfigureAwait(false);
                 await InstallEngineAsync(candidate).ConfigureAwait(false);
                 var editor = RecoveryEditor();

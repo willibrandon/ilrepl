@@ -9,6 +9,10 @@ namespace IlRepl.Tui;
 public sealed class CilDecorationProvider : ITextDecorationProvider
 {
     private readonly CilTokenizer _tokenizer;
+    private IHex1bDocument? _prefixDocument;
+    private long _prefixVersion = -1;
+    private bool _prefixCommentOpen;
+    private readonly List<bool> _commentStarts = [];
     private long _version = -1;
     private int _start;
     private int _end;
@@ -61,16 +65,31 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
     public IReadOnlyList<TextDecorationSpan> GetDecorations(int startLine, int endLine, IHex1bDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
+        if (!ReferenceEquals(document, _prefixDocument) || document.Version != _prefixVersion
+            || CommentOpenAtStart != _prefixCommentOpen)
+        {
+            _prefixDocument = document;
+            _prefixVersion = document.Version;
+            _prefixCommentOpen = CommentOpenAtStart;
+            _commentStarts.Clear();
+            _commentStarts.Add(CommentOpenAtStart);
+            _version = -1;
+        }
         if (document.Version == _version && startLine == _start && endLine == _end && CommentOpenAtStart == _commentOpen && Caret == _caret)
         {
             return _cached;
         }
 
-        var inComment = CommentOpenAtStart;
-        for (var line = 1; line < startLine && line <= document.LineCount; line++)
+        // PromptView requests each visible row separately. Scan preceding lexical state only
+        // once per document revision, rather than repeating the whole prefix for every row.
+        var first = Math.Clamp(startLine, 1, document.LineCount + 1);
+        while (_commentStarts.Count < first)
         {
-            _tokenizer.Tokenize(document.GetLineText(line), ref inComment);
+            var open = _commentStarts[^1];
+            _tokenizer.Tokenize(document.GetLineText(_commentStarts.Count), ref open);
+            _commentStarts.Add(open);
         }
+        var inComment = _commentStarts[first - 1];
 
         var spans = new List<TextDecorationSpan>();
         var last = Math.Min(endLine, document.LineCount);
