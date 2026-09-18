@@ -5,6 +5,7 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -23,7 +24,7 @@ var outputOption = new Option<string>("--output")
 };
 var buildOnlyOption = new Option<bool>("--build-only")
 {
-    Description = "Publish without executing checks or producing a distributable package.",
+    Description = "Publish and inspect native host code without executing checks or producing a package.",
 };
 var smokeOnlyOption = new Option<bool>("--smoke-only")
 {
@@ -64,9 +65,11 @@ root.SetAction(async (parseResult, cancellationToken) =>
     if (!smokeOnly)
     {
         var publish = await RunAsync(repo, "dotnet", ["publish", project, "-c", "Release", "-r", rid, "-o", publishDirectory,
-            $"-p:Version={version}", "--nologo", "-v", "quiet"], cancellationToken);
+            $"-p:Version={version}", "-p:IlReplHostPublishReadyToRun=true", "--nologo", "-v", "quiet"], cancellationToken);
         if (publish != 0) return publish;
     }
+    var publishedHost = ReadReadyToRunHost(publishDirectory, rid);
+    if (publishedHost is null) return 1;
     if (buildOnly) return 0;
 
     var executable = Path.Combine(publishDirectory, OperatingSystem.IsWindows() ? "ilrepl.exe" : "ilrepl");
@@ -96,12 +99,13 @@ root.SetAction(async (parseResult, cancellationToken) =>
     var checkedPackages = new List<Dictionary<string, string>>();
     if (smokeOnly)
     {
-        await WriteEvidenceAsync(artifacts, rid, publishedHash, checkedPackages, cancellationToken);
+        await WriteEvidenceAsync(artifacts, rid, publishedHash, publishedHost, checkedPackages, cancellationToken);
         return 0;
     }
 
     var pack = await RunAsync(repo, "dotnet", ["pack", project, "-c", "Release", "-r", rid, "-o", packagesDirectory,
-        $"-p:Version={version}", $"-p:PackageVersion={version}", "--nologo", "-v", "quiet"], cancellationToken);
+        $"-p:Version={version}", $"-p:PackageVersion={version}", "-p:IlReplHostPublishReadyToRun=true",
+        "--nologo", "-v", "quiet"], cancellationToken);
     if (pack != 0)
     {
         return pack;
@@ -123,14 +127,17 @@ root.SetAction(async (parseResult, cancellationToken) =>
                 File.SetUnixFileMode(packagedExecutable, File.GetUnixFileMode(packagedExecutable)
                     | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
             }
+            var packagedHost = ReadReadyToRunHost(packagedDirectory, rid);
+            if (packagedHost is null) return 1;
             if (!await SmokePublishedAsync(repo, packagedDirectory, packagedExecutable, cancellationToken)) return 1;
-            checkedPackages.Add(new Dictionary<string, string>
+            var packageEvidence = new Dictionary<string, string>(packagedHost)
             {
                 ["package"] = Path.GetFileName(package),
                 ["packageSha256"] = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(package, cancellationToken))),
                 ["executableSha256"] = Convert.ToHexString(
                     SHA256.HashData(await File.ReadAllBytesAsync(packagedExecutable, cancellationToken))),
-            });
+            };
+            checkedPackages.Add(packageEvidence);
             Console.WriteLine($"packed and validated {Path.GetFileName(package)}");
         }
         finally
@@ -143,7 +150,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
         Console.Error.WriteLine("the expected runtime-specific package was not produced");
         return 1;
     }
-    await WriteEvidenceAsync(artifacts, rid, publishedHash, checkedPackages, cancellationToken);
+    await WriteEvidenceAsync(artifacts, rid, publishedHash, publishedHost, checkedPackages, cancellationToken);
 
     return 0;
 });
@@ -158,14 +165,80 @@ static bool CanRunHere(string rid)
     return rid == $"{os}-{arch}";
 }
 
-static async Task WriteEvidenceAsync(string artifacts, string rid, string publishedHash,
+static Dictionary<string, string>? ReadReadyToRunHost(string directory, string rid)
+{
+    var architecture = rid[(rid.LastIndexOf('-') + 1)..] switch
+    {
+        "x64" => (ushort)Machine.Amd64,
+        "arm64" => (ushort)Machine.Arm64,
+        _ => throw new ArgumentException($"unsupported ReadyToRun target: {rid}"),
+    };
+    // CoreCLR's IMAGE_FILE_MACHINE_NATIVE_OS_OVERRIDE is XORed with the target architecture.
+    var os = rid.StartsWith("win-", StringComparison.Ordinal) ? 0
+        : rid.StartsWith("osx-", StringComparison.Ordinal) ? 0x4644
+        : rid.StartsWith("linux-", StringComparison.Ordinal) ? 0x7B79
+        : throw new ArgumentException($"unsupported ReadyToRun target: {rid}");
+    var expectedMachine = (ushort)(architecture ^ os);
+    var evidence = new Dictionary<string, string> { ["readyToRunMachine"] = $"0x{expectedMachine:X4}" };
+    try
+    {
+        var dependencies = File.ReadAllBytes(Path.Combine(directory, "host", "ilrepl-host.deps.json"));
+        using var document = JsonDocument.Parse(dependencies);
+        var runtimeTarget = document.RootElement.GetProperty("runtimeTarget").GetProperty("name").GetString();
+        if (runtimeTarget is null || !runtimeTarget.EndsWith("/" + rid, StringComparison.Ordinal))
+        {
+            Console.Error.WriteLine($"host dependencies do not target {rid}: {runtimeTarget}");
+            return null;
+        }
+        evidence["runtimeTarget"] = runtimeTarget;
+        evidence["dependenciesSha256"] = Convert.ToHexString(SHA256.HashData(dependencies));
+    }
+    catch (Exception exception) when (exception is IOException or JsonException or KeyNotFoundException or UnauthorizedAccessException)
+    {
+        Console.Error.WriteLine($"cannot inspect host dependencies: {exception.Message}");
+        return null;
+    }
+    foreach (var (file, key) in new[]
+    {
+        ("ilrepl-host.dll", "hostSha256"),
+        ("IlRepl.Engine.dll", "engineSha256"),
+        ("IlRepl.Protocol.dll", "protocolSha256"),
+    })
+    {
+        var path = Path.Combine(directory, "host", file);
+        try
+        {
+            using var stream = File.OpenRead(path);
+            using var pe = new PEReader(stream, PEStreamOptions.LeaveOpen);
+            var native = pe.PEHeaders.CorHeader?.ManagedNativeHeaderDirectory;
+            if (native is not { Size: >= 4, RelativeVirtualAddress: > 0 }
+                || (ushort)pe.PEHeaders.CoffHeader.Machine != expectedMachine
+                || pe.GetSectionData(native.Value.RelativeVirtualAddress).GetReader().ReadUInt32() != 0x00525452)
+            {
+                Console.Error.WriteLine($"{path} does not contain ReadyToRun code for {rid}");
+                return null;
+            }
+            stream.Position = 0;
+            evidence[key] = Convert.ToHexString(SHA256.HashData(stream));
+        }
+        catch (Exception exception) when (exception is IOException or BadImageFormatException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"cannot inspect ReadyToRun host {path}: {exception.Message}");
+            return null;
+        }
+    }
+    Console.WriteLine($"ReadyToRun host images match {rid} ({evidence["readyToRunMachine"]})");
+    return evidence;
+}
+
+static async Task WriteEvidenceAsync(string artifacts, string rid, string publishedHash, Dictionary<string, string> publishedHost,
     List<Dictionary<string, string>> packages, CancellationToken cancellationToken)
 {
     Directory.CreateDirectory(artifacts);
     await using var file = File.Create(Path.Combine(artifacts, "smoke-results.json"));
     await using var writer = new Utf8JsonWriter(file, new JsonWriterOptions { Indented = true });
     writer.WriteStartObject();
-    writer.WriteNumber("schemaVersion", 1);
+    writer.WriteNumber("schemaVersion", 2);
     writer.WriteString("targetRid", rid);
     writer.WriteString("actualRuntimeIdentifier", RuntimeInformation.RuntimeIdentifier);
     writer.WriteString("architecture", RuntimeInformation.OSArchitecture.ToString());
@@ -175,6 +248,9 @@ static async Task WriteEvidenceAsync(string artifacts, string rid, string publis
     writer.WriteString("commit", Environment.GetEnvironmentVariable("GITHUB_SHA"));
     writer.WriteString("publishedExecutableSha256", publishedHash);
     writer.WriteBoolean("completed", true);
+    writer.WriteStartObject("publishedHost");
+    foreach (var (name, value) in publishedHost) writer.WriteString(name, value);
+    writer.WriteEndObject();
     writer.WriteStartArray("packages");
     foreach (var package in packages)
     {

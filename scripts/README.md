@@ -27,13 +27,17 @@ Review and include the updated `src/IlRepl.Protocol/BootstrapCatalog.Generated.c
 `--check` compares that file with the engine's current tables without writing it and returns a nonzero exit code if it is stale.
 
 Native AOT publishing writes to `artifacts/native-aot/<rid>/publish` by default; `--output` changes the base directory.
+The framework-dependent execution host contains ReadyToRun code for the requested RID. Its build cache separates target RIDs
+and portable builds. Publishing checks the host dependency target, then the host, engine, and protocol PE headers and ReadyToRun signatures.
 The default command checks both the published frontend and the executable extracted from its tool package, including
 interruption, restart, session saving, and process ownership. Validation requires a matching OS, architecture, and libc.
 Run musl checks inside Alpine with the .NET runtime available for the execution host.
-`--build-only` publishes without running checks or creating a package. `--smoke-only` checks an existing publish directory
-without republishing the frontend or packing; the checks can build their test driver. These options cannot be combined.
+`--build-only` publishes and inspects the host images without executing checks or creating a package.
+`--smoke-only` checks an existing publish directory without republishing the frontend or packing; the checks can build
+their test driver. These options cannot be combined.
 The default command writes packages under `artifacts/native-aot/<rid>/packages`. Successful checks write `smoke-results.json`
-beside the publish directory, recording the validated RID and artifact hashes; smoke-only results contain no package entries.
+beside the publish directory, recording the validated RID, ReadyToRun machine, and frontend, host, and package hashes.
+Smoke-only results contain no package entries. Extracted packages undergo the same host image and behavior checks.
 
 The opcode reference generator builds the engine itself. The browser publish needs the `wasm-tools` workload.
 Its scripts, runtime, and samples share a content-hashed directory. The site reads the generated asset manifest at build time
