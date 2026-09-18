@@ -21,8 +21,13 @@ ilrepl [options] [script]
 | `--help` | Print the options. |
 
 The exit code is 0 when every line succeeded, 1 for source, document, dependency, or execution failures, 2 for an unreadable input path,
-and 3 when the host could not be started. Input that ends inside a `.method`, `.class`, or `.edit` block is an error;
+3 when the host cannot start or exits unexpectedly, and 130 when execution is interrupted.
+An unexpected host exit is a failure even when user code exits with code 0.
+Input that ends inside a `.method`, `.class`, or `.edit` block is an error;
 close it with `}` first.
+
+Ctrl+C during a script, `--eval`, piped input, or `--run` stops its processes and exits with code 130.
+Output already received is written before exit. Remaining input is not executed, and batch mode does not restart the runtime.
 
 Reopened source and drafts stay inert at batch EOF. Use `--run` or `.session run` to execute a saved experiment.
 See [Saving and sharing sessions](/usage/sessions/).
@@ -30,8 +35,8 @@ See [Saving and sharing sessions](/usage/sessions/).
 Scripts accept `.edit method as Name { ... }` blocks. Add `--assert` to `.compare` to require a complete
 match and return exit code 1 otherwise. Without it, a difference is reported as a result.
 
-A trailing `.show`, `.il`, `.dis`, `.diff`, or `.jit` suppresses pending-cell execution at EOF, including
-when inspection fails. Their aliases have the same behavior. Further accepted cell instructions restore
+A trailing `.show`, `.il`, `.dis`, `.diff`, `.jit`, `.save`, or `.session` command suppresses pending-cell execution at EOF,
+including when the command fails. Their aliases have the same behavior. Further accepted cell instructions restore
 EOF execution; explicit `.run`, blank-line execution, and `ret` retain their usual meanings. Native
 comparisons accept `--assert` to fail a script when the captured native code differs.
 

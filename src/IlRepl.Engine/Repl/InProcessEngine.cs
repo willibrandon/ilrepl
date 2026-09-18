@@ -11,9 +11,13 @@ namespace IlRepl.Repl;
 /// An engine that runs <see cref="ReplCore"/> in the current process. The browser build uses it;
 /// the Native AOT tool talks to the same core through the host process instead.
 /// </remarks>
-public sealed partial class InProcessEngine : IReplEngine
+public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
 {
     private readonly ReplCore _core;
+    private readonly ExecutionThread? _execution;
+    private readonly OperandCompleter _completion;
+    private readonly Lock _snapshotLock = new();
+    private EditingSeed _publishedSeed;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _shutdown = new();
     private readonly CancellationTokenSource _warmupCancellation = new();
@@ -21,6 +25,7 @@ public sealed partial class InProcessEngine : IReplEngine
     private bool _disposed;
     private readonly Lock _analysisLock = new();
     private readonly HashSet<Task> _analyses = [];
+    private Task? _disposeTask;
     private AnalyzedDocument? _analysisCache;
     private readonly Func<ComparisonPackage, CancellationToken, Task<ComparisonReply>>? _comparisonRunner;
     private (ComparisonTicket Ticket, ComparisonPackage Package, MethodEdit Edit)? _preparedComparison;
@@ -53,6 +58,11 @@ public sealed partial class InProcessEngine : IReplEngine
     {
         ArgumentNullException.ThrowIfNull(core);
         _core = core;
+        _execution = OperatingSystem.IsBrowser() ? null : new ExecutionThread();
+        var version = AssemblyVersion;
+        _publishedSeed = core.CaptureEditingSeed() with { AssemblyVersion = version };
+        _completion = new OperandCompleter(CapturePublishedSeed);
+        _core.PhaseChanged = ReportPhase;
         _comparisonRunner = comparisonRunner;
         _nativeRunner = nativeRunner;
         Status = core.Status;
@@ -96,29 +106,19 @@ public sealed partial class InProcessEngine : IReplEngine
     {
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
         await Task.Yield();
-        await _gate.WaitAsync(cancellation.Token).ConfigureAwait(false);
-        EditingSeed seed;
-        long version;
-        try
+        cancellation.Token.ThrowIfCancellationRequested();
+        using var seed = CapturePublishedSeed();
+        var version = seed.AssemblyVersion;
+        lock (_analysisLock)
         {
-            version = AssemblyVersion;
-            lock (_analysisLock)
+            if (_analysisCache is { } cached && cached.Reply.Revision == seed.Revision
+                && cached.Reply.AssemblyVersion == version && cached.Lines.SequenceEqual(request.Lines))
             {
-                if (_analysisCache is { } cached && cached.Reply.Revision == _core.Status.Revision
-                    && cached.Reply.AssemblyVersion == version && cached.Lines.SequenceEqual(request.Lines))
-                {
-                    return cached.At(request);
-                }
+                return cached.At(request);
             }
-
-            seed = _core.CaptureEditingSeed();
-        }
-        finally
-        {
-            _gate.Release();
         }
 
-        using var editing = new EditingSession(seed);
+        using var editing = new EditingSession(seed.Lease(), cancellation.Token);
         var reply = await editing.AnalyzeAsync(request, cancellation.Token).ConfigureAwait(false);
         reply = reply with { AssemblyVersion = version };
         lock (_analysisLock)
@@ -159,13 +159,11 @@ public sealed partial class InProcessEngine : IReplEngine
         ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
         await _warmupCancellation.CancelAsync().ConfigureAwait(false);
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        HandleReply reply;
-        try
+        var reply = await ExecuteOperationAsync("submission", operation =>
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var result = _core.Handle(line, location);
-            reply = Reply(result);
+            var result = _core.HandleCancellable(line, location, operation);
+            var reply = Reply(result);
             if (result.ComparisonPackage is { } package)
             {
                 var ticket = new ComparisonTicket(Guid.NewGuid().ToString("N"), package.Name, package.StartingState);
@@ -179,18 +177,19 @@ public sealed partial class InProcessEngine : IReplEngine
                 _preparedNative = (ticket, native, _core.Status.Revision);
                 reply = reply with { PendingNative = ticket };
             }
-
-        }
-        finally
-        {
-            _gate.Release();
-        }
+            return reply;
+        }, cancellationToken).ConfigureAwait(false);
 
         if (reply.SessionAction is { Operation: SessionOperation.Load, Reload: false } action && SessionTooling is { } tooling)
         {
             try
             {
-                var loaded = await tooling(new SessionRequest { Action = action }, cancellationToken).ConfigureAwait(false);
+                var loaded = await RunOperationAsync("load", async token =>
+                {
+                    var workspace = await tooling(new SessionRequest { Action = action }, token).ConfigureAwait(false);
+                    WorkspaceCheckpoint?.Invoke(workspace);
+                    return workspace;
+                }, cancellationToken).ConfigureAwait(false);
                 return loaded.Reply with { Lines = [.. reply.Lines, .. loaded.Reply.Lines] };
             }
             catch (Exception exception) when (exception is ReplException or IOException or InvalidDataException or ArgumentException)
@@ -208,35 +207,31 @@ public sealed partial class InProcessEngine : IReplEngine
     {
         ArgumentNullException.ThrowIfNull(mark);
         ObjectDisposedException.ThrowIf(_disposed, this);
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return Reply(_core.Rollback(mark));
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        return await ExecuteAsync(() => Reply(_core.Rollback(mark)), cancellationToken).ConfigureAwait(false);
     }
 
-    /// <inheritdoc/>
-    public async Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        Task<CompletionReply> completion;
+        lock (_analysisLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            completion = CompleteCoreAsync(request, cancellationToken);
+            _analyses.Add(completion);
+        }
+
+        _ = completion.ContinueWith(RemoveAnalysis, CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return completion;
+    }
+
+    private async Task<CompletionReply> CompleteCoreAsync(CompletionRequest request, CancellationToken cancellationToken)
+    {
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
-        await _warmup.WaitAsync(cancellation.Token).ConfigureAwait(false);
-        await _gate.WaitAsync(cancellation.Token).ConfigureAwait(false);
-        try
-        {
-            var version = AssemblyVersion;
-            var reply = await _core.CompleteAsync(request, cancellation.Token).ConfigureAwait(false);
-            return reply with { AssemblyVersion = version };
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        await Task.Yield();
+        cancellation.Token.ThrowIfCancellationRequested();
+        return await _completion.CompleteAsync(request, cancellation.Token).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -269,6 +264,7 @@ public sealed partial class InProcessEngine : IReplEngine
             EditDocument = result.EditDocument,
             Diff = result.Diff,
             SessionAction = result.SessionAction,
+            AssemblyExport = result.AssemblyExport,
         };
     }
 
@@ -303,17 +299,20 @@ public sealed partial class InProcessEngine : IReplEngine
 
     private void CancelWarmup() => _warmupCancellation.Cancel();
 
-    /// <inheritdoc />
-    public async ValueTask DisposeAsync()
+    /// <summary>
+    /// Shares completion of analysis, metadata, and execution-thread cleanup with every concurrent disposal caller.
+    /// </summary>
+    /// <returns>The shared cleanup operation.</returns>
+    public ValueTask DisposeAsync()
+    {
+        lock (_analysisLock) return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+    }
+
+    private async Task DisposeCoreAsync()
     {
         Task[] analyses;
         lock (_analysisLock)
         {
-            if (_disposed)
-            {
-                return;
-            }
-
             _disposed = true;
             _analysisCache = null;
             analyses = [.. _analyses];
@@ -327,16 +326,37 @@ public sealed partial class InProcessEngine : IReplEngine
         catch (OperationCanceledException) when (_shutdown.IsCancellationRequested)
         {
         }
+        catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
+        {
+            // The request already observes its failure; shutdown must still release snapshots and the execution thread.
+        }
         await _warmupCancellation.CancelAsync().ConfigureAwait(false);
         await _warmup.ConfigureAwait(false);
         await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
-            _core.Dispose();
+            if (_execution is null)
+            {
+                _core.Dispose();
+            }
+            else
+            {
+                await _execution.RunAsync(() => { _core.Dispose(); return true; }, CancellationToken.None).ConfigureAwait(false);
+            }
+            _completion.Dispose();
+            lock (_snapshotLock)
+            {
+                _publishedSeed.Dispose();
+            }
         }
         finally
         {
             _gate.Release();
+        }
+
+        if (_execution is not null)
+        {
+            await _execution.DisposeAsync().ConfigureAwait(false);
         }
 
         _shutdown.Dispose();

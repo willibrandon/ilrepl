@@ -183,30 +183,36 @@ printf 'ldstr "piped"\nret\n' | ilrepl --no-color
 
 ## How it works
 
-Reflection.Emit needs a JIT, and the Native AOT front-end has none, so ilrepl is two processes:
-the front-end owns the terminal UI, the transcript, and the opcode catalog; the host owns the
-session and completes operands from the unsent buffer over JSON-RPC. The same engine runs in the browser on the docs
-site, where the .NET runtime is compiled to WebAssembly.
+Reflection.Emit needs a JIT, so the Native AOT frontend runs user IL in a separate execution host.
+The frontend owns the terminal, transcript, and retained source. It communicates directly with
+the host over a private Unix domain socket on Windows, Linux, and macOS. On Unix, a separate
+lifetime supervisor tracks execution processes and stops them if the frontend exits.
 
 ## Building
 
-Requires the .NET 10 SDK. The browser build also needs the `wasm-tools` workload, and the docs
-need Node 22 with pnpm.
+Requires the .NET 10 SDK.
 
 ```sh
-dotnet build
+dotnet build src/IlRepl
 dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj
 dotnet run --project src/IlRepl
 ```
 
-`dotnet build` publishes the host into `host/` beside the front-end. The tests cover the engine
+The build publishes the host into `host/` beside the front-end. The tests cover the engine
 in-process on the real JIT, the sample library in `samples/Greeter`, every transcript in
 `samples/Transcripts`, the terminal UI on a headless terminal emulator, and the front-end as a
 process in a PTY.
 
-Repository utilities are file-based apps under `scripts/`:
+To build the entire solution, run `dotnet workload restore` before `dotnet build`; the live demo
+needs the `wasm-tools` workload. Building the documentation site also requires Node 22 with pnpm.
+
+The [responsiveness validation guide](tests/responsiveness-validation.md) describes packaged
+terminal reference measurements and generated stress fixtures.
+
+Repository utilities are file-based apps documented in [scripts/README.md](scripts/README.md):
 
 ```sh
+dotnet run --file scripts/Generate-BootstrapCatalog.cs -- --check
 dotnet run --file scripts/Generate-OpcodeReference.cs
 dotnet run --file scripts/Publish-Wasm.cs
 dotnet run --file scripts/Publish-NativeAot.cs -- --rid osx-arm64 --package-version 0.4.1

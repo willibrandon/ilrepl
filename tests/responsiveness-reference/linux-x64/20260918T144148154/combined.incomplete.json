@@ -1,0 +1,1249 @@
+{
+  "ArchiveSchema": 1,
+  "Outcome": "incomplete",
+  "SourceCommit": "b12e3d02fe7c64f4c59390a4aca831f8bc848168",
+  "FrontendSha256": "7ebd5c21eb6dc4556b8dd9b2e6d1f3545a61561f64a4478b071380c632da9dda",
+  "PackageArchiveSha256": "8be59530644b1597a0e7f83462be6734cb20680894dcfcb39b63096c0573e255",
+  "Fixture": {
+    "Generator": "responsiveness-v1",
+    "AssemblySha256": "0d0752909320175431266f77698e47e06160c194c41f0da3bfd5c6121f0cddc2",
+    "SessionSha256": "9bf05e01e96969edbb6d66dc75a68f26342136b2913bce4a0401d733122246c6"
+  },
+  "FailureStage": "repeated startup sampling",
+  "Limitation": "The process ended without a final driver record or recoverable exit status. Missing samples are not reconstructed.",
+  "OriginalLogSha256": "fbf19234fd67f17076b6a60ed16c6469e0f9335e94484461a46a6a691f1d1fa2",
+  "OriginalLogSegments": [
+    "Responsiveness artifacts: /home/brandon/src/ilrepl/artifacts/responsiveness",
+    "/linux-x64/20260918T144148154\nMeasuring combined: initial document analysis",
+    " at 204.8 ms after launch.\nMeasuring combined: first submission at 1298.8 m",
+    "s after launch.\nMeasuring combined: first submission accepted at 1466.2 ms ",
+    "after launch.\nMeasuring combined: large catalog load at 1466.3 ms after lau",
+    "nch.\nMeasuring combined: cold catalog completion at 3138.4 ms after launch.",
+    "\nMeasuring combined: large draft preparation at 3237.5 ms after launch.\nMea",
+    "suring combined: typing and caret measurements at 3340.0 ms after launch.\nM",
+    "easuring combined: completion draft preparation at 116653.1 ms after launch",
+    ".\nMeasuring combined: warm completion measurements at 116883.5 ms after lau",
+    "nch.\nMeasured combined: 1000 interaction samples.\n"
+  ],
+  "ProcessArtifacts": [
+    {
+      "FileName": "frontend-2786471.json",
+      "Sha256": "456ab5983f5f5173b965682b9c8525d645c487411f70f70cee3071d7104680f3",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2786471,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 112117868304,
+        "RetainedBytes": 88591368,
+        "WorkingSetBytes": 176332800,
+        "Stages": {
+          "entry": 173152172585770,
+          "catalog-ready": 173152174844200,
+          "frontend-prepared": 173152174844891,
+          "prompt-rendered": 173152282258396,
+          "host-starting": 173152282311112,
+          "host-ready": 173152456105823,
+          "exit": 173360166916745
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787053.json",
+      "Sha256": "d222a3bafc0466a1d67e02e1159c1c07da5aee53461b79dd661ca0a518e5d8e0",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787053,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 983708496,
+        "RetainedBytes": 144780064,
+        "WorkingSetBytes": 237699072,
+        "Stages": {
+          "entry": 173360238195057,
+          "catalog-ready": 173360240085661,
+          "frontend-prepared": 173360240086082,
+          "prompt-rendered": 173360345688954,
+          "host-starting": 173360345744786,
+          "host-ready": 173360508677727,
+          "exit": 173363805761339
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787105.json",
+      "Sha256": "ed67264a6837c9a4e205b2e465cca7c0dbad319b866a6c239f185206eb4124ed",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787105,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 998375328,
+        "RetainedBytes": 144822448,
+        "WorkingSetBytes": 241188864,
+        "Stages": {
+          "entry": 173363883734329,
+          "catalog-ready": 173363885829202,
+          "frontend-prepared": 173363885829593,
+          "prompt-rendered": 173363991569611,
+          "host-starting": 173363991635000,
+          "host-ready": 173364158446882,
+          "exit": 173367560649792
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787156.json",
+      "Sha256": "ba11c5d665a19e22fb6afc14775fe2cd40caa57c4eb2d148b80f6fc52821c6d4",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787156,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 985232136,
+        "RetainedBytes": 144760200,
+        "WorkingSetBytes": 241356800,
+        "Stages": {
+          "entry": 173367634212987,
+          "catalog-ready": 173367636276531,
+          "frontend-prepared": 173367636277292,
+          "prompt-rendered": 173367741716684,
+          "host-starting": 173367741757601,
+          "host-ready": 173367917839066,
+          "exit": 173371329716239
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787206.json",
+      "Sha256": "d0685be254c2c7db38173ca4356d327c544061a2aa5a9108795ac086e5c3f83e",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787206,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 977923104,
+        "RetainedBytes": 144729192,
+        "WorkingSetBytes": 244981760,
+        "Stages": {
+          "entry": 173371401215631,
+          "catalog-ready": 173371403111917,
+          "frontend-prepared": 173371403112377,
+          "prompt-rendered": 173371508807971,
+          "host-starting": 173371508865470,
+          "host-ready": 173371669913693,
+          "exit": 173375111837174
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787257.json",
+      "Sha256": "89b827b324a33b151fcfdc3f85b51b3dc14a8572ed0f9fa9526f774fd266356e",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787257,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1017766000,
+        "RetainedBytes": 144805160,
+        "WorkingSetBytes": 214376448,
+        "Stages": {
+          "entry": 173375180987360,
+          "catalog-ready": 173375182896389,
+          "frontend-prepared": 173375182896950,
+          "prompt-rendered": 173375288428678,
+          "host-starting": 173375288482855,
+          "host-ready": 173375454166873,
+          "exit": 173378870307226
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787309.json",
+      "Sha256": "d64a0f0e1c685ac2d362c21ce8b0e433a4d5602a8dd4e51abe296f85d2ce4357",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787309,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1004216248,
+        "RetainedBytes": 144805832,
+        "WorkingSetBytes": 214470656,
+        "Stages": {
+          "entry": 173378940230542,
+          "catalog-ready": 173378942213632,
+          "frontend-prepared": 173378942214493,
+          "prompt-rendered": 173379047855558,
+          "host-starting": 173379047910036,
+          "host-ready": 173379208760018,
+          "exit": 173382654420675
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787357.json",
+      "Sha256": "6223864b6e98233b560582602c27d46408cf9c9309f845f30fa1bf44609826f2",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787357,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1011747432,
+        "RetainedBytes": 144800016,
+        "WorkingSetBytes": 245493760,
+        "Stages": {
+          "entry": 173382724328706,
+          "catalog-ready": 173382726263013,
+          "frontend-prepared": 173382726263294,
+          "prompt-rendered": 173382833602818,
+          "host-starting": 173382833659662,
+          "host-ready": 173382994970439,
+          "exit": 173386311838030
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787407.json",
+      "Sha256": "a7bfd966c861bb25ae2e69e648204eda4c961d9d05f075467a02fab4afb90bf7",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787407,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 991117328,
+        "RetainedBytes": 144793160,
+        "WorkingSetBytes": 210280448,
+        "Stages": {
+          "entry": 173386379758025,
+          "catalog-ready": 173386381775671,
+          "frontend-prepared": 173386381776152,
+          "prompt-rendered": 173386487118486,
+          "host-starting": 173386487173727,
+          "host-ready": 173386663355583,
+          "exit": 173390055138760
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787464.json",
+      "Sha256": "2c75cee98f48c4263b83ddb34eb143208bc1c35758514431b1962b00f5d7312e",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787464,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1011555392,
+        "RetainedBytes": 144750288,
+        "WorkingSetBytes": 214630400,
+        "Stages": {
+          "entry": 173390130076938,
+          "catalog-ready": 173390132055659,
+          "frontend-prepared": 173390132056270,
+          "prompt-rendered": 173390237894108,
+          "host-starting": 173390237955230,
+          "host-ready": 173390403729779,
+          "exit": 173393810445652
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787514.json",
+      "Sha256": "c7058257eb23a5a588e8a123b5e1adfbb44b79e6d5a3850ce0f501218f6b8cf5",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787514,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1018136504,
+        "RetainedBytes": 144801336,
+        "WorkingSetBytes": 214904832,
+        "Stages": {
+          "entry": 173393892318841,
+          "catalog-ready": 173393894348861,
+          "frontend-prepared": 173393894349262,
+          "prompt-rendered": 173394001981773,
+          "host-starting": 173394002030196,
+          "host-ready": 173394164501725,
+          "exit": 173397614978597
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787565.json",
+      "Sha256": "22a5dc8ea4ea302190e425f06a23045a404b5c2ad13ea09a2d894fc77cce1919",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787565,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1031709944,
+        "RetainedBytes": 144771408,
+        "WorkingSetBytes": 241344512,
+        "Stages": {
+          "entry": 173397691432639,
+          "catalog-ready": 173397693396893,
+          "frontend-prepared": 173397693397344,
+          "prompt-rendered": 173397798904274,
+          "host-starting": 173397798963141,
+          "host-ready": 173397969178717,
+          "exit": 173401418922667
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787615.json",
+      "Sha256": "af4c079cf8850966ea2d2939bc99338d2a6924752ef8cbd83f2150519ba630a5",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787615,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1010040128,
+        "RetainedBytes": 144795392,
+        "WorkingSetBytes": 237248512,
+        "Stages": {
+          "entry": 173401493020047,
+          "catalog-ready": 173401494973300,
+          "frontend-prepared": 173401494973891,
+          "prompt-rendered": 173401600685215,
+          "host-starting": 173401600742624,
+          "host-ready": 173401757059646,
+          "exit": 173405087202715
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787658.json",
+      "Sha256": "f65b5e5ae7f4c8d4565a8a6e0a02fe2fbf09f474d8dfcb4f647f9d1fc6c03a08",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787658,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 985392872,
+        "RetainedBytes": 144738456,
+        "WorkingSetBytes": 237273088,
+        "Stages": {
+          "entry": 173405169761777,
+          "catalog-ready": 173405171793159,
+          "frontend-prepared": 173405171794081,
+          "prompt-rendered": 173405277447649,
+          "host-starting": 173405277509863,
+          "host-ready": 173405448682909,
+          "exit": 173408925649027
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787709.json",
+      "Sha256": "34d48f82ce8aec7e244fa20043828a750747f1ca680c7b6b3b46199716b1ba13",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787709,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 990228872,
+        "RetainedBytes": 144778840,
+        "WorkingSetBytes": 214446080,
+        "Stages": {
+          "entry": 173408995285176,
+          "catalog-ready": 173408997235744,
+          "frontend-prepared": 173408997236145,
+          "prompt-rendered": 173409104402214,
+          "host-starting": 173409104458069,
+          "host-ready": 173409254996857,
+          "exit": 173412608420900
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787761.json",
+      "Sha256": "80a9d69967ed4303d7bac9b631e1b37ad675697b1a8b3468c94ab2bac44696ff",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787761,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 991063104,
+        "RetainedBytes": 144786488,
+        "WorkingSetBytes": 233283584,
+        "Stages": {
+          "entry": 173412679312881,
+          "catalog-ready": 173412681378188,
+          "frontend-prepared": 173412681378598,
+          "prompt-rendered": 173412786693148,
+          "host-starting": 173412786752912,
+          "host-ready": 173412932636770,
+          "exit": 173416335479875
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787809.json",
+      "Sha256": "61c25806c5f13d7a5b0353afb01c421829246b70076b0976c7cc4a5247325d5c",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787809,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 997865768,
+        "RetainedBytes": 144808672,
+        "WorkingSetBytes": 218894336,
+        "Stages": {
+          "entry": 173416404766225,
+          "catalog-ready": 173416406566888,
+          "frontend-prepared": 173416406567259,
+          "prompt-rendered": 173416511828226,
+          "host-starting": 173416511883922,
+          "host-ready": 173416674239526,
+          "exit": 173420093514687
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787860.json",
+      "Sha256": "f678b817591756f673161673f9ac6e8a8de7e6fccc7daa62b67ce29e63b1fbb5",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787860,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1004437592,
+        "RetainedBytes": 144733008,
+        "WorkingSetBytes": 237408256,
+        "Stages": {
+          "entry": 173420168171100,
+          "catalog-ready": 173420170189307,
+          "frontend-prepared": 173420170189969,
+          "prompt-rendered": 173420275977828,
+          "host-starting": 173420276054162,
+          "host-ready": 173420434911426,
+          "exit": 173423830586309
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787912.json",
+      "Sha256": "bdfd2d365f9ec12c2d54c987defaca146a6639307b4728e7086f410fd524299a",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787912,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1004098392,
+        "RetainedBytes": 144782168,
+        "WorkingSetBytes": 237400064,
+        "Stages": {
+          "entry": 173423916264847,
+          "catalog-ready": 173423918144160,
+          "frontend-prepared": 173423918144972,
+          "prompt-rendered": 173424023692188,
+          "host-starting": 173424023748692,
+          "host-ready": 173424177106599,
+          "exit": 173427576887277
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2787961.json",
+      "Sha256": "70573ab1d6b2e2ff8af45d98b74efcbba617609077f26ef4b0bd78d55a62400f",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2787961,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1005060208,
+        "RetainedBytes": 144799616,
+        "WorkingSetBytes": 237379584,
+        "Stages": {
+          "entry": 173427656979034,
+          "catalog-ready": 173427658859859,
+          "frontend-prepared": 173427658860390,
+          "prompt-rendered": 173427764143194,
+          "host-starting": 173427764202943,
+          "host-ready": 173427932367730,
+          "exit": 173431320326750
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2788011.json",
+      "Sha256": "9f7e25dc03410aa4ebcaa491cfa767a89d151eb020625dae05281edb0bcde6de",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2788011,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1004082096,
+        "RetainedBytes": 144785192,
+        "WorkingSetBytes": 214925312,
+        "Stages": {
+          "entry": 173431405089787,
+          "catalog-ready": 173431406985592,
+          "frontend-prepared": 173431406986233,
+          "prompt-rendered": 173431512600135,
+          "host-starting": 173431512650341,
+          "host-ready": 173431681658016,
+          "exit": 173435046996629
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2788062.json",
+      "Sha256": "b0c8a1c70e7e41cf0a4e7f6dab73b9d14bfea47b6b58ce9daa7c20db620f2b61",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2788062,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1004606720,
+        "RetainedBytes": 144777592,
+        "WorkingSetBytes": 214315008,
+        "Stages": {
+          "entry": 173435122909300,
+          "catalog-ready": 173435124890146,
+          "frontend-prepared": 173435124890527,
+          "prompt-rendered": 173435230613689,
+          "host-starting": 173435230684893,
+          "host-ready": 173435393939801,
+          "exit": 173438815695640
+        }
+      }
+    },
+    {
+      "FileName": "frontend-2788112.json",
+      "Sha256": "c3060bd8e24f43fb513dd95b41a45448cfcd8b2502c297e18951c76a0bc63971",
+      "Record": {
+        "Role": "frontend",
+        "ProcessId": 2788112,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1017560080,
+        "RetainedBytes": 144821680,
+        "WorkingSetBytes": 233144320,
+        "Stages": {
+          "entry": 173438894609187,
+          "catalog-ready": 173438896580996,
+          "frontend-prepared": 173438896581817,
+          "prompt-rendered": 173439002344658,
+          "host-starting": 173439002405284,
+          "host-ready": 173439159792791,
+          "exit": 173442469693083
+        }
+      }
+    },
+    {
+      "FileName": "host-2786491.json",
+      "Sha256": "1498fcf569cb72b5fb155a7654b17507613570961ba8a9225654eb3981f079ed",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2786491,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 457332098848,
+        "RetainedBytes": 68084448,
+        "WorkingSetBytes": 395501568,
+        "Stages": {
+          "entry": 173152303291900,
+          "exit": 173360049630505
+        }
+      }
+    },
+    {
+      "FileName": "host-2787074.json",
+      "Sha256": "9c25790548798be34123ef3422518db99026278834c43632da4358d38a3bf386",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787074,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603938032,
+        "RetainedBytes": 72316232,
+        "WorkingSetBytes": 345923584,
+        "Stages": {
+          "entry": 173360366991639,
+          "exit": 173363699321591
+        }
+      }
+    },
+    {
+      "FileName": "host-2787128.json",
+      "Sha256": "59aeb3c365575b35991dc347e6684014f263b0301747f9687f1919a79b7d1d30",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787128,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603943576,
+        "RetainedBytes": 72315288,
+        "WorkingSetBytes": 344281088,
+        "Stages": {
+          "entry": 173364013882281,
+          "exit": 173367462152213
+        }
+      }
+    },
+    {
+      "FileName": "host-2787178.json",
+      "Sha256": "0c89100a7805e3ee628406c4906c61b143c76dc878dd69f34c8734e005fcbc2b",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787178,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603924664,
+        "RetainedBytes": 72297368,
+        "WorkingSetBytes": 348336128,
+        "Stages": {
+          "entry": 173367763408639,
+          "exit": 173371226077413
+        }
+      }
+    },
+    {
+      "FileName": "host-2787228.json",
+      "Sha256": "4548175cd841a9ddfdf75cbcb0ad8231f9466b8e68c466712406f1818efe0bb3",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787228,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603387576,
+        "RetainedBytes": 71753728,
+        "WorkingSetBytes": 345894912,
+        "Stages": {
+          "entry": 173371529741198,
+          "exit": 173375007246512
+        }
+      }
+    },
+    {
+      "FileName": "host-2787279.json",
+      "Sha256": "0de1689c334d9c4aea99e37d8caf1193c6908537dc4ee85dca8e40efcfebe981",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787279,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603940376,
+        "RetainedBytes": 72300184,
+        "WorkingSetBytes": 343932928,
+        "Stages": {
+          "entry": 173375308900583,
+          "exit": 173378769026996
+        }
+      }
+    },
+    {
+      "FileName": "host-2787330.json",
+      "Sha256": "d1e81d1eedc80ad30544916935f9a6c72dcb6eaebbcfb70e0e9f579c4de4ca50",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787330,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603412872,
+        "RetainedBytes": 71784592,
+        "WorkingSetBytes": 344182784,
+        "Stages": {
+          "entry": 173379068846230,
+          "exit": 173382552097467
+        }
+      }
+    },
+    {
+      "FileName": "host-2787378.json",
+      "Sha256": "6d57d7bc64aca0e88669f4171a93dd116a5f18c1cf6d538fc99b3edfbe38a22d",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787378,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603654400,
+        "RetainedBytes": 71772104,
+        "WorkingSetBytes": 345870336,
+        "Stages": {
+          "entry": 173382854708529,
+          "exit": 173386207922512
+        }
+      }
+    },
+    {
+      "FileName": "host-2787428.json",
+      "Sha256": "7fdbc26f2d9f7d71d2d020b8c467e05cb25712cb776eb7c1ec51d9eb84e42e53",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787428,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603915800,
+        "RetainedBytes": 72292160,
+        "WorkingSetBytes": 344399872,
+        "Stages": {
+          "entry": 173386508430209,
+          "exit": 173389951964551
+        }
+      }
+    },
+    {
+      "FileName": "host-2787485.json",
+      "Sha256": "b67468b5e3cf134755418eda9014f620e0814838df675d60660ca73b2bcbd597",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787485,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603947536,
+        "RetainedBytes": 72318472,
+        "WorkingSetBytes": 345944064,
+        "Stages": {
+          "entry": 173390259400309,
+          "exit": 173393709773955
+        }
+      }
+    },
+    {
+      "FileName": "host-2787537.json",
+      "Sha256": "d82b789aa239ad6aef715165ef587fa2a55d572778482cd800234c63f8195616",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787537,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603930152,
+        "RetainedBytes": 72299488,
+        "WorkingSetBytes": 342237184,
+        "Stages": {
+          "entry": 173394023082754,
+          "exit": 173397503077085
+        }
+      }
+    },
+    {
+      "FileName": "host-2787585.json",
+      "Sha256": "775705a2abeace962c3cc70111daad02335f53041a1a5ca060c112ccf390f1f2",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787585,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603889208,
+        "RetainedBytes": 72304864,
+        "WorkingSetBytes": 342298624,
+        "Stages": {
+          "entry": 173397819976421,
+          "exit": 173401309083074
+        }
+      }
+    },
+    {
+      "FileName": "host-2787636.json",
+      "Sha256": "e46f0280733159439b426457bba69a14e5adeae4eba0858c3622252cdab5ff65",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787636,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603379176,
+        "RetainedBytes": 71763560,
+        "WorkingSetBytes": 345616384,
+        "Stages": {
+          "entry": 173401621774279,
+          "exit": 173404981449366
+        }
+      }
+    },
+    {
+      "FileName": "host-2787682.json",
+      "Sha256": "352ccee32bb992e897b1027d45253269bc0b5b05206dd19e20e74166e8cab423",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787682,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603416472,
+        "RetainedBytes": 71784240,
+        "WorkingSetBytes": 345800704,
+        "Stages": {
+          "entry": 173405298045595,
+          "exit": 173408823005496
+        }
+      }
+    },
+    {
+      "FileName": "host-2787730.json",
+      "Sha256": "bfb5a5a5da99370b32f79852543fc29bcef61d8dcf6c174c8ed95ae9ca615924",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787730,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603418920,
+        "RetainedBytes": 71787408,
+        "WorkingSetBytes": 345677824,
+        "Stages": {
+          "entry": 173409125096107,
+          "exit": 173412509948553
+        }
+      }
+    },
+    {
+      "FileName": "host-2787782.json",
+      "Sha256": "9cc5cbb95a4a36e8a576b957e0b4be00e34646a9ee467801927d8e7cb6df9d01",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787782,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603927632,
+        "RetainedBytes": 72302840,
+        "WorkingSetBytes": 349347840,
+        "Stages": {
+          "entry": 173412807149018,
+          "exit": 173416231326178
+        }
+      }
+    },
+    {
+      "FileName": "host-2787830.json",
+      "Sha256": "2e9f9f0185aacebaf4ca8309095cc13d825667a244b269ac1dbe93d61f79727e",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787830,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603947584,
+        "RetainedBytes": 72326032,
+        "WorkingSetBytes": 342614016,
+        "Stages": {
+          "entry": 173416533632490,
+          "exit": 173419992156990
+        }
+      }
+    },
+    {
+      "FileName": "host-2787880.json",
+      "Sha256": "dfe565ae7e72f7dcf11c375f2e39fe95e104e08e0eade7c71912a915ef075702",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787880,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603932848,
+        "RetainedBytes": 72302536,
+        "WorkingSetBytes": 344035328,
+        "Stages": {
+          "entry": 173420296864136,
+          "exit": 173423729170332
+        }
+      }
+    },
+    {
+      "FileName": "host-2787932.json",
+      "Sha256": "f2188ddc53fc4713f5e304e4d5374c1969365c25ef2eda6f9bc16fc85870cfb5",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787932,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603940024,
+        "RetainedBytes": 72312584,
+        "WorkingSetBytes": 346095616,
+        "Stages": {
+          "entry": 173424044822265,
+          "exit": 173427478579970
+        }
+      }
+    },
+    {
+      "FileName": "host-2787981.json",
+      "Sha256": "f67aaeebc24a2827be53b9ffb473da5266c80aad1fe1ca787f67131116031a9a",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2787981,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603393944,
+        "RetainedBytes": 71773136,
+        "WorkingSetBytes": 345747456,
+        "Stages": {
+          "entry": 173427784956589,
+          "exit": 173431223759821
+        }
+      }
+    },
+    {
+      "FileName": "host-2788032.json",
+      "Sha256": "f357952f384b56af9d09a1dd64772926548150875d3a78df9a12b143339dfa63",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2788032,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603899712,
+        "RetainedBytes": 72297552,
+        "WorkingSetBytes": 346177536,
+        "Stages": {
+          "entry": 173431534083233,
+          "exit": 173434946728824
+        }
+      }
+    },
+    {
+      "FileName": "host-2788085.json",
+      "Sha256": "899d900d4909b03a04d645bb5a878ad8fe331797d4f366f0f372792821df1f8d",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2788085,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603423960,
+        "RetainedBytes": 71789488,
+        "WorkingSetBytes": 345735168,
+        "Stages": {
+          "entry": 173435253997308,
+          "exit": 173438715141681
+        }
+      }
+    },
+    {
+      "FileName": "host-2788134.json",
+      "Sha256": "e607605d6ef6299ab1e08c35a4486f4e576dfd8801ac38d02ca430e194f1e98d",
+      "Record": {
+        "Role": "host",
+        "ProcessId": 2788134,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 603395616,
+        "RetainedBytes": 71774272,
+        "WorkingSetBytes": 348065792,
+        "Stages": {
+          "entry": 173439023637759,
+          "exit": 173442369945052
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2786481.json",
+      "Sha256": "525c9e409509f57327c6e94757ba0ae0848acfa1a2fcf17d43f45a2e29ba7881",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2786481,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1036064,
+        "RetainedBytes": 494904,
+        "WorkingSetBytes": 22102016,
+        "Stages": {
+          "entry": 173152287672485,
+          "exit": 173360163115058
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787064.json",
+      "Sha256": "a14c215ae6a6305f8f403b5c6604acead93b22c3f999021b74c227652108155b",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787064,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1022424,
+        "RetainedBytes": 513000,
+        "WorkingSetBytes": 21843968,
+        "Stages": {
+          "entry": 173360350874609,
+          "exit": 173363801872476
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787115.json",
+      "Sha256": "69311a0d2cbe0ab913ea70736a3e15ec64db4a2b90008df2c0a43c03e99106a8",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787115,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1018688,
+        "RetainedBytes": 508880,
+        "WorkingSetBytes": 22007808,
+        "Stages": {
+          "entry": 173363997470660,
+          "exit": 173367557054817
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787166.json",
+      "Sha256": "676cb3bdfa69a1a84b11e479c4c1c6149e75274e200d40b6bdaa4c0960814c1d",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787166,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1021584,
+        "RetainedBytes": 510912,
+        "WorkingSetBytes": 20873216,
+        "Stages": {
+          "entry": 173367747163564,
+          "exit": 173371326013029
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787217.json",
+      "Sha256": "41924fbe2bb004d566142508c008c1078d8755f80873bc578677161049c9e888",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787217,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1023192,
+        "RetainedBytes": 512624,
+        "WorkingSetBytes": 22589440,
+        "Stages": {
+          "entry": 173371513999742,
+          "exit": 173375107777420
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787268.json",
+      "Sha256": "1ca167bf0d0c4893a28ee78841ecc021fb60a07f4dcec67e0e90fb07ca0ea056",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787268,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1023304,
+        "RetainedBytes": 512408,
+        "WorkingSetBytes": 22257664,
+        "Stages": {
+          "entry": 173375293396839,
+          "exit": 173378866707753
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787320.json",
+      "Sha256": "52c99726e14822bae0169073133ee95c2fc830367dda0f202d34328f7f50647e",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787320,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1022144,
+        "RetainedBytes": 510912,
+        "WorkingSetBytes": 22155264,
+        "Stages": {
+          "entry": 173379053139419,
+          "exit": 173382650742467
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787367.json",
+      "Sha256": "146558ec13723159e7ce9707fc08708e69bf90bc574daf9428bf7c3563ea0720",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787367,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1019232,
+        "RetainedBytes": 508880,
+        "WorkingSetBytes": 21946368,
+        "Stages": {
+          "entry": 173382838445280,
+          "exit": 173386309093772
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787417.json",
+      "Sha256": "09e42b37ee9bf57c416c465ba9baaea495ddc9ba441e7bed8fce6f3698b9d2bd",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787417,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1019024,
+        "RetainedBytes": 509568,
+        "WorkingSetBytes": 21995520,
+        "Stages": {
+          "entry": 173386492309941,
+          "exit": 173390051481968
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787474.json",
+      "Sha256": "9f6a81adefae22d00b07d9a382ca83b55a4f518b724678c94723842c4be29f2f",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787474,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1021176,
+        "RetainedBytes": 510376,
+        "WorkingSetBytes": 21909504,
+        "Stages": {
+          "entry": 173390242898468,
+          "exit": 173393807815322
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787525.json",
+      "Sha256": "a4573ed337ba0bbf469a9e962885e09027f679fe7dfc6b30e246f39a28c33691",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787525,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1020656,
+        "RetainedBytes": 510224,
+        "WorkingSetBytes": 22319104,
+        "Stages": {
+          "entry": 173394007196171,
+          "exit": 173397611213868
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787575.json",
+      "Sha256": "d273e5724598566284641ac7f2b6b48841975e1a9fe44588e2b881dd9bdb4a0e",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787575,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1019088,
+        "RetainedBytes": 508664,
+        "WorkingSetBytes": 21946368,
+        "Stages": {
+          "entry": 173397804197011,
+          "exit": 173401414995766
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787626.json",
+      "Sha256": "62215a7c7ad083f64c6b6d0534882bbaa86091c0e513a5f5b49b0c61cc75e888",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787626,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1022384,
+        "RetainedBytes": 510912,
+        "WorkingSetBytes": 21942272,
+        "Stages": {
+          "entry": 173401605888757,
+          "exit": 173405083112974
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787671.json",
+      "Sha256": "e5af9bda11cd022574a65c3ce6097de78cb93223990de7677ac8dbf512857d31",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787671,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 2907320,
+        "RetainedBytes": 520704,
+        "WorkingSetBytes": 24018944,
+        "Stages": {
+          "entry": 173405282298056,
+          "exit": 173408921542149
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787720.json",
+      "Sha256": "4c9a4df91915ab73c5f66def0cc65e3f13891588f5f39f4565db8412c13f52fd",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787720,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 2907536,
+        "RetainedBytes": 520704,
+        "WorkingSetBytes": 24092672,
+        "Stages": {
+          "entry": 173409109640643,
+          "exit": 173412604249855
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787771.json",
+      "Sha256": "a1914dfd8cd8342bf5fe87beee770ae93767aa1f5f6451312825f7a4ba0bbb50",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787771,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1019040,
+        "RetainedBytes": 508728,
+        "WorkingSetBytes": 22233088,
+        "Stages": {
+          "entry": 173412791643690,
+          "exit": 173416331496819
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787819.json",
+      "Sha256": "ecbf576e6ddf9fdf0084b2791eab442d21d6a6e241cc88a31984d2dc4d833312",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787819,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 2910488,
+        "RetainedBytes": 523760,
+        "WorkingSetBytes": 23953408,
+        "Stages": {
+          "entry": 173416517241087,
+          "exit": 173420089170403
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787870.json",
+      "Sha256": "e06878af2959458c20c8db6e844d31b2bea1bfb4e6381c9e41f3a883326f8d69",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787870,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1019008,
+        "RetainedBytes": 509568,
+        "WorkingSetBytes": 22306816,
+        "Stages": {
+          "entry": 173420281512510,
+          "exit": 173423826742542
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787922.json",
+      "Sha256": "2e6e9d660f16bfec5f791c323cc7d235389d3087db9c4d7531289d9782366994",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787922,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1019032,
+        "RetainedBytes": 509416,
+        "WorkingSetBytes": 21987328,
+        "Stages": {
+          "entry": 173424029089375,
+          "exit": 173427573325385
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2787971.json",
+      "Sha256": "acdca9fe977d1974b545dbbbdc34721f828c33b6cee4f24812c991f55fcb7b10",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2787971,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1021912,
+        "RetainedBytes": 511920,
+        "WorkingSetBytes": 21917696,
+        "Stages": {
+          "entry": 173427769079674,
+          "exit": 173431316833152
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2788022.json",
+      "Sha256": "39d1639260ff2de61e149832a59705c45ceec917d1bea76e73d722b5e4d1f3f8",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2788022,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1018944,
+        "RetainedBytes": 509416,
+        "WorkingSetBytes": 22188032,
+        "Stages": {
+          "entry": 173431518033831,
+          "exit": 173435044076206
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2788073.json",
+      "Sha256": "ccd9ae2f93485d3a996a6cad2ed325c4fa352636fc71a086e236e7cfa26925eb",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2788073,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1027096,
+        "RetainedBytes": 515992,
+        "WorkingSetBytes": 21946368,
+        "Stages": {
+          "entry": 173435236647174,
+          "exit": 173438811887159
+        }
+      }
+    },
+    {
+      "FileName": "supervisor-2788122.json",
+      "Sha256": "7947a79ef599c9d9766cce31bb2d4a4eeaa1cfa059d2b74a4536dda8c29a99d1",
+      "Record": {
+        "Role": "supervisor",
+        "ProcessId": 2788122,
+        "Runtime": ".NET 10.0.11",
+        "AllocatedBytes": 1019176,
+        "RetainedBytes": 508664,
+        "WorkingSetBytes": 22171648,
+        "Stages": {
+          "entry": 173439007741338,
+          "exit": 173442466903219
+        }
+      }
+    }
+  ]
+}

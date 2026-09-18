@@ -19,6 +19,11 @@ public sealed record CompiledCell(AssemblyBuilder Assembly, Type CellType, Metho
     public MethodInfo? Implementation { get; init; }
 
     /// <summary>
+    /// Retains argument declarations so execution can materialize values after entering the user-code phase.
+    /// </summary>
+    internal IReadOnlyList<ArgumentDeclaration> InvocationArguments { get; init; } = [];
+
+    /// <summary>
     /// Owns any metadata-emitted body assemblies retained by the dynamic entry point.
     /// </summary>
     internal IReadOnlyList<DefinitionAssembly> Helpers { get; init; } = [];

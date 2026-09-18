@@ -14,6 +14,14 @@ namespace IlRepl.Protocol;
 public partial interface IReplHost
 {
     /// <summary>
+    /// Requests interruption without waiting for the execution gate.
+    /// </summary>
+    /// <param name="identity">The operation the frontend intends to interrupt.</param>
+    /// <param name="cancellationToken">Cancels delivery of the control request.</param>
+    /// <returns>Whether the matching operation was still running.</returns>
+    Task<bool> InterruptAsync(string identity, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Inspects a prepared implementation in an isolated native compilation worker.
     /// </summary>
     /// <param name="identity">The one-use native inspection ticket.</param>

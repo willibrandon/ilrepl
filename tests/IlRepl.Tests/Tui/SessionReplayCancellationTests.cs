@@ -129,7 +129,8 @@ public sealed class SessionReplayCancellationTests
         Assert.AreSequenceEqual(source.Entries.SelectMany(entry => entry.Source),
             captured.Document.Entries.SelectMany(entry => entry.Source));
         Assert.AreSequenceEqual(source.Cells.Select(cell => cell.Identity), captured.Document.Cells.Select(cell => cell.Identity));
-        Assert.AreSequenceEqual(["unrun", "unrun"], captured.Document.Cells.Select(cell => cell.State));
+        Assert.AreSequenceEqual(["interrupted", "unrun"], captured.Document.Cells.Select(cell => cell.State));
+        Assert.AreSequenceEqual(source.Cells[0].Source, captured.Document.Cells[0].Source);
         Assert.AreEqual(1, Assert.ContainsSingle(captured.Document.Interruptions).Number);
         Assert.AreSequenceEqual([".session run"], captured.Document.Interruptions[0].Source);
         Assert.AreEqual("started", await File.ReadAllTextAsync(files.MarkerPath, token));

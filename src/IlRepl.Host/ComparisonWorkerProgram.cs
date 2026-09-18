@@ -10,6 +10,11 @@ namespace IlRepl.Host;
 /// </summary>
 internal static class ComparisonWorkerProgram
 {
+    /// <summary>
+    /// Executes one prepared comparison in an isolated runtime with acknowledged process ownership.
+    /// </summary>
+    /// <param name="arguments">The prepared request, result, assembly, and ownership paths.</param>
+    /// <returns>The conventional worker exit code.</returns>
     internal static async Task<int> RunAsync(string[] arguments)
     {
         if (arguments.Length != 9)
@@ -17,7 +22,8 @@ internal static class ComparisonWorkerProgram
             return 64;
         }
 
-        ComparisonProcessGroup.PrepareWorker();
+        OwnedProcessGroup.PrepareWorker();
+        WorkerOwnerWatchdog.Start();
         await File.WriteAllTextAsync(arguments[6], "prepared").ConfigureAwait(false);
         while (!File.Exists(arguments[7]))
         {

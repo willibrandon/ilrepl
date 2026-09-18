@@ -80,3 +80,47 @@ boundary below. Coverage percentages do not establish that every branch or combi
 Fresh comparison workers intentionally receive the captured environment. Coverage profiler settings
 are not a reason to change that environment. Consequently, collection does not cover every worker-only
 branch even when process tests execute and assert that branch.
+
+## Export conformance
+
+`ControlFlowExamples` is also the export corpus. Each accepted example runs through a real host, an
+independently authored ILAsm image, `.save`, assembled `.il`, and an ILDAsm-to-ILAsm round trip. Both
+`.il` renderers run for each example, with a committed method copy selecting the Cecil renderer.
+`ExportConformanceTests` adds atomic publication, input isolation, and deliberate corruption controls.
+
+Run the export checks with:
+
+```sh
+dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj --filter TestCategory=ExportConformance
+```
+
+The independent metadata reader compares authored signatures, constraints, layouts, attributes,
+accessors, overrides, complete assembly binding identities, local signatures, instructions, branch
+destinations, and exception boundaries.
+Tokens, instruction offsets, timestamps, and MVIDs do not identify semantic differences. ILDAsm drops
+an empty local declaration, so its initialization flag is compared only when locals or `localloc`
+make it meaningful. Authored names and required or optional modifiers remain exact.
+
+Every execution starts a fresh process and requests an 8 MiB execution-thread stack. Deterministic
+and tiered profiles explicitly set tiering, tiered PGO, Quick JIT, loop Quick JIT, and ReadyToRun before
+runtime startup. The runner scrubs inherited `DOTNET_*` and `COMPlus_*` settings, supplies the complete
+child environment, fixes cultures and input EOF, and restores the same working directory before each
+artifact. Nonempty-input checks also call unchanged independent and exported images through the
+existing comparison worker, covering raw and managed readers, Unicode, mixed line endings, and EOF.
+These settings apply only to fixture children.
+
+Failed fixtures retain source, generated images, tool package identities, requests, process outputs,
+and observations below the test executable's `artifacts/export-conformance` directory. CI uploads
+these records alongside TRX results. Missing tools, deadline expiration, unexpected verifier failures,
+or differences in exact expected verification codes fail the check.
+
+The separate browser workflow generates its test-only image bundle from this same corpus and runs it
+in fresh Mono WebAssembly workers. Browser tests remain outside `dotnet test`.
+
+Native AOT validation runs the interruption, explicit replacement, retained-source, and offline-save
+checks against both published files and the extracted runtime package. Unix checks also replace the
+lifetime supervisor while an invocation runs and verify that the host and its static values survive. Matching Alpine containers run
+musl publication and validation with a musl .NET host. Successful validation writes
+`artifacts/native-aot/<rid>/smoke-results.json`, including package and executable hashes and the actual
+runtime identity. `--build-only` deliberately produces no distributable package; it is useful when
+cross-publishing on a machine that cannot run the target runtime.

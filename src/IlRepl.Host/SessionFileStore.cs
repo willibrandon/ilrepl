@@ -3,7 +3,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Host;
 
 /// <summary>
-/// Stores desktop session documents atomically and resolves their verified dependency images.
+/// Stores local session documents atomically and resolves their verified dependency images.
 /// </summary>
 public sealed partial class SessionFileStore
 {
@@ -24,7 +24,7 @@ public sealed partial class SessionFileStore
     /// </summary>
     /// <param name="path">The requested session file.</param>
     /// <param name="cancellationToken">Cancels file reads.</param>
-    /// <returns>A source document with verified available images and absolute desktop locators.</returns>
+    /// <returns>A source document with verified available images and absolute local locators.</returns>
     public async Task<SessionDocument> ReadAsync(string path, CancellationToken cancellationToken)
     {
         var fullPath = Path.GetFullPath(path);
@@ -90,51 +90,21 @@ public sealed partial class SessionFileStore
     /// <param name="embed">Whether to include all available non-framework images.</param>
     /// <param name="cancellationToken">Cancels preparation and writing before the atomic replacement.</param>
     /// <returns>The absolute associated session path.</returns>
-    public async Task<string> WriteAsync(string path, SessionDocument document, bool embed, CancellationToken cancellationToken)
-    {
-        SessionCodec.Validate(document);
-        var fullPath = Path.GetFullPath(path);
-        var directory = Path.GetDirectoryName(fullPath)!;
-        var baselines = document.References.Where(reference => reference.Origin == "baseline")
-            .SelectMany(reference => reference.Assets).Select(asset => asset.Hash).ToHashSet(StringComparer.Ordinal);
-        var portable = document with
-        {
-            References = [.. document.References.Select(reference => PortableLocators(reference, directory))],
-            Assets = embed ? document.Assets : [.. document.Assets.Where(asset => baselines.Contains(asset.Hash))],
-        };
-        var bytes = SessionCodec.Write(portable);
-        Directory.CreateDirectory(_cacheDirectory);
-        foreach (var reference in document.References.Where(reference => reference.Origin is "project" or "assembly"))
-        {
-            await RememberLocatorsAsync(reference, cancellationToken).ConfigureAwait(false);
-        }
-        foreach (var asset in document.Assets)
-        {
-            await AtomicWriteAsync(Path.Combine(_cacheDirectory, asset.Hash), asset.Image, cancellationToken).ConfigureAwait(false);
-        }
-
-        try
-        {
-            Directory.CreateDirectory(directory);
-            await AtomicWriteAsync(fullPath, bytes, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            throw new IOException($"could not save session '{fullPath}': {exception.Message}", exception);
-        }
-        return fullPath;
-    }
+    public Task<string> WriteAsync(string path, SessionDocument document, bool embed, CancellationToken cancellationToken)
+        => SessionSnapshotStore.WriteAsync(path, document, embed, _cacheDirectory, cancellationToken);
 
     private static async Task<byte[]> ReadBoundedAsync(string path, CancellationToken cancellationToken)
     {
         await using var input = new FileStream(path, FileMode.Open, FileAccess.Read,
             FileShare.Read | FileShare.Delete, 8192, useAsync: true);
-        if (input.Length > SessionCodec.FileLimit)
+        var length = input.Length;
+        if (length > SessionCodec.FileLimit)
         {
             throw new InvalidDataException("the session or dependency exceeds the 64 MiB file limit");
         }
 
-        using var output = new MemoryStream();
+        cancellationToken.ThrowIfCancellationRequested();
+        using var output = new MemoryStream((int)length);
         var buffer = new byte[8192];
         int read;
         while ((read = await input.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) != 0)
@@ -148,36 +118,5 @@ public sealed partial class SessionFileStore
         }
 
         return output.ToArray();
-    }
-
-    private static async Task AtomicWriteAsync(string path, byte[] bytes, CancellationToken cancellationToken)
-    {
-        var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                8192, FileOptions.Asynchronous | FileOptions.WriteThrough))
-            {
-                await output.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
-                await output.FlushAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            cancellationToken.ThrowIfCancellationRequested();
-            if (OperatingSystem.IsWindows())
-            {
-                ReplaceWindowsFile(temporary, path);
-            }
-            else
-            {
-                File.Move(temporary, path, overwrite: true);
-            }
-        }
-        finally
-        {
-            if (File.Exists(temporary))
-            {
-                File.Delete(temporary);
-            }
-        }
     }
 }

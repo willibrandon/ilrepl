@@ -187,13 +187,13 @@ public sealed class SessionRecallTests
     }
 
     /// <summary>
-    /// Unsupported dependency operations name the desktop workflow that can prepare a portable file for the demo.
+    /// Unsupported dependency operations name the terminal workflow that can prepare a portable file for the demo.
     /// </summary>
-    /// <param name="operation">The desktop dependency operation requested without host tooling.</param>
+    /// <param name="operation">The dependency operation requested without host tooling.</param>
     [TestMethod]
     [DataRow(SessionOperation.Load)]
     [DataRow(SessionOperation.Restore)]
-    public async Task DependencyAction_WithoutHostNamesDesktopWorkflow(SessionOperation operation)
+    public async Task DependencyAction_WithoutHostNamesTerminalWorkflow(SessionOperation operation)
     {
         await using var engine = new InProcessEngine();
 
@@ -202,7 +202,7 @@ public sealed class SessionRecallTests
             Action = new SessionAction { Operation = operation },
         }, TestContext.CancellationToken));
 
-        Assert.Contains("desktop ilrepl", exception.Message);
+        Assert.Contains("terminal ilrepl", exception.Message);
         Assert.Contains(".session save --embed", exception.Message);
         Assert.Contains("open the file in the demo", exception.Message);
         Assert.DoesNotContain("Open and Download controls", exception.Message);

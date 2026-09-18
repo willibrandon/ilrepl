@@ -44,6 +44,16 @@ internal sealed record EditingSeed(
     internal IReadOnlyList<EditingMethodEdit> Edits { get; init; } = [];
 
     /// <summary>
+    /// The assembly observation version captured with this immutable source snapshot.
+    /// </summary>
+    internal long AssemblyVersion { get; init; }
+
+    /// <summary>
+    /// Creates a separately disposable lease without copying accepted source or live runtime objects.
+    /// </summary>
+    internal EditingSeed Lease() => this with { Snapshot = Snapshot.Lease() };
+
+    /// <summary>
     /// Releases the captured assemblies when the editing view is discarded.
     /// </summary>
     public void Dispose() => Snapshot.Dispose();

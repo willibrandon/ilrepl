@@ -77,17 +77,25 @@
     let preparing = null;
     let preparationTimer = null;
     const queuedInput = [];
+    const pendingInput = new Map();
+    let inputSequence = 0;
     let checkpoint = null;
     let preferences = 'true,false';
     let nextGeneration = 0;
     const workspace = createWorkspaceControls({
       getWorker: () => worker,
+      getGeneration: () => generation,
       getCheckpoint: () => checkpoint,
-      replace: (source, path, run) => startWorker(source, path, run, run == null),
+      replace: (source, path, run, announceOpen = run == null) => startWorker(source, path, run, announceOpen),
       setStatus,
       focus: () => term.focus(),
     });
     let generation = 0;
+    window.ilreplGeneration = generation;
+    Object.defineProperty(window, 'ilreplWorkspaceState', { configurable: true, get: () => ({
+      generation, pendingSubmission: checkpoint?.pendingSubmission || 0,
+      pendingInput: pendingInput.size, replacing: preparing !== null, restartScheduled: restartTimer !== null,
+    }) });
     let lastMessageAt = 0;
     let readyAt = 0;
     let restartTimer = null;
@@ -104,12 +112,24 @@
       helpQueue.length = 0;
     };
 
-    const sendResize = () => { if (worker) worker.postMessage({ type: 'resize', cols: term.cols, rows: term.rows }); };
+    const sendResize = () => {
+      if (worker) worker.postMessage({ type: 'resize', generation, cols: term.cols, rows: term.rows });
+    };
 
     const stopWorker = () => {
       if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
       comparisons.stop();
       resetHelp();
+      if (preparationTimer) { clearTimeout(preparationTimer); preparationTimer = null; }
+      if (preparing) {
+        workspace.stop(preparing);
+        preparing.onmessage = null;
+        preparing.onerror = null;
+        preparing.terminate();
+        preparing = null;
+      }
+      queuedInput.unshift(...pendingInput.values());
+      pendingInput.clear();
       if (worker) {
         workspace.stop(worker);
         worker.onmessage = null;
@@ -119,6 +139,8 @@
       }
       window.ilreplReady = false;
       readyAt = 0;
+      generation = ++nextGeneration;
+      window.ilreplGeneration = generation;
     };
 
     window.addEventListener('pagehide', (event) => {
@@ -135,8 +157,14 @@
       const document = checkpoint.document;
       document.interruptions ||= [];
       const identity = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
-      document.interruptions.push({ identity, number: checkpoint.pendingSubmission,
-        source: checkpoint.pendingSource || [] });
+      const number = checkpoint.pendingSubmission;
+      const source = checkpoint.pendingSource || [];
+      document.interruptions.push({ identity, number, source });
+      const existing = document.cells.find(cell => cell.number === number);
+      if (existing) existing.state = 'interrupted';
+      else document.cells.push({ identity, number, kind: 'cell', state: 'interrupted',
+        source: [...document.entries.filter(entry => entry.number === number).flatMap(entry => entry.source), ...source],
+        inputs: [], output: [] });
       checkpoint = { ...checkpoint, document, dirty: true, pendingSubmission: 0 };
     };
 
@@ -154,17 +182,29 @@
       }
     };
 
+    const retainedEditor = (editor, pendingDraft = []) => {
+      if (!pendingDraft.length) return editor;
+      const text = editor.lines.join('\n');
+      const offset = pendingDraft.join('\n').length + (text.length ? 1 : 0);
+      return { ...editor, lines: [...pendingDraft, ...(text.length ? editor.lines : [])],
+        caret: offset + editor.caret, anchor: offset + editor.anchor };
+    };
+
     const startWorker = (source = checkpoint ? JSON.stringify(checkpoint.document) : '',
       path = checkpoint?.path || null, run = null, announceOpen = false) => {
-      if (preparing) preparing.terminate();
-      if (preparationTimer) clearTimeout(preparationTimer);
+      // A replacement owns the whole transition. Repeated Restart and watchdog requests coalesce.
+      if (preparing) return;
+      stopWorker();
       const candidate = new Worker(baseUrl + 'worker.js', { type: 'module' });
       preparing = candidate;
-      const own = ++nextGeneration;
+      const own = generation;
+      inputSequence = 0;
       let candidateCheckpoint = null;
       let retainedDocument = null;
       const assets = new Map();
       const retainCheckpoint = msg => {
+        // The execution checkpoint retains the submitted source before invoking it. Its Enter must not be replayed.
+        if (msg.pendingSubmission && msg.submittedInputSequence) pendingInput.delete(msg.submittedInputSequence);
         const document = JSON.parse(msg.document);
         for (const asset of document.assets) assets.set(asset.hash, asset);
         document.assets = msg.assetHashes.map(hash => assets.get(hash));
@@ -172,37 +212,35 @@
         const cells = new Map((retainedDocument?.cells || []).map(cell => [cell.number, cell]));
         for (const cell of document.cells) cells.set(cell.number, cell);
         document.cells = msg.cellNumbers.map(number => cells.get(number));
+        const pendingDraft = msg.pendingSubmission ? [...msg.pendingSource, ...msg.pendingInput] : [];
+        if (pendingDraft.length) document.editor = retainedEditor(msg.editor, pendingDraft);
         retainedDocument = document;
         return { document, path: msg.path, dirty: msg.dirty, preferences: msg.preferences,
-          pendingSubmission: msg.pendingSubmission, pendingSource: msg.pendingSource };
+          pendingSubmission: msg.pendingSubmission, pendingSource: msg.pendingSource, pendingDraft };
       };
       const output = [];
       const flushQueuedInput = () => {
-        for (const input of queuedInput.splice(0)) send(input.text, input.binary);
+        for (const input of queuedInput.splice(0)) send(input.text, input.binary, true);
       };
       const rejectCandidate = detail => {
         if (preparing !== candidate) return;
-        clearTimeout(preparationTimer);
-        preparationTimer = null;
-        preparing = null;
-        candidate.terminate();
+        stopWorker();
         workspace.error(detail);
-        setStatus(worker ? 'Ready' : 'Failed');
-        flushQueuedInput();
+        setStatus('Failed');
       };
       preparationTimer = setTimeout(() => rejectCandidate(
         'Opening the session timed out; try again or use Restart.'), 45_000);
       lastMessageAt = Date.now();
       setStatus('Loading');
-      candidate.postMessage({ type: 'workspace-init', document: source, path, preferences, announceOpen });
-      candidate.postMessage({ type: 'resize', cols: term.cols, rows: term.rows });
+      candidate.postMessage({ type: 'workspace-init', generation: own, document: source, path, preferences, announceOpen });
+      candidate.postMessage({ type: 'resize', generation: own, cols: term.cols, rows: term.rows });
 
       candidate.onmessage = (e) => {
         const incoming = e.data;
         if (preparing === candidate) {
           if (incoming.type === 'workspace-checkpoint') {
             candidateCheckpoint = retainCheckpoint(incoming);
-            candidate.postMessage({ type: 'workspace-ack', identity: incoming.identity });
+            candidate.postMessage({ type: 'workspace-ack', generation: own, identity: incoming.identity });
             return;
           }
           if (incoming.type === 'output') { output.push(incoming.data); return; }
@@ -213,7 +251,6 @@
           if (incoming.type !== 'ready') return;
           clearTimeout(preparationTimer);
           preparationTimer = null;
-          stopWorker();
           preparing = null;
           worker = candidate;
           generation = own;
@@ -228,11 +265,19 @@
         if (msg.type === 'workspace-checkpoint') {
           checkpoint = retainCheckpoint(msg);
           preferences = checkpoint.preferences;
-          worker.postMessage({ type: 'workspace-ack', identity: msg.identity });
+          worker.postMessage({ type: 'workspace-ack', generation: own, identity: msg.identity });
+        } else if (msg.type === 'input-applied') {
+          if (msg.generation !== own) return;
+          pendingInput.delete(msg.sequence);
+          if (checkpoint) {
+            const editor = retainedEditor(JSON.parse(msg.editor), checkpoint.pendingDraft);
+            const changed = checkpoint.document.editor.lines.join('\n') !== editor.lines.join('\n');
+            checkpoint = { ...checkpoint, document: { ...checkpoint.document, editor }, dirty: checkpoint.dirty || changed };
+          }
         } else if (msg.type === 'workspace-editor') {
           if (checkpoint) {
             const document = checkpoint.document;
-            const editor = JSON.parse(msg.editor);
+            const editor = retainedEditor(JSON.parse(msg.editor), checkpoint.pendingDraft);
             const changed = document.editor.lines.join('\n') !== editor.lines.join('\n');
             document.editor = editor;
             checkpoint = { ...checkpoint, document, dirty: checkpoint.dirty || changed };
@@ -274,7 +319,9 @@
             const selected = run;
             run = null;
             workspace.running();
-            workspace.request('run', selected).then(workspace.completed, workspace.error);
+            workspace.request('run', selected).then(
+              () => { if (generation === own) workspace.completed(); },
+              error => { if (generation === own) workspace.error(error); });
           }
         } else if (msg.type === 'exited') {
           // Quit starts a fresh worker, dropping all previous runtime state and source.
@@ -318,13 +365,12 @@
       });
     }
 
-    const send = (text, binary = false) => {
-      if (preparing) {
+    const send = (text, binary = false, replay = false) => {
+      if (preparing || !worker) {
         queuedInput.push({ text, binary });
         return;
       }
-      if (!worker) return;
-      if (helpPending) {
+      if (helpPending && !replay) {
         helpQueue.push({ text, binary });
         return;
       }
@@ -336,8 +382,17 @@
         helpPending = true;
       }
       documentationUrl = null;
-      const data = binary ? text : String.fromCharCode(...new TextEncoder().encode(text));
-      worker.postMessage({ type: 'input', data: btoa(data) });
+      let data = text;
+      if (!binary) {
+        const bytes = new TextEncoder().encode(text);
+        data = '';
+        for (let offset = 0; offset < bytes.length; offset += 32_768) {
+          data += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
+        }
+      }
+      const sequence = ++inputSequence;
+      pendingInput.set(sequence, { text, binary });
+      worker.postMessage({ type: 'input', generation, sequence, replay, data: btoa(data) });
     };
     term.onData((text) => send(text));
     term.onBinary((data) => send(data, true));

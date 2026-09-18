@@ -11,8 +11,10 @@ public sealed class CompletionRequester
     private readonly CaretClassifier _classifier;
     private readonly List<PendingCompletion> _owned = [];
     private PendingCompletion? _pending;
+    private CompletionRequestKey? _queued;
     private CompletionRequestKey? _current;
     private CompletionRequestKey? _site;
+    private CompletionAcceptance? _acceptance;
     private long _generation;
     private long _revision = -1;
     private long _assemblyVersion = -1;
@@ -36,7 +38,12 @@ public sealed class CompletionRequester
     /// <summary>
     /// Whether the current query or its next page is still pending.
     /// </summary>
-    public bool IsPending => _pending is not null;
+    public bool IsPending => _pending is not null || _queued is not null;
+
+    /// <summary>
+    /// Whether a user selection is awaiting a current bound reply before its edit can be applied.
+    /// </summary>
+    internal bool HasPendingAcceptance => _acceptance is not null;
 
     /// <summary>
     /// The engine's current semantic revision, also captured when input is returned to the editor.
@@ -46,7 +53,7 @@ public sealed class CompletionRequester
     /// <summary>
     /// The current pending query, including a next-page cursor when applicable.
     /// </summary>
-    public CompletionRequestKey? PendingKey => _pending?.Key;
+    public CompletionRequestKey? PendingKey => _queued ?? _pending?.Key;
 
     /// <summary>
     /// The last successfully answered local query, excluding failed and cancelled requests.
@@ -66,7 +73,7 @@ public sealed class CompletionRequester
     /// <param name="state">The prompt.</param>
     /// <param name="snapshot">The retained rows.</param>
     /// <returns>Whether every local query component is still current.</returns>
-    public bool Matches(PromptState state, CompletionSnapshot snapshot) => !_stopped && !_watchFailed && !state.Busy
+    public bool Matches(PromptState state, CompletionSnapshot snapshot) => !_stopped && !_watchFailed
         && snapshot.Key.SameQuery(CurrentKey(state)) && snapshot.Reply.Revision == _engine.Status.Revision
         && snapshot.Reply.AssemblyVersion == _engine.AssemblyVersion;
 
@@ -83,6 +90,12 @@ public sealed class CompletionRequester
             return;
         }
 
+        if (_watchFailed && _assemblyVersion != _engine.AssemblyVersion)
+        {
+            _watchFailed = false;
+            _watch = null;
+        }
+
         _watch ??= WatchAssembliesAsync(state);
         if (_watchFailed)
         {
@@ -91,11 +104,8 @@ public sealed class CompletionRequester
             return;
         }
 
-        if (state.Busy)
-        {
-            Cancel(state);
-            return;
-        }
+        if (_acceptance is { } acceptance && (!acceptance.Matches(CurrentKey(state)) || state.PaletteDismissed))
+            _acceptance = null;
 
         var revision = _engine.Status.Revision;
         var assemblyVersion = _engine.AssemblyVersion;
@@ -104,7 +114,7 @@ public sealed class CompletionRequester
         if (revisionChanged || assemblyChanged)
         {
             var retained = !revisionChanged && _assemblyVersion >= 0 ? state.PendingDisplay ?? state.Completions : null;
-            Cancel(state);
+            CancelCore(state, retainAcceptance: !revisionChanged);
             state.PendingDisplay = retained;
             state.Anchors.Clear();
             _revision = revision;
@@ -151,6 +161,11 @@ public sealed class CompletionRequester
 
         if (PendingKey?.SameQuery(key) == true)
         {
+            if (_queued is { } queued && _owned.All(work => work.Task.IsCompleted))
+            {
+                Start(state, queued);
+            }
+
             if (state.Completions is null)
             {
                 state.Palette = PaletteMode.Requested;
@@ -198,6 +213,31 @@ public sealed class CompletionRequester
     }
 
     /// <summary>
+    /// Rebinds an explicitly selected visible operand when only the assembly catalog changed before its key arrived.
+    /// </summary>
+    internal void QueueAcceptance(PromptState state, CompletionItem item)
+    {
+        var displayed = state.Completions ?? state.PendingDisplay;
+        if (displayed is null || !CanRebind(state, displayed, item)) return;
+        var current = CurrentKey(state);
+        _acceptance = new CompletionAcceptance(current, item);
+        Refresh(state);
+        state.Invalidate?.Invoke();
+    }
+
+    /// <summary>
+    /// Allows a displayed candidate to be requested again only while its complete editing context remains unchanged.
+    /// </summary>
+    internal bool CanRebind(PromptState state, CompletionSnapshot snapshot, CompletionItem item) =>
+        !state.PaletteDismissed && snapshot.Reply.Items.Contains(item)
+        && new CompletionAcceptance(snapshot.Key, item).Matches(CurrentKey(state));
+
+    /// <summary>
+    /// Withdraws an earlier acceptance key when the user navigates to another palette selection.
+    /// </summary>
+    internal void CancelAcceptance() => _acceptance = null;
+
+    /// <summary>
     /// Schedules the next page without cancelling an identical page already in flight.
     /// </summary>
     /// <param name="state">The prompt.</param>
@@ -223,7 +263,7 @@ public sealed class CompletionRequester
         }
 
         _pending = null;
-        if (!result.Key.SameQuery(CurrentKey(state)) || state.Busy)
+        if (!result.Key.SameQuery(CurrentKey(state)))
         {
             LastAnswered = null;
             return;
@@ -231,6 +271,7 @@ public sealed class CompletionRequester
 
         if (result.Cancelled || result.Faulted)
         {
+            _acceptance = null;
             LastAnswered = null;
             state.PendingDisplay = null;
             state.Completions = null;
@@ -248,10 +289,22 @@ public sealed class CompletionRequester
             : result.Key.Cursor is null ? new CompletionSnapshot(result.Key, reply) : state.Completions?.Append(reply);
         if (snapshot is null)
         {
-            Cancel(state);
+            CancelCore(state, retainAcceptance: true);
             state.Palette = PaletteMode.Closed;
             state.Invalidate?.Invoke();
             return;
+        }
+
+        if (state.PendingDisplay is { } display && display.Visible() is { Count: > 0 } visible)
+        {
+            var selected = visible[Math.Clamp(state.SelectedIndex, 0, visible.Count - 1)];
+            var selection = new CompletionAcceptance(display.Key, selected);
+            if (selection.Matches(CurrentKey(state)))
+            {
+                var index = snapshot.Visible().ToList().FindIndex(selection.Selects);
+                if (index >= 0) state.SelectedIndex = index;
+                else state.DetailScroll = 0;
+            }
         }
 
         LastAnswered = result.Key with { Cursor = null };
@@ -266,14 +319,32 @@ public sealed class CompletionRequester
             state.PendingDisplay = null;
             state.Palette = snapshot.Reply.Items.Count > 0 ? PaletteMode.Open : PaletteMode.Closed;
         }
+
+        if (_acceptance is { } acceptance)
+        {
+            if (!acceptance.Matches(CurrentKey(state)))
+                _acceptance = null;
+            else if (snapshot.Reply.Items.FirstOrDefault(acceptance.Selects) is { } selected)
+            {
+                _acceptance = null;
+                CompletionEdit.Accept(state, selected);
+            }
+            else if (reply.Cursor is not null)
+                state.MoreCompletions = true;
+            else
+                _acceptance = null;
+        }
     }
 
     /// <summary>
     /// Cancels current work and removes every committable row while retaining tasks until they settle.
     /// </summary>
     /// <param name="state">The prompt.</param>
-    public void Cancel(PromptState state)
+    public void Cancel(PromptState state) => CancelCore(state, retainAcceptance: false);
+
+    private void CancelCore(PromptState state, bool retainAcceptance)
     {
+        if (!retainAcceptance) _acceptance = null;
         CancelPending();
         LastAnswered = null;
         state.Completions = null;
@@ -315,6 +386,7 @@ public sealed class CompletionRequester
         }
 
         _pending = null;
+        _queued = null;
         Prune();
         _current = null;
         _site = null;
@@ -374,6 +446,13 @@ public sealed class CompletionRequester
 
     private void Start(PromptState state, CompletionRequestKey key)
     {
+        if (_owned.Any(work => !work.Task.IsCompleted))
+        {
+            _queued = key;
+            return;
+        }
+
+        _queued = null;
         var cancellation = new CancellationTokenSource();
         var generation = Interlocked.Increment(ref _generation);
         var task = ExecuteAsync(key, generation, cancellation.Token);
@@ -412,6 +491,7 @@ public sealed class CompletionRequester
         {
             state.Post(SubmissionEvent.Completion(result));
         }
+        state.Invalidate?.Invoke();
     }
 
     private void CancelPending()
@@ -419,6 +499,7 @@ public sealed class CompletionRequester
         Interlocked.Increment(ref _generation);
         _pending?.Cancellation.Cancel();
         _pending = null;
+        _queued = null;
     }
 
     private void Prune()

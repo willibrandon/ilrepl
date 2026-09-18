@@ -55,7 +55,8 @@ Press Enter when ready; recalled source uses the definitions and argument values
 `.session run` runs the recorded experiment in source order from a fresh runtime. It includes a complete current draft.
 Definitions, redefinitions, edits, and resets take effect where they originally appeared. Execution stops at the first failure,
 and the remaining source stays available. Incomplete source and missing dependencies are reported before execution starts.
-In the terminal, Ctrl+C cancels Run all and reopens its source in a fresh runtime without replaying it.
+Ctrl+C during `.session run` stops its execution host immediately and reopens the source without replaying it.
+This differs from [interrupting an ordinary cell](/reference/keyboard/), which asks before discarding runtime state.
 
 Use `.session run 2 4-6` to run selected executable cells. Other cells are skipped, including setup cells that might create
 objects or set static fields. Use run-all when those effects are needed.
@@ -69,6 +70,20 @@ ilrepl arithmetic.ilrepl.json --run
 Opening never restores live objects, static field values, file handles, or background tasks. Previous output is text,
 not a live result value. Explicit execution can run embedded code and affect files or services just as ordinary IL can.
 A fresh runtime does not undo those external effects.
+
+## Restart and recovery
+
+`.session restart` starts a fresh runtime from the retained source. Definitions and method edits are reconstructed
+and can be called by the next cell. Earlier cells are not replayed, and saved argument declarations do not recreate objects.
+Objects, argument values, and static field values from the previous runtime are lost.
+
+If the execution host exits unexpectedly, ilrepl reports its exit status and available diagnostic output, then attempts
+one restart. The interrupted cell remains in `.session cells` and in saved session history. Recall it with `.session cell`
+to inspect or change it before executing it again.
+
+Your draft stays editable during recovery. If a replacement host cannot start, `.help`, `.session save`, `.session restart`,
+and `.quit` remain available. Saving does not require a working execution host. Restarting does not undo files or other
+external changes made before the interruption.
 
 ## Save changes
 
@@ -133,21 +148,3 @@ Use `.session save example.ilrepl.json --embed` to include available dependency 
 Captured edit originals remain included even without `--embed`. A dependency may still require a particular platform,
 architecture, native library, or runtime. Embedded images do not make incompatible code portable.
 Use `--embed` when a file must remain usable without the original dependency files or your local cache.
-
-## Browser sharing
-
-The [live session](/try/) has Open, Download, Share, and Run all controls. Ctrl+S downloads a session and Ctrl+O opens the
-file picker while the terminal has focus. Cmd+S and Cmd+O work on macOS. Typed `.session save` also downloads;
-typed `.session open` points to the Open control.
-Download includes available dependency images so the file can be opened elsewhere; `--embed` is already applied in the browser.
-Package restore and project builds are desktop operations.
-
-Share creates a URL fragment containing source, the dependency manifest, and the loaded dependency images.
-The bundled sample is included so a later demo update cannot change a shared experiment.
-Nothing is uploaded to the documentation server. Links longer than 16 KiB fall back to a session download.
-Expanded link contents are limited to 1 MiB. Browser imports are limited to 8 MiB; desktop session files can be up to 64 MiB.
-If clipboard access is unavailable, the page displays the link for copying.
-
-Opening a link or file never runs it. Restarting the worker, including recovery after an unresponsive cell, reopens the retained
-source and editor draft without replay. Use Restart to stop a running browser cell; an unresponsive cell also triggers automatic recovery.
-Historical output remains history and execution starts fresh. Quitting starts a fresh, empty session.

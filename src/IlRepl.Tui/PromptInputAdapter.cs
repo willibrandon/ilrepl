@@ -1,13 +1,16 @@
+using System.Text;
 using System.Threading.Channels;
 using Hex1b;
 using Hex1b.Input;
+using Hex1b.Tokens;
 
 namespace IlRepl.Tui;
 
 /// <summary>
 /// Applies prompt input ordering and key decoding while forwarding the terminal's output unchanged.
 /// </summary>
-internal sealed class PromptInputAdapter(IHex1bAppTerminalWorkloadAdapter inner, PromptInputReader input)
+internal sealed class PromptInputAdapter(IHex1bAppTerminalWorkloadAdapter inner, PromptInputReader input,
+    Func<string?>? frameMarker = null)
     : IHex1bAppTerminalWorkloadAdapter
 {
     /// <inheritdoc />
@@ -33,13 +36,35 @@ internal sealed class PromptInputAdapter(IHex1bAppTerminalWorkloadAdapter inner,
     }
 
     /// <inheritdoc />
-    public void Write(string text) => inner.Write(text);
+    public void Write(string text)
+    {
+        inner.Write(text);
+        if (ContainsInterruptNotice(text)) WriteFrameMarker();
+    }
 
     /// <inheritdoc />
-    public void Write(ReadOnlySpan<byte> data) => inner.Write(data);
+    public void Write(ReadOnlySpan<byte> data)
+    {
+        inner.Write(data);
+        if (data.IndexOf("Press"u8) >= 0 && ContainsInterruptNotice(Encoding.UTF8.GetString(data))) WriteFrameMarker();
+    }
 
     /// <inheritdoc />
-    public void Write(ReadOnlyMemory<byte> data) => inner.Write(data);
+    public void Write(ReadOnlyMemory<byte> data) => Write(data.Span);
+
+    private void WriteFrameMarker()
+    {
+        if (frameMarker?.Invoke() is { } marker) inner.Write(marker);
+    }
+
+    private static bool ContainsInterruptNotice(string text)
+    {
+        if (text.Contains("Press Ctrl+C again", StringComparison.Ordinal)) return true;
+        if (!text.Contains("Press", StringComparison.Ordinal)) return false;
+        // Narrow terminals wrap the notice between ANSI cursor moves and may omit the inter-word spaces.
+        var painted = string.Concat(AnsiTokenizer.Tokenize(text).OfType<TextToken>().Select(token => token.Text));
+        return painted.Replace(" ", "", StringComparison.Ordinal).Contains("PressCtrl+Cagain", StringComparison.Ordinal);
+    }
 
     /// <inheritdoc />
     public void Flush() => inner.Flush();

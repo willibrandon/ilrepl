@@ -4,8 +4,7 @@ description: Inspect and compare the machine code CoreCLR generates for your IL.
 ---
 
 Use `.jit` to see the native code CoreCLR generates on your machine. It compiles the selected body in a
-fresh worker using the terminal host's runtime and architecture. The browser demo cannot provide native
-JIT listings.
+fresh worker using the host's runtime and architecture.
 
 ## Select a body
 

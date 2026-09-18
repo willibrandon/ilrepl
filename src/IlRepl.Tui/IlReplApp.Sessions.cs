@@ -38,10 +38,6 @@ public static partial class IlReplApp
             prompt.Invalidate?.Invoke();
             return await dialog.Decision.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         };
-        if (controller.Workspace is { } opened)
-        {
-            RestoreEditor(prompt, opened.Document.Editor);
-        }
     }
 
     private static async Task RunSessionActionAsync(PromptState prompt, SessionController controller, SessionOperation operation)

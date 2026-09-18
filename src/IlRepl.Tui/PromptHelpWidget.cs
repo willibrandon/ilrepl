@@ -37,7 +37,7 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
             var content = new List<Hex1bWidget>
             {
                 new TranscriptLineWidget(TranscriptLine.Of(LineKind.Info, PaletteText.Clip(heading, width), SpanStyle.Heading), width)
-                    .FixedHeight(1),
+                    .CacheRendering().FixedHeight(1),
                 v.Separator().FixedHeight(1),
             };
             foreach (var row in rows.Skip(help.Scroll).Take(height))
@@ -58,14 +58,15 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
                             State.OpenDocumentation?.Invoke(url);
                         }
                     })) : new TranscriptLineWidget(current || actionCurrent ? row.Line
-                        : row.Line with { Spans = row.Line.Spans.Select(span => span with { Style = SpanStyle.Dim }).ToArray() }, 0);
+                        : row.Line with { Spans = row.Line.Spans.Select(span => span with { Style = SpanStyle.Dim }).ToArray() }, 0)
+                        .CacheRendering();
                 content.Add(v.HStack(h => [h.Text("").FixedWidth(indent), line.Fill()]).FixedHeight(1));
             }
 
             content.Add(v.Text("").Fill());
             content.Add(new TranscriptLineWidget(TranscriptLine.Of(LineKind.Info,
                 PaletteText.Clip("Esc back · PgUp/PgDn scroll · Tab target · Enter open · F8 next", width), SpanStyle.Dim), width)
-                .FixedHeight(1));
+                .CacheRendering().FixedHeight(1));
             return [.. content];
         })).InputBindings(b => Bind(b, State, Catalog, bodyWidth, height));
         return ctx.Pastable(surface).OnPaste(e =>

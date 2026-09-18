@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using IlRepl.Hosting;
+using IlRepl.Processes;
 using IlRepl.Protocol;
 
 namespace IlRepl.Tests.EndToEnd;

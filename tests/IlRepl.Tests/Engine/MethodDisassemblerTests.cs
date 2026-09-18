@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Globalization;
 using System.Reflection;
 using IlRepl.Engine;
@@ -271,7 +272,8 @@ public sealed class MethodDisassemblerTests
     [TestMethod]
     public void Disassemble_LiteralOperands_RoundTrip()
     {
-        var method = Cecil((module, type) =>
+        var session = new Session();
+        var (_, _, fixture) = CecilFixture.Build((module, type) =>
         {
             var m = Static(type, "M", module.TypeSystem.Void);
             var il = m.Body.GetILProcessor();
@@ -281,7 +283,9 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Ldc_R4, 1.5f);
             il.Emit(OpCodes.Ldc_R8, -0.25);
             il.Emit(OpCodes.Ldc_R4, -0.0f);
-            il.Emit(OpCodes.Ldc_R4, BitConverter.Int32BitsToSingle(0x7F800001));
+            // A runtime value avoids the JIT folding a float constant through double and quieting this NaN.
+            var signalingNaNBits = int.Parse("7f800001", NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            il.Emit(OpCodes.Ldc_R4, BitConverter.Int32BitsToSingle(signalingNaNBits));
             il.Emit(OpCodes.Ldc_R8, BitConverter.Int64BitsToDouble(unchecked((long)0xFFF8000000000123)));
             il.Emit(OpCodes.Ldc_R4, float.PositiveInfinity);
             il.Emit(OpCodes.Ldc_R8, double.NaN);
@@ -291,21 +295,33 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldind_I4);
             il.Emit(OpCodes.Ret);
-        });
+        }, session.Resolver);
+        var body = fixture.GetMethod("M")!;
+        var bytes = body.GetMethodBody()!.GetILAsByteArray()!;
+        Assert.AreEqual((byte)0x22, bytes[35], "The seventh literal is the signaling-NaN ldc.r4 instruction.");
+        Assert.AreEqual(0x7F800001u, BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(36, 4)),
+            "The independent fixture must contain signaling NaN bits before disassembly reads it.");
+        var method = MethodDisassembler.Disassemble(body, session);
         var texts = DisassemblyText.Instructions(method);
         Assert.AreSequenceEqual(
-            ["ldc.i4.s -1", "ldc.i4 -2147483648", "ldc.i8 9223372036854775807", "ldc.r4 1.5", "ldc.r8 -0.25", "ldc.r4 -0.0", "ldc.r4 float32(0x7f800001)", "ldc.r8 float64(0xfff8000000000123)", "ldc.r4 float32(0x7f800000)", "ldc.r8 float64(0xfff8000000000000)", "ldc.r4 1E-45", "ldstr \"a\\\"b\\n\"", "unaligned. 2", "ldnull", "ldind.i4", "ret"],
+            [
+                "ldc.i4.s -1", "ldc.i4 -2147483648", "ldc.i8 9223372036854775807", "ldc.r4 1.5", "ldc.r8 -0.25", "ldc.r4 -0.0",
+                "ldc.r4 float32(0x7f800001)", "ldc.r8 float64(0xfff8000000000123)", "ldc.r4 float32(0x7f800000)",
+                "ldc.r8 float64(0xfff8000000000000)", "ldc.r4 1E-45", "ldstr \"a\\\"b\\n\"", "unaligned. 2", "ldnull", "ldind.i4", "ret"
+            ],
             texts);
         foreach (var entry in method.Entries.Where(e => e.Instruction?.Kind is OperandKind.Single or OperandKind.Double))
         {
             var parsed = InstructionParser.Parse(entry.Instruction!.Text, method.Context);
             if (entry.Instruction.Kind == OperandKind.Single)
             {
-                Assert.AreEqual(BitConverter.SingleToInt32Bits((float)entry.Instruction.Operand!), BitConverter.SingleToInt32Bits((float)parsed.Operand!), entry.Instruction.Text);
+                Assert.AreEqual(BitConverter.SingleToInt32Bits((float)entry.Instruction.Operand!),
+                    BitConverter.SingleToInt32Bits((float)parsed.Operand!), entry.Instruction.Text);
             }
             else
             {
-                Assert.AreEqual(BitConverter.DoubleToInt64Bits((double)entry.Instruction.Operand!), BitConverter.DoubleToInt64Bits((double)parsed.Operand!), entry.Instruction.Text);
+                Assert.AreEqual(BitConverter.DoubleToInt64Bits((double)entry.Instruction.Operand!),
+                    BitConverter.DoubleToInt64Bits((double)parsed.Operand!), entry.Instruction.Text);
             }
         }
     }

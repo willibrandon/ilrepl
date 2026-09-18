@@ -4,31 +4,32 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Publishes only analysis that still belongs to the editor's document and session.
+/// Coalesces document analysis into one active request and one replaceable pending document.
 /// </summary>
 public sealed class AnalysisRequester(IReplEngine engine)
 {
     private readonly IReplEngine _engine = engine;
-    private readonly List<PendingAnalysis> _owned = [];
     private readonly ConcurrentQueue<CompletedAnalysis> _completed = new();
     private AnalysisRequestKey? _current;
+    private AnalysisRequestKey? _desired;
     private (AnalysisRequestKey Key, AnalysisReply Reply)? _published;
-    private PendingAnalysis? _pending;
+    private PendingAnalysis? _active;
     private Task? _settlement;
     private long _nextRequestId;
+    private long _minimumRequestId;
     private bool _stopped;
 
     /// <summary>
-    /// Whether the current document is still being analyzed.
+    /// Whether the current document is waiting for a result or obsolete work to settle.
     /// </summary>
-    public bool IsPending => _pending is not null;
+    public bool IsPending => _desired is not null;
 
     /// <summary>
     /// Returns diagnostics while their document and session remain current, including during caret-only refreshes.
     /// </summary>
     internal IReadOnlyList<AnalysisDiagnostic> Diagnostics(PromptState state)
     {
-        if (!state.Busy && _published is { } published && published.Key.Text == state.Text
+        if (_published is { } published && published.Key.Text == state.Text
             && published.Key.Version == state.Editor.Document.Version && published.Key.Revision == _engine.Status.Revision
             && published.Key.AssemblyVersion == _engine.AssemblyVersion)
         {
@@ -38,7 +39,21 @@ public sealed class AnalysisRequester(IReplEngine engine)
     }
 
     /// <summary>
-    /// Applies completed work and starts analysis when the document or session changes.
+    /// Keeps published source locations usable across catalog refreshes without carrying them into changed source or runtimes.
+    /// </summary>
+    internal IReadOnlyList<AnalysisDiagnostic> NavigationDiagnostics(PromptState state)
+    {
+        if (_published is { } published && published.Key.Text == state.Text
+            && published.Key.Version == state.Editor.Document.Version && published.Key.Revision == _engine.Status.Revision
+            && (_engine is not SessionController || published.Key.AssemblyVersion >> 32 == _engine.AssemblyVersion >> 32))
+        {
+            return published.Reply.Diagnostics;
+        }
+        return [];
+    }
+
+    /// <summary>
+    /// Applies completed work and coalesces source changes once per render while projecting caret moves locally.
     /// </summary>
     /// <param name="state">The prompt on the render thread.</param>
     public void Refresh(PromptState state)
@@ -49,78 +64,83 @@ public sealed class AnalysisRequester(IReplEngine engine)
             return;
         }
 
-        foreach (var work in _owned.Where(work => work.Task.IsCompleted).ToArray())
+        if (_active is { Task.IsCompleted: true } settled)
         {
-            work.Cancellation.Dispose();
-            _owned.Remove(work);
+            settled.Cancellation.Dispose();
+            _active = null;
         }
 
         var key = new AnalysisRequestKey(state.Text, state.Editor.Document.Version, state.CaretLine - 1, state.CaretColumn,
             _engine.Status.Revision, _engine.AssemblyVersion);
-        if (state.Busy)
-        {
-            Cancel();
-            state.Analysis = null;
-            state.PendingDiagnostic = null;
-            state.Highlighter.Diagnostics = [];
-            return;
-        }
-
         if (key != _current)
         {
-            var display = key.Text.Length > 0 && _current is { } previous
-                && previous.Revision == key.Revision && previous.AssemblyVersion == key.AssemblyVersion
-                    ? PromptDiagnostics.PreviousDisplay(state) : null;
-            Cancel();
-            _current = key;
-            state.Analysis = null;
-            state.PendingDiagnostic = display;
-            state.Highlighter.Diagnostics = [];
-            if (key.Text.Length > 0)
+            var sameDocument = _current?.SameDocument(key) == true;
+            if (!sameDocument)
             {
-                var cancellation = new CancellationTokenSource();
-                var id = ++_nextRequestId;
-                var task = SendAsync(state, id, key, cancellation.Token);
-                _pending = new PendingAnalysis(id, key, cancellation, task);
-                _owned.Add(_pending);
+                _minimumRequestId = ++_nextRequestId;
+                var display = key.Text.Length > 0 && _current is { } previous
+                    && previous.Revision == key.Revision && previous.AssemblyVersion == key.AssemblyVersion
+                        ? PromptDiagnostics.PreviousDisplay(state) : null;
+                _active?.Cancellation.Cancel();
+                state.Analysis = null;
+                state.PendingDiagnostic = display;
+                state.Highlighter.Diagnostics = [];
             }
+
+            _current = key;
+            _desired = key.Text.Length == 0 ? null : key;
         }
 
         while (_completed.TryDequeue(out var completed))
         {
-            if (completed.Key != _current || completed.Id != _pending?.Id)
+            if (completed.Id < _minimumRequestId || !completed.Key.SameDocument(key))
             {
                 continue;
             }
 
-            _pending = null;
             state.PendingDiagnostic = null;
             if (completed.Reply is { } reply && reply.Revision == key.Revision && reply.AssemblyVersion == key.AssemblyVersion
                 && reply.DocumentVersion == key.Version)
             {
-                _published = (key, reply);
-                state.Analysis = reply;
-                state.Highlighter.Diagnostics = reply.Diagnostics;
+                _published = (completed.Key, reply);
             }
+            else if (_active?.Id == completed.Id || _active is null)
+            {
+                _desired = null;
+            }
+        }
+
+        if (_published is { } published && published.Key.SameDocument(key)
+            && (published.Reply.Positions.Count > 0 || published.Key.Line == key.Line))
+        {
+            state.Analysis = published.Reply.At(key.Line);
+            state.PendingDiagnostic = null;
+            _desired = null;
+        }
+
+        if (_desired is { } desired && _active is null)
+        {
+            var cancellation = new CancellationTokenSource();
+            var id = ++_nextRequestId;
+            var task = SendAsync(state, id, desired, cancellation.Token);
+            _active = new PendingAnalysis(id, desired, cancellation, task);
         }
     }
 
     /// <summary>
-    /// Cancels work for a document that is about to be submitted or replaced.
+    /// Cancels active analysis and discards the pending document before submission or replacement.
     /// </summary>
     public void Cancel()
     {
-        if (_pending is { } pending && !pending.Task.IsCompleted)
-        {
-            pending.Cancellation.Cancel();
-        }
-
-        _pending = null;
+        _active?.Cancellation.Cancel();
+        _minimumRequestId = ++_nextRequestId;
+        _desired = null;
         _current = null;
+        _published = null;
     }
 
     /// <summary>
-    /// Stops publication and waits for workers, closing the engine when cancellation does not settle in time.
+    /// Stops publication and waits for the active request, closing the engine only when shutdown cannot settle.
     /// </summary>
     /// <param name="timeout">The maximum wait before closing a stalled engine.</param>
     /// <returns>The completion of every outstanding request.</returns>
@@ -130,31 +150,22 @@ public sealed class AnalysisRequester(IReplEngine engine)
     {
         _stopped = true;
         Cancel();
-        foreach (var work in _owned)
+        if (_active is { } active)
         {
-            if (!work.Task.IsCompleted)
+            try
             {
-                await work.Cancellation.CancelAsync().ConfigureAwait(false);
+                await active.Task.WaitAsync(timeout).ConfigureAwait(false);
             }
+            catch (TimeoutException)
+            {
+                await _engine.DisposeAsync().AsTask().WaitAsync(timeout).ConfigureAwait(false);
+                await active.Task.WaitAsync(timeout).ConfigureAwait(false);
+            }
+
+            active.Cancellation.Dispose();
+            _active = null;
         }
 
-        var joined = Task.WhenAll(_owned.Select(work => work.Task));
-        try
-        {
-            await joined.WaitAsync(timeout).ConfigureAwait(false);
-        }
-        catch (TimeoutException)
-        {
-            await _engine.DisposeAsync().AsTask().WaitAsync(timeout).ConfigureAwait(false);
-            await joined.WaitAsync(timeout).ConfigureAwait(false);
-        }
-
-        foreach (var work in _owned)
-        {
-            work.Cancellation.Dispose();
-        }
-
-        _owned.Clear();
         _completed.Clear();
     }
 

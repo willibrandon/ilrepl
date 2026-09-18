@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using IlRepl.Protocol;
 
 namespace IlRepl.Tests.Engine;
 
@@ -17,7 +18,7 @@ public static partial class ComparisonDescendantSource
     /// <param name="records">The test-owned directory containing process and readiness records.</param>
     /// <param name="grandchild">Whether an intermediate child exits before the comparison worker.</param>
     /// <param name="mode">The way the compared method ends.</param>
-    /// <param name="escape">Whether the child creates a new Unix session.</param>
+    /// <param name="escape">Whether the child leaves the inherited Unix session or Windows console.</param>
     /// <returns>The normal result, or a distinct value if the previous side left a live descendant.</returns>
     public static int Run(string executable, string records, bool grandchild, string mode, bool escape)
     {
@@ -50,11 +51,15 @@ public static partial class ComparisonDescendantSource
     /// <param name="record">The process record path.</param>
     /// <param name="ready">The readiness path for the leaf process.</param>
     /// <param name="grandchild">Whether this process should launch a leaf and then exit.</param>
-    /// <param name="escape">Whether the child creates a new Unix session.</param>
+    /// <param name="escape">Whether the child leaves the inherited Unix session or Windows console.</param>
     /// <returns>The started process.</returns>
     public static Process Start(string executable, string record, string ready, bool grandchild, bool escape)
     {
-        var start = new ProcessStartInfo(executable) { UseShellExecute = false };
+        var start = new ProcessStartInfo(executable)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = escape && OperatingSystem.IsWindows(),
+        };
         start.Environment["ILREPL_DESCENDANT_RECORD"] = record;
         start.Environment["ILREPL_DESCENDANT_READY"] = ready;
         start.Environment["ILREPL_DESCENDANT_BRANCH"] = grandchild.ToString();
@@ -65,18 +70,18 @@ public static partial class ComparisonDescendantSource
     /// <summary>
     /// Checks a recorded process without relying on its original parent remaining alive.
     /// </summary>
-    /// <param name="record">The process identifier and UTC creation ticks.</param>
+    /// <param name="record">The process identifier and stable kernel creation identity.</param>
     /// <returns>Whether the process is still running.</returns>
     public static bool IsRunning(string record)
     {
         using var process = Open(record);
-        return process is not null && !process.HasExited;
+        return process is not null && !(OperatingSystem.IsWindows() ? process.WaitForExit(0) : process.HasExited);
     }
 
     /// <summary>
-    /// Opens the recorded process only when its creation time still matches, excluding reused process identifiers.
+    /// Opens the recorded process only when its kernel creation identity still matches, excluding reused process identifiers.
     /// </summary>
-    /// <param name="record">The process identifier and UTC creation ticks.</param>
+    /// <param name="record">The process identifier and stable kernel creation identity.</param>
     /// <returns>The matching process, or null when it has exited and its identifier is no longer assigned to it.</returns>
     public static Process? Open(string record)
     {
@@ -86,7 +91,7 @@ public static partial class ComparisonDescendantSource
             var process = Process.GetProcessById(int.Parse(parts[0], CultureInfo.InvariantCulture));
             try
             {
-                if (process.StartTime.ToUniversalTime().Ticks == long.Parse(parts[1], CultureInfo.InvariantCulture)) return process;
+                if (OwnedProcessGroup.GetStartIdentity(process) == long.Parse(parts[1], CultureInfo.InvariantCulture)) return process;
             }
             catch
             {
@@ -97,7 +102,10 @@ public static partial class ComparisonDescendantSource
             process.Dispose();
             return null;
         }
-        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException
+            or FileNotFoundException or DirectoryNotFoundException
+            || exception is Win32Exception && OperatingSystem.IsMacOS()
+            || exception is IOException && OperatingSystem.IsLinux() && (exception.HResult & 0xffff) is 2 or 3)
         {
             return null;
         }

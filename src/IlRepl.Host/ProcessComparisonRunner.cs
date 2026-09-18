@@ -18,17 +18,28 @@ public static class ProcessComparisonRunner
     /// <param name="package">The captured versions and starting conditions.</param>
     /// <param name="cancellationToken">Terminates workers and cancels the remaining execution.</param>
     /// <returns>The observations and comparison outcome.</returns>
-    public static async Task<ComparisonReply> RunAsync(ComparisonPackage package, CancellationToken cancellationToken)
+    public static Task<ComparisonReply> RunAsync(ComparisonPackage package, CancellationToken cancellationToken) =>
+        RunAsync(package, null, cancellationToken);
+
+    /// <summary>
+    /// Registers each prepared worker with frontend ownership before allowing user execution.
+    /// </summary>
+    /// <param name="package">The prepared immutable request.</param>
+    /// <param name="register">The frontend ownership acknowledgement.</param>
+    /// <param name="cancellationToken">Cancels execution and ownership registration.</param>
+    /// <returns>The resulting worker observations.</returns>
+    internal static async Task<ComparisonReply> RunAsync(ComparisonPackage package,
+        Func<OwnedProcessScope, CancellationToken, Task>? register, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(package);
         var path = Path.Combine(Path.GetTempPath(), "ilrepl-compare-" + Guid.NewGuid().ToString("N"));
-        var original = await RunSideAsync(package, true, path, cancellationToken).ConfigureAwait(false);
-        var edited = await RunSideAsync(package, false, path, cancellationToken).ConfigureAwait(false);
+        var original = await RunSideAsync(package, true, path, register, cancellationToken).ConfigureAwait(false);
+        var edited = await RunSideAsync(package, false, path, register, cancellationToken).ConfigureAwait(false);
         return ComparisonResults.Compare(package, original, edited);
     }
 
     private static async Task<ComparisonSide> RunSideAsync(ComparisonPackage package, bool original, string path,
-        CancellationToken cancellationToken)
+        Func<OwnedProcessScope, CancellationToken, Task>? register, CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
         {
@@ -40,7 +51,7 @@ public static class ProcessComparisonRunner
         using var inputLifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var outputLifetime = new CancellationTokenSource();
         using var process = new Process();
-        using var group = new ComparisonProcessGroup();
+        using var group = new OwnedProcessGroup();
         var processStarted = false;
         Task? stdin = null;
         Task<string>? stdout = null;
@@ -90,6 +101,7 @@ public static class ProcessComparisonRunner
                 process.StartInfo.Environment[pair.Key] = pair.Value;
             }
 
+            WorkerOwnerWatchdog.Configure(process.StartInfo);
             processStarted = process.Start();
             if (!processStarted)
             {
@@ -100,7 +112,7 @@ public static class ProcessComparisonRunner
             var overflow = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             stdout = ReadOutputAsync(process.StandardOutput, package.OutputLimit, overflow, outputLifetime.Token);
             stderr = ReadOutputAsync(process.StandardError, package.OutputLimit, overflow, outputLifetime.Token);
-            var exit = process.WaitForExitAsync(CancellationToken.None);
+            var exit = OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None);
             var ready = WaitForReadyAsync(readyPath, lifetime.Token);
             var resultReady = WaitForReadyAsync(resultReadyPath, lifetime.Token);
             var startup = Task.Delay(TimeSpan.FromMinutes(2), lifetime.Token);
@@ -109,6 +121,9 @@ public static class ProcessComparisonRunner
             if (preparation == prepared && !prepared.IsCanceled)
             {
                 group.Attach(process);
+                if (register is not null)
+                    await register(OwnedProcessGroup.Describe(process, Guid.NewGuid().ToString("N")), cancellationToken)
+                        .ConfigureAwait(false);
                 await File.WriteAllTextAsync(startPath, "start", cancellationToken).ConfigureAwait(false);
             }
 
@@ -190,7 +205,7 @@ public static class ProcessComparisonRunner
             await group.StopAsync().ConfigureAwait(false);
             if (processStarted)
             {
-                await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None).ConfigureAwait(false);
             }
 
             if (stdin is not null)
@@ -225,7 +240,7 @@ public static class ProcessComparisonRunner
             await group.StopAsync().ConfigureAwait(false);
             if (processStarted)
             {
-                await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None).ConfigureAwait(false);
             }
 
             // Drain closed pipes without waiting indefinitely for descendants that retained inherited handles.

@@ -6,9 +6,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// The colours of the terminal UI, one per <see cref="SpanStyle"/>, muted in the way of One Dark.
-/// The transcript, the editor, and the status bar all draw from here, and so do the docs, which
-/// also have the same roles in the colours of One Light for a light ground.
+/// Maps transcript styles to terminal colors shared by the editor and output.
 /// </summary>
 public static class SpanPalette
 {
@@ -71,14 +69,14 @@ public static class SpanPalette
     };
 
     /// <summary>
-    /// A theme change that paints text in a style's colour.
+    /// Paints text in a style's colour using the private theme copy supplied by a theme panel.
     /// </summary>
     /// <param name="style">The style.</param>
     /// <returns>The change.</returns>
     public static Func<Hex1bTheme, Hex1bTheme> Mutator(SpanStyle style)
     {
         var color = Color(style);
-        return theme => theme.Clone().Set(GlobalTheme.ForegroundColor, color);
+        return theme => theme.Set(GlobalTheme.ForegroundColor, color);
     }
 
     /// <summary>

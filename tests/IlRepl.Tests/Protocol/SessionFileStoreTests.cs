@@ -5,7 +5,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Tests.Protocol;
 
 /// <summary>
-/// Desktop session storage preserves source files and uses atomic documents with verified portable dependency assets.
+/// Local session storage preserves source files and uses atomic documents with verified portable dependency assets.
 /// </summary>
 [TestClass]
 public sealed class SessionFileStoreTests
@@ -666,6 +666,36 @@ public sealed class SessionFileStoreTests
             var error = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => store.ReadAsync(path, TestContext.CancellationToken));
             Assert.Contains("64 MiB", error.Message);
             Assert.AreEqual(SessionCodec.FileLimit + 1L, new FileInfo(path).Length);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A canceled large-file read preserves the exact saved bytes and permits a later successful Unicode document read.
+    /// </summary>
+    [TestMethod]
+    public async Task Read_CancellationPreservesLargeDocumentAndAllowsRetry()
+    {
+        var directory = Directory.CreateTempSubdirectory("ilrepl-store-read-cancel-").FullName;
+        try
+        {
+            var path = Path.Combine(directory, "example.ilrepl.json");
+            var source = new string('x', 1024 * 1024) + " λ日本";
+            var bytes = SessionCodec.Write(Document(source));
+            await File.WriteAllBytesAsync(path, bytes, TestContext.CancellationToken);
+            var store = new SessionFileStore(Path.Combine(directory, "cache"));
+            using var canceled = new CancellationTokenSource();
+            await canceled.CancelAsync();
+
+            await Assert.ThrowsAsync<OperationCanceledException>(() => store.ReadAsync(path, canceled.Token));
+
+            Assert.AreSequenceEqual(bytes, await File.ReadAllBytesAsync(path, TestContext.CancellationToken));
+            Assert.AreSequenceEqual([source], (await store.ReadAsync(path, TestContext.CancellationToken)).Editor.Lines);
+            Assert.IsFalse(Directory.Exists(Path.Combine(directory, "cache")));
+            Assert.HasCount(1, Directory.GetFiles(directory));
         }
         finally
         {

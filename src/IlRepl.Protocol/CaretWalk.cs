@@ -318,6 +318,10 @@ internal sealed class CaretWalk
             }
 
             name += " " + _r.TextAt(head + 1).ToString();
+            if (name == ".session restart")
+            {
+                return CompletionSite.None;
+            }
         }
         if (name is ".diff" or ".compare" or ".methods")
         {

@@ -22,17 +22,24 @@ public static class CellCompiler
     /// <param name="session">The session holding the cell.</param>
     /// <returns>The compiled cell.</returns>
     /// <exception cref="ReplException">The cell is incomplete or the runtime rejected it.</exception>
-    public static CompiledCell Compile(Session session) => CompileCore(session, activate: true);
+    public static CompiledCell Compile(Session session) => CompileCore(session, activate: true, CancellationToken.None);
 
     /// <summary>
     /// Emits the normal cell body without binding delegates or creating argument values.
     /// </summary>
     /// <param name="session">The captured declaration context.</param>
     /// <returns>The emitted implementation and its invocation wrapper.</returns>
-    public static CompiledCell CompileForInspection(Session session) => CompileCore(session, activate: false);
+    public static CompiledCell CompileForInspection(Session session) => CompileCore(session, activate: false, CancellationToken.None);
 
-    private static CompiledCell CompileCore(Session session, bool activate)
+    /// <summary>
+    /// Emits an execution candidate cooperatively while leaving activation and argument values to the invocation boundary.
+    /// </summary>
+    internal static CompiledCell CompileForExecution(Session session, CancellationToken cancellationToken) =>
+        CompileCore(session, activate: false, cancellationToken);
+
+    private static CompiledCell CompileCore(Session session, bool activate, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(session);
         using var references = session.Resolver.EnterContext();
         RequireComplete(session);
@@ -54,7 +61,15 @@ public static class CellCompiler
             assembly = AssemblyBuilder.DefineDynamicAssembly(SessionAssemblies.MakeAssemblyName(name), access);
         }
 
-        return Build(session, assembly, name, context, activate);
+        try
+        {
+            return Build(session, assembly, name, context, activate, cancellationToken);
+        }
+        catch
+        {
+            if (context is { IsCollectible: true }) context.Unload();
+            throw;
+        }
     }
 
     /// <summary>
@@ -103,7 +118,7 @@ public static class CellCompiler
     }
 
     private static CompiledCell Build(Session session, AssemblyBuilder assembly, string moduleName,
-        DefinitionLoadContext? context, bool activate)
+        DefinitionLoadContext? context, bool activate, CancellationToken cancellationToken)
     {
         RequireComplete(session);
         var cell = session.Cell;
@@ -120,11 +135,13 @@ public static class CellCompiler
             session.TypeTable, null);
         foreach (var line in session.DeclarationLines)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             state.Apply(line);
         }
 
         foreach (var line in session.BodyLines)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             state.Apply(line);
         }
 
@@ -150,7 +167,7 @@ public static class CellCompiler
             var il = run.GetILGenerator();
             if (!CecilCellBody.IsRequired(state))
             {
-                EmitBody(il, state, methods);
+                EmitBody(il, state, methods, cancellationToken);
                 return;
             }
 
@@ -192,6 +209,7 @@ public static class CellCompiler
             definition)
         {
             Helpers = helpers,
+            InvocationArguments = state.Arguments,
             Implementation = implementation ?? created.GetMethod("Run", BindingFlags.Public | BindingFlags.Static),
         };
     }
@@ -226,13 +244,15 @@ public static class CellCompiler
         }
     }
 
-    private static void EmitBody(ILGenerator il, CellState state, IReadOnlyDictionary<string, MethodInfo> methods)
+    private static void EmitBody(ILGenerator il, CellState state, IReadOnlyDictionary<string, MethodInfo> methods,
+        CancellationToken cancellationToken)
     {
         var locals = state.Locals.Select(l => il.DeclareLocal(l.Type, l.IsPinned)).ToArray();
         var labels = state.DefinedLabels.ToDictionary(l => l, _ => il.DefineLabel(), StringComparer.Ordinal);
 
         foreach (var entry in state.Entries)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             foreach (var l in entry.Labels)
             {
                 il.MarkLabel(labels[l]);

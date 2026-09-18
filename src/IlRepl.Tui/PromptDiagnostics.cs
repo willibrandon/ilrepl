@@ -32,6 +32,11 @@ public static class PromptDiagnostics
     {
         ArgumentNullException.ThrowIfNull(state);
         var diagnostics = state.Analyzer is { } analyzer ? analyzer.Diagnostics(state) : state.Analysis?.Diagnostics ?? [];
+        return Visible(state, diagnostics);
+    }
+
+    private static IReadOnlyList<AnalysisDiagnostic> Visible(PromptState state, IReadOnlyList<AnalysisDiagnostic> diagnostics)
+    {
         if (!CompletionOwnsCaret(state))
         {
             return diagnostics;
@@ -64,6 +69,14 @@ public static class PromptDiagnostics
             return state.Analysis is null ? state.PendingDiagnostic : null;
         }
 
+        return Display(diagnostic, diagnostics.Count);
+    }
+
+    /// <summary>
+    /// Formats a selected diagnostic without rechecking the identity of its analysis.
+    /// </summary>
+    internal static DiagnosticDisplay Display(AnalysisDiagnostic diagnostic, int count)
+    {
         var kind = diagnostic.Kind switch
         {
             AnalysisDiagnosticKind.Error => "error",
@@ -71,7 +84,6 @@ public static class PromptDiagnostics
             AnalysisDiagnosticKind.Unknown => "unknown",
             _ => "incomplete",
         };
-        var count = diagnostics.Count;
         var suffix = count > 1 ? $" ({count} findings; F8 next)" : "";
         var where = diagnostic.Explanation?.Source is { Kind: not AnalysisSourceKind.Document } source
             ? " at " + DiagnosticFormatter.Source(source) : $" on line {diagnostic.Location.Line + 1}";
@@ -107,7 +119,8 @@ public static class PromptDiagnostics
     {
         ArgumentNullException.ThrowIfNull(state);
         state.Analyzer?.Refresh(state);
-        var positions = Visible(state).Where(d => d.Explanation?.Source is null or { Kind: AnalysisSourceKind.Document })
+        var diagnostics = state.Analyzer is { } analyzer ? Visible(state, analyzer.NavigationDiagnostics(state)) : Visible(state);
+        var positions = diagnostics.Where(d => d.Explanation?.Source is null or { Kind: AnalysisSourceKind.Document })
             .Select(d => d.Location).Where(location => location.Line >= 0 && location.Line < state.LineCount && location.Offset is null)
             .Distinct().OrderBy(location => location.Line).ThenBy(location => location.Start).ToArray();
         if (positions.Length == 0)

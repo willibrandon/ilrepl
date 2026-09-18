@@ -33,6 +33,43 @@ public sealed class SessionCodecTests
     }
 
     /// <summary>
+    /// Format metadata can precede or follow the content without dropping later source or additive fields.
+    /// </summary>
+    /// <param name="metadataFirst">Whether both required properties precede the document content.</param>
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public void Read_PreservesContentRegardlessOfMetadataOrder(bool metadataFirst)
+    {
+        const string metadata = "\"format\":\"ilrepl-session\",\"version\":1";
+        const string content = "\"editor\":{\"lines\":[\"// café λ\"]},\"future\":{\"version\":7,\"items\":[\"keep\"]}";
+        var json = "{" + (metadataFirst ? metadata + "," + content : content + "," + metadata) + "}";
+
+        var document = SessionCodec.Read(Encoding.UTF8.GetBytes(json));
+
+        Assert.AreSequenceEqual(["// café λ"], document.Editor.Lines);
+        Assert.IsNotNull(document.Extensions);
+        Assert.AreEqual(7, document.Extensions["future"].GetProperty("version").GetInt32());
+        Assert.AreEqual("keep", document.Extensions["future"].GetProperty("items")[0].GetString());
+    }
+
+    /// <summary>
+    /// Finding the required metadata never bypasses full JSON parsing, final duplicate values, or source validation.
+    /// </summary>
+    /// <param name="json">The malformed document or unsupported final metadata value.</param>
+    [TestMethod]
+    [DataRow("{\"format\":\"ilrepl-session\",\"future\":{\"version\":1}}")]
+    [DataRow("{\"version\":1,\"future\":{\"format\":\"ilrepl-session\"}}")]
+    [DataRow("{\"format\":\"ilrepl-session\",\"version\":1,\"format\":\"other\"}")]
+    [DataRow("{\"format\":\"ilrepl-session\",\"version\":1,\"version\":2}")]
+    [DataRow("{\"format\":\"ilrepl-session\",\"version\":1}garbage")]
+    [DataRow("{\"format\":\"ilrepl-session\",\"version\":1,\"editor\":{\"lines\":[\"two\\nlines\"]}}")]
+    public void Read_MetadataPresenceDoesNotReplaceDocumentValidation(string json)
+    {
+        Assert.ThrowsExactly<InvalidDataException>(() => SessionCodec.Read(Encoding.UTF8.GetBytes(json)));
+    }
+
+    /// <summary>
     /// Session JSON retains physical source, numbered historical results, assets, runtime facts, and nested additive fields.
     /// </summary>
     [TestMethod]

@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.Loader;
+using System.Text;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
@@ -11,9 +12,10 @@ using Mono.Cecil.Cil;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Runs the browser's source corpus through live binding, preview, independent ILAsm, and verification.
+/// Checks the shared source corpus against live execution, independent tools, and both export renderers.
 /// </summary>
 [TestClass]
+[TestCategory("ExportConformance")]
 public sealed class ControlFlowCorpusTests
 {
     /// <summary>
@@ -55,27 +57,7 @@ public sealed class ControlFlowCorpusTests
         }
 
         Assert.AreEqual(example.Accepted, refusal is null, refusal?.Message);
-        var implementation = example.Implementation.Length == 0 ? "" : " " + example.Implementation;
-        var members = example.Members.Length == 0 ? ""
-            : example.Members.Replace("FlowGeneric::", "Fixture::", StringComparison.Ordinal)
-                .Replace("\n", "\n    ", StringComparison.Ordinal) + "\n    ";
-        var declarations = example.Declarations.Length == 0 ? ""
-            : example.Declarations.Replace("} handler {", "} {", StringComparison.Ordinal) + "\n";
-        var body = string.Join('\n', example.Body).Replace("} handler {", "} {", StringComparison.Ordinal)
-            .Replace("FlowGeneric::", "Fixture::", StringComparison.Ordinal);
-        var source = $$"""
-            .assembly extern System.Runtime { }
-            .assembly extern System.Private.CoreLib { }
-            .assembly FlowCorpus { }
-            .module FlowCorpus.dll
-            {{declarations}}
-            .class public Fixture extends [System.Runtime]System.Object {
-                {{members}}.method public static int32 {{name}}{{example.GenericHeader}}(int32 n) cil managed{{implementation}} {
-                    .maxstack 64
-                    {{body}}
-                }
-            }
-            """;
+        var source = ControlFlowSource.Original(example);
         var original = AssembleOriginal(name, source);
         using var oracle = new IlVerificationOracle();
         var verification = Array.Empty<VerifierError>();
@@ -125,25 +107,85 @@ public sealed class ControlFlowCorpusTests
             return;
         }
 
-        session.AddLine("ldc.i4.1");
+        session.AddLine("ldc.i4 " + example.Input);
         session.AddLine(example.Call);
-        Assert.AreEqual(42, session.Run().Value);
+        Assert.AreEqual(example.Expected, session.Run().Value);
         var arguments = example.GenericArguments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(argument => argument == "int32" ? typeof(int) : typeof(string)).ToArray();
-        Execute(original, "Fixture", name, [1], arguments);
-        session.AddLine("ldc.i4.1");
-        session.AddLine(example.Call);
-        Execute(IlasmLocator.Assemble(session.ToIlAsm()), "IlRepl.Cell", "Run", null);
-        var path = Path.Combine(Path.GetTempPath(), "ilrepl-flow-" + Guid.NewGuid().ToString("N") + ".dll");
+        using var execution = new ExportExecution();
         try
         {
-            session.Save(path);
-            Execute(File.ReadAllBytes(path), "IlRepl.Cell", "Run", null);
+            execution.Record("independent.il", Encoding.UTF8.GetBytes(source));
+            execution.Record("independent.dll", original);
+            foreach (var profile in new[] { "deterministic", "tiered" })
+            {
+                var observed = await execution.RunAsync(original, "Fixture", name, profile, [example.Input], arguments,
+                    cancellationToken: TestContext.CancellationToken);
+                AssertObservation(example, observed);
+                await execution.RunLiveAsync(example, profile, TestContext.CancellationToken);
+            }
+
+            foreach (var edited in new[] { false, true })
+            {
+                var exported = IlLines.Load(example.Source.Split('\n'));
+                if (edited)
+                {
+                    Add(exported, ".method int32 ExportRendererWitness() {", "ldc.i4.0", "ret", "}");
+                    var edit = exported.PrepareEdit("ExportRendererWitness", "ExportRendererCopy");
+                    exported.CommitEdit(edit.Name, edit.Source);
+                }
+                Add(exported, "ldc.i4 " + example.Input, example.Call);
+                var identity = edited ? "edited" : "text";
+                var saved = AssemblyExporter.Write(exported, "FlowExport");
+                execution.Record(identity + "-saved.dll", saved);
+                var rendered = exported.ToIlAsm();
+                execution.Record(identity + ".il", Encoding.UTF8.GetBytes(rendered));
+                var assembled = IlasmLocator.Assemble(rendered);
+                execution.Record(identity + "-ilasm.dll", assembled);
+                var roundTrip = IldasmLocator.RoundTrip(saved);
+                execution.Record(identity + "-ildasm.dll", roundTrip);
+                Assert.AreSequenceEqual(ExportMetadata.Read(saved), ExportMetadata.Read(roundTrip));
+                foreach (var image in new[] { saved, assembled, roundTrip })
+                {
+                    VerifyExport(example, image);
+                    foreach (var profile in new[] { "deterministic", "tiered" })
+                    {
+                        var observed = await execution.RunAsync(image, "IlRepl.Cell", "Run", profile,
+                            cancellationToken: TestContext.CancellationToken);
+                        AssertObservation(example, observed);
+                    }
+                }
+            }
         }
-        finally
+        catch
         {
-            File.Delete(path);
+            execution.RetainArtifacts();
+            throw;
         }
+    }
+
+    private static void AssertObservation(ControlFlowExample example, ExportObservation observed)
+    {
+        Assert.IsNull(observed.ExceptionType, observed.ExceptionType);
+        Assert.AreEqual(typeof(int).AssemblyQualifiedName, observed.Result.Type);
+        Assert.AreEqual(example.Expected, observed.Result.Value.GetInt32());
+        Assert.AreEqual("", observed.StandardOutput);
+        Assert.AreEqual("", observed.StandardError);
+    }
+
+    private static void VerifyExport(ControlFlowExample example, byte[] image)
+    {
+        using var oracle = new IlVerificationOracle();
+        if (example.VerificationFailure.Length > 0)
+        {
+            var error = Assert.ThrowsExactly<InvalidOperationException>(() => oracle.Verify(image));
+            Assert.AreEqual("ILVerification could not finish the fixture: " + example.VerificationFailure, error.Message);
+            return;
+        }
+        var actual = oracle.Verify(image).Select(code => code.ToString()).Distinct().Order();
+        var expected = (example.ExportVerification ?? example.Verification)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Order();
+        Assert.AreSequenceEqual(expected, actual, "The exported image must have precisely the expected ILVerify diagnostics.");
     }
 
     /// <summary>

@@ -35,12 +35,18 @@ public static class SessionCheckpointDelta
         }, prefix);
     }
 
-    private static bool EntryEquals(SessionEntry left, SessionEntry right) => ReferenceEquals(left, right)
+    /// <summary>
+    /// Compares every persisted source transition field, including immutable edit inputs.
+    /// </summary>
+    internal static bool EntryEquals(SessionEntry left, SessionEntry right) => ReferenceEquals(left, right)
         || (left.Identity == right.Identity && left.Number == right.Number && left.Kind == right.Kind
             && left.Reference == right.Reference && left.Mark == right.Mark && left.Source.SequenceEqual(right.Source)
             && EditEquals(left.Edit, right.Edit) && FieldsEqual(left.Extensions, right.Extensions));
 
-    private static bool CellEquals(SessionCell left, SessionCell right) => ReferenceEquals(left, right)
+    /// <summary>
+    /// Compares retained execution history, including styled output and additive fields.
+    /// </summary>
+    internal static bool CellEquals(SessionCell left, SessionCell right) => ReferenceEquals(left, right)
         || (left.Identity == right.Identity && left.Number == right.Number && left.Kind == right.Kind && left.State == right.State
             && left.Source.SequenceEqual(right.Source) && left.Inputs.SequenceEqual(right.Inputs)
             && left.Output.Length == right.Output.Length && left.Output.Zip(right.Output).All(pair =>

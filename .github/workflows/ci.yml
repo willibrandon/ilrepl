@@ -25,14 +25,16 @@ jobs:
           - name: Windows x64
             os: windows-latest
             artifact: windows-x64
+            timeout: 40
           - name: Windows Arm64
             os: windows-11-arm
             artifact: windows-arm64
           - name: macOS Arm64
             os: macos-26
             artifact: macos-arm64
+            timeout: 45
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: ${{ matrix.timeout || 30 }}
 
     steps:
       - uses: actions/checkout@v6
@@ -42,18 +44,23 @@ jobs:
         with:
           dotnet-version: '10.0.400'
 
-      - name: Restore solution workloads
-        run: dotnet workload restore
+      - name: Check the generated startup catalog
+        run: dotnet run --file scripts/Generate-BootstrapCatalog.cs -c Release -- --check
 
       - name: Test
-        run: dotnet test --report-trx --results-directory TestResults
+        run: >-
+          dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj -c Release
+          --report-trx --results-directory TestResults
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.artifact }}
-          path: TestResults/
+          path: |
+            TestResults/
+            **/artifacts/export-conformance/**
+            artifacts/responsiveness/**
 
   test-musl:
     name: tests (Alpine ${{ matrix.arch }})
@@ -76,26 +83,81 @@ jobs:
           -v "$PWD:/repo" -w /repo
           mcr.microsoft.com/dotnet/sdk:10.0.400-alpine3.23
           sh -c 'apk add --no-cache build-base icu-libs libstdc++ &&
-          dotnet workload restore &&
-          dotnet test --report-trx --results-directory TestResults'
+          dotnet run --file scripts/Generate-BootstrapCatalog.cs -c Release -- --check &&
+          dotnet test --project tests/IlRepl.Tests/IlRepl.Tests.csproj -c Release
+          --report-trx --results-directory TestResults'
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: test-results-linux-musl-${{ matrix.arch }}
-          path: TestResults/
+          path: |
+            TestResults/
+            **/artifacts/export-conformance/**
+            artifacts/responsiveness/**
 
   native-aot:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    name: packaged frontend (${{ matrix.rid }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+          - rid: win-arm64
+            os: windows-11-arm
+          - rid: linux-x64
+            os: ubuntu-latest
+          - rid: linux-arm64
+            os: ubuntu-24.04-arm
+          - rid: linux-musl-x64
+            os: ubuntu-latest
+          - rid: linux-musl-arm64
+            os: ubuntu-24.04-arm
+          - rid: osx-arm64
+            os: macos-26
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
 
       - name: Setup .NET
+        if: ${{ !startsWith(matrix.rid, 'linux-musl-') }}
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.400'
 
-      - name: Publish, smoke test, and pack for linux-x64
-        run: dotnet run --file scripts/Publish-NativeAot.cs -- --rid linux-x64 --package-version 0.0.0-ci
+      - name: Prepare Windows file-lock diagnostics
+        if: startsWith(matrix.rid, 'win-')
+        shell: pwsh
+        run: |
+          $ilreplHandleDirectory = Join-Path $env:RUNNER_TEMP 'ilrepl-handle'
+          $ilreplHandleArchive = "$ilreplHandleDirectory.zip"
+          Invoke-WebRequest 'https://download.sysinternals.com/files/Handle.zip' -OutFile $ilreplHandleArchive -TimeoutSec 30
+          Expand-Archive $ilreplHandleArchive $ilreplHandleDirectory
+          $ilreplHandleName = if ('${{ matrix.rid }}' -eq 'win-arm64') { 'handle64a.exe' } else { 'handle64.exe' }
+          $ilreplHandlePath = Join-Path $ilreplHandleDirectory $ilreplHandleName
+          "ILREPL_SMOKE_HANDLE_PATH=$ilreplHandlePath" >> $env:GITHUB_ENV
+
+      - name: Publish, smoke test, and pack
+        if: ${{ !startsWith(matrix.rid, 'linux-musl-') }}
+        run: dotnet run --file scripts/Publish-NativeAot.cs -- --rid ${{ matrix.rid }} --package-version 0.0.0-ci
+
+      - name: Publish, smoke test, and pack inside Alpine
+        if: startsWith(matrix.rid, 'linux-musl-')
+        run: >-
+          docker run --rm
+          -v "$PWD:/repo" -w /repo
+          mcr.microsoft.com/dotnet/sdk:10.0.400-alpine3.23
+          sh -c 'apk add --no-cache build-base clang lld zlib-dev icu-libs libstdc++ &&
+          dotnet run --file scripts/Publish-NativeAot.cs --
+          --rid ${{ matrix.rid }} --package-version 0.0.0-ci'
+
+      - name: Upload packaged validation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: packaged-validation-${{ matrix.rid }}
+          path: artifacts/native-aot/${{ matrix.rid }}/smoke-results.json
+          if-no-files-found: error

@@ -89,15 +89,17 @@ public sealed class PromptHelp
             return;
         }
 
-        var diagnostic = PromptDiagnostics.Visible(state).FirstOrDefault(item => PromptDiagnostics.AtCaret(item, state)
+        var diagnostics = PromptDiagnostics.Visible(state);
+        var diagnostic = diagnostics.FirstOrDefault(item => PromptDiagnostics.AtCaret(item, state)
             && item.Kind == AnalysisDiagnosticKind.Error)
-            ?? PromptDiagnostics.Visible(state).FirstOrDefault(item => PromptDiagnostics.AtCaret(item, state));
+            ?? diagnostics.FirstOrDefault(item => PromptDiagnostics.AtCaret(item, state));
         var candidates = PromptWidget.Candidates(state, catalog);
         var completion = candidates.Count > 0 ? candidates[Math.Clamp(state.SelectedIndex, 0, candidates.Count - 1)] : null;
         var help = diagnostic?.Explanation?.Instruction ?? completion?.InstructionHelp ?? state.Analysis?.InstructionHelp;
         if (diagnostic is null && help is null)
         {
-            diagnostic = PromptDiagnostics.Current(state);
+            diagnostic = diagnostics.FirstOrDefault(item => item.Kind == AnalysisDiagnosticKind.Error)
+                ?? (diagnostics.Count > 0 ? diagnostics[0] : null);
             help = diagnostic?.Explanation?.Instruction;
         }
         if (diagnostic is null && help is null && (state.Analyzer?.IsPending == true || state.Requester?.IsPending == true))
@@ -127,7 +129,7 @@ public sealed class PromptHelp
         var actions = new List<HelpAction>();
         if (diagnostic is not null)
         {
-            var display = PromptDiagnostics.Display(state)!;
+            var display = PromptDiagnostics.Display(diagnostic, diagnostics.Count);
             details.Add(TranscriptLine.Of(LineKind.Info, display.Text, display.Style));
             details.AddRange(PromptHelpContent.Diagnostic(diagnostic, state.Tokenizer));
             var sources = diagnostic.Explanation is { } explanation

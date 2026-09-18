@@ -24,6 +24,16 @@ public sealed record SessionInterruption
     public string[] Source { get; set; } = [];
 
     /// <summary>
+    /// The operating system exit status, when the host exited before its runtime could be recovered.
+    /// </summary>
+    public int? ExitCode { get; set; }
+
+    /// <summary>
+    /// The bounded host diagnostic output retained with the interrupted attempt.
+    /// </summary>
+    public string? StandardError { get; set; }
+
+    /// <summary>
     /// Additive format fields retained when a supported document is saved again.
     /// </summary>
     [JsonExtensionData]

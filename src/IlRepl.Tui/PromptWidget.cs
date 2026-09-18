@@ -163,7 +163,7 @@ public sealed partial record PromptWidget(
             var children = new List<Hex1bWidget>();
             var diagnosticStyle = PromptDiagnostics.Display(state)?.Style ?? SpanStyle.Dim;
             children.AddRange(PromptDiagnostics.Lines(state, Width).Take(Fit.DiagnosticRows)
-                .Select(line => v.ThemePanel(SpanPalette.Mutator(diagnosticStyle), v.Text(line))));
+                .Select(line => StyledLine(line, diagnosticStyle)));
             if (paletteVisible)
             {
                 children.Add(BuildPalette(v, candidates, state, Fit, Width));
@@ -191,7 +191,7 @@ public sealed partial record PromptWidget(
 
         var candidates = Candidates(state, catalog);
         var best = candidates.Count == 0 ? null : candidates[Math.Clamp(state.SelectedIndex, 0, candidates.Count - 1)];
-        return best is null ? null : CompletionEdit.For(state, best)?.Prediction(state);
+        return best is null ? CompletionEdit.PendingPrediction(state) : CompletionEdit.For(state, best)?.Prediction(state);
     }
 
     private void Bind(InputBindingsBuilder b, PromptState state)
@@ -206,7 +206,7 @@ public sealed partial record PromptWidget(
         b.Key(Hex1bKey.F8).Action(_ => PromptDiagnostics.Move(state, false), "Next diagnostic");
         b.Shift().Key(Hex1bKey.F8).Action(_ => PromptDiagnostics.Move(state, true), "Previous diagnostic");
         // The builder runs for every key, so what it reads here is the state that key meets.
-        var candidates = Candidates(state, Catalog);
+        var candidates = DisplayCandidates(state, Catalog);
         var paletteVisible = candidates.Count > 0 && Fit.PaletteRows > 0;
         var predictionVisible = PredictionFor(state, Catalog) is not null;
         var onFirst = state.CaretLine <= 1;
@@ -240,6 +240,7 @@ public sealed partial record PromptWidget(
             b.Remove(EditorWidget.MoveUp);
             b.Key(Hex1bKey.UpArrow).Action(_ =>
             {
+                state.Requester?.CancelAcceptance();
                 if (paletteVisible)
                 {
                     state.SelectedIndex = Math.Max(0, state.SelectedIndex - 1);
@@ -258,6 +259,7 @@ public sealed partial record PromptWidget(
             b.Remove(EditorWidget.MoveDown);
             b.Key(Hex1bKey.DownArrow).Action(_ =>
             {
+                state.Requester?.CancelAcceptance();
                 if (paletteVisible)
                 {
                     state.SelectedIndex = Math.Min(candidates.Count - 1, state.SelectedIndex + 1);
@@ -292,7 +294,7 @@ public sealed partial record PromptWidget(
         b.Ctrl().Key(Hex1bKey.P).Action(_ => HistoryBack(state), "Previous entry");
         b.Ctrl().Key(Hex1bKey.N).Action(_ => HistoryForward(state), "Next entry");
         b.Ctrl().Key(Hex1bKey.U).Action(_ => DeleteToLineStart(state), "Delete to the start of the line");
-        b.Ctrl().Key(Hex1bKey.C).Action(c => CtrlC(state, c), "Copy, clear, or quit");
+        b.Ctrl().Key(Hex1bKey.C).Action(_ => CtrlC(state), "Copy, interrupt, or clear");
     }
 
     private void Enter(PromptState state, IReadOnlyList<CompletionItem> candidates, EnterAction enter)
@@ -344,27 +346,10 @@ public sealed partial record PromptWidget(
         }
 
         var item = candidates[Math.Clamp(state.SelectedIndex, 0, candidates.Count - 1)];
-        if (CompletionEdit.For(state, item) is not { } edit)
-        {
-            return;
-        }
-
-        edit.Apply(state);
-        if (item.Continuation is { } token)
-        {
-            state.Anchors.Add(edit.Range.Start.Value, edit.Range.Start.Value + (edit.CaretOffset ?? edit.Text.Length), token);
-        }
-
-        state.PaletteDismissed = true;
-        state.PaletteNavigated = false;
-        state.Prediction.Hide();
-        if (item.Continues)
-        {
-            state.Requester?.Request(state);
-        }
+        if (!CompletionEdit.Accept(state, item)) state.Requester?.QueueAcceptance(state, item);
     }
 
-    private void CtrlC(PromptState state, InputBindingActionContext context)
+    private void CtrlC(PromptState state)
     {
         // Where the terminal copies itself there is no handler, and a selection clears like any buffer.
         if (CopyHandler is { } copy && state.Editor.Cursor.HasSelection && !state.SelectionIsReturned)
@@ -372,6 +357,8 @@ public sealed partial record PromptWidget(
             copy(state.Editor.Document.GetText(state.Editor.Cursor.SelectionRange));
             return;
         }
+
+        if (state.Interrupt?.Invoke() == true) return;
 
         if (state.Busy)
         {
@@ -391,7 +378,6 @@ public sealed partial record PromptWidget(
             return;
         }
 
-        context.RequestStop();
     }
 
     // Ctrl+U as readline and prompt_toolkit have it: the line is cut from the caret back to
@@ -462,6 +448,9 @@ public sealed partial record PromptWidget(
 
         state.LastLength = editor.Document.Length;
     }
+
+    private static TranscriptLineWidget StyledLine(string text, SpanStyle style) =>
+        new TranscriptLineWidget(TranscriptLine.Of(LineKind.Info, text, style), 0).CacheRendering();
 
     // One recorded edit that swaps a range for new text and puts the caret after it, so undo
     // brings back the text and the caret as they were, with no selection left behind.

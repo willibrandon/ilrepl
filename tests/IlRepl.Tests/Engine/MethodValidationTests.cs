@@ -146,16 +146,23 @@ public sealed class MethodValidationTests
     /// <summary>
     /// Superseded method versions are collected while the trampoline and its current version remain callable.
     /// </summary>
+    /// <param name="deferred">Whether the first version uses reconstructed-session activation.</param>
     [TestMethod]
-    public void Redefinitions_ReleaseSupersededVersions()
+    [DataRow(false)]
+    [DataRow(true)]
+    public void Redefinitions_ReleaseSupersededVersions(bool deferred)
     {
         TestSkip.Unless(!OperatingSystem.IsBrowser(), "unloading needs CoreCLR");
         const int Redefinitions = 20;
-        var session = new Session();
+        var session = new Session { DeferActivation = deferred };
         var versions = new List<WeakReference>();
         for (var i = 0; i <= Redefinitions; i++)
         {
             versions.Add(DefineVersion(session, i));
+            if (i == 0 && deferred)
+            {
+                session.Activate();
+            }
         }
 
         Assert.HasCount(1, session.Methods);

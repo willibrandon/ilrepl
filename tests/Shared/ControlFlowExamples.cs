@@ -1,20 +1,24 @@
 namespace IlRepl.Tests.Shared;
 
 /// <summary>
-/// Supplies matching control-flow reproductions for CoreCLR, ILVerification, and browser Mono.
+/// Supplies control-flow reproductions consumed by the independent desktop export conformance driver.
 /// </summary>
 public static class ControlFlowExamples
 {
     /// <summary>
-    /// The source cases; accepted methods return 42 when called with argument 1.
+    /// The named source cases and their explicit expected execution and verification outcomes.
     /// </summary>
     public static IReadOnlyList<ControlFlowExample> All { get; } =
     [
         new("Diamond", ["ldarg.0", "brtrue OTHER", "ldc.i4.s 41", "br DONE", "OTHER: ldc.i4.s 42", "DONE: ret"], true),
+        new("DiamondZero", ["ldarg.0", "brtrue OTHER", "ldc.i4.s 41", "br DONE", "OTHER: ldc.i4.s 42", "DONE: ret"],
+            true, Input: 0, Expected: 41),
         new("Loop", ["AGAIN: ldarg.0", "brfalse DONE", "ldarg.0", "ldc.i4.1", "sub", "starg.s n", "br AGAIN",
             "DONE: ldc.i4.s 42", "ret"], true),
         new("Switch", ["ldarg.0", "switch (ZERO, ONE)", "ldc.i4.0", "ret", "ZERO: ldc.i4.1", "ret",
             "ONE: ldc.i4.s 42", "ret"], true),
+        new("SwitchDefault", ["ldarg.0", "switch (ZERO, ONE)", "ldc.i4.0", "ret", "ZERO: ldc.i4.1", "ret",
+            "ONE: ldc.i4.s 42", "ret"], true, Input: 2, Expected: 0),
         new("DeadCode", ["br DONE", "pop", "DONE: ldc.i4.s 42", "ret"], true),
         new("MixedFloats", ["ldarg.0", "brtrue OTHER", "ldc.r4 1.0", "br DONE", "OTHER: ldc.r8 2.0", "DONE: pop",
             "ldc.i4.s 42", "ret"], true),

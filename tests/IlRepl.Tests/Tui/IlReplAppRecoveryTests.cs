@@ -8,8 +8,7 @@ using IlRepl.Tui;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// A block the engine refuses comes back whole, with the refused line selected and the engine
-/// returned to where it stood before the block; what ran or committed stays.
+/// Verifies that refused blocks return to the editor while completed executions and definitions remain accepted.
 /// </summary>
 [TestClass]
 public sealed class IlReplAppRecoveryTests
@@ -323,11 +322,13 @@ public sealed class IlReplAppRecoveryTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_twice, ct);
-        engine.Allow(5);
+        engine.HoldReplyAt(6);
+        engine.Allow(6);
+        await auto.WaitUntilAsync(_ => engine.ReplyWaiting, description: "the closing brace has committed before its reply arrives");
         await auto.WaitUntilTextAsync("sending 5/6");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await auto.WaitUntilTextAsync("cancelling 5/6");
-        engine.Allow(1);
+        engine.ReleaseReply();
         await auto.WaitUntilTextAsync("end of method Twice");
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]>" && !s.ContainsText("cancelling"), description: "the block is done and the buffer is empty");
         Assert.DoesNotContain(l => l.PlainText.Contains("abandoned", StringComparison.Ordinal), transcript.Lines);
@@ -357,12 +358,10 @@ public sealed class IlReplAppRecoveryTests
         engine.Allow(3);
         await auto.WaitUntilTextAsync("sending 3/6");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
-        await auto.WaitUntilTextAsync("cancelling 3/6");
-        engine.Allow(1);
         await auto.WaitUntilTextAsync("method Twice abandoned; the block is back in the editor");
         await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 5) == "  ...> }", description: "the whole block is back");
         Assert.AreEqual(0, engine.Status.OpenDepth);
-        Assert.HasCount(4, engine.Handled);
+        Assert.HasCount(3, engine.Handled);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -451,8 +450,6 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilTextAsync("sending 2/6");
         await auto.WaitUntilTextAsync("1 open block");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
-        await auto.WaitUntilTextAsync("cancelling 2/6");
-        engine.Allow(1);
         await auto.WaitUntilTextAsync("lines withdrawn; the block is back in the editor");
         await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && !s.ContainsText("open block"), description: "the region is back in the editor and gone from the cell");
         Assert.AreEqual(0, engine.Status.OpenDepth);
@@ -535,8 +532,7 @@ public sealed class IlReplAppRecoveryTests
     }
 
     /// <summary>
-    /// When Ctrl+C lands after the final brace committed, the queued text comes back to the
-    /// editor rather than running behind a cancel.
+    /// Ctrl+C after a committed final brace returns queued text to the editor without executing it.
     /// </summary>
     [TestMethod]
     public async Task CtrlC_RacingFinalBrace_QueuedTextComesBack()
@@ -550,13 +546,15 @@ public sealed class IlReplAppRecoveryTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_twice, ct);
-        engine.Allow(5);
+        engine.HoldReplyAt(6);
+        engine.Allow(6);
+        await auto.WaitUntilAsync(_ => engine.ReplyWaiting, description: "the closing brace has committed before its reply arrives");
         await auto.WaitUntilTextAsync("sending 5/6");
         await AppTest.TypeLinesAsync(auto, ["nop"], ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && s.ContainsText("sending 5/6"), description: "the line is queued behind the block");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await auto.WaitUntilTextAsync("cancelling 5/6");
-        engine.Allow(1);
+        engine.ReleaseReply();
         await auto.WaitUntilTextAsync("end of method Twice");
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]> nop" && !s.ContainsText("cancelling"), description: "the block stays and the queued line is back in the editor");
         Assert.HasCount(6, engine.Handled, "the queued line did not run");
@@ -659,8 +657,7 @@ public sealed class IlReplAppRecoveryTests
     }
 
     /// <summary>
-    /// A blank run queued behind a block that commits before Ctrl+C takes comes back as the
-    /// empty buffer it is: Enter runs the cell once, and two queued runs come back as two lines.
+    /// Ctrl+C after a committed block preserves queued blank runs as individually editable lines.
     /// </summary>
     [TestMethod]
     public async Task CtrlC_RacingFinalBrace_QueuedBlankRunIsTheEmptyBuffer()
@@ -677,7 +674,9 @@ public sealed class IlReplAppRecoveryTests
         await AppTest.TypeLinesAsync(auto, ["ldc.i4 7"], ct);
         await auto.WaitUntilTextAsync("stack [int32]");
         await AppTest.TypeLinesAsync(auto, s_twice, ct);
-        engine.Allow(5);
+        engine.HoldReplyAt(7);
+        engine.Allow(6);
+        await auto.WaitUntilAsync(_ => engine.ReplyWaiting, description: "the closing brace has committed before its reply arrives");
         await auto.WaitUntilTextAsync("sending 5/6");
         await auto.EnterAsync(ct: ct);
         await auto.TypeAsync("q", ct: ct);
@@ -686,7 +685,7 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "the buffer is empty again");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await auto.WaitUntilTextAsync("cancelling 5/6");
-        engine.Allow(1);
+        engine.ReleaseReply();
         await auto.WaitUntilTextAsync("end of method Twice");
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]>" && !s.ContainsText("cancelling") && !s.ContainsText("editing"), description: "the block stays and the queued run is the empty buffer");
         Assert.HasCount(7, engine.Handled, "the queued run did not run behind the cancel");

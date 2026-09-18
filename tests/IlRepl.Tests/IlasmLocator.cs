@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 
 namespace IlRepl.Tests;
@@ -53,25 +54,33 @@ internal static class IlasmLocator
     /// <returns>The assembled image.</returns>
     public static byte[] Assemble(string source)
     {
-        var ilasm = Require();
-        var directory = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
+        var result = AssembleResultAsync(source).GetAwaiter().GetResult();
+        Assert.AreEqual(0, result.Tool.ExitCode, result.Tool.StandardOutput + result.Tool.StandardError + "\n" + source);
+        Assert.IsNotEmpty(result.Image, "A successful assembler must produce an image.");
+        return result.Image;
+    }
+
+    /// <summary>
+    /// Runs the assembler without treating an expected nonzero exit as an infrastructure failure.
+    /// </summary>
+    /// <param name="source">The source to assemble, including intentional rejection controls.</param>
+    /// <param name="cancellationToken">Cancels assembly and drains the terminated tool.</param>
+    /// <returns>The exit code, diagnostics, and any successful assembly image.</returns>
+    internal static async Task<IlasmResult> AssembleResultAsync(string source, CancellationToken cancellationToken = default)
+    {
+        var directory = Directory.CreateTempSubdirectory("ilrepl-ilasm-").FullName;
         try
         {
             var il = Path.Combine(directory, "cell.il");
             var dll = Path.Combine(directory, "cell.dll");
-            File.WriteAllText(il, source);
-            // Options take a dash: a slash is a path on Unix.
-            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ilasm, ["-DLL", "-QUIET", "-OUTPUT=" + dll, il])
+            await File.WriteAllTextAsync(il, source, cancellationToken);
+            var start = new ProcessStartInfo(Require(), ["-DLL", "-QUIET", "-OUTPUT=" + dll, il])
             {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            })!;
-            var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
-            process.WaitForExit();
-            Assert.AreEqual(0, process.ExitCode, output + "\n" + source);
-            return File.ReadAllBytes(dll);
+                WorkingDirectory = directory,
+            };
+            var result = await ToolProcess.RunAsync(start, cancellationToken);
+            var image = result.ExitCode == 0 ? await File.ReadAllBytesAsync(dll, cancellationToken) : [];
+            return new IlasmResult(result, image);
         }
         finally
         {

@@ -22,21 +22,32 @@ public static class ProcessNativeRunner
     /// <param name="package">The prepared immutable request.</param>
     /// <param name="cancellationToken">Cancels the inspection and terminates its process group.</param>
     /// <returns>The available native evidence and comparison outcome.</returns>
-    public static async Task<NativeReply> RunAsync(NativePackage package, CancellationToken cancellationToken)
+    public static Task<NativeReply> RunAsync(NativePackage package, CancellationToken cancellationToken) =>
+        RunAsync(package, null, cancellationToken);
+
+    /// <summary>
+    /// Registers each prepared worker with frontend ownership before allowing user execution.
+    /// </summary>
+    /// <param name="package">The prepared immutable request.</param>
+    /// <param name="register">The frontend ownership acknowledgement.</param>
+    /// <param name="cancellationToken">Cancels execution and ownership registration.</param>
+    /// <returns>The resulting worker observations.</returns>
+    internal static async Task<NativeReply> RunAsync(NativePackage package,
+        Func<OwnedProcessScope, CancellationToken, Task>? register, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(package);
         cancellationToken.ThrowIfCancellationRequested();
         var capabilityKey = package.Options.Info ? NativeCapabilityCache.Key(package) : null;
         if (capabilityKey is not null && NativeCapabilityCache.TryGet(capabilityKey, out var cached)) return cached;
         var root = Path.Combine(Path.GetTempPath(), "ilrepl-native-" + Guid.NewGuid().ToString("N"));
-        var left = await RunSideAsync(package, true, root, cancellationToken).ConfigureAwait(false);
+        var left = await RunSideAsync(package, true, root, register, cancellationToken).ConfigureAwait(false);
         if (package.Right is null)
         {
             var reply = new NativeReply { Outcome = left.Outcome, Left = left };
             if (capabilityKey is not null) NativeCapabilityCache.Store(capabilityKey, reply);
             return reply;
         }
-        var right = await RunSideAsync(package, false, root, cancellationToken).ConfigureAwait(false);
+        var right = await RunSideAsync(package, false, root, register, cancellationToken).ConfigureAwait(false);
         if (left.Outcome != "complete" || right.Outcome != "complete")
             return new NativeReply { Outcome = "incomplete", Left = left, Right = right };
         if (!package.Options.Raw && (left.NormalizationProblems.Length != 0 || right.NormalizationProblems.Length != 0))
@@ -51,7 +62,8 @@ public static class ProcessNativeRunner
         };
     }
 
-    private static async Task<NativeReport> RunSideAsync(NativePackage package, bool left, string root, CancellationToken cancellationToken)
+    private static async Task<NativeReport> RunSideAsync(NativePackage package, bool left, string root,
+        Func<OwnedProcessScope, CancellationToken, Task>? register, CancellationToken cancellationToken)
     {
         var target = left ? package.Left : package.Right!;
         var state = new NativeWorkerState { Report = new NativeReport { Name = target.Name, Fingerprint = target.Fingerprint,
@@ -59,7 +71,7 @@ public static class ProcessNativeRunner
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var outputLifetime = new CancellationTokenSource();
         using var process = new Process();
-        using var group = new ComparisonProcessGroup();
+        using var group = new OwnedProcessGroup();
         using var port = new NativeDiagnosticPort();
         DiagnosticsClientConnector? connector = null;
         EventPipeSession? session = null;
@@ -103,13 +115,14 @@ public static class ProcessNativeRunner
             foreach (var (key, value) in environment) process.StartInfo.Environment[key] = value;
             lifetime.CancelAfter(TimeSpan.FromMinutes(2));
             connecting = DiagnosticsClientConnector.FromDiagnosticPort(port.Address + ",listen", lifetime.Token);
+            WorkerOwnerWatchdog.Configure(process.StartInfo);
             started = process.Start();
             if (!started) throw new IOException("could not start the native inspection runtime");
             input = WriteInputAsync(process.StandardInput.BaseStream, package.Options.StandardInput, lifetime.Token);
             stdout = ReadOutputAsync(process.StandardOutput, 64 * 1024, overflow, outputLifetime.Token,
                 NativeOutputBuffer.StartMarker(root));
             stderr = ReadOutputAsync(process.StandardError, 64 * 1024, overflow, outputLifetime.Token);
-            var exit = process.WaitForExitAsync(CancellationToken.None);
+            var exit = OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None);
             if (await Task.WhenAny(connecting, exit).ConfigureAwait(false) == exit)
                 throw new IOException($"native runtime exited during diagnostics startup with code {process.ExitCode}");
             connector = await connecting.ConfigureAwait(false) ?? throw new IOException("CoreCLR diagnostics startup timed out");
@@ -137,6 +150,9 @@ public static class ProcessNativeRunner
                 if (!attached && File.Exists(Path.Combine(root, "group-ready")))
                 {
                     group.Attach(process);
+                if (register is not null)
+                    await register(OwnedProcessGroup.Describe(process, Guid.NewGuid().ToString("N")), cancellationToken)
+                        .ConfigureAwait(false);
                     attached = true;
                     await File.WriteAllTextAsync(Path.Combine(root, "start"), "start", lifetime.Token).ConfigureAwait(false);
                 }
@@ -198,12 +214,12 @@ public static class ProcessNativeRunner
             {
                 // Orderly shutdown also flushes release runtimes that leave the final native listing buffered.
                 await File.WriteAllTextAsync(Path.Combine(root, "release"), "release", CancellationToken.None).ConfigureAwait(false);
-                try { await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5),
+                try { await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5),
                     CancellationToken.None).ConfigureAwait(false); }
                 catch (TimeoutException) { /* A workload can register an exit handler that never returns. */ }
             }
             Kill(process);
-            if (started) await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            if (started) await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None).ConfigureAwait(false);
             await group.StopAsync().ConfigureAwait(false);
             outputLifetime.CancelAfter(TimeSpan.FromSeconds(1));
             if (input is not null) await input.ConfigureAwait(false);

@@ -1,4 +1,9 @@
 <Project>
+  <!-- Scope restore assets to this host; NuGet's dependency walk does not honor reference property removal. -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'IlRepl.Host' and '$(_IlReplHostBuildDirectory)' != ''">
+    <MSBuildProjectExtensionsPath>$(_IlReplHostBuildDirectory)obj/</MSBuildProjectExtensionsPath>
+  </PropertyGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Version Condition="$(MSBuildProjectName.StartsWith('IlRepl'))">0.4.1</Version>

@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using IlRepl.Hosting;
+using IlRepl.Processes;
 
 namespace IlRepl.Tests.EndToEnd;
 

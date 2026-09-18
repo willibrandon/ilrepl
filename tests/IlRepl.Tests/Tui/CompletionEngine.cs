@@ -1,104 +1,162 @@
 using System.Collections.Concurrent;
+using System.Runtime.Loader;
 using IlRepl.Protocol;
 using IlRepl.Repl;
+using Mono.Cecil;
+using Mono.Cecil.Cil;
 
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// Controls completion replies while retaining the real engine's vocabulary and mutation behavior.
+/// Gates delivery of real editing results without synthesizing candidate pages or assembly observations.
 /// </summary>
 internal sealed class CompletionEngine : IReplEngine
 {
     private readonly InProcessEngine _inner = new();
-    private TaskCompletionSource<long> _assembliesChanged = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly CancellationTokenSource _lifetime = new();
+    private bool _disposed;
+    private readonly Lock _callsLock = new();
+    private readonly List<HeldCompletion> _calls = [];
 
     /// <summary>
-    /// Every completion call in arrival order.
+    /// Every real completion call in arrival order.
     /// </summary>
-    public List<HeldCompletion> Calls { get; } = [];
-
-    /// <summary>
-    /// An optional synchronous response used to test same-frame publication.
-    /// </summary>
-    public CompletionReply? Immediate { get; set; }
-
-    /// <inheritdoc/>
-    public IReadOnlyList<CompletionItem> Catalog => _inner.Catalog;
-
-    /// <inheritdoc/>
-    public CilVocabulary Vocabulary => _inner.Vocabulary;
-
-    /// <inheritdoc/>
-    public SessionStatus Status => _inner.Status;
-
-    /// <inheritdoc/>
-    public long AssemblyVersion { get; private set; }
-
-    /// <inheritdoc/>
-    public Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken) =>
-        version == AssemblyVersion ? _assembliesChanged.Task.WaitAsync(cancellationToken) : Task.FromResult(AssemblyVersion);
-
-    /// <summary>
-    /// Reports an assembly load independently of the session revision and any pending replies.
-    /// </summary>
-    public void ChangeAssemblies()
+    public IReadOnlyList<HeldCompletion> Calls
     {
-        var previous = _assembliesChanged;
-        _assembliesChanged = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        previous.TrySetResult(++AssemblyVersion);
+        get { lock (_callsLock) { return _calls.ToArray(); } }
     }
 
     /// <summary>
-    /// Whether analysis responses are controlled by the test.
+    /// Whether prepared completion replies remain held until the test releases them.
+    /// </summary>
+    public bool HoldCompletion { get; set; } = true;
+
+    /// <summary>
+    /// Whether prepared analysis replies remain held until the test releases them.
     /// </summary>
     public bool HoldAnalysis { get; set; }
 
     /// <summary>
-    /// The held requests in arrival order.
+    /// Every real analysis call in arrival order.
     /// </summary>
     public ConcurrentQueue<HeldAnalysis> Analyses { get; } = new();
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
+    public IReadOnlyList<CompletionItem> Catalog => _inner.Catalog;
+
+    /// <inheritdoc />
+    public CilVocabulary Vocabulary => _inner.Vocabulary;
+
+    /// <inheritdoc />
+    public SessionStatus Status => _inner.Status;
+
+    /// <inheritdoc />
+    public long AssemblyVersion => _inner.AssemblyVersion;
+
+    /// <inheritdoc />
+    public Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken) =>
+        _inner.WaitForAssembliesAsync(version, cancellationToken);
+
+    /// <summary>
+    /// Establishes real catalog and analysis metadata before a test begins observing request delivery.
+    /// </summary>
+    public async Task PrimeAsync(CancellationToken cancellationToken)
+    {
+        long before;
+        do
+        {
+            before = AssemblyVersion;
+            await _inner.CompleteAsync(new CompletionRequest(["call Console::Wr"], 0, 16, null, []), cancellationToken);
+            await _inner.AnalyzeAsync(new AnalysisRequest(["ldc.i4.1", "ret"], 1, 0, 0), cancellationToken);
+        }
+        while (before != AssemblyVersion);
+    }
+
+    /// <summary>
+    /// Loads a generated assembly without changing accepted session source or its semantic revision.
+    /// </summary>
+    public static void ChangeAssemblies()
+    {
+        var name = "EditingLoad" + Guid.NewGuid().ToString("N");
+        using var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0)), name, ModuleKind.Dll);
+        assembly.MainModule.Types.Add(new TypeDefinition(name, "LoadedType", TypeAttributes.Public, assembly.MainModule.TypeSystem.Object));
+        using var image = new MemoryStream();
+        assembly.Write(image);
+        image.Position = 0;
+        var context = new AssemblyLoadContext(name);
+        context.LoadFromStream(image);
+    }
+
+    /// <summary>
+    /// Loads a real method whose distinct parameter types span more detail rows than the terminal can display at once.
+    /// </summary>
+    public static void LoadLongSignature()
+    {
+        const string name = "LongSignatureFixture";
+        using var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0)), name, ModuleKind.Dll);
+        var module = assembly.MainModule;
+        var owner = new TypeDefinition(name, "Methods", TypeAttributes.Public, module.TypeSystem.Object);
+        module.Types.Add(owner);
+        var method = new MethodDefinition("Use", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
+        owner.Methods.Add(method);
+        for (var index = 0; index < 80; index++)
+        {
+            var type = new TypeDefinition(name, "SignaturePart" + index.ToString("D2"), TypeAttributes.Public, module.TypeSystem.Object);
+            module.Types.Add(type);
+            method.Parameters.Add(new ParameterDefinition("argument" + index, ParameterAttributes.None, type));
+        }
+        method.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        using var image = new MemoryStream();
+        assembly.Write(image);
+        image.Position = 0;
+        var context = new AssemblyLoadContext(name);
+        context.LoadFromStream(image);
+    }
+
+    /// <inheritdoc />
     public Task<AnalysisReply> AnalyzeAsync(AnalysisRequest request, CancellationToken cancellationToken)
     {
-        if (!HoldAnalysis)
-        {
-            return _inner.AnalyzeAsync(request, cancellationToken);
-        }
-
-        var call = new HeldAnalysis(request, cancellationToken);
+        var prepared = _inner.AnalyzeAsync(request, _lifetime.Token);
+        var call = new HeldAnalysis(request, prepared, cancellationToken);
         Analyses.Enqueue(call);
-        return call.Answer.Task;
+        if (!HoldAnalysis) call.Release.TrySetResult();
+        return DeliverAsync(prepared, call.Release.Task);
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public Task<CompletionReply> CompleteAsync(CompletionRequest request, CancellationToken cancellationToken)
     {
-        var call = new HeldCompletion(request, cancellationToken);
-        Calls.Add(call);
-        return Immediate is { } reply ? Task.FromResult(reply) : call.Answer.Task;
+        var prepared = _inner.CompleteAsync(request, _lifetime.Token);
+        var call = new HeldCompletion(request, prepared, cancellationToken);
+        lock (_callsLock) { _calls.Add(call); }
+        if (!HoldCompletion) call.Release.TrySetResult();
+        return DeliverAsync(prepared, call.Release.Task);
     }
 
-    /// <inheritdoc/>
+    private async Task<T> DeliverAsync<T>(Task<T> prepared, Task release)
+    {
+        var cancellationToken = _lifetime.Token;
+        var reply = await prepared.ConfigureAwait(false);
+        await release.WaitAsync(cancellationToken).ConfigureAwait(false);
+        return reply;
+    }
+
+    /// <inheritdoc />
     public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken) => _inner.HandleAsync(line, cancellationToken);
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken) =>
         _inner.RollbackAsync(mark, cancellationToken);
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        foreach (var call in Calls)
-        {
-            call.Answer.TrySetCanceled();
-        }
-
-        foreach (var call in Analyses)
-        {
-            call.Answer.TrySetCanceled();
-        }
-
+        if (_disposed) return;
+        _disposed = true;
+        await _lifetime.CancelAsync();
+        foreach (var call in Calls) call.Release.TrySetCanceled();
+        foreach (var call in Analyses) call.Release.TrySetCanceled();
         await _inner.DisposeAsync();
+        _lifetime.Dispose();
     }
 }

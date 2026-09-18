@@ -13,6 +13,48 @@ namespace IlRepl.Tests.Engine;
 public sealed class NativeWorkerContextTests
 {
     /// <summary>
+    /// A reconstructed pending cell binds its captured visible method independently of a later replacement in the parent.
+    /// </summary>
+    /// <param name="collectible">Whether the native worker uses collectible definitions.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Context_PendingCellCallsCapturedVisibleMethodAfterReplacement(bool collectible)
+    {
+        using var files = new SessionWorkspaceFixture();
+        var session = new Session();
+        try
+        {
+            Add(session, ".method string Value() { ldstr \"captured\"; ret }",
+                "ldstr " + LiteralParser.Escape(files.MarkerPath), "call string Value()",
+                "call void System.IO.File::WriteAllText(string, string)");
+            var options = new NativeOptions { Run = true, Collectible = collectible };
+            var target = NativeCapture.Create(session, "", options);
+            session.ClearCell();
+            Add(session, ".method string Value() { ldstr \"replacement\"; ret }");
+            using (var context = new NativeWorkerContext(target, options))
+            {
+                var signature = context.Session.InspectionContext.Methods.Single();
+                Assert.AreEqual("Value", signature.Name);
+                Assert.AreEqual(typeof(string), signature.ReturnType);
+                context.Prepare();
+                Assert.IsFalse(File.Exists(files.MarkerPath));
+
+                await context.InvokeAsync();
+
+                Assert.AreEqual("captured", File.ReadAllText(files.MarkerPath));
+            }
+            Add(session, "call string Value()");
+            Assert.AreEqual("replacement", session.Run().Value);
+        }
+        finally
+        {
+            session.Reset();
+            session.Resolver.Dispose();
+        }
+    }
+
+    /// <summary>
     /// An omitted nonframework image cannot be satisfied by an assembly already loaded in the parent process.
     /// </summary>
     [TestMethod]

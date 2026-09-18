@@ -102,6 +102,7 @@ public sealed partial class Session
                 if (rebuiltMethods.Contains(_methods[i]))
                 {
                     _methods[i] = _methods[i] with { Signature = MapSignature(_methods[i].Signature, map) };
+                    InvalidateSignatures();
                 }
             }
 
@@ -258,6 +259,7 @@ public sealed partial class Session
             _types.AddRange(savedTypes);
             _methods.Clear();
             _methods.AddRange(savedMethods);
+            InvalidateSignatures();
             Submissions = savedSubmissions;
             var released = new List<DefinitionAssembly>();
             foreach (var (pending, family) in loaded)
@@ -312,6 +314,7 @@ public sealed partial class Session
                     released.Add(_methods[index].Trampoline.Definition);
                     _methods[index] = committed;
                 }
+                InvalidateSignatures();
             }
 
             CellState cell;
@@ -343,6 +346,7 @@ public sealed partial class Session
             _types.AddRange(savedTypes);
             _methods.Clear();
             _methods.AddRange(savedMethods);
+            InvalidateSignatures();
             _typeTable = savedTable;
             _cell = savedCell;
             Submissions = savedSubmissions;

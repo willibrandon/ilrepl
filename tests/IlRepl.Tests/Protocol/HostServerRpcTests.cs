@@ -12,16 +12,17 @@ namespace IlRepl.Tests.Protocol;
 [TestClass]
 public sealed class HostServerRpcTests
 {
-    private static (JsonRpc Server, JsonRpc Client, IReplHost Proxy) Connect()
+    private static (JsonRpc Server, JsonRpc Client, IReplHost Proxy, HostServer Host) Connect()
     {
         var (clientPipe, serverPipe) = FullDuplexStream.CreatePair();
         var server = new JsonRpc(RpcTransport.CreateHandler(serverPipe, serverPipe));
-        server.AddLocalRpcTarget(RpcTargetMetadata.FromShape<IReplHost>(), new HostServer(new ReplCore()), null);
+        var host = new HostServer(new ReplCore());
+        server.AddLocalRpcTarget(RpcTargetMetadata.FromShape<IReplHost>(), host, null);
         server.StartListening();
         var client = new JsonRpc(RpcTransport.CreateHandler(clientPipe, clientPipe));
         var proxy = client.Attach<IReplHost>();
         client.StartListening();
-        return (server, client, proxy);
+        return (server, client, proxy, host);
     }
 
     /// <summary>
@@ -30,7 +31,8 @@ public sealed class HostServerRpcTests
     [TestMethod]
     public async Task Hello_ReturnsCatalogAndStatus()
     {
-        var (server, client, proxy) = Connect();
+        var (server, client, proxy, host) = Connect();
+        await using (host)
         using (server)
         using (client)
         {
@@ -56,7 +58,8 @@ public sealed class HostServerRpcTests
     [TestMethod]
     public async Task Handle_RoundTripsTranscriptLines()
     {
-        var (server, client, proxy) = Connect();
+        var (server, client, proxy, host) = Connect();
+        await using (host)
         using (server)
         using (client)
         {
@@ -74,12 +77,48 @@ public sealed class HostServerRpcTests
     }
 
     /// <summary>
+    /// Callers without a checkpoint receiver still receive the full document even when they request correlated delivery.
+    /// </summary>
+    [TestMethod]
+    public async Task Session_WithoutCheckpointReceiver_ReturnsCompleteDocument()
+    {
+        var (server, client, proxy, host) = Connect();
+        await using (host)
+        using (server)
+        using (client)
+        {
+            var token = TestContext.CancellationToken;
+            Assert.IsTrue((await proxy.HandleAsync("ldc.i4.s 42", token)).Succeeded);
+            Assert.IsTrue((await proxy.HandleAsync("ret", token)).Succeeded);
+            var reply = await proxy.SessionAsync(new SessionRequest
+            {
+                Action = new SessionAction { Operation = SessionOperation.Capture },
+                Editor = new SessionEditor { Lines = ["// unsent draft"], Caret = 8, Anchor = 8 },
+                CheckpointDelivery = Guid.NewGuid().ToString("N"),
+            }, token);
+
+            Assert.IsNull(reply.CheckpointDelivery);
+            Assert.IsTrue(reply.Reply.Succeeded);
+            Assert.AreSequenceEqual<string>(["ldc.i4.s 42", "ret"], reply.Document.Entries.SelectMany(entry => entry.Source));
+            Assert.AreSequenceEqual<string>(["// unsent draft"], reply.Document.Editor.Lines);
+            Assert.AreEqual(8, reply.Document.Editor.Caret);
+            Assert.AreEqual(8, reply.Document.Editor.Anchor);
+            var cell = reply.Document.Cells.Single();
+            Assert.AreEqual("succeeded", cell.State);
+            Assert.AreSequenceEqual<string>(["ldc.i4.s 42", "ret"], cell.Source);
+            Assert.Contains(line => line.Kind == LineKind.Result && line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal),
+                cell.Output);
+        }
+    }
+
+    /// <summary>
     /// The transcript buffer is drained per reply, so lines are not repeated.
     /// </summary>
     [TestMethod]
     public async Task Handle_DoesNotRepeatLines()
     {
-        var (server, client, proxy) = Connect();
+        var (server, client, proxy, host) = Connect();
+        await using (host)
         using (server)
         using (client)
         {
@@ -103,7 +142,8 @@ public sealed class HostServerRpcTests
     [TestMethod]
     public async Task Handle_ReportsOpenMethodAndMethodCount()
     {
-        var (server, client, proxy) = Connect();
+        var (server, client, proxy, host) = Connect();
+        await using (host)
         using (server)
         using (client)
         {
@@ -136,7 +176,8 @@ public sealed class HostServerRpcTests
     [TestMethod]
     public async Task Rollback_RoundTrips()
     {
-        var (server, client, proxy) = Connect();
+        var (server, client, proxy, host) = Connect();
+        await using (host)
         using (server)
         using (client)
         {
@@ -167,7 +208,8 @@ public sealed class HostServerRpcTests
     [TestMethod]
     public async Task AnalysisAndSource_RecoverEarlierInstructionOverRpc()
     {
-        var (server, client, proxy) = Connect();
+        var (server, client, proxy, host) = Connect();
+        await using (host)
         using (server)
         using (client)
         {

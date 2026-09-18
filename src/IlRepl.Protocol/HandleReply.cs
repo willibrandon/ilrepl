@@ -10,6 +10,31 @@ namespace IlRepl.Protocol;
 public sealed record HandleReply(bool Succeeded, bool Quit, IReadOnlyList<TranscriptLine> Lines, SessionStatus Status)
 {
     /// <summary>
+    /// The final operation state that the frontend must observe before releasing this source invocation to its caller.
+    /// </summary>
+    public ExecutionProgress? CompletionProgress { get; init; }
+
+    /// <summary>
+    /// The operation whose console output was also streamed before this reply.
+    /// </summary>
+    public string? OutputIdentity { get; init; }
+
+    /// <summary>
+    /// The last acknowledged output chunk, used to avoid displaying streamed output twice.
+    /// </summary>
+    public long OutputSequence { get; init; }
+
+    /// <summary>
+    /// Reply line indexes already acknowledged as leading transcript records on the streamed output channel.
+    /// </summary>
+    public IReadOnlyList<int> StreamedLineIndexes { get; init; } = [];
+
+    /// <summary>
+    /// An assembly awaiting delivery through the frontend's export destination.
+    /// </summary>
+    public AssemblyExportResult? AssemblyExport { get; init; }
+
+    /// <summary>
     /// The typed workspace action awaiting the frontend coordinator.
     /// </summary>
     public SessionAction? SessionAction { get; init; }

@@ -50,6 +50,9 @@ constants and modifiers, parameter defaults, attributes, and no constructor you 
 A call from one session method to another is a direct call in the file, and nothing in it
 refers back to the session.
 
+Exporting does not run the cell, constructors, or method edits. The destination is replaced only after the complete
+assembly has been written. Cancellation or a write failure leaves an existing destination unchanged.
+
 ## As ILAsm
 
 `.il` renders the types, the methods, and the cell as ILAsm source, and `.save` with an `.il`
@@ -80,3 +83,5 @@ il[1]> .il
     }
 }
 ```
+
+In a script or `--eval`, ending with `.save` or `.session save` saves the source without running the pending cell.

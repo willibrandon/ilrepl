@@ -32,7 +32,7 @@ public sealed partial class EditingSession : IDisposable
     /// <summary>
     /// Replays accepted source with its original coordinates while retaining a distinct editor-document identity.
     /// </summary>
-    internal EditingSession(EditingSeed seed)
+    internal EditingSession(EditingSeed seed, CancellationToken cancellationToken = default)
     {
         _seed = seed;
         _state = EmptyState();
@@ -41,9 +41,9 @@ public sealed partial class EditingSession : IDisposable
             _replaySourceKind = AnalysisSourceKind.Accepted;
             _state.Methods.AddRange(_seed.Snapshot.SessionMethods);
             _state.Definitions.AddRange(_seed.Definitions);
-            ReplayAcceptedLines(_seed.CellDeclarations, _seed.CellDeclarationLocations);
-            ReplayAcceptedLines(_seed.CellLines, _seed.CellLocations);
-            ReplayAcceptedLines(_seed.OpenLines, _seed.OpenLocations);
+            ReplayAcceptedLines(_seed.CellDeclarations, _seed.CellDeclarationLocations, cancellationToken);
+            ReplayAcceptedLines(_seed.CellLines, _seed.CellLocations, cancellationToken);
+            ReplayAcceptedLines(_seed.OpenLines, _seed.OpenLocations, cancellationToken);
 
             _state.InBlockComment = _seed.InBlockComment;
             _state.TypeArguments = _seed.TypeArguments;
@@ -61,10 +61,12 @@ public sealed partial class EditingSession : IDisposable
         }
     }
 
-    private void ReplayAcceptedLines(IReadOnlyList<string> lines, IReadOnlyList<AnalysisLocation?> locations)
+    private void ReplayAcceptedLines(IReadOnlyList<string> lines, IReadOnlyList<AnalysisLocation?> locations,
+        CancellationToken cancellationToken)
     {
         for (var index = 0; index < lines.Count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             _replayLocation = index < locations.Count ? locations[index] : null;
             var inComment = _state.InBlockComment;
             var kind = CilLexer.Classify(lines[index], ref inComment, out var line);

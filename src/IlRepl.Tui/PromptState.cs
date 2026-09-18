@@ -147,6 +147,11 @@ public sealed partial class PromptState
     public Submission? Submission { get; set; }
 
     /// <summary>
+    /// Identifies a saved editor already restored during attachment so its startup notification is applied only once.
+    /// </summary>
+    internal SessionEditor? InitialSessionEditor { get; set; }
+
+    /// <summary>
     /// Buffers submitted while another submission was in flight, oldest first; each goes when
     /// the one before it completes.
     /// </summary>

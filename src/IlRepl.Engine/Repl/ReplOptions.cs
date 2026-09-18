@@ -6,7 +6,7 @@ namespace IlRepl.Repl;
 public sealed class ReplOptions
 {
     /// <summary>
-    /// Whether this host can restore dependencies locally rather than requiring an embedded document from desktop ilrepl.
+    /// Whether this host can restore dependencies locally rather than requiring an embedded document from terminal ilrepl.
     /// </summary>
     public bool SupportsDependencyRestore { get; init; } = !OperatingSystem.IsBrowser();
 

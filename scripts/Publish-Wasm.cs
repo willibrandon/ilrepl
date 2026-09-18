@@ -10,7 +10,14 @@ using System.Text.Json;
 
 var configurationOption = new Option<string>("--configuration", "-c") { Description = "The build configuration.", DefaultValueFactory = _ => "Release" };
 var outputOption = new Option<string>("--output") { Description = "Where the browser assets go, relative to the repository.", DefaultValueFactory = _ => "docs/public/try" };
-var root = new RootCommand("Publishes the browser build of ilrepl and copies it into the docs site.") { configurationOption, outputOption };
+var conformanceOption = new Option<bool>("--conformance")
+{
+    Description = "Includes the test-only browser conformance entry point.",
+};
+var root = new RootCommand("Publishes the browser build of ilrepl and copies it into the docs site.")
+{
+    configurationOption, outputOption, conformanceOption,
+};
 
 root.SetAction(async (parseResult, cancellationToken) =>
 {
@@ -23,6 +30,11 @@ root.SetAction(async (parseResult, cancellationToken) =>
     foreach (var argument in new[] { "publish", project, "-c", configuration, "--nologo", "-v", "quiet" })
     {
         publish.ArgumentList.Add(argument);
+    }
+
+    if (parseResult.GetValue(conformanceOption))
+    {
+        publish.ArgumentList.Add("-p:BrowserConformance=true");
     }
 
     using (var process = Process.Start(publish) ?? throw new InvalidOperationException("dotnet did not start"))
@@ -58,7 +70,9 @@ root.SetAction(async (parseResult, cancellationToken) =>
         copied++;
     }
 
-    foreach (var name in PageFiles.Names)
+    var pageFiles = parseResult.GetValue(conformanceOption)
+        ? PageFiles.Names.Append("conformance-worker.js") : PageFiles.Names;
+    foreach (var name in pageFiles)
     {
         File.Copy(Path.Combine(wwwroot, name), Path.Combine(bundle, name), overwrite: true);
     }

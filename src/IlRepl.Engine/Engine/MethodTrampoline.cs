@@ -22,14 +22,16 @@ namespace IlRepl.Engine;
 public sealed class MethodTrampoline
 {
     private readonly Lazy<Action<Delegate>> _bind;
+    private readonly FieldInfo _implementationField;
 
     private MethodTrampoline(MethodSignature signature, DefinitionAssembly definition, MethodInfo method,
-        Type delegateType, Func<Action<Delegate>> bind)
+        Type delegateType, FieldInfo implementationField, Func<Action<Delegate>> bind)
     {
         Signature = signature;
         Definition = definition;
         Method = method;
         DelegateType = delegateType;
+        _implementationField = implementationField;
         _bind = new Lazy<Action<Delegate>>(bind);
     }
 
@@ -109,9 +111,10 @@ public sealed class MethodTrampoline
         cell.Fields.Add(field);
 
         var bind = new MethodDefinition("Bind", MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig, writer.Module.TypeSystem.Void);
-        bind.Parameters.Add(new ParameterDefinition("impl", ParameterAttributes.None, delegateType));
+        bind.Parameters.Add(new ParameterDefinition("impl", ParameterAttributes.None, writer.Import(typeof(Delegate))));
         var il = bind.Body.GetILProcessor();
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, delegateType);
         il.Emit(OpCodes.Volatile);
         il.Emit(OpCodes.Stsfld, field);
         il.Emit(OpCodes.Ret);
@@ -136,16 +139,12 @@ public sealed class MethodTrampoline
         var loaded = type.GetMethod(signature.Name, BindingFlags.Public | BindingFlags.Static) ?? throw new ReplException($"the trampoline for {signature.Name} has no entry point");
         var loadedDelegate = type.GetNestedType(signature.Name + "Delegate") ?? throw new ReplException($"the trampoline for {signature.Name} has no delegate type");
         var loadedBind = type.GetMethod("Bind", BindingFlags.NonPublic | BindingFlags.Static) ?? throw new ReplException($"the trampoline for {signature.Name} has no binder");
+        var loadedField = type.GetField(field.Name, BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new ReplException($"the trampoline for {signature.Name} has no implementation field");
 
-        // Binding must not go through reflection once a commit is under way, so the typed Bind
-        // is wrapped once here into a delegate that takes any delegate of the right type.
-        return new MethodTrampoline(signature, definition, loaded, loadedDelegate, () =>
-        {
-            var typed = loadedBind.CreateDelegate(typeof(Action<>).MakeGenericType(loadedDelegate));
-            var shim = typeof(MethodTrampoline).GetMethod(nameof(BindCore), BindingFlags.NonPublic | BindingFlags.Static)!
-                .MakeGenericMethod(loadedDelegate);
-            return (Action<Delegate>)shim.CreateDelegate(typeof(Action<Delegate>), typed);
-        });
+        // The emitted cast preserves type safety without a separate generic binder instantiation for every method.
+        return new MethodTrampoline(signature, definition, loaded, loadedDelegate, loadedField,
+            loadedBind.CreateDelegate<Action<Delegate>>);
     }
 
     /// <summary>
@@ -156,6 +155,36 @@ public sealed class MethodTrampoline
     {
         ArgumentNullException.ThrowIfNull(implementation);
         _bind.Value(implementation);
+    }
+
+    /// <summary>
+    /// Publishes a reconstructed implementation before execution without compiling a separate setter for each method.
+    /// </summary>
+    /// <param name="implementation">A delegate with the exact generated signature.</param>
+    internal void BindInitial(Delegate implementation)
+    {
+        ArgumentNullException.ThrowIfNull(implementation);
+        if (implementation.GetType() != DelegateType)
+        {
+            throw new InvalidCastException("the implementation does not have the trampoline's delegate type");
+        }
+
+        // The barrier also covers the runtime's first reflection setter, before its shared accessor is initialized.
+        // Readers acquire the reference through the trampoline's volatile load.
+        Thread.MemoryBarrier();
+        _implementationField.SetValue(null, implementation);
+    }
+
+    /// <summary>
+    /// Prepares the typed volatile setter before entering a replacement's publication phase.
+    /// </summary>
+    internal void PrepareBinding()
+    {
+        var bind = _bind.Value;
+        if (MethodPreparation.IsSupported)
+        {
+            MethodPreparation.Prepare(bind.Method);
+        }
     }
 
     /// <summary>
@@ -170,7 +199,7 @@ public sealed class MethodTrampoline
             throw new ReplException("the captured trampoline has no owned assembly");
         var field = method.DeclaringType!.GetField(method.Name + "Impl", BindingFlags.NonPublic | BindingFlags.Static)
             ?? throw new ReplException("the captured trampoline has no implementation field");
-        return new MethodTrampoline(signature, definition, method, field.FieldType, () => value => field.SetValue(null, value));
+        return new MethodTrampoline(signature, definition, method, field.FieldType, field, () => value => field.SetValue(null, value));
     }
 
     private static void AddParameters(MethodDefinition method, MethodSignature signature, TypeReference[] parameterTypes)
@@ -182,5 +211,4 @@ public sealed class MethodTrampoline
         }
     }
 
-    private static void BindCore<T>(Action<T> bind, Delegate implementation) where T : Delegate => bind((T)implementation);
 }

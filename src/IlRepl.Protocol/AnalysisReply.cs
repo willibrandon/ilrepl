@@ -23,4 +23,26 @@ public sealed record AnalysisReply(
     /// Explains the instruction at the caret without requiring the completion palette to be open.
     /// </summary>
     public InstructionHelp? InstructionHelp { get; init; }
+
+    /// <summary>
+    /// Immutable presentation facts for the document, including its final empty insertion position.
+    /// </summary>
+    public IReadOnlyList<AnalysisPosition> Positions { get; init; } = [];
+
+    /// <summary>
+    /// Selects a caret line from the captured document without reanalyzing source or making an RPC.
+    /// </summary>
+    public AnalysisReply At(int line)
+    {
+        if (Positions.Count == 0)
+        {
+            return this;
+        }
+
+        var position = Positions[Math.Clamp(line, 0, Positions.Count - 1)];
+        return this with
+        {
+            Stack = position.Stack, BeforeInstruction = position.BeforeInstruction, InstructionHelp = position.InstructionHelp,
+        };
+    }
 }

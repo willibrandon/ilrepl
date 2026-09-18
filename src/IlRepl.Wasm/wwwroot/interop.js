@@ -9,6 +9,14 @@ let initialSource = null;
 let initialFile = null;
 let preferences = 'true,false';
 let announceOpen = false;
+let generation = 0;
+const inputBoundaries = [];
+let appliedBoundary = null;
+let activeInputSequence = 0;
+let submittedInputSequence = 0;
+const boundaryBytes = new TextEncoder().encode('\x1b[24;8~');
+let pendingEscape = null;
+const deferredInput = [];
 
 export function initialDocument() {
   const source = initialSource;
@@ -21,19 +29,72 @@ export function initialPreferences() { return preferences; }
 export function initialAnnounceOpen() { return announceOpen; }
 
 export function checkpoint(source, path, dirty, echoStack, showTiming, pendingSubmission, pendingSource,
-  entryPrefix, cellNumbers, assetHashes) {
+  entryPrefix, cellNumbers, assetHashes, pendingInput, editor) {
   return acknowledged({ type: 'workspace-checkpoint', document: source, path, dirty, entryPrefix,
     cellNumbers: cellNumbers ? cellNumbers.split(',').map(Number) : [], assetHashes: assetHashes ? assetHashes.split(',') : [],
-    preferences: [echoStack, showTiming].join(','), pendingSubmission, pendingSource: JSON.parse(pendingSource) });
+    preferences: [echoStack, showTiming].join(','), pendingSubmission, pendingSource: JSON.parse(pendingSource),
+    submittedInputSequence, pendingInput: JSON.parse(pendingInput), editor: JSON.parse(editor) });
 }
 
 export function editorChanged(editor) {
-  self.postMessage({ type: 'workspace-editor', editor });
+  self.postMessage({ type: 'workspace-editor', generation, editor });
 }
 
 export function inputBarrier() {
-  inputChunks.push(new TextEncoder().encode('\x1b[24;8~'));
+  enqueueInput({ type: 'barrier' });
+}
+
+function enqueueInput(message) {
+  if (pendingEscape !== null) {
+    deferredInput.push(message);
+    return;
+  }
+  if (message.type === 'barrier') {
+    inputBoundaries.push({ kind: 'capture' });
+    inputChunks.push(boundaryBytes);
+  } else {
+    const bytes = Uint8Array.from(atob(message.data), character => character.charCodeAt(0));
+    inputBoundaries.push({ kind: message.replay ? 'replay' : 'live', sequence: message.sequence });
+    inputChunks.push(boundaryBytes, bytes);
+    if (bytes.length === 1 && bytes[0] === 27) {
+      // A following escape sequence would turn a standalone Escape into an Alt key in the terminal decoder.
+      // Wait for the actual Escape event before inserting its acknowledgement boundary or later input.
+      pendingEscape = message.sequence;
+    } else {
+      inputBoundaries.push({ kind: 'end', sequence: message.sequence });
+      inputChunks.push(boundaryBytes);
+    }
+  }
   self.__ilreplSignalInput?.();
+}
+
+export function completeEscapeInput() {
+  if (pendingEscape === null) return;
+  inputBoundaries.push({ kind: 'end', sequence: pendingEscape });
+  inputChunks.push(boundaryBytes);
+  pendingEscape = null;
+  while (pendingEscape === null && deferredInput.length) enqueueInput(deferredInput.shift());
+  self.__ilreplSignalInput?.();
+}
+
+export function readInputBoundary() {
+  appliedBoundary = inputBoundaries.shift() || null;
+  if (appliedBoundary?.kind === 'live' || appliedBoundary?.kind === 'replay') activeInputSequence = appliedBoundary.sequence;
+  return appliedBoundary?.kind || '';
+}
+
+export function inputSubmitted() {
+  submittedInputSequence = activeInputSequence;
+}
+
+export function inputApplied(editor) {
+  if (appliedBoundary?.kind !== 'end') return;
+  self.postMessage({ type: 'input-applied', generation, sequence: appliedBoundary.sequence, editor });
+}
+
+export function downloadAssembly(path, image) {
+  // Copy out of WASM memory before the asynchronous acknowledgement crosses a runtime turn.
+  return acknowledged({ type: 'workspace-action', operation: 'assembly-download', path, image: new Uint8Array(image) });
 }
 
 export function pageAction(operation, document, value) {
@@ -44,7 +105,7 @@ function acknowledged(message) {
   return new Promise((resolve, reject) => {
     const identity = ++checkpointSequence;
     acknowledgements.set(identity, { resolve, reject });
-    self.postMessage({ ...message, identity });
+    self.postMessage({ ...message, generation, identity });
   });
 }
 
@@ -170,9 +231,11 @@ self.__ilreplQueuedMessages = null;
 
 self.onmessage = (e) => {
   const msg = e.data;
+  const scoped = ['input', 'resize', 'workspace-ack', 'workspace-request'].includes(msg.type);
+  if (scoped && msg.generation !== generation) return;
+  if (msg.type === 'workspace-init' && generation !== 0) return;
   if (msg.type === 'input') {
-    inputChunks.push(Uint8Array.from(atob(msg.data), (c) => c.charCodeAt(0)));
-    if (self.__ilreplSignalInput) self.__ilreplSignalInput();
+    enqueueInput(msg);
   } else if (msg.type === 'resize') {
     pendingResize = msg.cols + ',' + msg.rows;
     if (self.__ilreplSignalInput) self.__ilreplSignalInput();
@@ -181,6 +244,7 @@ self.onmessage = (e) => {
     comparisons.delete(msg.identity);
     resolve?.(msg.result);
   } else if (msg.type === 'workspace-init') {
+    generation = msg.generation;
     initialSource = msg.document || null;
     initialFile = msg.path || null;
     preferences = msg.preferences || 'true,false';
@@ -192,8 +256,8 @@ self.onmessage = (e) => {
     else pending?.resolve();
   } else if (msg.type === 'workspace-request') {
     Promise.resolve().then(() => self.__ilreplWorkspace(msg.operation, msg.value || '')).then(
-      value => self.postMessage({ type: 'workspace-result', identity: msg.identity, value }),
-      error => self.postMessage({ type: 'workspace-result', identity: msg.identity, error: String(error) }));
+      value => self.postMessage({ type: 'workspace-result', generation, identity: msg.identity, value }),
+      error => self.postMessage({ type: 'workspace-result', generation, identity: msg.identity, error: String(error) }));
   }
 };
 

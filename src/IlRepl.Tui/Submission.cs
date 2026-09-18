@@ -26,6 +26,7 @@ public sealed class Submission
     private readonly Func<CancellationToken, Task> _persist;
     private readonly Action<SubmissionEvent> _post;
     private readonly Lock _comparisonLock = new();
+    private readonly CancellationTokenSource _cancellation = new();
     private CancellationTokenSource? _comparisonCancellation;
     private volatile bool _cancelled;
     private volatile bool _running = true;
@@ -43,7 +44,8 @@ public sealed class Submission
     /// <param name="inBlockComment">Whether the engine has a <c>/*</c> open when the buffer starts.</param>
     /// <param name="persist">Writes the history entry; awaited before the first line goes.</param>
     /// <param name="post">Where events go.</param>
-    public Submission(IReplEngine engine, IReadOnlyList<string> lines, int openDepth, bool inBlockComment, Func<CancellationToken, Task> persist, Action<SubmissionEvent> post)
+    public Submission(IReplEngine engine, IReadOnlyList<string> lines, int openDepth, bool inBlockComment,
+        Func<CancellationToken, Task> persist, Action<SubmissionEvent> post)
     {
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(lines);
@@ -56,13 +58,23 @@ public sealed class Submission
         _inBlockComment = inBlockComment;
         _units = [.. SubmissionSplitter.Split(lines, openDepth, inBlockComment, _commands)];
         _persist = persist;
-        _post = post;
+        var runtimeEpoch = engine.AssemblyVersion >> 32;
+        _post = update => post(update with
+        {
+            RuntimeEpoch = update.Kind == SubmissionEventKind.SessionDocument ? engine.AssemblyVersion >> 32 : runtimeEpoch,
+            SubmissionIdentity = _sourceIdentity,
+        });
         Total = _units.Sum(u => u.Sends.Count);
         var after = BlockBalance.Scan(string.Join('\n', lines), openDepth, inBlockComment, commands: engine.Vocabulary.Commands);
         DepthAfter = Math.Max(0, after.Depth);
         CommentOpenAfter = after.InBlockComment;
         Completion = RunAsync();
     }
+
+    /// <summary>
+    /// Identifies this submission independently of later input sent to a recovered runtime.
+    /// </summary>
+    internal string Identity => _sourceIdentity;
 
     /// <summary>
     /// The open depth the engine will be at once every line has gone by.
@@ -105,12 +117,15 @@ public sealed class Submission
     public void Cancel()
     {
         _cancelled = true;
+        var replaying = _engine is SessionController { IsReplaying: true };
         if (_engine is SessionController controller)
         {
             controller.CancelExecution();
         }
         lock (_comparisonLock)
         {
+            if (!_running) return;
+            if (!replaying) _cancellation.Cancel();
             _comparisonCancellation?.Cancel();
         }
     }
@@ -119,7 +134,7 @@ public sealed class Submission
     {
         try
         {
-            await _persist(CancellationToken.None).ConfigureAwait(false);
+            await _persist(_cancellation.Token).ConfigureAwait(false);
             // What the text says the engine's depth should be after each line, so a command
             // that ended a block, .clear or .reset among them, is noticed when it has.
             var expect = new BlockScan(_openDepth, _inBlockComment, false);
@@ -163,7 +178,7 @@ public sealed class Submission
                             controller.PendingInput = _lines.Skip(index + 1).ToArray();
                         }
 
-                        reply = await _engine.HandleSourceAsync(_lines[index], location, CancellationToken.None).ConfigureAwait(false);
+                        reply = await _engine.HandleSourceAsync(_lines[index], location, _cancellation.Token).ConfigureAwait(false);
                         if (reply.PendingComparison is not null || reply.PendingNative is not null)
                         {
                             _post(SubmissionEvent.Reply(reply.Lines));
@@ -312,6 +327,19 @@ public sealed class Submission
                 _post(SubmissionEvent.Done([]));
             }
         }
+        catch (OperationCanceledException)
+        {
+            IReadOnlyList<TranscriptLine> withdrawn = [];
+            try
+            {
+                withdrawn = _mark is { } mark ? await WithdrawAsync(mark, _provisional).ConfigureAwait(false) : [];
+            }
+            catch (Exception exception) when (exception is ReplEngineException or OperationCanceledException or ObjectDisposedException)
+            {
+                // A replaced runtime restores the acknowledged source through its recovery event.
+            }
+            _post(SubmissionEvent.Cancel(withdrawn, TextFrom(_boundary)));
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Whatever went wrong, the prompt must hear that the submission is over, and the
@@ -335,7 +363,11 @@ public sealed class Submission
                 controller.PendingInput = [];
             }
 
-            _running = false;
+            lock (_comparisonLock)
+            {
+                _running = false;
+                _cancellation.Dispose();
+            }
         }
     }
 

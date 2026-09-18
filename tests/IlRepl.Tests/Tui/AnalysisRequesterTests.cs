@@ -20,97 +20,105 @@ public sealed class AnalysisRequesterTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
-    /// A superseded worker cannot overwrite a newer caret stack, even when it ignores cancellation.
+    /// A cancelled delivery cannot publish stale stacks and the latest document waits for that delivery to settle.
     /// </summary>
     [TestMethod]
     public async Task OutOfOrderReplies_KeepTheCurrentDocument()
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
         await using var engine = new CompletionEngine { HoldAnalysis = true };
+        await engine.PrimeAsync(TestContext.CancellationToken);
         var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
         var requester = new AnalysisRequester(engine);
         state.SetText("nop", 3);
         requester.Refresh(state);
         await WaitAsync(() => engine.Analyses.Count == 1);
         var old = engine.Analyses.First();
-        state.SetText("ldc.i4.1", 8);
+        await old.Prepared;
+        state.SetText("ldc.i4.1\nret", 11);
         requester.Refresh(state);
-        await WaitAsync(() => engine.Analyses.Count == 2);
+        Assert.HasCount(1, engine.Analyses, "A second RPC must wait until the cancelled first one settles.");
         Assert.IsTrue(old.Cancellation.IsCancellationRequested);
+        old.Release.SetResult();
+        await WaitAsync(() => { requester.Refresh(state); return engine.Analyses.Count == 2; });
+        Assert.IsNull(state.Analysis);
         var current = engine.Analyses.Last();
-        current.Answer.SetResult(Reply(engine, current, "int32"));
+        current.Release.SetResult();
         await WaitAsync(() => { requester.Refresh(state); return state.Analysis is not null; });
-        old.Answer.SetResult(Reply(engine, old, "string"));
-        await requester.SettleAsync(TimeSpan.FromSeconds(2));
-        requester.Refresh(state);
         Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
     }
 
     /// <summary>
-    /// A cancelled request with the same document key cannot retire or prevent cancellation of its replacement.
+    /// Cancellation invalidates the request identity even when its replacement has exactly the same source.
     /// </summary>
     [TestMethod]
     public async Task SameKeyReply_DoesNotRetireReplacement()
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
         await using var engine = new CompletionEngine { HoldAnalysis = true };
+        await engine.PrimeAsync(TestContext.CancellationToken);
         var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
-        var invalidations = 0;
-        state.Invalidate = () => Interlocked.Increment(ref invalidations);
         var requester = new AnalysisRequester(engine);
         state.SetText("nop", 3);
         requester.Refresh(state);
         await WaitAsync(() => engine.Analyses.Count == 1);
         var old = engine.Analyses.First();
+        await old.Prepared;
         requester.Cancel();
         requester.Refresh(state);
-        await WaitAsync(() => engine.Analyses.Count == 2);
-        var current = engine.Analyses.Last();
-        old.Answer.SetResult(Reply(engine, old, "string"));
-        await WaitAsync(() => Volatile.Read(ref invalidations) == 1);
-        requester.Refresh(state);
+        Assert.HasCount(1, engine.Analyses);
+        old.Release.SetResult();
+        await WaitAsync(() => { requester.Refresh(state); return engine.Analyses.Count == 2; });
         Assert.IsTrue(requester.IsPending);
-        state.SetText("ret", 3);
+        Assert.IsNull(state.Analysis, "The cancelled same-key response cannot satisfy the replacement request.");
+        var current = engine.Analyses.Last();
+        state.SetText("ldc.i4.1\nret", 11);
         requester.Refresh(state);
         Assert.IsTrue(current.Cancellation.IsCancellationRequested);
-        await WaitAsync(() => engine.Analyses.Count == 3);
-        foreach (var call in engine.Analyses)
-        {
-            call.Answer.TrySetResult(Reply(engine, call, "int32"));
-        }
-
-        await requester.SettleAsync(TimeSpan.FromSeconds(2)).WaitAsync(TimeSpan.FromSeconds(5), TestContext.CancellationToken);
+        current.Release.SetResult();
+        await WaitAsync(() => { requester.Refresh(state); return engine.Analyses.Count == 3; });
+        engine.Analyses.Last().Release.SetResult();
+        await WaitAsync(() => { requester.Refresh(state); return state.Analysis is not null; });
+        Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
     }
 
     /// <summary>
-    /// A changed assembly context clears old diagnostics, and shutdown settles cancelled workers before returning.
+    /// A genuine assembly load retires old diagnostics and shutdown waits for the sole active delivery.
     /// </summary>
     [TestMethod]
     public async Task AssemblyChangeAndShutdown_RetireOwnedWorkers()
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
         await using var engine = new CompletionEngine { HoldAnalysis = true };
+        await engine.PrimeAsync(TestContext.CancellationToken);
         var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
         var requester = new AnalysisRequester(engine);
         state.SetText("nop", 3);
         requester.Refresh(state);
         await WaitAsync(() => engine.Analyses.Count == 1);
-        engine.ChangeAssemblies();
+        await engine.Analyses.First().Prepared;
+        var revision = engine.Status.Revision;
+        var version = engine.AssemblyVersion;
+        CompletionEngine.ChangeAssemblies();
+        Assert.IsGreaterThan(version, engine.AssemblyVersion);
+        Assert.AreEqual(revision, engine.Status.Revision);
         requester.Refresh(state);
-        await WaitAsync(() => engine.Analyses.Count == 2);
+        Assert.HasCount(1, engine.Analyses);
         Assert.IsNull(state.Analysis);
         var settling = requester.SettleAsync(TimeSpan.FromSeconds(2));
         Assert.IsFalse(settling.IsCompleted);
-        foreach (var call in engine.Analyses)
-        {
-            Assert.IsTrue(call.Cancellation.IsCancellationRequested);
-            call.Answer.SetResult(Reply(engine, call, "string"));
-        }
-
+        var call = engine.Analyses.Single();
+        Assert.IsTrue(call.Cancellation.IsCancellationRequested);
+        call.Release.SetResult();
         await settling;
         requester.Refresh(state);
         Assert.IsNull(state.Analysis);
     }
 
     /// <summary>
-    /// Settlement closes the engine when an analysis worker ignores cancellation.
+    /// Shutdown closes the real engine when delivery ignores cancellation and does not settle before its deadline.
     /// </summary>
     [TestMethod]
     public async Task Settlement_DisposesEngineWhenCancellationIsIgnored()
@@ -122,12 +130,114 @@ public sealed class AnalysisRequesterTests
         requester.Refresh(state);
         await WaitAsync(() => engine.Analyses.Count == 1);
         var call = engine.Analyses.Single();
-
-        await requester.SettleAsync(TimeSpan.FromMilliseconds(50))
-            .WaitAsync(TimeSpan.FromSeconds(2), TestContext.CancellationToken);
-
+        await call.Prepared;
+        await requester.SettleAsync(TimeSpan.FromSeconds(5))
+            .WaitAsync(TimeSpan.FromSeconds(20), TestContext.CancellationToken);
         Assert.IsTrue(call.Cancellation.IsCancellationRequested);
-        Assert.IsTrue(call.Answer.Task.IsCanceled);
+        Assert.IsTrue(call.Release.Task.IsCanceled);
+    }
+
+    /// <summary>
+    /// Every caret position projects the real full-document result locally without sending additional analysis requests.
+    /// </summary>
+    [TestMethod]
+    public async Task CaretMoves_ProjectWholeDocumentWithoutRpc()
+    {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        await using var engine = new CompletionEngine();
+        await engine.PrimeAsync(TestContext.CancellationToken);
+        var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
+        var requester = new AnalysisRequester(engine);
+        state.SetText("ldc.i4.1\nret", 0);
+        requester.Refresh(state);
+        await WaitAsync(() => { requester.Refresh(state); return state.Analysis is not null; });
+        Assert.AreEqual("[]", state.Analysis!.Stack!.Render());
+        var calls = engine.Analyses.Count;
+        state.Editor.SetCursorPosition(new DocumentOffset(9));
+        requester.Refresh(state);
+        Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
+        Assert.HasCount(calls, engine.Analyses);
+        for (var index = 0; index < 20; index++) requester.Refresh(state);
+        Assert.HasCount(calls, engine.Analyses);
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>
+    /// Caret motion after typing and deleting reuses the outstanding edited-document result and projects its latest position.
+    /// </summary>
+    [TestMethod]
+    public async Task CaretMoves_ReuseEditedDocumentWhileAnalysisIsPending()
+    {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        await using var engine = new CompletionEngine { HoldAnalysis = true };
+        await engine.PrimeAsync(TestContext.CancellationToken);
+        var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
+        var requester = new AnalysisRequester(engine);
+        try
+        {
+            const string typedSource = "ldc.i4.1\nretx";
+            state.SetText(typedSource, typedSource.Length);
+            requester.Refresh(state);
+            await WaitAsync(() => engine.Analyses.Count == 1);
+            var typed = engine.Analyses.Single();
+            await typed.Prepared;
+            state.Editor.DeleteBackward();
+            requester.Refresh(state);
+            Assert.IsTrue(typed.Cancellation.IsCancellationRequested);
+            typed.Release.SetResult();
+            await WaitAsync(() => { requester.Refresh(state); return engine.Analyses.Count == 2; });
+            var restored = engine.Analyses.Last();
+            await restored.Prepared;
+            for (var index = 0; index < 20; index++)
+            {
+                state.Editor.SetCursorPosition(new DocumentOffset(index % 2 == 0 ? 0 : 9));
+                requester.Refresh(state);
+                Assert.IsFalse(restored.Cancellation.IsCancellationRequested);
+                Assert.HasCount(2, engine.Analyses);
+            }
+            restored.Release.SetResult();
+            await WaitAsync(() => { requester.Refresh(state); return state.Analysis is not null; });
+            Assert.AreEqual("ldc.i4.1\nret", state.Text);
+            Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
+            Assert.IsEmpty(state.Analysis.Diagnostics);
+            Assert.HasCount(2, engine.Analyses);
+            Assert.IsFalse(requester.IsPending);
+        }
+        finally
+        {
+            foreach (var call in engine.Analyses) call.Release.TrySetResult();
+            await requester.SettleAsync(TimeSpan.FromSeconds(2));
+        }
+    }
+
+    /// <summary>
+    /// Multiple edits replace one pending document instead of creating cancelled RPCs for intermediate versions.
+    /// </summary>
+    [TestMethod]
+    public async Task RapidEdits_CoalesceToLatestDocument()
+    {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        await using var engine = new CompletionEngine { HoldAnalysis = true };
+        await engine.PrimeAsync(TestContext.CancellationToken);
+        var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
+        var requester = new AnalysisRequester(engine);
+        state.SetText("nop", 3);
+        requester.Refresh(state);
+        await WaitAsync(() => engine.Analyses.Count == 1);
+        for (var index = 0; index < 100; index++)
+        {
+            var text = "ldc.i4 " + index + "\nret";
+            state.SetText(text, text.Length);
+            requester.Refresh(state);
+        }
+        Assert.HasCount(1, engine.Analyses);
+        engine.Analyses.First().Release.SetResult();
+        await WaitAsync(() => { requester.Refresh(state); return engine.Analyses.Count == 2; });
+        Assert.AreEqual("ldc.i4 99", engine.Analyses.Last().Request.Lines[0]);
+        engine.Analyses.Last().Release.SetResult();
+        await WaitAsync(() => { requester.Refresh(state); return state.Analysis is not null; });
+        Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
+        await requester.SettleAsync(TimeSpan.FromSeconds(2));
     }
 
     /// <summary>
@@ -317,10 +427,6 @@ public sealed class AnalysisRequesterTests
         Assert.IsTrue(refusal.Select);
         Assert.IsNull(engine.Status.OpenMethod);
     }
-
-    private static AnalysisReply Reply(CompletionEngine engine, HeldAnalysis call, string type) =>
-        new(call.Request.DocumentVersion, engine.Status.Revision, 1, engine.AssemblyVersion,
-            new AnalyzedStack(AnalyzedStackKind.Known, [type]), true, []);
 
     private async Task WaitAsync(Func<bool> ready)
     {

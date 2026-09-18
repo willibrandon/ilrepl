@@ -12,6 +12,39 @@ namespace IlRepl.Tui;
 public readonly record struct CompletionEdit(DocumentRange Range, string Text, int? CaretOffset = null)
 {
     /// <summary>
+    /// Accepts only a currently bound candidate and preserves its complete edit as one undo group.
+    /// </summary>
+    internal static bool Accept(PromptState state, CompletionItem item)
+    {
+        if (For(state, item) is not { } edit) return false;
+        edit.Apply(state);
+        if (item.Continuation is { } token)
+            state.Anchors.Add(edit.Range.Start.Value, edit.Range.Start.Value + (edit.CaretOffset ?? edit.Text.Length), token);
+        state.PaletteDismissed = true;
+        state.PaletteNavigated = false;
+        state.Prediction.Hide();
+        if (item.Continues) state.Requester?.Request(state);
+        return true;
+    }
+
+    /// <summary>
+    /// Keeps a visible prediction through an assembly-only refresh while acceptance still requires a new binding.
+    /// </summary>
+    internal static string? PendingPrediction(PromptState state)
+    {
+        var snapshot = state.PendingDisplay ?? state.Completions;
+        if (snapshot is null || snapshot.Reply.Items.Count == 0) return null;
+        var item = snapshot.Reply.Items[Math.Clamp(state.SelectedIndex, 0, snapshot.Reply.Items.Count - 1)];
+        if (state.Requester?.CanRebind(state, snapshot, item) != true) return null;
+        var start = snapshot.Reply.ReplaceStart;
+        var length = snapshot.Reply.ReplaceLength;
+        if (start < 0 || length < 0 || start > state.CurrentLine.Length - length) return null;
+        var offset = state.Editor.Document.PositionToOffset(new DocumentPosition(state.CaretLine, 1)).Value + start;
+        var range = new DocumentRange(new DocumentOffset(offset), new DocumentOffset(offset + length));
+        return new CompletionEdit(range, item.InsertText + (item.TakesOperand ? " " : ""), item.CaretOffset).Prediction(state);
+    }
+
+    /// <summary>
     /// Builds an edit only when the candidate still belongs to the current document and session.
     /// </summary>
     /// <param name="state">The prompt.</param>

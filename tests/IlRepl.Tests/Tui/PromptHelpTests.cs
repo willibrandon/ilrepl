@@ -19,6 +19,111 @@ public sealed class PromptHelpTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
+    /// A real assembly load during help selection preserves coherent text and retires diagnostic navigation until analysis refreshes.
+    /// </summary>
+    /// <param name="source">The actual incomplete or invalid IL analyzed by the engine.</param>
+    /// <param name="mnemonic">The instruction whose documentation remains available.</param>
+    /// <param name="hasProducer">Whether the diagnostic identifies an earlier instruction in the editor.</param>
+    [TestMethod]
+    [DataRow("constr", "constrained.", false)]
+    [DataRow("ldc.i4.1\nthrow", "throw", true)]
+    [Timeout(30_000, CooperativeCancellation = true)]
+    public async Task AssemblyLoad_DuringHelpSelectionPreservesEvidenceAndFreshness(string source, string mnemonic, bool hasProducer)
+    {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        var token = TestContext.CancellationToken;
+        await using var engine = new CompletionEngine { HoldCompletion = false };
+        await engine.PrimeAsync(token);
+        using var invalidated = new SemaphoreSlim(0);
+        var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary))
+        {
+            Analyzer = new AnalysisRequester(engine), Invalidate = () => invalidated.Release(),
+            CurrentHelpIdentity = () => (engine.Status.Revision, engine.AssemblyVersion),
+        };
+        state.SetText(source, source.Length);
+        try
+        {
+            await FreshAnalysisAsync();
+            var before = engine.AssemblyVersion;
+            state.HelpRevision = engine.Status.Revision;
+            state.HelpAssemblyVersion = before;
+            var display = PromptDiagnostics.Display(state);
+            Assert.IsNotNull(display);
+            var analysis = state.Analysis;
+            Assert.IsNotNull(analysis);
+            var version = state.Editor.Document.Version;
+            var caret = state.Editor.Cursor.Position;
+            var undo = state.Editor.History.UndoCount;
+            var loaded = false;
+            var catalog = new ObservedCompletionCatalog(engine.Catalog, () =>
+            {
+                CompletionEngine.ChangeAssemblies();
+                loaded = true;
+                Assert.IsGreaterThan(before, engine.AssemblyVersion);
+            });
+
+            PromptHelp.Open(state, catalog);
+
+            Assert.IsTrue(loaded, "The real assembly load must occur while help is choosing its completion.");
+            Assert.IsNotNull(state.Analysis);
+            Assert.AreSame(analysis.Diagnostics, state.Analysis.Diagnostics);
+            Assert.AreEqual(before, state.Analysis.AssemblyVersion, "The newer catalog must not fabricate replacement evidence.");
+            var help = state.Help;
+            Assert.IsNotNull(help);
+            Assert.AreEqual("help · " + mnemonic, help.Heading);
+            Assert.AreEqual(display.Text, help.Lines(200)[0].Text);
+            Assert.IsFalse(help.IsCurrent(state));
+            var sources = help.Actions.Select((action, index) => (action, index)).Where(item => item.action.Source is not null).ToArray();
+            Assert.AreEqual(hasProducer, sources.Length != 0);
+            foreach (var (_, index) in sources) Assert.IsFalse(help.IsActionCurrent(state, index));
+            if (hasProducer)
+            {
+                help.Activate(state);
+                Assert.AreSame(help, state.Help);
+                Assert.AreEqual(caret, state.Editor.Cursor.Position);
+            }
+            string? opened = null;
+            state.OpenDocumentation = url => opened = url;
+            help.MoveAction(state, backwards: true, 80, 8);
+            help.Activate(state);
+            Assert.AreEqual(InstructionReference.For(mnemonic).DocumentationUrl, opened);
+            Assert.AreEqual(source, state.Text);
+            Assert.AreEqual(version, state.Editor.Document.Version);
+            Assert.AreEqual(caret, state.Editor.Cursor.Position);
+            Assert.AreEqual(undo, state.Editor.History.UndoCount);
+
+            await FreshAnalysisAsync();
+            state.HelpAssemblyVersion = engine.AssemblyVersion;
+            help.Refresh(state, engine.Catalog);
+            Assert.IsTrue(help.IsCurrent(state));
+            if (hasProducer)
+            {
+                help.MoveAction(state, backwards: false, 80, 8);
+                Assert.IsNotNull(help.Actions[help.SelectedAction].Source);
+                Assert.IsTrue(help.IsActionCurrent(state, help.SelectedAction));
+                help.Activate(state);
+                Assert.IsNull(state.Help);
+                Assert.AreEqual(1, state.CaretLine);
+                Assert.AreEqual(source, state.Text);
+            }
+        }
+        finally
+        {
+            await state.Analyzer.SettleAsync(TimeSpan.FromSeconds(5));
+        }
+
+        async Task FreshAnalysisAsync()
+        {
+            while (true)
+            {
+                state.Analyzer.Refresh(state);
+                if (state.Analysis is { } current && current.AssemblyVersion == engine.AssemblyVersion) return;
+                Assert.IsTrue(await invalidated.WaitAsync(TimeSpan.FromSeconds(5), token));
+            }
+        }
+    }
+
+    /// <summary>
     /// A caret diagnostic is presented first and exposes its required type, actual stack, and producer.
     /// </summary>
     [TestMethod]

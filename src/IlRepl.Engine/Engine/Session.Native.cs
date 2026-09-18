@@ -47,7 +47,11 @@ public sealed partial class Session
                 throw new ReplException("captured implementation has no retained image");
             var restored = new SessionMethod(signature, "", [], new CellState(Resolver, GenericContext.Empty), trampoline,
                 new CompiledMethodVersion(definition, body, trampoline.DelegateType));
-            if (binding.Visible) _methods.Add(restored);
+            if (binding.Visible)
+            {
+                _methods.Add(restored);
+                InvalidateSignatures();
+            }
             else _hiddenNativeBindings.Add(restored);
         }
         Rebuild();

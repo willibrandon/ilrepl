@@ -33,4 +33,24 @@ public sealed record SessionEditor
     /// </summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
+
+    /// <summary>
+    /// Preserves saved source while appending current startup input and retaining its caret and selection.
+    /// </summary>
+    /// <param name="input">The editor captured after the user could begin typing.</param>
+    /// <returns>The saved editor when untouched, or the combined source with rebased current editing offsets.</returns>
+    public SessionEditor WithStartupInput(SessionEditor input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        if (input.Revision == 0 && string.Join('\n', input.Lines).Length == 0) return this;
+        var saved = string.Join('\n', Lines);
+        var offset = saved.Length == 0 ? 0 : saved.Length + (input.Lines.Length == 0 ? 0 : 1);
+        return this with
+        {
+            Lines = saved.Length == 0 ? input.Lines : [.. Lines, .. input.Lines],
+            Caret = offset + input.Caret,
+            Anchor = offset + input.Anchor,
+            Revision = input.Revision,
+        };
+    }
 }

@@ -136,6 +136,75 @@ public sealed class BindingSnapshot : IDisposable
         };
 
     /// <summary>
+    /// Takes an independent metadata lease over the same immutable committed binding context.
+    /// </summary>
+    internal BindingSnapshot Lease()
+    {
+        var snapshot = WithContext(Types, SessionMethods, Generics, Locals, Arguments, Access, ThisIndex, Inspecting);
+        try
+        {
+            foreach (var source in Catalog.Sources)
+            {
+                snapshot._leases.Add(source.Lease());
+            }
+
+            return snapshot;
+        }
+        catch
+        {
+            snapshot.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Leases the same committed declarations and bindings with any newly searchable process assemblies appended in load order.
+    /// </summary>
+    internal BindingSnapshot WithProcessAssemblies(IReadOnlyList<Assembly> assemblies)
+    {
+        var leases = new List<MetadataLease>();
+        try
+        {
+            foreach (var source in Catalog.Sources) leases.Add(source.Lease());
+            var added = new List<(Assembly Assembly, AssemblySymbolSource Source)>();
+            var searchOrder = SearchOrder.ToList();
+            var searched = SearchOrder.Select(source => source.Instance).ToHashSet();
+            foreach (var assembly in assemblies)
+            {
+                if (IlRepl.Engine.SessionAssemblies.IsSessionAssembly(assembly) || AssemblySymbolSource.For(assembly) is not { } source)
+                {
+                    continue;
+                }
+
+                if (searched.Add(source.Instance)) searchOrder.Add(source);
+                if (Catalog.Source(source.Instance) is not null) continue;
+                leases.Add(source.Lease());
+                added.Add((assembly, source));
+            }
+
+            var snapshot = new BindingSnapshot(Catalog.WithAssemblies(added), searchOrder, Engine, CoreLib, [.. SessionAssemblies], Types)
+            {
+                SessionMethods = SessionMethods,
+                MethodAliases = MethodAliases,
+                EditNames = EditNames,
+                Generics = Generics,
+                Locals = Locals,
+                Arguments = Arguments,
+                Access = Access,
+                ThisIndex = ThisIndex,
+                Inspecting = Inspecting,
+            };
+            snapshot._leases.AddRange(leases);
+            return snapshot;
+        }
+        catch
+        {
+            foreach (var lease in leases) lease.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Captures the context of a session's current body.
     /// </summary>
     /// <param name="session">The session.</param>
@@ -174,13 +243,14 @@ public sealed class BindingSnapshot : IDisposable
         ArgumentNullException.ThrowIfNull(context);
         var leases = new List<MetadataLease>();
         var ordered = new List<(Assembly Assembly, AssemblySymbolSource Source)>();
+        var captured = new HashSet<AssemblySymbolSource>(ReferenceEqualityComparer.Instance);
         var searchOrder = new List<AssemblySymbolSource>();
         var sessionInstances = new HashSet<long>();
 
         void Take(Assembly assembly, bool searched)
         {
             var source = AssemblySymbolSource.For(assembly, context.Resolver.TryGetImage(assembly, out var image) ? image : null);
-            if (source is null || ordered.Any(o => ReferenceEquals(o.Source, source)))
+            if (source is null || !captured.Add(source))
             {
                 return;
             }

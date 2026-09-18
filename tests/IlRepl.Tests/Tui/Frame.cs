@@ -11,6 +11,11 @@ namespace IlRepl.Tests.Tui;
 internal sealed record Frame(int Index, IReadOnlyList<string> Lines, (int X, int Y)? Caret, int Width, int Height)
 {
     /// <summary>
+    /// The monotonic timestamp immediately after this frame was applied to the terminal.
+    /// </summary>
+    public long Timestamp { get; init; }
+
+    /// <summary>
     /// The row the caret cell is on, or null.
     /// </summary>
     public string? CaretRow => Caret is { } c ? Lines[c.Y] : null;

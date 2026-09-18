@@ -6,20 +6,24 @@ using StreamJsonRpc;
 namespace IlRepl.Host;
 
 /// <summary>
-/// Exposes the execution engine and desktop workspace operations through the host RPC connection.
+/// Exposes the execution engine and terminal workspace operations through the host RPC connection.
 /// </summary>
 /// <remarks>
 /// Serves a <see cref="ReplCore"/> over JSON-RPC. The process console is detached from the
 /// protocol streams so cells can print without corrupting the channel.
 /// </remarks>
-public sealed class HostServer : IReplHost, IAsyncDisposable
+public sealed partial class HostServer : IReplHost, IAsyncDisposable
 {
     /// <inheritdoc />
     public async Task<SessionReply> SessionAsync(SessionRequest request, CancellationToken cancellationToken)
     {
         try
         {
-            return await _engine.SessionAsync(request, cancellationToken).ConfigureAwait(false);
+            var reply = await _engine.SessionAsync(request, cancellationToken).ConfigureAwait(false);
+            var response = reply with { Reply = WithStreamedOutput(reply.Reply) };
+            return _client is not null && request.CheckpointDelivery is { } identity && reply.CheckpointDelivery == identity
+                ? response with { Document = new SessionDocument() }
+                : response with { CheckpointDelivery = null };
         }
         catch (Exception exception) when (request.Action.Operation == SessionOperation.Open
             && exception is not InvalidDataException && exception is IOException or UnauthorizedAccessException)
@@ -34,17 +38,34 @@ public sealed class HostServer : IReplHost, IAsyncDisposable
     }
 
     private readonly InProcessEngine _engine;
+    private readonly ReplCore _core;
+    private readonly IReplClient? _client;
 
     /// <summary>
     /// Initializes a server for the given REPL.
     /// </summary>
     /// <param name="core">The REPL to serve.</param>
-    public HostServer(ReplCore core)
+    /// <param name="client">The connected frontend that acknowledges source and execution progress.</param>
+    public HostServer(ReplCore core, IReplClient? client = null)
     {
         ArgumentNullException.ThrowIfNull(core);
-        _engine = new InProcessEngine(core, ProcessComparisonRunner.RunAsync, ProcessNativeRunner.RunAsync);
+        _core = core;
+        _client = client;
+        _engine = new InProcessEngine(core,
+            (package, token) => ProcessComparisonRunner.RunAsync(package, RegisterProcessAsync, token),
+            (package, token) => ProcessNativeRunner.RunAsync(package, RegisterProcessAsync, token));
         _engine.SessionTooling = new HostSessionService(_engine).ExecuteAsync;
+        _engine.WorkspaceCheckpoint = checkpoint => PublishWorkspaceAsync(checkpoint, CancellationToken.None).GetAwaiter().GetResult();
+        core.OutputReceived = PublishOutput;
+        core.Transcript.LineAdded += RetainOutputPrefix;
+        _engine.ProgressPublisher = PublishProgressAsync;
+        core.BeforeExecution = () => PublishCheckpoint(executing: true);
+        core.SourceCheckpoint = () => PublishCheckpoint(executing: false);
     }
+
+    /// <inheritdoc />
+    public Task<bool> InterruptAsync(string identity, CancellationToken cancellationToken) =>
+        _engine.InterruptAsync(identity, cancellationToken);
 
     /// <inheritdoc />
     public Task<HostHello> HelloAsync(CancellationToken cancellationToken) => _engine.HelloAsync(cancellationToken);
@@ -63,7 +84,7 @@ public sealed class HostServer : IReplHost, IAsyncDisposable
 
     /// <inheritdoc/>
     public Task<HandleReply> HandleSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken) =>
-        _engine.HandleSourceAsync(line, location, cancellationToken);
+        HandleWithCompletionAsync(() => _engine.HandleSourceAsync(line, location, cancellationToken));
 
     /// <inheritdoc/>
     public Task<HandleReply> CompareAsync(string identity, CancellationToken cancellationToken) =>
@@ -77,7 +98,7 @@ public sealed class HostServer : IReplHost, IAsyncDisposable
     public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(line);
-        return _engine.HandleAsync(line, cancellationToken);
+        return HandleWithCompletionAsync(() => _engine.HandleAsync(line, cancellationToken));
     }
 
     /// <inheritdoc />
@@ -113,20 +134,24 @@ public sealed class HostServer : IReplHost, IAsyncDisposable
     public ValueTask DisposeAsync() => _engine.DisposeAsync();
 
     /// <summary>
-    /// Serves the process's standard streams until the front-end disconnects.
+    /// Serves the frontend's private socket without using process standard streams for RPC.
     /// </summary>
+    /// <param name="path">The frontend-owned endpoint.</param>
+    /// <param name="secret">The launch-specific bootstrap secret.</param>
     /// <param name="cancellationToken">Stops the server.</param>
-    /// <returns>The exit code.</returns>
-    public static async Task<int> ServeStandardStreamsAsync(CancellationToken cancellationToken)
+    /// <returns>The process exit code.</returns>
+    public static async Task<int> ServeSocketAsync(string path, string secret, CancellationToken cancellationToken)
     {
-        var input = Console.OpenStandardInput();
-        var output = Console.OpenStandardOutput();
+        var frontendOwner = ReadFrontendOwner();
+        using var startup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        startup.CancelAfter(TimeSpan.FromSeconds(30));
+        await using var connection = await LocalSocketListener.ConnectAsync(path, secret, startup.Token).ConfigureAwait(false);
         Console.SetOut(TextWriter.Null);
         Console.SetIn(TextReader.Null);
         Console.OutputEncoding = new UTF8Encoding(false);
 
-        using var rpc = new JsonRpc(RpcTransport.CreateHandler(output, input));
-        await using var server = new HostServer(new ReplCore());
+        using var rpc = new JsonRpc(RpcTransport.CreateHandler(connection, connection));
+        var server = new HostServer(new ReplCore(), rpc.Attach<IReplClient>());
         rpc.AddLocalRpcTarget(RpcTargetMetadata.FromShape<IReplHost>(), server, null);
         rpc.StartListening();
         using var registration = cancellationToken.Register(rpc.Dispose);
@@ -134,15 +159,33 @@ public sealed class HostServer : IReplHost, IAsyncDisposable
         {
             await rpc.Completion.ConfigureAwait(false);
         }
-        catch (ConnectionLostException)
+        catch (Exception exception) when (exception is ConnectionLostException or ObjectDisposedException)
         {
-            // The front-end went away; nothing more to do.
+            // The owning frontend closed its direct connection.
         }
-        catch (ObjectDisposedException)
+        finally
         {
-            // Cancelled.
+            // Disposal may be waiting for arbitrary user code; losing the frontend cannot leave that code running.
+            var settled = false;
+            try
+            {
+                if (!OperatingSystem.IsWindows())
+                    await server.StopOwnedWorkersAsync().WaitAsync(TimeSpan.FromSeconds(1), CancellationToken.None).ConfigureAwait(false);
+                await server.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1), CancellationToken.None).ConfigureAwait(false);
+                settled = true;
+            }
+            catch (TimeoutException) { }
+            if (!settled || !OwnedProcessGroup.IsRunning(frontendOwner))
+            {
+                if (!OperatingSystem.IsWindows())
+                {
+                    using var group = new OwnedProcessGroup();
+                    group.Adopt(Environment.ProcessId);
+                    await group.StopAsync().ConfigureAwait(false);
+                }
+                Environment.Exit(3);
+            }
         }
-
         return 0;
     }
 }

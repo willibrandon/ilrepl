@@ -22,9 +22,34 @@ public sealed record SubmissionEvent(
     bool Select = false)
 {
     /// <summary>
+    /// A bounded user console chunk received before its submission finishes.
+    /// </summary>
+    public ExecutionOutput? Output { get; init; }
+
+    /// <summary>
+    /// The submission that produced this event, or null for independent frontend events.
+    /// </summary>
+    public string? SubmissionIdentity { get; init; }
+
+    /// <summary>
+    /// The runtime generation that owns this submission result, or null for frontend-only events.
+    /// </summary>
+    public long? RuntimeEpoch { get; init; }
+
+    /// <summary>
+    /// Whether the restored editor already includes queued input retained across runtime replacement.
+    /// </summary>
+    public bool RuntimeRecovery { get; init; }
+
+    /// <summary>
     /// The editor state returned by a workspace operation.
     /// </summary>
     public SessionEditor? SessionEditor { get; init; }
+
+    /// <summary>
+    /// The original saved draft to combine with the latest terminal input when startup finishes.
+    /// </summary>
+    public SessionEditor? StartupEditor { get; init; }
 
     /// <summary>
     /// Whether an approved workspace action requested that the terminal close.

@@ -30,6 +30,35 @@ public sealed class FrontEndProcessTests
     }
 
     /// <summary>
+    /// Streamed output follows its initiating echo in scripts while expression mode continues to suppress all input echoes.
+    /// </summary>
+    /// <param name="eval">Whether to supply an expression or a file with echoed source.</param>
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ConsoleOutput_PreservesEchoPolicyAndOrder(bool eval)
+    {
+        using var files = new SessionWorkspaceFixture();
+        string[] lines = ["ldstr \"visible output\"", "call void Console::WriteLine(string)", "ldc.i4 42", "ret"];
+        var source = Path.Combine(files.DirectoryPath, "output.il");
+        await File.WriteAllLinesAsync(source, lines, TestContext.CancellationToken);
+        var (code, stdout, stderr) = await RunAsync(eval ? ["--no-color", "-e", string.Join(';', lines)] : ["--no-color", source]);
+        Assert.AreEqual(0, code, stderr);
+        var printed = stdout.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        Assert.ContainsSingle(printed.Where(line => line == "visible output"));
+        Assert.ContainsSingle(printed.Where(line => line.Contains("= 42 : int32", StringComparison.Ordinal)));
+        if (eval)
+        {
+            Assert.DoesNotContain(line => line.StartsWith("il[", StringComparison.Ordinal), printed);
+        }
+        else
+        {
+            Assert.ContainsSingle(printed.Where(line => line == "il[1]> ret"));
+            Assert.IsLessThan(Array.IndexOf(printed, "visible output"), Array.IndexOf(printed, "il[1]> ret"));
+        }
+    }
+
+    /// <summary>
     /// -e can define a method and disassemble it in one run.
     /// </summary>
     [TestMethod]
@@ -218,7 +247,7 @@ public sealed class FrontEndProcessTests
         await using var terminal = Hex1bTerminal.CreateBuilder()
             .WithPtyProcess(options =>
             {
-                options.FileName = Hosting.HostLocator.FindDotnet();
+                options.FileName = Processes.HostLocator.FindDotnet();
                 options.Arguments = [RepoPaths.FrontEndAssembly, "--no-history"];
                 options.WorkingDirectory = RepoPaths.Root;
                 options.Environment = new Dictionary<string, string> { ["TERM"] = "xterm-256color", ["NO_COLOR"] = "" };
@@ -230,7 +259,7 @@ public sealed class FrontEndProcessTests
 
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
-        await WaitForPromptAsync(terminal, run, ct);
+        await WaitForReadyPromptAsync(terminal, run, ct);
 
         // What the process writes is what a terminal would see: the hardware caret is hidden and
         // no caret shape is ever asked for; the prompt paints its own caret cell.
@@ -270,7 +299,7 @@ public sealed class FrontEndProcessTests
 
             var run = terminal.RunAsync(ct);
             var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
-            await WaitForPromptAsync(terminal, run, ct);
+            await WaitForReadyPromptAsync(terminal, run, ct);
             await auto.TypeAsync("nop", ct: ct);
             await auto.EnterAsync(ct: ct);
             await auto.WaitUntilTextAsync("1 instruction");
@@ -304,7 +333,7 @@ public sealed class FrontEndProcessTests
             {
                 var run = first.RunAsync(ct);
                 var auto = new Hex1bTerminalAutomator(first, defaultTimeout: TimeSpan.FromSeconds(30));
-                await WaitForPromptAsync(first, run, ct);
+                await WaitForReadyPromptAsync(first, run, ct);
                 foreach (var line in new[] { ".method int32 Twice(int32 n) {", "ldarg n", "ldc.i4 2", "mul", "ret", "}" })
                 {
                     await auto.TypeAsync(line, ct: ct);
@@ -325,7 +354,7 @@ public sealed class FrontEndProcessTests
             {
                 var run = second.RunAsync(ct);
                 var auto = new Hex1bTerminalAutomator(second, defaultTimeout: TimeSpan.FromSeconds(30));
-                await WaitForPromptAsync(second, run, ct);
+                await WaitForReadyPromptAsync(second, run, ct);
                 await auto.UpAsync(ct: ct);
                 await auto.WaitUntilTextAsync("editing 6 lines");
                 await auto.WaitUntilTextAsync("il[1]> .method int32 Twice(int32 n) {");
@@ -352,7 +381,7 @@ public sealed class FrontEndProcessTests
         await using var terminal = Hex1bTerminal.CreateBuilder()
             .WithPtyProcess(options =>
             {
-                options.FileName = Hosting.HostLocator.FindDotnet();
+                options.FileName = Processes.HostLocator.FindDotnet();
                 options.Arguments = [RepoPaths.FrontEndAssembly, "--no-history"];
                 options.WorkingDirectory = RepoPaths.Root;
                 options.Environment = new Dictionary<string, string> { ["TERM"] = "xterm-256color", ["NO_COLOR"] = "" };
@@ -363,7 +392,7 @@ public sealed class FrontEndProcessTests
 
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(30));
-        await WaitForPromptAsync(terminal, run, ct);
+        await WaitForReadyPromptAsync(terminal, run, ct);
         var lines = new List<string> { ".method int32 Big() {", "  ldc.i4 7" };
         lines.AddRange(Enumerable.Repeat("  nop", 196));
         lines.Add("  ret");
@@ -386,11 +415,12 @@ public sealed class FrontEndProcessTests
         Assert.AreEqual(0, await run);
     }
 
-    private static async Task WaitForPromptAsync(Hex1bTerminal terminal, Task<int> run, CancellationToken cancellationToken)
+    private static async Task WaitForReadyPromptAsync(Hex1bTerminal terminal, Task<int> run, CancellationToken cancellationToken)
     {
         using var waiting = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var prompt = new Hex1bTerminalInputSequenceBuilder()
-            .WaitUntil(snapshot => snapshot.ContainsText("il[1]>"), TimeSpan.FromSeconds(30), "the initial prompt")
+            .WaitUntil(snapshot => snapshot.ContainsText("il[1]>") && !snapshot.ContainsText("starting execution host")
+                && !snapshot.ContainsText("host unavailable"), TimeSpan.FromSeconds(30), "the prompt with its host ready")
             .Build().ApplyAsync(terminal, waiting.Token);
         try
         {
@@ -421,7 +451,7 @@ public sealed class FrontEndProcessTests
         options.WorkingDirectory = RepoPaths.Root;
         if (OperatingSystem.IsWindows())
         {
-            options.FileName = Hosting.HostLocator.FindDotnet();
+            options.FileName = Processes.HostLocator.FindDotnet();
             options.Arguments = arguments;
             options.Environment = new Dictionary<string, string>
             {
@@ -433,7 +463,7 @@ public sealed class FrontEndProcessTests
             // Hex1b 0.165.0's Unix PTY inherits the environment instead of applying options.Environment.
             options.FileName = "/usr/bin/env";
             options.Arguments = ["XDG_CONFIG_HOME=" + config, "TERM=xterm-256color", "NO_COLOR=",
-                Hosting.HostLocator.FindDotnet(), .. arguments];
+                Processes.HostLocator.FindDotnet(), .. arguments];
         }
     }
 
@@ -441,7 +471,7 @@ public sealed class FrontEndProcessTests
     {
         var startInfo = new ProcessStartInfo
         {
-            FileName = Hosting.HostLocator.FindDotnet(),
+            FileName = Processes.HostLocator.FindDotnet(),
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             RedirectStandardInput = true,

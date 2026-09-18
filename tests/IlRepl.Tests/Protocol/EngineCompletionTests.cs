@@ -57,6 +57,7 @@ public sealed class EngineCompletionTests
     [DataRow(true)]
     public async Task Paging_RejectsMutationAndPreservesOrder(bool useHost)
     {
+        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
         await using var engine = useHost
             ? (IReplEngine)await HostPaths.StartEngineAsync(TestContext.CancellationToken) : new InProcessEngine();
         const string line = "call string::";
@@ -109,13 +110,13 @@ public sealed class EngineCompletionTests
     }
 
     /// <summary>
-    /// Completion waits for an explicitly released cell and observes its committed revision through both transports.
+    /// Completion uses the committed snapshot while user code remains blocked through both transports.
     /// </summary>
     /// <param name="useHost">Whether to use the real host process.</param>
     [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
-    public async Task ConcurrentHandle_CompletesBeforeTheSnapshot(bool useHost)
+    public async Task ConcurrentHandle_UsesCommittedSnapshotWhileExecuting(bool useHost)
     {
         var ct = TestContext.CancellationToken;
         await using var engine = useHost ? (IReplEngine)await HostPaths.StartEngineAsync(ct) : new InProcessEngine();
@@ -134,6 +135,7 @@ public sealed class EngineCompletionTests
                 Assert.IsTrue((await engine.HandleAsync(line, ct)).Succeeded, line);
             }
 
+            var committed = engine.Status;
             running = Task.Run(() => engine.HandleAsync("ret", ct), ct);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(15));
@@ -145,12 +147,13 @@ public sealed class EngineCompletionTests
             const string prefix = "call Environment::get_CurrentManagedTh";
             var completing = engine.CompleteAsync(new CompletionRequest([prefix], 0, prefix.Length, null, []), ct);
             Assert.IsFalse(running.IsCompleted, "The executing cell has not been released.");
-            Assert.IsFalse(completing.IsCompleted, "Completion must wait for the executing cell.");
+            var snapshot = await completing.WaitAsync(timeout.Token);
+            Assert.IsFalse(running.IsCompleted, "A usable completion does not require the executing cell to finish.");
+            Assert.AreEqual(committed.Revision, snapshot.Revision);
             File.WriteAllText(release, "continue");
             var completed = await running;
-            var snapshot = await completing;
             Assert.IsTrue(completed.Succeeded);
-            Assert.AreEqual(completed.Status.Revision, snapshot.Revision);
+            Assert.IsGreaterThan(snapshot.Revision, completed.Status.Revision);
             Assert.HasCount(1, snapshot.Items);
             Assert.AreEqual("Environment::get_CurrentManagedThreadId()", snapshot.Items[0].InsertText);
         }

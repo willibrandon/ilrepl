@@ -79,8 +79,8 @@ never runs the cell. The stack echo, `.show`, and the status bar describe the me
 open.
 
 Closing the block completes the cell, so the next line starts a new one. Nothing runs. Stack
-analysis checks every established path before the method is kept, on desktop and in the browser.
-Desktop runtime preparation adds a check for methods it can prepare; remaining runtime checks
+analysis checks every established path before the method is kept.
+Runtime preparation adds a check for methods it can prepare; remaining runtime checks
 happen when called. Anything already typed into the cell stays there.
 
 A call names the method with nothing in front of it: `call int32 Fib(int32)`. The return type is

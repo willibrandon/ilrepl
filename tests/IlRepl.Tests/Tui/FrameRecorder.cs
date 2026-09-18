@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Tokens;
@@ -7,9 +8,7 @@ using IlRepl.Tui;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// Snapshots the screen at the end of every frame the app renders, so a test can assert on each
-/// frame after an action rather than only on the last one a wait happens to see. A frame ends
-/// where the app closes its synchronized update, once the terminal has applied it.
+/// Records each completed synchronized terminal frame for behavioral assertions and latency measurements.
 /// </summary>
 internal sealed class FrameRecorder : IHex1bTerminalPresentationFilter
 {
@@ -17,6 +16,11 @@ internal sealed class FrameRecorder : IHex1bTerminalPresentationFilter
     private static readonly Hex1b.Theming.Hex1bColor s_caret = SpanPalette.Color(SpanStyle.Prompt);
     private readonly List<Frame> _frames = [];
     private readonly Lock _lock = new();
+
+    /// <summary>
+    /// Publishes frames immediately after the terminal has applied the complete synchronized update.
+    /// </summary>
+    public event Action<Frame>? FrameAdded;
 
     /// <summary>
     /// The terminal to snapshot; set after the terminal is built.
@@ -56,7 +60,14 @@ internal sealed class FrameRecorder : IHex1bTerminalPresentationFilter
     /// </summary>
     /// <param name="index">The first frame to include.</param>
     /// <returns>The frames.</returns>
-    public IReadOnlyList<Frame> Since(int index) => Frames.Skip(index).ToArray();
+    public IReadOnlyList<Frame> Since(int index)
+    {
+        lock (_lock)
+        {
+            var first = Math.Clamp(index, 0, _frames.Count);
+            return _frames.GetRange(first, _frames.Count - first).ToArray();
+        }
+    }
 
     /// <summary>
     /// Finds the caret cell in a snapshot: the cell whose background is the prompt colour.
@@ -85,6 +96,7 @@ internal sealed class FrameRecorder : IHex1bTerminalPresentationFilter
     /// <inheritdoc />
     public ValueTask<IReadOnlyList<AnsiToken>> OnOutputAsync(IReadOnlyList<AppliedToken> appliedTokens, TimeSpan elapsed, CancellationToken ct = default)
     {
+        var painted = Stopwatch.GetTimestamp();
         var tokens = appliedTokens.Select(a => a.Token).ToList();
         if (Terminal is { } terminal && AnsiTokenSerializer.Serialize(tokens).Contains(FrameEnd, StringComparison.Ordinal))
         {
@@ -95,10 +107,16 @@ internal sealed class FrameRecorder : IHex1bTerminalPresentationFilter
                 lines[y] = snapshot.GetLine(y);
             }
 
+            Frame frame;
             lock (_lock)
             {
-                _frames.Add(new Frame(_frames.Count, lines, FindCaret(snapshot), snapshot.Width, snapshot.Height));
+                frame = new Frame(_frames.Count, lines, FindCaret(snapshot), snapshot.Width, snapshot.Height)
+                {
+                    Timestamp = painted,
+                };
+                _frames.Add(frame);
             }
+            FrameAdded?.Invoke(frame);
         }
 
         return ValueTask.FromResult<IReadOnlyList<AnsiToken>>(tokens);

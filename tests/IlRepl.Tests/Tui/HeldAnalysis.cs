@@ -3,12 +3,15 @@ using IlRepl.Protocol;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// Holds one analysis reply so tests can complete requests in a different order from arrival.
+/// Retains a real analyzed document independently of cancellation to exercise stale delivery.
 /// </summary>
-internal sealed record HeldAnalysis(AnalysisRequest Request, CancellationToken Cancellation)
+/// <param name="Request">The document submitted to analysis.</param>
+/// <param name="Cancellation">The caller's cancellation token.</param>
+/// <param name="Prepared">The actual engine computation.</param>
+internal sealed record HeldAnalysis(AnalysisRequest Request, Task<AnalysisReply> Prepared, CancellationToken Cancellation)
 {
     /// <summary>
-    /// The independently controlled engine response.
+    /// Allows the actual analysis response to reach its requester.
     /// </summary>
-    public TaskCompletionSource<AnalysisReply> Answer { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 }

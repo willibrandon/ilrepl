@@ -9,7 +9,6 @@
     <IncludeIlReplHostInOutput>true</IncludeIlReplHostInOutput>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>$(NoWarn);MSTESTEXP</NoWarn>
-    <IncludeIlReplHostInOutput>true</IncludeIlReplHostInOutput>
     <IlReplHostPublishReadyToRun>true</IlReplHostPublishReadyToRun>
   </PropertyGroup>
 
@@ -50,7 +49,7 @@
   </ItemGroup>
 
   <Import Project="../../build/IlRepl.Host.targets" />
-  <Import Project="../../build/IlRepl.PtyTests.targets" />
+  <Import Project="../../build/IlRepl.NativeInterop.targets" />
 
   <ItemGroup>
     <Compile Include="../Shared/*.cs" Link="Shared/%(Filename)%(Extension)" />

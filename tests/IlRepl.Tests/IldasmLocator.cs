@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 
 namespace IlRepl.Tests;
@@ -55,17 +56,28 @@ internal static class IldasmLocator
     /// <returns>The ILAsm text ildasm printed.</returns>
     public static string Disassemble(string assemblyPath)
     {
-        var ildasm = Require();
-        using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ildasm, [assemblyPath])
+        var result = ToolProcess.RunAsync(new ProcessStartInfo(Require(), ["-UTF8", assemblyPath])).GetAwaiter().GetResult();
+        Assert.AreEqual(0, result.ExitCode, result.StandardError);
+        return result.StandardOutput;
+    }
+
+    /// <summary>
+    /// Disassembles and reassembles an image using Microsoft's independent tools.
+    /// </summary>
+    /// <param name="image">The assembly produced by ilrepl.</param>
+    /// <returns>The independently reconstructed image.</returns>
+    internal static byte[] RoundTrip(byte[] image)
+    {
+        var directory = Directory.CreateTempSubdirectory("ilrepl-ildasm-").FullName;
+        try
         {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        })!;
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Assert.AreEqual(0, process.ExitCode, error);
-        return output;
+            var path = Path.Combine(directory, "cell.dll");
+            File.WriteAllBytes(path, image);
+            return IlasmLocator.Assemble(Disassemble(path));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 }

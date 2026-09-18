@@ -18,17 +18,53 @@ public sealed class ComparisonDescendantTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
-    /// A live process is recognized only when both its identifier and creation time match the descendant record.
+    /// A live process is recognized only when both its identifier and kernel creation identity match the descendant record.
     /// </summary>
     [TestMethod]
     public void DescendantIdentity_RequiresMatchingCreationTime()
     {
         using var process = Process.GetCurrentProcess();
         var prefix = process.Id.ToString(CultureInfo.InvariantCulture) + " ";
-        var started = process.StartTime.ToUniversalTime().Ticks;
+        var started = OwnedProcessGroup.GetStartIdentity(process);
         Assert.IsTrue(ComparisonDescendantSource.IsRunning(prefix + started.ToString(CultureInfo.InvariantCulture)));
         Assert.IsFalse(ComparisonDescendantSource.IsRunning(prefix + (started + 1).ToString(CultureInfo.InvariantCulture)));
         Assert.IsNull(ComparisonDescendantSource.Open(prefix + (started + 1).ToString(CultureInfo.InvariantCulture)));
+    }
+
+    /// <summary>
+    /// A parent's observation matches the child's published kernel identity while it runs and detects its subsequent exit.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000, CooperativeCancellation = true)]
+    public async Task DescendantIdentity_MatchesAcrossProcessesAndDetectsExit()
+    {
+        var token = TestContext.CancellationToken;
+        using var files = new SessionWorkspaceFixture();
+        var record = Path.Combine(files.DirectoryPath, "processes");
+        var ready = Path.Combine(files.DirectoryPath, "ready");
+        using var child = ComparisonDescendantSource.Start(Environment.ProcessPath!, record, ready, false, false);
+        try
+        {
+            while (!File.Exists(ready)) await Task.Delay(10, token);
+            var identity = Assert.ContainsSingle(await File.ReadAllLinesAsync(record, token));
+            var expected = child.Id.ToString(CultureInfo.InvariantCulture) + " "
+                + OwnedProcessGroup.GetStartIdentity(child).ToString(CultureInfo.InvariantCulture);
+            Assert.AreEqual(expected, identity);
+            Assert.IsTrue(ComparisonDescendantSource.IsRunning(identity));
+            using var observed = ComparisonDescendantSource.Open(identity);
+            Assert.IsNotNull(observed);
+            Assert.AreEqual(child.Id, observed.Id);
+
+            child.Kill();
+            await OwnedProcessGroup.WaitForExitAsync(child, token);
+
+            Assert.IsFalse(ComparisonDescendantSource.IsRunning(identity));
+        }
+        finally
+        {
+            if (!child.HasExited) child.Kill();
+            await OwnedProcessGroup.WaitForExitAsync(child, CancellationToken.None);
+        }
     }
 
     /// <summary>
@@ -145,14 +181,15 @@ public sealed class ComparisonDescendantTests
         }
 
         var ready = Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_READY")!;
-        if (bool.Parse(Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_ESCAPE")!))
-            ComparisonDescendantSource.EscapeProcessGroup();
+        var escape = bool.Parse(Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_ESCAPE")!);
+        if (escape) ComparisonDescendantSource.EscapeProcessGroup();
         using var process = Process.GetCurrentProcess();
         File.AppendAllText(record, Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + " "
-            + process.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture) + Environment.NewLine);
+            + OwnedProcessGroup.GetStartIdentity(process).ToString(CultureInfo.InvariantCulture) + Environment.NewLine);
         if (bool.Parse(Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_BRANCH")!))
         {
-            using var leaf = ComparisonDescendantSource.Start(Environment.ProcessPath!, record, ready, false, false);
+            using var leaf = ComparisonDescendantSource.Start(Environment.ProcessPath!, record, ready, false,
+                escape && OperatingSystem.IsWindows());
             while (!File.Exists(ready)) await Task.Delay(10);
             Environment.Exit(0);
         }

@@ -5,10 +5,7 @@ using System.Runtime.CompilerServices;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Writes a type family exactly as declared into a session assembly, loads it, and prepares
-/// its bodies on the JIT. The live type carries the declared metadata and nothing else: no
-/// synthesized constructor, the declared layout, the declared attributes and modifiers. The
-/// same writer serves an export, which is why live and saved metadata agree.
+/// Writes and loads declared type families with the same metadata and bodies used by exported assemblies.
 /// </summary>
 public static class TypeEmitter
 {
@@ -150,41 +147,61 @@ public static class TypeEmitter
     }
 
     /// <summary>
-    /// Writes several families into one writer: every type of every family is declared before
-    /// any shape or body is imported, so the families may mention each other in any order.
+    /// Declares every family before importing shapes and bodies so families can reference each other in any order.
     /// </summary>
     /// <param name="writer">The writer.</param>
     /// <param name="families">The families with their prototypes and, for an export, their loaded types.</param>
     /// <param name="trampolines">The trampolines of the session methods, by name.</param>
-    public static void WriteAll(CecilWriter writer, IReadOnlyList<(TypeDeclaration Family, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> Prototypes, IReadOnlyDictionary<string, Type>? RuntimeTypes)> families, IReadOnlyDictionary<string, MethodTrampoline> trampolines)
+    public static void WriteAll(CecilWriter writer,
+        IReadOnlyList<(TypeDeclaration Family, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> Prototypes,
+            IReadOnlyDictionary<string, Type>? RuntimeTypes)> families, IReadOnlyDictionary<string, MethodTrampoline> trampolines)
+        => WriteAllCancellable(writer, families, trampolines, CancellationToken.None);
+
+    /// <summary>
+    /// Writes mutually referencing families while observing cancellation between definition passes.
+    /// </summary>
+    /// <param name="writer">The destination writer.</param>
+    /// <param name="families">The declarations, prototypes, and optional live definitions.</param>
+    /// <param name="trampolines">The session methods referenced by the definitions.</param>
+    /// <param name="cancellationToken">Cancels preparation before the resulting image is published.</param>
+    internal static void WriteAllCancellable(CecilWriter writer,
+        IReadOnlyList<(TypeDeclaration Family, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> Prototypes,
+            IReadOnlyDictionary<string, Type>? RuntimeTypes)> families, IReadOnlyDictionary<string, MethodTrampoline> trampolines,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(families);
         ArgumentNullException.ThrowIfNull(trampolines);
+        cancellationToken.ThrowIfCancellationRequested();
         var emitters = families.Select(f => (
             Emitter: new TypeFamilyEmitter(writer, f.Prototypes, trampolines) { RuntimeTypes = f.RuntimeTypes }, f.Family)).ToList();
         foreach (var (emitter, family) in emitters)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             emitter.Declare(family);
         }
 
         foreach (var (emitter, family) in emitters)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             emitter.Shape(family);
         }
 
         foreach (var (emitter, family) in emitters)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             emitter.Members(family);
         }
 
         foreach (var (emitter, family) in emitters)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             emitter.Details(family);
         }
 
         foreach (var (emitter, family) in emitters)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             emitter.Bodies(family);
         }
     }

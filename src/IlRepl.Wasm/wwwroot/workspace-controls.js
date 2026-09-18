@@ -1,7 +1,14 @@
 // File controls live on the page; only the shared .NET codec reads or writes session documents.
-export function createWorkspaceControls({ getWorker, getCheckpoint, replace, setStatus, focus }) {
+export function createWorkspaceControls({ getWorker, getGeneration, getCheckpoint, replace, setStatus, focus }) {
   const pending = new Map();
   let sequence = 0;
+  const dialogs = new Set();
+  const current = () => ({ worker: getWorker(), generation: getGeneration() });
+  const assertCurrent = owner => {
+    if (owner.worker !== getWorker() || owner.generation !== getGeneration()) {
+      throw new DOMException('The execution runtime was replaced.', 'AbortError');
+    }
+  };
   const toolbar = document.getElementById('session-files');
   const terminal = document.getElementById('terminal');
   const message = document.createElement('span');
@@ -13,8 +20,9 @@ export function createWorkspaceControls({ getWorker, getCheckpoint, replace, set
   picker.hidden = true;
   toolbar.append(picker);
 
-  function request(operation, value = '') {
-    const worker = getWorker();
+  function request(operation, value = '', owner = current()) {
+    assertCurrent(owner);
+    const worker = owner.worker;
     if (!worker) return Promise.reject(new Error('The session is still starting.'));
     return new Promise((resolve, reject) => {
       const identity = ++sequence;
@@ -22,8 +30,8 @@ export function createWorkspaceControls({ getWorker, getCheckpoint, replace, set
         pending.delete(identity);
         reject(new Error('The execution runtime did not respond; wait for the current operation or restart the session.'));
       }, 30_000);
-      pending.set(identity, { worker, resolve, reject, timeout });
-      worker.postMessage({ type: 'workspace-request', identity, operation, value });
+      pending.set(identity, { ...owner, resolve, reject, timeout });
+      worker.postMessage({ type: 'workspace-request', generation: owner.generation, identity, operation, value });
     });
   }
 
@@ -38,15 +46,28 @@ export function createWorkspaceControls({ getWorker, getCheckpoint, replace, set
     message.textContent = 'Session downloaded.';
   }
 
-  async function save() {
-    const source = await request('capture');
-    const name = getCheckpoint()?.path || 'session.ilrepl.json';
-    download(source, name);
-    await request('saved', name);
+  function downloadAssembly(image, path) {
+    const url = URL.createObjectURL(new Blob([image], { type: 'application/octet-stream' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = path.split(/[\\/]/).pop() || 'session.dll';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    message.textContent = 'Assembly downloaded.';
   }
 
-  async function canReplace() {
-    await request('capture');
+  async function save(owner = current()) {
+    const source = await request('capture', '', owner);
+    assertCurrent(owner);
+    const name = getCheckpoint()?.path || 'session.ilrepl.json';
+    download(source, name);
+    await request('saved', JSON.stringify({ path: name, document: source }), owner);
+    assertCurrent(owner);
+  }
+
+  async function canReplace(owner) {
+    await request('capture', '', owner);
+    assertCurrent(owner);
     if (!getCheckpoint()?.dirty) return true;
     const dialog = document.createElement('dialog');
     const question = document.createElement('p');
@@ -68,42 +89,60 @@ export function createWorkspaceControls({ getWorker, getCheckpoint, replace, set
         choices[(current + (event.key === 'ArrowDown' ? 1 : choices.length - 1)) % choices.length].focus();
       });
       dialog.addEventListener('cancel', () => resolve('Cancel'), { once: true });
+      dialog.addEventListener('close', () => resolve('Cancel'), { once: true });
+      dialogs.add(dialog);
       dialog.showModal();
     });
+    dialogs.delete(dialog);
     dialog.remove();
-    if (choice === 'Save') await save();
+    assertCurrent(owner);
+    if (choice === 'Save') await save(owner);
+    assertCurrent(owner);
     if (choice === 'Cancel') focus();
     return choice !== 'Cancel';
   }
 
-  const showError = error => { message.textContent = String(error.message || error); };
+  const showError = error => {
+    if (error.name !== 'AbortError') message.textContent = String(error.message || error);
+  };
   picker.addEventListener('change', async () => {
     const file = picker.files?.[0];
     picker.value = '';
     if (!file) return;
+    const owner = current();
     try {
       if (file.size > 8 * 1024 * 1024) {
-        throw new Error('Browser session files are limited to 8 MiB. Open larger files with desktop ilrepl.');
+        throw new Error('Browser session files are limited to 8 MiB. Open larger files with terminal ilrepl.');
       }
-      const source = await request('validate', await file.text());
-      if (await canReplace()) replace(source, file.name);
+      const text = await file.text();
+      assertCurrent(owner);
+      const source = await request('validate', text, owner);
+      assertCurrent(owner);
+      const allowed = await canReplace(owner);
+      assertCurrent(owner);
+      if (allowed) replace(source, file.name);
     } catch (error) { showError(error); }
   });
 
   async function share() {
+    const owner = current();
     let url;
     try {
-      url = await request('share', location.href.split('#')[0]);
+      url = await request('share', location.href.split('#')[0], owner);
+      assertCurrent(owner);
     } catch (error) {
       if (!String(error).includes('download the session file')) throw error;
-      await save();
+      await save(owner);
+      assertCurrent(owner);
       message.textContent = 'The example is too large for a link. The session file was downloaded.';
       return;
     }
     try {
       await navigator.clipboard.writeText(url);
+      assertCurrent(owner);
       message.textContent = 'Share link copied. Opening it restores source without running it.';
-    } catch {
+    } catch (error) {
+      assertCurrent(owner);
       const field = document.createElement('input');
       field.readOnly = true;
       field.value = url;
@@ -118,7 +157,12 @@ export function createWorkspaceControls({ getWorker, getCheckpoint, replace, set
     ['Open', 'Open a saved session without running it.', () => picker.click()],
     ['Download', 'Download the current session as an .ilrepl.json file.', save],
     ['Share', 'Copy a link to share this session.', share],
-    ['Run all', 'Run all saved cells from the beginning.', async () => replace(await request('capture'), getCheckpoint()?.path, '')],
+    ['Run all', 'Run all saved cells from the beginning.', async () => {
+      const owner = current();
+      const source = await request('capture', '', owner);
+      assertCurrent(owner);
+      replace(source, getCheckpoint()?.path, '');
+    }],
   ];
   for (const [label, tooltip, action] of actions) {
     const button = document.createElement('button');
@@ -142,17 +186,19 @@ export function createWorkspaceControls({ getWorker, getCheckpoint, replace, set
   return {
     request,
     stop(worker) {
+      for (const dialog of dialogs) dialog.close();
       for (const [identity, waiter] of pending) {
         if (waiter.worker !== worker) continue;
         pending.delete(identity);
         clearTimeout(waiter.timeout);
-        waiter.reject(new Error('The execution runtime was replaced.'));
+        waiter.reject(new DOMException('The execution runtime was replaced.', 'AbortError'));
       }
     },
     message(msg, worker) {
+      if (worker !== getWorker() || msg.generation !== getGeneration()) return;
       if (msg.type === 'workspace-result') {
         const waiter = pending.get(msg.identity);
-        if (waiter?.worker !== worker) return;
+        if (waiter?.worker !== worker || waiter.generation !== msg.generation) return;
         pending.delete(msg.identity);
         clearTimeout(waiter.timeout);
         if (msg.error) waiter.reject(new Error(msg.error));
@@ -160,13 +206,15 @@ export function createWorkspaceControls({ getWorker, getCheckpoint, replace, set
       } else if (msg.type === 'workspace-action') {
         try {
           if (msg.operation === 'download') download(msg.document, msg.value);
-          worker.postMessage({ type: 'workspace-ack', identity: msg.identity });
+          if (msg.operation === 'assembly-download') downloadAssembly(msg.image, msg.path);
+          worker.postMessage({ type: 'workspace-ack', generation: msg.generation, identity: msg.identity });
+          if (msg.operation === 'restart') replace(msg.document, getCheckpoint()?.path, null, false);
           if (msg.operation === 'run') {
             message.textContent = 'Starting a fresh runtime to run the saved source.';
             replace(msg.document, getCheckpoint()?.path, msg.value);
           }
         } catch (error) {
-          worker.postMessage({ type: 'workspace-ack', identity: msg.identity, error: String(error) });
+          worker.postMessage({ type: 'workspace-ack', generation: msg.generation, identity: msg.identity, error: String(error) });
         }
       }
     },

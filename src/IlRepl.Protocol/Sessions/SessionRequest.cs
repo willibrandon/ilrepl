@@ -39,6 +39,16 @@ public sealed record SessionRequest
     public bool AnnounceOpen { get; init; } = true;
 
     /// <summary>
+    /// The maximum historical presentation rows, with zero unlimited and null using the frontend's configured limit.
+    /// </summary>
+    public int? HistoryLineLimit { get; init; }
+
+    /// <summary>
+    /// The host transport's pending request identity when its reply can reference an acknowledged checkpoint document.
+    /// </summary>
+    public string? CheckpointDelivery { get; init; }
+
+    /// <summary>
     /// Additive format fields retained when a supported document is saved again.
     /// </summary>
     [JsonExtensionData]

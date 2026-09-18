@@ -22,6 +22,7 @@ public sealed partial class Session
     private readonly List<string> _bodyLines = [];
     private readonly List<string> _typeParameterNames = [];
     private readonly List<SessionMethod> _methods = [];
+    private readonly WeakReference<MethodSignature[]?> _methodSignatures = new(null);
     private CellState _cell;
     private OpenMethodBlock? _open;
     private long _completionRevision;
@@ -530,6 +531,7 @@ public sealed partial class Session
         }
 
         _methods.Clear();
+        InvalidateSignatures();
         foreach (var edit in _edits)
         {
             if (edit.Baseline.Definition is { } baseline)
@@ -569,22 +571,38 @@ public sealed partial class Session
     /// <returns>The result.</returns>
     /// <exception cref="ReplException">The cell is incomplete, a method block is open, or the runtime rejected it.</exception>
     /// <exception cref="CellException">The cell threw.</exception>
-    public CellResult Run()
-    {
-        using var capture = new ConsoleCapture();
-        var isVoid = _cell.Stack.Count == 0 && !_cell.ReturnsValue;
-        var compiled = CellCompiler.Compile(this);
-        RecordActivation(compiled);
-        var typeArguments = TypeArguments;
-        ClearCell();
-        CellsRun++;
-        Submissions++;
+    public CellResult Run() => RunCancellable(null, null, CancellationToken.None);
 
-        var stopwatch = Stopwatch.StartNew();
+    /// <summary>
+    /// Compiles cooperatively and marks the boundary before invoking arbitrary user IL.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels preparation before invocation.</param>
+    /// <param name="beforeInvoke">Publishes the transition into user execution.</param>
+    /// <param name="output">Streams captured user output, when supplied.</param>
+    /// <returns>The value and captured output from the cell.</returns>
+    internal CellResult RunCancellable(Action? beforeInvoke, Action<string, bool>? output, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var capture = new ConsoleCapture(output);
+        var isVoid = _cell.Stack.Count == 0 && !_cell.ReturnsValue;
+        var compiled = CellCompiler.CompileForExecution(this, cancellationToken);
+        var stopwatch = new Stopwatch();
         object? value;
         try
         {
-            value = compiled.Invoke(typeArguments);
+            cancellationToken.ThrowIfCancellationRequested();
+            var typeArguments = TypeArguments;
+            beforeInvoke?.Invoke();
+            cancellationToken.ThrowIfCancellationRequested();
+            RecordActivation(compiled);
+            Activate();
+            var invocation = compiled with { ArgumentValues = compiled.InvocationArguments.Select(argument => argument.ExecutionValue())
+                .ToArray() };
+            ClearCell();
+            CellsRun++;
+            Submissions++;
+            stopwatch.Start();
+            value = invocation.Invoke(typeArguments);
         }
         catch (CellException exception)
         {
@@ -613,6 +631,14 @@ public sealed partial class Session
     public void Save(string path) => AssemblyExporter.Save(this, path);
 
     /// <summary>
+    /// Exports the current cell and declarations with cancellation before atomically replacing the destination.
+    /// </summary>
+    /// <param name="path">The destination assembly filename.</param>
+    /// <param name="cancellationToken">Cancels export before publication.</param>
+    internal void SaveCancellable(string path, CancellationToken cancellationToken)
+        => AssemblyExporter.SaveCancellable(this, path, cancellationToken);
+
+    /// <summary>
     /// Renders the session methods and the current cell as ILAsm source.
     /// </summary>
     /// <returns>The ILAsm text.</returns>
@@ -628,17 +654,11 @@ public sealed partial class Session
             throw new ReplException($"'{signature.Name}' already belongs to an edit; choose another method name");
         }
 
-        var replacing = _methods.FirstOrDefault(m => m.Signature.Name == signature.Name);
-        var table = new List<MethodSignature>(signatures);
-        var index = table.FindIndex(s => s.Name == signature.Name);
-        if (index < 0)
-        {
-            table.Add(signature);
-        }
-        else
-        {
-            table[index] = signature;
-        }
+        var index = _methods.FindIndex(method => method.Signature.Name == signature.Name);
+        var replacing = index < 0 ? null : _methods[index];
+        var table = new MethodSignature[signatures.Length + (index < 0 ? 1 : 0)];
+        signatures.CopyTo(table, 0);
+        table[index < 0 ? signatures.Length : index] = signature;
 
         if (replacing is not null && !_rebuilding)
         {
@@ -737,16 +757,45 @@ public sealed partial class Session
         // identity, and nothing references it yet.
         var sameSignature = replacing is not null && !_rebuilding && SameSignature(replacing.Signature, open.Signature);
         var trampoline = sameSignature ? replacing!.Trampoline : MethodTrampoline.Create(open.Signature);
-        var trampolines = _methods.Where(m => !ReferenceEquals(m, replacing)).ToDictionary(m => m.Signature.Name, m => m.Trampoline, StringComparer.Ordinal);
-        trampolines[name] = trampoline;
-        CompiledMethodVersion version;
+        Dictionary<string, MethodTrampoline>? trampolines = null;
+        var map = new EmitMap(signature =>
+        {
+            // Emission runs synchronously before the session records change. Bodies with no
+            // session-method references do not need a copy of every existing trampoline.
+            if (trampolines is null)
+            {
+                trampolines = _methods.Where(method => !ReferenceEquals(method, replacing))
+                    .ToDictionary(method => method.Signature.Name, method => method.Trampoline, StringComparer.Ordinal);
+                trampolines[name] = trampoline;
+            }
+
+            return trampolines.TryGetValue(signature.Name, out var target)
+                ? target.Method
+                : throw new ReplException($"no method '{signature.Name}' is bound in the session");
+        });
+        CompiledMethodVersion? version = null;
+        Delegate? implementation = null;
         try
         {
-            version = DefinitionCompiler.CompileMethod(open.Signature, open.State, trampoline, trampolines,
+            if (sameSignature && !DeferActivation)
+            {
+                trampoline.PrepareBinding();
+            }
+
+            version = DefinitionCompiler.CompileMappedMethod(open.Signature, open.State, trampoline, map,
                 !DeferActivation && MethodPreparation.IsSupported);
+            if (!DeferActivation)
+            {
+                implementation = version.Implementation;
+            }
         }
         catch
         {
+            if (version is not null)
+            {
+                SessionAssemblies.Release(version.Definition);
+            }
+
             if (!sameSignature)
             {
                 SessionAssemblies.Release(trampoline.Definition);
@@ -757,13 +806,13 @@ public sealed partial class Session
 
         if (!sameSignature && !DeferActivation)
         {
-            trampoline.Bind(version.Implementation);
+            trampoline.Bind(implementation!);
         }
 
         // Phase B: one reference store and the record swap. Neither can fail.
         if (sameSignature && !DeferActivation)
         {
-            trampoline.Bind(version.Implementation);
+            trampoline.Bind(implementation!);
         }
 
         var committed = new SessionMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State, trampoline, version) { Order = sameSignature ? replacing!.Order : Submissions };
@@ -777,6 +826,7 @@ public sealed partial class Session
             _methods[index] = committed;
         }
 
+        InvalidateSignatures();
         _cell = cell;
         _open = null;
         Submissions++;
@@ -848,7 +898,19 @@ public sealed partial class Session
 
     private static bool SameSignature(MethodSignature a, MethodSignature b) => SignatureIdentity.Same(a, b);
 
-    private List<MethodSignature> Signatures() => _methods.Select(m => m.Signature).ToList();
+    private MethodSignature[] Signatures()
+    {
+        var unchanged = _methodSignatures.TryGetTarget(out var signatures) && signatures.Length == _methods.Count;
+        if (!unchanged)
+        {
+            signatures = _methods.Select(method => method.Signature).ToArray();
+            // Contexts own their binding tables; memoization must not extend the lifetime of retired definition types.
+            _methodSignatures.SetTarget(signatures);
+        }
+        return signatures!;
+    }
+
+    private void InvalidateSignatures() => _methodSignatures.SetTarget(null);
 
     private void Rebuild() => _cell = BuildCell(Signatures());
 

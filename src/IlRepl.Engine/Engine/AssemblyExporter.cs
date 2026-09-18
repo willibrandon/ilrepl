@@ -8,10 +8,7 @@ using TypeAttributes = Mono.Cecil.TypeAttributes;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Writes a session to disk as one assembly: every type family in declaration order, then
-/// <c>IlRepl.Cell</c> with the session methods and <c>Run</c>. The same writer produces the
-/// live definitions, so the saved metadata is what the session ran; calls between session
-/// methods become direct calls, with no trampolines or delegates.
+/// Exports session definitions and the current cell without executing user code or retaining live-session references.
 /// </summary>
 public static class AssemblyExporter
 {
@@ -21,25 +18,33 @@ public static class AssemblyExporter
     /// <param name="session">The session.</param>
     /// <param name="path">The output path; the assembly is named after the file.</param>
     /// <exception cref="ReplException">A block is open, the cell is incomplete, or the writer refused it.</exception>
-    public static void Save(Session session, string path)
+    public static void Save(Session session, string path) => SaveCancellable(session, path, CancellationToken.None);
+
+    /// <summary>
+    /// Atomically replaces an assembly file after cancellable export preparation has completed.
+    /// </summary>
+    /// <param name="session">The session to export.</param>
+    /// <param name="path">The destination file, whose basename determines the assembly name.</param>
+    /// <param name="cancellationToken">Cancels preparation or writing before the destination is replaced.</param>
+    internal static void SaveCancellable(Session session, string path, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        var assemblyName = Path.GetFileNameWithoutExtension(path);
-        if (assemblyName.Length == 0)
-        {
-            assemblyName = "ilrepl_cell";
-        }
-
-        var image = Write(session, assemblyName);
+        cancellationToken.ThrowIfCancellationRequested();
         var fullPath = Path.GetFullPath(path);
-        var directory = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrEmpty(directory))
+        if (Path.EndsInDirectorySeparator(path) || Directory.Exists(fullPath))
         {
-            Directory.CreateDirectory(directory);
+            throw new ArgumentException("The assembly destination must be a file.", nameof(path));
         }
 
-        File.WriteAllBytes(fullPath, image);
+        var assemblyName = Path.GetFileNameWithoutExtension(fullPath);
+        if (string.IsNullOrWhiteSpace(assemblyName))
+        {
+            throw new ArgumentException("The assembly destination must have a filename.", nameof(path));
+        }
+
+        var image = WriteCancellable(session, assemblyName, cancellationToken);
+        AtomicAssemblyFile.Write(fullPath, image, cancellationToken);
     }
 
     /// <summary>
@@ -50,7 +55,17 @@ public static class AssemblyExporter
     /// <returns>The image.</returns>
     /// <exception cref="ReplException">A block is open, the cell is incomplete, or the writer refused it.</exception>
     public static byte[] Write(Session session, string assemblyName)
-        => WriteCore(session, assemblyName, null, false, null);
+        => WriteCancellable(session, assemblyName, CancellationToken.None);
+
+    /// <summary>
+    /// Produces an assembly image while observing cancellation between emitted definitions.
+    /// </summary>
+    /// <param name="session">The session to export.</param>
+    /// <param name="assemblyName">The assembly's simple name.</param>
+    /// <param name="cancellationToken">Cancels export preparation before publication.</param>
+    /// <returns>The completed assembly image.</returns>
+    internal static byte[] WriteCancellable(Session session, string assemblyName, CancellationToken cancellationToken)
+        => WriteCore(session, assemblyName, null, false, null, cancellationToken: cancellationToken);
 
     /// <summary>
     /// Writes committed declarations for inspecting an unfinished current cell as ILAsm source.
@@ -74,10 +89,12 @@ public static class AssemblyExporter
         => WriteCore(session, "IlReplComparison", edit, original, instrument, complete: complete);
 
     private static byte[] WriteCore(Session session, string assemblyName, MethodEdit? comparison, bool original,
-        Action<CecilWriter, MethodDefinition>? instrument, bool includeCell = true, Action<CecilWriter>? complete = null)
+        Action<CecilWriter, MethodDefinition>? instrument, bool includeCell = true, Action<CecilWriter>? complete = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentException.ThrowIfNullOrWhiteSpace(assemblyName);
+        cancellationToken.ThrowIfCancellationRequested();
         if (comparison is null && includeCell)
         {
             CellCompiler.RequireComplete(session);
@@ -89,12 +106,16 @@ public static class AssemblyExporter
             // The cell type's method signatures exist before any body is written, so a type's
             // call to a session method binds to the exported method, and the type is added to the
             // module after the families so it follows them in the metadata.
-            var cell = new TypeDefinition("IlRepl", "Cell", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit, writer.Object);
-            var map = new EmitMap(signature => trampolines.TryGetValue(signature.Name, out var t) ? t.Method : throw new ReplException($"no method '{signature.Name}' is bound in the session"));
+            var cell = new TypeDefinition("IlRepl", "Cell", TypeAttributes.Public | TypeAttributes.Abstract
+                | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit, writer.Object);
+            var map = new EmitMap(signature => trampolines.TryGetValue(signature.Name, out var t) ? t.Method
+                : throw new ReplException($"no method '{signature.Name}' is bound in the session"));
             var methods = new List<(SessionMethod Method, MethodDefinition Definition)>();
             foreach (var method in session.Methods)
             {
-                var definition = new MethodDefinition(method.Signature.Name, MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, writer.Module.TypeSystem.Void);
+                cancellationToken.ThrowIfCancellationRequested();
+                var definition = new MethodDefinition(method.Signature.Name,
+                    MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, writer.Module.TypeSystem.Void);
                 cell.Methods.Add(definition);
                 // A call to the session method binds to its trampoline; here that is the method itself.
                 writer.Define(method.Trampoline.Method, definition);
@@ -104,6 +125,7 @@ public static class AssemblyExporter
             var revisions = new List<(ImportedMethodFamily Revision, Dictionary<MemberInfo, IMemberDefinition> Definitions)>();
             foreach (var edit in session.Edits)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (edit == comparison && original)
                 {
                     if (edit.Baseline.Problems.Count == 0)
@@ -138,11 +160,14 @@ public static class AssemblyExporter
                 instrument!(writer, (MethodDefinition)writer.Import(IlAsmRenderer.DefinitionOf(comparison.Method!)));
             }
 
-            TypeEmitter.WriteAll(writer, [.. session.Types.Select(f => (f.Declaration, f.Prototypes, (IReadOnlyDictionary<string, Type>?)f.Types))], trampolines);
+            TypeEmitter.WriteAllCancellable(writer,
+                [.. session.Types.Select(f => (f.Declaration, f.Prototypes, (IReadOnlyDictionary<string, Type>?)f.Types))],
+                trampolines, cancellationToken);
 
             // Signatures are imported once every session type is a definition of this module.
             foreach (var (method, definition) in methods)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var signature = method.Signature;
                 definition.ReturnType = writer.ImportSignature(
                     signature.ReturnType,
@@ -167,6 +192,7 @@ public static class AssemblyExporter
             writer.Module.Types.Add(cell);
             foreach (var (method, definition) in methods)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 Guarded("method " + method.Signature.Name, () => CecilBodyEmitter.Emit(definition, method.State, writer, map));
             }
 
@@ -175,8 +201,11 @@ public static class AssemblyExporter
                 WriteRun(writer, cell, session, map);
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             complete?.Invoke(writer);
-            return writer.Write();
+            var image = writer.Write();
+            cancellationToken.ThrowIfCancellationRequested();
+            return image;
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException or NullReferenceException)
         {
@@ -187,7 +216,8 @@ public static class AssemblyExporter
     private static void WriteRun(CecilWriter writer, TypeDefinition cell, Session session, EmitMap map)
     {
         var state = session.Cell;
-        var run = new MethodDefinition("Run", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, writer.Object);
+        var run = new MethodDefinition("Run",
+            MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, writer.Object);
         cell.Methods.Add(run);
         var names = session.TypeParameterNames;
         var cellParameters = state.Generics.MethodArguments;
@@ -221,7 +251,8 @@ public static class AssemblyExporter
         {
             // Reflection cannot invoke a vararg method, so a standard-convention Invoke forwards
             // the fixed arguments and an empty variable-argument list, as the live cell has.
-            var invoke = new MethodDefinition("Invoke", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, writer.Object);
+            var invoke = new MethodDefinition("Invoke",
+                MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, writer.Object);
             cell.Methods.Add(invoke);
             MethodReference target = run;
             if (names.Count > 0)

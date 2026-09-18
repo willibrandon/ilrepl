@@ -3,8 +3,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// An engine whose transport fails on one chosen line, the way a host that has died fails: the
-/// call throws instead of answering, and every later call answers again.
+/// Injects an explicitly chosen unexpected application exception before one real engine call to verify submission cleanup.
 /// </summary>
 internal sealed class FaultingEngine : IReplEngine
 {
@@ -18,12 +17,12 @@ internal sealed class FaultingEngine : IReplEngine
     /// </summary>
     /// <param name="inner">The engine that answers.</param>
     /// <param name="failAt">The zero-based call that throws.</param>
-    /// <param name="fault">What it throws; a transport failure unless given.</param>
-    public FaultingEngine(IReplEngine inner, int failAt, Func<Exception>? fault = null)
+    /// <param name="fault">The non-transport application failure being exercised.</param>
+    public FaultingEngine(IReplEngine inner, int failAt, Func<Exception> fault)
     {
         _inner = inner;
         _failAt = failAt;
-        _fault = fault ?? (() => new ReplEngineException("the host has exited"));
+        _fault = fault;
     }
 
     /// <summary>
@@ -66,7 +65,8 @@ internal sealed class FaultingEngine : IReplEngine
     }
 
     /// <inheritdoc />
-    public Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken) => _inner.RollbackAsync(mark, cancellationToken);
+    public Task<HandleReply> RollbackAsync(SessionMark mark, CancellationToken cancellationToken) =>
+        _inner.RollbackAsync(mark, cancellationToken);
 
     /// <inheritdoc />
     public ValueTask DisposeAsync() => _inner.DisposeAsync();

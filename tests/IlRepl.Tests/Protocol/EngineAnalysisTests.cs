@@ -30,6 +30,13 @@ public sealed class EngineAnalysisTests
         Assert.AreEqual("[]", first.Stack!.Render());
         Assert.AreEqual("[int32]", moved.Stack!.Render());
         Assert.AreEqual(first.BindingEpoch, moved.BindingEpoch);
+        Assert.HasCount(lines.Length + 1, first.Positions);
+        var json = JsonSerializer.Serialize(first, ProtocolJsonContext.Default.AnalysisReply);
+        var restored = JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.AnalysisReply)!;
+        Assert.HasCount(first.Positions.Count, restored.Positions);
+        Assert.IsNull(restored.At(0).Stack);
+        Assert.AreEqual("[int32]", restored.At(2).Stack!.Render());
+        Assert.HasCount(first.Diagnostics.Count, restored.At(2).Diagnostics);
         Assert.AreEqual(2, moved.DocumentVersion);
         var header = await engine.AnalyzeAsync(new AnalysisRequest(lines, 0, 0, 3), TestContext.CancellationToken);
         Assert.IsNull(header.Stack, "A method declaration is not an instruction position.");
