@@ -9,12 +9,12 @@ const left = [
     + 'mode is implied when input is piped.',
   ],
   ['tui', 'terminal UI',
-    'The prompt with its completion palette, the transcript with copy mode, and the status bar with the live stack. '
-    + 'It is a widget tree behind a terminal driver, so the same UI runs headless in the tests.',
+    'The editor shows completion candidates and live stack state beside the transcript. '
+    + 'Keyboard and mouse selection let you copy source and results.',
   ],
   ['batch', 'batch mode',
-    'Scripts, -e, and piped input run without the UI. The transcript streams to standard output, a cell left open '
-    + 'at the end of the input is run, and a method block left open is an error.',
+    'Scripts, -e, and piped input run without the UI. Newly supplied cell instructions can run at EOF; reopened source '
+    + 'and trailing inspection or export commands do not trigger execution. An unclosed definition block is an error.',
   ],
   ['transcript', 'transcript and completion',
     'The frontend owns the transcript and retains acknowledged source. An embedded opcode and command catalog makes '
@@ -32,12 +32,12 @@ const right = [
     + 'optional, short names resolve through System.*, and a method defined with .method resolves by its bare name.',
   ],
   ['stack', 'stack simulation',
-    'Every line is checked against a linear model of the evaluation stack before it is accepted, so underflows and '
-    + 'arity mistakes show up at the prompt rather than at the JIT.',
+    'A control-flow model validates accepted IL, including stack merges, branches, and exception regions. '
+    + 'Diagnostics appear at the prompt before compilation.',
   ],
-  ['emit', 'Reflection.Emit compilation',
-    'ret replays the accepted lines onto a fresh MethodBuilder in a collectible assembly, defines the session '
-    + 'methods ahead of Run, and hands the type to the JIT. .save writes the same thing to disk.',
+  ['emit', 'IL compilation',
+    'Cells compile into collectible runtime assemblies. Definitions and edits are written with Mono.Cecil and retained '
+    + 'across cells. .save writes a standalone assembly from the current source.',
   ],
   ['session', 'the session',
     'The declarations and methods that persist across cells, the cell being written, and the replayable state '
