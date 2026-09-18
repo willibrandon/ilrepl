@@ -85,9 +85,9 @@ internal static class PackagedSmoke
         await SubmitAsync(auto, "ret", cancellationToken);
         await auto.WaitUntilTextAsync("= 42 : int32");
         await SubmitAsync(auto, ".session restart", cancellationToken);
-        await auto.WaitUntilTextAsync("restarting runtime");
-        await auto.WaitUntilNoTextAsync("restarting runtime");
-        await auto.WaitUntilTextAsync("runtime restarted");
+        await auto.WaitUntilAsync(snapshot => snapshot.FindText("= 42 : int32").Any(result =>
+            snapshot.FindText("runtime restarted").Any(notice => notice.Line > result.Line)),
+            description: "a new restart has completed after the retained definition ran");
         await SubmitAsync(auto, "call int32 Answer()", cancellationToken);
         await SubmitAsync(auto, "ldc.i4.1", cancellationToken);
         await SubmitAsync(auto, "add", cancellationToken);
