@@ -47,6 +47,33 @@ public sealed class BatchInterruptTests
     }
 
     /// <summary>
+    /// Windows end-of-input remains a successful batch exit rather than being mistaken for console interruption.
+    /// </summary>
+    [TestMethod]
+    [OSCondition(ConditionMode.Include, OperatingSystems.Windows)]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task CtrlZ_WhileWaitingForInputExitsNormally()
+    {
+        var token = TestContext.CancellationToken;
+        await using var terminal = Hex1bTerminal.CreateBuilder().WithPtyProcess(options =>
+        {
+            options.FileName = HostLocator.FindDotnet();
+            options.Arguments = [RepoPaths.FrontEndAssembly, "--batch", "--no-color"];
+            options.WorkingDirectory = RepoPaths.Root;
+        }).WithHeadless().WithDimensions(100, 30).Build();
+        var run = terminal.RunAsync(token);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(20));
+        await auto.TypeAsync("ldc.i4 42", ct: token);
+        await auto.EnterAsync(ct: token);
+        await auto.TypeAsync("ret", ct: token);
+        await auto.EnterAsync(ct: token);
+        await auto.WaitUntilTextAsync("= 42 : int32");
+        await auto.Ctrl().KeyAsync(Hex1bKey.Z, ct: token);
+        await auto.EnterAsync(ct: token);
+        Assert.AreEqual(0, await run.WaitAsync(TimeSpan.FromSeconds(20), token));
+    }
+
+    /// <summary>
     /// Expressions, stdin, and explicit session replay all flush partial output and exit 130 without recovery.
     /// </summary>
     /// <param name="mode">The actual CLI source mode.</param>

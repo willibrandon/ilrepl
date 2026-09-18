@@ -113,6 +113,8 @@ root.SetAction(async (parseResult, cancellationToken) =>
             }).ConfigureAwait(false);
         }
 
+        using var consoleCancellation = new BatchConsoleCancellation(cancellationToken);
+        cancellationToken = consoleCancellation.Token;
         SessionController engine;
         HostProcessEngine initial;
         try
@@ -166,6 +168,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
                                 AnsiWriter.Write(Console.Out, line, color);
                         }
 
+                        await engine.DisposeAsync().ConfigureAwait(false);
                         cancellationToken.ThrowIfCancellationRequested();
                         return result.Reply.Succeeded ? 0 : 1;
                     }
@@ -205,6 +208,9 @@ root.SetAction(async (parseResult, cancellationToken) =>
             var exitCode = lines is null
                 ? await runner.RunInputAsync(Console.In, cancellationToken).ConfigureAwait(false)
                 : await runner.RunAsync(lines, cancellationToken).ConfigureAwait(false);
+            // A Windows console interrupt can finish ReadLine as EOF before its signal callback runs.
+            // Keep cancellation registered through cleanup and decide the exit status only afterward.
+            await engine.DisposeAsync().ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             return exitCode;
         }

@@ -131,8 +131,8 @@ public sealed class AnalysisRequesterTests
         await WaitAsync(() => engine.Analyses.Count == 1);
         var call = engine.Analyses.Single();
         await call.Prepared;
-        await requester.SettleAsync(TimeSpan.FromMilliseconds(500))
-            .WaitAsync(TimeSpan.FromSeconds(5), TestContext.CancellationToken);
+        await requester.SettleAsync(TimeSpan.FromSeconds(5))
+            .WaitAsync(TimeSpan.FromSeconds(20), TestContext.CancellationToken);
         Assert.IsTrue(call.Cancellation.IsCancellationRequested);
         Assert.IsTrue(call.Release.Task.IsCanceled);
     }

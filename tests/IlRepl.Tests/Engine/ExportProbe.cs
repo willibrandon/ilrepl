@@ -26,7 +26,8 @@ internal static class ExportProbe
         }
         if (args is ["--export-tool-wait", var signal])
         {
-            await File.WriteAllTextAsync(signal, Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+            await File.WriteAllTextAsync(signal + ".pending", Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+            File.Move(signal + ".pending", signal);
             await new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously).Task;
             return true;
         }

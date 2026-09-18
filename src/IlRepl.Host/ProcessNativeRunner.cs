@@ -122,7 +122,7 @@ public static class ProcessNativeRunner
             stdout = ReadOutputAsync(process.StandardOutput, 64 * 1024, overflow, outputLifetime.Token,
                 NativeOutputBuffer.StartMarker(root));
             stderr = ReadOutputAsync(process.StandardError, 64 * 1024, overflow, outputLifetime.Token);
-            var exit = process.WaitForExitAsync(CancellationToken.None);
+            var exit = OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None);
             if (await Task.WhenAny(connecting, exit).ConfigureAwait(false) == exit)
                 throw new IOException($"native runtime exited during diagnostics startup with code {process.ExitCode}");
             connector = await connecting.ConfigureAwait(false) ?? throw new IOException("CoreCLR diagnostics startup timed out");
@@ -214,12 +214,12 @@ public static class ProcessNativeRunner
             {
                 // Orderly shutdown also flushes release runtimes that leave the final native listing buffered.
                 await File.WriteAllTextAsync(Path.Combine(root, "release"), "release", CancellationToken.None).ConfigureAwait(false);
-                try { await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5),
+                try { await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5),
                     CancellationToken.None).ConfigureAwait(false); }
                 catch (TimeoutException) { /* A workload can register an exit handler that never returns. */ }
             }
             Kill(process);
-            if (started) await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            if (started) await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None).ConfigureAwait(false);
             await group.StopAsync().ConfigureAwait(false);
             outputLifetime.CancelAfter(TimeSpan.FromSeconds(1));
             if (input is not null) await input.ConfigureAwait(false);

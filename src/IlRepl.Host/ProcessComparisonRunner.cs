@@ -112,7 +112,7 @@ public static class ProcessComparisonRunner
             var overflow = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             stdout = ReadOutputAsync(process.StandardOutput, package.OutputLimit, overflow, outputLifetime.Token);
             stderr = ReadOutputAsync(process.StandardError, package.OutputLimit, overflow, outputLifetime.Token);
-            var exit = process.WaitForExitAsync(CancellationToken.None);
+            var exit = OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None);
             var ready = WaitForReadyAsync(readyPath, lifetime.Token);
             var resultReady = WaitForReadyAsync(resultReadyPath, lifetime.Token);
             var startup = Task.Delay(TimeSpan.FromMinutes(2), lifetime.Token);
@@ -205,7 +205,7 @@ public static class ProcessComparisonRunner
             await group.StopAsync().ConfigureAwait(false);
             if (processStarted)
             {
-                await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None).ConfigureAwait(false);
             }
 
             if (stdin is not null)
@@ -240,7 +240,7 @@ public static class ProcessComparisonRunner
             await group.StopAsync().ConfigureAwait(false);
             if (processStarted)
             {
-                await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None).ConfigureAwait(false);
             }
 
             // Drain closed pipes without waiting indefinitely for descendants that retained inherited handles.

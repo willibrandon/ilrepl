@@ -18,6 +18,10 @@ internal static partial class ConsoleStartupProbe
     /// </summary>
     internal static async Task<int> RunAsync(string mode, string directory)
     {
+        // Cooked Console.In otherwise converts Windows input through the inherited legacy code page.
+        // Establish the Unicode contract before capturing the modes that the presentation must restore.
+        Console.InputEncoding = Encoding.UTF8;
+        Console.OutputEncoding = Encoding.UTF8;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var token = timeout.Token;
         var original = CaptureMode();

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using IlRepl.Protocol;
 
 namespace IlRepl.Tests;
 
@@ -26,7 +27,7 @@ internal static class ToolProcess
         var error = process.StandardError.ReadToEndAsync(deadline.Token);
         try
         {
-            await process.WaitForExitAsync(deadline.Token);
+            await OwnedProcessGroup.WaitForExitAsync(process, deadline.Token);
             await Task.WhenAll(output, error).WaitAsync(deadline.Token);
             return new ToolResult(process.ExitCode, await output, await error);
         }
@@ -39,8 +40,8 @@ internal static class ToolProcess
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync(CancellationToken.None);
             }
+            await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None);
 
             await deadline.CancelAsync();
             try

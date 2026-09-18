@@ -96,7 +96,7 @@ public sealed partial class OwnedProcessGroup : IDisposable
             using var process = Process.GetProcessById(scope.ProcessId);
             if (GetStartIdentity(process) != scope.StartIdentity) return false;
             if (!OperatingSystem.IsWindows() && GetProcessGroup(scope.ProcessId) != scope.ProcessId) return false;
-            return !process.HasExited || GroupExists(scope.ProcessId);
+            return !(OperatingSystem.IsWindows() ? process.WaitForExit(0) : process.HasExited) || GroupExists(scope.ProcessId);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException
             or FileNotFoundException or DirectoryNotFoundException
@@ -117,7 +117,9 @@ public sealed partial class OwnedProcessGroup : IDisposable
         try
         {
             using var process = Process.GetProcessById(scope.ProcessId);
-            if (GetStartIdentity(process) != scope.StartIdentity || process.HasExited) return false;
+            if (GetStartIdentity(process) != scope.StartIdentity) return false;
+            if (OperatingSystem.IsWindows()) return !process.WaitForExit(0);
+            if (process.HasExited) return false;
             if (!OperatingSystem.IsLinux()) return true;
             var status = File.ReadAllText("/proc/" + scope.ProcessId.ToString(CultureInfo.InvariantCulture) + "/stat");
             var closing = status.LastIndexOf(')');
@@ -142,6 +144,33 @@ public sealed partial class OwnedProcessGroup : IDisposable
     {
         while (IsRunning(scope)) await Task.Delay(10, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Waits for a retained child process handle to signal completion before callers release its filesystem resources.
+    /// </summary>
+    /// <param name="process">The original started process with its retained operating-system handle.</param>
+    /// <param name="cancellationToken">Cancels the observation without terminating the process.</param>
+    /// <returns>Completion after process termination and redirected event-output draining.</returns>
+    public static async Task WaitForExitAsync(Process process, CancellationToken cancellationToken)
+    {
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        // On Windows HasExited can observe the exit code before the process object is signalled.
+        // WaitForExitAsync uses that shortcut too; a kernel wait is the resource-release boundary.
+        if (OperatingSystem.IsWindows())
+        {
+            while (!process.WaitForExit(0)) await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Uses the retained Windows process handle or the adopted Unix identity to observe complete termination.
+    /// </summary>
+    /// <param name="process">The retained process object.</param>
+    /// <param name="scope">The stable identity used for an adopted Unix process.</param>
+    /// <param name="cancellationToken">Cancels the observation without terminating the process.</param>
+    /// <returns>Completion after termination, including unreaped adopted Unix zombies.</returns>
+    public static Task WaitForExitAsync(Process process, OwnedProcessScope scope, CancellationToken cancellationToken) =>
+        OperatingSystem.IsWindows() ? WaitForExitAsync(process, cancellationToken) : WaitForExitAsync(scope, cancellationToken);
 
     private static bool GroupExists(int group)
     {

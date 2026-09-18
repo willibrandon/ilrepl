@@ -214,10 +214,11 @@ public sealed partial class HostProcessEngine : IReplEngine
         Stream? connection = null;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        Task? exited = null;
         try
         {
             var accepted = listener.AcceptAsync(process.Id, timeout.Token);
-            var exited = OwnedProcessGroup.WaitForExitAsync(owned.Scope, timeout.Token);
+            exited = OwnedProcessGroup.WaitForExitAsync(process, owned.Scope, timeout.Token);
             if (await Task.WhenAny(accepted, exited).ConfigureAwait(false) == exited)
             {
                 await timeout.CancelAsync().ConfigureAwait(false);
@@ -232,6 +233,9 @@ public sealed partial class HostProcessEngine : IReplEngine
             var host = rpc.Attach<IReplHost>();
             rpc.StartListening();
             var hello = await host.HelloAsync(timeout.Token).ConfigureAwait(false);
+            await timeout.CancelAsync().ConfigureAwait(false);
+            try { await exited.ConfigureAwait(false); }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested) { }
             var engine = new HostProcessEngine(process, rpc, host, stderr, hello, listener, connection,
                 lifetime, owned.Scope, ownsLifetime);
             receiver.Client = engine;
@@ -240,6 +244,12 @@ public sealed partial class HostProcessEngine : IReplEngine
         }
         catch (Exception ex) when (ex is RemoteInvocationException or ConnectionLostException or OperationCanceledException or IOException)
         {
+            await timeout.CancelAsync().ConfigureAwait(false);
+            if (exited is not null)
+            {
+                try { await exited.ConfigureAwait(false); }
+                catch (OperationCanceledException) when (timeout.IsCancellationRequested) { }
+            }
             string detail;
             lock (stderr)
             {
@@ -255,7 +265,7 @@ public sealed partial class HostProcessEngine : IReplEngine
                 {
                     await lifetime.StopAsync(owned.Scope.Identity, CancellationToken.None).ConfigureAwait(false);
                 }
-                await OwnedProcessGroup.WaitForExitAsync(owned.Scope, CancellationToken.None).ConfigureAwait(false);
+                await OwnedProcessGroup.WaitForExitAsync(process, owned.Scope, CancellationToken.None).ConfigureAwait(false);
             }
             catch (InvalidOperationException)
             {
@@ -384,10 +394,10 @@ public sealed partial class HostProcessEngine : IReplEngine
             try
             {
                 using var grace = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-                try { await OwnedProcessGroup.WaitForExitAsync(_scope, grace.Token).ConfigureAwait(false); }
+                try { await OwnedProcessGroup.WaitForExitAsync(_process, _scope, grace.Token).ConfigureAwait(false); }
                 catch (OperationCanceledException) { }
                 await _lifetime.StopAsync(_scope.Identity, CancellationToken.None).ConfigureAwait(false);
-                await OwnedProcessGroup.WaitForExitAsync(_scope, CancellationToken.None).ConfigureAwait(false);
+                await OwnedProcessGroup.WaitForExitAsync(_process, _scope, CancellationToken.None).ConfigureAwait(false);
                 await _exit.Task.ConfigureAwait(false);
             }
             finally

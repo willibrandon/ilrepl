@@ -74,7 +74,7 @@ public static partial class ComparisonDescendantSource
     public static bool IsRunning(string record)
     {
         using var process = Open(record);
-        return process is not null && !process.HasExited;
+        return process is not null && !(OperatingSystem.IsWindows() ? process.WaitForExit(0) : process.HasExited);
     }
 
     /// <summary>

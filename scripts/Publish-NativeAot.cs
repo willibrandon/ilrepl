@@ -313,6 +313,16 @@ static async Task<bool> SmokePublishedAsync(string repo, string publishDirectory
     return packaged == 0;
 }
 
+static async Task WaitForProcessExitAsync(Process process, CancellationToken cancellationToken)
+{
+    await process.WaitForExitAsync(cancellationToken);
+    // The Windows exit-code shortcut can precede the process object's resource-release signal.
+    if (OperatingSystem.IsWindows())
+    {
+        while (!process.WaitForExit(0)) await Task.Delay(10, cancellationToken);
+    }
+}
+
 static async Task<int> RunAsync(string workingDirectory, string fileName, string[] arguments, CancellationToken cancellationToken)
 {
     var startInfo = new ProcessStartInfo(fileName) { WorkingDirectory = workingDirectory, UseShellExecute = false };
@@ -324,7 +334,7 @@ static async Task<int> RunAsync(string workingDirectory, string fileName, string
     using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"{fileName} did not start");
     try
     {
-        await process.WaitForExitAsync(cancellationToken);
+        await WaitForProcessExitAsync(process, cancellationToken);
         return process.ExitCode;
     }
     finally
@@ -332,8 +342,8 @@ static async Task<int> RunAsync(string workingDirectory, string fileName, string
         if (!process.HasExited)
         {
             process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync(CancellationToken.None);
         }
+        await WaitForProcessExitAsync(process, CancellationToken.None);
     }
 }
 
@@ -369,7 +379,7 @@ static async Task<(int ExitCode, string Output)> CaptureAsync(string workingDire
     var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
     try
     {
-        await process.WaitForExitAsync(timeout.Token);
+        await WaitForProcessExitAsync(process, timeout.Token);
         await Task.WhenAll(stdout, stderr).WaitAsync(timeout.Token);
         return (process.ExitCode, await stdout + await stderr);
     }
@@ -378,8 +388,8 @@ static async Task<(int ExitCode, string Output)> CaptureAsync(string workingDire
         if (!process.HasExited)
         {
             process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync(CancellationToken.None);
         }
+        await WaitForProcessExitAsync(process, CancellationToken.None);
     }
 }
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using IlRepl.Engine;
 using IlRepl.Processes;
 
 namespace IlRepl.Tests.EndToEnd;
@@ -9,8 +10,7 @@ namespace IlRepl.Tests.EndToEnd;
 /// </summary>
 [TestClass]
 [TestCategory("Interaction")]
-[OSCondition(ConditionMode.Exclude, OperatingSystems.Windows)]
-public sealed class UnixSocketPathTests
+public sealed class LocalSocketPathTests
 {
     /// <summary>
     /// Supplies cancellation to the actual frontend and its owned execution processes.
@@ -28,25 +28,29 @@ public sealed class UnixSocketPathTests
     public async Task Eval_UsesSocketFallbackWithoutChangingTemporaryDirectory(string kind)
     {
         var suffix = kind switch { "ascii" => new string('a', 80), "utf8" => new string('界', 28), _ => "界" };
-        var temporary = Path.Combine("/tmp", "ilr-" + Guid.NewGuid().ToString("N")[..8] + "-" + suffix);
+        var root = OperatingSystem.IsWindows() ? Path.GetTempPath() : "/tmp";
+        var temporary = Path.Combine(root, "ilr-" + Guid.NewGuid().ToString("N")[..8] + "-" + suffix);
         Directory.CreateDirectory(temporary);
         try
         {
             if (kind == "utf8")
             {
-                Assert.IsLessThanOrEqualTo(55, temporary.Length);
+                if (!OperatingSystem.IsWindows()) Assert.IsLessThanOrEqualTo(55, temporary.Length);
                 Assert.IsGreaterThan(108, Encoding.UTF8.GetByteCount(Path.Combine(temporary, "ilr-0123456789abcdef", "host.sock")));
             }
 
             var start = new ProcessStartInfo(HostLocator.FindDotnet()) { WorkingDirectory = RepoPaths.Root };
             start.Environment["TMPDIR"] = temporary;
-            foreach (var argument in new[] { RepoPaths.FrontEndAssembly, "--no-color", "-e",
-                "call string Path::GetTempPath(); call void Console::WriteLine(string); ldc.i4.s 42; ret" })
+            start.Environment["TMP"] = temporary;
+            start.Environment["TEMP"] = temporary;
+            var source = "call string Path::GetTempPath(); ldstr " + LiteralParser.Escape(temporary + Path.DirectorySeparatorChar)
+                + "; call bool string::op_Equality(string, string); call void Console::WriteLine(bool); ldc.i4.s 42; ret";
+            foreach (var argument in new[] { RepoPaths.FrontEndAssembly, "--no-color", "-e", source })
                 start.ArgumentList.Add(argument);
             var result = await ToolProcess.RunAsync(start, TestContext.CancellationToken);
             Assert.AreEqual(0, result.ExitCode, result.StandardError + result.StandardOutput);
             Assert.Contains("= 42 : int32", result.StandardOutput);
-            Assert.Contains(temporary + Path.DirectorySeparatorChar, result.StandardOutput);
+            Assert.Contains("True" + Environment.NewLine, result.StandardOutput);
             Assert.IsEmpty(Directory.EnumerateDirectories(temporary, "ilr-*"), "Exited owners must remove their socket directories.");
         }
         finally

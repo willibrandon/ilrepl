@@ -45,11 +45,6 @@ public sealed class ToolProcessTests
                 await Task.Delay(10, TestContext.CancellationToken);
             }
             var text = await File.ReadAllTextAsync(signal, TestContext.CancellationToken);
-            while (text.Length == 0)
-            {
-                await Task.Delay(10, TestContext.CancellationToken);
-                text = await File.ReadAllTextAsync(signal, TestContext.CancellationToken);
-            }
             using var process = Process.GetProcessById(int.Parse(text, CultureInfo.InvariantCulture));
             Assert.IsFalse(process.HasExited);
             await cancellation.CancelAsync();

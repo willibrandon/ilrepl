@@ -99,10 +99,8 @@ public sealed class ConsoleStartupTests
         await auto.WaitUntilTextAsync(draft);
         await SendObservedAsync("\x1b_Gi=991122;OK\x1b\\\x1b]11;rgb:1111/2222/3333\x1b\\");
         await SendObservedAsync("\x1b_Gi=991144;ERROR:" + new string('x', 600) + "\x1b\\", requireMultipleReads: true);
-        await SendObservedAsync("\x1b_Gi=991133;");
-        await SendObservedAsync("OK\x1b\\");
-        await SendObservedAsync("\x1b]11;rgb:abcd/");
-        await SendObservedAsync("1234/5678\x1b\\");
+        await SendFragmentedAsync("\x1b_Gi=991133;", "OK\x1b\\");
+        await SendFragmentedAsync("\x1b]11;rgb:abcd/", "1234/5678\x1b\\");
         await auto.TypeAsync(" unchanged", ct: token);
         await auto.WaitUntilTextAsync(draft + " unchanged");
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
@@ -112,11 +110,23 @@ public sealed class ConsoleStartupTests
         await auto.EnterAsync(ct: token);
         await AssertCookedLineAsync(auto, files, run, token);
 
-        async Task SendObservedAsync(string text, bool requireMultipleReads = false)
+        async Task SendFragmentedAsync(string prefix, string suffix)
+        {
+            // ConPTY retains incomplete terminal responses before making console input records available.
+            // Unix exposes each fragment; Windows exposes the completed response after both ordered writes.
+            if (OperatingSystem.IsWindows()) await SendObservedAsync(prefix + suffix, fragments: [prefix, suffix]);
+            else
+            {
+                await SendObservedAsync(prefix);
+                await SendObservedAsync(suffix);
+            }
+        }
+
+        async Task SendObservedAsync(string text, bool requireMultipleReads = false, string[]? fragments = null)
         {
             var previous = Directory.EnumerateFiles(files.DirectoryPath, "*.read").ToHashSet(StringComparer.Ordinal);
             var bytes = Encoding.UTF8.GetBytes(text);
-            await terminal.SendInputAsync(bytes, token);
+            foreach (var fragment in fragments ?? [text]) await terminal.SendInputAsync(Encoding.UTF8.GetBytes(fragment), token);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
             timeout.CancelAfter(TimeSpan.FromSeconds(10));
             while (true)

@@ -1,5 +1,8 @@
 using System.Buffers.Binary;
 using System.Net.Sockets;
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using IlRepl.Protocol;
 
 namespace IlRepl.Tests.Protocol;
@@ -15,6 +18,34 @@ public sealed class SocketTransportTests
     /// Supplies cancellation to actual socket operations.
     /// </summary>
     public TestContext TestContext { get; set; } = null!;
+
+    /// <summary>
+    /// Windows socket directories and endpoints admit only the current user without inherited access entries.
+    /// </summary>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    [SupportedOSPlatform("windows")]
+    public void WindowsEndpoint_RestrictsDirectoryAndSocketToCurrentUser()
+    {
+        using var listener = new LocalSocketListener();
+        using var identity = WindowsIdentity.GetCurrent();
+        FileSystemSecurity[] resources =
+        [
+            new DirectoryInfo(Path.GetDirectoryName(listener.SocketPath)!).GetAccessControl(AccessControlSections.Access),
+            new FileInfo(listener.SocketPath).GetAccessControl(AccessControlSections.Access),
+        ];
+        foreach (var security in resources)
+        {
+            Assert.IsTrue(security.AreAccessRulesProtected);
+            var rules = security.GetAccessRules(includeExplicit: true, includeInherited: true, typeof(SecurityIdentifier))
+                .Cast<FileSystemAccessRule>().ToArray();
+            var rule = Assert.ContainsSingle(rules);
+            Assert.AreEqual(identity.User, rule.IdentityReference);
+            Assert.AreEqual(AccessControlType.Allow, rule.AccessControlType);
+            Assert.AreEqual(FileSystemRights.FullControl, rule.FileSystemRights);
+            Assert.IsFalse(rule.IsInherited);
+        }
+    }
 
     /// <summary>
     /// Independent authenticated connections exchange exact duplex bytes and remove their own endpoints.

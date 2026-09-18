@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using IlRepl.Processes;
+using IlRepl.Protocol;
 
 namespace IlRepl.Tests.EndToEnd;
 
@@ -24,19 +25,32 @@ internal static partial class WindowsConsoleProbe
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Windows console events require Windows.");
         if (args[1] == "launch")
         {
-            InstallHandler();
-            var start = new ProcessStartInfo(HostLocator.FindDotnet()) { UseShellExecute = false };
-            foreach (var argument in args[3..]) start.ArgumentList.Add(argument);
-            using var frontend = Process.Start(start) ?? throw new InvalidOperationException("The frontend did not start.");
-            await File.WriteAllTextAsync(args[2], frontend.Id.ToString(CultureInfo.InvariantCulture));
+            Publish(args[2] + ".launcher", Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
             try
             {
-                await frontend.WaitForExitAsync();
-                return frontend.ExitCode;
+                InstallHandler();
+                var start = new ProcessStartInfo(HostLocator.FindDotnet()) { UseShellExecute = false, RedirectStandardError = true };
+                foreach (var argument in args[3..]) start.ArgumentList.Add(argument);
+                using var frontend = Process.Start(start) ?? throw new InvalidOperationException("The frontend did not start.");
+                var errors = frontend.StandardError.ReadToEndAsync();
+                Publish(args[2], frontend.Id.ToString(CultureInfo.InvariantCulture));
+                try
+                {
+                    await OwnedProcessGroup.WaitForExitAsync(frontend, CancellationToken.None);
+                    Publish(args[2] + ".stderr", await errors);
+                    Publish(args[2] + ".exit", frontend.ExitCode.ToString(CultureInfo.InvariantCulture));
+                    return frontend.ExitCode;
+                }
+                finally
+                {
+                    if (!frontend.HasExited) frontend.Kill(entireProcessTree: true);
+                    await OwnedProcessGroup.WaitForExitAsync(frontend, CancellationToken.None);
+                }
             }
-            finally
+            catch (Exception exception)
             {
-                if (!frontend.HasExited) frontend.Kill(entireProcessTree: true);
+                Publish(args[2] + ".error", exception.ToString());
+                throw;
             }
         }
 
@@ -49,7 +63,7 @@ internal static partial class WindowsConsoleProbe
             InstallHandler();
             if (args[1] == "observe-close")
             {
-                await File.WriteAllTextAsync(args[4], "ready");
+                Publish(args[4], "ready");
                 await Task.Delay(Timeout.InfiniteTimeSpan);
                 return 0;
             }
@@ -65,6 +79,13 @@ internal static partial class WindowsConsoleProbe
         if (SetConsoleCtrlHandler(&HandleControl, 1) == 0) throw new Win32Exception(Marshal.GetLastPInvokeError());
     }
 
+    private static void Publish(string path, string contents)
+    {
+        var temporary = path + ".pending";
+        File.WriteAllText(temporary, contents);
+        File.Move(temporary, path);
+    }
+
     [UnmanagedCallersOnly]
     private static int HandleControl(uint control)
     {
@@ -76,7 +97,7 @@ internal static partial class WindowsConsoleProbe
         if (control == 2 && _closeMarker is { } marker)
         {
             // A control callback must never propagate a managed exception across the native boundary.
-            try { File.WriteAllText(marker, "CTRL_CLOSE_EVENT"); }
+            try { Publish(marker, "CTRL_CLOSE_EVENT"); }
             catch { return 0; }
         }
         return 0;

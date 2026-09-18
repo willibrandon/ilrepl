@@ -73,7 +73,7 @@ public sealed partial class HostProcessEngine : IReplClient, IHostedEngine, IPro
         try
         {
             await _lifetime.StopAsync(_scope.Identity, cancellationToken).ConfigureAwait(false);
-            await OwnedProcessGroup.WaitForExitAsync(_scope, cancellationToken).ConfigureAwait(false);
+            await OwnedProcessGroup.WaitForExitAsync(_process, _scope, cancellationToken).ConfigureAwait(false);
         }
         catch (InvalidOperationException)
         {
@@ -85,7 +85,7 @@ public sealed partial class HostProcessEngine : IReplClient, IHostedEngine, IPro
     {
         try
         {
-            await OwnedProcessGroup.WaitForExitAsync(_scope, CancellationToken.None).ConfigureAwait(false);
+            await OwnedProcessGroup.WaitForExitAsync(_process, _scope, CancellationToken.None).ConfigureAwait(false);
             int? code;
             if (OperatingSystem.IsWindows()) code = _process.ExitCode;
             else code = await _lifetime.ExitCodeAsync(_scope.Identity).ConfigureAwait(false);

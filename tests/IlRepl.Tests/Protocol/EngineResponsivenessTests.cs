@@ -151,11 +151,9 @@ public sealed class EngineResponsivenessTests
     {
         using var fixture = new SessionDependencyFixture();
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 42);
-        var path = Path.Combine(fixture.DirectoryPath, fixture.AssemblyName + ".dll");
-        await File.WriteAllBytesAsync(path, fixture.PackageImage(fixture.AssemblyName, "1.0.0"), TestContext.CancellationToken);
         var core = new ReplCore();
+        core.Session.Resolver.LoadImage(fixture.PackageImage(fixture.AssemblyName, "1.0.0"));
         await using var engine = new InProcessEngine(core);
-        Assert.IsTrue((await engine.HandleAsync(".load " + LiteralParser.Escape(path), TestContext.CancellationToken)).Succeeded);
         var call = "call int32 [" + fixture.AssemblyName + "]DependencySamples.Values::Read()";
         Assert.IsTrue((await engine.HandleAsync(call, TestContext.CancellationToken)).Succeeded);
         using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);

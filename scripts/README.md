@@ -41,7 +41,8 @@ The default command writes packages under `artifacts/native-aot/<rid>/packages`.
 beside the publish directory, recording the validated RID, ReadyToRun machine, and frontend, host, and package hashes.
 Smoke-only results contain no package entries. Extracted packages undergo the same host image and behavior checks.
 Linux evidence also records the terminal helper hash and requires the packaged helper to match the published copy.
-Windows runtime-only cleanup failures retain the error, file attributes, and observable process paths still using the fixture.
+Windows smoke process waits require the kernel termination signal before deleting runtime-only fixtures.
+Cleanup failures retain the error, file attributes, and observable process paths still using the fixture.
 CI also supplies Microsoft's [Handle](https://learn.microsoft.com/sysinternals/downloads/handle) through `ILREPL_SMOKE_HANDLE_PATH`
 to report matching open handles when cleanup fails. This diagnostic never closes handles or changes the validation result.
 

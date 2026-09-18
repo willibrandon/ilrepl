@@ -1,6 +1,7 @@
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using IlRepl.Protocol;
+using IlRepl.Processes;
 using IlRepl.Repl;
 
 namespace IlRepl.Tests.Responsiveness;
@@ -32,7 +33,7 @@ public sealed class ResponsivenessFixtureTests
             var metadata = pe.GetMetadataReader();
             Assert.HasCount(33, metadata.TypeDefinitions);
             Assert.HasCount(320, metadata.MethodDefinitions);
-            await using var engine = new InProcessEngine();
+            await using var engine = await HostProcessEngine.StartAsync(cancellationToken: TestContext.CancellationToken);
             var loaded = await engine.HandleAsync(".load " + path, TestContext.CancellationToken);
             Assert.IsTrue(loaded.Succeeded);
             const string text = "call Responsiveness.CatalogType00031::Method";
