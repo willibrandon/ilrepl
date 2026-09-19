@@ -35,6 +35,7 @@ public sealed class StackedParametersAnalyzer : DiagnosticAnalyzer
             TypeParameterListSyntax types => types.Parameters.Cast<SyntaxNode>().ToList(),
             _ => ((BaseParameterListSyntax)list).Parameters.Cast<SyntaxNode>().ToList(),
         };
+
         if (parameters.Count == 0)
         {
             return;
@@ -60,6 +61,7 @@ public sealed class StackedParametersAnalyzer : DiagnosticAnalyzer
                     TypeParameterSyntax generic => generic.Identifier.ValueText,
                     _ => parameter.ToString(),
                 };
+
                 context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.ParametersAreNotStacked, parameter.GetLocation(), name));
             }
         }
