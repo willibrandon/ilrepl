@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -23,62 +22,69 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
     {
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.EnableConcurrentExecution();
-        context.RegisterSyntaxNodeAction(AnalyzeStatements, SyntaxKind.Block, SyntaxKind.SwitchSection, SyntaxKind.CompilationUnit);
-        context.RegisterSyntaxNodeAction(AnalyzeMembers, SyntaxKind.ClassDeclaration, SyntaxKind.StructDeclaration,
-            SyntaxKind.InterfaceDeclaration, SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration);
+        context.RegisterSyntaxNodeAction(AnalyzeSequence, SyntaxKind.Block, SyntaxKind.SwitchSection, SyntaxKind.CompilationUnit,
+            SyntaxKind.NamespaceDeclaration, SyntaxKind.FileScopedNamespaceDeclaration, SyntaxKind.ClassDeclaration,
+            SyntaxKind.StructDeclaration, SyntaxKind.InterfaceDeclaration, SyntaxKind.RecordDeclaration,
+            SyntaxKind.RecordStructDeclaration);
     }
 
-    private static void AnalyzeMembers(SyntaxNodeAnalysisContext context)
+    private static void AnalyzeSequence(SyntaxNodeAnalysisContext context)
     {
-        var members = ((TypeDeclarationSyntax)context.Node).Members;
-        for (var index = 0; index + 1 < members.Count; index++)
-        {
-            if (EndsOnBraceLine(members[index]))
-            {
-                Check(context, members[index].GetLastToken(), members[index + 1].GetFirstToken(), codeAlso: true);
-            }
-        }
-    }
-
-    private static void AnalyzeStatements(SyntaxNodeAnalysisContext context)
-    {
-        var node = context.Node;
-        IReadOnlyList<SyntaxNode> statements;
+        IReadOnlyList<SyntaxNode> items;
         var end = default(SyntaxToken);
-        switch (node)
+        switch (context.Node)
         {
             case BlockSyntax block:
-                statements = block.Statements;
+                items = block.Statements;
                 end = block.CloseBraceToken;
                 break;
             case SwitchSectionSyntax section:
-                statements = section.Statements;
+                items = section.Statements;
+                break;
+            case CompilationUnitSyntax unit:
+                items = unit.Members;
+                break;
+            case NamespaceDeclarationSyntax space:
+                items = space.Members;
+                end = space.CloseBraceToken;
+                break;
+            case FileScopedNamespaceDeclarationSyntax space:
+                items = space.Members;
                 break;
             default:
-                statements = ((CompilationUnitSyntax)node).Members.OfType<GlobalStatementSyntax>().ToList();
+                var type = (TypeDeclarationSyntax)context.Node;
+                items = type.Members;
+                end = type.CloseBraceToken;
                 break;
         }
 
-        for (var index = 0; index < statements.Count; index++)
+        for (var index = 0; index < items.Count; index++)
         {
-            if (!EndsOnBraceLine(statements[index]))
+            if (!EndsOnBraceLine(items[index]))
             {
                 continue;
             }
 
-            // The SDK's rule already reports a statement placed right under a block, so only what it misses is reported
-            // here: a comment under any closing brace, and code under a line such as "});" that ends an expression.
-            var last = statements[index].GetLastToken();
-            if (index + 1 < statements.Count)
+            var last = items[index].GetLastToken();
+            if (index + 1 == items.Count)
             {
-                Check(context, last, statements[index + 1].GetFirstToken(), codeAlso: !last.IsKind(SyntaxKind.CloseBraceToken));
+                // Only a comment can stand between the last item and the brace that closes its container.
+                if (!end.IsKind(SyntaxKind.None) && !end.IsMissing)
+                {
+                    Check(context, last, end, codeAlso: false);
+                }
+
+                continue;
             }
-            else if (!end.IsKind(SyntaxKind.None))
-            {
-                Check(context, last, end, codeAlso: false);
-            }
+
+            // The SDK's rule already reports a statement placed right under a block, so that one case is left to it.
+            var next = items[index + 1];
+            var sdkReports = last.IsKind(SyntaxKind.CloseBraceToken) && IsStatement(items[index]) && IsStatement(next);
+            Check(context, last, next.GetFirstToken(), codeAlso: !sdkReports);
         }
     }
+
+    private static bool IsStatement(SyntaxNode node) => node is StatementSyntax or GlobalStatementSyntax;
 
     // A body, a lambda, or an initializer can end a statement or member on a line that begins with its closing brace.
     private static bool EndsOnBraceLine(SyntaxNode node)

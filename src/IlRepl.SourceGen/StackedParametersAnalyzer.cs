@@ -23,15 +23,18 @@ public sealed class StackedParametersAnalyzer : DiagnosticAnalyzer
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.EnableConcurrentExecution();
         context.RegisterSyntaxNodeAction(AnalyzeParameters, SyntaxKind.ParameterList, SyntaxKind.BracketedParameterList,
-            SyntaxKind.FunctionPointerParameterList);
+            SyntaxKind.FunctionPointerParameterList, SyntaxKind.TypeParameterList);
     }
 
     private static void AnalyzeParameters(SyntaxNodeAnalysisContext context)
     {
         var list = context.Node;
-        var parameters = list is FunctionPointerParameterListSyntax pointer
-            ? pointer.Parameters.Cast<SyntaxNode>().ToList()
-            : ((BaseParameterListSyntax)list).Parameters.Cast<SyntaxNode>().ToList();
+        var parameters = list switch
+        {
+            FunctionPointerParameterListSyntax pointer => pointer.Parameters.Cast<SyntaxNode>().ToList(),
+            TypeParameterListSyntax types => types.Parameters.Cast<SyntaxNode>().ToList(),
+            _ => ((BaseParameterListSyntax)list).Parameters.Cast<SyntaxNode>().ToList(),
+        };
         if (parameters.Count == 0)
         {
             return;
@@ -51,7 +54,12 @@ public sealed class StackedParametersAnalyzer : DiagnosticAnalyzer
             var startsItsLine = tree.GetLineSpan(previous.Span).EndLinePosition.Line != tree.GetLineSpan(first.Span).StartLinePosition.Line;
             if (!startsItsLine)
             {
-                var name = parameter is ParameterSyntax named ? named.Identifier.ValueText : parameter.ToString();
+                var name = parameter switch
+                {
+                    ParameterSyntax named => named.Identifier.ValueText,
+                    TypeParameterSyntax generic => generic.Identifier.ValueText,
+                    _ => parameter.ToString(),
+                };
                 context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.ParametersAreNotStacked, parameter.GetLocation(), name));
             }
         }

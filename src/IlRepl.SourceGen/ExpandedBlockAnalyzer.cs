@@ -24,7 +24,7 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
         context.RegisterSyntaxNodeAction(AnalyzeBlock, SyntaxKind.Block, SyntaxKind.SwitchStatement, SyntaxKind.NamespaceDeclaration,
             SyntaxKind.ClassDeclaration, SyntaxKind.StructDeclaration, SyntaxKind.InterfaceDeclaration, SyntaxKind.EnumDeclaration,
-            SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration);
+            SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration, SyntaxKind.AccessorList);
     }
 
     private static void AnalyzeBlock(SyntaxNodeAnalysisContext context)
@@ -44,6 +44,17 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
             case NamespaceDeclarationSyntax space:
                 open = space.OpenBraceToken;
                 close = space.CloseBraceToken;
+                break;
+            case AccessorListSyntax accessors:
+                // "{ get; set; }" reads as one phrase. Accessors that take lines of their own are a body like any other.
+                var lines = accessors.SyntaxTree.GetLineSpan(accessors.Span);
+                if (lines.StartLinePosition.Line == lines.EndLinePosition.Line)
+                {
+                    return;
+                }
+
+                open = accessors.OpenBraceToken;
+                close = accessors.CloseBraceToken;
                 break;
             default:
                 var type = (BaseTypeDeclarationSyntax)context.Node;
