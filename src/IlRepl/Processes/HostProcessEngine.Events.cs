@@ -106,9 +106,17 @@ public sealed partial class HostProcessEngine : IReplClient, IHostedEngine, IPro
                     // The tail retained so far is reported while an inherited writer keeps the pipe open.
                 }
             }
-            else code = await _lifetime.ExitCodeAsync(_scope.Identity).ConfigureAwait(false);
+            else
+            {
+                code = await _lifetime.ExitCodeAsync(_scope.Identity).ConfigureAwait(false);
+            }
+
             string tail;
-            lock (_stderr) tail = Tail(_stderr.ToString());
+            lock (_stderr)
+            {
+                tail = Tail(_stderr.ToString());
+            }
+
             var observed = new HostExit(_process.Id, code, tail, Volatile.Read(ref _expectedExit) != 0);
             Exited?.Invoke(observed);
             _exit.TrySetResult(observed);
