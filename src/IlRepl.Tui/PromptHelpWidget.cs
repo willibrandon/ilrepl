@@ -71,11 +71,8 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
             return [.. content];
         })).InputBindings(b => Bind(b, State, Catalog, bodyWidth, height));
 
-        return ctx.Pastable(surface).OnPaste(e =>
-        {
-            e.Paste.Cancel();
-            State.PasteInput?.Applied();
-        });
+        // Help is read-only. A paste that reaches it holds back no later input, so there is nothing to release here.
+        return ctx.Pastable(surface).OnPaste(e => e.Paste.Cancel());
     }
 
     /// <summary>

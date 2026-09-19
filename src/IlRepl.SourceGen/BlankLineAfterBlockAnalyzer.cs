@@ -49,9 +49,9 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
             while (true)
             {
                 var next = last.GetNextToken(includeZeroWidth: true);
-                if (FindComment(last, next) is { } comment)
+                if (IsCrowded(next, out var comment) && comment is { } found)
                 {
-                    context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlankLineAfterBrace, comment.GetLocation()));
+                    context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlankLineAfterBrace, found.GetLocation()));
                 }
 
                 if (!IsCloser(next) || StartLineOf(next) != LineOf(last) + 1 || !ClosesOnly(next, LastOnLine(next)))
@@ -104,7 +104,7 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
 
             // A comment under the brace is the other pass's to report.
             var first = next.GetFirstToken();
-            if (!HasComment(first) && StartLineOf(first) == LineOf(last) + 1)
+            if (StartLineOf(first) != LineOf(last) && IsCrowded(first, out var comment) && comment is null)
             {
                 context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlankLineAfterBrace, first.GetLocation()));
             }
@@ -182,37 +182,44 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
         token.IsKind(SyntaxKind.CloseParenToken) || token.IsKind(SyntaxKind.CloseBracketToken)
         || token.IsKind(SyntaxKind.SemicolonToken) || token.IsKind(SyntaxKind.CommaToken);
 
-    // The comment on the line right under the one "last" ends, when a comment is the first thing written there.
-    private static SyntaxTrivia? FindComment(SyntaxToken last, SyntaxToken next)
+    // Whether no blank line stands between the brace line and what follows it, which is a comment or else the token itself.
+    // A directive is passed over: "#endif" under a brace puts no space between the brace and the code after it.
+    private static bool IsCrowded(SyntaxToken next, out SyntaxTrivia? comment)
     {
+        comment = null;
+        var lineIsEmpty = true;
         foreach (var trivia in next.LeadingTrivia)
         {
-            if (IsLayout(trivia))
+            if (trivia.IsKind(SyntaxKind.WhitespaceTrivia))
             {
                 continue;
             }
 
-            var line = trivia.SyntaxTree!.GetLineSpan(trivia.Span).StartLinePosition.Line;
-            return line == LineOf(last) + 1 ? trivia : null;
-        }
-
-        return null;
-    }
-
-    private static bool HasComment(SyntaxToken token)
-    {
-        foreach (var trivia in token.LeadingTrivia)
-        {
-            if (!IsLayout(trivia))
+            if (trivia.IsKind(SyntaxKind.EndOfLineTrivia))
             {
-                return true;
+                if (lineIsEmpty)
+                {
+                    return false;
+                }
+
+                lineIsEmpty = true;
+                continue;
             }
+
+            // A directive, and the text a false "#if" disables, end their own lines.
+            if (trivia.IsDirective || trivia.IsKind(SyntaxKind.DisabledTextTrivia))
+            {
+                lineIsEmpty = true;
+                continue;
+            }
+
+            comment = trivia;
+            return true;
         }
 
-        return false;
+        return true;
     }
 
-    // A directive such as "#endif" separates the brace from what follows, as a blank line does.
     private static bool IsLayout(SyntaxTrivia trivia) =>
         trivia.IsKind(SyntaxKind.WhitespaceTrivia) || trivia.IsKind(SyntaxKind.EndOfLineTrivia) || trivia.IsDirective;
 
