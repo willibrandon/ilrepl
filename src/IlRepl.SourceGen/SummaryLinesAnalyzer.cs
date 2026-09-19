@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -47,7 +48,9 @@ public sealed class SummaryLinesAnalyzer : DiagnosticAnalyzer
             // Nothing but the tag stands on the first line and on the last, and one line of text lies between them.
             var afterOpening = text.ToString(TextSpan.FromBounds(summary.StartTag.Span.End, first.End));
             var beforeClosing = text.ToString(TextSpan.FromBounds(last.Start, summary.EndTag.SpanStart));
-            if (last.LineNumber - first.LineNumber != 2 || afterOpening.Trim().Length != 0 || beforeClosing.Trim() != "///")
+            var between = last.LineNumber - first.LineNumber == 2 ? text.Lines[first.LineNumber + 1].ToString().Trim() : "";
+            if (afterOpening.Trim().Length != 0 || beforeClosing.Trim() != "///" || !between.StartsWith("///", StringComparison.Ordinal)
+                || between.Substring(3).Trim().Length == 0)
             {
                 context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.SummaryIsNotThreeLines, summary.StartTag.GetLocation()));
             }
