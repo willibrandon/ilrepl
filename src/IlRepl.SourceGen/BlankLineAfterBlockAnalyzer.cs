@@ -80,6 +80,7 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
             CompilationUnitSyntax unit => unit.Members,
             BaseNamespaceDeclarationSyntax space => space.Members,
             AccessorListSyntax accessors => accessors.Accessors,
+            ExtensionBlockDeclarationSyntax extension => extension.Members,
             TypeDeclarationSyntax type => type.Members,
             _ => [],
         };

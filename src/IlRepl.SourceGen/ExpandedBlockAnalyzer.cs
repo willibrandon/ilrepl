@@ -49,6 +49,10 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
                 open = space.OpenBraceToken;
                 close = space.CloseBraceToken;
                 break;
+            case ExtensionBlockDeclarationSyntax extension:
+                open = extension.OpenBraceToken;
+                close = extension.CloseBraceToken;
+                break;
             case BaseTypeDeclarationSyntax type:
                 open = type.OpenBraceToken;
                 close = type.CloseBraceToken;
