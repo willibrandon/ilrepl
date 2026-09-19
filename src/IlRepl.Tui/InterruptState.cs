@@ -14,6 +14,36 @@ internal sealed class InterruptState
     private long _builtRevision = -1;
     private long _renderedRevision = -1;
     private bool _settled;
+    private int _presses;
+    private int _restarts;
+
+    /// <summary>
+    /// Whether the next press replaces the runtime, which holds once the notice for the current phase has been flushed.
+    /// </summary>
+    internal bool Armed
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _progress.IsRunning && _requestedIdentity == _progress.Identity && _renderedRevision == _progress.Sequence;
+            }
+        }
+    }
+
+    /// <summary>
+    /// How many presses have been classified, and how many of them replaced the runtime.
+    /// </summary>
+    internal (int Presses, int Restarts) Counts
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return (_presses, _restarts);
+            }
+        }
+    }
 
     /// <summary>
     /// Applies a phase change while retracting notices belonging to an earlier phase or operation.
@@ -55,6 +85,7 @@ internal sealed class InterruptState
         lock (_lock)
         {
             progress = _progress;
+            _presses++;
             if (!_progress.IsRunning)
             {
                 return _settled ? InterruptAction.Consume : InterruptAction.None;
@@ -62,7 +93,13 @@ internal sealed class InterruptState
 
             if (_requestedIdentity == _progress.Identity)
             {
-                return _renderedRevision == _progress.Sequence ? InterruptAction.Restart : InterruptAction.Consume;
+                if (_renderedRevision != _progress.Sequence)
+                {
+                    return InterruptAction.Consume;
+                }
+
+                _restarts++;
+                return InterruptAction.Restart;
             }
 
             _requestedIdentity = _progress.Identity;

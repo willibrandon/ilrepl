@@ -199,7 +199,7 @@ public sealed class HostInteractionTests
         await auto.WaitUntilTextAsync("Press Ctrl+C again to restart");
         Assert.AreEqual(SessionRuntimeState.Ready, controller.RuntimeState);
         Assert.IsTrue(controller.Progress.IsRunning);
-        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
+        await ConfirmRestartAsync(auto, prompt!, token);
         await auto.WaitUntilTextAsync("runtime restarted; source and definitions retained");
         var expectedDraft = queueInput ? "ldc.i4 73\n// keep this draft" : "// keep this draft";
         Assert.AreEqual(expectedDraft, prompt!.Text);
@@ -251,7 +251,7 @@ public sealed class HostInteractionTests
             .Replace(" ", "", StringComparison.Ordinal).Contains("PressCtrl+Cagain", StringComparison.Ordinal));
         Assert.AreEqual(SessionRuntimeState.Ready, controller.RuntimeState);
         Assert.IsTrue(controller.Progress.IsRunning);
-        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
+        await ConfirmRestartAsync(auto, prompt!, token);
         await auto.WaitUntilAsync(_ => controller.RuntimeState == SessionRuntimeState.Ready && !controller.Progress.IsRunning
             && controller.Workspace!.Document.Interruptions.Length == 1);
         await executing.WaitAsync(token);
@@ -306,12 +306,26 @@ public sealed class HostInteractionTests
         await auto.WaitUntilAsync(_ => File.Exists(files.MarkerPath));
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
         await auto.WaitUntilTextAsync("Press Ctrl+C again");
-        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
+        await ConfirmRestartAsync(auto, prompt!, token);
         await executing.WaitAsync(token);
         await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("runtime restarted") && snapshot.ContainsText("il[2]> .clear"));
         Assert.AreEqual(".clear", prompt!.Text);
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
         await run.WaitAsync(token);
+    }
+
+    // The app honours the confirming press only once the notice for the current phase of the run has been flushed, and it
+    // ignores a press that arrives while a new phase redraws the notice, as it would for a person who then presses again.
+    // The text on screen cannot tell the two apart, so the press is repeated until one of them is taken.
+    private static async Task ConfirmRestartAsync(Hex1bTerminalAutomator auto, PromptState prompt, CancellationToken token)
+    {
+        while (prompt.Interruption.Counts.Restarts == 0)
+        {
+            await auto.WaitUntilAsync(_ => prompt.Interruption.Armed);
+            var presses = prompt.Interruption.Counts.Presses;
+            await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
+            await auto.WaitUntilAsync(_ => prompt.Interruption.Counts.Presses > presses);
+        }
     }
 
     private static string Flatten(Hex1bTerminalSnapshot snapshot) =>
