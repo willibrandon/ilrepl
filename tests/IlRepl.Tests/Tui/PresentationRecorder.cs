@@ -5,9 +5,11 @@ using Hex1b.Tokens;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// A presentation filter that keeps what the app sent to the terminal, so tests can look for
-/// sequences the emulator does not surface, such as the clipboard write and the caret shape.
+/// A presentation filter that keeps what the app sent to the terminal, so tests can look for sequences the emulator does not surface.
 /// </summary>
+/// <remarks>
+/// Such sequences include the clipboard write and the caret shape.
+/// </remarks>
 internal sealed class PresentationRecorder : IHex1bTerminalPresentationFilter
 {
     private readonly StringBuilder _output = new();

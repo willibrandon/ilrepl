@@ -71,10 +71,12 @@ public sealed class StackSimulator
     }
 
     /// <summary>
-    /// Merges another stack of the same depth into this one, slot by slot, the way the CLI merges
-    /// stack states at a join (ECMA-335 III.1.8.1.3): by stack category, with an unknown slot
-    /// staying unknown. The depths must already agree.
+    /// Merges another stack of the same depth into this one, slot by slot, the way the CLI merges stack states at a join.
     /// </summary>
+    /// <remarks>
+    /// The merge follows ECMA-335 III.1.8.1.3: it goes by stack category, with an unknown slot staying unknown. The depths must already
+    /// agree.
+    /// </remarks>
     /// <param name="other">The incoming stack.</param>
     /// <param name="types">The session types, for the base chain of session classes.</param>
     /// <returns>True when a slot changed.</returns>
@@ -220,9 +222,11 @@ public sealed class StackSimulator
     }
 
     /// <summary>
-    /// True when the entry at <paramref name="index"/> (from the bottom) is the <c>this</c> of an
-    /// instance member, loaded with <c>ldarg.0</c> and not copied through a local since.
+    /// True when the entry at <paramref name="index"/> (from the bottom) is the <c>this</c> of an instance member.
     /// </summary>
+    /// <remarks>
+    /// The <c>this</c> must have been loaded with <c>ldarg.0</c> and not copied through a local since.
+    /// </remarks>
     /// <param name="index">The entry index.</param>
     /// <returns>True for <c>this</c>.</returns>
     public bool IsThisAt(int index) => index >= 0 && index < _isThis.Count && _isThis[index];

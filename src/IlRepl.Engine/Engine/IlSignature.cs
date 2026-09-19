@@ -2,11 +2,13 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A type as a metadata signature encodes it, kept whole: custom modifiers in position, array
-/// shapes with their sizes and bounds, function pointers with their own signatures, pinning,
-/// generic parameters by position. Reflection cannot represent all of this, so the listing
-/// renders from here and only the stack simulator works from the projected <see cref="Type"/>.
+/// A type as a metadata signature encodes it, kept whole.
 /// </summary>
+/// <remarks>
+/// It keeps custom modifiers in position, array shapes with their sizes and bounds, function pointers with their own signatures, pinning,
+/// and generic parameters by position. Reflection cannot represent all of this, so the listing renders from here and only the stack
+/// simulator works from the projected <see cref="Type"/>.
+/// </remarks>
 public sealed record IlSignature
 {
     private IlSignature(IlSignatureKind kind)
@@ -20,15 +22,20 @@ public sealed record IlSignature
     public IlSignatureKind Kind { get; }
 
     /// <summary>
-    /// The runtime type for a primitive, a named type, the definition of a generic instance, or
-    /// a generic parameter the context could name; null when resolution failed or does not apply.
+    /// The runtime type, or null when resolution failed or does not apply.
     /// </summary>
+    /// <remarks>
+    /// There is a runtime type for a primitive, a named type, the definition of a generic instance, or a generic parameter the context
+    /// could name.
+    /// </remarks>
     public Type? Resolved { get; init; }
 
     /// <summary>
-    /// The spelling of a named type that did not resolve, as <c>[Assembly]Namespace.Name</c>, or
-    /// <c>Outer/Inner</c> for a nested one; null otherwise.
+    /// The spelling of a named type that did not resolve, or null otherwise.
     /// </summary>
+    /// <remarks>
+    /// The spelling is <c>[Assembly]Namespace.Name</c>, or <c>Outer/Inner</c> for a nested one.
+    /// </remarks>
     public string? UnresolvedName { get; init; }
 
     /// <summary>
@@ -225,9 +232,12 @@ public sealed record IlSignature
     };
 
     /// <summary>
-    /// The closest runtime type, for the stack simulator: modifiers and pinning dropped, a function
-    /// pointer as <c>native int</c> (its stack category), an unresolved part as null (an unknown slot).
+    /// The closest runtime type, for the stack simulator.
     /// </summary>
+    /// <remarks>
+    /// Modifiers and pinning are dropped. A function pointer becomes <c>native int</c>, its stack category. An unresolved part becomes
+    /// null, an unknown slot.
+    /// </remarks>
     /// <returns>The type, or null when any part is unresolved.</returns>
     public Type? ToClrType()
     {
@@ -279,9 +289,11 @@ public sealed record IlSignature
     public override string ToString() => IlSignatureRenderer.IlAsm(this);
 
     /// <summary>
-    /// Builds a signature from a runtime type, for the paths that have no metadata reader: a
-    /// dynamic assembly, or a reflected member's modifiers.
+    /// Builds a signature from a runtime type, for the paths that have no metadata reader.
     /// </summary>
+    /// <remarks>
+    /// Those paths are a dynamic assembly and a reflected member's modifiers.
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <param name="requiredModifiers">Required modifiers to wrap it in, innermost first.</param>
     /// <param name="optionalModifiers">Optional modifiers to wrap it in, innermost first.</param>

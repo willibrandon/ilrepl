@@ -296,9 +296,11 @@ public sealed class IlAsmRendererTests
     }
 
     /// <summary>
-    /// A member calling another member of its own type renders from the declaration, a
-    /// namespaced type keeps its namespace, and a synthesized static-interface override is written.
+    /// A member calling another member of its own type renders from the declaration, and a namespaced type keeps its namespace.
     /// </summary>
+    /// <remarks>
+    /// A synthesized static-interface override is written.
+    /// </remarks>
     [TestMethod]
     public void Render_OwnCalls_NamespacesAndStaticOverrides()
     {
@@ -354,9 +356,11 @@ public sealed class IlAsmRendererTests
     }
 
     /// <summary>
-    /// A member of a generic instantiation and a generic interface method render with the
-    /// definition's signature, so the assembled references bind.
+    /// A member of a generic instantiation and a generic interface method render with the definition's signature.
     /// </summary>
+    /// <remarks>
+    /// The assembled references therefore bind.
+    /// </remarks>
     [TestMethod]
     public void Render_GenericReferences_UseDefinitionSignatures()
     {
@@ -394,9 +398,11 @@ public sealed class IlAsmRendererTests
     }
 
     /// <summary>
-    /// The transitions the REPL supplies, leaving a try or a catch and ending a finally, are
-    /// rendered, so blocks written without them assemble and run.
+    /// The transitions the REPL supplies, leaving a try or a catch and ending a finally, are rendered.
     /// </summary>
+    /// <remarks>
+    /// Blocks written without them therefore assemble and run.
+    /// </remarks>
     [TestMethod]
     public void Render_ImplicitBlockTransitions_AreWritten()
     {

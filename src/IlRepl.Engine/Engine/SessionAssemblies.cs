@@ -18,8 +18,7 @@ namespace IlRepl.Engine;
 public static class SessionAssemblies
 {
     /// <summary>
-    /// The version every session assembly carries. Version components are two bytes wide, so the
-    /// counter lives in the simple name instead.
+    /// The version every session assembly carries. Version components are two bytes wide, so the counter lives in the simple name instead.
     /// </summary>
     public static readonly Version Version = new(1, 0, 0, 0);
 
@@ -56,21 +55,24 @@ public static class SessionAssemblies
     public static AssemblyName MakeAssemblyName(string name) => new(name) { Version = Version };
 
     /// <summary>
-    /// True when a simple name has the shape of a session assembly name. Only used to decide
-    /// whether a load request should consult the registry; recognition is by identity.
+    /// True when a simple name has the shape of a session assembly name.
     /// </summary>
+    /// <remarks>
+    /// Only used to decide whether a load request should consult the registry; recognition is by identity.
+    /// </remarks>
     /// <param name="simpleName">The simple name.</param>
     /// <returns>True for <c>ilrepl.*</c>.</returns>
     public static bool IsSessionName(string? simpleName) =>
         simpleName is not null && simpleName.StartsWith(Prefix, StringComparison.Ordinal);
 
     /// <summary>
-    /// Creates the load context for a cell built with Reflection.Emit. On CoreCLR the cell is
-    /// defined under contextual reflection so its dynamic assembly lands in a collectible context
-    /// that resolves session names; the browser runtime ignores contextual reflection for dynamic
-    /// assemblies, so there the default context resolves session names instead (every context is
-    /// non-collectible on that runtime, which is what makes that legal).
+    /// Creates the load context for a cell built with Reflection.Emit.
     /// </summary>
+    /// <remarks>
+    /// On CoreCLR the cell is defined under contextual reflection so its dynamic assembly lands in a collectible context that resolves
+    /// session names; the browser runtime ignores contextual reflection for dynamic assemblies, so there the default context resolves
+    /// session names instead (every context is non-collectible on that runtime, which is what makes that legal).
+    /// </remarks>
     /// <param name="name">The cell's name.</param>
     /// <returns>The context, or null on the browser.</returns>
     public static DefinitionLoadContext? CreateCellContext(string name)
@@ -110,9 +112,11 @@ public static class SessionAssemblies
     }
 
     /// <summary>
-    /// Registers a cell built with Reflection.Emit. Both the builder and the runtime assembly of
-    /// the created type are registered, because they are different objects on CoreCLR.
+    /// Registers a cell built with Reflection.Emit.
     /// </summary>
+    /// <remarks>
+    /// Both the builder and the runtime assembly of the created type are registered, because they are different objects on CoreCLR.
+    /// </remarks>
     /// <param name="builder">The assembly builder.</param>
     /// <param name="created">A type created in it.</param>
     /// <param name="dependencies">The session assemblies the cell references.</param>
@@ -140,9 +144,11 @@ public static class SessionAssemblies
     }
 
     /// <summary>
-    /// Initiates unloading of a definition the session no longer holds. Objects that still
-    /// reference the assembly keep it, and its dependencies, alive until they are released.
+    /// Initiates unloading of a definition the session no longer holds.
     /// </summary>
+    /// <remarks>
+    /// Objects that still reference the assembly keep it, and its dependencies, alive until they are released.
+    /// </remarks>
     /// <param name="definition">The definition.</param>
     public static void Release(DefinitionAssembly definition)
     {
@@ -176,8 +182,10 @@ public static class SessionAssemblies
 
     /// <summary>
     /// True when a type was defined by a session: its definition, for a constructed generic type.
-    /// Arrays, pointers, and byrefs answer false; their own assembly is their element's.
     /// </summary>
+    /// <remarks>
+    /// Arrays, pointers, and byrefs answer false; their own assembly is their element's.
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <returns>True for a session type.</returns>
     public static bool IsSessionType(Type? type)
@@ -203,8 +211,7 @@ public static class SessionAssemblies
     public static bool IsSessionInstance(object? value) => value is not null && IsSessionType(value.GetType());
 
     /// <summary>
-    /// Resolves a session assembly by its full name. Entries are weak, so a definition that
-    /// nothing references any more is simply absent.
+    /// Resolves a session assembly by its full name. Entries are weak, so a definition that nothing references any more is simply absent.
     /// </summary>
     /// <param name="name">The assembly name.</param>
     /// <returns>The assembly, or null.</returns>

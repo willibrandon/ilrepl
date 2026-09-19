@@ -4,8 +4,7 @@ using IlRepl.Tui;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// Tests for <see cref="PromptViewport"/>: the caret is always inside the view, and the view
-/// moves only when it has to.
+/// Tests for <see cref="PromptViewport"/>: the caret is always inside the view, and the view moves only when it has to.
 /// </summary>
 [TestClass]
 public sealed class PromptViewportTests
@@ -72,9 +71,11 @@ public sealed class PromptViewportTests
     }
 
     /// <summary>
-    /// The offsets count characters and the screen counts cells, so a line of wide characters
-    /// scrolls further than its character count says; narrow text is left as it was.
+    /// The offsets count characters and the screen counts cells.
     /// </summary>
+    /// <remarks>
+    /// A line of wide characters therefore scrolls further than its character count says. Narrow text is left as it was.
+    /// </remarks>
     [TestMethod]
     public void RevealWide_WideCharacters_ScrollUntilTheCaretCellFits()
     {
@@ -92,9 +93,11 @@ public sealed class PromptViewportTests
     }
 
     /// <summary>
-    /// Scrolling never starts inside a surrogate pair or a joined emoji: the offset lands on a
-    /// text element, and one whose character index fell inside a pair is moved to its start.
+    /// Scrolling never starts inside a surrogate pair or a joined emoji: the offset lands on a text element.
     /// </summary>
+    /// <remarks>
+    /// An offset whose character index fell inside a pair is moved to its start.
+    /// </remarks>
     [TestMethod]
     public void RevealWide_Emoji_KeepsTextElementBoundaries()
     {
@@ -120,11 +123,12 @@ public sealed class PromptViewportTests
     }
 
     /// <summary>
-    /// The horizontal reveal counts cells, not characters: a line of decomposed accents, many
-    /// characters but few cells, that fits the columns is not scrolled at all; a line of wide
-    /// characters is scrolled by whole characters until the caret's cell fits; and a joined emoji
-    /// is never split.
+    /// The horizontal reveal counts cells, not characters.
     /// </summary>
+    /// <remarks>
+    /// A line of decomposed accents, many characters but few cells, that fits the columns is not scrolled at all. A line of wide characters
+    /// is scrolled by whole characters until the caret's cell fits. A joined emoji is never split.
+    /// </remarks>
     [TestMethod]
     public void RevealCaret_CountsCellsAndLandsOnTextElements()
     {
@@ -155,10 +159,12 @@ public sealed class PromptViewportTests
     }
 
     /// <summary>
-    /// A style cut at the scrolled edge starts at the next character that is a whole code unit,
-    /// so it never begins inside a character built from several: in a run of joined emoji that
-    /// is the closing quote, and in plain text it is the edge itself.
+    /// A style cut at the scrolled edge starts at the next character that is a whole code unit.
     /// </summary>
+    /// <remarks>
+    /// It therefore never begins inside a character built from several. In a run of joined emoji that character is the closing quote, and
+    /// in plain text it is the edge itself.
+    /// </remarks>
     [TestMethod]
     public void SafeStart_SkipsSurrogatePairsAtTheEdge()
     {

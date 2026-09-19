@@ -81,9 +81,11 @@ public static class CellCompiler
     }
 
     /// <summary>
-    /// Refuses a session whose cell cannot be compiled: an open block, a pending label, an open
-    /// protected region, or more than one value on the stack.
+    /// Refuses a session whose cell cannot be compiled.
     /// </summary>
+    /// <remarks>
+    /// A cell cannot be compiled when it has an open block, a pending label, an open protected region, or more than one value on the stack.
+    /// </remarks>
     /// <param name="session">The session.</param>
     /// <exception cref="ReplException">The cell is incomplete.</exception>
     public static void RequireComplete(Session session)

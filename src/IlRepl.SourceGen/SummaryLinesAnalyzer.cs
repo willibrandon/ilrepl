@@ -1,0 +1,48 @@
+using System.Collections.Immutable;
+using System.Linq;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Text;
+
+namespace IlRepl.SourceGen;
+
+/// <summary>
+/// Holds every documentation summary to three lines: the opening tag, one line of text, and the closing tag.
+/// </summary>
+[DiagnosticAnalyzer(LanguageNames.CSharp)]
+public sealed class SummaryLinesAnalyzer : DiagnosticAnalyzer
+{
+    /// <inheritdoc />
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
+        ImmutableArray.Create(DiagnosticDescriptors.SummaryIsNotThreeLines);
+
+    /// <inheritdoc />
+    public override void Initialize(AnalysisContext context)
+    {
+        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+        context.EnableConcurrentExecution();
+        context.RegisterSyntaxTreeAction(AnalyzeTree);
+    }
+
+    // Documentation is structured trivia, which a walk of the nodes reaches only when it is asked to descend into trivia.
+    private static void AnalyzeTree(SyntaxTreeAnalysisContext context)
+    {
+        var text = context.Tree.GetText(context.CancellationToken);
+        var root = context.Tree.GetRoot(context.CancellationToken);
+        foreach (var summary in root.DescendantNodes(descendIntoTrivia: true).OfType<XmlElementSyntax>()
+            .Where(element => element.StartTag.Name.LocalName.ValueText == "summary"))
+        {
+            var first = text.Lines.GetLineFromPosition(summary.StartTag.SpanStart);
+            var last = text.Lines.GetLineFromPosition(summary.EndTag.SpanStart);
+
+            // Nothing but the tag stands on the first line and on the last, and one line of text lies between them.
+            var afterOpening = text.ToString(TextSpan.FromBounds(summary.StartTag.Span.End, first.End));
+            var beforeClosing = text.ToString(TextSpan.FromBounds(last.Start, summary.EndTag.SpanStart));
+            if (last.LineNumber - first.LineNumber != 2 || afterOpening.Trim().Length != 0 || beforeClosing.Trim() != "///")
+            {
+                context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.SummaryIsNotThreeLines, summary.StartTag.GetLocation()));
+            }
+        }
+    }
+}

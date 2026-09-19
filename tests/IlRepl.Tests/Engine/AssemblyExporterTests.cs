@@ -9,9 +9,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// The exported assembly carries the session's types and methods with the metadata that was
-/// declared, references no session assembly, and runs when loaded.
+/// The exported assembly carries the session's types and methods with the metadata that was declared.
 /// </summary>
+/// <remarks>
+/// It references no session assembly and runs when loaded.
+/// </remarks>
 [TestClass]
 public sealed class AssemblyExporterTests
 {
@@ -93,9 +95,12 @@ public sealed class AssemblyExporterTests
     }
 
     /// <summary>
-    /// The saved metadata is what was declared: layouts and offsets, no synthesized constructor,
-    /// non-vector arrays, a parameter default that is not optional, modifiers, and attributes.
+    /// The saved metadata is what was declared.
     /// </summary>
+    /// <remarks>
+    /// That covers layouts and offsets, no synthesized constructor, non-vector arrays, a parameter default that is not optional, modifiers,
+    /// and attributes.
+    /// </remarks>
     [TestMethod]
     public void Write_KeepsDeclaredMetadata()
     {
@@ -213,8 +218,7 @@ public sealed class AssemblyExporterTests
     }
 
     /// <summary>
-    /// A family listed first may mention one listed later, since every family is declared
-    /// before any shape is imported.
+    /// A family listed first may mention one listed later, since every family is declared before any shape is imported.
     /// </summary>
     [TestMethod]
     public void Write_FamiliesInAnyOrder()
@@ -255,9 +259,11 @@ public sealed class AssemblyExporterTests
     }
 
     /// <summary>
-    /// An attribute type declared in the session is applied and exported; its constructor is a
-    /// definition of the export before any attribute is imported.
+    /// An attribute type declared in the session is applied and exported.
     /// </summary>
+    /// <remarks>
+    /// Its constructor is a definition of the export before any attribute is imported.
+    /// </remarks>
     [TestMethod]
     public void Write_SessionDefinedAttribute()
     {

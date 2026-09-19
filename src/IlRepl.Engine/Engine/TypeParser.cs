@@ -69,8 +69,7 @@ public static class TypeParser
         ParseAt(s, ref pos, context, out pinned, out _, out _);
 
     /// <summary>
-    /// Parses a type starting at <paramref name="pos"/>, advances past it, and reports the custom
-    /// modifiers written after it.
+    /// Parses a type starting at <paramref name="pos"/>, advances past it, and reports the custom modifiers written after it.
     /// </summary>
     /// <param name="s">The normalized text.</param>
     /// <param name="pos">The position to start at; updated to the first character after the type.</param>

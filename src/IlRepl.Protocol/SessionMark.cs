@@ -1,12 +1,13 @@
 namespace IlRepl.Protocol;
 
 /// <summary>
-/// Where the session stands, taken before a block is sent so the block can be withdrawn if a
-/// line of it is refused. The generation changes whenever something runs, commits, or is
-/// discarded, and a mark from an earlier generation cannot be rolled back to: nothing that ran
-/// or committed is ever undone. The counts say how many lines each provisional store held, so a
-/// rollback keeps everything that came before the block.
+/// Where the session stands, taken before a block is sent so the block can be withdrawn if a line of it is refused.
 /// </summary>
+/// <remarks>
+/// The generation changes whenever something runs, commits, or is discarded, and a mark from an earlier generation cannot be rolled back
+/// to: nothing that ran or committed is ever undone. The counts say how many lines each provisional store held, so a rollback keeps
+/// everything that came before the block.
+/// </remarks>
 /// <param name="Generation">The session generation the mark belongs to.</param>
 /// <param name="BodyLines">How many lines the cell body held.</param>
 /// <param name="DeclarationLines">How many declaration lines the cell held.</param>

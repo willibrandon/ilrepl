@@ -3,9 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for the checks a family passes when its outermost block closes: interfaces and
-/// abstract members implemented, overrides in the hierarchy, kinds and layouts consistent.
+/// Tests for the checks a family passes when its outermost block closes.
 /// </summary>
+/// <remarks>
+/// The checks are interfaces and abstract members implemented, overrides in the hierarchy, and kinds and layouts consistent.
+/// </remarks>
 [TestClass]
 public sealed class TypeDeclarationValidatorTests
 {
@@ -35,9 +37,11 @@ public sealed class TypeDeclarationValidatorTests
     private static string CloseRefused(Session session) => Assert.ThrowsExactly<ReplException>(() => session.AddLine("}")).Message;
 
     /// <summary>
-    /// An interface member is implemented by a virtual method with its name and signature, or
-    /// by an override, or by the base, or by its own default body; otherwise the close is refused.
+    /// An interface member is implemented by a virtual method with its name and signature, an override, the base, or its own default body.
     /// </summary>
+    /// <remarks>
+    /// Otherwise the close is refused.
+    /// </remarks>
     [TestMethod]
     public void Interfaces_MustBeImplemented()
     {
@@ -69,8 +73,7 @@ public sealed class TypeDeclarationValidatorTests
     }
 
     /// <summary>
-    /// A static abstract member is implemented by a static method of the same shape, which the
-    /// validator records as an override for the writer.
+    /// A static method of the same shape implements a static abstract member, and the validator records it as an override for the writer.
     /// </summary>
     [TestMethod]
     public void StaticAbstract_ImplementedByAStaticMethod()
@@ -134,9 +137,11 @@ public sealed class TypeDeclarationValidatorTests
     }
 
     /// <summary>
-    /// A sealed session type cannot be extended: an accepted one is refused at the header like
-    /// any loaded type, and one still being written is refused when the family closes.
+    /// A sealed session type cannot be extended.
     /// </summary>
+    /// <remarks>
+    /// An accepted one is refused at the header like any loaded type, and one still being written is refused when the family closes.
+    /// </remarks>
     [TestMethod]
     public void BaseChain_IsChecked()
     {
@@ -210,9 +215,11 @@ public sealed class TypeDeclarationValidatorTests
     }
 
     /// <summary>
-    /// A generic interface method is implemented by a generic method with the same shape; the
-    /// two methods' own parameters match by position.
+    /// A generic interface method is implemented by a generic method with the same shape.
     /// </summary>
+    /// <remarks>
+    /// The two methods' own parameters match by position.
+    /// </remarks>
     [TestMethod]
     public void GenericInterfaceMethod_MatchedByPosition()
     {

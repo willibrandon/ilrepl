@@ -3,9 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for <see cref="Session"/> with <c>.method</c> blocks: definition, persistence,
-/// redefinition, undo, and running cells that call the methods on the real JIT.
+/// Tests for <see cref="Session"/> with <c>.method</c> blocks: definition, persistence, redefinition, undo, and running cells.
 /// </summary>
+/// <remarks>
+/// The cells call the methods on the real JIT.
+/// </remarks>
 [TestClass]
 public sealed class SessionMethodTests
 {
@@ -517,9 +519,11 @@ public sealed class SessionMethodTests
     }
 
     /// <summary>
-    /// A reference that named the method without its signature still pins the old one: the
-    /// caller's calli signature would otherwise quietly read the new return as the old type.
+    /// A reference that named the method without its signature still pins the old one.
     /// </summary>
+    /// <remarks>
+    /// The caller's calli signature would otherwise quietly read the new return as the old type.
+    /// </remarks>
     [TestMethod]
     public void AddLine_RedefinitionChangingReferencedSignature_FailsAtHeader()
     {
@@ -554,8 +558,7 @@ public sealed class SessionMethodTests
     }
 
     /// <summary>
-    /// Quoted names, assembly-qualified parameter types, and return types with parentheses all
-    /// define and resolve.
+    /// Quoted names, assembly-qualified parameter types, and return types with parentheses all define and resolve.
     /// </summary>
     [TestMethod]
     public void AddLine_IlAsmSpellings_DefineAndResolve()
@@ -602,8 +605,7 @@ public sealed class SessionMethodTests
     }
 
     /// <summary>
-    /// The reviewer's case: a boxed int32 cannot leave a string method by ret or by the brace, and
-    /// typed loads keep their element type.
+    /// The reviewer's case: a boxed int32 cannot leave a string method by ret or by the brace, and typed loads keep their element type.
     /// </summary>
     [TestMethod]
     public void AddLine_BoxedValueForStringReturn_IsRefused()

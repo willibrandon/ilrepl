@@ -4,9 +4,11 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Puts <c>IgnoresAccessChecksTo</c> on a dynamic assembly for the session assemblies it
-/// references, defining the attribute type in the assembly itself as the runtime expects.
+/// Puts <c>IgnoresAccessChecksTo</c> on a dynamic assembly for the session assemblies it references.
 /// </summary>
+/// <remarks>
+/// It defines the attribute type in the assembly itself, as the runtime expects.
+/// </remarks>
 public static class AccessGrants
 {
     /// <summary>

@@ -4,8 +4,7 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Properties and events declared with their accessor directives are real properties and
-/// events on the live type.
+/// Properties and events declared with their accessor directives are real properties and events on the live type.
 /// </summary>
 [TestClass]
 public sealed class PropertyEventTests

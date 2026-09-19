@@ -3,9 +3,11 @@ using System.Reflection;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// One generic parameter of a <c>.class</c> or of a generic <c>.method</c> inside one: its
-/// name, its variance and special constraints, and the types it is constrained to.
+/// One generic parameter of a <c>.class</c> or of a generic <c>.method</c> inside one.
 /// </summary>
+/// <remarks>
+/// It holds its name, its variance and special constraints, and the types it is constrained to.
+/// </remarks>
 /// <param name="Name">The parameter name.</param>
 /// <param name="Attributes">Variance and the <c>class</c>, <c>valuetype</c>, and <c>.ctor</c> constraints.</param>
 /// <param name="Constraints">The base class and interfaces the parameter must satisfy.</param>

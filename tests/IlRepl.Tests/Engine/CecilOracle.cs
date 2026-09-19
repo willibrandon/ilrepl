@@ -11,10 +11,12 @@ using PEReaderExtensions = System.Reflection.Metadata.PEReaderExtensions;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Compares bodies with Mono.Cecil's reader, an implementation that shares nothing with the
-/// engine's: instruction by instruction against a disassembly, and body against body across two
-/// assemblies by the meaning of every operand.
+/// Compares bodies with Mono.Cecil's reader, an implementation that shares nothing with the engine's.
 /// </summary>
+/// <remarks>
+/// It compares instruction by instruction against a disassembly, and body against body across two assemblies by the meaning of every
+/// operand.
+/// </remarks>
 internal static class CecilOracle
 {
     /// <summary>
@@ -100,10 +102,12 @@ internal static class CecilOracle
     }
 
     /// <summary>
-    /// Asserts that two bodies mean the same: exact encodings, offsets, immediates, targets, and
-    /// clause ranges, and every metadata operand equal by its symbolic identity, with the two
-    /// modules' own scopes mapped onto each other.
+    /// Asserts that two bodies mean the same.
     /// </summary>
+    /// <remarks>
+    /// That means exact encodings, offsets, immediates, targets, and clause ranges, and every metadata operand equal by its symbolic
+    /// identity, with the two modules' own scopes mapped onto each other.
+    /// </remarks>
     /// <param name="original">The original method.</param>
     /// <param name="reassembled">The method assembled from the listing.</param>
     /// <param name="originalScope">The full assembly name the original module's own references count as.</param>
@@ -116,10 +120,11 @@ internal static class CecilOracle
         AssertSameMeaning(original, reassembled, originalScope, reassembledScope, null, null);
 
     /// <summary>
-    /// As above, and with both images at hand also compares the table each token operand comes
-    /// from, which Cecil hides: a TypeSpec wrapping a reference is not the reference itself, and
-    /// the runtime treats the two differently for an open generic type.
+    /// As above, and with both images at hand also compares the table each token operand comes from, which Cecil hides.
     /// </summary>
+    /// <remarks>
+    /// A TypeSpec wrapping a reference is not the reference itself, and the runtime treats the two differently for an open generic type.
+    /// </remarks>
     /// <param name="original">The original method.</param>
     /// <param name="reassembled">The method assembled from the listing.</param>
     /// <param name="originalScope">The full assembly name the original module's own references count as.</param>
@@ -146,11 +151,13 @@ internal static class CecilOracle
     }
 
     /// <summary>
-    /// The shape of every token operand in a body, in order: a type by reference against a type
-    /// signature, and a member against a generic method instance. Which table a reference came
-    /// through within a shape, a TypeDef or a TypeRef, a MethodDef or a MemberRef, is not part of
-    /// it, because a member of the module being reassembled is rightly a reference from outside.
+    /// The shape of every token operand in a body, in order.
     /// </summary>
+    /// <remarks>
+    /// A shape is a type by reference against a type signature, and a member against a generic method instance. Which table a reference
+    /// came through within a shape, a TypeDef or a TypeRef, a MethodDef or a MemberRef, is not part of it, because a member of the module
+    /// being reassembled is rightly a reference from outside.
+    /// </remarks>
     private static List<string> RawTokens(byte[] image, MethodDefinition method)
     {
         using var pe = new PEReader(ImmutableArray.Create(image));
@@ -225,10 +232,12 @@ internal static class CecilOracle
         $"{(handler.CatchType is null ? "" : Identity(handler.CatchType, module, scope))}";
 
     /// <summary>
-    /// The symbolic identity of an operand: its full name and the assembly identity of every
-    /// scope in it, with the module's own scope named by <paramref name="self"/>. The table a
-    /// reference came through is not part of it, so a MethodDef and a MemberRef to one member agree.
+    /// The symbolic identity of an operand: its full name and the assembly identity of every scope in it.
     /// </summary>
+    /// <remarks>
+    /// The module's own scope is named by <paramref name="self"/>. The table a reference came through is not part of it, so a MethodDef and
+    /// a MemberRef to one member agree.
+    /// </remarks>
     private static string Identity(object? operand, ModuleDefinition module, string self)
     {
         switch (operand)
@@ -311,12 +320,13 @@ internal static class CecilOracle
     }
 
     /// <summary>
-    /// The full identity of the assembly a type lives in: name, version, culture, and public key
-    /// token. A compiled reference names a facade such as System.Collections that forwards the
-    /// type on, and the listing names where the runtime finds it, so a reference the runtime can
-    /// load is followed to the assembly that defines the type; one it cannot keeps the identity
-    /// written in the reference, so two versions of one name stay two identities.
+    /// The full identity of the assembly a type lives in: name, version, culture, and public key token.
     /// </summary>
+    /// <remarks>
+    /// A compiled reference names a facade such as System.Collections that forwards the type on, and the listing names where the runtime
+    /// finds it, so a reference the runtime can load is followed to the assembly that defines the type; one it cannot keeps the identity
+    /// written in the reference, so two versions of one name stay two identities.
+    /// </remarks>
     private static string ScopeName(TypeReference type, string self)
     {
         switch (type.Scope)

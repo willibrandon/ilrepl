@@ -3,10 +3,11 @@ using Hex1b.Documents;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// The suffix the best-matching completion would add to the word being typed, shown as grey
-/// text from the caret on. The view draws it, so the caret stays on what was typed and the
-/// suggestion follows it; Right accepts it.
+/// The suffix the best-matching completion would add to the word being typed, shown as grey text from the caret on.
 /// </summary>
+/// <remarks>
+/// The view draws it, so the caret stays on what was typed and the suggestion follows it; Right accepts it.
+/// </remarks>
 public sealed class PredictionHint
 {
     /// <summary>

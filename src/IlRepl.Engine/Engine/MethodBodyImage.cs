@@ -4,9 +4,12 @@ using System.Reflection.PortableExecutable;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A method body as read for a listing: the IL, the header facts, the exception clauses, and the
-/// metadata reader for the module when the body came from an image. Disposed when the command is done.
+/// A method body as read for a listing.
 /// </summary>
+/// <remarks>
+/// It holds the IL, the header facts, the exception clauses, and the metadata reader for the module when the body came from an image. It is
+/// disposed when the command is done.
+/// </remarks>
 public sealed class MethodBodyImage : IDisposable
 {
     private readonly PEReader? _pe;

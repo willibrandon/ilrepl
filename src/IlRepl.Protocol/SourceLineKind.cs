@@ -11,8 +11,7 @@ public enum SourceLineKind
     Blank,
 
     /// <summary>
-    /// A comment and nothing else, or a blank line inside an open <c>/* */</c> comment. It is
-    /// ignored wherever it appears.
+    /// A comment and nothing else, or a blank line inside an open <c>/* */</c> comment. It is ignored wherever it appears.
     /// </summary>
     Comment,
 

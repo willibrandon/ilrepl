@@ -9,11 +9,13 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Renders the prompt's buffer: the prompt in a gutter on the first line and a continuation
-/// marker on the ones below, then the text, scrolled so the caret is always in view. The offsets
-/// are computed from the caret at render time, so the first frame after any change is right and
-/// nothing moves while the caret stays visible. Clicks are mapped back through the same offsets.
+/// Renders the prompt's buffer: a gutter, then the text, scrolled so the caret is always in view.
 /// </summary>
+/// <remarks>
+/// The gutter holds the prompt on the first line and a continuation marker on the ones below. The offsets are computed from the caret at
+/// render time, so the first frame after any change is right and nothing moves while the caret stays visible. Clicks are mapped back
+/// through the same offsets.
+/// </remarks>
 public sealed class PromptView : IEditorViewRenderer
 {
     private const string Marker = "...> ";
@@ -30,10 +32,12 @@ public sealed class PromptView : IEditorViewRenderer
     public ViewportOffsets Offsets { get; private set; } = new(1, 0);
 
     /// <summary>
-    /// Brings the caret into view. Rows are rows, but the horizontal reveal is worked out in
-    /// terminal cells, where a wide character takes two and a combining mark takes none, and
-    /// the chosen left edge is then mapped back to the start of a text element.
+    /// Brings the caret into view.
     /// </summary>
+    /// <remarks>
+    /// Rows are rows, but the horizontal reveal is worked out in terminal cells, where a wide character takes two and a combining mark
+    /// takes none, and the chosen left edge is then mapped back to the start of a text element.
+    /// </remarks>
     /// <param name="offsets">The offsets now; the left one is a character index.</param>
     /// <param name="rows">The rows the text has.</param>
     /// <param name="columns">The columns the text has.</param>
@@ -78,9 +82,10 @@ public sealed class PromptView : IEditorViewRenderer
 
     /// <summary>
     /// The offsets count characters and the screen counts cells: a wide character takes two.
-    /// When the cells before the caret overflow the columns, the left offset moves on until
-    /// the caret's cell fits.
     /// </summary>
+    /// <remarks>
+    /// When the cells before the caret overflow the columns, the left offset moves on until the caret's cell fits.
+    /// </remarks>
     /// <param name="offsets">The offsets after the character-based reveal.</param>
     /// <param name="columns">The columns the text has.</param>
     /// <param name="line">The caret's line.</param>

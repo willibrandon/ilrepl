@@ -3,9 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for <see cref="Session.Mark"/> and <see cref="Session.Rollback"/>: a block a line of
-/// which was refused is withdrawn whole, everything before it stays, and nothing is re-run.
+/// Tests for <see cref="Session.Mark"/> and <see cref="Session.Rollback"/>: a block a line of which was refused is withdrawn whole.
 /// </summary>
+/// <remarks>
+/// Everything before it stays, and nothing is re-run.
+/// </remarks>
 [TestClass]
 public sealed class SessionMarkTests
 {
@@ -60,9 +62,11 @@ public sealed class SessionMarkTests
     }
 
     /// <summary>
-    /// A closing brace refused because the body leaves the wrong return type leaves the method
-    /// open today; a rollback takes it away so the whole declaration can be sent again.
+    /// A closing brace refused because the body leaves the wrong return type leaves the method open today.
     /// </summary>
+    /// <remarks>
+    /// A rollback takes it away so the whole declaration can be sent again.
+    /// </remarks>
     [TestMethod]
     public void Rollback_CloseTimeFailure_LeavesNoOpenMethod()
     {
@@ -105,8 +109,7 @@ public sealed class SessionMarkTests
     }
 
     /// <summary>
-    /// A member accepted before the mark survives a rollback of a member refused after it, and
-    /// the family still closes and runs.
+    /// A member accepted before the mark survives a rollback of a member refused after it, and the family still closes and runs.
     /// </summary>
     [TestMethod]
     public void Rollback_FamilyWithAcceptedMember_ReplaysMember()
@@ -126,8 +129,7 @@ public sealed class SessionMarkTests
     }
 
     /// <summary>
-    /// A protected region typed into the cell after the mark is withdrawn with its lines, and the
-    /// region can be opened again without nesting.
+    /// A protected region typed into the cell after the mark is withdrawn with its lines and can be opened again without nesting.
     /// </summary>
     [TestMethod]
     public void Rollback_TryRegionOpenedAfterMark_RestoresDepthZero()
@@ -305,9 +307,11 @@ public sealed class SessionMarkTests
     }
 
     /// <summary>
-    /// A mark taken while a method header still waits for its brace puts the method back to
-    /// waiting: after the rollback the depth is zero again and the brace is accepted once.
+    /// A mark taken while a method header still waits for its brace puts the method back to waiting.
     /// </summary>
+    /// <remarks>
+    /// After the rollback the depth is zero again and the brace is accepted once.
+    /// </remarks>
     [TestMethod]
     public void Rollback_HeaderWithoutBrace_RestoresTheWaitingBrace()
     {
@@ -358,9 +362,11 @@ public sealed class SessionMarkTests
     }
 
     /// <summary>
-    /// A member whose brace came on its own line is replayed with that brace: a rollback inside
-    /// the member keeps the class and puts the member back to where the mark stood.
+    /// A member whose brace came on its own line is replayed with that brace.
     /// </summary>
+    /// <remarks>
+    /// A rollback inside the member keeps the class and puts the member back to where the mark stood.
+    /// </remarks>
     [TestMethod]
     public void Rollback_MemberBraceOnItsOwnLine_ReplaysTheBrace()
     {

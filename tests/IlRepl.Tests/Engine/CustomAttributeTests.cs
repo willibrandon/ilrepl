@@ -6,9 +6,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Custom attributes on types, fields, methods, and parameters are real attributes on the live
-/// type, with their arguments, including Type arguments that name session types.
+/// Custom attributes on types, fields, methods, and parameters are real attributes on the live type, with their arguments.
 /// </summary>
+/// <remarks>
+/// The arguments include Type arguments that name session types.
+/// </remarks>
 [TestClass]
 public sealed class CustomAttributeTests
 {
@@ -41,8 +43,7 @@ public sealed class CustomAttributeTests
     }
 
     /// <summary>
-    /// A Type argument naming a type of the same family, and one naming a type of another
-    /// family, both resolve when read from the live attribute.
+    /// Type arguments naming a type of the same family and a type of another family both resolve when read from the live attribute.
     /// </summary>
     [TestMethod]
     public void TypeArguments_ResolveAcrossFamilies()

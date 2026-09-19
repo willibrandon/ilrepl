@@ -3,11 +3,12 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Cuts a buffer into the units a submission sends: single lines at the top level, blank lines
-/// that run the cell, and brace blocks from their opening line to the line that balances them.
-/// Depth is counted from what the engine already has open, a comment line is never a boundary,
-/// and a blank line inside a block is not sent at all.
+/// Cuts a buffer into the units a submission sends: single lines, blank lines that run the cell, and brace blocks.
 /// </summary>
+/// <remarks>
+/// Single lines are units at the top level, and a brace block runs from its opening line to the line that balances it. Depth is counted
+/// from what the engine already has open, a comment line is never a boundary, and a blank line inside a block is not sent at all.
+/// </remarks>
 public static class SubmissionSplitter
 {
     /// <summary>

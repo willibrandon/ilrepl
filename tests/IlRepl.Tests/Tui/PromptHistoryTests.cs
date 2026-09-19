@@ -54,9 +54,11 @@ public sealed class PromptHistoryTests
     }
 
     /// <summary>
-    /// Editing a recalled entry edits its working copy; the entry itself is unchanged, and the
-    /// edit is still there when the user comes back to it.
+    /// Editing a recalled entry edits its working copy, and the entry itself is unchanged.
     /// </summary>
+    /// <remarks>
+    /// The edit is still there when the user comes back to it.
+    /// </remarks>
     [TestMethod]
     public void Back_EditedRecall_KeepsWorkingCopyNotEntry()
     {
@@ -119,8 +121,7 @@ public sealed class PromptHistoryTests
     }
 
     /// <summary>
-    /// Loading puts the store's entries before the ones this session already has, and the
-    /// store's problem shows through.
+    /// Loading puts the store's entries before the ones this session already has, and the store's problem shows through.
     /// </summary>
     /// <returns>A task that completes when the assertions have run.</returns>
     [TestMethod]
@@ -138,9 +139,11 @@ public sealed class PromptHistoryTests
     }
 
     /// <summary>
-    /// The store's writes before this session began are not the session's, however many there
-    /// were: a line written after the read was asked for stays recallable once the read lands.
+    /// The store's writes before this session began are not the session's, however many there were.
     /// </summary>
+    /// <remarks>
+    /// A line written after the read was asked for stays recallable once the read lands.
+    /// </remarks>
     [TestMethod]
     public async Task LoadAsync_CountsOnlyThisSessionsWrites()
     {
@@ -162,8 +165,7 @@ public sealed class PromptHistoryTests
     }
 
     /// <summary>
-    /// An entry added before the store answered stays, after the stored ones, and one the store
-    /// had already taken is not doubled.
+    /// An entry added before the store answered stays, after the stored ones, and one the store had already taken is not doubled.
     /// </summary>
     [TestMethod]
     public void Load_KeepsEntriesAddedMeanwhile()
@@ -184,9 +186,11 @@ public sealed class PromptHistoryTests
     }
 
     /// <summary>
-    /// A load that lands while browsing keeps the place, the working copies, and the draft the
-    /// buffer held when browsing began; the stored entries are reachable further back.
+    /// A load that lands while browsing keeps the place, the working copies, and the draft the buffer held when browsing began.
     /// </summary>
+    /// <remarks>
+    /// The stored entries are reachable further back.
+    /// </remarks>
     [TestMethod]
     public void Load_WhileBrowsing_KeepsDraftAndPosition()
     {
@@ -223,9 +227,11 @@ public sealed class PromptHistoryTests
     }
 
     /// <summary>
-    /// A buffer that ends with a blank line ends with a run: the entry keeps that line, so the
-    /// recalled entry does what the original did; a buffer of nothing but blank lines is no entry.
+    /// A buffer that ends with a blank line ends with a run: the entry keeps that line, so the recalled entry does what the original did.
     /// </summary>
+    /// <remarks>
+    /// A buffer of nothing but blank lines is no entry.
+    /// </remarks>
     [TestMethod]
     public void Add_KeepsATrailingRunLine()
     {
@@ -240,9 +246,11 @@ public sealed class PromptHistoryTests
     }
 
     /// <summary>
-    /// The session's own writes the store had taken come back at its end and are not added
-    /// again; a stored run that merely reads the same is another run and stays recallable.
+    /// The session's own writes the store had taken come back at its end and are not added again.
     /// </summary>
+    /// <remarks>
+    /// A stored run that merely reads the same is another run and stays recallable.
+    /// </remarks>
     [TestMethod]
     public void Load_TakesItsOwnWritesFromTheStoredEnd()
     {

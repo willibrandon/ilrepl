@@ -4,9 +4,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Renders a disassembled method the way the tests want to read it: one line per entry with
-/// the offset in hex, labels bare, block boundaries as their words, and the stack column beside.
+/// Renders a disassembled method the way the tests want to read it, one line per entry.
 /// </summary>
+/// <remarks>
+/// Each line has the offset in hex, labels bare, block boundaries as their words, and the stack column beside.
+/// </remarks>
 internal static class DisassemblyText
 {
     /// <summary>

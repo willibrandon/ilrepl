@@ -1,12 +1,13 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Decides how exception clauses are drawn. Clauses that nest the way ILGenerator, the C#
-/// compiler, and the REPL's own emitter lay them out become <c>.try { } catch T { } finally { }</c>
-/// blocks: a finally or fault whose protected range is exactly another region's try plus its
-/// handlers folds into that region as its trailing handler, and regions nest inside a try, a
-/// filter, or a handler. Anything else keeps its clauses in ildasm's offset form.
+/// Decides how exception clauses are drawn.
 /// </summary>
+/// <remarks>
+/// Clauses that nest the way ILGenerator, the C# compiler, and the REPL's own emitter lay them out become <c>.try { } catch T { } finally {
+/// }</c> blocks: a finally or fault whose protected range is exactly another region's try plus its handlers folds into that region as its
+/// trailing handler, and regions nest inside a try, a filter, or a handler. Anything else keeps its clauses in ildasm's offset form.
+/// </remarks>
 public static class ClauseLayout
 {
     /// <summary>

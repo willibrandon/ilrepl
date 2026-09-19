@@ -3,9 +3,11 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Reads a reply against the mark its unit began with: a changed generation means the line ran,
-/// committed, or discarded something, and nothing before it can be withdrawn any more.
+/// Reads a reply against the mark its unit began with.
 /// </summary>
+/// <remarks>
+/// A changed generation means the line ran, committed, or discarded something, and nothing before it can be withdrawn any more.
+/// </remarks>
 public static class SubmissionClassifier
 {
     /// <summary>

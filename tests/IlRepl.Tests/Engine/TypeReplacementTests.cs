@@ -3,9 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Redefining a type that other definitions depend on rebuilds them against the new type, as
-/// new identities, and only when every one of them still compiles; otherwise nothing changes.
+/// Redefining a type that other definitions depend on rebuilds them against the new type, as new identities.
 /// </summary>
+/// <remarks>
+/// The rebuild happens only when every one of them still compiles. Otherwise nothing changes.
+/// </remarks>
 [TestClass]
 public sealed class TypeReplacementTests
 {
@@ -75,8 +77,7 @@ public sealed class TypeReplacementTests
     }
 
     /// <summary>
-    /// A redefinition a dependent cannot use is refused, naming the dependent, and everything
-    /// keeps running as before.
+    /// A redefinition a dependent cannot use is refused, naming the dependent, and everything keeps running as before.
     /// </summary>
     [TestMethod]
     public void Redefine_Incompatible_IsRefusedAndNothingChanges()
@@ -94,8 +95,7 @@ public sealed class TypeReplacementTests
     }
 
     /// <summary>
-    /// Making a field private breaks a dependent that reads it; the replacement is refused with
-    /// the access rule in the message.
+    /// Making a field private breaks a dependent that reads it; the replacement is refused with the access rule in the message.
     /// </summary>
     [TestMethod]
     public void Redefine_NarrowedAccess_IsRefused()
@@ -109,8 +109,7 @@ public sealed class TypeReplacementTests
     }
 
     /// <summary>
-    /// A cell that mentions the type is rebuilt with it, or the redefinition is refused when it
-    /// no longer compiles.
+    /// A cell that mentions the type is rebuilt with it, or the redefinition is refused when it no longer compiles.
     /// </summary>
     [TestMethod]
     public void Redefine_WithTheCellMentioningIt_RebuildsOrRefuses()
@@ -159,9 +158,11 @@ public sealed class TypeReplacementTests
     }
 
     /// <summary>
-    /// A redefinition that refers back to a dependent binds to that dependent's new identity,
-    /// so no member of the group runs against a previous generation.
+    /// A redefinition that refers back to a dependent binds to that dependent's new identity.
     /// </summary>
+    /// <remarks>
+    /// No member of the group therefore runs against a previous generation.
+    /// </remarks>
     [TestMethod]
     public void Redefine_CyclicReference_BindsToNewIdentities()
     {
@@ -176,9 +177,11 @@ public sealed class TypeReplacementTests
     }
 
     /// <summary>
-    /// A same-signature method redefinition does not change the order in which a later
-    /// replacement rebuilds callers, and every caller ends up on the new entry points.
+    /// A same-signature method redefinition does not change the order in which a later replacement rebuilds callers.
     /// </summary>
+    /// <remarks>
+    /// Every caller ends up on the new entry points.
+    /// </remarks>
     [TestMethod]
     public void Redefine_AfterMethodRedefinition_CallersFollowTheNewEntryPoints()
     {
@@ -194,9 +197,11 @@ public sealed class TypeReplacementTests
     }
 
     /// <summary>
-    /// A pending cell that calls a session method whose signature names the type is rebuilt
-    /// once the method has been, not against a mix of new types and old signatures.
+    /// A pending cell that calls a session method whose signature names the type is rebuilt once the method has been.
     /// </summary>
+    /// <remarks>
+    /// It is not rebuilt against a mix of new types and old signatures.
+    /// </remarks>
     [TestMethod]
     public void Redefine_WithCellCallingAMethodOverTheType_RebuildsTheCellLast()
     {
@@ -214,8 +219,7 @@ public sealed class TypeReplacementTests
     }
 
     /// <summary>
-    /// A nested type the replacement drops stops resolving, so nothing can bind to it and a save
-    /// has nothing stale to refuse.
+    /// A nested type the replacement drops stops resolving, so nothing can bind to it and a save has nothing stale to refuse.
     /// </summary>
     [TestMethod]
     public void Redefine_DroppingANestedType_RemovesItFromLookup()
@@ -230,9 +234,11 @@ public sealed class TypeReplacementTests
     }
 
     /// <summary>
-    /// A type named in an attribute argument is a dependency: the annotated type is rebuilt
-    /// against the new one, and the saved assembly names the new one.
+    /// A type named in an attribute argument is a dependency.
     /// </summary>
+    /// <remarks>
+    /// The annotated type is rebuilt against the new one, and the saved assembly names the new one.
+    /// </remarks>
     [TestMethod]
     public void Redefine_TypeNamedInAnAttributeArgument_RebuildsTheAnnotatedType()
     {
@@ -250,8 +256,7 @@ public sealed class TypeReplacementTests
     }
 
     /// <summary>
-    /// A family replaced twice maps every generation of its prototypes, so a dependent whose
-    /// signature names it replays cleanly each time.
+    /// A family replaced twice maps every generation of its prototypes, so a dependent whose signature names it replays cleanly each time.
     /// </summary>
     [TestMethod]
     public void Redefine_Twice_WithATypedDependent()

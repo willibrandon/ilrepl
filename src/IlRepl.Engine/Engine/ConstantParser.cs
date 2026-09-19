@@ -4,10 +4,12 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Parses the constant forms ILAsm writes after <c>=</c>: <c>int32(5)</c>, <c>uint8(1)</c>,
-/// <c>float64(1.5)</c>, <c>char(65)</c>, <c>bool(true)</c>, <c>"text"</c>, <c>nullref</c>,
-/// <c>bytearray(...)</c>, and, as a convenience, a bare literal typed by the target.
+/// Parses the constant forms ILAsm writes after <c>=</c>.
 /// </summary>
+/// <remarks>
+/// The forms are <c>int32(5)</c>, <c>uint8(1)</c>, <c>float64(1.5)</c>, <c>char(65)</c>, <c>bool(true)</c>, <c>"text"</c>, <c>nullref</c>,
+/// and <c>bytearray(...)</c>. As a convenience, it also parses a bare literal typed by the target.
+/// </remarks>
 public static class ConstantParser
 {
     private static readonly Dictionary<string, Type> Wrappers = new(StringComparer.Ordinal)

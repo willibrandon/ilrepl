@@ -95,9 +95,11 @@ public sealed class ReplCoreRollbackTests
     }
 
     /// <summary>
-    /// A redefinition the cell cannot follow is refused at its close and changes nothing, the
-    /// generation included, so the block can be withdrawn and the cell keeps its lines.
+    /// A redefinition the cell cannot follow is refused at its close and changes nothing, the generation included.
     /// </summary>
+    /// <remarks>
+    /// The block can therefore be withdrawn and the cell keeps its lines.
+    /// </remarks>
     [TestMethod]
     public void Rollback_AfterRedefinitionRefusedAtClose_Works()
     {
@@ -128,8 +130,7 @@ public sealed class ReplCoreRollbackTests
     }
 
     /// <summary>
-    /// A toggle inside a withdrawn block is undone with the block, so sending the block again
-    /// applies it once, not twice.
+    /// A toggle inside a withdrawn block is undone with the block, so sending the block again applies it once, not twice.
     /// </summary>
     [TestMethod]
     public void Rollback_RestoresOptionsToggledSinceTheMark()

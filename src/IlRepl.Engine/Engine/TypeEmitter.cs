@@ -45,9 +45,11 @@ public static class TypeEmitter
     }
 
     /// <summary>
-    /// Writes a family into an image under a name taken in advance. Prototypes of other families
-    /// written in the same group are referenced by their assembly names.
+    /// Writes a family into an image under a name taken in advance.
     /// </summary>
+    /// <remarks>
+    /// Prototypes of other families written in the same group are referenced by their assembly names.
+    /// </remarks>
     /// <param name="family">The outermost declaration.</param>
     /// <param name="prototypes">The prototype and members of every declaration, by path.</param>
     /// <param name="trampolines">The trampolines of the session methods, by name.</param>
@@ -140,8 +142,7 @@ public static class TypeEmitter
     }
 
     /// <summary>
-    /// Writes a family into an existing writer, for an export. The prototypes map onto the
-    /// definitions written; nothing is loaded.
+    /// Writes a family into an existing writer, for an export. The prototypes map onto the definitions written; nothing is loaded.
     /// </summary>
     /// <param name="writer">The writer.</param>
     /// <param name="family">The outermost declaration.</param>

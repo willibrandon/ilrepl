@@ -340,9 +340,12 @@ public sealed class MemberResolverTests
     }
 
     /// <summary>
-    /// Quoted names, as listings print them, resolve: a method named like an opcode, a compiler-made
-    /// nested type and member, and a field whose name starts with angle brackets.
+    /// Quoted names, as listings print them, resolve.
     /// </summary>
+    /// <remarks>
+    /// The cases are a method named like an opcode, a compiler-made nested type and member, and a field whose name starts with angle
+    /// brackets.
+    /// </remarks>
     [TestMethod]
     public void ResolveMethod_QuotedNames_Resolve()
     {

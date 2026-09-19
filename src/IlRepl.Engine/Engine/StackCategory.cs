@@ -1,9 +1,11 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// The kinds of value the evaluation stack distinguishes, following ECMA-335 III.1.1. Smaller
-/// integers widen to <see cref="Int32"/> on the stack, and every floating type is <see cref="Float"/>.
+/// The kinds of value the evaluation stack distinguishes, following ECMA-335 III.1.1.
 /// </summary>
+/// <remarks>
+/// Smaller integers widen to <see cref="Int32"/> on the stack, and every floating type is <see cref="Float"/>.
+/// </remarks>
 public enum StackCategory
 {
     /// <summary>

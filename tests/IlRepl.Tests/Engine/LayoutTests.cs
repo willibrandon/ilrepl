@@ -5,8 +5,7 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Sequential and explicit layout, .pack, .size, and offsets, as the runtime sees them and as
-/// sizeof reports them.
+/// Sequential and explicit layout, .pack, .size, and offsets, as the runtime sees them and as sizeof reports them.
 /// </summary>
 [TestClass]
 public sealed class LayoutTests

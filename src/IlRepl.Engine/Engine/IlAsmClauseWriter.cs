@@ -3,11 +3,13 @@ using System.Text;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Writes the body of a disassembled method as native ILAsm: every instruction line with its
-/// labels, and the exception clauses in the nesting ilasm reads, where a finally over a try and
-/// its catch is an outer <c>.try { .try { } catch { } } finally { }</c>, not the REPL's folded
-/// <c>} catch { } finally {</c>. Clauses braces cannot draw follow the body in offset form.
+/// Writes the body of a disassembled method as native ILAsm.
 /// </summary>
+/// <remarks>
+/// It writes every instruction line with its labels, and the exception clauses in the nesting ilasm reads, where a finally over a try and
+/// its catch is an outer <c>.try { .try { } catch { } } finally { }</c>, not the REPL's folded <c>} catch { } finally {</c>. Clauses braces
+/// cannot draw follow the body in offset form.
+/// </remarks>
 public static class IlAsmClauseWriter
 {
     /// <summary>

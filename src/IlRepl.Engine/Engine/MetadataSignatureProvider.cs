@@ -6,9 +6,11 @@ namespace IlRepl.Engine;
 
 /// <summary>
 /// Turns signature blobs into <see cref="IlSignature"/> trees for <see cref="SignatureDecoder{TType, TGenericContext}"/>.
-/// Named types resolve through a callback (the module's <c>ResolveType</c> wrapped in the caller's
-/// failure handling); a type that does not resolve keeps its spelling from the metadata row.
 /// </summary>
+/// <remarks>
+/// Named types resolve through a callback (the module's <c>ResolveType</c> wrapped in the caller's failure handling); a type that does not
+/// resolve keeps its spelling from the metadata row.
+/// </remarks>
 /// <param name="resolve">Resolves a metadata token to a runtime type, or returns null.</param>
 public sealed class MetadataSignatureProvider(Func<int, Type?> resolve) : ISignatureTypeProvider<IlSignature, GenericContext>
 {

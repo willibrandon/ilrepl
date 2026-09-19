@@ -4,10 +4,11 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// The accessibility rules of ECMA-335 as the REPL teaches them, and the words ILAsm uses for
-/// them. Because a consumer skips the runtime's checks for session assemblies, this is the only
-/// place a session member's access is enforced.
+/// The accessibility rules of ECMA-335 as the REPL teaches them, and the words ILAsm uses for them.
 /// </summary>
+/// <remarks>
+/// Because a consumer skips the runtime's checks for session assemblies, this is the only place a session member's access is enforced.
+/// </remarks>
 public static class MemberAccess
 {
     /// <summary>
@@ -60,8 +61,7 @@ public static class MemberAccess
     };
 
     /// <summary>
-    /// Refuses a field access a session type does not allow. Framework and loaded fields are
-    /// left to the runtime.
+    /// Refuses a field access a session type does not allow. Framework and loaded fields are left to the runtime.
     /// </summary>
     /// <param name="field">The field.</param>
     /// <param name="scope">Where the access happens.</param>
@@ -112,11 +112,12 @@ public static class MemberAccess
     }
 
     /// <summary>
-    /// Decides a field access: null when allowed, otherwise the reason. Only session fields
-    /// are judged unless <paramref name="judgeAll"/> is set. The receiver plays no part: the
-    /// runtime checks only who accesses a family member, not through what, so neither does
-    /// the REPL; the receiver rule of ECMA II.10.5.3 belongs to the verifier.
+    /// Decides a field access: null when allowed, otherwise the reason.
     /// </summary>
+    /// <remarks>
+    /// Only session fields are judged unless <paramref name="judgeAll"/> is set. The receiver plays no part: the runtime checks only who
+    /// accesses a family member, not through what, so neither does the REPL; the receiver rule of ECMA II.10.5.3 belongs to the verifier.
+    /// </remarks>
     /// <param name="field">The field.</param>
     /// <param name="scope">Where the access happens.</param>
     /// <param name="types">The table that knows the types being written.</param>
@@ -200,8 +201,10 @@ public static class MemberAccess
 
     /// <summary>
     /// Decides whether a type is visible from a scope: null when it is, otherwise the reason.
-    /// Element types and generic arguments are judged too.
     /// </summary>
+    /// <remarks>
+    /// Element types and generic arguments are judged too.
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <param name="scope">Where the mention happens.</param>
     /// <param name="types">The table that knows the types being written.</param>

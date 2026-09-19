@@ -11,14 +11,14 @@ using TA = Mono.Cecil.TypeAttributes;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// The REPL enforces accessibility on session members itself, because consumers skip the
-/// runtime's checks for session assemblies. This harness proves the rule matches the runtime:
-/// every access category is exercised from every accessor context in ordinary assemblies, and
-/// the runtime's verdict on that reference pair must equal <see cref="MemberAccess"/>'s verdict.
-/// The session is one logical assembly, which the pair models with InternalsVisibleTo. The
-/// contexts include a derived type reaching a family member through a base-typed receiver,
-/// which the runtime allows: the receiver rule of ECMA II.10.5.3 is the verifier's, not the loader's.
+/// The REPL enforces accessibility on session members itself, because consumers skip the runtime's checks for session assemblies.
 /// </summary>
+/// <remarks>
+/// This harness proves the rule matches the runtime: every access category is exercised from every accessor context in ordinary assemblies,
+/// and the runtime's verdict on that reference pair must equal <see cref="MemberAccess"/>'s verdict. The session is one logical assembly,
+/// which the pair models with InternalsVisibleTo. The contexts include a derived type reaching a family member through a base-typed
+/// receiver, which the runtime allows: the receiver rule of ECMA II.10.5.3 is the verifier's, not the loader's.
+/// </remarks>
 [TestClass]
 public sealed class AccessibilityEquivalenceTests
 {

@@ -5,12 +5,13 @@ using System.Text;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// History in a file, in the shape pgcli keeps its own: a timestamp line, then each line of the
-/// entry with a plus in front, then a blank line. The file is only ever appended to, and every
-/// read and append happens under a lock file beside it, so two sessions never open the file at
-/// the same length and overwrite each other. A session that cannot take the lock in time keeps
-/// its entry in memory and says so once.
+/// History in a file, in the shape pgcli keeps its own.
 /// </summary>
+/// <remarks>
+/// The shape is a timestamp line, then each line of the entry with a plus in front, then a blank line. The file is only ever appended to,
+/// and every read and append happens under a lock file beside it, so two sessions never open the file at the same length and overwrite each
+/// other. A session that cannot take the lock in time keeps its entry in memory and says so once.
+/// </remarks>
 public sealed class FileHistoryStore : IHistoryStore
 {
     /// <summary>
@@ -50,9 +51,12 @@ public sealed class FileHistoryStore : IHistoryStore
     public string? Problem { get; private set; }
 
     /// <summary>
-    /// Where the history file lives: <c>$XDG_CONFIG_HOME/ilrepl/history</c> when the variable is
-    /// set, else the local application data folder on Windows, else <c>~/.config/ilrepl/history</c>.
+    /// Where the history file lives.
     /// </summary>
+    /// <remarks>
+    /// It is <c>$XDG_CONFIG_HOME/ilrepl/history</c> when the variable is set, else the local application data folder on Windows, else
+    /// <c>~/.config/ilrepl/history</c>.
+    /// </remarks>
     /// <returns>The path.</returns>
     public static string DefaultPath()
     {
@@ -71,9 +75,12 @@ public sealed class FileHistoryStore : IHistoryStore
     }
 
     /// <summary>
-    /// Reads the entries out of a file's text. A line with a plus in front is a line of an entry;
-    /// any other line ends the entry. A record cut off before its final newline is dropped.
+    /// Reads the entries out of a file's text.
     /// </summary>
+    /// <remarks>
+    /// A line with a plus in front is a line of an entry; any other line ends the entry. A record cut off before its final newline is
+    /// dropped.
+    /// </remarks>
     /// <param name="content">The file's text.</param>
     /// <returns>The entries, oldest first.</returns>
     public static IReadOnlyList<string> Parse(string content)

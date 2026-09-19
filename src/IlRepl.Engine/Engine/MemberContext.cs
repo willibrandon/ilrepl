@@ -1,9 +1,11 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// What a method body inside a <c>.class</c> block knows about its type: the type being written,
-/// the type of <c>this</c> for an instance member, and whether the body is allowed at all.
+/// What a method body inside a <c>.class</c> block knows about its type.
 /// </summary>
+/// <remarks>
+/// It holds the type being written, the type of <c>this</c> for an instance member, and whether the body is allowed at all.
+/// </remarks>
 /// <param name="Owner">The prototype of the type being written.</param>
 /// <param name="Header">The type's header.</param>
 /// <param name="ThisType">

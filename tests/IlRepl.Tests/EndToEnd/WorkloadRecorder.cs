@@ -5,9 +5,11 @@ using Hex1b.Tokens;
 namespace IlRepl.Tests.EndToEnd;
 
 /// <summary>
-/// A workload filter that keeps what a process wrote to the terminal, so a test can look for
-/// sequences the emulator does not surface, such as the caret shape.
+/// A workload filter that keeps what a process wrote to the terminal.
 /// </summary>
+/// <remarks>
+/// A test can then look for sequences the emulator does not surface, such as the caret shape.
+/// </remarks>
 internal sealed class WorkloadRecorder : IHex1bTerminalWorkloadFilter
 {
     private readonly StringBuilder _output = new();

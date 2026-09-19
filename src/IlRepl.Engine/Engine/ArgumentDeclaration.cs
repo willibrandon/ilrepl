@@ -31,8 +31,7 @@ public sealed record ArgumentDeclaration(Type Type, string? Name, object? Value,
     internal TypeSymbol? ExactType { get; init; }
 
     /// <summary>
-    /// The parameter attributes written before the type: <c>[in]</c>, <c>[out]</c>, <c>[opt]</c>, and
-    /// a default set with <c>.param</c>.
+    /// The parameter attributes written before the type: <c>[in]</c>, <c>[out]</c>, <c>[opt]</c>, and a default set with <c>.param</c>.
     /// </summary>
     public ParameterAttributes Attributes { get; init; }
 

@@ -3,9 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Class members and session methods call each other through an explicit binding, and a
-/// compatible session-method redefinition reaches the class members already calling it.
+/// Class members and session methods call each other through an explicit binding.
 /// </summary>
+/// <remarks>
+/// A compatible session-method redefinition reaches the class members already calling it.
+/// </remarks>
 [TestClass]
 public sealed class InteropTests
 {
@@ -61,9 +63,11 @@ public sealed class InteropTests
     }
 
     /// <summary>
-    /// A session method that mentions a type is rebuilt when the type is redefined, and a
-    /// signature change to a session method a class calls is refused as before.
+    /// A session method that mentions a type is rebuilt when the type is redefined.
     /// </summary>
+    /// <remarks>
+    /// A signature change to a session method a class calls is refused as before.
+    /// </remarks>
     [TestMethod]
     public void RedefineSessionMethodSignature_ClassCallerIsChecked()
     {

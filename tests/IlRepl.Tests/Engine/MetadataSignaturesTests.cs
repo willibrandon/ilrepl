@@ -13,9 +13,11 @@ using TypeReference = Mono.Cecil.TypeReference;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for <see cref="MetadataSignatures"/>, <see cref="MetadataSignatureProvider"/>, and
-/// <see cref="IlSignatureRenderer"/>: signatures come out of the module's metadata whole.
+/// Tests for <see cref="MetadataSignatures"/>, <see cref="MetadataSignatureProvider"/>, and <see cref="IlSignatureRenderer"/>.
 /// </summary>
+/// <remarks>
+/// Signatures come out of the module's metadata whole.
+/// </remarks>
 [TestClass]
 public sealed class MetadataSignaturesTests
 {

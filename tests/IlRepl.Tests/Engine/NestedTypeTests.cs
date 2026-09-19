@@ -4,8 +4,7 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Nested types: their runtime names, their visibility, and their use from the enclosing type
-/// and from cells.
+/// Nested types: their runtime names, their visibility, and their use from the enclosing type and from cells.
 /// </summary>
 [TestClass]
 public sealed class NestedTypeTests
@@ -68,8 +67,7 @@ public sealed class NestedTypeTests
     }
 
     /// <summary>
-    /// A nested type is referenced before its declaration inside the family, and the
-    /// placeholder becomes the real type.
+    /// A nested type is referenced before its declaration inside the family, and the placeholder becomes the real type.
     /// </summary>
     [TestMethod]
     public void Nested_ForwardReference_Resolves()
@@ -111,9 +109,11 @@ public sealed class NestedTypeTests
     }
 
     /// <summary>
-    /// A nested generic type redeclares the enclosing parameters first and its arity suffix
-    /// counts only the ones it introduces (ECMA I.10.7.1); references carry the total list.
+    /// A nested generic type redeclares the enclosing parameters first and its arity suffix counts only the ones it introduces.
     /// </summary>
+    /// <remarks>
+    /// The rule is ECMA I.10.7.1. References carry the total list.
+    /// </remarks>
     [TestMethod]
     public void NestedGeneric_ArityAndReferences()
     {

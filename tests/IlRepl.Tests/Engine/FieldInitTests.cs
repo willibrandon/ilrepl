@@ -4,9 +4,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Field constants, literals, initonly stores, and type initializers behave as ILAsm
-/// declares them: a constant is metadata, storage starts zero, and initonly holds.
+/// Field constants, literals, initonly stores, and type initializers behave as ILAsm declares them.
 /// </summary>
+/// <remarks>
+/// A constant is metadata, storage starts zero, and initonly holds.
+/// </remarks>
 [TestClass]
 public sealed class FieldInitTests
 {

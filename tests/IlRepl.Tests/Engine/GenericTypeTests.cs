@@ -5,8 +5,7 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Generic session types: instantiation from cells, per-closed-type statics, constraints,
-/// variance, and generic methods on them.
+/// Generic session types: instantiation from cells, per-closed-type statics, constraints, variance, and generic methods on them.
 /// </summary>
 [TestClass]
 public sealed class GenericTypeTests
@@ -115,9 +114,11 @@ public sealed class GenericTypeTests
     }
 
     /// <summary>
-    /// A generic method of a generic type mixes !0 and !!0, and a call site names the callee's
-    /// parameters with !N even inside another generic body.
+    /// A generic method of a generic type mixes !0 and !!0, and a call site names the callee's parameters with !N.
     /// </summary>
+    /// <remarks>
+    /// The call site uses !N even inside another generic body.
+    /// </remarks>
     [TestMethod]
     public void GenericMethod_InAGenericType_MixesTypeAndMethodParameters()
     {

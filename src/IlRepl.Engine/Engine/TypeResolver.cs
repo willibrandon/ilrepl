@@ -273,10 +273,12 @@ public sealed partial class TypeResolver : IDisposable
     }
 
     /// <summary>
-    /// The reflection spelling of an IL type name: nesting with <c>+</c>, and a backslash before
-    /// each character reflection's own name grammar reserves, so a type called <c>Comma,Name</c>
-    /// is looked up as one name and not as a name and an assembly.
+    /// The reflection spelling of an IL type name: nesting with <c>+</c> and reserved characters escaped with a backslash.
     /// </summary>
+    /// <remarks>
+    /// The backslash goes before each character reflection's own name grammar reserves, so a type called <c>Comma,Name</c> is looked up as
+    /// one name and not as a name and an assembly.
+    /// </remarks>
     /// <param name="ilName">The IL name.</param>
     /// <returns>The name for <see cref="Assembly.GetType(string)"/>.</returns>
     public static string ReflectionName(string ilName)

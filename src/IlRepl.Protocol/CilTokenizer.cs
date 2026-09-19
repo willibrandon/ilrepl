@@ -51,8 +51,7 @@ public sealed class CilTokenizer
     public CilVocabulary Vocabulary { get; }
 
     /// <summary>
-    /// Tokenizes one line, carrying an open <c>/* */</c> in and out so a buffer or a listing can
-    /// be walked line by line.
+    /// Tokenizes one line, carrying an open <c>/* */</c> in and out so a buffer or a listing can be walked line by line.
     /// </summary>
     /// <param name="line">The line.</param>
     /// <param name="inBlockComment">Whether a <c>/*</c> from an earlier line is still open; updated for the next line.</param>
@@ -93,9 +92,11 @@ public sealed class CilTokenizer
     }
 
     /// <summary>
-    /// Tokenizes one line into transcript spans that concatenate to the line: the text between
-    /// tokens gets the plain style, and neighbouring spans of one style are merged.
+    /// Tokenizes one line into transcript spans that concatenate to the line.
     /// </summary>
+    /// <remarks>
+    /// The text between tokens gets the plain style, and neighbouring spans of one style are merged.
+    /// </remarks>
     /// <param name="line">The line.</param>
     /// <param name="inBlockComment">Whether a <c>/*</c> from an earlier line is still open; updated for the next line.</param>
     /// <param name="plain">The style of the text between tokens.</param>

@@ -3,9 +3,11 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A type family accepted by the session: the outermost declaration with its nested types, and
-/// the runtime type it became once compiled. Nothing is parsed again after acceptance.
+/// A type family accepted by the session: the outermost declaration with its nested types, and the runtime type it became once compiled.
 /// </summary>
+/// <remarks>
+/// Nothing is parsed again after acceptance.
+/// </remarks>
 /// <param name="Declaration">The outermost declaration.</param>
 /// <param name="Types">
 /// Every type of the family by its ILAsm path: the loaded runtime types once compiled, the prototypes until then.

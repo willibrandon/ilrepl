@@ -3,9 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for <c>.override</c> in both places: inside a method, naming the slot the method fills,
-/// and at class level, naming the slot and the method that fills it.
+/// Tests for <c>.override</c> in both places, inside a method and at class level.
 /// </summary>
+/// <remarks>
+/// Inside a method it names the slot the method fills. At class level it names the slot and the method that fills it.
+/// </remarks>
 [TestClass]
 public sealed class OverrideParserTests
 {

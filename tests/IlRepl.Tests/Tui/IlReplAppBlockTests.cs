@@ -22,9 +22,11 @@ public sealed class IlReplAppBlockTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
-    /// A block comment that spans lines inside a method is one comment: the text after its close
-    /// delimiter is the instruction, and the method compiles and runs.
+    /// A block comment that spans lines inside a method is one comment, and the method compiles and runs.
     /// </summary>
+    /// <remarks>
+    /// The text after its close delimiter is the instruction.
+    /// </remarks>
     [TestMethod]
     public async Task TypeBlock_WithMultiLineComment_Compiles()
     {
@@ -193,9 +195,11 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// Exception regions nest like the listings show them: each open brace steps in by two, and a
-    /// close brace steps out before the rest of its line.
+    /// Exception regions nest like the listings show them: each open brace steps in by two.
     /// </summary>
+    /// <remarks>
+    /// A close brace steps out before the rest of its line.
+    /// </remarks>
     [TestMethod]
     public async Task Nested_TryCatch_IndentsLikeShow()
     {
@@ -731,9 +735,11 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// A method whose brace comes on the next line is one block: Enter continues from the header
-    /// until the close, and the engine takes the brace as the header's own.
+    /// A method whose brace comes on the next line is one block: Enter continues from the header until the close.
     /// </summary>
+    /// <remarks>
+    /// The engine takes the brace as the header's own.
+    /// </remarks>
     [TestMethod]
     public async Task TypeMethod_BraceOnNextLine_SendsAtClose()
     {
@@ -802,10 +808,11 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// A store that wrote for an earlier session in the same process, as the browser's does, does
-    /// not count those writes as this session's: a line submitted before the load answers stays
-    /// recallable once it does.
+    /// A store that wrote for an earlier session in the same process does not count those writes as this session's.
     /// </summary>
+    /// <remarks>
+    /// The browser's store writes that way. A line submitted before the load answers stays recallable once it does.
+    /// </remarks>
     [TestMethod]
     public async Task History_EarlierSessionsWrites_DoNotClaimTheNewLine()
     {
@@ -838,8 +845,7 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// A brace in a command's argument opens no block: Enter sends the command, which the engine
-    /// answers, and the prompt is empty again.
+    /// A brace in a command's argument opens no block: Enter sends the command, which the engine answers, and the prompt is empty again.
     /// </summary>
     [TestMethod]
     public async Task Command_WithABraceInItsArgument_GoesOnEnter()
@@ -867,9 +873,11 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// A comment before the header does not change what the header is: the block waits for its
-    /// brace, a refused body line brings the whole block back, and the correction commits it.
+    /// A comment before the header does not change what the header is: the block waits for its brace.
     /// </summary>
+    /// <remarks>
+    /// A refused body line brings the whole block back, and the correction commits it.
+    /// </remarks>
     [TestMethod]
     public async Task TypeMethod_CommentBeforeHeader_RecoversWhole()
     {
@@ -948,8 +956,7 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// A space after the first word moves the caret into the operand: the palette closes and Up
-    /// walks history again.
+    /// A space after the first word moves the caret into the operand: the palette closes and Up walks history again.
     /// </summary>
     [TestMethod]
     public async Task Palette_ClosesAfterOperandSpace()
@@ -1010,9 +1017,11 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// A first word still being typed is not underlined while it can still become a known word;
-    /// it is underlined once nothing begins with it, or once the caret leaves it unfinished.
+    /// A first word still being typed is not underlined while it can still become a known word.
     /// </summary>
+    /// <remarks>
+    /// It is underlined once nothing begins with it, or once the caret leaves it unfinished.
+    /// </remarks>
     [TestMethod]
     public async Task Buffer_WordBeingTyped_IsUnderlinedOnlyOnceItCannotComplete()
     {
@@ -1082,10 +1091,11 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// Ctrl+U cuts the current line from the caret back to its start and leaves the caret there;
-    /// at the start of a line it joins the line to the one above, the other lines stay, and undo
-    /// puts each step back.
+    /// Ctrl+U cuts the current line from the caret back to its start and leaves the caret there.
     /// </summary>
+    /// <remarks>
+    /// At the start of a line it joins the line to the one above, the other lines stay, and undo puts each step back.
+    /// </remarks>
     [TestMethod]
     public async Task CtrlU_DeletesToTheStartOfTheLine()
     {

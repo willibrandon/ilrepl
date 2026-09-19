@@ -4,9 +4,11 @@ using System.Reflection.Metadata.Ecma335;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Reads the signatures a listing prints from a module's metadata: locals, member references,
-/// method definitions, <c>calli</c> signatures, and type tokens.
+/// Reads the signatures a listing prints from a module's metadata.
 /// </summary>
+/// <remarks>
+/// These are locals, member references, method definitions, <c>calli</c> signatures, and type tokens.
+/// </remarks>
 public static class MetadataSignatures
 {
     /// <summary>
@@ -29,9 +31,11 @@ public static class MetadataSignatures
     }
 
     /// <summary>
-    /// Decodes the signature behind a method operand: a MethodDef, a MemberRef, or a MethodSpec
-    /// (whose signature is the underlying method's, with the instantiation returned separately).
+    /// Decodes the signature behind a method operand: a MethodDef, a MemberRef, or a MethodSpec.
     /// </summary>
+    /// <remarks>
+    /// A MethodSpec's signature is the underlying method's, with the instantiation returned separately.
+    /// </remarks>
     /// <param name="reader">The metadata reader.</param>
     /// <param name="token">The operand token.</param>
     /// <param name="provider">The provider.</param>

@@ -3,9 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for <see cref="TypeRelations"/>: the base chain and interfaces of session types come
-/// from their declarations, and assignability follows them.
+/// Tests for <see cref="TypeRelations"/>: the base chain and interfaces of session types come from their declarations.
 /// </summary>
+/// <remarks>
+/// Assignability follows them.
+/// </remarks>
 [TestClass]
 public sealed class TypeRelationsTests
 {
@@ -169,10 +171,11 @@ public sealed class TypeRelationsTests
     }
 
     /// <summary>
-    /// The runtime converts a vector to the collection interfaces over any reference type its
-    /// element converts to, whatever the interface's own variance; value elements and other
-    /// ranks stay put.
+    /// The runtime converts a vector to the collection interfaces over any reference type its element converts to.
     /// </summary>
+    /// <remarks>
+    /// This holds whatever the interface's own variance. Value elements and other ranks stay put.
+    /// </remarks>
     [TestMethod]
     public void IsAssignable_VectorToInterfaceOverABaseElement()
     {

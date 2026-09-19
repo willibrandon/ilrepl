@@ -4,8 +4,7 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Emits a parsed <see cref="Instruction"/> through an <see cref="ILGenerator"/>, picking the
-/// overload that matches the operand kind.
+/// Emits a parsed <see cref="Instruction"/> through an <see cref="ILGenerator"/>, picking the overload that matches the operand kind.
 /// </summary>
 public static class InstructionEmitter
 {

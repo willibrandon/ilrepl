@@ -67,9 +67,11 @@ public static class TypeNameFormatter
     }
 
     /// <summary>
-    /// Renders a name the way ILAsm needs it: quoted when the lexer reserves it or it is not a
-    /// plain identifier, so a method called <c>add</c> or a parameter called <c>value</c> assembles.
+    /// Renders a name the way ILAsm needs it, quoted when the lexer reserves it or it is not a plain identifier.
     /// </summary>
+    /// <remarks>
+    /// A method called <c>add</c> or a parameter called <c>value</c> therefore assembles.
+    /// </remarks>
     /// <param name="name">The name.</param>
     /// <returns>The name, quoted when needed.</returns>
     public static string IlAsmIdentifier(string name)
@@ -207,9 +209,12 @@ public static class TypeNameFormatter
     }
 
     /// <summary>
-    /// True for a function pointer type. A builder or a placeholder type answers the question with
-    /// <see cref="NotImplementedException"/>, and none of those is a function pointer.
+    /// True for a function pointer type.
     /// </summary>
+    /// <remarks>
+    /// A builder or a placeholder type answers the question with <see cref="NotImplementedException"/>, and none of those is a function
+    /// pointer.
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <returns>True when the runtime describes the type as a function pointer.</returns>
     public static bool IsFunctionPointer(Type type)
@@ -242,9 +247,11 @@ public static class TypeNameFormatter
     }
 
     /// <summary>
-    /// A type name as ILAsm reads it: quoted when the lexer would not take it as a name, with an
-    /// arity suffix left outside the quotes because ILAsm reads <c>List`1</c> as one name.
+    /// A type name as ILAsm reads it, quoted when the lexer would not take it as a name.
     /// </summary>
+    /// <remarks>
+    /// An arity suffix is left outside the quotes because ILAsm reads <c>List`1</c> as one name.
+    /// </remarks>
     /// <param name="name">The simple type name.</param>
     /// <returns>The name, quoted when needed.</returns>
     public static string IlAsmTypeName(string name)
@@ -262,9 +269,11 @@ public static class TypeNameFormatter
     }
 
     /// <summary>
-    /// The namespace-qualified, nesting-qualified name of a type definition, each segment quoted on
-    /// its own when it must be: <c>System.Collections.Generic.List`1</c>, <c>Program/'&lt;&gt;c'</c>.
+    /// The namespace-qualified, nesting-qualified name of a type definition, each segment quoted on its own when it must be.
     /// </summary>
+    /// <remarks>
+    /// Examples are <c>System.Collections.Generic.List`1</c> and <c>Program/'&lt;&gt;c'</c>.
+    /// </remarks>
     /// <param name="definition">The type definition.</param>
     /// <returns>The qualified name without an assembly.</returns>
     public static string QualifiedName(Type definition)
@@ -282,9 +291,11 @@ public static class TypeNameFormatter
     }
 
     /// <summary>
-    /// Reflection escapes the characters its own type-name grammar reserves, writing a comma in a
-    /// name as <c>\,</c>; the metadata name has no backslash, and neither does ILAsm's quoted form.
+    /// Reflection escapes the characters its own type-name grammar reserves, writing a comma in a name as <c>\,</c>.
     /// </summary>
+    /// <remarks>
+    /// The metadata name has no backslash, and neither does ILAsm's quoted form.
+    /// </remarks>
     internal static string Unescape(string name)
     {
         // Reflection escapes the characters its own grammar reserves, a comma as \, and a
@@ -334,12 +345,13 @@ public static class TypeNameFormatter
     private static readonly ConcurrentDictionary<Type, string> FacadeNames = new();
 
     /// <summary>
-    /// The assembly name ILAsm should reference for a type. A type that lives in
-    /// <c>System.Private.CoreLib</c> is named by the facade that exports it, which is what a
-    /// reference must bind through: <c>System.Runtime</c> for <c>string</c>, <c>System.Collections</c>
-    /// for <c>List`1</c>. A reference through a facade that does not export the type would assemble
-    /// and then fail to load.
+    /// The assembly name ILAsm should reference for a type.
     /// </summary>
+    /// <remarks>
+    /// A type that lives in <c>System.Private.CoreLib</c> is named by the facade that exports it, which is what a reference must bind
+    /// through: <c>System.Runtime</c> for <c>string</c>, <c>System.Collections</c> for <c>List`1</c>. A reference through a facade that
+    /// does not export the type would assemble and then fail to load.
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <returns>The assembly name.</returns>
     public static string AssemblyReferenceName(Type type)

@@ -141,9 +141,11 @@ public sealed class FrontEndProcessTests
     }
 
     /// <summary>
-    /// A block comment that spans lines inside a method reaches the host as one comment, and the
-    /// text after its closing delimiter is assembled.
+    /// A block comment that spans lines inside a method reaches the host as one comment.
     /// </summary>
+    /// <remarks>
+    /// The text after its closing delimiter is assembled.
+    /// </remarks>
     [TestMethod]
     public async Task Script_MultiLineCommentInsideMethod()
     {
@@ -168,8 +170,7 @@ public sealed class FrontEndProcessTests
     }
 
     /// <summary>
-    /// A line that is only a comment never runs the cell, so a value stays on the stack until a
-    /// blank line or ret.
+    /// A line that is only a comment never runs the cell, so a value stays on the stack until a blank line or ret.
     /// </summary>
     [TestMethod]
     public async Task Script_CommentOnlyLines_NeverRun()

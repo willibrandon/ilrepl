@@ -22,8 +22,7 @@ public sealed class InstructionParserTests
     }
 
     /// <summary>
-    /// A quoted name keeps its slashes, a comment needs no space before it, and a block comment
-    /// with no close runs to the end of the line.
+    /// A quoted name keeps its slashes, a comment needs no space before it, and a block comment with no close runs to the end of the line.
     /// </summary>
     [TestMethod]
     public void StripComments_QuotedNamesAndUnspacedComments()

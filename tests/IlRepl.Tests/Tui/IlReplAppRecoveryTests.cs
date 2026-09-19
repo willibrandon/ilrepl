@@ -24,9 +24,11 @@ public sealed class IlReplAppRecoveryTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
-    /// A typo in the middle of a method brings the whole method back with that line selected, and
-    /// typing the correction over it makes the next Enter succeed.
+    /// A typo in the middle of a method brings the whole method back with that line selected.
     /// </summary>
+    /// <remarks>
+    /// Typing the correction over it makes the next Enter succeed.
+    /// </remarks>
     [TestMethod]
     public async Task TypeBlock_RefusedInMiddle_WholeDeclarationComesBack()
     {
@@ -63,10 +65,11 @@ public sealed class IlReplAppRecoveryTests
     }
 
     /// <summary>
-    /// A failure at the end of a method, where the return type is checked, leaves no method open:
-    /// the whole declaration is editable and resubmitting it fails the same way, not with a
-    /// nested-method error.
+    /// A failure at the end of a method, where the return type is checked, leaves no method open.
     /// </summary>
+    /// <remarks>
+    /// The whole declaration is editable and resubmitting it fails the same way, not with a nested-method error.
+    /// </remarks>
     [TestMethod]
     public async Task TypeBlock_CloseFails_WholeDeclarationComesBack()
     {
@@ -290,9 +293,11 @@ public sealed class IlReplAppRecoveryTests
     }
 
     /// <summary>
-    /// A destructive command inside a block moves the block's mark: a later refusal returns only
-    /// the lines after it and says the earlier ones stayed applied.
+    /// A destructive command inside a block moves the block's mark: a later refusal returns only the lines after it.
     /// </summary>
+    /// <remarks>
+    /// The refusal says the earlier lines stayed applied.
+    /// </remarks>
     [TestMethod]
     public async Task Paste_UndoInsideBlock_ThenRefusal_ReturnsLinesAfterUndoWithNote()
     {
@@ -391,9 +396,11 @@ public sealed class IlReplAppRecoveryTests
     }
 
     /// <summary>
-    /// A refused line inside a top-level exception region brings the whole region back and leaves
-    /// the cell without the region; the corrected region is accepted once.
+    /// A refused line inside a top-level exception region brings the whole region back and leaves the cell without the region.
     /// </summary>
+    /// <remarks>
+    /// The corrected region is accepted once.
+    /// </remarks>
     [TestMethod]
     public async Task TryBlock_RefusedInMiddle_WholeRegionComesBack()
     {
@@ -528,9 +535,11 @@ public sealed class IlReplAppRecoveryTests
     }
 
     /// <summary>
-    /// When the engine already has a region open, the buffer's lines belong to it until the depth
-    /// returns to zero; a refusal rolls back to the region's state at the start of the buffer.
+    /// When the engine already has a region open, the buffer's lines belong to it until the depth returns to zero.
     /// </summary>
+    /// <remarks>
+    /// A refusal rolls back to the region's state at the start of the buffer.
+    /// </remarks>
     [TestMethod]
     public async Task TryBlock_ContinuesRegionOpenedByScript()
     {
@@ -608,9 +617,11 @@ public sealed class IlReplAppRecoveryTests
     }
 
     /// <summary>
-    /// A destructive command inside a block moves the boundary, and a run that fails after it
-    /// stays run: the lines after the failed run come back, the block's close included.
+    /// A destructive command inside a block moves the boundary, and a run that fails after it stays run.
     /// </summary>
+    /// <remarks>
+    /// The lines after the failed run come back, the block's close included.
+    /// </remarks>
     [TestMethod]
     public async Task Paste_ResetInsideBlock_ThenFailedRun_ReturnsLinesAfterIt()
     {
@@ -672,9 +683,11 @@ public sealed class IlReplAppRecoveryTests
     }
 
     /// <summary>
-    /// A toggle inside a refused block is undone with the block, so the corrected block applies
-    /// it once: after it, the stack is quiet, not toggled back on.
+    /// A toggle inside a refused block is undone with the block, so the corrected block applies it once.
     /// </summary>
+    /// <remarks>
+    /// After the corrected block, the stack is quiet, not toggled back on.
+    /// </remarks>
     [TestMethod]
     public async Task Recovery_QuietInsideBlock_IsAppliedOnce()
     {
@@ -748,9 +761,11 @@ public sealed class IlReplAppRecoveryTests
     }
 
     /// <summary>
-    /// A pasted region whose braces sit on their own lines is one block: a refused line brings
-    /// it back whole, the cell keeps no part of it, and the correction is accepted once.
+    /// A pasted region whose braces sit on their own lines is one block: a refused line brings it back whole.
     /// </summary>
+    /// <remarks>
+    /// The cell keeps no part of it, and the correction is accepted once.
+    /// </remarks>
     [TestMethod]
     public async Task TryBlock_BracesOnTheirOwnLines_ComesBackWhole()
     {
@@ -785,10 +800,12 @@ public sealed class IlReplAppRecoveryTests
     }
 
     /// <summary>
-    /// A refused line on its own is not put back: the error is in the transcript, the prompt is
-    /// empty, and Up recalls the line. In a paste of separate lines, the line that went stays
-    /// applied, the refused one is gone, and the ones after it come back, unselected.
+    /// A refused line on its own is not put back: the error is in the transcript, the prompt is empty, and Up recalls the line.
     /// </summary>
+    /// <remarks>
+    /// In a paste of separate lines, the line that went stays applied, the refused one is gone, and the ones after it come back,
+    /// unselected.
+    /// </remarks>
     [TestMethod]
     public async Task Refused_LoneLine_LeavesThePromptEmpty()
     {
@@ -825,10 +842,12 @@ public sealed class IlReplAppRecoveryTests
     }
 
     /// <summary>
-    /// A comment between the closing brace and the handler keyword does not end the region in
-    /// the editor's eyes any more than in the engine's: a refused line in the handler brings the
-    /// whole region back, and the correction is accepted once.
+    /// A comment between the closing brace and the handler keyword does not end the region in the editor's eyes.
     /// </summary>
+    /// <remarks>
+    /// It does not end the region in the engine's eyes either. A refused line in the handler brings the whole region back, and the
+    /// correction is accepted once.
+    /// </remarks>
     [TestMethod]
     public async Task TryBlock_HandlerPartedByAComment_ComesBackWhole()
     {
@@ -863,10 +882,12 @@ public sealed class IlReplAppRecoveryTests
     }
 
     /// <summary>
-    /// A command that ends a block, pasted inside it, leaves the engine where the text was not
-    /// written for: the lines after it are read from where the engine now is, so a blank line
-    /// runs the cell and the stray closing brace is refused on its own.
+    /// A command that ends a block, pasted inside it, leaves the engine where the text was not written for.
     /// </summary>
+    /// <remarks>
+    /// The lines after it are read from where the engine now is, so a blank line runs the cell and the stray closing brace is refused on
+    /// its own.
+    /// </remarks>
     [TestMethod]
     public async Task Paste_ClearInsideBlock_RestFollowsTheEngine()
     {

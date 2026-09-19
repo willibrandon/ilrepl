@@ -5,10 +5,12 @@ using Hex1b;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Puts copied text on the clipboard. The terminal is always asked through OSC 52, which the
-/// docs page and most terminals honor. On a desktop the platform's clipboard command is used as
-/// well, for terminals that do not.
+/// Puts copied text on the clipboard.
 /// </summary>
+/// <remarks>
+/// The terminal is always asked through OSC 52, which the docs page and most terminals honor. On a desktop the platform's clipboard command
+/// is used as well, for terminals that do not.
+/// </remarks>
 public static class ClipboardWriter
 {
     /// <summary>
@@ -29,9 +31,11 @@ public static class ClipboardWriter
     }
 
     /// <summary>
-    /// Runs the platform's clipboard command with the text on its standard input. A missing
-    /// command or a failure is ignored; the OSC 52 path has already been tried.
+    /// Runs the platform's clipboard command with the text on its standard input.
     /// </summary>
+    /// <remarks>
+    /// A missing command or a failure is ignored; the OSC 52 path has already been tried.
+    /// </remarks>
     /// <param name="text">The text to copy.</param>
     /// <returns>True when a command accepted the text.</returns>
     public static bool TryPlatformCopy(string text)

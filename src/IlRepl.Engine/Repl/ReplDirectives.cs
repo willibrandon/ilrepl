@@ -1,10 +1,11 @@
 namespace IlRepl.Repl;
 
 /// <summary>
-/// The dot-words the prompt takes as directives rather than commands. They live apart from
-/// <see cref="ReplCore"/> so the tokenizer's vocabulary can read them without touching the
-/// core's own initialization.
+/// The dot-words the prompt takes as directives rather than commands.
 /// </summary>
+/// <remarks>
+/// They live apart from <see cref="ReplCore"/> so the tokenizer's vocabulary can read them without touching the core's own initialization.
+/// </remarks>
 public static class ReplDirectives
 {
     /// <summary>

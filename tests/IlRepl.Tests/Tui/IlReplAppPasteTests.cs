@@ -9,9 +9,11 @@ using IlRepl.Tui;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// A bracketed paste lands in the buffer and waits for Enter; only the clipboard's own last
-/// newline is dropped, so the buffer shows exactly the lines that will be sent.
+/// A bracketed paste lands in the buffer and waits for Enter.
 /// </summary>
+/// <remarks>
+/// Only the clipboard's own last newline is dropped, so the buffer shows exactly the lines that will be sent.
+/// </remarks>
 [TestClass]
 public sealed class IlReplAppPasteTests
 {

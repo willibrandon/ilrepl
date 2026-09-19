@@ -87,10 +87,12 @@ public sealed class CellState
     }
 
     /// <summary>
-    /// Initializes an empty cell, or the body of a <c>.method</c> when a signature is given. A
-    /// method body names its parameters with <c>ldarg</c>, owns its locals and labels, and checks
-    /// <c>ret</c> against the declared return type.
+    /// Initializes an empty cell, or the body of a <c>.method</c> when a signature is given.
     /// </summary>
+    /// <remarks>
+    /// A method body names its parameters with <c>ldarg</c>, owns its locals and labels, and checks <c>ret</c> against the declared return
+    /// type.
+    /// </remarks>
     /// <param name="resolver">The type resolver.</param>
     /// <param name="generics">The generic parameters in scope for <c>!!N</c>.</param>
     /// <param name="methods">The session methods a call can name without a type.</param>
@@ -107,9 +109,11 @@ public sealed class CellState
     }
 
     /// <summary>
-    /// Initializes an empty cell, the body of a session method, or the body of a member of a
-    /// type being written. An instance member has <c>this</c> at argument 0.
+    /// Initializes an empty cell, the body of a session method, or the body of a member of a type being written.
     /// </summary>
+    /// <remarks>
+    /// An instance member has <c>this</c> at argument 0.
+    /// </remarks>
     /// <param name="resolver">The type resolver.</param>
     /// <param name="generics">The generic parameters in scope for <c>!N</c> and <c>!!N</c>.</param>
     /// <param name="methods">The session methods a call can name without a type.</param>
@@ -266,10 +270,12 @@ public sealed class CellState
     public bool ReturnsValue => _entries.Any(e => e.Instruction is { Op.Name: "ret", RetPops: 1 });
 
     /// <summary>
-    /// True when the last instruction ends its path (a return, throw, unconditional branch, or
-    /// jump) so nothing falls off the end of the body. A trailing label or block boundary means
-    /// the end is reachable.
+    /// True when the last instruction ends its path, so nothing falls off the end of the body.
     /// </summary>
+    /// <remarks>
+    /// An instruction that ends its path is a return, throw, unconditional branch, or jump. A trailing label or block boundary means the
+    /// end is reachable.
+    /// </remarks>
     public bool LastInstructionEndsFlow
     {
         get
@@ -289,10 +295,12 @@ public sealed class CellState
     };
 
     /// <summary>
-    /// Checks that a <c>.method</c> body can close: every label is defined, and either the last
-    /// instruction ends its path or the stack holds what the return type needs for an implied
-    /// <c>ret</c> (nothing for <c>void</c>, exactly one compatible value otherwise).
+    /// Checks that a <c>.method</c> body can close.
     /// </summary>
+    /// <remarks>
+    /// Every label must be defined, and either the last instruction ends its path or the stack holds what the return type needs for an
+    /// implied <c>ret</c>. That is nothing for <c>void</c> and exactly one compatible value otherwise.
+    /// </remarks>
     /// <exception cref="InvalidOperationException">This is the cell, not a method body.</exception>
     /// <exception cref="ReplException">The body cannot close as it stands.</exception>
     public void ValidateMethodEnd()
@@ -878,8 +886,7 @@ public sealed class CellState
     }
 
     /// <summary>
-    /// Judges every member access in the body again, once the declarations it referenced ahead
-    /// of their headers are complete.
+    /// Judges every member access in the body again, once the declarations it referenced ahead of their headers are complete.
     /// </summary>
     /// <param name="types">The table with the final declarations.</param>
     /// <exception cref="ReplException">An access is not allowed.</exception>

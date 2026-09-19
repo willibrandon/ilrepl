@@ -89,9 +89,12 @@ public sealed class TranscriptTests
     }
 
     /// <summary>
-    /// The types transcript: a struct shown by its fields, a static that persists, an interface
-    /// dispatched through a class, and a generic class instantiated from a cell.
+    /// The types transcript, with a struct, a static, an interface, and a generic class.
     /// </summary>
+    /// <remarks>
+    /// The struct is shown by its fields, the static persists, the interface is dispatched through a class, and the generic class is
+    /// instantiated from a cell.
+    /// </remarks>
     [TestMethod]
     public void Transcripts_TypesProduceExpectedValues()
     {

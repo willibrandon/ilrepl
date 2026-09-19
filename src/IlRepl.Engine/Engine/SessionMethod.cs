@@ -1,11 +1,13 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A method defined with <c>.method</c> and kept by the session. The body is stored as the lines
-/// the user typed, so it can be shown and exported, and as the validated state those lines
-/// produced, which is what was compiled: nothing is parsed again after a method is accepted. The
-/// trampoline is the identity callers bind to; the version is the body it forwards to now.
+/// A method defined with <c>.method</c> and kept by the session.
 /// </summary>
+/// <remarks>
+/// The body is stored as the lines the user typed, so it can be shown and exported, and as the validated state those lines produced, which
+/// is what was compiled: nothing is parsed again after a method is accepted. The trampoline is the identity callers bind to; the version is
+/// the body it forwards to now.
+/// </remarks>
 /// <param name="Signature">The signature.</param>
 /// <param name="HeaderLine">The <c>.method</c> line as typed.</param>
 /// <param name="BodyLines">The body lines as typed, without the closing brace.</param>

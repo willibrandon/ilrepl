@@ -13,8 +13,7 @@ internal sealed class MemoryHistoryStore : IHistoryStore
     public List<string> Appended { get; } = [];
 
     /// <summary>
-    /// The entries in the store from before this store wrote any; a load returns them followed
-    /// by what was appended.
+    /// The entries in the store from before this store wrote any; a load returns them followed by what was appended.
     /// </summary>
     public List<string> Stored { get; } = [];
 
@@ -27,8 +26,7 @@ internal sealed class MemoryHistoryStore : IHistoryStore
     public string? Problem { get; set; }
 
     /// <summary>
-    /// When set, a load waits for this before it answers, so a test can act while history is
-    /// still being read.
+    /// When set, a load waits for this before it answers, so a test can act while history is still being read.
     /// </summary>
     public TaskCompletionSource? HoldLoad { get; set; }
 

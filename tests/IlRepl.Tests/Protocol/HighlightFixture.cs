@@ -4,12 +4,13 @@ using IlRepl.Protocol;
 namespace IlRepl.Tests.Protocol;
 
 /// <summary>
-/// Reads a highlight fixture in the shape tree-sitter uses: a subject line, then annotation
-/// lines whose carets sit under the subject's columns. <c>// &lt;- style</c> marks the token at
-/// column 0 and <c>//   ^^^ style</c> marks the token that starts under the first caret and covers
-/// the run. Any other line is a subject; a blank subject must produce no tokens. Comment state
-/// carries through the file in order.
+/// Reads a highlight fixture in the shape tree-sitter uses.
 /// </summary>
+/// <remarks>
+/// The shape is a subject line, then annotation lines whose carets sit under the subject's columns. <c>// &lt;- style</c> marks the token
+/// at column 0 and <c>//   ^^^ style</c> marks the token that starts under the first caret and covers the run. Any other line is a subject,
+/// and a blank subject must produce no tokens. Comment state carries through the file in order.
+/// </remarks>
 internal static partial class HighlightFixture
 {
     [GeneratedRegex(@"^\s*//\s*(<-|\^+)\s+([A-Za-z]+)\s*$")]

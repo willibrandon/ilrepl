@@ -4,8 +4,7 @@ using IlRepl.Repl;
 namespace IlRepl.Tests.Repl;
 
 /// <summary>
-/// Tests for <see cref="ReplCore"/> with <c>.method</c> blocks: the notes, the commands, the
-/// status, and the cell number.
+/// Tests for <see cref="ReplCore"/> with <c>.method</c> blocks: the notes, the commands, the status, and the cell number.
 /// </summary>
 [TestClass]
 public sealed class ReplCoreMethodTests
@@ -386,8 +385,7 @@ public sealed class ReplCoreMethodTests
     }
 
     /// <summary>
-    /// A close the runtime cannot prepare on this platform is an error line, never an exception
-    /// out of Handle, and the block stays open.
+    /// A close the runtime cannot prepare on this platform is an error line, never an exception out of Handle, and the block stays open.
     /// </summary>
     [TestMethod]
     public void Handle_PlatformLimitedClose_IsAnErrorLine()

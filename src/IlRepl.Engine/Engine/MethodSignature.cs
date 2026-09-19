@@ -4,9 +4,11 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// The name, return type, and parameters of a method defined with <c>.method</c>. Calls resolve
-/// against it before the method exists as a builder, so nothing here reflects over emitted code.
+/// The name, return type, and parameters of a method defined with <c>.method</c>.
 /// </summary>
+/// <remarks>
+/// Calls resolve against it before the method exists as a builder, so nothing here reflects over emitted code.
+/// </remarks>
 /// <param name="Name">The method name.</param>
 /// <param name="ReturnType">The return type; <c>void</c> when the method returns nothing.</param>
 /// <param name="Parameters">The parameters in order. Names are optional and values are unused.</param>
@@ -23,8 +25,7 @@ public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList
     internal TypeSymbol? ExactReturnType { get; init; }
 
     /// <summary>
-    /// The method attributes as declared: access, <c>static</c>, <c>virtual</c>, and the rest. A
-    /// session method is public and static.
+    /// The method attributes as declared: access, <c>static</c>, <c>virtual</c>, and the rest. A session method is public and static.
     /// </summary>
     public MethodAttributes Attributes { get; init; } = MethodAttributes.Public
         | MethodAttributes.Static;

@@ -1,11 +1,12 @@
 namespace IlRepl.Protocol;
 
 /// <summary>
-/// A snapshot of the session for the status bar and the prompt. The stack, locals, instructions,
-/// and open blocks describe the body being written: the cell, the open <c>.method</c> block, or
-/// the open member of a <c>.class</c> block. When both a type and a method are open, the method
-/// is inside the type.
+/// A snapshot of the session for the status bar and the prompt.
 /// </summary>
+/// <remarks>
+/// The stack, locals, instructions, and open blocks describe the body being written: the cell, the open <c>.method</c> block, or the open
+/// member of a <c>.class</c> block. When both a type and a method are open, the method is inside the type.
+/// </remarks>
 /// <param name="Prompt">The prompt for the next line, for example <c>il[3]&gt; </c>.</param>
 /// <param name="CellNumber">The number of the cell being written. A run and a committed method block each complete one.</param>
 /// <param name="Stack">The rendered stack, for example <c>[int32, string]</c>.</param>

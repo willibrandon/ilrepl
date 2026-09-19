@@ -4,9 +4,11 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A property declared with <c>.property</c>: its signature and the accessor methods named by
-/// <c>.get</c>, <c>.set</c>, and <c>.other</c>, which are ordinary methods of the same type.
+/// A property declared with <c>.property</c>: its signature and the accessor methods named by <c>.get</c>, <c>.set</c>, and <c>.other</c>.
 /// </summary>
+/// <remarks>
+/// The accessor methods are ordinary methods of the same type.
+/// </remarks>
 /// <param name="Name">The property name.</param>
 /// <param name="Type">The property type.</param>
 /// <param name="ParameterTypes">The index parameter types, empty for a plain property.</param>

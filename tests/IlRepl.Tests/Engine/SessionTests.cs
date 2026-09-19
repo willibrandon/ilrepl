@@ -322,9 +322,11 @@ public sealed class SessionTests
     }
 
     /// <summary>
-    /// A block comment opened on one line and closed on a later one is one comment, inside a
-    /// method as anywhere else; the text after the closing delimiter is parsed.
+    /// A block comment opened on one line and closed on a later one is one comment, inside a method as anywhere else.
     /// </summary>
+    /// <remarks>
+    /// The text after the closing delimiter is parsed.
+    /// </remarks>
     [TestMethod]
     public void Normalize_CommentSpansLinesInsideMethod()
     {
@@ -358,8 +360,7 @@ public sealed class SessionTests
     }
 
     /// <summary>
-    /// Whitespace outside a comment is blank; a comment alone, or a blank line inside an open
-    /// comment, is a comment; anything left is text.
+    /// Whitespace outside a comment is blank; a comment alone, or a blank line inside an open comment, is a comment; anything left is text.
     /// </summary>
     [TestMethod]
     public void Normalize_Kinds()
@@ -403,8 +404,7 @@ public sealed class SessionTests
     }
 
     /// <summary>
-    /// A line the session refuses leaves the comment state where it was, through the string
-    /// overload as well.
+    /// A line the session refuses leaves the comment state where it was, through the string overload as well.
     /// </summary>
     [TestMethod]
     public void AddLine_RefusedString_LeavesNoCommentOpen()

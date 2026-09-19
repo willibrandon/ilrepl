@@ -79,10 +79,12 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
     public void Deactivate() => _session = null;
 
     /// <summary>
-    /// Where the caret is. A first word the caret is still at the end of is not marked wrong
-    /// while it can still become an opcode, a directive, or a command; it is marked once it
-    /// cannot, or once the caret has left it.
+    /// Where the caret is.
     /// </summary>
+    /// <remarks>
+    /// A first word the caret is still at the end of is not marked wrong while it can still become an opcode, a directive, or a command; it
+    /// is marked once it cannot, or once the caret has left it.
+    /// </remarks>
     public DocumentPosition? Caret { get; set; }
 
     /// <summary>

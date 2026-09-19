@@ -4,9 +4,11 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Creates generic method parameters that stand in for a cell's <c>.typeparams</c> while lines
-/// are validated. The real parameters are created again on the method that is compiled.
+/// Creates generic method parameters that stand in for a cell's <c>.typeparams</c> while lines are validated.
 /// </summary>
+/// <remarks>
+/// The real parameters are created again on the method that is compiled.
+/// </remarks>
 public static class PrototypeGenerics
 {
     private static int s_counter;

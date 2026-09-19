@@ -5,12 +5,13 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A method reference resolved at a call site: either a framework method or constructor, with
-/// the optional parameter types of a vararg call, or a method defined in the session with
-/// <c>.method</c>, which is bound to a builder only when the cell is emitted. Nothing here
-/// reflects over a builder, because a <see cref="MethodBuilder"/> cannot
-/// describe its parameters before its type is created.
+/// A method reference resolved at a call site.
 /// </summary>
+/// <remarks>
+/// It is either a framework method or constructor, with the optional parameter types of a vararg call, or a method defined in the session
+/// with <c>.method</c>, which is bound to a builder only when the cell is emitted. Nothing here reflects over a builder, because a <see
+/// cref="MethodBuilder"/> cannot describe its parameters before its type is created.
+/// </remarks>
 public sealed record ResolvedMethod
 {
     /// <summary>
@@ -41,9 +42,11 @@ public sealed record ResolvedMethod
     }
 
     /// <summary>
-    /// Initializes a reference to a member of a type still being written. The builder cannot
-    /// describe itself before its type is created, so the declaration answers for it.
+    /// Initializes a reference to a member of a type still being written.
     /// </summary>
+    /// <remarks>
+    /// The builder cannot describe itself before its type is created, so the declaration answers for it.
+    /// </remarks>
     /// <param name="builder">The member's builder, or its instantiation over a constructed type.</param>
     /// <param name="declared">The declared signature, with generic parameters substituted for a constructed type.</param>
     /// <param name="declaringType">The declaring type as referenced.</param>
@@ -83,9 +86,11 @@ public sealed record ResolvedMethod
     internal TypeSymbol? ExactDeclaringType { get; init; }
 
     /// <summary>
-    /// The generic arguments the call instantiates the method with, whether the method is a
-    /// builder of a type being written or a loaded generic method instance; empty otherwise.
+    /// The generic arguments the call instantiates the method with, empty otherwise.
     /// </summary>
+    /// <remarks>
+    /// This applies whether the method is a builder of a type being written or a loaded generic method instance.
+    /// </remarks>
     public IReadOnlyList<Type> InstantiationArguments =>
         GenericArguments
         ?? (Method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } instance ? instance.GetGenericArguments()
@@ -169,8 +174,7 @@ public sealed record ResolvedMethod
     public string DeclaringTypeName => Definition is not null ? "IlRepl.Cell" : TypeNameFormatter.Pretty(DeclaringType);
 
     /// <summary>
-    /// How many values a call pops: the fixed and optional parameters, plus the receiver for an
-    /// instance call that is not <c>newobj</c>.
+    /// How many values a call pops: the fixed and optional parameters, plus the receiver for an instance call that is not <c>newobj</c>.
     /// </summary>
     /// <param name="isNewObj">True when the call site is <c>newobj</c>, which pushes the receiver itself.</param>
     /// <returns>The pop count.</returns>

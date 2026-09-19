@@ -60,9 +60,11 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// The completion palette opens on a prefix, Escape dismisses it, typing reopens it, the arrows
-    /// move the highlight, and Tab accepts the highlighted opcode.
+    /// The completion palette opens on a prefix, the arrows move the highlight, and Tab accepts the highlighted opcode.
     /// </summary>
+    /// <remarks>
+    /// Escape dismisses the palette, and typing reopens it.
+    /// </remarks>
     [TestMethod]
     public async Task Palette_DismissReopenSelectAndAccept()
     {
@@ -222,8 +224,7 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// The palette's columns stay put while the selection scrolls through the whole list, so the
-    /// descriptions do not jump left and right.
+    /// The palette's columns stay put while the selection scrolls through the whole list, so the descriptions do not jump left and right.
     /// </summary>
     [TestMethod]
     public async Task Palette_ColumnsStayPutWhileScrolling()
@@ -387,10 +388,12 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// Where the terminal selects and copies itself, as in the browser, the app stays out of it:
-    /// a drag and Shift+Up select nothing, Ctrl+C on a buffer selection clears the buffer rather
-    /// than copying, the hints do not offer Shift+Up, and the wheel still scrolls the transcript.
+    /// Where the terminal selects and copies itself, as in the browser, the app stays out of it.
     /// </summary>
+    /// <remarks>
+    /// A drag and Shift+Up select nothing, Ctrl+C on a buffer selection clears the buffer rather than copying, the hints do not offer
+    /// Shift+Up, and the wheel still scrolls the transcript.
+    /// </remarks>
     [TestMethod]
     public async Task OwnSelectionOff_LeavesSelectionToTheTerminal()
     {
@@ -435,10 +438,11 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// A click ends a transcript selection as Escape does, whether it lands on the transcript or
-    /// on the prompt, and so does typing; the prompt is in charge again at once and a later drag
-    /// selects afresh.
+    /// A click ends a transcript selection as Escape does, whether it lands on the transcript or on the prompt, and so does typing.
     /// </summary>
+    /// <remarks>
+    /// The prompt is in charge again at once and a later drag selects afresh.
+    /// </remarks>
     [TestMethod]
     public async Task Click_EndsTranscriptSelection()
     {
@@ -481,9 +485,11 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// Shift+Up at the prompt selects the last transcript line, another Shift+Up extends the
-    /// selection upward, y yanks both lines, and F12 is not bound to anything.
+    /// Shift+Up at the prompt selects the last transcript line, another Shift+Up extends the selection upward, and y yanks both lines.
     /// </summary>
+    /// <remarks>
+    /// F12 is not bound to anything.
+    /// </remarks>
     [TestMethod]
     public async Task ShiftUp_SelectsLinesFromTheKeyboard()
     {
@@ -625,11 +631,13 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// A method block stays in the editor until its closing brace: Enter continues it with the
-    /// next line indented, the status bar counts the lines, and nothing reaches the engine. The
-    /// brace sends the block line by line, every line keeps its echo and its stack line, the
-    /// method fact shows only while the engine has it open, and the method is callable after.
+    /// A method block stays in the editor until its closing brace, and the brace sends the block line by line.
     /// </summary>
+    /// <remarks>
+    /// Until the brace, Enter continues the block with the next line indented, the status bar counts the lines, and nothing reaches the
+    /// engine. Once it is sent, every line keeps its echo and its stack line, the method fact shows only while the engine has it open, and
+    /// the method is callable after.
+    /// </remarks>
     [TestMethod]
     public async Task TypeMethod_EnterContinuesAndCloseSubmits()
     {
@@ -691,10 +699,11 @@ public sealed class IlReplAppTests
     }
 
     /// <summary>
-    /// A class with a method inside is one block: the nested braces indent as they open, the
-    /// block stays in the editor until the outermost brace, and then it goes line by line, the
-    /// class ahead of its method.
+    /// A class with a method inside is one block that stays in the editor until the outermost brace.
     /// </summary>
+    /// <remarks>
+    /// The nested braces indent as they open. After the outermost brace the block goes line by line, the class ahead of its method.
+    /// </remarks>
     [TestMethod]
     public async Task TypeClass_NestedBlockIsOneSubmission()
     {

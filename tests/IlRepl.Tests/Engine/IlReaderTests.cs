@@ -154,8 +154,7 @@ public sealed class IlReaderTests
     }
 
     /// <summary>
-    /// A target that is not the start of an instruction, or past the end, is a problem but the
-    /// instructions are all kept.
+    /// A target that is not the start of an instruction, or past the end, is a problem but the instructions are all kept.
     /// </summary>
     [TestMethod]
     public void Read_TargetsOffInstructionBoundaries_AreProblems()

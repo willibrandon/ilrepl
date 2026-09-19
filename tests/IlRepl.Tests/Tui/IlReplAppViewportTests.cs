@@ -8,10 +8,11 @@ using IlRepl.Tui;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// The prompt keeps its caret in view on every frame, not only on the frame a wait happens to
-/// see: the offsets are computed at render time from the caret, so the first frame after any
-/// change is right.
+/// The prompt keeps its caret in view on every frame, not only on the frame a wait happens to see.
 /// </summary>
+/// <remarks>
+/// The offsets are computed at render time from the caret, so the first frame after any change is right.
+/// </remarks>
 [TestClass]
 public sealed class IlReplAppViewportTests
 {
@@ -77,8 +78,7 @@ public sealed class IlReplAppViewportTests
     }
 
     /// <summary>
-    /// Moving the caret up through a scrolled buffer keeps it in view on every frame, all the way
-    /// to the first line.
+    /// Moving the caret up through a scrolled buffer keeps it in view on every frame, all the way to the first line.
     /// </summary>
     [TestMethod]
     public async Task CaretMove_MiddleOfDocument_EveryFrameShowsCaret()
@@ -237,8 +237,7 @@ public sealed class IlReplAppViewportTests
     }
 
     /// <summary>
-    /// Growing the terminal shows more of the buffer and keeps the caret in view on every frame
-    /// drawn at the new size.
+    /// Growing the terminal shows more of the buffer and keeps the caret in view on every frame drawn at the new size.
     /// </summary>
     [TestMethod]
     public async Task Resize_Grow_EveryFrameShowsCaret()
@@ -420,9 +419,11 @@ public sealed class IlReplAppViewportTests
     }
 
     /// <summary>
-    /// A line of emoji scrolls by whole characters: nothing renders as a replacement glyph, the
-    /// caret's cell is in view, and a click on either cell of an emoji puts the caret before it.
+    /// A line of emoji scrolls by whole characters, and a click on either cell of an emoji puts the caret before it.
     /// </summary>
+    /// <remarks>
+    /// Nothing renders as a replacement glyph, and the caret's cell is in view.
+    /// </remarks>
     [TestMethod]
     public async Task Paste_Emoji_ScrollsWholeCharactersAndClicksLand()
     {
@@ -472,10 +473,11 @@ public sealed class IlReplAppViewportTests
     }
 
     /// <summary>
-    /// The scrolled left edge is a character index chosen for the caret's line; on another line
-    /// it may fall inside an emoji. Each row starts on a whole character of its own, and a click
-    /// on that row lands on the line it shows.
+    /// The scrolled left edge is a character index chosen for the caret's line; on another line it may fall inside an emoji.
     /// </summary>
+    /// <remarks>
+    /// Each row starts on a whole character of its own, and a click on that row lands on the line it shows.
+    /// </remarks>
     [TestMethod]
     public async Task Paste_EmojiOnAnotherLine_StartsOnWholeCharacters()
     {
@@ -514,9 +516,11 @@ public sealed class IlReplAppViewportTests
     }
 
     /// <summary>
-    /// A line of decomposed accents is many characters but few cells: it fits, so the whole line
-    /// stays in view with the opcode at the left and the caret after the quote.
+    /// A line of decomposed accents is many characters but few cells: it fits, so the whole line stays in view.
     /// </summary>
+    /// <remarks>
+    /// The opcode is at the left and the caret is after the quote.
+    /// </remarks>
     [TestMethod]
     public async Task Paste_DecomposedAccents_StaysFullyVisible()
     {

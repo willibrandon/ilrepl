@@ -84,10 +84,11 @@ public sealed class IlReplAppSubmissionTests
     }
 
     /// <summary>
-    /// Enter while lines are in flight waits its turn: the buffer was cleared when the block was
-    /// sent, so the block cannot go twice, and each Enter on the empty buffer is one blank line,
-    /// run after the block in order.
+    /// Enter while lines are in flight waits its turn: each Enter on the empty buffer is one blank line, run after the block in order.
     /// </summary>
+    /// <remarks>
+    /// The buffer was cleared when the block was sent, so the block cannot go twice.
+    /// </remarks>
     [TestMethod]
     public async Task Submit_WhileSending_ExtraEnterQueuesAfterBlock()
     {
@@ -381,9 +382,11 @@ public sealed class IlReplAppSubmissionTests
     }
 
     /// <summary>
-    /// A line typed while a block is in flight is judged against where the block will leave the
-    /// engine, not against the method the worker is still closing: it queues as a complete line.
+    /// A line typed while a block is in flight is judged against where the block will leave the engine.
     /// </summary>
+    /// <remarks>
+    /// It is not judged against the method the worker is still closing. It queues as a complete line.
+    /// </remarks>
     [TestMethod]
     public async Task Submit_WhileSending_TypedLineQueuesAsComplete()
     {
@@ -441,10 +444,12 @@ public sealed class IlReplAppSubmissionTests
     }
 
     /// <summary>
-    /// Enter on an empty buffer while a block is in flight queues a run; when the block is
-    /// withdrawn, that run comes back as a blank line after the block, and resending both
-    /// commits the block and runs the cell.
+    /// Enter on an empty buffer while a block is in flight queues a run.
     /// </summary>
+    /// <remarks>
+    /// When the block is withdrawn, that run comes back as a blank line after the block, and resending both commits the block and runs the
+    /// cell.
+    /// </remarks>
     [TestMethod]
     public async Task Submit_CtrlC_WithQueuedBlankRun_ReturnsItAsABlankLine()
     {

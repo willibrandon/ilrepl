@@ -5,10 +5,12 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Decodes the bytes of a method body into instructions. Pure: it reads opcodes and operand
-/// layouts, computes branch and switch targets, and checks that every target is the start of an
-/// instruction; it never touches metadata or the runtime.
+/// Decodes the bytes of a method body into instructions.
 /// </summary>
+/// <remarks>
+/// Pure: it reads opcodes and operand layouts, computes branch and switch targets, and checks that every target is the start of an
+/// instruction; it never touches metadata or the runtime.
+/// </remarks>
 public static class IlReader
 {
     /// <summary>

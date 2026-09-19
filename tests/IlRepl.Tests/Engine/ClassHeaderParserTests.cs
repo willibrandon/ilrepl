@@ -4,9 +4,12 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for parsing <c>.class</c> headers: the ILAsm words, the name and its arity, generic
-/// parameters with their constraints, and the base and interface texts kept for resolution.
+/// Tests for parsing <c>.class</c> headers.
 /// </summary>
+/// <remarks>
+/// They cover the ILAsm words, the name and its arity, generic parameters with their constraints, and the base and interface texts kept for
+/// resolution.
+/// </remarks>
 [TestClass]
 public sealed class ClassHeaderParserTests
 {

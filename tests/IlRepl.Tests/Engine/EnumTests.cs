@@ -3,8 +3,7 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Enums declared with .class: the value__ field, literal members, the underlying type, and
-/// the runtime's view of them.
+/// Enums declared with .class: the value__ field, literal members, the underlying type, and the runtime's view of them.
 /// </summary>
 [TestClass]
 public sealed class EnumTests

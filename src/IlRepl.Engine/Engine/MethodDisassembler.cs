@@ -3,11 +3,13 @@ using System.Reflection;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Reads a method body back into a listing: the bytes through <see cref="IlReader"/>, operands
-/// through the module's metadata and its runtime resolution, exception clauses into blocks, and
-/// every instruction into the same <see cref="Instruction"/> shape the stack simulator applies.
-/// A token that does not resolve becomes a raw line and a note; the listing goes on.
+/// Reads a method body back into a listing.
 /// </summary>
+/// <remarks>
+/// The bytes go through <see cref="IlReader"/>, operands through the module's metadata and its runtime resolution, exception clauses into
+/// blocks, and every instruction into the same <see cref="Instruction"/> shape the stack simulator applies. A token that does not resolve
+/// becomes a raw line and a note, and the listing goes on.
+/// </remarks>
 public static class MethodDisassembler
 {
     /// <summary>

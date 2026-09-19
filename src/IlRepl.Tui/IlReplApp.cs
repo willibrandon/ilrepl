@@ -161,9 +161,11 @@ public static partial class IlReplApp
     }
 
     /// <summary>
-    /// Runs a terminal the app was configured on and settles the prompt afterwards, whether the
-    /// app stopped on its own or the token cancelled it, so no line runs behind the session.
+    /// Runs a terminal the app was configured on and settles the prompt afterwards.
     /// </summary>
+    /// <remarks>
+    /// The prompt is settled whether the app stopped on its own or the token cancelled it, so no line runs behind the session.
+    /// </remarks>
     /// <param name="terminal">The terminal.</param>
     /// <param name="prompt">The prompt's state, from <see cref="Configure"/>'s callback, or null.</param>
     /// <param name="cancellationToken">Cancels the run.</param>
@@ -185,10 +187,12 @@ public static partial class IlReplApp
     }
 
     /// <summary>
-    /// Ends what the prompt still has in flight once the app has stopped: the worker is asked to
-    /// stop, the queue is dropped, and the line with the engine is waited for, so no line runs
-    /// behind a session that has ended.
+    /// Ends what the prompt still has in flight once the app has stopped.
     /// </summary>
+    /// <remarks>
+    /// The worker is asked to stop, the queue is dropped, and the line with the engine is waited for, so no line runs behind a session that
+    /// has ended.
+    /// </remarks>
     /// <param name="prompt">The prompt's state.</param>
     /// <returns>A task that completes once nothing is in flight.</returns>
     public static async Task SettleAsync(PromptState prompt)
@@ -217,10 +221,12 @@ public static partial class IlReplApp
     }
 
     /// <summary>
-    /// The key hints for the status bar: what copy mode offers while it is active, otherwise the
-    /// everyday keys. Hints are dropped from the left while they do not fit beside the other
-    /// sections, so a long stack never clips the one that matters most.
+    /// The key hints for the status bar: what copy mode offers while it is active, otherwise the everyday keys.
     /// </summary>
+    /// <remarks>
+    /// Hints are dropped from the left while they do not fit beside the other sections, so a long stack never clips the one that matters
+    /// most.
+    /// </remarks>
     /// <param name="occupied">The sections already on the bar.</param>
     /// <param name="width">The terminal width, or zero when not known yet.</param>
     /// <param name="copyMode">True while the transcript is in copy mode.</param>
@@ -288,9 +294,11 @@ public static partial class IlReplApp
     }
 
     /// <summary>
-    /// Finds the first node of a type by walking up from the focused node to the root and back
-    /// down the tree, or null before the first frame.
+    /// Finds the first node of a type by walking up from the focused node to the root and back down the tree.
     /// </summary>
+    /// <remarks>
+    /// The result is null before the first frame.
+    /// </remarks>
     /// <typeparam name="TNode">The node type to find.</typeparam>
     /// <param name="app">The running app.</param>
     /// <returns>The node, or null.</returns>

@@ -6,10 +6,12 @@ using IlRepl.Repl;
 namespace IlRepl.Tests.Protocol;
 
 /// <summary>
-/// Tests for <see cref="CilTokenizer"/>: the caret fixtures pin every style, the property tests
-/// pin the shape of the tokens over every line the repository holds, and the listing tests pin
-/// that the transcript colours nothing by hand.
+/// Tests for <see cref="CilTokenizer"/> through caret fixtures, property tests, and listing tests.
 /// </summary>
+/// <remarks>
+/// The caret fixtures pin every style. The property tests pin the shape of the tokens over every line the repository holds. The listing
+/// tests pin that the transcript colours nothing by hand.
+/// </remarks>
 [TestClass]
 public sealed partial class CilTokenizerTests
 {
@@ -62,10 +64,11 @@ public sealed partial class CilTokenizerTests
     }
 
     /// <summary>
-    /// Tokens are ordered, disjoint, and inside the line; every character that is not whitespace
-    /// is inside exactly one; whitespace is inside a token only for a string, a comment, or a
-    /// quoted name.
+    /// Tokens are ordered, disjoint, and inside the line, and every character that is not whitespace is inside exactly one.
     /// </summary>
+    /// <remarks>
+    /// Whitespace is inside a token only for a string, a comment, or a quoted name.
+    /// </remarks>
     [TestMethod]
     public void Tokens_AreOrderedDisjointAndCoverEveryNonSpaceCharacter()
     {
@@ -204,10 +207,11 @@ public sealed partial class CilTokenizerTests
     }
 
     /// <summary>
-    /// The echo, <c>.show</c>, <c>.dis</c>, and <c>.il</c> colour their IL with the tokenizer and
-    /// nothing else: with the prompt, offsets, padding, and the stack column taken away, every
-    /// line's spans are what the tokenizer gives for its text.
+    /// The echo, <c>.show</c>, <c>.dis</c>, and <c>.il</c> colour their IL with the tokenizer and nothing else.
     /// </summary>
+    /// <remarks>
+    /// With the prompt, offsets, padding, and the stack column taken away, every line's spans are what the tokenizer gives for its text.
+    /// </remarks>
     [TestMethod]
     public void Listings_UseTheTokenizer()
     {

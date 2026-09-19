@@ -36,8 +36,7 @@ public sealed class CecilWriter
     internal CecilSignatureFixups SignatureFixups { get; } = new();
 
     /// <summary>
-    /// A prototype written by another writer of the same group, referenced here by the name its
-    /// assembly will carry.
+    /// A prototype written by another writer of the same group, referenced here by the name its assembly will carry.
     /// </summary>
     /// <param name="AssemblyName">The simple name of the assembly the prototype is written into.</param>
     /// <param name="Namespace">The type's namespace, or empty.</param>
@@ -105,10 +104,12 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// Cecil's default core library for a new module is mscorlib 4.0, which the desktop resolves
-    /// through a facade and the browser bundle does not carry. Referencing the runtime's own core
-    /// library first makes the module's type system name that instead.
+    /// References the runtime's own core library first so the module's type system names that instead of mscorlib 4.0.
     /// </summary>
+    /// <remarks>
+    /// Cecil's default core library for a new module is mscorlib 4.0, which the desktop resolves through a facade and the browser bundle
+    /// does not carry.
+    /// </remarks>
     private void ReferenceCoreLibrary() => Module.ImportReference(typeof(object));
 
     /// <summary>
@@ -147,9 +148,11 @@ public sealed class CecilWriter
     public TypeReference Object => Import(typeof(object));
 
     /// <summary>
-    /// Records that a prototype builder or a generic parameter builder is written as a definition
-    /// of this module, so bodies bound to the prototype emit against the real definition.
+    /// Records that a prototype builder or a generic parameter builder is written as a definition of this module.
     /// </summary>
+    /// <remarks>
+    /// Bodies bound to the prototype then emit against the real definition.
+    /// </remarks>
     /// <param name="prototype">The builder.</param>
     /// <param name="definition">The definition or generic parameter in this module.</param>
     public void Define(Type prototype, TypeReference definition)
@@ -184,9 +187,11 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// Imports a type, noting a session assembly it comes from. A prototype maps to its
-    /// definition here; constructed types are rebuilt around their imported parts.
+    /// Imports a type, noting a session assembly it comes from.
     /// </summary>
+    /// <remarks>
+    /// A prototype maps to its definition here; constructed types are rebuilt around their imported parts.
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <returns>The reference.</returns>
     public TypeReference Import(Type type)
@@ -353,10 +358,12 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// Restores the metadata spelling of every name in an imported reference. Reflection escapes
-    /// the characters its own name grammar reserves, a backslash as <c>\\\\</c> and a comma as
-    /// <c>\\,</c>, and Cecil's importer copies that spelling, which names a type that does not exist.
+    /// Restores the metadata spelling of every name in an imported reference.
     /// </summary>
+    /// <remarks>
+    /// Reflection escapes the characters its own name grammar reserves, a backslash as <c>\\\\</c> and a comma as <c>\\,</c>, and Cecil's
+    /// importer copies that spelling, which names a type that does not exist.
+    /// </remarks>
     /// <param name="reference">The imported reference.</param>
     /// <returns>The same reference, with metadata names.</returns>
     private static TypeReference WithMetadataNames(TypeReference reference)
@@ -504,9 +511,11 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// Imports a field, noting a session assembly it comes from. A prototype field maps to its
-    /// definition; a field of an instantiated prototype becomes a reference on the instantiation.
+    /// Imports a field, noting a session assembly it comes from.
     /// </summary>
+    /// <remarks>
+    /// A prototype field maps to its definition; a field of an instantiated prototype becomes a reference on the instantiation.
+    /// </remarks>
     /// <param name="field">The field.</param>
     /// <returns>The reference.</returns>
     public FieldReference Import(FieldInfo field)
@@ -570,8 +579,7 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// Imports a member of a type, where the member may be a prototype builder and the declaring
-    /// type an instantiation of the prototype.
+    /// Imports a member of a type, where the member may be a prototype builder and the declaring type an instantiation of the prototype.
     /// </summary>
     /// <param name="method">The method or constructor.</param>
     /// <param name="declaring">The declaring type as referenced, or null for the method's own.</param>
@@ -666,10 +674,12 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// Imports a method or constructor, noting a session assembly it comes from. A member of a
-    /// loaded type instantiated with a prototype's parameters, or a generic method instantiated
-    /// with them, is rebuilt here, since the reflection importer cannot see a builder.
+    /// Imports a method or constructor, noting a session assembly it comes from.
     /// </summary>
+    /// <remarks>
+    /// A member of a loaded type instantiated with a prototype's parameters, or a generic method instantiated with them, is rebuilt here,
+    /// since the reflection importer cannot see a builder.
+    /// </remarks>
     /// <param name="method">The method.</param>
     /// <returns>The reference.</returns>
     public MethodReference Import(MethodBase method)
@@ -862,9 +872,11 @@ public sealed class CecilWriter
     public DefinitionAssembly Load() => SessionAssemblies.Load(Write(), Name, Kind, Dependencies);
 
     /// <summary>
-    /// Grants this assembly access to every member of a session assembly. The attribute type is
-    /// defined in this module, as the runtime expects.
+    /// Grants this assembly access to every member of a session assembly.
     /// </summary>
+    /// <remarks>
+    /// The attribute type is defined in this module, as the runtime expects.
+    /// </remarks>
     /// <param name="dependency">The session assembly.</param>
     public void GrantAccessTo(DefinitionAssembly dependency)
     {
@@ -881,8 +893,7 @@ public sealed class CecilWriter
     private readonly HashSet<string> _granted = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Grants this assembly access to every member of a session assembly by name, for one that
-    /// is not loaded yet.
+    /// Grants this assembly access to every member of a session assembly by name, for one that is not loaded yet.
     /// </summary>
     /// <param name="name">The assembly's simple name.</param>
     public void GrantAccessTo(string name)
@@ -900,8 +911,7 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// True when the type mentions a builder or a type written by this writer, so the reflection
-    /// importer must not see it.
+    /// True when the type mentions a builder or a type written by this writer, so the reflection importer must not see it.
     /// </summary>
     private bool NeedsRebuild(Type type)
     {

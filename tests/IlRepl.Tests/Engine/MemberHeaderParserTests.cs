@@ -5,10 +5,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for parsing <c>.method</c> headers inside a <c>.class</c> block, where the ILAsm words
-/// mean what ILAsm says: instance unless static, no access unless an access word is written,
-/// constructors by name, and the virtual words recorded.
+/// Tests for parsing <c>.method</c> headers inside a <c>.class</c> block, where the ILAsm words mean what ILAsm says.
 /// </summary>
+/// <remarks>
+/// That means instance unless static, no access unless an access word is written, constructors by name, and the virtual words recorded.
+/// </remarks>
 [TestClass]
 public sealed class MemberHeaderParserTests
 {

@@ -9,12 +9,13 @@ using IlRepl.Protocol;
 namespace IlRepl.Repl;
 
 /// <summary>
-/// Formats the value a cell returned as styled spans: strings quoted, numbers as numbers,
-/// arrays and collections expanded, an instance of a session type by its fields, everything
-/// else through <c>ToString</c>. A session instance is shown structurally, base fields first,
-/// through generated readers that run none of its code, unless the type overrides
-/// <c>ToString</c> itself, in which case that override speaks for it.
+/// Formats the value a cell returned as styled spans.
 /// </summary>
+/// <remarks>
+/// Strings are quoted, numbers are shown as numbers, arrays and collections are expanded, an instance of a session type is shown by its
+/// fields, and everything else goes through <c>ToString</c>. A session instance is shown structurally, base fields first, through generated
+/// readers that run none of its code, unless the type overrides <c>ToString</c> itself, in which case that override speaks for it.
+/// </remarks>
 public static class ValueFormatter
 {
     private const int MaxItems = 32;
@@ -131,9 +132,11 @@ public static class ValueFormatter
         value is sbyte or byte or short or ushort or int or uint or long or ulong or float or double or decimal or nint or nuint;
 
     /// <summary>
-    /// True when the type, or a session base of it, overrides <c>ToString</c>. The slot is read
-    /// without invoking anything: a delegate bound to the instance names the implementation.
+    /// True when the type, or a session base of it, overrides <c>ToString</c>.
     /// </summary>
+    /// <remarks>
+    /// The slot is read without invoking anything: a delegate bound to the instance names the implementation.
+    /// </remarks>
     /// <param name="value">The instance.</param>
     /// <returns>True when a user body would run for ToString.</returns>
     public static bool HasOwnToString(object value)
@@ -251,10 +254,12 @@ public static class ValueFormatter
     private sealed record FieldReader(string Label, Func<object, object?> Read);
 
     /// <summary>
-    /// The instance fields of a type and its bases, base fields first, each read by a generated
-    /// method that skips visibility and runs nothing of the type. A name that appears more than
-    /// once is qualified by its declaring type.
+    /// The instance fields of a type and its bases, base fields first, each read by a generated method.
     /// </summary>
+    /// <remarks>
+    /// The generated method skips visibility and runs nothing of the type. A name that appears more than once is qualified by its declaring
+    /// type.
+    /// </remarks>
     private static FieldReader[] ReadersFor(Type type)
     {
         if (Readers.TryGetValue(type, out var cached))

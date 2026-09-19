@@ -5,8 +5,7 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for <see cref="Session"/> with <c>.class</c> blocks: opening, members, nesting, undo,
-/// abandoning, and closing a family.
+/// Tests for <see cref="Session"/> with <c>.class</c> blocks: opening, members, nesting, undo, abandoning, and closing a family.
 /// </summary>
 [TestClass]
 public sealed class SessionTypeTests
@@ -158,9 +157,11 @@ public sealed class SessionTypeTests
     }
 
     /// <summary>
-    /// A member may call a member declared later, and a nested type may be named before its
-    /// declaration; both are settled when the family closes.
+    /// A member may call a member declared later, and a nested type may be named before its declaration.
     /// </summary>
+    /// <remarks>
+    /// Both are settled when the family closes.
+    /// </remarks>
     [TestMethod]
     public void AddLine_ForwardReferences_AreSettledAtClose()
     {
@@ -408,8 +409,7 @@ public sealed class SessionTypeTests
     }
 
     /// <summary>
-    /// A member inherited from a base is found on the open type, whether the base is loaded or
-    /// still being written.
+    /// A member inherited from a base is found on the open type, whether the base is loaded or still being written.
     /// </summary>
     [TestMethod]
     public void AddLine_InheritedMembers_ResolveOnOpenTypes()
@@ -430,8 +430,7 @@ public sealed class SessionTypeTests
     }
 
     /// <summary>
-    /// Abandoning a member with .clear removes it from the family, so it can be declared again
-    /// and a later replay does not bring it back.
+    /// Abandoning a member with .clear removes it from the family, so it can be declared again and a later replay does not bring it back.
     /// </summary>
     [TestMethod]
     public void AbandonMethod_InsideClass_RemovesTheMember()
@@ -480,8 +479,7 @@ public sealed class SessionTypeTests
     }
 
     /// <summary>
-    /// Attributes after .param [0] belong to the return value, and every attribute after
-    /// .param [N] belongs to that parameter.
+    /// Attributes after .param [0] belong to the return value, and every attribute after .param [N] belongs to that parameter.
     /// </summary>
     [TestMethod]
     public void AddLine_ParamAttributes_TargetReturnAndParameters()
@@ -531,8 +529,7 @@ public sealed class SessionTypeTests
     }
 
     /// <summary>
-    /// Properties with the same name and parameters but different types are distinct, as the
-    /// CLI's property signature includes the type.
+    /// Properties with the same name and parameters but different types are distinct, as the CLI's property signature includes the type.
     /// </summary>
     [TestMethod]
     public void AddLine_Properties_DifferByType()
@@ -549,8 +546,7 @@ public sealed class SessionTypeTests
     }
 
     /// <summary>
-    /// A method's generic arguments substitute by position, so a leading parameter the
-    /// signature never mentions does not shift the others.
+    /// A method's generic arguments substitute by position, so a leading parameter the signature never mentions does not shift the others.
     /// </summary>
     [TestMethod]
     public void AddLine_GenericArguments_SubstituteByPosition()

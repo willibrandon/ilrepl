@@ -20,9 +20,11 @@ public static class OpcodeTable
     public const ushort NoPrefixValue = 0xFE19;
 
     /// <summary>
-    /// Every opcode that can appear in a method body, keyed by its encoded value. The reserved
-    /// <c>prefixN</c> values are left out on purpose: a reader that meets one has found a fault.
+    /// Every opcode that can appear in a method body, keyed by its encoded value.
     /// </summary>
+    /// <remarks>
+    /// The reserved <c>prefixN</c> values are left out on purpose: a reader that meets one has found a fault.
+    /// </remarks>
     public static IReadOnlyDictionary<ushort, IlOpcode> ByValue { get; } = BuildByValue();
 
     /// <summary>

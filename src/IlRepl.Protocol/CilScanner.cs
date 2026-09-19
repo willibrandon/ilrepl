@@ -2,9 +2,11 @@ namespace IlRepl.Protocol;
 
 /// <summary>
 /// Cuts a line into lexemes: words, numbers, strings, quoted names, comments, and punctuation.
-/// It knows nothing about roles; the tokenizer decides those. Comments and quoting come from
-/// <see cref="CilLexer"/>, so the cut agrees with the engine's.
 /// </summary>
+/// <remarks>
+/// It knows nothing about roles; the tokenizer decides those. Comments and quoting come from <see cref="CilLexer"/>, so the cut agrees with
+/// the engine's.
+/// </remarks>
 internal static class CilScanner
 {
     /// <summary>

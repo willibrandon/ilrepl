@@ -3,9 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Expands compact test specs into the lines the REPL takes: a header ending in <c>{ a; b }</c>
-/// becomes the header with <c>{</c>, one line per statement, and a closing brace.
+/// Expands compact test specs into the lines the REPL takes.
 /// </summary>
+/// <remarks>
+/// A header ending in <c>{ a; b }</c> becomes the header with <c>{</c>, one line per statement, and a closing brace.
+/// </remarks>
 internal static class IlLines
 {
     /// <summary>

@@ -4,8 +4,7 @@ using StreamJsonRpc;
 namespace IlRepl.Protocol;
 
 /// <summary>
-/// Builds the JSON-RPC message handler both sides use: header-delimited UTF-8 JSON with the
-/// source-generated serializer.
+/// Builds the JSON-RPC message handler both sides use: header-delimited UTF-8 JSON with the source-generated serializer.
 /// </summary>
 public static class RpcTransport
 {

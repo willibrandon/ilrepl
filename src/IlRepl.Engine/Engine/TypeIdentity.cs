@@ -4,12 +4,13 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Decides when two types are the same for the purposes of matching signatures. Generic
-/// parameters are the same only when they belong to the same declaration, are of the same kind
-/// (a type's or a method's), and sit at the same position; <c>!0</c> is never <c>!!0</c>, and
-/// the <c>T</c> of one type is never the <c>T</c> of another. An <see cref="EmitMap"/> may
-/// declare two owners equivalent, which is how a prototype's parameters match the real ones.
+/// Decides when two types are the same for the purposes of matching signatures.
 /// </summary>
+/// <remarks>
+/// Generic parameters are the same only when they belong to the same declaration, are of the same kind (a type's or a method's), and sit at
+/// the same position; <c>!0</c> is never <c>!!0</c>, and the <c>T</c> of one type is never the <c>T</c> of another. An <see
+/// cref="EmitMap"/> may declare two owners equivalent, which is how a prototype's parameters match the real ones.
+/// </remarks>
 public static class TypeIdentity
 {
     /// <summary>

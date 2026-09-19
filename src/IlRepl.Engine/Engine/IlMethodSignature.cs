@@ -5,10 +5,12 @@ using System.Runtime.InteropServices;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A method signature as metadata encodes it (ECMA-335 II.23.2.1 to II.23.2.3): calling
-/// convention bits, generic arity, return type, parameters, and where the vararg sentinel sits.
-/// Used for <c>calli</c> operands, function pointer types, member references, and method headers.
+/// A method signature as metadata encodes it (ECMA-335 II.23.2.1 to II.23.2.3).
 /// </summary>
+/// <remarks>
+/// It holds calling convention bits, generic arity, return type, parameters, and where the vararg sentinel sits. It is used for
+/// <c>calli</c> operands, function pointer types, member references, and method headers.
+/// </remarks>
 /// <param name="Convention">The calling convention: default, vararg, or an unmanaged one.</param>
 /// <param name="HasThis">True for an instance signature.</param>
 /// <param name="ExplicitThis">True when <c>this</c> is spelled out as the first parameter.</param>
@@ -48,8 +50,7 @@ public sealed record IlMethodSignature(
         RequiredParameterCount < Parameters.Count ? Parameters.Skip(RequiredParameterCount).ToArray() : null;
 
     /// <summary>
-    /// The signature the stack simulator works with: projected types, and <c>this</c> counted once
-    /// whether it is implicit or spelled out.
+    /// The signature the stack simulator works with: projected types, and <c>this</c> counted once whether it is implicit or spelled out.
     /// </summary>
     /// <returns>The calli signature, or null when a parameter or the return type did not resolve.</returns>
     public CalliSignature? ToCalliSignature()

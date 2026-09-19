@@ -52,6 +52,17 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
+    /// A documentation summary takes the opening tag, one line of text, and the closing tag.
+    /// </summary>
+    internal static readonly DiagnosticDescriptor SummaryIsNotThreeLines = new(
+        id: "ILREPL0006",
+        title: "A summary takes exactly three lines",
+        messageFormat: "Write this summary as three lines: the opening tag, one line of text, and the closing tag",
+        category: "IlRepl.Layout",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
     /// A line stays within the max_line_length set in the editor configuration.
     /// </summary>
     internal static readonly DiagnosticDescriptor LineIsTooLong = new(

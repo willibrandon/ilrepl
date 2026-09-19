@@ -242,8 +242,7 @@ public sealed class MethodValidationTests
     }
 
     /// <summary>
-    /// A try with both a catch and a finally is written as nested regions, the way ILGenerator
-    /// emits it, so the method prepares and runs.
+    /// A try with both a catch and a finally is written as nested regions, the way ILGenerator emits it, so the method prepares and runs.
     /// </summary>
     [TestMethod]
     public void CompileMethod_CatchAndFinally_NestsTheRegions()

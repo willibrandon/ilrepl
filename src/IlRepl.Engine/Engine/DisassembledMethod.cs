@@ -3,9 +3,11 @@ using System.Reflection;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A method body read back into the shape the listing prints: header facts, locals, the lines,
-/// the exception clauses, and everything that went wrong on the way.
+/// A method body read back into the shape the listing prints.
 /// </summary>
+/// <remarks>
+/// It holds header facts, locals, the lines, the exception clauses, and everything that went wrong on the way.
+/// </remarks>
 /// <param name="Method">The definition that was read.</param>
 /// <param name="Requested">The method the user named, which may be an instantiation of <paramref name="Method"/>.</param>
 /// <param name="Header">The <c>.method</c> line without its braces.</param>

@@ -7,9 +7,11 @@ using TypeAttributes = Mono.Cecil.TypeAttributes;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Writes a small assembly with Mono.Cecil and loads it from its bytes, so a test controls every
-/// signature and instruction in it, exactly as the session's own definitions are produced.
+/// Writes a small assembly with Mono.Cecil and loads it from its bytes, so a test controls every signature and instruction in it.
 /// </summary>
+/// <remarks>
+/// The session's own definitions are produced in exactly this way.
+/// </remarks>
 internal static class CecilFixture
 {
     private static int s_counter;

@@ -3,10 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for the accessibility rules the REPL enforces on session members, which the runtime
-/// does not check for them. Each category is tried from the cell, from the declaring type, from
-/// a derived type, and from an unrelated type.
+/// Tests for the accessibility rules the REPL enforces on session members, which the runtime does not check for them.
 /// </summary>
+/// <remarks>
+/// Each category is tried from the cell, from the declaring type, from a derived type, and from an unrelated type.
+/// </remarks>
 [TestClass]
 public sealed class MemberAccessTests
 {
@@ -109,9 +110,11 @@ public sealed class MemberAccessTests
     }
 
     /// <summary>
-    /// A derived type reaches family members through any receiver, as the runtime allows (the
-    /// receiver rule of ECMA II.10.5.3 is the verifier's), and never private or privatescope members.
+    /// A derived type reaches family members through any receiver, as the runtime allows, and never private or privatescope members.
     /// </summary>
+    /// <remarks>
+    /// The receiver rule of ECMA II.10.5.3 is the verifier's.
+    /// </remarks>
     [TestMethod]
     public void DerivedType_ReachesFamilyMembersButNotPrivateOnes()
     {
@@ -141,8 +144,7 @@ public sealed class MemberAccessTests
     }
 
     /// <summary>
-    /// A constructor with family access can be used from a derived type, with call on this or
-    /// with newobj, and not from outside.
+    /// A constructor with family access can be used from a derived type, with call on this or with newobj, and not from outside.
     /// </summary>
     [TestMethod]
     public void FamilyConstructor_UsableFromDerivedTypesOnly()
@@ -179,9 +181,11 @@ public sealed class MemberAccessTests
     }
 
     /// <summary>
-    /// A nested type reaches the private members of the type it is nested in, and the enclosing
-    /// type reaches a nested private type; nothing else does.
+    /// A nested type reaches the private members of the type it is nested in, and the enclosing type reaches a nested private type.
     /// </summary>
+    /// <remarks>
+    /// Nothing else reaches them.
+    /// </remarks>
     [TestMethod]
     public void NestedTypes_ShareTheEnclosingTypesPrivacy()
     {

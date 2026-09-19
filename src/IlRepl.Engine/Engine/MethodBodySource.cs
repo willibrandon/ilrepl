@@ -8,12 +8,14 @@ using System.Reflection.PortableExecutable;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Finds the bytes of a method body. The PE image comes first, because reflection refuses to
-/// describe a body whose locals or clauses name something it cannot load while the bytes sit
-/// there unchanged: the image a session definition was loaded from, the bytes read when an
-/// assembly was <c>.load</c>ed, or the file a framework assembly lives in. Every image is checked
-/// against the loaded module's version id before it is trusted. Reflection is the fallback.
+/// Finds the bytes of a method body.
 /// </summary>
+/// <remarks>
+/// The PE image comes first, because reflection refuses to describe a body whose locals or clauses name something it cannot load while the
+/// bytes sit there unchanged: the image a session definition was loaded from, the bytes read when an assembly was <c>.load</c>ed, or the
+/// file a framework assembly lives in. Every image is checked against the loaded module's version id before it is trusted. Reflection is
+/// the fallback.
+/// </remarks>
 public static class MethodBodySource
 {
     /// <summary>

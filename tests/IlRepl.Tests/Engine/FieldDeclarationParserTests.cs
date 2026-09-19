@@ -5,9 +5,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for parsing <c>.field</c> lines: access words, the contract words, offsets, constants,
-/// and the ILAsm rule that no access word means privatescope.
+/// Tests for parsing <c>.field</c> lines: access words, the contract words, offsets, and constants.
 /// </summary>
+/// <remarks>
+/// Also covers the ILAsm rule that no access word means privatescope.
+/// </remarks>
 [TestClass]
 public sealed class FieldDeclarationParserTests
 {
@@ -57,8 +59,7 @@ public sealed class FieldDeclarationParserTests
     }
 
     /// <summary>
-    /// A constant sets the default without making the field a literal; the runtime never uses
-    /// it to initialize storage.
+    /// A constant sets the default without making the field a literal; the runtime never uses it to initialize storage.
     /// </summary>
     [TestMethod]
     public void Parse_Initializer_IsIndependentOfLiteral()

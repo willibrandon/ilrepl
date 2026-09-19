@@ -3,9 +3,12 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Virtual dispatch on session types: overrides, abstract members, interfaces implemented
-/// implicitly and explicitly, default interface bodies, static abstract members, and newslot.
+/// Virtual dispatch on session types.
 /// </summary>
+/// <remarks>
+/// Covers overrides, abstract members, interfaces implemented implicitly and explicitly, default interface bodies, static abstract members,
+/// and newslot.
+/// </remarks>
 [TestClass]
 public sealed class TypeDispatchTests
 {
@@ -64,9 +67,11 @@ public sealed class TypeDispatchTests
     }
 
     /// <summary>
-    /// An interface is implemented by name, by an explicit override under another name, by a
-    /// default body, and dispatched through the interface.
+    /// An interface is implemented by name, by an explicit override under another name, and by a default body.
     /// </summary>
+    /// <remarks>
+    /// It is dispatched through the interface.
+    /// </remarks>
     [TestMethod]
     public void Interface_ImplicitExplicitAndDefault()
     {

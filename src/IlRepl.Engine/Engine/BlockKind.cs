@@ -1,8 +1,7 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A structured exception-handling boundary inside a cell, mirroring the
-/// <c>ILGenerator</c> block methods.
+/// A structured exception-handling boundary inside a cell, mirroring the <c>ILGenerator</c> block methods.
 /// </summary>
 public enum BlockKind
 {

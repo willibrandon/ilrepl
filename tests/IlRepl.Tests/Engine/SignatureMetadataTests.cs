@@ -5,8 +5,7 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Signature details survive into the live type: non-vector arrays, custom modifiers,
-/// parameter attributes, and defaults set by .param.
+/// Signature details survive into the live type: non-vector arrays, custom modifiers, parameter attributes, and defaults set by .param.
 /// </summary>
 [TestClass]
 public sealed class SignatureMetadataTests
@@ -14,8 +13,7 @@ public sealed class SignatureMetadataTests
     private static Session Load(params string[] lines) => IlLines.Load(lines);
 
     /// <summary>
-    /// int32[0...] is a rank-one array, not a vector, on a field, a parameter, a return, and
-    /// both overloads.
+    /// int32[0...] is a rank-one array, not a vector, on a field, a parameter, a return, and both overloads.
     /// </summary>
     [TestMethod]
     public void NonVectorArrays_AreKept()

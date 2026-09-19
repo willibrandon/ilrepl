@@ -3,9 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for <see cref="TypeIdentity"/>: generic parameters are the same only by owner, kind,
-/// and position; constructed types compare structurally.
+/// Tests for <see cref="TypeIdentity"/>: generic parameters are the same only by owner, kind, and position.
 /// </summary>
+/// <remarks>
+/// Constructed types compare structurally.
+/// </remarks>
 [TestClass]
 public sealed class TypeIdentityTests
 {

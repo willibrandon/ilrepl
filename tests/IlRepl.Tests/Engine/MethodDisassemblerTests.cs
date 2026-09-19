@@ -721,9 +721,11 @@ public sealed class MethodDisassemblerTests
     }
 
     /// <summary>
-    /// Handlers that share a try keep their metadata order, which is the dispatch order; when
-    /// that order is not their lexical order, braces cannot draw them and the offset form does.
+    /// Handlers that share a try keep their metadata order, which is the dispatch order.
     /// </summary>
+    /// <remarks>
+    /// When that order is not their lexical order, braces cannot draw them and the offset form does.
+    /// </remarks>
     [TestMethod]
     public void Disassemble_HandlersOutOfLexicalOrder_KeepMetadataOrder()
     {
@@ -743,9 +745,11 @@ public sealed class MethodDisassemblerTests
     }
 
     /// <summary>
-    /// Writes a body whose two catch handlers sit in the opposite order from their clauses:
-    /// the Exception handler comes first in metadata but last in the bytes, so it must win.
+    /// Writes a body whose two catch handlers sit in the opposite order from their clauses.
     /// </summary>
+    /// <remarks>
+    /// The Exception handler comes first in metadata but last in the bytes, so it must win.
+    /// </remarks>
     internal static void AddOutOfOrderHandlers(ModuleDefinition module, TypeDefinition type)
     {
         var m = Static(type, "M", module.TypeSystem.Int32);
@@ -1068,9 +1072,11 @@ public sealed class MethodDisassemblerTests
     }
 
     /// <summary>
-    /// Writes two types whose names differ by one literal backslash, each with a Value method
-    /// returning 1 and 2, and a method M that calls the first.
+    /// Writes two types whose names differ by one literal backslash, each with a Value method, and a method M that calls the first.
     /// </summary>
+    /// <remarks>
+    /// The Value methods return 1 and 2.
+    /// </remarks>
     internal static void AddBackslashTypes(ModuleDefinition module, TypeDefinition type)
     {
         foreach (var (name, value) in new[] { ("Slash\\Name", 1), ("SlashName", 2) })
@@ -1090,10 +1096,11 @@ public sealed class MethodDisassemblerTests
     }
 
     /// <summary>
-    /// Writes two types that differ by one character reflection or ILAsm would treat specially,
-    /// each with a Value method returning 1 and 2, and a method M that calls the first, closed over
-    /// int32 when the types are generic.
+    /// Writes two types that differ by one character reflection or ILAsm would treat specially, and a method M that calls the first.
     /// </summary>
+    /// <remarks>
+    /// Each type has a Value method, returning 1 and 2. M calls the first closed over int32 when the types are generic.
+    /// </remarks>
     internal static Action<ModuleDefinition, TypeDefinition> CollidingTypes(
         string firstNamespace,
         string firstName,
@@ -1133,9 +1140,11 @@ public sealed class MethodDisassemblerTests
     };
 
     /// <summary>
-    /// A special character in a generic type name or a namespace survives escaping end to end: the
-    /// listing names the first type, and so does the parsed operand.
+    /// A special character in a generic type name or a namespace survives escaping end to end.
     /// </summary>
+    /// <remarks>
+    /// The listing names the first type, and so does the parsed operand.
+    /// </remarks>
     /// <param name="firstNamespace">The first type's namespace.</param>
     /// <param name="firstName">The first type's name.</param>
     /// <param name="secondNamespace">The colliding type's namespace.</param>

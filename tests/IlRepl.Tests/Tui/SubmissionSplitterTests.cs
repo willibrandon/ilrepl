@@ -68,8 +68,7 @@ public sealed class SubmissionSplitterTests
     }
 
     /// <summary>
-    /// A comment inside a block is sent and never ends the block; a blank line inside a block
-    /// comment is a comment too.
+    /// A comment inside a block is sent and never ends the block; a blank line inside a block comment is a comment too.
     /// </summary>
     [TestMethod]
     public void Split_CommentsInsideBlock_SentNotBoundaries()

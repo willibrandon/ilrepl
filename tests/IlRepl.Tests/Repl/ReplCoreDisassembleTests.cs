@@ -236,9 +236,11 @@ public sealed partial class ReplCoreDisassembleTests
     }
 
     /// <summary>
-    /// The listing of a session method pastes back into a fresh method: the emitter forces zeroed
-    /// locals and writes its own transitions, and the pasted method runs to the same result.
+    /// The listing of a session method pastes back into a fresh method and runs to the same result.
     /// </summary>
+    /// <remarks>
+    /// The emitter forces zeroed locals and writes its own transitions.
+    /// </remarks>
     [TestMethod]
     public void Handle_Dis_Listing_PastesBackIntoAMethod()
     {
@@ -318,11 +320,12 @@ public sealed partial class ReplCoreDisassembleTests
     }
 
     /// <summary>
-    /// A listing of compiled C# pastes back into a method: the quoted names of a lambda's closure
-    /// parse, and a body over public members runs to the same result. The closure's own fields are
-    /// private to the loaded assembly, which the runtime still enforces, so that body compiles but
-    /// is not run.
+    /// A listing of compiled C# pastes back into a method, and a body over public members runs to the same result.
     /// </summary>
+    /// <remarks>
+    /// The quoted names of a lambda's closure parse. The closure's own fields are private to the loaded assembly, which the runtime still
+    /// enforces, so that body compiles but is not run.
+    /// </remarks>
     [TestMethod]
     public void Handle_Dis_LoadedListing_PastesBackIntoAMethod()
     {
@@ -372,9 +375,11 @@ public sealed partial class ReplCoreDisassembleTests
     }
 
     /// <summary>
-    /// The lines of a listing that paste into a method block: everything between the header and
-    /// the closing brace except .maxstack, with the offset and stack columns removed.
+    /// The lines of a listing that paste into a method block, with the offset and stack columns removed.
     /// </summary>
+    /// <remarks>
+    /// They are everything between the header and the closing brace except .maxstack.
+    /// </remarks>
     private static List<string> Pasteable(ReplCore core, string command)
     {
         var listing = Listing(core, command);
@@ -458,9 +463,11 @@ public sealed partial class ReplCoreDisassembleTests
     }
 
     /// <summary>
-    /// A listing over types whose names carry special characters pastes back and runs against the
-    /// first type, which is also what the session's writer must emit.
+    /// A listing over types whose names carry special characters pastes back and runs against the first type.
     /// </summary>
+    /// <remarks>
+    /// That is also what the session's writer must emit.
+    /// </remarks>
     /// <param name="firstNamespace">The first type's namespace.</param>
     /// <param name="firstName">The first type's name.</param>
     /// <param name="secondNamespace">The colliding type's namespace.</param>

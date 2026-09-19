@@ -118,9 +118,11 @@ public sealed partial class DisassemblyFidelityTests
     }
 
     /// <summary>
-    /// ildasm prints the same offsets, opcodes, branch targets, maxstack, init bit, and clause
-    /// structure for every compiled body. Operand spelling is the REPL's own, so it is not compared.
+    /// ildasm prints the same offsets, opcodes, branch targets, maxstack, init bit, and clause structure for every compiled body.
     /// </summary>
+    /// <remarks>
+    /// Operand spelling is the REPL's own, so it is not compared.
+    /// </remarks>
     [TestMethod]
     public void Listing_MatchesIldasm_ForCompiledCSharp()
     {
@@ -168,10 +170,11 @@ public sealed partial class DisassemblyFidelityTests
     }
 
     /// <summary>
-    /// Every compiled body assembles back through ilasm inside a scaffold that keeps its owning
-    /// type and signature, and the reassembled body means the same. The try, catch, and finally
-    /// fixture runs and returns eleven on its exception path.
+    /// Every compiled body assembles back through ilasm inside a scaffold that keeps its owning type and signature.
     /// </summary>
+    /// <remarks>
+    /// The reassembled body means the same. The try, catch, and finally fixture runs and returns eleven on its exception path.
+    /// </remarks>
     [TestMethod]
     public void Scaffold_RoundTrips_ThroughIlasm()
     {
@@ -220,9 +223,11 @@ public sealed partial class DisassemblyFidelityTests
     }
 
     /// <summary>
-    /// A body whose handlers sit in a different order from their clauses reassembles with the same
-    /// dispatch: the offset form keeps the metadata order, and the Exception handler still wins.
+    /// A body whose handlers sit in a different order from their clauses reassembles with the same dispatch.
     /// </summary>
+    /// <remarks>
+    /// The offset form keeps the metadata order, and the Exception handler still wins.
+    /// </remarks>
     [TestMethod]
     public void Scaffold_KeepsHandlerOrder_WhenLexicalOrderDiffers()
     {
@@ -503,9 +508,11 @@ public sealed partial class DisassemblyFidelityTests
     }
 
     /// <summary>
-    /// The index of the parenthesis that opens the parameter list: the first one outside angle
-    /// brackets and quotes, since a return type may carry generic arguments and a name may be quoted.
+    /// The index of the parenthesis that opens the parameter list, the first one outside angle brackets and quotes.
     /// </summary>
+    /// <remarks>
+    /// Angle brackets and quotes are skipped because a return type may carry generic arguments and a name may be quoted.
+    /// </remarks>
     private static int ParameterListStart(string header)
     {
         var angle = 0;

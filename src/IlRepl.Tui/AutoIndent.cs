@@ -3,10 +3,12 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// The indentation the editor adds and takes away: a new line copies the whitespace of the text
-/// before the caret and steps in once after an opening brace, and a closing brace typed on a
-/// blank line steps out once, which is how <c>.show</c> indents a listing.
+/// The indentation the editor adds and takes away.
 /// </summary>
+/// <remarks>
+/// A new line copies the whitespace of the text before the caret and steps in once after an opening brace. A closing brace typed on a blank
+/// line steps out once, which is how <c>.show</c> indents a listing.
+/// </remarks>
 public static class AutoIndent
 {
     /// <summary>
@@ -15,10 +17,11 @@ public static class AutoIndent
     public const string Unit = "  ";
 
     /// <summary>
-    /// The indentation for the line Enter opens under the text before the caret: that text's
-    /// leading whitespace, tabs kept, plus one unit when it ends with an opening brace outside a
-    /// string or comment.
+    /// The indentation for the line Enter opens under the text before the caret.
     /// </summary>
+    /// <remarks>
+    /// It is that text's leading whitespace, tabs kept, plus one unit when it ends with an opening brace outside a string or comment.
+    /// </remarks>
     /// <param name="textBeforeCaret">The current line up to the caret.</param>
     /// <param name="inBlockComment">Whether a <c>/*</c> was open when the line began.</param>
     /// <returns>The whitespace to start the new line with.</returns>
@@ -31,9 +34,11 @@ public static class AutoIndent
     }
 
     /// <summary>
-    /// Whether a closing brace typed at the caret should step the line out: the line so far is
-    /// whitespace of at least one unit and the caret is outside any comment or string.
+    /// Whether a closing brace typed at the caret should step the line out.
     /// </summary>
+    /// <remarks>
+    /// It should when the line so far is whitespace of at least one unit and the caret is outside any comment or string.
+    /// </remarks>
     /// <param name="textBeforeCaret">The current line up to the caret.</param>
     /// <param name="inBlockComment">Whether a <c>/*</c> was open when the line began.</param>
     /// <returns>True when the brace should be dedented.</returns>

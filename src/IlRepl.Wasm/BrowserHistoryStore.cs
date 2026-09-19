@@ -6,9 +6,12 @@ using IlRepl.Tui;
 namespace IlRepl.Wasm;
 
 /// <summary>
-/// History in the browser's own database. IndexedDB is reachable from the worker the runtime
-/// runs in, and every entry is one record, so two tabs never write over each other's entries.
+/// History in the browser's own database.
 /// </summary>
+/// <remarks>
+/// IndexedDB is reachable from the worker the runtime runs in, and every entry is one record, so two tabs never write over each other's
+/// entries.
+/// </remarks>
 public sealed partial class BrowserHistoryStore : IHistoryStore
 {
     private Task _pending = Task.CompletedTask;

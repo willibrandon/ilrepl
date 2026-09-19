@@ -216,8 +216,7 @@ public sealed class ReplCoreTests
     }
 
     /// <summary>
-    /// A comment inside an open method or class is ignored rather than reported as a blank line
-    /// that cannot run while the block is open.
+    /// A comment inside an open method or class is ignored rather than reported as a blank line that cannot run while the block is open.
     /// </summary>
     [TestMethod]
     public void Handle_CommentOnlyLine_InsideBlock_Succeeds()
@@ -236,8 +235,7 @@ public sealed class ReplCoreTests
     }
 
     /// <summary>
-    /// A blank line inside an open block comment is part of the comment, and text after the
-    /// closing delimiter is handled.
+    /// A blank line inside an open block comment is part of the comment, and text after the closing delimiter is handled.
     /// </summary>
     [TestMethod]
     public void Handle_BlankLineInsideBlockComment_DoesNotRun()
@@ -408,9 +406,11 @@ public sealed class ReplCoreTests
     }
 
     /// <summary>
-    /// A header whose brace comes on the next line has opened nothing yet: the depth counts
-    /// braces the session has seen, so an editor adding the brace itself reaches zero at the close.
+    /// A header whose brace comes on the next line has opened nothing yet.
     /// </summary>
+    /// <remarks>
+    /// The depth counts braces the session has seen, so an editor adding the brace itself reaches zero at the close.
+    /// </remarks>
     [TestMethod]
     public void Handle_HeaderWithoutBrace_OpenDepthCountsFromTheBrace()
     {
@@ -443,8 +443,7 @@ public sealed class ReplCoreTests
     }
 
     /// <summary>
-    /// A refused line changes nothing, the block comment it opened included, so the corrected
-    /// line that follows is read as code.
+    /// A refused line changes nothing, the block comment it opened included, so the corrected line that follows is read as code.
     /// </summary>
     [TestMethod]
     public void Handle_RefusedLine_LeavesNoCommentOpen()

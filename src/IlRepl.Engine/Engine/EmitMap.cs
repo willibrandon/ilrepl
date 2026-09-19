@@ -4,13 +4,14 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Maps the identities a body was bound to onto the identities it is emitted against. A cell
-/// binds session methods to their trampolines; an export binds them to the methods of the
-/// persisted <c>IlRepl.Cell</c>; a family under construction maps its prototype builders onto
-/// real definitions. Constructed types (arrays of any rank, byrefs, pointers, generic
-/// instantiations) are rebuilt around their mapped parts, so a mapping of <c>Point</c> also maps
-/// <c>Point[]</c>, <c>Point&amp;</c>, and <c>List&lt;Point&gt;</c>.
+/// Maps the identities a body was bound to onto the identities it is emitted against.
 /// </summary>
+/// <remarks>
+/// A cell binds session methods to their trampolines; an export binds them to the methods of the persisted <c>IlRepl.Cell</c>; a family
+/// under construction maps its prototype builders onto real definitions. Constructed types (arrays of any rank, byrefs, pointers, generic
+/// instantiations) are rebuilt around their mapped parts, so a mapping of <c>Point</c> also maps <c>Point[]</c>, <c>Point&amp;</c>, and
+/// <c>List&lt;Point&gt;</c>.
+/// </remarks>
 public sealed class EmitMap
 {
     // Keyed by identity: a builder's Equals may ask for an underlying type it does not have yet.

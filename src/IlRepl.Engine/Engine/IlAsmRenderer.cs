@@ -7,10 +7,12 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Renders a session as ILAsm source: assembly references, a static class, one method per
-/// <c>.method</c> definition, and a <c>Run</c> method with the cell's locals, arguments, blocks,
-/// and instructions.
+/// Renders a session as ILAsm source.
 /// </summary>
+/// <remarks>
+/// The source has assembly references, a static class, one method per <c>.method</c> definition, and a <c>Run</c> method with the cell's
+/// locals, arguments, blocks, and instructions.
+/// </remarks>
 public static class IlAsmRenderer
 {
     /// <summary>
@@ -684,9 +686,11 @@ public static class IlAsmRenderer
     }
 
     /// <summary>
-    /// The method on the generic type definition, or the generic method definition, behind a
-    /// member reached through an instantiation; the member itself otherwise.
+    /// The method on the generic type definition, or the generic method definition, behind a member reached through an instantiation.
     /// </summary>
+    /// <remarks>
+    /// It is the member itself otherwise.
+    /// </remarks>
     internal static MethodBase DefinitionOf(MethodBase method)
     {
         var definition = method;

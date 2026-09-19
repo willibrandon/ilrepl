@@ -5,11 +5,12 @@ using System.Text;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Spells <see cref="IlSignature"/> trees the way the REPL spells types: leaves through
-/// <see cref="TypeNameFormatter"/>, so a resolved type reads exactly as <c>.il</c> prints it,
-/// and the composite forms reflection cannot carry (modifiers, array shapes, function pointers,
-/// pinning) the way ildasm prints them.
+/// Spells <see cref="IlSignature"/> trees the way the REPL spells types.
 /// </summary>
+/// <remarks>
+/// Leaves go through <see cref="TypeNameFormatter"/>, so a resolved type reads exactly as <c>.il</c> prints it. The composite forms
+/// reflection cannot carry (modifiers, array shapes, function pointers, pinning) are spelled the way ildasm prints them.
+/// </remarks>
 public static class IlSignatureRenderer
 {
     /// <summary>
@@ -20,9 +21,11 @@ public static class IlSignatureRenderer
     public static string IlAsm(IlSignature signature) => Render(signature, pretty: false, namedParameters: false);
 
     /// <summary>
-    /// The fully qualified spelling with generic parameters by name where the context knew them,
-    /// for method headers and locals, where ildasm writes <c>!T</c> rather than <c>!0</c>.
+    /// The fully qualified spelling with generic parameters by name where the context knew them.
     /// </summary>
+    /// <remarks>
+    /// It is for method headers and locals, where ildasm writes <c>!T</c> rather than <c>!0</c>.
+    /// </remarks>
     /// <param name="signature">The signature.</param>
     /// <returns>The text.</returns>
     public static string IlAsmNamed(IlSignature signature) => Render(signature, pretty: false, namedParameters: true);
@@ -35,9 +38,11 @@ public static class IlSignatureRenderer
     public static string Pretty(IlSignature signature) => Render(signature, pretty: true, namedParameters: true);
 
     /// <summary>
-    /// A method signature as <c>calli</c> takes it: <c>[instance] [explicit] [vararg] ret(params)</c> or
-    /// <c>unmanaged cdecl ret(params)</c>.
+    /// A method signature as <c>calli</c> takes it.
     /// </summary>
+    /// <remarks>
+    /// The form is <c>[instance] [explicit] [vararg] ret(params)</c> or <c>unmanaged cdecl ret(params)</c>.
+    /// </remarks>
     /// <param name="signature">The signature.</param>
     /// <returns>The text.</returns>
     public static string IlAsm(IlMethodSignature signature)
@@ -47,8 +52,7 @@ public static class IlSignatureRenderer
     }
 
     /// <summary>
-    /// A member reference as an instruction operand spells it:
-    /// <c>instance int32 [Asm]N.T::Name&lt;int32&gt;(string, ..., int32)</c>.
+    /// A member reference as an instruction operand spells it: <c>instance int32 [Asm]N.T::Name&lt;int32&gt;(string, ..., int32)</c>.
     /// </summary>
     /// <param name="signature">The member's signature.</param>
     /// <param name="declaringType">The declaring type, already spelled for a member position.</param>
@@ -74,11 +78,13 @@ public static class IlSignatureRenderer
     }
 
     /// <summary>
-    /// A type as an instruction operand. A plain named type prints bare, which ilasm encodes as
-    /// the TypeRef or TypeDef the compilers write; with <paramref name="viaSignature"/> it keeps
-    /// its <c>class</c>/<c>valuetype</c> word, which ilasm encodes as a TypeSpec, the form the
-    /// original token had. Every other shape is a signature either way.
+    /// A type as an instruction operand.
     /// </summary>
+    /// <remarks>
+    /// A plain named type prints bare, which ilasm encodes as the TypeRef or TypeDef the compilers write; with <paramref
+    /// name="viaSignature"/> it keeps its <c>class</c>/<c>valuetype</c> word, which ilasm encodes as a TypeSpec, the form the original
+    /// token had. Every other shape is a signature either way.
+    /// </remarks>
     /// <param name="signature">The operand type.</param>
     /// <param name="viaSignature">True when the original token was a TypeSpec.</param>
     /// <returns>The text.</returns>
@@ -89,9 +95,11 @@ public static class IlSignatureRenderer
     }
 
     /// <summary>
-    /// A type in a member position: the <c>class</c>/<c>valuetype</c> word dropped except for a
-    /// generic instantiation, which keeps it as ILAsm requires.
+    /// A type in a member position, with the <c>class</c>/<c>valuetype</c> word dropped except for a generic instantiation.
     /// </summary>
+    /// <remarks>
+    /// A generic instantiation keeps the word as ILAsm requires.
+    /// </remarks>
     /// <param name="signature">The declaring type.</param>
     /// <returns>The text.</returns>
     public static string Declaring(IlSignature signature)

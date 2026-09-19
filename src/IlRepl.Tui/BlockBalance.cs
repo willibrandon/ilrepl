@@ -4,10 +4,12 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Decides whether a buffer is complete: its closing braces, counted outside strings, quoted
-/// names, and comments, reach its opening braces, no comment is left open, and no string is left
-/// open on its last line. Enter submits a complete buffer and continues an incomplete one.
+/// Decides whether a buffer is complete.
 /// </summary>
+/// <remarks>
+/// A buffer is complete when its closing braces, counted outside strings, quoted names, and comments, reach its opening braces, no comment
+/// is left open, and no string is left open on its last line. Enter submits a complete buffer and continues an incomplete one.
+/// </remarks>
 public static class BlockBalance
 {
     /// <summary>

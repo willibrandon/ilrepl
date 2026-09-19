@@ -6,9 +6,11 @@ using IlRepl.Tui;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// Tests for <see cref="FileHistoryStore"/>: the file's shape, what a damaged file yields, the
-/// lock every read and append takes, and two real processes sharing one file.
+/// Tests for <see cref="FileHistoryStore"/>: the file's shape, a damaged file, the lock, and two real processes sharing one file.
 /// </summary>
+/// <remarks>
+/// The damaged file tests cover what such a file yields. The lock is the one every read and append takes.
+/// </remarks>
 [TestClass]
 public sealed class FileHistoryStoreTests
 {
@@ -162,8 +164,7 @@ public sealed class FileHistoryStoreTests
     }
 
     /// <summary>
-    /// A lock that never goes away is given up on after the timeout; the entry stays in memory
-    /// and the problem says who holds the lock.
+    /// A lock that never goes away is given up on after the timeout; the entry stays in memory and the problem says who holds the lock.
     /// </summary>
     /// <returns>A task that completes when the assertions have run.</returns>
     [TestMethod]
@@ -208,9 +209,11 @@ public sealed class FileHistoryStoreTests
     }
 
     /// <summary>
-    /// Two processes forced to overlap: the child takes the lock and writes a record while
-    /// holding it; the parent's append waits for the release, and both records survive whole.
+    /// Two processes forced to overlap: the parent's append waits for the release, and both records survive whole.
     /// </summary>
+    /// <remarks>
+    /// The child takes the lock and writes a record while holding it.
+    /// </remarks>
     /// <returns>A task that completes when the assertions have run.</returns>
     [TestMethod]
     public async Task TwoProcesses_ForcedOverlap_NothingLost()
@@ -433,9 +436,11 @@ public sealed class FileHistoryStoreTests
     }
 
     /// <summary>
-    /// A record a crash cut short is cut away before the file grows, so a later append cannot
-    /// finish it and bring it back; the whole records before it stay.
+    /// A record a crash cut short is cut away before the file grows, so a later append cannot finish it and bring it back.
     /// </summary>
+    /// <remarks>
+    /// The whole records before it stay.
+    /// </remarks>
     /// <returns>A task that completes when the assertions have run.</returns>
     [TestMethod]
     public async Task Append_CutsAnIncompleteTailFirst()

@@ -5,9 +5,11 @@ using IlRepl.Tests.Engine;
 namespace IlRepl.Tests.Repl;
 
 /// <summary>
-/// Tests for the display of session instances: structural by default, through readers that run
-/// none of the type's code, bounded and cycle-safe, and through ToString when the type has one.
+/// Tests for the display of session instances: structural by default, and through ToString when the type has one.
 /// </summary>
+/// <remarks>
+/// The structural display goes through readers that run none of the type's code, and it is bounded and cycle-safe.
+/// </remarks>
 [TestClass]
 public sealed class SessionValueFormatterTests
 {
@@ -46,8 +48,7 @@ public sealed class SessionValueFormatterTests
     }
 
     /// <summary>
-    /// Base fields come first, a name declared twice is qualified, and a nested session value is
-    /// shown structurally to a bounded depth.
+    /// Base fields come first, a name declared twice is qualified, and a nested session value is shown structurally to a bounded depth.
     /// </summary>
     [TestMethod]
     public void Class_BaseFirstQualifiedAndNested()
@@ -90,8 +91,7 @@ public sealed class SessionValueFormatterTests
     }
 
     /// <summary>
-    /// A type that overrides ToString is shown through it, and a throwing override is marked
-    /// rather than propagated.
+    /// A type that overrides ToString is shown through it, and a throwing override is marked rather than propagated.
     /// </summary>
     [TestMethod]
     public void ToStringOverride_IsUsed()
@@ -118,9 +118,11 @@ public sealed class SessionValueFormatterTests
     }
 
     /// <summary>
-    /// The display never runs the type's code: no ToString when there is none of its own, and a
-    /// session type that enumerates is shown by its fields, not enumerated.
+    /// The display never runs the type's code: a session type that enumerates is shown by its fields, not enumerated.
     /// </summary>
+    /// <remarks>
+    /// There is no ToString when the type has none of its own.
+    /// </remarks>
     [TestMethod]
     public void Display_RunsNoUserCode()
     {

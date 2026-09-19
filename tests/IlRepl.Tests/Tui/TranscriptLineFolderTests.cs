@@ -93,8 +93,7 @@ public sealed class TranscriptLineFolderTests
     }
 
     /// <summary>
-    /// A paragraph breaks at spaces, fills each row as far as it can, and drops only the space
-    /// at the break.
+    /// A paragraph breaks at spaces, fills each row as far as it can, and drops only the space at the break.
     /// </summary>
     [TestMethod]
     public void Paragraph_BreaksAtSpacesAndFillsRows()
@@ -107,8 +106,7 @@ public sealed class TranscriptLineFolderTests
     }
 
     /// <summary>
-    /// A label followed by a description folds the description under itself, at the label's width,
-    /// and the label keeps its style.
+    /// A label followed by a description folds the description under itself, at the label's width, and the label keeps its style.
     /// </summary>
     [TestMethod]
     public void LabeledLine_FoldsWithHangingIndent()
@@ -155,8 +153,7 @@ public sealed class TranscriptLineFolderTests
     private static string Join(IReadOnlyList<TranscriptSpan> row) => string.Concat(row.Select(s => s.Text));
 
     /// <summary>
-    /// An echoed line folds under its input at the prompt's width, however many runs the
-    /// tokenizer cut the input into.
+    /// An echoed line folds under its input at the prompt's width, however many runs the tokenizer cut the input into.
     /// </summary>
     [TestMethod]
     public void EchoLine_FoldsUnderTheInput()

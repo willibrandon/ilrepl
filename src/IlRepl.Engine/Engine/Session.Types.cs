@@ -1291,10 +1291,12 @@ public sealed partial class Session
     }
 
     /// <summary>
-    /// Phase A of a family commit: everything that can fail. The family is written, loaded, and
-    /// prepared as new identities, and the cell is rebuilt against them; nothing the session
-    /// holds changes.
+    /// Phase A of a family commit: everything that can fail.
     /// </summary>
+    /// <remarks>
+    /// The family is written, loaded, and prepared as new identities, and the cell is rebuilt against them; nothing the session holds
+    /// changes.
+    /// </remarks>
     private (
         CompiledFamily Family, TypeTable Table, CellState Cell, IReadOnlyDictionary<string, (
             TypeBuilder Prototype, OwnMembers Members)> Prototypes) CompileFamily(
@@ -1371,10 +1373,11 @@ public sealed partial class Session
     }
 
     /// <summary>
-    /// Everything that mentions a family being replaced, directly or through another dependent:
-    /// families by the types they mention, methods by the types they mention and the methods
-    /// they call, transitively.
+    /// Everything that mentions a family being replaced, directly or through another dependent.
     /// </summary>
+    /// <remarks>
+    /// Families are found by the types they mention, and methods by the types they mention and the methods they call, transitively.
+    /// </remarks>
     private (List<SessionType> Types, List<SessionMethod> Methods) ReplacementClosure(SessionType replaced)
     {
         // Bodies rebuilt with a family bind to its prototypes; those name the family too.

@@ -1,8 +1,7 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// One instruction as it sits in a method body: where it starts, how many bytes it takes, its
-/// opcode, and its operand as read.
+/// One instruction as it sits in a method body: where it starts, how many bytes it takes, its opcode, and its operand as read.
 /// </summary>
 /// <param name="Offset">The offset of the first byte of the opcode.</param>
 /// <param name="Size">The opcode and operand bytes together.</param>

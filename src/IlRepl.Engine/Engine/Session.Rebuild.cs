@@ -397,9 +397,11 @@ public sealed partial class Session
     }
 
     /// <summary>
-    /// Defines the prototype of a declaration and its nested types ahead of their lines, and
-    /// maps the identities the session holds for them onto the new builders.
+    /// Defines the prototype of a declaration and its nested types ahead of their lines.
     /// </summary>
+    /// <remarks>
+    /// It also maps the identities the session holds for them onto the new builders.
+    /// </remarks>
     private static void DeclareAhead(
         TypeDeclaration declaration,
         TypeBuilder? enclosing,
@@ -448,9 +450,11 @@ public sealed partial class Session
     }
 
     /// <summary>
-    /// Gives a prototype declared ahead its base, interfaces, constraints, fields, and method
-    /// builders, every type mapped onto the new identities, so lines can claim them.
+    /// Gives a prototype declared ahead its base, interfaces, constraints, fields, and method builders, so lines can claim them.
     /// </summary>
+    /// <remarks>
+    /// Every type is mapped onto the new identities.
+    /// </remarks>
     private static void ShapeAhead(
         TypeDeclaration declaration,
         Dictionary<string, (TypeBuilder Prototype, OwnMembers Members)> family,

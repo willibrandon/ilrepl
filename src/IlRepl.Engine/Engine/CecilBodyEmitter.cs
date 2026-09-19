@@ -10,11 +10,13 @@ using EmitOpCodes = System.Reflection.Emit.OpCodes;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Emits a validated body into a Cecil method: the same entries the <c>ILGenerator</c> path
-/// emits for a cell, with the structured exception blocks turned into handler ranges and the
-/// <c>leave</c>, <c>endfinally</c>, and <c>endfilter</c> instructions that <c>ILGenerator</c>
-/// inserts at block boundaries written out explicitly.
+/// Emits a validated body into a Cecil method.
 /// </summary>
+/// <remarks>
+/// It emits the same entries the <c>ILGenerator</c> path emits for a cell. The structured exception blocks are turned into handler ranges,
+/// and the <c>leave</c>, <c>endfinally</c>, and <c>endfilter</c> instructions that <c>ILGenerator</c> inserts at block boundaries are
+/// written out explicitly.
+/// </remarks>
 public static class CecilBodyEmitter
 {
     /// <summary>

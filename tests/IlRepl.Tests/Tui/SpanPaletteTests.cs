@@ -10,9 +10,11 @@ namespace IlRepl.Tests.Tui;
 public sealed class SpanPaletteTests
 {
     /// <summary>
-    /// Every style coloured on a dark ground is coloured on a light ground too, differently, and
-    /// the styles left to the terminal's own foreground are left alone on both.
+    /// Every style coloured on a dark ground is coloured on a light ground too, differently.
     /// </summary>
+    /// <remarks>
+    /// The styles left to the terminal's own foreground are left alone on both.
+    /// </remarks>
     [TestMethod]
     public void LightColor_CoversEveryColouredStyle()
     {
