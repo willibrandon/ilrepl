@@ -16,7 +16,8 @@ internal sealed partial class ImportedMethodFamily
         typeof(ICustomAttributeProvider), typeof(Type), typeof(Delegate), typeof(MethodBase), typeof(MethodInfo),
         typeof(PropertyInfo), typeof(MethodInvoker), typeof(ConstructorInvoker), typeof(Activator), typeof(RuntimeMethodHandle),
         typeof(ModuleHandle), typeof(object), typeof(RuntimeHelpers),
-    }.SelectMany(type => type.GetMethods()).Where(method => AssemblyInspectionProblem(method) is not null || IsIndirectReflection(method)
+    }
+        .SelectMany(type => type.GetMethods()).Where(method => AssemblyInspectionProblem(method) is not null || IsIndirectReflection(method)
         || IsTypeLookup(method) || IsActivation(method) || IsAssemblyActivation(method) || IsObjectReferenceInspection(method)
         || IsMemberTokenInspection(method) || IsTypeNameInspection(method))
         .SelectMany(method => method.Name.StartsWith("get_", StringComparison.Ordinal) ? new[] { method.Name, method.Name[4..] }

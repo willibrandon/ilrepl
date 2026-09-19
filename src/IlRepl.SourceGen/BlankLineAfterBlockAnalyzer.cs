@@ -26,7 +26,8 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxNodeAction(AnalyzeSequence, SyntaxKind.Block, SyntaxKind.SwitchStatement, SyntaxKind.SwitchSection,
             SyntaxKind.CompilationUnit, SyntaxKind.NamespaceDeclaration, SyntaxKind.FileScopedNamespaceDeclaration,
             SyntaxKind.ClassDeclaration, SyntaxKind.StructDeclaration, SyntaxKind.InterfaceDeclaration,
-            SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration, SyntaxKind.AccessorList);
+            SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration, SyntaxKind.ExtensionBlockDeclaration,
+            SyntaxKind.AccessorList);
     }
 
     // A comment is held to the rule wherever it follows a closing brace line: between statements, members, accessors, or

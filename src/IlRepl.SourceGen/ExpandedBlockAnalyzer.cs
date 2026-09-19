@@ -24,7 +24,8 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
         context.RegisterSyntaxNodeAction(AnalyzeBlock, SyntaxKind.Block, SyntaxKind.SwitchStatement, SyntaxKind.NamespaceDeclaration,
             SyntaxKind.ClassDeclaration, SyntaxKind.StructDeclaration, SyntaxKind.InterfaceDeclaration, SyntaxKind.EnumDeclaration,
-            SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration, SyntaxKind.AccessorList, SyntaxKind.SwitchExpression,
+            SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration, SyntaxKind.ExtensionBlockDeclaration,
+            SyntaxKind.AccessorList, SyntaxKind.SwitchExpression,
             SyntaxKind.ObjectInitializerExpression, SyntaxKind.CollectionInitializerExpression, SyntaxKind.ArrayInitializerExpression,
             SyntaxKind.ComplexElementInitializerExpression, SyntaxKind.WithInitializerExpression,
             SyntaxKind.AnonymousObjectCreationExpression, SyntaxKind.PropertyPatternClause);
@@ -87,7 +88,8 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    // Only what completes the expression around a block may follow its brace, as in "});". The "while" of a "do" takes the next line.
+    // Only what completes the expression around a block may follow its brace, as in "});". The "while" of a "do" and a member
+    // access that carries the expression on, as in ".ToList()", take the next line.
     private static bool ContinuesWithCode(SyntaxToken close)
     {
         var next = close.GetNextToken();
@@ -102,7 +104,6 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
             case SyntaxKind.CloseBracketToken:
             case SyntaxKind.SemicolonToken:
             case SyntaxKind.CommaToken:
-            case SyntaxKind.DotToken:
                 return false;
             case SyntaxKind.EqualsToken:
                 // A property's initializer can only follow its accessors.

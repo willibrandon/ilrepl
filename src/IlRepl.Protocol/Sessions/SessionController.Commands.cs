@@ -92,7 +92,8 @@ public sealed partial class SessionController
                     [.. captured.Document.Cells.SelectMany(cell => new[]
                     {
                         TranscriptLine.Of(LineKind.Info, $"  {cell.Number}: {cell.Kind}, {cell.State} (historical)", SpanStyle.Dim),
-                    }.Concat(cell.Output))], Status),
+                    }
+                        .Concat(cell.Output))], Status),
             };
         }
 

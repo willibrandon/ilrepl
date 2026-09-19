@@ -94,6 +94,7 @@ internal static class DependencyAsset
     internal static bool MatchesNativeName(string import, string file) => new[]
     {
         import, import + ".dll", import + ".so", "lib" + import, "lib" + import + ".so", "lib" + import + ".dylib",
-    }.Contains(file, StringComparer.OrdinalIgnoreCase);
+    }
+        .Contains(file, StringComparer.OrdinalIgnoreCase);
 
 }

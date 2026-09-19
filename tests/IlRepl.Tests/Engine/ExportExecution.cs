@@ -196,7 +196,8 @@ internal sealed class ExportExecution : IDisposable
             "call void " + culture + "::set_CurrentCulture(class " + culture + ")",
             "call class " + culture + " " + culture + "::get_InvariantCulture()",
             "call void " + culture + "::set_CurrentUICulture(class " + culture + ")", ".run",
-        }.Concat(example.Source.Split('\n')).Concat(["ldc.i4 " + example.Input, example.Call]))
+        }
+            .Concat(example.Source.Split('\n')).Concat(["ldc.i4 " + example.Input, example.Call]))
         {
             var reply = await host.HandleAsync(line, cancellationToken);
             Assert.IsTrue(reply.Succeeded, string.Join('\n', reply.Lines.Select(output => output.PlainText)));
