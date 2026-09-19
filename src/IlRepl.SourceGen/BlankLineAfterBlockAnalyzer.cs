@@ -37,7 +37,9 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
     {
         foreach (var token in context.Tree.GetRoot(context.CancellationToken).DescendantTokens())
         {
-            if (!token.IsKind(SyntaxKind.CloseBraceToken) || SharesLine(token.GetPreviousToken(), token))
+            // The brace that closes a hole in an interpolated string is text, not layout.
+            if (!token.IsKind(SyntaxKind.CloseBraceToken) || token.Parent is InterpolationSyntax
+                || SharesLine(token.GetPreviousToken(), token))
             {
                 continue;
             }
@@ -149,9 +151,10 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
         return token;
     }
 
+    // A token that runs over several lines, as the text of a raw string does, ends the line it starts on.
     private static SyntaxToken LastOnLine(SyntaxToken token)
     {
-        while (SharesLine(token, token.GetNextToken()))
+        while (SharesLine(token, token.GetNextToken()) && StartLineOf(token.GetNextToken()) == LineOf(token.GetNextToken()))
         {
             token = token.GetNextToken();
         }
