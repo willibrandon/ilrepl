@@ -1,6 +1,7 @@
 using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
+using Hex1b.Theming;
 using IlRepl.Engine;
 using IlRepl.Protocol;
 using IlRepl.Tui;
@@ -60,8 +61,9 @@ public sealed class PromptHelpAppearanceTests
             var resizedHeight = height == 30 ? 14 : 30;
             adapter.Resize(resizedWidth, resizedHeight);
             await auto.WaitUntilAsync(snapshot => snapshot.Width == resizedWidth && snapshot.Height == resizedHeight
+                && AppTest.Row(snapshot, 0) == "help · nop"
                 && AppTest.Row(snapshot, resizedHeight - 1).StartsWith("Esc back", StringComparison.Ordinal),
-                description: "the footer follows the resized terminal");
+                description: "the footer follows the resized terminal and the heading is no longer updating");
             using (var snapshot = auto.CreateSnapshot())
             {
                 AssertFrame(snapshot, resizedWidth, resizedHeight, "nop");
@@ -142,8 +144,8 @@ public sealed class PromptHelpAppearanceTests
             }
 
             // Tab to the URL, then back to the source so both action states are observed after any necessary scrolling.
-            await auto.TabAsync(ct: ct);
-            await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("❯ https://ilrepl.dev"),
+            await SelectActionAsync(auto, prompt, 1, backwards: false, ct);
+            await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("❯ https://ilrepl.dev") && LinksAre(snapshot, SpanStyle.TopType),
                 description: "the selected documentation link has rendered");
             using (var snapshot = auto.CreateSnapshot())
             {
@@ -155,10 +157,10 @@ public sealed class PromptHelpAppearanceTests
             adapter.Resize(32, height);
             await auto.WaitUntilAsync(snapshot => snapshot.Width == 32 && snapshot.GetCell(31, height - 1).Character == "…",
                 description: "help has rendered its footer at the narrower width");
-            await auto.TabAsync(ct: ct);
-            await auto.Shift().TabAsync(ct: ct);
-            await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("❯ https://ilrepl.dev") && snapshot.ContainsText("opcodes/#call"),
-                description: "the same link wraps in a narrower viewport");
+            await SelectActionAsync(auto, prompt, 0, backwards: false, ct);
+            await SelectActionAsync(auto, prompt, 1, backwards: true, ct);
+            await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("❯ https://ilrepl.dev") && snapshot.ContainsText("opcodes/#call")
+                && LinksAre(snapshot, SpanStyle.TopType), description: "the same link wraps in a narrower viewport");
             using (var snapshot = auto.CreateSnapshot())
             {
                 AssertLinks(snapshot, InstructionReference.For("call").DocumentationUrl, SpanStyle.TopType);
@@ -171,9 +173,9 @@ public sealed class PromptHelpAppearanceTests
             await auto.WaitUntilAsync(_ => Volatile.Read(ref opened) is not null,
                 description: "Enter activates the selected documentation");
             Assert.AreEqual(InstructionReference.For("call").DocumentationUrl, Volatile.Read(ref opened));
-            await auto.Shift().TabAsync(ct: ct);
-            await auto.WaitUntilAsync(snapshot => prompt.Help is { SelectedAction: 0 } && snapshot.ContainsText("❯ Go to"),
-                description: "the selected source action is in view");
+            await SelectActionAsync(auto, prompt, 0, backwards: true, ct);
+            await auto.WaitUntilAsync(snapshot => prompt.Help is { SelectedAction: 0 } && snapshot.ContainsText("❯ Go to")
+                && LinksAre(snapshot, SpanStyle.Member), description: "the selected source action is in view");
             using (var snapshot = auto.CreateSnapshot())
             {
                 AssertColor(snapshot, "❯ Go to", SpanStyle.TopType);
@@ -195,6 +197,15 @@ public sealed class PromptHelpAppearanceTests
                 + $"link current {help?.IsActionCurrent(prompt, 1)}, analysis pending {prompt.Analyzer?.IsPending}, "
                 + $"completion pending {prompt.Requester?.IsPending}, palette {prompt.Palette}, selected {prompt.SelectedIndex}, "
                 + $"busy {prompt.Busy}, input sequence {prompt.HelpInputSequence}");
+            using (var snapshot = terminal.CreateSnapshot())
+            {
+                var colors = Enumerable.Range(0, snapshot.Height).SelectMany(y => Enumerable.Range(0, snapshot.Width)
+                    .Select(x => snapshot.GetCell(x, y))).Where(cell => cell.HyperlinkData is not null)
+                    .GroupBy(cell => Rgb(cell.Foreground)).Select(group => group.Key + " x" + group.Count());
+                TestContext.WriteLine("Link cell colors: " + string.Join(", ", colors) + "; selected is "
+                    + Rgb(SpanPalette.Color(SpanStyle.TopType)) + ", unselected is " + Rgb(SpanPalette.Color(SpanStyle.Member)));
+            }
+
             throw;
         }
         finally
@@ -209,6 +220,33 @@ public sealed class PromptHelpAppearanceTests
             }
 
             await IlReplApp.SettleAsync(prompt);
+        }
+    }
+
+    // While help refreshes it shows "updating" and ignores Tab, as it would for a person who then presses it again. Every
+    // help key advances the input sequence once it has been handled, so the key is pressed until the selection has moved.
+    private static async Task SelectActionAsync(
+        Hex1bTerminalAutomator auto,
+        PromptState prompt,
+        int action,
+        bool backwards,
+        CancellationToken token)
+    {
+        while (prompt.Help is { } help && help.SelectedAction != action)
+        {
+            await auto.WaitUntilAsync(_ => prompt.Help is { } current && current.IsActionCurrent(prompt, action),
+                description: "help is current, so it accepts the key");
+            var handled = prompt.HelpInputSequence;
+            if (backwards)
+            {
+                await auto.Shift().TabAsync(ct: token);
+            }
+            else
+            {
+                await auto.TabAsync(ct: token);
+            }
+
+            await auto.WaitUntilAsync(_ => prompt.HelpInputSequence > handled, description: "help has handled the key");
         }
     }
 
@@ -237,6 +275,16 @@ public sealed class PromptHelpAppearanceTests
         {
             Assert.AreEqual(SpanPalette.Color(style), actual, text);
         }
+    }
+
+    private static string Rgb(Hex1bColor? color) => color is { } value ? $"{value.R},{value.G},{value.B}" : "none";
+
+    // The frame that follows a selection change is the one to assert on, and the link's color is what tells it apart.
+    private static bool LinksAre(Hex1bTerminalSnapshot snapshot, SpanStyle style)
+    {
+        var cells = Enumerable.Range(0, snapshot.Height).SelectMany(y => Enumerable.Range(0, snapshot.Width)
+            .Select(x => snapshot.GetCell(x, y))).Where(cell => cell.HyperlinkData is not null).ToArray();
+        return cells.Length > 0 && cells.All(cell => Equals(cell.Foreground, SpanPalette.Color(style)));
     }
 
     private static void AssertLinks(Hex1bTerminalSnapshot snapshot, string url, SpanStyle style)

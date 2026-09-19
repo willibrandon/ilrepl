@@ -47,12 +47,15 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
                 var actionCurrent = action is not null && help.IsActionCurrent(State, row.Action);
                 var style = current || actionCurrent
                     ? row.Action == help.SelectedAction ? SpanStyle.TopType : SpanStyle.Member : SpanStyle.Dim;
+
+                // Hex1b redraws a hyperlink when its text, target, or id changes. The later rows of a wrapped link keep their
+                // text when the selection moves, so the id carries the style and every row is redrawn in the new color.
                 Hex1bWidget line = actionCurrent && action?.Url is { } url
                     ? v.ThemePanel(theme => theme.Clone()
                         .Set(HyperlinkTheme.ForegroundColor, SpanPalette.Color(style))
                         .Set(HyperlinkTheme.FocusedForegroundColor, SpanPalette.Color(style))
                         .Set(HyperlinkTheme.HoveredForegroundColor, SpanPalette.Color(style)),
-                        v.Hyperlink(row.Line.PlainText, url).Id("ilrepl-help-" + row.Action).OnClick(_ =>
+                        v.Hyperlink(row.Line.PlainText, url).Id("ilrepl-help-" + row.Action + "-" + style).OnClick(_ =>
                     {
                         if (help.IsActionCurrent(State, row.Action) && help.Actions[row.Action] == action)
                         {
