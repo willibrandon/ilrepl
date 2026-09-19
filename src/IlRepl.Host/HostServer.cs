@@ -149,9 +149,10 @@ public sealed partial class HostServer : IReplHost, IAsyncDisposable
     /// </summary>
     /// <param name="path">The frontend-owned endpoint.</param>
     /// <param name="secret">The launch-specific bootstrap secret.</param>
+    /// <param name="leaving">What the caller does on its way out, run here when the host leaves without returning.</param>
     /// <param name="cancellationToken">Stops the server.</param>
     /// <returns>The process exit code.</returns>
-    public static async Task<int> ServeSocketAsync(string path, string secret, CancellationToken cancellationToken)
+    public static async Task<int> ServeSocketAsync(string path, string secret, Action leaving, CancellationToken cancellationToken)
     {
         var frontendOwner = ReadFrontendOwner();
         using var startup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -194,6 +195,8 @@ public sealed partial class HostServer : IReplHost, IAsyncDisposable
 
             if (!settled || !OwnedProcessGroup.IsRunning(frontendOwner))
             {
+                // This way out stops the process where it stands, so the caller never gets to unwind.
+                leaving();
                 if (!OperatingSystem.IsWindows())
                 {
                     using var group = new OwnedProcessGroup();

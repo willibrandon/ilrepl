@@ -13,6 +13,12 @@ public sealed class ProcessMeasurements : IDisposable
     private readonly string _role;
     private readonly Lock _lock = new();
     private readonly Dictionary<string, long> _stages = [];
+    private int _written;
+
+    /// <summary>
+    /// The measurements of this process, for code far from the entry point that has a stage to mark.
+    /// </summary>
+    public static ProcessMeasurements? Current { get; private set; }
 
     /// <summary>
     /// Enables measurements only when the private reference-run environment variable supplies an artifact directory.
@@ -22,6 +28,7 @@ public sealed class ProcessMeasurements : IDisposable
     {
         _role = role;
         _directory = Environment.GetEnvironmentVariable("ILREPL_MEASUREMENTS_DIRECTORY");
+        Current = this;
         Mark("entry");
     }
 
@@ -47,7 +54,8 @@ public sealed class ProcessMeasurements : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (string.IsNullOrEmpty(_directory))
+        // The host writes on its hard exit as well as on its way out of Main, and the record is written once.
+        if (string.IsNullOrEmpty(_directory) || Interlocked.Exchange(ref _written, 1) != 0)
         {
             return;
         }

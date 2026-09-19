@@ -31,4 +31,4 @@ if (args.Length != 2 || args[0] != "--socket")
 var secret = Environment.GetEnvironmentVariable("ILREPL_HOST_HANDSHAKE")
     ?? throw new InvalidOperationException("the host connection has no launch identity");
 Environment.SetEnvironmentVariable("ILREPL_HOST_HANDSHAKE", null);
-return await HostServer.ServeSocketAsync(args[1], secret, cancellation.Token).ConfigureAwait(false);
+return await HostServer.ServeSocketAsync(args[1], secret, measurements.Dispose, cancellation.Token).ConfigureAwait(false);

@@ -512,12 +512,16 @@ public sealed partial class HostProcessEngine : IReplEngine
             try
             {
                 using var grace = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                ProcessMeasurements.Current?.Mark("host-exit-requested");
                 try
                 {
                     await OwnedProcessGroup.WaitForExitAsync(_process, _scope, grace.Token).ConfigureAwait(false);
+                    ProcessMeasurements.Current?.Mark("host-exited");
                 }
                 catch (OperationCanceledException)
                 {
+                    // A host stopped here never writes its own record, so this one says what became of it.
+                    ProcessMeasurements.Current?.Mark("host-stopped");
                 }
 
                 await _lifetime.StopAsync(_scope.Identity, CancellationToken.None).ConfigureAwait(false);

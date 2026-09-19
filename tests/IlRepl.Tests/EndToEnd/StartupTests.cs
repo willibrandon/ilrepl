@@ -3,6 +3,7 @@ using System.Text.Json;
 using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
+using IlRepl.Engine;
 using IlRepl.Processes;
 using IlRepl.Protocol;
 using IlRepl.Tests.Tui;
@@ -91,5 +92,72 @@ public sealed class StartupTests
             var process = records.Single(record => record.Role == role);
             Assert.IsGreaterThan(rendered, process.Stages["entry"], role + " started before the prompt rendered.");
         }
+    }
+
+    /// <summary>
+    /// A host that has to leave through its hard exit, because user code is still running when the frontend quits, still writes its record.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task HostRecord_SurvivesTheHardExit()
+    {
+        var token = TestContext.CancellationToken;
+        using var files = new SessionWorkspaceFixture();
+        await using var terminal = Hex1bTerminal.CreateBuilder().WithPtyProcess(options =>
+        {
+            options.FileName = HostLocator.FindDotnet();
+            options.Arguments = [RepoPaths.FrontEndAssembly, "--no-history"];
+            options.WorkingDirectory = files.DirectoryPath;
+            options.Environment = new Dictionary<string, string>
+            {
+                ["TERM"] = "xterm-256color", ["NO_COLOR"] = "", ["ILREPL_MEASUREMENTS_DIRECTORY"] = files.DirectoryPath,
+            };
+        }).WithHeadless().WithDimensions(100, 30).Build();
+
+        var run = terminal.RunAsync(token);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(20));
+        try
+        {
+            await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("il[1]>") && FrameRecorder.FindCaret(snapshot) is not null);
+            string[] lines =
+            [
+                "ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"running\"",
+                "call void System.IO.File::WriteAllText(string, string)", "ldc.i4 20000",
+                "call void System.Threading.Thread::Sleep(int32)",
+            ];
+
+            for (var index = 0; index < lines.Length; index++)
+            {
+                var count = index == 0 ? "1 instruction " : (index + 1) + " instructions";
+                await auto.TypeAsync(lines[index], ct: token);
+
+                // Enter before the host is ready keeps the line in the prompt, so the first line waits for the host.
+                await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("stack ") && !snapshot.ContainsText("starting execution host"));
+                await auto.EnterAsync(ct: token);
+                await auto.WaitUntilAsync(snapshot => snapshot.ContainsText(count));
+            }
+
+            // The sleeping cell cannot be cancelled, so the host's engine cannot settle and the host takes its hard exit.
+            await auto.TypeAsync("ret", ct: token);
+            await auto.EnterAsync(ct: token);
+            await auto.WaitUntilAsync(_ => File.Exists(files.MarkerPath));
+            await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
+            await run.WaitAsync(token);
+        }
+        finally
+        {
+            await terminal.DisposeAsync();
+        }
+
+        var roles = new List<string>();
+        foreach (var path in Directory.EnumerateFiles(files.DirectoryPath, "*.json"))
+        {
+            var record = JsonSerializer.Deserialize(await File.ReadAllTextAsync(path, token),
+                MeasurementJsonContext.Default.ProcessMeasurement);
+            Assert.IsNotNull(record);
+            roles.Add(record.Role);
+        }
+
+        Assert.Contains("host", roles, "The host left no record: " + string.Join(", ", roles));
     }
 }
