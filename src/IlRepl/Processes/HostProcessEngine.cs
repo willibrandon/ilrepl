@@ -295,6 +295,40 @@ public sealed partial class HostProcessEngine : IReplEngine
     }
 
     /// <inheritdoc />
+    public async Task<HandleReply[]> HandleRetainedSourceRunAsync(string[] lines, AnalysisLocation[] locations,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        ArgumentNullException.ThrowIfNull(locations);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        try
+        {
+            var replies = await InvokeMutationAsync(token => _host.HandleRetainedSourceRunAsync(lines, locations, token),
+                cancellationToken).ConfigureAwait(false);
+            if (replies.Length != 0)
+            {
+                if (replies[^1].CompletionProgress is { } progress)
+                {
+                    ObserveProgress(progress);
+                }
+
+                Status = replies[^1].Status;
+            }
+
+            return replies;
+        }
+        catch (RemoteInvocationException ex)
+        {
+            throw new HostProtocolException("the host failed: " + ex.Message, ex);
+        }
+        catch (ConnectionLostException ex)
+        {
+            await ObserveConnectionLossAsync().ConfigureAwait(false);
+            throw new HostProtocolException("the host exited" + ExitDetail(), ex);
+        }
+    }
+
+    /// <inheritdoc />
     public Task<HandleReply> HandleAsync(string line, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(line);

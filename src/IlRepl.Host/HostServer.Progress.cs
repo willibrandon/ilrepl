@@ -31,6 +31,35 @@ public sealed partial class HostServer
         }
     }
 
+    private async Task<HandleReply[]> HandleRunWithCompletionAsync(Func<Task<HandleReply[]>> action)
+    {
+        var previous = _completionDelivery.Value;
+        var delivery = new HostCompletionDelivery();
+        _completionDelivery.Value = delivery;
+        try
+        {
+            var replies = await action().ConfigureAwait(false);
+            if (replies.Length == 0)
+            {
+                // No reply can carry the completion, so it is acknowledged like an exceptional one.
+                await FlushCompletionAsync(delivery).ConfigureAwait(false);
+                return replies;
+            }
+
+            replies[^1] = WithStreamedOutput(replies[^1]) with { CompletionProgress = delivery.Pending };
+            return replies;
+        }
+        catch
+        {
+            await FlushCompletionAsync(delivery).ConfigureAwait(false);
+            throw;
+        }
+        finally
+        {
+            _completionDelivery.Value = previous;
+        }
+    }
+
     private async Task PublishProgressAsync(ExecutionProgress progress)
     {
         if (_completionDelivery.Value is { } delivery)

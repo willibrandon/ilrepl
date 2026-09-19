@@ -19,6 +19,8 @@ namespace IlRepl.Protocol;
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(HandleReply))]
+[JsonSerializable(typeof(HandleReply[]))]
+[JsonSerializable(typeof(AnalysisLocation[]))]
 [JsonSerializable(typeof(AssemblyExportResult))]
 [JsonSerializable(typeof(OwnedProcessScope))]
 [JsonSerializable(typeof(SupervisorLaunch))]

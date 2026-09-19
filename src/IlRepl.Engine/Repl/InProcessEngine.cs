@@ -163,6 +163,53 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
     public Task<HandleReply> HandleRetainedSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken) =>
         HandleLineAsync(line, location, cancellationToken, deferCheckpoint: true);
 
+    /// <summary>
+    /// Handles a run of retained instructions in one operation, ending at the first line that is not plainly accepted.
+    /// </summary>
+    /// <param name="lines">The retained instructions inside an open method, in order.</param>
+    /// <param name="locations">Their locations in the submitting document.</param>
+    /// <param name="cancellationToken">Cancels the operation.</param>
+    /// <returns>One reply for each line handled, which can be fewer than were sent.</returns>
+    public async Task<HandleReply[]> HandleRetainedSourceRunAsync(string[] lines, AnalysisLocation[] locations,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        ArgumentNullException.ThrowIfNull(locations);
+        if (lines.Length != locations.Length)
+        {
+            throw new ArgumentException("Every line needs its location.", nameof(locations));
+        }
+
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+        await _warmupCancellation.CancelAsync().ConfigureAwait(false);
+        return await ExecuteOperationAsync("submission", operation =>
+        {
+            var replies = new List<HandleReply>(lines.Length);
+            for (var index = 0; index < lines.Length; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Only an instruction inside an open method is certain to be recorded without running or changing anything else.
+                var comment = _core.Status.Mark.InBlockComment;
+                if (_core.Status.OpenMethod is null || !Vocabulary.IsInstruction(lines[index], ref comment))
+                {
+                    break;
+                }
+
+                var generation = _core.Session.Generation;
+                var result = _core.HandleCancellable(lines[index], locations[index], operation, deferCheckpoint: true);
+                replies.Add(Reply(result));
+                if (!result.Succeeded || _core.Session.Generation != generation)
+                {
+                    break;
+                }
+            }
+
+            return replies.ToArray();
+        }, cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task<HandleReply> HandleLineAsync(string line, AnalysisLocation? location, CancellationToken cancellationToken,
         bool deferCheckpoint = false)
     {
