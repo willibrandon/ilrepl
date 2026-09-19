@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using IlRepl.Engine;
 using IlRepl.Processes;
@@ -80,6 +81,71 @@ public sealed class HostCrashTests
         if (failure == "terminate-large") Assert.EndsWith("ilrepl-terminate-tail-marker", observed.StandardError);
         if (failure == "stack-overflow") Assert.Contains("Stack overflow", observed.StandardError);
         if (failure == "access-violation") Assert.Contains("AccessViolation", observed.StandardError);
+    }
+
+    /// <summary>
+    /// Host diagnostics are read while every pool thread is busy, as they are while a parallel suite starts hosts on few cores.
+    /// </summary>
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    [Timeout(90_000, CooperativeCancellation = true)]
+    public async Task Diagnostics_AreReadWhileThePoolIsExhausted()
+    {
+        // The pool is exhausted in a process of its own, so no other test waits on it.
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
+        var outcome = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() => outcome.TrySetResult(ReadDiagnosticsWithoutThePool()));
+        thread.Start();
+        Assert.Contains("ilrepl-diagnostic-marker", await outcome.Task.WaitAsync(TestContext.CancellationToken));
+    }
+
+    private static string ReadDiagnosticsWithoutThePool()
+    {
+        var workers = Environment.ProcessorCount;
+        ThreadPool.GetMaxThreads(out _, out var ports);
+        ThreadPool.SetMinThreads(workers, workers);
+        ThreadPool.SetMaxThreads(workers, ports);
+        using var release = new ManualResetEventSlim();
+        using var busy = new CountdownEvent(workers);
+        using var finished = new CountdownEvent(workers);
+        for (var worker = 0; worker < workers; worker++)
+        {
+            ThreadPool.UnsafeQueueUserWorkItem(_ =>
+            {
+                busy.Signal();
+                release.Wait();
+                finished.Signal();
+            }, null);
+        }
+
+        try
+        {
+            if (!busy.Wait(TimeSpan.FromSeconds(30)))
+            {
+                return "the pool was not exhausted";
+            }
+
+            var start = new ProcessStartInfo("cmd.exe")
+            {
+                RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
+            };
+            start.ArgumentList.Add("/c");
+            start.ArgumentList.Add("echo ilrepl-diagnostic-marker 1>&2");
+            using var process = Process.Start(start)!;
+            var tail = new DiagnosticTail();
+            var drained = DiagnosticTail.DrainAsync(process.StandardError, () => tail);
+            process.WaitForExit();
+            return drained.Wait(TimeSpan.FromSeconds(20)) ? tail.ToString() : "the pipe was not drained";
+        }
+        finally
+        {
+            release.Set();
+            finished.Wait(TimeSpan.FromSeconds(30));
+        }
     }
 
     /// <summary>
