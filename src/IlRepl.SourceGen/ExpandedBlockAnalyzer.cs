@@ -104,13 +104,28 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
             case SyntaxKind.CloseBracketToken:
             case SyntaxKind.SemicolonToken:
             case SyntaxKind.CommaToken:
-                return false;
+                return StartsAnotherStatement(close);
             case SyntaxKind.EqualsToken:
                 // A property's initializer can only follow its accessors.
                 return next.Parent is not EqualsValueClauseSyntax { Parent: PropertyDeclarationSyntax };
             default:
                 return true;
         }
+    }
+
+    // The rest of the line may finish the statement, as "}, token);" does. A statement that starts after it, as in
+    // "}); Next();", is code beside the brace.
+    private static bool StartsAnotherStatement(SyntaxToken close)
+    {
+        for (var token = close.GetNextToken(); SharesLine(close, token); token = token.GetNextToken())
+        {
+            if (token.IsKind(SyntaxKind.SemicolonToken) && SharesLine(token, token.GetNextToken()))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // A comment is trivia, so the neighbouring tokens do not show it. One written after "});" hangs on the last token of that line.
