@@ -40,6 +40,7 @@ public sealed partial class EditingSession
 
                 break;
             }
+
             case SessionTransition.Clear:
                 Clear();
                 break;

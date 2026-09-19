@@ -456,6 +456,7 @@ internal sealed class MethodBodyReader
                     Op = emit, Text = $"{emit.Name} field {text}", Kind = OperandKind.Token, Operand = field,
                 });
             }
+
             case MethodBase method:
             {
                 var (resolved, text, _) = MethodOperand(token, method, raw.Label);

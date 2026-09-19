@@ -184,6 +184,7 @@ internal sealed class CompletionCandidateSource
 
                 break;
             }
+
             case CompletionSiteKind.Type:
             case CompletionSiteKind.MemberHead:
             case CompletionSiteKind.TypeArgument:
@@ -267,6 +268,7 @@ internal sealed class CompletionCandidateSource
 
                 break;
             }
+
             case CompletionSiteKind.Label:
                 foreach (var label in labels.Order(StringComparer.Ordinal))
                 {

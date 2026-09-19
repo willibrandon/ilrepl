@@ -55,6 +55,7 @@ internal static class CecilCellBody
 
                     break;
                 }
+
                 case FieldInfo field when field.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false }:
                     if (NeedsMetadata(field.FieldType))
                     {

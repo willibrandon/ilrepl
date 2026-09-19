@@ -174,12 +174,14 @@ internal static class CecilMetadataSignatures
 
                 return generic;
             }
+
             case IlSignatureKind.Modified:
             {
                 var modifier = Import(signature.Modifier!, context, writer);
                 var element = Import(signature.Element!, context, writer);
                 return signature.IsRequired ? new RequiredModifierType(modifier, element) : new OptionalModifierType(modifier, element);
             }
+
             case IlSignatureKind.FunctionPointer:
             {
                 var method = signature.Method!;
@@ -204,6 +206,7 @@ internal static class CecilMetadataSignatures
 
                 return pointer;
             }
+
             default:
                 throw new ReplException($"unsupported signature element {signature.Kind}");
         }

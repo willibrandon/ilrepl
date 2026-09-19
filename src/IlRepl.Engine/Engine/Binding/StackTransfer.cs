@@ -85,6 +85,7 @@ public sealed class StackTransfer<T> where T : class
                     StackTokenKind.Field => _types.CoreLib("System.RuntimeFieldHandle"),
                     _ => _types.CoreLib("System.RuntimeMethodHandle"),
                 }];
+
             case "ldftn":
             case "ldvirtftn":
             case "ldlen":

@@ -153,6 +153,7 @@ internal static class ImportedMarshalling
 
                 break;
             }
+
             case NativeType.CustomMarshaler:
             {
                 var guid = reader.ReadSerializedString();
@@ -170,6 +171,7 @@ internal static class ImportedMarshalling
 
                 break;
             }
+
             default:
                 result = new MarshalInfo(native);
                 break;

@@ -469,6 +469,7 @@ public static class IlAsmRenderer
                             sb.Append(Pad(indent - 1)).Append(endLabel).AppendLine(":");
                             break;
                         }
+
                         default:
                             break;
                     }

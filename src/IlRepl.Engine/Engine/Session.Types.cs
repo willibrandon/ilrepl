@@ -658,6 +658,7 @@ public sealed partial class Session
 
                 break;
             }
+
             case ".locals":
             case ".try":
             case ".args":

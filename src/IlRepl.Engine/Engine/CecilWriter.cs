@@ -278,6 +278,7 @@ public sealed class CecilWriter
 
                 return instance;
             }
+
             case TypeSymbolKind.SzArray:
                 return new ArrayType(Import(type.Element!));
             case TypeSymbolKind.Array:

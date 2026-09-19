@@ -377,6 +377,7 @@ public sealed class StackSimulator
                     DeclaringType = field.DeclaringType,
                     Token = StackTokenKind.Field,
                 };
+
             case ResolvedMethod method:
                 return view with
                 {
@@ -395,6 +396,7 @@ public sealed class StackSimulator
                     DeclaringTypeIsAbstract = method.DeclaringType?.IsAbstract,
                     Token = StackTokenKind.Method,
                 };
+
             case CalliSignature signature:
                 return view with
                 {
@@ -404,6 +406,7 @@ public sealed class StackSimulator
                     HasImplicitThis = signature.ManagedConvention.HasFlag(CallingConventions.HasThis)
                         && !signature.ManagedConvention.HasFlag(CallingConventions.ExplicitThis),
                 };
+
             default:
                 return view;
         }

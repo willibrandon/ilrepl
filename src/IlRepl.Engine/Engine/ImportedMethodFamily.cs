@@ -542,6 +542,7 @@ internal sealed partial class ImportedMethodFamily
                         copy ? "copied" : "external") { Access = MemberAccess.AccessWord(target.Attributes) });
                     break;
                 }
+
                 case FieldInfo field:
                 {
                     var owner = DefinitionOf(field.DeclaringType!);
@@ -562,6 +563,7 @@ internal sealed partial class ImportedMethodFamily
                         : "external") { Access = MemberAccess.AccessWord(field.Attributes) });
                     break;
                 }
+
                 case Type type:
                     ConsiderType(type, from);
                     if (instruction.Op == OpCodes.Ldtoken && ContainsCopiedType(type))
@@ -591,6 +593,7 @@ internal sealed partial class ImportedMethodFamily
 
                     break;
                 }
+
                 default:
                     break;
             }

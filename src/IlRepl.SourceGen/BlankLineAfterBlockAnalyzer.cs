@@ -23,10 +23,10 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.EnableConcurrentExecution();
         context.RegisterSyntaxTreeAction(AnalyzeComments);
-        context.RegisterSyntaxNodeAction(AnalyzeSequence, SyntaxKind.Block, SyntaxKind.SwitchSection, SyntaxKind.CompilationUnit,
-            SyntaxKind.NamespaceDeclaration, SyntaxKind.FileScopedNamespaceDeclaration, SyntaxKind.ClassDeclaration,
-            SyntaxKind.StructDeclaration, SyntaxKind.InterfaceDeclaration, SyntaxKind.RecordDeclaration,
-            SyntaxKind.RecordStructDeclaration);
+        context.RegisterSyntaxNodeAction(AnalyzeSequence, SyntaxKind.Block, SyntaxKind.SwitchStatement, SyntaxKind.SwitchSection,
+            SyntaxKind.CompilationUnit, SyntaxKind.NamespaceDeclaration, SyntaxKind.FileScopedNamespaceDeclaration,
+            SyntaxKind.ClassDeclaration, SyntaxKind.StructDeclaration, SyntaxKind.InterfaceDeclaration,
+            SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration);
     }
 
     // A comment is held to the rule wherever it follows a closing brace line: between statements, members, accessors, or
@@ -59,6 +59,7 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
         IReadOnlyList<SyntaxNode> items = context.Node switch
         {
             BlockSyntax block => block.Statements,
+            SwitchStatementSyntax choice => choice.Sections,
             SwitchSectionSyntax section => section.Statements,
             CompilationUnitSyntax unit => unit.Members,
             BaseNamespaceDeclarationSyntax space => space.Members,

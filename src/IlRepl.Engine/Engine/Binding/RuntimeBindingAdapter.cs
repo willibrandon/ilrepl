@@ -113,6 +113,7 @@ public sealed class RuntimeBindingAdapter
                     IsAlias = bound.IsAlias,
                     ExactOptionalParameterTypes = bound.ExactOptionalParameterTypes,
                 };
+
             case RuntimeDeclaredMember declared:
             {
                 var declaringType = ToType(method.DeclaringType!);
@@ -182,6 +183,7 @@ public sealed class RuntimeBindingAdapter
                     ExactOptionalParameterTypes = bound.ExactOptionalParameterTypes,
                     ExactGenericArguments = ExactGenericArguments(bound),
                 };
+
             case MethodBase runtime:
                 return new ResolvedMethod(runtime, optional)
                 {
@@ -190,6 +192,7 @@ public sealed class RuntimeBindingAdapter
                     ExactOptionalParameterTypes = bound.ExactOptionalParameterTypes,
                     ExactGenericArguments = ExactGenericArguments(bound),
                 };
+
             default:
                 throw new InvalidOperationException($"{SymbolRenderer.Describe(method)} was not bound in this scope");
         }

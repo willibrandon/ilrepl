@@ -45,6 +45,7 @@ internal sealed partial class ImportedMethodFamily
 
                     break;
                 }
+
                 case MethodBase method:
                     map.Add(method, (MethodBase)replacement);
                     break;

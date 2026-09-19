@@ -287,6 +287,7 @@ internal sealed class CecilSignatureFixups
                 output.WriteBytes(_shapes.GetValueOrDefault(Convert.ToHexString(shape), shape));
                 break;
             }
+
             case 0x15: // Constructed generic type.
             {
                 CopyType(ref reader, output);
@@ -298,6 +299,7 @@ internal sealed class CecilSignatureFixups
 
                 break;
             }
+
             case 0x1b: // Function pointer.
                 CopySignature(ref reader, output);
                 break;
