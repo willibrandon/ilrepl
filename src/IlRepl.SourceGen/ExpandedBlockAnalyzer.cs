@@ -110,15 +110,15 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
             case SyntaxKind.CommaToken:
                 return StartsAnotherStatement(close);
             case SyntaxKind.EqualsToken:
-                // A property's initializer can only follow its accessors.
-                return next.Parent is not EqualsValueClauseSyntax { Parent: PropertyDeclarationSyntax };
+                // A property's initializer can only follow its accessors, and the next member still takes a line of its own.
+                return next.Parent is not EqualsValueClauseSyntax { Parent: PropertyDeclarationSyntax } || StartsAnotherStatement(close);
             default:
                 return true;
         }
     }
 
     // The rest of the line may finish the statement, as "}, token).ConfigureAwait(false);" does, which is how such a call
-    // is written everywhere. A statement that starts after it, as in "}); Next();", is code beside the brace.
+    // is written everywhere. A statement or member that starts after it, as in "}); Next();", is code beside the brace.
     private static bool StartsAnotherStatement(SyntaxToken close)
     {
         for (var token = close.GetNextToken(); SharesLine(close, token); token = token.GetNextToken())
