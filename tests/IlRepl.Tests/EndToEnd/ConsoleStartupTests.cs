@@ -153,7 +153,14 @@ public sealed class ConsoleStartupTests
                 var paths = Directory.EnumerateFiles(files.DirectoryPath, "*.read").Where(path => !previous.Contains(path))
                     .OrderBy(path => int.Parse(Path.GetFileNameWithoutExtension(path), CultureInfo.InvariantCulture))
                     .ToArray();
-                var received = paths.SelectMany(File.ReadAllBytes).ToArray();
+                var chunks = paths.Select(TryRead).ToArray();
+                if (chunks.Any(chunk => chunk is null))
+                {
+                    await Task.Delay(1, timeout.Token);
+                    continue;
+                }
+
+                var received = chunks.SelectMany(chunk => chunk!).ToArray();
                 if (received.Length >= bytes.Length)
                 {
                     Assert.AreSequenceEqual(bytes, received, "The actual console reader must preserve every protocol byte in order.");
@@ -167,6 +174,23 @@ public sealed class ConsoleStartupTests
 
                 Assert.AreSequenceEqual(bytes[..received.Length], received, "Observed raw chunks must match the sent prefix.");
                 await Task.Delay(1, timeout.Token);
+            }
+        }
+
+        // The probe renames each chunk into place once it is written, but on Windows a file that has just appeared can be
+        // held for a moment by another process. A sharing violation means the chunk is not readable yet, not that it is lost.
+        static byte[]? TryRead(string path)
+        {
+            try
+            {
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                var chunk = new byte[stream.Length];
+                stream.ReadExactly(chunk);
+                return chunk;
+            }
+            catch (IOException) when (OperatingSystem.IsWindows())
+            {
+                return null;
             }
         }
     }
