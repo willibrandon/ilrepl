@@ -26,7 +26,7 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxNodeAction(AnalyzeSequence, SyntaxKind.Block, SyntaxKind.SwitchStatement, SyntaxKind.SwitchSection,
             SyntaxKind.CompilationUnit, SyntaxKind.NamespaceDeclaration, SyntaxKind.FileScopedNamespaceDeclaration,
             SyntaxKind.ClassDeclaration, SyntaxKind.StructDeclaration, SyntaxKind.InterfaceDeclaration,
-            SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration);
+            SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration, SyntaxKind.AccessorList);
     }
 
     // A comment is held to the rule wherever it follows a closing brace line: between statements, members, accessors, or
@@ -70,6 +70,7 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
             SwitchSectionSyntax section => section.Statements,
             CompilationUnitSyntax unit => unit.Members,
             BaseNamespaceDeclarationSyntax space => space.Members,
+            AccessorListSyntax accessors => accessors.Accessors,
             _ => ((TypeDeclarationSyntax)context.Node).Members,
         };
 
