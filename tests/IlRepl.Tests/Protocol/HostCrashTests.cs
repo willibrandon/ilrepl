@@ -26,6 +26,7 @@ public sealed class HostCrashTests
     [DataRow("fail-fast")]
     [DataRow("fail-fast-large")]
     [DataRow("access-violation")]
+    [DataRow("terminate-large")]
     [Timeout(45_000, CooperativeCancellation = true)]
     public async Task FatalUserCode_ReportsObservedExitAndDiagnosticTail(string failure)
     {
@@ -46,6 +47,15 @@ public sealed class HostCrashTests
                 "call class System.IO.Stream Console::OpenStandardError()", "ldloc.0", "ldc.i4.0", "ldloc.0", "ldlen", "conv.i4",
                 "callvirt instance void System.IO.Stream::Write(uint8[], int32, int32)",
                 "ldstr \"ilrepl-fatal-diagnostic\"", "call void Environment::FailFast(string)"],
+            // Terminating as the write returns leaves the last pipe buffer unread when the exit is signalled, as a stack overflow does.
+            "terminate-large" => [".locals init (uint8[] bytes)",
+                "call class System.Text.Encoding System.Text.Encoding::get_UTF8()",
+                "ldstr " + LiteralParser.Escape(new string('x', 60_000) + " ilrepl-terminate-tail-marker"),
+                "callvirt instance uint8[] System.Text.Encoding::GetBytes(string)", "stloc.0",
+                "call class System.IO.Stream Console::OpenStandardError()", "ldloc.0", "ldc.i4.0", "ldloc.0", "ldlen", "conv.i4",
+                "callvirt instance void System.IO.Stream::Write(uint8[], int32, int32)",
+                "call class System.Diagnostics.Process System.Diagnostics.Process::GetCurrentProcess()",
+                "callvirt instance void System.Diagnostics.Process::Kill()"],
             _ => ["ldc.i8 0x123456781000", "conv.u", "ldind.i4"],
         };
         foreach (var line in source)
@@ -67,6 +77,7 @@ public sealed class HostCrashTests
             Assert.Contains("ilrepl-fatal-tail-marker", observed.StandardError);
             Assert.IsGreaterThan(32_768, Encoding.UTF8.GetByteCount(observed.StandardError));
         }
+        if (failure == "terminate-large") Assert.EndsWith("ilrepl-terminate-tail-marker", observed.StandardError);
         if (failure == "stack-overflow") Assert.Contains("Stack overflow", observed.StandardError);
         if (failure == "access-violation") Assert.Contains("AccessViolation", observed.StandardError);
     }

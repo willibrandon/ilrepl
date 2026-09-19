@@ -60,6 +60,7 @@ public sealed partial class HostProcessEngine : IReplEngine
     private readonly JsonRpc _rpc;
     private readonly IReplHost _host;
     private readonly DiagnosticTail _stderr;
+    private readonly Task _drained;
     private readonly LocalSocketListener _listener;
     private readonly Stream _connection;
     private readonly object _disposeLock = new();
@@ -67,7 +68,7 @@ public sealed partial class HostProcessEngine : IReplEngine
     private bool _disposed;
     private long _assemblyVersion;
 
-    private HostProcessEngine(Process process, JsonRpc rpc, IReplHost host, DiagnosticTail stderr, HostHello hello,
+    private HostProcessEngine(Process process, JsonRpc rpc, IReplHost host, DiagnosticTail stderr, Task drained, HostHello hello,
         LocalSocketListener listener, Stream connection, HostProcessLifetime lifetime, OwnedProcessScope scope, bool ownsLifetime)
     {
         _process = process;
@@ -77,6 +78,7 @@ public sealed partial class HostProcessEngine : IReplEngine
         _rpc = rpc;
         _host = host;
         _stderr = stderr;
+        _drained = drained;
         _listener = listener;
         _connection = connection;
         Catalog = hello.Catalog;
@@ -236,7 +238,7 @@ public sealed partial class HostProcessEngine : IReplEngine
             await timeout.CancelAsync().ConfigureAwait(false);
             try { await exited.ConfigureAwait(false); }
             catch (OperationCanceledException) when (timeout.IsCancellationRequested) { }
-            var engine = new HostProcessEngine(process, rpc, host, stderr, hello, listener, connection,
+            var engine = new HostProcessEngine(process, rpc, host, stderr, owned.Drained, hello, listener, connection,
                 lifetime, owned.Scope, ownsLifetime);
             receiver.Client = engine;
             _ = engine.ObserveExitAsync();

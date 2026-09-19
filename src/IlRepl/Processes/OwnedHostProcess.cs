@@ -9,4 +9,5 @@ namespace IlRepl.Processes;
 /// <param name="Process">The host process, independent of its supervisor connection.</param>
 /// <param name="Scope">The stable ownership identity.</param>
 /// <param name="Diagnostics">The bounded inherited diagnostic pipe buffer.</param>
-internal sealed record OwnedHostProcess(Process Process, OwnedProcessScope Scope, DiagnosticTail Diagnostics);
+/// <param name="Drained">Completion after directly read diagnostic pipes reach their end, or at once when a supervisor relays them.</param>
+internal sealed record OwnedHostProcess(Process Process, OwnedProcessScope Scope, DiagnosticTail Diagnostics, Task Drained);
