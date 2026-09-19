@@ -474,7 +474,17 @@ public static partial class IlReplApp
                     prompt.Submission = null;
                     if (e.SessionEditor is { } editor)
                     {
-                        if (e.StartupEditor is { } saved) editor = saved.WithStartupInput(CaptureEditor(prompt));
+                        if (e.StartupEditor is { } saved)
+                        {
+                            editor = saved.WithStartupInput(CaptureEditor(prompt));
+                        }
+                        else if (e.RecoveredInput is { } recovered)
+                        {
+                            // The controller captured its editor before this event reached the screen. Keys typed since are
+                            // only in the prompt, so the retained lines go ahead of what the prompt holds now.
+                            editor = new SessionEditor { Lines = recovered }.WithStartupInput(CaptureEditor(prompt));
+                        }
+
                         if (e.RuntimeRecovery) prompt.Pending.Clear();
                         if (prompt.Pending.Count != 0)
                         {

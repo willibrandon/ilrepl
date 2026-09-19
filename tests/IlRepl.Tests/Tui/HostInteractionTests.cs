@@ -236,9 +236,59 @@ public sealed class HostInteractionTests
         await auto.WaitUntilAsync(_ => controller.RuntimeState == SessionRuntimeState.Ready && !controller.Progress.IsRunning
             && controller.Workspace!.Document.Interruptions.Length == 1);
         await executing.WaitAsync(token);
+
+        // Input is sent once the screen shows the replacement. Twelve columns scroll the prompt, so its text is read directly.
+        await auto.WaitUntilAsync(snapshot => Flatten(snapshot).Contains("valuesreset", StringComparison.Ordinal)
+            && Flatten(snapshot).Contains("il[2]>", StringComparison.Ordinal));
         await auto.TypeAsync(".clear", ct: token);
         await auto.WaitUntilAsync(_ => prompt!.Text == ".clear");
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
         await run.WaitAsync(token);
     }
+
+    /// <summary>
+    /// Input typed after the runtime is replaced but before the recovery reaches the screen stays in the prompt.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task Interrupt_KeepsInputTypedBeforeTheRecoveryIsShown()
+    {
+        var token = TestContext.CancellationToken;
+        using var files = new SessionWorkspaceFixture();
+        await using var controller = await SessionWorkspaceFixture.StartAsync(token);
+        foreach (var line in new[] { "ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"running\"",
+            "call void System.IO.File::WriteAllText(string, string)", "LOOP: br LOOP" })
+        {
+            Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded);
+        }
+
+        PromptState? prompt = null;
+        Hex1bTerminalAutomator? auto = null;
+
+        // Building the app subscribes it to the recovery, so this handler is added first and its keys reach the prompt
+        // before the app hears that the runtime was replaced.
+        controller.RecoveryCompleted += _ =>
+        {
+            auto!.TypeAsync(".clear", ct: token).GetAwaiter().GetResult();
+            auto.WaitUntilAsync(_ => prompt!.Text == ".clear").GetAwaiter().GetResult();
+        };
+        await using var terminal = AppTest.Build(controller, new Transcript(), width: 80, height: 30,
+            onPrompt: value => prompt = value);
+        auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        var run = IlReplApp.RunAsync(terminal, prompt, token);
+        await auto.WaitUntilTextAsync("il[1]>");
+        var executing = controller.HandleAsync("ret", token);
+        await auto.WaitUntilAsync(_ => File.Exists(files.MarkerPath));
+        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
+        await auto.WaitUntilTextAsync("Press Ctrl+C again");
+        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
+        await executing.WaitAsync(token);
+        await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("runtime restarted") && snapshot.ContainsText("il[2]> .clear"));
+        Assert.AreEqual(".clear", prompt!.Text);
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
+        await run.WaitAsync(token);
+    }
+
+    private static string Flatten(Hex1bTerminalSnapshot snapshot) =>
+        string.Concat(Enumerable.Range(0, snapshot.Height).Select(snapshot.GetLine)).Replace(" ", "", StringComparison.Ordinal);
 }

@@ -30,6 +30,12 @@ public sealed record SessionReply
     public SessionEditor? StartupEditor { get; init; }
 
     /// <summary>
+    /// The retained lines a runtime recovery puts ahead of the editor, so the frontend keeps input typed since the capture.
+    /// </summary>
+    [JsonIgnore]
+    public string[]? RecoveredInput { get; init; }
+
+    /// <summary>
     /// The associated session file path or download name.
     /// </summary>
     public string? Path { get; init; } = null;
