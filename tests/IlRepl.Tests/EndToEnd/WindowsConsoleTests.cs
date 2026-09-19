@@ -71,6 +71,7 @@ public sealed class WindowsConsoleTests
                 frontendRecord, RepoPaths.FrontEndAssembly, "--no-color", script];
             options.WorkingDirectory = files.DirectoryPath;
         }).AddWorkloadFilter(recorder).WithHeadless().WithDimensions(100, 30).Build();
+
         // The run ends when the PTY process is seen to exit or this token is cancelled. Closing the console disposes the
         // terminal, which releases that process, so the close case ends the run itself instead of waiting to see the exit.
         using var running = CancellationTokenSource.CreateLinkedTokenSource(token);

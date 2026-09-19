@@ -35,6 +35,7 @@ public sealed partial class SiblingTypeLookupTests
                 FileName = Environment.ProcessPath!, WorkingDirectory = AppContext.BaseDirectory,
                 RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false,
             };
+
             start.ArgumentList.Add("--filter");
             start.ArgumentList.Add("FullyQualifiedName~SiblingTypeLookupTests.Edit_FileNameOnlySiblingsPreserveContext");
             start.Environment[FileProbeDirectory] = directory;

@@ -272,6 +272,7 @@ public sealed class MethodEditTests
             method.Body.GetILProcessor().Emit(CecilOpCodes.Call, helper);
             method.Body.GetILProcessor().Emit(CecilOpCodes.Ret);
         }, session.Resolver);
+
         var draft = session.PrepareEdit($"int32 [{assembly.GetName().Name}]N.Fixture::M(int32)", "PrivateHelper");
         var committed = session.CommitEdit(draft.Name, draft.Source);
         Assert.AreEqual(49, committed.Method!.Invoke(null, [7]));
@@ -314,6 +315,7 @@ public sealed class MethodEditTests
             method.Body.GetILProcessor().Emit(CecilOpCodes.Callvirt, contractMethod);
             method.Body.GetILProcessor().Emit(CecilOpCodes.Ret);
         }, session.Resolver);
+
         var draft = session.PrepareEdit($"instance int32 [{assembly.GetName().Name}]N.Fixture::M(int32)", "ExplicitInterface");
         var committed = session.CommitEdit(draft.Name, draft.Source);
         var receiver = Activator.CreateInstance(committed.Method!.DeclaringType!);
@@ -364,6 +366,7 @@ public sealed class MethodEditTests
             method.Body.GetILProcessor().Emit(CecilOpCodes.Call, helper);
             method.Body.GetILProcessor().Emit(CecilOpCodes.Ret);
         }, session.Resolver);
+
         var draft = session.PrepareEdit($"instance int32 [{assembly.GetName().Name}]N.Fixture::M(int32)", "ProtectedBase");
         var committed = session.CommitEdit(draft.Name, draft.Source);
         var owner = committed.Method!.DeclaringType!;
@@ -678,6 +681,7 @@ public sealed class MethodEditTests
             il.Emit(CecilOpCodes.Ldind_I4);
             il.Emit(CecilOpCodes.Ret);
         }, session.Resolver);
+
         Assert.AreEqual(42, fixture.GetMethod("Read")!.Invoke(null, null));
         var edit = session.PrepareEdit("int32 N.Fixture::Read()", "AccessorCopy");
 

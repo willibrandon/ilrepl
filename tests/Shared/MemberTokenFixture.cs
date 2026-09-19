@@ -176,6 +176,7 @@ public static class MemberTokenFixture
                         EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
                     }
                 });
+
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
             if (method is not MethodInfo { IsGenericMethod: true } closed)
@@ -266,6 +267,7 @@ public static class MemberTokenFixture
                         EncodeType(arguments.AddParameter().Type(), parameter);
                     }
                 });
+
             var first = MetadataTokens.ParameterHandle(parameterRow);
             for (var index = 0; index < parameters.Length; index++)
             {
@@ -382,6 +384,7 @@ public static class MemberTokenFixture
                 "Field" => typeof(int), "Method" or "Constructor" or "Parameter" => typeof(object),
                 "Event" => typeof(AppDomain), _ => typeof(string),
             };
+
             LoadType(dispatch == "external-sibling" ? MetadataTokens.TypeDefinitionHandle(2)
                 : external ? TypeReference(externalType) : owner);
             if (kind == "Type")
@@ -403,6 +406,7 @@ public static class MemberTokenFixture
                 "Field" => external ? "MaxValue" : "Data", "Property" => external ? "Length" : "Value",
                 "Event" => external ? "AssemblyLoad" : "Changed", _ => external ? "ReferenceEquals" : "Probe",
             };
+
             instructions.LoadString(metadata.GetOrAddUserString(dispatch == "unknown" ? " Probe " : memberName));
             if (dispatch == "unknown")
             {

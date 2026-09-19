@@ -102,6 +102,7 @@ public sealed class ExportConformanceTests
                 Assert.AreSequenceEqual(original, File.ReadAllBytes(path));
                 cancellation.Cancel();
             }, cancellation.Token));
+
             Assert.AreEqual(64 * 1024L, observed);
             Assert.AreSequenceEqual(original, File.ReadAllBytes(path));
             Assert.AreSequenceEqual([path], Directory.GetFiles(directory));

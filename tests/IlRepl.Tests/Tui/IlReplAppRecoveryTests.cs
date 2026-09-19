@@ -1,3 +1,4 @@
+using System.Text;
 using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
@@ -663,7 +664,7 @@ public sealed class IlReplAppRecoveryTests
             description: "the terminal is asked to copy");
         var payload = recorder.Output[(recorder.Output.LastIndexOf("\x1b]52;c;", StringComparison.Ordinal) + 7)..];
         payload = payload[..payload.IndexOfAny(['\x07', '\x1b'])];
-        Assert.AreEqual("  ldc.i4 2", System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload)));
+        Assert.AreEqual("  ldc.i4 2", Encoding.UTF8.GetString(Convert.FromBase64String(payload)));
         Assert.IsTrue(terminal.CreateSnapshot().ContainsText("editing 6 lines"), "the block stays in the editor");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);

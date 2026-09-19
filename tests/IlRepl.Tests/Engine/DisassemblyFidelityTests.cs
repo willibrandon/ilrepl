@@ -108,6 +108,7 @@ public sealed partial class DisassemblyFidelityTests
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var module = ModuleDefinition.ReadModule(new MemoryStream(image));
         var cecil = module.Types.First(t => t.Name == "Fixture").Methods.First(m => m.Name == "M");
         var ours = MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
@@ -203,7 +204,7 @@ public sealed partial class DisassemblyFidelityTests
 
         Assert.IsGreaterThan(15, count);
         Assert.IsNotNull(guarded);
-        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-guarded", isCollectible: true);
+        var context = new AssemblyLoadContext("ilasm-guarded", isCollectible: true);
         var loaded = context.LoadFromStream(new MemoryStream(guarded));
         var run = loaded.GetType("N.T")!.GetMethod("Guarded")!;
         Assert.AreEqual(11, run.Invoke(null, [true]));
@@ -212,7 +213,7 @@ public sealed partial class DisassemblyFidelityTests
 
         // A reference to a core type binds through the facade that exports it, so the reassembled body loads and runs.
         Assert.IsNotNull(open);
-        var openContext = new System.Runtime.Loader.AssemblyLoadContext("ilasm-open", isCollectible: true);
+        var openContext = new AssemblyLoadContext("ilasm-open", isCollectible: true);
         var openLoaded = openContext.LoadFromStream(new MemoryStream(open));
         Assert.AreEqual(typeof(List<>), openLoaded.GetType("N.T")!.GetMethod("Open")!.Invoke(null, null));
         openContext.Unload();
@@ -237,7 +238,7 @@ public sealed partial class DisassemblyFidelityTests
             .Methods.Single(m => m.HasBody);
         CecilOracle.AssertSameMeaning(original, method, fixture.Assembly.GetName().FullName, fixture.Assembly.GetName().FullName, image,
             reassembled);
-        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-order", isCollectible: true);
+        var context = new AssemblyLoadContext("ilasm-order", isCollectible: true);
         var loaded = context.LoadFromStream(new MemoryStream(reassembled));
         Assert.AreEqual(2, loaded.GetType("N.T")!.GetMethod("M")!.Invoke(null, null), "the reassembled body dispatches the same way");
         context.Unload();
@@ -663,7 +664,7 @@ public sealed partial class DisassemblyFidelityTests
             + $"    ldtoken {TypeNameFormatter.IlAsm(marvin)}\n    call class [System.Runtime]System.Type " +
             $"[System.Runtime]System.Type::GetTypeFromHandle(valuetype [System.Runtime]System.RuntimeTypeHandle)\n    ret\n  }}\n}}\n";
         var image = IlasmLocator.Assemble(source);
-        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-marvin", isCollectible: true);
+        var context = new AssemblyLoadContext("ilasm-marvin", isCollectible: true);
         var loaded = context.LoadFromStream(new MemoryStream(image));
         Assert.AreEqual(marvin, loaded.GetType("N.T")!.GetMethod("M")!.Invoke(null, null));
         context.Unload();

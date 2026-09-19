@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using IlRepl.Engine;
 
@@ -356,7 +357,7 @@ public sealed class SessionTypeTests
         var parameter = method.Signature.Parameters[0];
         Assert.IsTrue(parameter.HasDefault);
         Assert.AreEqual(7, parameter.DefaultValue);
-        Assert.IsFalse(parameter.Attributes.HasFlag(System.Reflection.ParameterAttributes.Optional));
+        Assert.IsFalse(parameter.Attributes.HasFlag(ParameterAttributes.Optional));
         Assert.HasCount(1, parameter.CustomAttributes);
         Assert.AreEqual("old", parameter.CustomAttributes[0].FixedArguments[0]);
     }
@@ -496,7 +497,7 @@ public sealed class SessionTypeTests
         Assert.IsEmpty(method.GetCustomAttributes(false));
         var parameter = method.GetParameters()[0];
         Assert.AreEqual("one", parameter.GetCustomAttribute<ObsoleteAttribute>()!.Message);
-        Assert.AreEqual("two", parameter.GetCustomAttribute<System.Diagnostics.ConditionalAttribute>()!.ConditionString);
+        Assert.AreEqual("two", parameter.GetCustomAttribute<ConditionalAttribute>()!.ConditionString);
         Assert.HasCount(1, session.Types[0].Declaration.Methods[0].Signature.ReturnCustomAttributes);
     }
 

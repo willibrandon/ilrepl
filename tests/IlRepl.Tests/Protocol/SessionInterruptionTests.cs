@@ -45,11 +45,13 @@ public sealed class SessionInterruptionTests
             Entries = [new SessionEntry { Source = source }, new SessionEntry { Kind = SessionEntryKind.Run, Source = ["ret"] }],
             Cells = [new SessionCell { Source = [.. source, "ret"] }],
         }, token);
+
         await using var controller = await SessionWorkspaceFixture.StartAsync(token);
         var opened = await controller.SessionAsync(new SessionRequest
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         Assert.IsTrue(opened.Reply.Succeeded);
         var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         void Observe(ExecutionProgress progress)

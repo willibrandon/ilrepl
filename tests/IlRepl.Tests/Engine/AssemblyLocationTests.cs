@@ -57,6 +57,7 @@ public sealed class AssemblyLocationTests
                 FileName = Environment.ProcessPath!, WorkingDirectory = AppContext.BaseDirectory,
                 RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false,
             };
+
             start.ArgumentList.Add("--filter");
             start.ArgumentList.Add("FullyQualifiedName~AssemblyLocationTests.Edit_FileLoadedSourceMetadataRemainsRecoverable");
             start.Environment[ProbeDirectory] = directory;
@@ -131,6 +132,7 @@ public sealed class AssemblyLocationTests
         {
             Architecture.X64 => Machine.Amd64, Architecture.Arm64 => Machine.Arm64, _ => Machine.I386,
         };
+
         var fixture = AssemblyLocationFixture.Create(target, api, dispatch, path, machine: imageMachine);
         File.WriteAllBytes(path, fixture.Image);
         var session = new Session();

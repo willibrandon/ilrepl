@@ -177,6 +177,7 @@ public static class AssemblyIdentityFixture
                         EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
                     }
                 });
+
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
             if (method is not MethodInfo { IsGenericMethod: true } closed)
@@ -222,6 +223,7 @@ public static class AssemblyIdentityFixture
                 .GetMethod(nameof(Assembly.ToString))!,
             _ => typeof(MemberInfo).GetProperty(nameof(MemberInfo.Name))!.GetMethod!,
         };
+
         void Call(MethodBase method)
         {
             instructions.OpCode(method.IsStatic ? ILOpCode.Call : ILOpCode.Callvirt);

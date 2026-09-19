@@ -169,6 +169,7 @@ public static class ModuleGlobalFixture
                         EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
                     }
                 });
+
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
             if (method is not MethodInfo { IsGenericMethod: true } closed)
@@ -221,6 +222,7 @@ public static class ModuleGlobalFixture
             _ when !plural => [typeof(string)],
             _ => [],
         };
+
         var lookup = typeof(Module).GetMethod(apiName, parameterTypes)!;
         var instructions = new InstructionEncoder(new BlobBuilder());
         void Call(MethodBase method)

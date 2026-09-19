@@ -70,6 +70,7 @@ public sealed class ComparisonStandardInputTests
             "spin" or "cancel" => "AGAIN: br AGAIN",
             _ => "ldc.i4.s 42\nret",
         };
+
         var session = IlLines.Load((".method int32 Read() {\n" + body + "\n}").Split('\n'));
         var edit = session.PrepareEdit("Read", "Copy");
         session.CommitEdit(edit.Name, edit.Source);

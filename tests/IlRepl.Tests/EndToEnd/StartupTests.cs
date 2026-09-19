@@ -39,6 +39,7 @@ public sealed class StartupTests
                 ["TERM"] = "xterm-256color", ["NO_COLOR"] = "", ["ILREPL_MEASUREMENTS_DIRECTORY"] = files.DirectoryPath,
             };
         }).WithHeadless().WithDimensions(100, 30).Build();
+
         var run = terminal.RunAsync(token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(20));
         try

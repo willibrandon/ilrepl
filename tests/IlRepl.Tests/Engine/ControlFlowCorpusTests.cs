@@ -211,6 +211,7 @@ public sealed class ControlFlowCorpusTests
         {
             ".locals init (method int32 *(int32) pointer)", "ldftn int32 Id(int32)", "stloc pointer", "ldloc pointer", "ret",
         };
+
         using var editing = new EditingSession(session);
         var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 4, 3, 1), TestContext.CancellationToken);
         Assert.DoesNotContain(diagnostic => diagnostic.Kind is AnalysisDiagnosticKind.Error

@@ -79,6 +79,7 @@ public sealed class AccessibilityEquivalenceTests
                 "derived" or "derivedNew" => derived,
                 _ => unrelated,
             };
+
             foreach (var kind in Kinds)
             {
                 foreach (var (word, _, _, _) in Categories)

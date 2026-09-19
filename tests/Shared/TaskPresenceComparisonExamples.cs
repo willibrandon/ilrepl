@@ -19,12 +19,14 @@ public static class TaskPresenceComparisonExamples
             1 => "class System.Threading.Tasks.Task`1<int32>",
             _ => "class System.Threading.Tasks.Task`1<string>",
         };
+
         var body = !present ? "ldnull" : kind switch
         {
             0 => "call class System.Threading.Tasks.Task System.Threading.Tasks.Task::get_CompletedTask()",
             1 => "ldc.i4.s 42\ncall class System.Threading.Tasks.Task`1<!!0> System.Threading.Tasks.Task::FromResult<int32>(!!0)",
             _ => "ldnull\ncall class System.Threading.Tasks.Task`1<!!0> System.Threading.Tasks.Task::FromResult<string>(!!0)",
         };
+
         return ".method public static " + type + " Read() cil managed {\n" + body + "\nret\n}";
     }
 

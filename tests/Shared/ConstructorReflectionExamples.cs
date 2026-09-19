@@ -71,6 +71,7 @@ public static class ConstructorReflectionExamples
             "return" => "call class ConstructorInfo " + Owner(generic) + "::Find()\n",
             _ => Lookup(lookup, argument, privateConstructor, generic, flow == "binder"),
         };
+
         if (flow == "local")
         {
             source += "stloc.0\nldloc.0\n";
@@ -200,6 +201,7 @@ public static class ConstructorReflectionExamples
                 "four" => "valuetype BindingFlags, class Binder, class Type[], valuetype ParameterModifier[]",
                 _ => "valuetype BindingFlags, class Binder, valuetype CallingConventions, class Type[], valuetype ParameterModifier[]",
             };
+
             return source + "callvirt instance class ConstructorInfo Type::GetConstructor(" + parameters + ")\n";
         }
 

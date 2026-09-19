@@ -362,6 +362,7 @@ public sealed class EditableBodyTests
             "HANDLER: pop", "leave DONE",
             "DONE: ldloc.0", "}",
         };
+
         var exception = Assert.ThrowsExactly<ReplException>(() =>
         {
             foreach (var line in source)
@@ -369,6 +370,7 @@ public sealed class EditableBodyTests
                 session.AddLine(line);
             }
         });
+
         Assert.Contains(diagnosticLabel, exception.Message);
         Assert.AreSame(original, session.Methods.Single().Version.Body);
         Assert.AreEqual(42, original.Invoke(null, null));

@@ -25,6 +25,7 @@ public static class SignatureDependencyExamples
                 + "ldarg.0\ncall instance void Object::.ctor()\nret\n}\n",
             _ => "",
         };
+
         var setup = shape == "property" ? "call int32 Owner::get_Value()\npop\n"
             : shape == "constructor" ? "ldarg.0\nnewobj instance void Owner::.ctor(" + modified + ")\npop\n" : "";
         return ".class public Marker {\n.field public int32 Original\n}\n.class public " + (shape == "abstract" ? "abstract " : "")

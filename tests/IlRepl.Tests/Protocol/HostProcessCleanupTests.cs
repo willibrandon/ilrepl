@@ -51,6 +51,7 @@ public sealed class HostProcessCleanupTests
                     entered.TrySetResult();
                 }
             };
+
             Assert.IsTrue((await engine.HandleAsync("LOOP: br LOOP", token)).Succeeded);
             var running = engine.HandleAsync(".run", token);
             await entered.Task.WaitAsync(token);

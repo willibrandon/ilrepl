@@ -181,6 +181,7 @@ public static class ModuleTokenFixture
                         EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
                     }
                 });
+
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
             if (method is not MethodInfo { IsGenericMethod: true } closed)
@@ -233,12 +234,14 @@ public static class ModuleTokenFixture
             _ when apiName.Contains("Type", StringComparison.Ordinal) => MetadataTokens.GetToken(hidden),
             _ => MetadataTokens.GetToken(MetadataTokens.MethodDefinitionHandle(2)),
         };
+
         var expected = apiName switch
         {
             "ResolveString" => "source token text", "ResolveSignature" => "BwEI",
             _ when apiName.Contains("Field", StringComparison.Ordinal) => "HiddenField",
             _ when apiName.Contains("Type", StringComparison.Ordinal) => "HiddenType", _ => "HiddenMethod",
         };
+
         if (dispatch == "lookalike")
         {
             expected = "user token result";

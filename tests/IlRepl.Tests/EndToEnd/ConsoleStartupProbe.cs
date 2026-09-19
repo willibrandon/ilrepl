@@ -74,6 +74,7 @@ internal static partial class ConsoleStartupProbe
                         cancellation.Cancel();
                     }
                 }) { IsBackground = true };
+
                 monitor.Start();
                 monitorReady.Wait(token);
             }

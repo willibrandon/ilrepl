@@ -250,6 +250,7 @@ public sealed class MethodComparisonTests
         {
             await ComparisonAsyncSource.Start(true);
         }) : null;
+
         var session = new Session();
         session.Resolver.Load(typeof(ComparisonAsyncSource).Assembly.Location);
         session.AddLine(".method valuetype System.Threading.Tasks.ValueTask`1<int32> Read(bool fail) {");

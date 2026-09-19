@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
@@ -95,9 +96,9 @@ public sealed class MemberHeaderParserTests
         var signature =
             Parse("public static int32 modreq([System.Runtime]System.Runtime.CompilerServices.IsVolatile) M([in] int32 " +
             "modopt([System.Runtime]System.Runtime.CompilerServices.IsVolatile) x, [out] int32& y) {");
-        Assert.AreSequenceEqual([typeof(System.Runtime.CompilerServices.IsVolatile)], signature.ReturnRequiredModifiers);
+        Assert.AreSequenceEqual([typeof(IsVolatile)], signature.ReturnRequiredModifiers);
         Assert.AreEqual(ParameterAttributes.In, signature.Parameters[0].Attributes);
-        Assert.AreSequenceEqual([typeof(System.Runtime.CompilerServices.IsVolatile)], signature.Parameters[0].OptionalModifiers);
+        Assert.AreSequenceEqual([typeof(IsVolatile)], signature.Parameters[0].OptionalModifiers);
         Assert.AreEqual(ParameterAttributes.Out, signature.Parameters[1].Attributes);
         Assert.IsTrue(signature.Parameters[1].Type.IsByRef);
         var vararg = Parse("public vararg int32 Count(int32 first, ...) {");

@@ -389,6 +389,7 @@ public sealed partial class ReplCoreDisassembleTests
             m.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ret);
             type.Methods.Add(m);
         }, core.Session.Resolver);
+
         var assembly = fixture.Assembly.GetName().Name;
         var lines = Listing(core, ".dis void N.Fixture::M()");
         var locals = lines.Single(l => l.TrimStart().StartsWith(".locals", StringComparison.Ordinal)).Trim();

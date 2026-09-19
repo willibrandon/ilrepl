@@ -234,6 +234,7 @@ public sealed class ExactBoundaryTests
                 Assert.IsInstanceOfType<FunctionPointerType>(signature).ReturnType).ModifierType,
             _ => Assert.IsInstanceOfType<FunctionPointerType>(signature).ReturnType,
         };
+
         Assert.AreEqual(owner.FullName, nominal.FullName);
         Assert.AreSame(owner, nominal.Resolve());
     }

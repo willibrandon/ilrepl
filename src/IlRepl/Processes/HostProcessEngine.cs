@@ -33,6 +33,7 @@ public sealed partial class HostProcessEngine : IReplEngine
                     _deliveries.Forget(identity);
                 }
             }, cancellationToken).ConfigureAwait(false);
+
             if (reply.FailureExitCode is { } exitCode)
             {
                 throw new ReplEngineException(string.Join('\n', reply.Reply.Lines.Select(line => line.PlainText)))
@@ -206,6 +207,7 @@ public sealed partial class HostProcessEngine : IReplEngine
             WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory,
             StandardErrorEncoding = new UTF8Encoding(false),
         };
+
         startInfo.ArgumentList.Add(hostPath);
         startInfo.ArgumentList.Add("--socket");
         startInfo.ArgumentList.Add(listener.SocketPath);

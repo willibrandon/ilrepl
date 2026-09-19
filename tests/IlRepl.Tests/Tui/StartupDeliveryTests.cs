@@ -43,6 +43,7 @@ public sealed class StartupDeliveryTests
             await launch.Task.WaitAsync(ct);
             return await HostPaths.StartEngineAsync(ct);
         }, new SessionRequest { Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath } });
+
         PromptState? prompt = null;
         var transcript = new Transcript();
         var adapter = new ScriptedPresentationAdapter(120, 36);
@@ -65,6 +66,7 @@ public sealed class StartupDeliveryTests
                     return false;
                 };
             });
+
         var run = IlReplApp.RunAsync(terminal, prompt, token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         try
@@ -86,6 +88,7 @@ public sealed class StartupDeliveryTests
             {
                 Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = prompt!.CaptureSessionEditor(),
             }, token);
+
             Assert.HasCount(1, captured.Document.Cells);
             await auto.WaitUntilAsync(_ => prompt.Analysis?.Stack?.Render() == "[int32]");
             await auto.EnterAsync(ct: token);
@@ -95,6 +98,7 @@ public sealed class StartupDeliveryTests
             {
                 Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = prompt.CaptureSessionEditor(),
             }, token);
+
             Assert.HasCount(2, captured.Document.Cells);
             await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
             await auto.WaitUntilTextAsync("Save changes to ");

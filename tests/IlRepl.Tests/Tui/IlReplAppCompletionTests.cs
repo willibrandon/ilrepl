@@ -189,6 +189,7 @@ public sealed class IlReplAppCompletionTests
         Assert.EndsWith("ret", echoes[1]);
         Assert.DoesNotContain(LineKind.Error, transcript.Lines.Select(line => line.Kind));
     }
+
     /// <summary>
     /// Every part of a real long method signature remains reachable without changing the editor or selected member.
     /// </summary>
@@ -274,6 +275,7 @@ public sealed class IlReplAppCompletionTests
 
             return engine.Calls[^1].Request.Lines[0] == "call string::";
         });
+
         await auto.WaitUntilTextAsync("updating members");
         Assert.IsEmpty(PromptWidget.Candidates(prompt, engine.Catalog));
         Assert.IsNull(CompletionEdit.For(prompt, item));

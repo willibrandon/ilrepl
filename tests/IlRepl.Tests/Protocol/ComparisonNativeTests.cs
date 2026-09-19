@@ -44,6 +44,7 @@ public sealed class ComparisonNativeTests
         {
             NativeLibraries = [new ComparisonNativeLibrary("fixture-native.so", SessionCodec.Hash(bytes), bytes)],
         };
+
         var wire = JsonSerializer.SerializeToUtf8Bytes(source, ProtocolJsonContext.Default.ComparisonImage);
         var restored = JsonSerializer.Deserialize(wire, ProtocolJsonContext.Default.ComparisonImage)!;
         var native = Assert.ContainsSingle(restored.NativeLibraries);

@@ -48,6 +48,7 @@ public sealed class SessionDirtyStateTests
         {
             Action = new SessionAction { Operation = SessionOperation.Hydrate, Path = files.SessionPath }, Document = original,
         }, token);
+
         Assert.IsFalse(opened.Dirty);
         var baseline = opened.Document;
         var output = baseline.Cells[0].Output;
@@ -70,6 +71,7 @@ public sealed class SessionDirtyStateTests
             "interruption" => baseline with { Interruptions = [new SessionInterruption { Source = ["ret"], ExitCode = 17 }] },
             _ => throw new ArgumentOutOfRangeException(nameof(change)),
         };
+
         await files.WriteAsync(written, token);
         var bytes = await File.ReadAllBytesAsync(files.SessionPath, token);
         Assert.Contains("\n  \"format\"", Encoding.UTF8.GetString(bytes));
@@ -78,6 +80,7 @@ public sealed class SessionDirtyStateTests
             Action = new SessionAction { Operation = SessionOperation.AcknowledgeSave, Path = files.SessionPath },
             Document = SessionCodec.Read(bytes), Editor = editor,
         }, token);
+
         Assert.AreEqual(dirty, saved.Dirty, change);
         Assert.AreSequenceEqual(SessionCodec.Write(baseline), SessionCodec.Write(saved.Document));
         Assert.IsFalse(File.Exists(files.MarkerPath), "Saving and comparing source must not replay it.");
@@ -88,6 +91,7 @@ public sealed class SessionDirtyStateTests
             Action = new SessionAction { Operation = SessionOperation.AcknowledgeSave, Path = files.SessionPath },
             Document = SessionCodec.Read(await File.ReadAllBytesAsync(files.SessionPath, token)), Editor = editor,
         }, token);
+
         Assert.IsFalse(clean.Dirty, "Writing the actual current content restores the saved state.");
     }
 

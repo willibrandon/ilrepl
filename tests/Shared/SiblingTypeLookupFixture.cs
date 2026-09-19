@@ -111,6 +111,7 @@ public static class SiblingTypeLookupFixture
                         EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
                     }
                 });
+
             return metadata.AddMemberReference(TypeReference(method.DeclaringType!), metadata.GetOrAddString(method.Name),
                 metadata.GetOrAddBlob(signature));
         }
@@ -150,6 +151,7 @@ public static class SiblingTypeLookupFixture
             "array" => "Lookup.Sibling[]", "bounded" => "Lookup.Sibling[*]", "matrix" => "Lookup.Sibling[,]",
             "component" => "System.Collections.Generic.List`1[Lookup.Sibling[]]", _ => "Lookup.Sibling",
         };
+
         if (ignoreCase)
         {
             target = target.ToLowerInvariant();
@@ -169,10 +171,12 @@ public static class SiblingTypeLookupFixture
             "type" => typeof(Type), "module" => typeof(Module),
             "activator" or "activator-from" => typeof(Activator), _ => typeof(Assembly),
         };
+
         var methodName = api switch
         {
             "assembly-create" or "activator" => "CreateInstance", "activator-from" => "CreateInstanceFrom", _ => "GetType",
         };
+
         var lookup = owner.GetMethods().Single(method => method.Name == methodName && method.GetParameters().Length == arity
             && method.GetParameters()[0].ParameterType == typeof(string)
             && (api != "type" || method.GetParameters().Skip(1).All(parameter => parameter.ParameterType == typeof(bool))));

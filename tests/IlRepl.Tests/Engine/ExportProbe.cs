@@ -57,6 +57,7 @@ internal static class ExportProbe
                 completion.SetException(exception);
             }
         }, request.StackSize);
+
         thread.Start();
         var result = await completion.Task;
         await File.WriteAllTextAsync(args[2], JsonSerializer.Serialize(result, ExportJsonContext.Default.ExportObservation));
@@ -85,6 +86,7 @@ internal static class ExportProbe
                     AssemblyName.GetAssemblyName(candidate).Name == name.Name);
                 return path is null ? null : context.LoadFromAssemblyPath(path);
             };
+
             var assembly = context.LoadFromAssemblyPath(request.ImagePath);
             var method = assembly.GetType(request.Type, throwOnError: true)!
                 .GetMethod(request.Method, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)

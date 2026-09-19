@@ -192,6 +192,7 @@ public static class MetadataBoundaryFixture
                         parameter.IsByRef ? parameter.GetElementType()! : parameter);
                 }
             });
+
             return metadata.GetOrAddBlob(blob);
         }
 
@@ -343,6 +344,7 @@ public static class MetadataBoundaryFixture
             "Assembly" => typeof(Assembly), "Module" => typeof(Module),
             "Type" or "Method" => typeof(MemberInfo), _ => typeof(object),
         };
+
         var inspectSignature = Signature(typeof(int), [argumentType]);
         var bodies = new MethodBodyStreamEncoder(new BlobBuilder());
         var code = new InstructionEncoder(new BlobBuilder());

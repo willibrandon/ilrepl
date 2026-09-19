@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using IlRepl.Protocol;
 
@@ -38,7 +39,7 @@ public sealed class ProtocolJsonTests
         var transcript = new Transcript { MaxLines = 3 };
         for (var i = 0; i < 5; i++)
         {
-            transcript.Add(LineKind.Info, i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            transcript.Add(LineKind.Info, i.ToString(CultureInfo.InvariantCulture));
         }
 
         Assert.HasCount(3, transcript.Lines);

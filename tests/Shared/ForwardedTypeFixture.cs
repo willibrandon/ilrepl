@@ -38,6 +38,7 @@ public static class ForwardedTypeFixture
             result => result.Type().Type(assemblyType, isValueType: false), _ =>
             {
             });
+
         var executing = metadata.AddMemberReference(assemblyType, metadata.GetOrAddString("GetExecutingAssembly"),
             metadata.GetOrAddBlob(executingSignature));
         var forwardedSignature = new BlobBuilder();
@@ -45,6 +46,7 @@ public static class ForwardedTypeFixture
             result => result.Type().SZArray().Type(reflectedType, isValueType: false), _ =>
             {
             });
+
         var forwarded = metadata.AddMemberReference(assemblyType, metadata.GetOrAddString("GetForwardedTypes"),
             metadata.GetOrAddBlob(forwardedSignature));
         var instructions = new InstructionEncoder(new BlobBuilder());

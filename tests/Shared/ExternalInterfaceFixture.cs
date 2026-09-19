@@ -27,6 +27,7 @@ public static class ExternalInterfaceFixture
             "castclass" => "castclass " + contract + "\ncallvirt instance int32 " + contract + "::Value()",
             _ => "callvirt instance int32 " + contract + "::Value()"
         };
+
         var owner = operation == "base-isinst" ? "ExternalBase" : "Owner";
         return ".method public static int32 Probe() {\nnewobj instance void " + owner + "::.ctor()\n"
             + body + "\nldc.i4.1\nadd\nret\n}";

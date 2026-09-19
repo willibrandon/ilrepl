@@ -81,6 +81,7 @@ internal sealed class SupervisorConnection : IAsyncDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
+
         if (managedAssembly.Length != 0)
         {
             start.ArgumentList.Add(managedAssembly);

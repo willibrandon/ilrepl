@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using IlRepl.Engine;
 
@@ -38,8 +39,8 @@ public sealed class LayoutTests
             ".size 16",
             ".field public int32 A",
             "}");
-        Assert.AreEqual(5, Convert.ToInt32(Run(session, "sizeof Packed"), System.Globalization.CultureInfo.InvariantCulture));
-        Assert.AreEqual(16, Convert.ToInt32(Run(session, "sizeof Padded"), System.Globalization.CultureInfo.InvariantCulture));
+        Assert.AreEqual(5, Convert.ToInt32(Run(session, "sizeof Packed"), CultureInfo.InvariantCulture));
+        Assert.AreEqual(16, Convert.ToInt32(Run(session, "sizeof Padded"), CultureInfo.InvariantCulture));
         var packed = session.Types[0].RuntimeType!;
         Assert.AreEqual(1, packed.StructLayoutAttribute!.Pack);
         Assert.AreEqual(LayoutKind.Sequential, packed.StructLayoutAttribute.Value);
@@ -58,7 +59,7 @@ public sealed class LayoutTests
             ".field [0] public int32 I",
             ".field [4] public int32 Tail",
             "}");
-        Assert.AreEqual(8, Convert.ToInt32(Run(session, "sizeof Bits"), System.Globalization.CultureInfo.InvariantCulture));
+        Assert.AreEqual(8, Convert.ToInt32(Run(session, "sizeof Bits"), CultureInfo.InvariantCulture));
         Assert.AreEqual(0x3F800000,
             Run(session, ".locals init (valuetype Bits b)", "ldloca b", "ldc.r4 1.0", "stfld float32 Bits::F", "ldloca b",
             "ldfld int32 Bits::I"));
@@ -88,8 +89,8 @@ public sealed class LayoutTests
         Assert.AreEqual(LayoutKind.Sequential, outer.StructLayoutAttribute!.Value);
         Assert.AreEqual(2, outer.StructLayoutAttribute.Pack);
         Assert.AreEqual(LayoutKind.Explicit, inner.StructLayoutAttribute!.Value);
-        Assert.AreEqual(4, Convert.ToInt32(Run(session, "sizeof Outer/Inner"), System.Globalization.CultureInfo.InvariantCulture));
-        Assert.AreEqual(6, Convert.ToInt32(Run(session, "sizeof Outer"), System.Globalization.CultureInfo.InvariantCulture));
+        Assert.AreEqual(4, Convert.ToInt32(Run(session, "sizeof Outer/Inner"), CultureInfo.InvariantCulture));
+        Assert.AreEqual(6, Convert.ToInt32(Run(session, "sizeof Outer"), CultureInfo.InvariantCulture));
     }
 
     /// <summary>

@@ -103,6 +103,7 @@ public sealed class NativeByRefCallTests
             il.Emit(OpCodes.Ldind_I4);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var original = fixture.GetMethod("Read")!;
         var listing = MethodDisassembler.Disassemble(original, session);
         var call = listing.Entries.Last(entry => entry.Instruction?.Op.Name == operation);

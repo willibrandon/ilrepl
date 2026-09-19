@@ -213,6 +213,7 @@ public sealed class SessionEditSnapshotTests
                 })],
                 Assets = [.. document.Assets, new SessionAsset { Hash = hash, Image = replacement }],
             };
+
             var saved = SessionCodec.Read(SessionCodec.Write(changed));
             using var reopened = new ReplCore();
 

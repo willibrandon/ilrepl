@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
@@ -182,7 +183,7 @@ public sealed partial class DefinitionAssemblyTests
         var session = new Session();
         for (var i = 0; i < Runs; i++)
         {
-            session.AddLine("ldc.i4 " + i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            session.AddLine("ldc.i4 " + i.ToString(CultureInfo.InvariantCulture));
             Assert.AreEqual(i, session.Run().Value);
         }
 

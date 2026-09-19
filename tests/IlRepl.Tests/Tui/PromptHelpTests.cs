@@ -44,6 +44,7 @@ public sealed class PromptHelpTests
             Analyzer = new AnalysisRequester(engine), Invalidate = () => invalidated.Release(),
             CurrentHelpIdentity = () => (engine.Status.Revision, engine.AssemblyVersion),
         };
+
         state.SetText(source, source.Length);
         try
         {
@@ -476,6 +477,7 @@ public sealed class PromptHelpTests
             Location = location,
             Explanation = diagnostic.Explanation with { Source = new(location, "call int32 Math::Abs(int32)", kind) },
         };
+
         state.Analysis = state.Analysis with { Diagnostics = [diagnostic] };
         var caret = state.Editor.Cursor.Position;
         PromptDiagnostics.Move(state, backwards: false);

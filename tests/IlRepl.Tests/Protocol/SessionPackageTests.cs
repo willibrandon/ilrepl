@@ -221,6 +221,7 @@ public sealed class SessionPackageTests
         {
             username = feed.Username, password = feed.Password, marker,
         }), TestContext.CancellationToken);
+
         await using var controller = await fixture.StartAsync(new Dictionary<string, string?>
         {
             ["NUGET_NETCORE_PLUGIN_PATHS"] = typeof(SessionPackageTests).Assembly.Location,
@@ -445,6 +446,7 @@ public sealed class SessionPackageTests
         {
             ["type"] = "Transitive", ["resolved"] = "1.0.0", ["contentHash"] = Convert.ToBase64String(new byte[64]),
         };
+
         if (corruptHash)
         {
             portable[fixture.AssemblyName]!["contentHash"] = Convert.ToBase64String(new byte[64]);
@@ -590,6 +592,7 @@ public sealed class SessionPackageTests
                 ? old.References.Single() with { Identity = previous.Identity, RequestedVersion = null } : reference)],
             Assets = [.. document.Assets, .. old.Assets], PackageLock = parsed.ToJsonString(),
         };
+
         var path = Path.Combine(fixture.DirectoryPath, "incompatible-runtime.ilrepl.json");
         await File.WriteAllBytesAsync(path, SessionCodec.Write(document), TestContext.CancellationToken);
         await SubmitAsync(controller, ".session open \"" + path + "\" --force");
@@ -629,6 +632,7 @@ public sealed class SessionPackageTests
             References = [.. document.References.Select(reference => reference with { Framework = "net9.0" })],
             PackageLock = document.PackageLock!.Replace("net10.0", "net9.0", StringComparison.Ordinal),
         }), TestContext.CancellationToken);
+
         await SubmitAsync(controller, ".session open \"" + path + "\" --force");
 
         await SubmitAsync(controller, ".session restore");
@@ -661,6 +665,7 @@ public sealed class SessionPackageTests
             ["NUGET_PACKAGES"] = fixture.PackageCachePath,
             ["NUGET_COMMON_APPLICATION_DATA"] = Path.Combine(outside, "machine"),
         };
+
         async Task<IReplEngine> StartUnisolated(CancellationToken token) =>
             await HostProcessEngine.StartAsync(HostPaths.HostAssembly, fixture.DirectoryPath, environment, token);
         await using (var unisolated = new SessionController(await StartUnisolated(TestContext.CancellationToken), StartUnisolated))

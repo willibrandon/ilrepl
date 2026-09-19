@@ -184,6 +184,7 @@ public sealed class ControlFlowReceiverTests
                 session.AddLine(line);
             }
         });
+
         Assert.Contains("through this", error.Message);
         Assert.IsNotNull(session.OpenType);
     }
@@ -228,6 +229,7 @@ public sealed class ControlFlowReceiverTests
             "endfinally" => ControlFlowReceiverExamples.ConstantBranchAtEndfinallySource(),
             _ => throw new InvalidOperationException(shape),
         };
+
         const string Expected = "stack underflow";
         var session = new Session();
         using var editing = new EditingSession(session);
@@ -242,6 +244,7 @@ public sealed class ControlFlowReceiverTests
                 session.AddLine(line);
             }
         });
+
         Assert.Contains(Expected, error.Message);
         Assert.IsNotNull(session.OpenType);
     }
@@ -269,6 +272,7 @@ public sealed class ControlFlowReceiverTests
                 session.AddLine(line);
             }
         });
+
         Assert.Contains("through this", error.Message);
         Assert.IsNotNull(session.OpenType);
     }
@@ -791,6 +795,7 @@ public sealed class ControlFlowReceiverTests
             "float" => ControlFlowReceiverExamples.RepeatedFloatingComparisonSource(matching),
             _ => throw new ArgumentOutOfRangeException(nameof(shape)),
         };
+
         var session = new Session();
         using var editing = new EditingSession(session);
         var preview = await editing.AnalyzeAsync(
@@ -846,6 +851,7 @@ public sealed class ControlFlowReceiverTests
                 session.AddLine(line);
             }
         });
+
         Assert.Contains("through this", error.Message);
     }
 
@@ -1372,6 +1378,7 @@ public sealed class ControlFlowReceiverTests
                 session.AddLine(line);
             }
         });
+
         Assert.Contains("a try region is not allowed inside a filter", error.Message);
         Assert.IsNotNull(session.OpenMethod);
     }
@@ -1526,6 +1533,7 @@ public sealed class ControlFlowReceiverTests
                 session.AddLine(line);
             }
         });
+
         Assert.IsNotNull(session.OpenMethod);
     }
 
@@ -1960,6 +1968,7 @@ public sealed class ControlFlowReceiverTests
             il.Emit(OpCodes.Stfld, field);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var listing = MethodDisassembler.Disassemble(fixture.GetConstructors()[0], session);
         var diagnostics = StackAnalysis.Diagnostics(listing);
         Assert.AreEqual(originalReceiver, !diagnostics.Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error));
@@ -2003,6 +2012,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerEnd = initialize,
             });
         }, session.Resolver);
+
         var listing = MethodDisassembler.Disassemble(fixture.GetConstructors()[0], session);
         var diagnostics = StackAnalysis.Diagnostics(listing);
         Assert.Contains(diagnostic => diagnostic.Code == "FLOW007"
@@ -2493,6 +2503,7 @@ public sealed class ControlFlowReceiverTests
             il.Emit(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!));
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var listing = MethodDisassembler.Disassemble(fixture.GetConstructor([typeof(bool)])!, session);
         var diagnostics = StackAnalysis.Diagnostics(listing);
         Assert.Contains(diagnostic => diagnostic.Code == "FLOW007"
@@ -2524,6 +2535,7 @@ public sealed class ControlFlowReceiverTests
             il.Emit(OpCodes.Stfld, field);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var listing = MethodDisassembler.Disassemble(fixture.GetConstructors()[0], session);
         var diagnostics = StackAnalysis.Diagnostics(listing);
         Assert.Contains(diagnostic => diagnostic.Message.Contains("through this", StringComparison.Ordinal), diagnostics);
@@ -2575,6 +2587,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerEnd = done,
             });
         }, session.Resolver);
+
         var listing = MethodDisassembler.Disassemble(fixture.GetConstructors()[0], session);
         var diagnostics = StackAnalysis.Diagnostics(listing);
         Assert.Contains(diagnostic => diagnostic.Message.Contains("through this", StringComparison.Ordinal), diagnostics);
@@ -2631,6 +2644,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerEnd = done,
             });
         }, session.Resolver);
+
         var listing = MethodDisassembler.Disassemble(fixture.GetConstructors()[0], session);
         var diagnostics = StackAnalysis.Diagnostics(listing);
         Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error, diagnostics,
@@ -2696,6 +2710,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerStart = filterHandler,
                 HandlerEnd = catchHandler,
             });
+
             constructor.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch)
             {
                 TryStart = tryStart,
@@ -2705,6 +2720,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerEnd = done,
             });
         }, session.Resolver);
+
         var constructor = fixture.GetConstructors()[0];
         var listing = MethodDisassembler.Disassemble(constructor, session);
         var diagnostics = StackAnalysis.Diagnostics(listing);
@@ -2765,6 +2781,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerStart = filterHandler,
                 HandlerEnd = catchHandler,
             });
+
             constructor.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch)
             {
                 TryStart = tryStart,
@@ -2774,6 +2791,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerEnd = done,
             });
         });
+
         var patched = (byte[])image.Clone();
         var token = -1;
         for (var index = 0; index + 5 < patched.Length; index++)
@@ -2853,6 +2871,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerStart = finallyStart,
                 HandlerEnd = direct,
             });
+
             constructor.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Filter)
             {
                 TryStart = outerTry,
@@ -2862,6 +2881,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerEnd = done,
             });
         });
+
         var patched = (byte[])image.Clone();
         var tokens = new List<int>();
         for (var index = 0; index + 5 < patched.Length; index++)
@@ -2932,6 +2952,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerStart = innerHandler,
                 HandlerEnd = innerDone,
             });
+
             constructor.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch)
             {
                 TryStart = innerTry,
@@ -2941,6 +2962,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerEnd = done,
             });
         }, session.Resolver);
+
         var constructor = fixture.GetConstructors()[0];
         var listing = MethodDisassembler.Disassemble(constructor, session);
         var diagnostics = StackAnalysis.Diagnostics(listing);
@@ -2994,6 +3016,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerStart = firstHandler,
                 HandlerEnd = secondHandler,
             });
+
             constructor.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch)
             {
                 TryStart = tryStart,
@@ -3003,6 +3026,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerEnd = done,
             });
         }, session.Resolver);
+
         var listing = MethodDisassembler.Disassemble(fixture.GetConstructors()[0], session);
         var diagnostics = StackAnalysis.Diagnostics(listing);
         Assert.Contains(diagnostic => diagnostic.Message.Contains("through this", StringComparison.Ordinal), diagnostics);
@@ -3034,6 +3058,7 @@ public sealed class ControlFlowReceiverTests
             il.Emit(OpCodes.Stfld, field);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var listing = MethodDisassembler.Disassemble(fixture.GetConstructors()[0], session);
         var diagnostics = StackAnalysis.Diagnostics(listing);
         Assert.Contains(diagnostic => diagnostic.Message.Contains("through this", StringComparison.Ordinal), diagnostics);
@@ -3133,6 +3158,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerEnd = done,
             });
         }, session.Resolver, $"UnwindHandlerEntry{paths}");
+
         return fixture;
     }
 
@@ -3218,6 +3244,7 @@ public sealed class ControlFlowReceiverTests
                 HandlerEnd = done,
             });
         }, session.Resolver, $"UnknownEquality{cases}");
+
         return fixture;
     }
 

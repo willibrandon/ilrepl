@@ -38,6 +38,7 @@ public sealed class CompletionEligibilityTests
             typeof(Stream).GetMethod(nameof(Stream.Read), [typeof(byte[]), typeof(int), typeof(int)])!,
             typeof(object).GetMethod(nameof(ToString))!,
         };
+
         bool[] expected = [staticMethod, instanceMethod, abstractMethod, virtualMethod];
         for (var i = 0; i < methods.Length; i++)
         {

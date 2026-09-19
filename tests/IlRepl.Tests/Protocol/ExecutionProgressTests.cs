@@ -40,11 +40,13 @@ public sealed class ExecutionProgressTests
             entered.TrySetResult();
             return release.Task;
         };
+
         Task<HandleReply>? pending = null;
         var caller = Task.Run(() =>
         {
             pending = engine.RunOperationAsync("accepted source", cancellation => engine.HandleAsync("ldc.i4.s 42", cancellation), token);
         }, token);
+
         try
         {
             await entered.Task.WaitAsync(token);
@@ -98,6 +100,7 @@ public sealed class ExecutionProgressTests
                 secondStarted.TrySetResult();
             }
         };
+
         engine.ProgressPublisher = progress =>
         {
             if (progress.Name != "first" || progress.IsRunning)
@@ -108,6 +111,7 @@ public sealed class ExecutionProgressTests
             entered.TrySetResult();
             return release.Task;
         };
+
         var first = engine.RunOperationAsync("first", cancellation => engine.HandleAsync("ldc.i4.6", cancellation), token);
         Task<HandleReply>? second = null;
         try
@@ -166,6 +170,7 @@ public sealed class ExecutionProgressTests
             interruptEntered.TrySetResult();
             return releaseInterrupt.Task;
         };
+
         var pending = engine.RunOperationAsync("cancelled work", async cancellation =>
         {
             Assert.IsTrue((await engine.HandleAsync("ldc.i4.s 42", cancellation)).Succeeded);
@@ -182,6 +187,7 @@ public sealed class ExecutionProgressTests
 
             return true;
         }, token);
+
         Task<bool>? interrupt = null;
         Task? caller = null;
         try
@@ -192,6 +198,7 @@ public sealed class ExecutionProgressTests
             {
                 interrupt = engine.InterruptAsync(identity, token);
             }, token);
+
             await interruptEntered.Task.WaitAsync(token);
             await caller.WaitAsync(token);
             await cleanupEntered.Task.WaitAsync(token);
@@ -280,6 +287,7 @@ public sealed class ExecutionProgressTests
             checkpointEntered.TrySetResult(checkpoint);
             releaseCheckpoint.Wait(token);
         };
+
         host.ProgressChanged += progress =>
         {
             observed.Enqueue(progress);
@@ -294,6 +302,7 @@ public sealed class ExecutionProgressTests
                 releaseFinished.Wait(token);
             }
         };
+
         var pending = host.HandleAsync("ret", token);
         try
         {

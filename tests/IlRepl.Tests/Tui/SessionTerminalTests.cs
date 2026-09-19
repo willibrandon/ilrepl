@@ -164,6 +164,7 @@ public sealed class SessionTerminalTests
                 posted.TrySetResult();
             }
         };
+
         var armed = 1;
         var frame = 0;
         prompt.DocumentationTargetChanged = (_, _, _) =>
@@ -184,6 +185,7 @@ public sealed class SessionTerminalTests
             release.TrySetResult();
             posted.Task.WaitAsync(AppTest.Timeout, token).GetAwaiter().GetResult();
         };
+
         try
         {
             await EnterPathAsync(auto, files.SessionPath, token);
@@ -259,6 +261,7 @@ public sealed class SessionTerminalTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         PromptState? prompt = null;
         await using var terminal = AppTest.Build(engine, new Transcript(), onPrompt: value => prompt = value);
         var run = terminal.RunAsync(token);
@@ -299,6 +302,7 @@ public sealed class SessionTerminalTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         await using var terminal = AppTest.Build(engine, new Transcript());
         var run = terminal.RunAsync(token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
@@ -337,6 +341,7 @@ public sealed class SessionTerminalTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         PromptState? prompt = null;
         var recorder = new FrameRecorder();
         await using var terminal = AppTest.Build(engine, new Transcript(), onPrompt: value => prompt = value,
@@ -358,6 +363,7 @@ public sealed class SessionTerminalTests
             reached.TrySetResult();
             await release.Task.WaitAsync(cancellationToken);
         };
+
         var firstFrame = recorder.Count;
         try
         {
@@ -408,6 +414,7 @@ public sealed class SessionTerminalTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         File.Delete(files.SessionPath);
         Directory.CreateDirectory(files.SessionPath);
         Hex1bApp? app = null;
@@ -461,6 +468,7 @@ public sealed class SessionTerminalTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         Hex1bApp? app = null;
         PromptState? prompt = null;
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, new Transcript(),
@@ -567,6 +575,7 @@ public sealed class SessionTerminalTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         PromptState? prompt = null;
         await using var terminal = AppTest.Build(engine, new Transcript(), onPrompt: value => prompt = value);
         var run = terminal.RunAsync(token);
@@ -582,6 +591,7 @@ public sealed class SessionTerminalTests
             Action = new SessionAction { Operation = SessionOperation.Capture },
             Editor = engine.Editor,
         }, token);
+
         Assert.IsFalse(current.Dirty);
         Assert.AreEqual(files.SessionPath, current.Path);
         Assert.IsEmpty(current.Document.Entries);

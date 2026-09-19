@@ -48,6 +48,7 @@ public sealed class StartupSessionTests
             await launch.Task.WaitAsync(ct);
             return await HostPaths.StartEngineAsync(ct);
         }, new SessionRequest { Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath } });
+
         if (lateInput)
         {
             controller.RecoveryCompleted += _ =>
@@ -104,6 +105,7 @@ public sealed class StartupSessionTests
             {
                 Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = prompt.CaptureSessionEditor(),
             }, token);
+
             Assert.AreEqual(expected, string.Join('\n', captured.Document.Editor.Lines));
             Assert.AreEqual(edit, captured.Dirty);
             Assert.HasCount(1, captured.Document.Cells);

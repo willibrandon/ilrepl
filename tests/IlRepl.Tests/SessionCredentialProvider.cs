@@ -27,6 +27,7 @@ internal static class SessionCredentialProvider
             RequestId = "provider-handshake", Type = "Request", Method = "Handshake",
             Payload = new { ProtocolVersion = "2.0.0", MinimumProtocolVersion = "2.0.0" },
         }));
+
         while (await Console.In.ReadLineAsync() is { } line)
         {
             using var document = JsonDocument.Parse(line);
@@ -48,6 +49,7 @@ internal static class SessionCredentialProvider
                 },
                 _ => new { ResponseCode = "Success" },
             };
+
             if (method == "GetAuthenticationCredentials")
             {
                 var received = request.GetProperty("Payload");
@@ -58,6 +60,7 @@ internal static class SessionCredentialProvider
             {
                 RequestId = request.GetProperty("RequestId").GetString(), Type = "Response", Method = method, Payload = payload,
             }));
+
             if (method == "Close")
             {
                 break;

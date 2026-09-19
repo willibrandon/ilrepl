@@ -1,9 +1,12 @@
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Reflection;
+using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using IlRepl.Engine;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+using CallSite = Mono.Cecil.CallSite;
 using FieldDefinition = Mono.Cecil.FieldDefinition;
 using MethodDefinition = Mono.Cecil.MethodDefinition;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
@@ -159,6 +162,7 @@ public sealed class MethodDisassemblerTests
             m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally) { TryStart = tryStart, TryEnd = finallyStart,
                 HandlerStart = finallyStart, HandlerEnd = end });
         });
+
         var blocks = method.Entries.Where(e => e.Kind == DisassembledEntryKind.Block).Select(e => e.Block!.Value).ToList();
         Assert.AreSequenceEqual([BlockKind.Try, BlockKind.Catch, BlockKind.Finally, BlockKind.End], blocks);
         Assert.HasCount(2, method.Clauses);
@@ -204,6 +208,7 @@ public sealed class MethodDisassemblerTests
             m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Fault) { TryStart = tryStart, TryEnd = faultStart,
                 HandlerStart = faultStart, HandlerEnd = end });
         });
+
         var blocks = method.Entries.Where(e => e.Kind == DisassembledEntryKind.Block).Select(e => (e.Block!.Value, e.Offset)).ToList();
         var filter = method.Clauses.Single(c => c.Kind == IlClauseKind.Filter);
         Assert.AreSequenceEqual([(BlockKind.Try, 0), (BlockKind.Filter, filter.FilterStart!.Value),
@@ -239,6 +244,7 @@ public sealed class MethodDisassemblerTests
             m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = gap,
                 HandlerStart = handlerStart, HandlerEnd = end, CatchType = module.ImportReference(typeof(Exception)) });
         });
+
         Assert.DoesNotContain(e => e.Kind == DisassembledEntryKind.Block, method.Entries);
         Assert.HasCount(1, method.Clauses);
         var clause = method.Clauses[0];
@@ -274,6 +280,7 @@ public sealed class MethodDisassemblerTests
             m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally) { TryStart = tryStart, TryEnd = gap,
                 HandlerStart = handlerStart, HandlerEnd = null });
         });
+
         Assert.AreEqual(IlReader.LabelFor(method.CodeSize), method.Entries[^1].Label);
         Assert.AreEqual(DisassembledEntryKind.Label, method.Entries[^1].Kind);
     }
@@ -308,6 +315,7 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Ldind_I4);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var body = fixture.GetMethod("M")!;
         var bytes = body.GetMethodBody()!.GetILAsByteArray()!;
         Assert.AreEqual((byte)0x22, bytes[35], "The seventh literal is the signaling-NaN ldc.r4 instruction.");
@@ -366,6 +374,7 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Ret);
             il.Emit(OpCodes.Jmp, target);
         });
+
         var texts = DisassemblyText.Instructions(method);
         Assert.AreSequenceEqual(["ldarg.0", "switch (IL_000e, IL_000f)", "nop", "nop", "ldarga.s 0", "volatile.", "ldind.i4", "pop",
             "tail.", "call void [" + method.Method.Module.Assembly.GetName().Name + "]N.Fixture::Target()", "ret",
@@ -386,6 +395,7 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Ret);
             type.Methods.Add(m);
         }, "V");
+
         var lines = DisassemblyText.LinesWithStack(vararg);
         Assert.Contains(l => l.EndsWith("arglist\t[RuntimeArgumentHandle]", StringComparison.Ordinal), lines);
         Assert.Contains("vararg", vararg.Header);
@@ -434,6 +444,7 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         });
+
         var assembly = method.Method.Module.Assembly.GetName().Name;
         var lines = DisassemblyText.LinesWithStack(method);
         Assert.Contains("0000 ldtoken int32\t[RuntimeTypeHandle]", lines);
@@ -459,6 +470,7 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Calli, site);
             il.Emit(OpCodes.Ret);
         });
+
         var lines = DisassemblyText.LinesWithStack(method);
         Assert.Contains(l => l.EndsWith("calli instance explicit int32(object)\t[int32]", StringComparison.Ordinal), lines);
     }
@@ -484,6 +496,7 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Call, site);
             il.Emit(OpCodes.Ret);
         });
+
         var assembly = method.Method.Module.Assembly.GetName().Name;
         var lines = DisassemblyText.LinesWithStack(method);
         Assert.Contains($"0005 call vararg int32 [{assembly}]N.Fixture::Count(..., int32)\t[int32]", lines);
@@ -507,6 +520,7 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         });
+
         var lines = DisassemblyText.LinesWithStack(method);
         Assert.AreEqual("0000 call void string::Missing_Review_Test()\t?", lines[0]);
         Assert.AreEqual("0005 ldsfld int32 string::Gone\t?", lines[1]);
@@ -531,6 +545,7 @@ public sealed class MethodDisassemblerTests
             m.Body.Variables.Add(new VariableDefinition(missing));
             m.Body.GetILProcessor().Emit(OpCodes.Ret);
         });
+
         Assert.Throws<FileNotFoundException>(() => method.Method.GetMethodBody());
         Assert.AreEqual("image", method.BodySource);
         Assert.AreSequenceEqual(["ret"], DisassemblyText.Instructions(method));
@@ -554,6 +569,7 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         });
+
         var lines = DisassemblyText.LinesWithStack(patched);
         Assert.AreEqual("0000 ldloc.3\t?", lines[0]);
         Assert.AreEqual("0002 ldarg.1\t?", lines[2]);
@@ -584,8 +600,10 @@ public sealed class MethodDisassemblerTests
                 PInvokeInfo = new PInvokeInfo(PInvokeAttributes.CallConvCdecl, "getpid", module.ModuleReferences[0]),
                 ImplAttributes = Mono.Cecil.MethodImplAttributes.PreserveSig,
             };
+
             type.Methods.Add(native);
         });
+
         Assert.Contains("is abstract",
             Assert.Throws<ReplException>(() => MethodDisassembler.Disassemble(fixture.GetMethod("Abstract")!, session)).Message);
         Assert.Contains("implemented by the runtime",
@@ -594,7 +612,7 @@ public sealed class MethodDisassemblerTests
             Assert.Throws<ReplException>(() => MethodDisassembler.Disassemble(fixture.GetMethod("Native")!, session)).Message);
         Assert.Contains("is abstract",
             Assert.Throws<ReplException>(() => MethodDisassembler.Disassemble(typeof(Stream).GetMethod("Flush")!, session)).Message);
-        var dynamic = new System.Reflection.Emit.DynamicMethod("D", typeof(void), Type.EmptyTypes);
+        var dynamic = new DynamicMethod("D", typeof(void), Type.EmptyTypes);
         dynamic.GetILGenerator().Emit(System.Reflection.Emit.OpCodes.Ret);
         Assert.Contains("dynamic method", Assert.Throws<ReplException>(() => MethodDisassembler.Disassemble(dynamic, session)).Message);
     }
@@ -735,6 +753,7 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         });
+
         var text = method.Entries[0].Instruction!.Text;
         // Bare, without the class keyword: that is the spelling ilasm turns into a TypeRef, as the C# compiler writes it.
         Assert.AreEqual("ldtoken [System.Collections]System.Collections.Generic.List`1", text);
@@ -770,6 +789,7 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         }, session: session);
+
         var assembly = method.Method.Module.Assembly.GetName().Name;
         var texts = DisassemblyText.Instructions(method);
         Assert.AreEqual($"ldtoken method !!0 [{assembly}]N.Fixture::Generic<[1]>()", texts[0]);
@@ -810,6 +830,7 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         });
+
         var assembly = method.Method.Module.Assembly.GetName().Name;
         var texts = DisassemblyText.Instructions(method);
         Assert.AreEqual($"ldtoken method !!0 [{assembly}]N.GenericOwner`1::Identity<[1]>(!!0)", texts[0]);
@@ -817,7 +838,7 @@ public sealed class MethodDisassemblerTests
         var identityToken = (ResolvedMethod)InstructionParser.Parse(texts[0], method.Context).Operand!;
         Assert.IsTrue(identityToken.Method!.IsGenericMethodDefinition);
         Assert.IsTrue(identityToken.Method.DeclaringType!.IsGenericTypeDefinition);
-        var fieldToken = (System.Reflection.FieldInfo)InstructionParser.Parse(texts[2], method.Context).Operand!;
+        var fieldToken = (FieldInfo)InstructionParser.Parse(texts[2], method.Context).Operand!;
         Assert.AreEqual("Value", fieldToken.Name);
     }
 
@@ -846,6 +867,7 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Call, use);
             il.Emit(OpCodes.Ret);
         });
+
         var assembly = method.Method.Module.Assembly.GetName().Name;
         var call = DisassemblyText.Instructions(method)[2];
         Assert.AreEqual($"call void [{assembly}]N.Fixture::Use(class [{assembly}]N.'Paren(Name', class [{assembly}]N.'Comma,Name<T')",
@@ -981,7 +1003,7 @@ public sealed class MethodDisassemblerTests
         Assert.IsFalse(reference.IsAlive, "the listed definition should be collectable after .reset");
     }
 
-    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    [System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference ListAndReset(Session session)
     {
         foreach (var line in new[] { ".method int32 Two() {", "ldc.i4 2", "ret", "}" })

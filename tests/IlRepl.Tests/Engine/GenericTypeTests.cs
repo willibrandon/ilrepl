@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Reflection;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
@@ -75,12 +77,12 @@ public sealed class GenericTypeTests
             ".class public Sorted`1<([System.Runtime]System.IComparable`1<!0>) T> {", "}",
             ".class public Only`1<class .ctor T> {", "}");
         var source = session.Types[0].RuntimeType!.GetGenericArguments()[0];
-        Assert.IsTrue(source.GenericParameterAttributes.HasFlag(System.Reflection.GenericParameterAttributes.Covariant));
+        Assert.IsTrue(source.GenericParameterAttributes.HasFlag(GenericParameterAttributes.Covariant));
         var sorted = session.Types[1].RuntimeType!.GetGenericArguments()[0];
         Assert.AreEqual(typeof(IComparable<>), sorted.GetGenericParameterConstraints()[0].GetGenericTypeDefinition());
         var only = session.Types[2].RuntimeType!.GetGenericArguments()[0];
-        Assert.IsTrue(only.GenericParameterAttributes.HasFlag(System.Reflection.GenericParameterAttributes.ReferenceTypeConstraint));
-        Assert.IsTrue(only.GenericParameterAttributes.HasFlag(System.Reflection.GenericParameterAttributes.DefaultConstructorConstraint));
+        Assert.IsTrue(only.GenericParameterAttributes.HasFlag(GenericParameterAttributes.ReferenceTypeConstraint));
+        Assert.IsTrue(only.GenericParameterAttributes.HasFlag(GenericParameterAttributes.DefaultConstructorConstraint));
     }
 
     /// <summary>
@@ -133,7 +135,7 @@ public sealed class GenericTypeTests
         var closed = pair.MakeGenericType(typeof(int));
         var instance = Activator.CreateInstance(closed, 21)!;
         var mapped = closed.GetMethod("Map")!.MakeGenericMethod(typeof(string))
-            .Invoke(instance, [new Func<int, string>(i => (i * 2).ToString(System.Globalization.CultureInfo.InvariantCulture))]);
+            .Invoke(instance, [new Func<int, string>(i => (i * 2).ToString(CultureInfo.InvariantCulture))]);
         Assert.AreEqual("42", mapped);
     }
 

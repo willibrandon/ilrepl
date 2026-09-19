@@ -84,6 +84,7 @@ public sealed partial class SiblingTypeLookupTests
             {
                 File.WriteAllBytes(path, image);
             }
+
             // CreateInstanceFrom always uses LoadFrom's default context; this case already runs in an isolated child.
             var assembly = api == "activator-from" ? session.Resolver.Load(Assembly.LoadFrom(path).FullName!)
                 : session.Resolver.LoadImage(image);
@@ -161,6 +162,7 @@ public sealed partial class SiblingTypeLookupTests
                     MemberInfo member => member.DeclaringType,
                     _ => null,
                 };
+
                 if (referenced?.Assembly == owner.Assembly)
                 {
                     Assert.AreEqual(owner, referenced, entry.DisplayText);
@@ -177,6 +179,7 @@ public sealed partial class SiblingTypeLookupTests
             "nested" => type.IsNested && type.Name == "Nested",
             _ => !type.IsNested && !type.IsGenericType,
         }));
+
         return type.IsGenericTypeDefinition ? type.MakeGenericType(typeof(int)) : type;
     }
 

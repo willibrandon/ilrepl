@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.Loader;
+using System.Text;
 using IlRepl.Engine.Binding;
 
 namespace IlRepl.Tests.Engine.Binding;
@@ -152,6 +153,7 @@ public sealed partial class SymbolIdentityTests
         var (_, image, _) = CecilFixture.Build((_, type) =>
         {
         });
+
         var first = new AssemblyLoadContext("identity-first", isCollectible: true);
         var second = new AssemblyLoadContext("identity-second", isCollectible: true);
         try
@@ -206,7 +208,7 @@ public sealed partial class SymbolIdentityTests
         {
             typeof(Console).GetMethod("WriteLine", [typeof(string)])!,
             typeof(string).GetMethod("Trim", Type.EmptyTypes)!,
-            typeof(System.Text.StringBuilder).GetConstructor([typeof(int)])!,
+            typeof(StringBuilder).GetConstructor([typeof(int)])!,
             typeof(Enumerable).GetMethod("Empty")!,
             typeof(Enumerable).GetMethod("Empty")!.MakeGenericMethod(typeof(int)),
             typeof(List<int>).GetMethod("Add")!,

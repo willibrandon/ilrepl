@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
@@ -108,7 +109,7 @@ public sealed class FieldDeclarationParserTests
     {
         var field = Parse("public int32 modreq([System.Runtime]System.Runtime.CompilerServices.IsVolatile) V");
         Assert.AreEqual(typeof(int), field.Type);
-        Assert.AreSequenceEqual([typeof(System.Runtime.CompilerServices.IsVolatile)], field.RequiredModifiers);
+        Assert.AreSequenceEqual([typeof(IsVolatile)], field.RequiredModifiers);
     }
 
     /// <summary>

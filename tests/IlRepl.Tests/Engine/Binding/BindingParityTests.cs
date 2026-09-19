@@ -356,6 +356,7 @@ public sealed class BindingParityTests
                     "Environment",
                 "RuntimeHelpers", "Marshal", "Vector`1", "Half", "Int128", "Index", "Range", "Lazy`1", "WeakReference`1", "KeyValuePair`2",
             };
+
             var agreed = 0;
             foreach (var name in names)
             {

@@ -44,6 +44,7 @@ internal sealed class SampleFixture
             UseShellExecute = false,
             WorkingDirectory = RepoPaths.Root,
         };
+
         foreach (var argument in new[] { "build", projectDirectory, "-c", RepoPaths.Configuration, "--nologo", "-v", "quiet" })
         {
             startInfo.ArgumentList.Add(argument);

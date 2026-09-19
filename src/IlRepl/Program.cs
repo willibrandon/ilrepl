@@ -17,6 +17,7 @@ var evalOption = new Option<string[]>("--eval", "-e")
 {
     Description = "Run IL lines separated by ';' and exit. ret runs the cell.",
 };
+
 var noColorOption = new Option<bool>("--no-color") { Description = "Plain output without ANSI colors." };
 var quietOption = new Option<bool>("--quiet", "-q") { Description = "Do not echo the stack after each instruction." };
 var batchOption = new Option<bool>("--batch") { Description = "Read lines from standard input without the terminal UI." };
@@ -110,6 +111,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
             {
                 Action = new SessionAction { Operation = SessionOperation.Open, Path = sessionFile.FullName },
             };
+
             await using var interactive = new SessionController(StartInteractiveAsync, initialRequest, IlReplApp.TranscriptLineLimit);
             var history = noHistory ? null : new FileHistoryStore(FileHistoryStore.DefaultPath());
             _ = BootstrapCatalog.Hello;
@@ -158,6 +160,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
                 Console.Out.Write(output.Text);
                 Console.Out.Flush();
             };
+
             using var interruption = cancellationToken.Register(() => _ = lifetime.TerminateAsync(CancellationToken.None));
             if (quiet)
             {
@@ -174,6 +177,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
                         {
                             Action = new SessionAction { Operation = SessionOperation.Open, Path = sessionFile.FullName, Execute = true },
                         }, cancellationToken).ConfigureAwait(false);
+
                         foreach (var (line, index) in result.Reply.Lines.Select((line, index) => (line, index)))
                         {
                             if (result.Reply.OutputSequence == 0

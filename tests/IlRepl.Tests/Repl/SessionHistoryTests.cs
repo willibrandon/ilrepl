@@ -74,6 +74,7 @@ public sealed class SessionHistoryTests
         {
             Action = new SessionAction { Operation = SessionOperation.Cells },
         }, TestContext.CancellationToken);
+
         Assert.Contains(line => line.PlainText == "  2: cell, unrun (historical)", listed.Reply.Lines);
         Assert.DoesNotContain(line => line.Kind == LineKind.Result, listed.Reply.Lines);
         Assert.DoesNotContain(line => line.Kind == LineKind.Result, ReplCore.RenderSessionHistory(ran.Document));

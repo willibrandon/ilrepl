@@ -59,6 +59,7 @@ public sealed class HostCrashTests
                 "callvirt instance void System.Diagnostics.Process::Kill()"],
             _ => ["ldc.i8 0x123456781000", "conv.u", "ldind.i4"],
         };
+
         foreach (var line in source)
         {
             var reply = await engine.HandleAsync(line, token);
@@ -150,6 +151,7 @@ public sealed class HostCrashTests
             {
                 RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
             };
+
             start.ArgumentList.Add("/c");
             start.ArgumentList.Add("echo ilrepl-diagnostic-marker 1>&2");
             using var process = Process.Start(start)!;

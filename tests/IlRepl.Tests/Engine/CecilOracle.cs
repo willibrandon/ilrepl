@@ -1,9 +1,12 @@
+using System.Collections.Immutable;
 using System.Globalization;
+using System.Reflection.PortableExecutable;
 using IlRepl.Engine;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using CecilInstruction = Mono.Cecil.Cil.Instruction;
 using MethodDefinition = Mono.Cecil.MethodDefinition;
+using PEReaderExtensions = System.Reflection.Metadata.PEReaderExtensions;
 
 namespace IlRepl.Tests.Engine;
 
@@ -150,8 +153,8 @@ internal static class CecilOracle
     /// </summary>
     private static List<string> RawTokens(byte[] image, MethodDefinition method)
     {
-        using var pe = new System.Reflection.PortableExecutable.PEReader(System.Collections.Immutable.ImmutableArray.Create(image));
-        var body = System.Reflection.Metadata.PEReaderExtensions.GetMethodBody(pe, method.RVA);
+        using var pe = new PEReader(ImmutableArray.Create(image));
+        var body = PEReaderExtensions.GetMethodBody(pe, method.RVA);
         var read = IlReader.Read(body.GetILBytes()!);
         Assert.IsEmpty(read.Problems, method.FullName + ": " + string.Join("; ", read.Problems));
         return read.Instructions

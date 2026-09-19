@@ -40,6 +40,7 @@ public sealed class StartupAttachmentTests
             await launch.Task.WaitAsync(ct);
             return await HostPaths.StartEngineAsync(ct);
         }, new SessionRequest { Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath } });
+
         controller.RecoveryCompleted += _ =>
         {
             published.TrySetResult();
@@ -48,6 +49,7 @@ public sealed class StartupAttachmentTests
                 release.Task.GetAwaiter().GetResult();
             }
         };
+
         try
         {
             launch.TrySetResult();
@@ -75,6 +77,7 @@ public sealed class StartupAttachmentTests
             {
                 Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = prompt.CaptureSessionEditor(),
             }, token);
+
             Assert.AreEqual(expected, string.Join('\n', captured.Document.Editor.Lines));
             Assert.IsFalse(captured.Dirty);
             Assert.HasCount(1, captured.Document.Cells);

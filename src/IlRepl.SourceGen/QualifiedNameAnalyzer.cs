@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -29,9 +28,7 @@ public sealed class QualifiedNameAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeName(SyntaxNodeAnalysisContext context)
     {
         var node = context.Node;
-        var text = node.ToString();
-        if (!text.StartsWith("System.", StringComparison.Ordinal) && !text.StartsWith("global::System.", StringComparison.Ordinal)
-            || node.Ancestors().Any(ancestor => ancestor is UsingDirectiveSyntax))
+        if (!StartsAtSystem(node) || node.Ancestors().Any(ancestor => ancestor is UsingDirectiveSyntax))
         {
             return;
         }
@@ -66,5 +63,28 @@ public sealed class QualifiedNameAnalyzer : DiagnosticAnalyzer
         var written = node is QualifiedNameSyntax name ? name.Right.ToString() : ((MemberAccessExpressionSyntax)node).Name.ToString();
         context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.NameIsQualified, node.GetLocation(),
             type.ContainingNamespace.ToDisplayString(), written));
+    }
+
+    // The name is read from its tokens, so a line break or a comment inside it changes nothing.
+    private static bool StartsAtSystem(SyntaxNode node)
+    {
+        while (true)
+        {
+            switch (node)
+            {
+                case QualifiedNameSyntax qualified:
+                    node = qualified.Left;
+                    break;
+                case MemberAccessExpressionSyntax access:
+                    node = access.Expression;
+                    break;
+                case AliasQualifiedNameSyntax alias:
+                    return alias.Alias.Identifier.IsKind(SyntaxKind.GlobalKeyword) && alias.Name.Identifier.ValueText == "System";
+                case IdentifierNameSyntax identifier:
+                    return identifier.Identifier.ValueText == "System";
+                default:
+                    return false;
+            }
+        }
     }
 }

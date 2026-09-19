@@ -43,6 +43,7 @@ public sealed class MethodEditLocalTypeTests
             "parameter" => "method void *(class Marker)",
             _ => "method void *(method int32 modopt(Marker) *())",
         };
+
         var locals = ".locals init (" + signature + " value)\n";
         string Source(int value, bool declare) => ".method public static int32 Read() cil managed {\n"
             + (declare ? locals : "") + "ldc.i4.s " + value + "\nret\n}";
@@ -85,6 +86,7 @@ public sealed class MethodEditLocalTypeTests
                 _ => ((IModifierType)((FunctionPointerType)((FunctionPointerType)local).Parameters.Single().ParameterType)
                     .ReturnType).ModifierType,
             };
+
             Assert.AreSame(module, referenced.Scope);
             Assert.AreEqual(captured.FullName, referenced.FullName);
             var context = new AssemblyLoadContext("local-types-export", isCollectible: true);

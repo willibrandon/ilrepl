@@ -43,6 +43,7 @@ internal sealed class SessionAuthenticatedFeed : IAsyncDisposable
             ["/flat/" + package + "/index.json"] = JsonSerializer.SerializeToUtf8Bytes(new { versions = new[] { version } }),
             ["/flat/" + package + "/" + version + "/" + package + "." + version + ".nupkg"] = File.ReadAllBytes(packagePath),
         };
+
         _server = ServeAsync();
     }
 

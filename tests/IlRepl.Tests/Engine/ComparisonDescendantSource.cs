@@ -80,6 +80,7 @@ public static partial class ComparisonDescendantSource
             UseShellExecute = false,
             CreateNoWindow = escape && OperatingSystem.IsWindows(),
         };
+
         start.Environment["ILREPL_DESCENDANT_RECORD"] = record;
         start.Environment["ILREPL_DESCENDANT_READY"] = ready;
         start.Environment["ILREPL_DESCENDANT_BRANCH"] = grandchild.ToString();

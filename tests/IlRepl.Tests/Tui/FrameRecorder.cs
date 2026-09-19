@@ -118,6 +118,7 @@ internal sealed class FrameRecorder : IHex1bTerminalPresentationFilter
                 {
                     Timestamp = painted,
                 };
+
                 _frames.Add(frame);
             }
 

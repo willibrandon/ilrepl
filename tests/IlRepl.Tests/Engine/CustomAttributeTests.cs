@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
@@ -34,8 +36,8 @@ public sealed class CustomAttributeTests
         Assert.AreEqual("gone", onField.Message);
         Assert.IsTrue(onField.IsError);
         var method = tagged.GetMethod("M")!;
-        Assert.AreEqual("DEBUG", method.GetCustomAttribute<System.Diagnostics.ConditionalAttribute>()!.ConditionString);
-        Assert.IsNotNull(method.GetParameters()[0].GetCustomAttribute<System.Runtime.CompilerServices.CallerMemberNameAttribute>());
+        Assert.AreEqual("DEBUG", method.GetCustomAttribute<ConditionalAttribute>()!.ConditionString);
+        Assert.IsNotNull(method.GetParameters()[0].GetCustomAttribute<CallerMemberNameAttribute>());
     }
 
     /// <summary>
@@ -54,10 +56,10 @@ public sealed class CustomAttributeTests
             ".custom instance void [System.Runtime]System.Diagnostics.DebuggerDisplayAttribute::.ctor(string) = { string('line') }",
             "}");
         var line = session.Types[1].RuntimeType!;
-        var proxy = line.GetCustomAttributesData().First(a => a.AttributeType == typeof(System.Diagnostics.DebuggerTypeProxyAttribute));
+        var proxy = line.GetCustomAttributesData().First(a => a.AttributeType == typeof(DebuggerTypeProxyAttribute));
         Assert.AreSame(session.Types[0].RuntimeType, proxy.ConstructorArguments[0].Value,
             "the cross-family Type argument names the live Point");
-        Assert.AreEqual("line", line.GetCustomAttribute<System.Diagnostics.DebuggerDisplayAttribute>()!.Value);
+        Assert.AreEqual("line", line.GetCustomAttribute<DebuggerDisplayAttribute>()!.Value);
         var self = Load(
             ".class public Own {",
             ".custom instance void [System.Runtime]System.Diagnostics.DebuggerTypeProxyAttribute::.ctor(class " +

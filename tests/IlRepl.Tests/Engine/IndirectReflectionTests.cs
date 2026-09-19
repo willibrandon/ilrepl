@@ -143,6 +143,7 @@ public sealed class IndirectReflectionTests
             {
                 "typed resource" => "GetManifestResourceStream", "typed attributes" => "GetCustomAttributes", _ => api,
             };
+
             Assert.Contains(item => item.Contains(apiName, StringComparison.Ordinal), edit.Problems);
             Assert.Contains(dependency => dependency.Symbol.Contains(apiName, StringComparison.Ordinal)
                 && dependency.Disposition.Contains(problem, StringComparison.Ordinal), edit.Dependencies);

@@ -111,6 +111,7 @@ internal static class ResponsivenessFixtures
                 Identity = "source-" + number, Number = number, Kind = SessionEntryKind.Source,
                 Source = definition ? source : [source[0]],
             });
+
             if (!definition)
             {
                 entries.Add(new SessionEntry

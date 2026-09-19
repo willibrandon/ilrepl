@@ -47,6 +47,7 @@ public sealed partial class SatelliteAssemblyTests
                 FileName = Environment.ProcessPath!, WorkingDirectory = AppContext.BaseDirectory,
                 RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false,
             };
+
             start.ArgumentList.Add("--filter");
             start.ArgumentList.Add("FullyQualifiedName~SatelliteAssemblyTests.Compare_UnloadedSatelliteFilesRetainCapturedContext");
             start.Environment[UnloadedProbeDirectory] = directory;

@@ -45,6 +45,7 @@ public sealed class CompletionRequesterTests
             requester.Refresh(state);
             return engine.Calls.Count == 2;
         });
+
         Assert.AreEqual("call Console::Writ", engine.Calls[1].Request.Lines[0]);
         Assert.IsNull(state.Completions);
         await ReleaseAsync(engine, state, 1);
@@ -203,6 +204,7 @@ public sealed class CompletionRequesterTests
             requester.Refresh(state);
             return engine.Calls.Count == 2;
         });
+
         Assert.AreEqual(PaletteMode.Requested, state.Palette);
         await ReleaseAsync(engine, state, 1);
         Assert.AreEqual(PaletteMode.Open, state.Palette);
@@ -383,6 +385,7 @@ public sealed class CompletionRequesterTests
         state.Submission = new Submission(engine, [], 0, false, ct => release.Task.WaitAsync(ct), _ =>
         {
         });
+
         try
         {
             requester.Refresh(state);
@@ -545,6 +548,7 @@ public sealed class CompletionRequesterTests
             requester.Refresh(state);
             return engine.Calls.Count == 2;
         });
+
         await ReleaseAsync(engine, state, 1);
         Assert.AreEqual("call Environment::get_CurrentManagedThreadId()", state.Text);
         Assert.IsTrue(state.PaletteDismissed);
@@ -583,6 +587,7 @@ public sealed class CompletionRequesterTests
             requester.Refresh(state);
             return engine.Calls.Count == 2;
         });
+
         switch (change)
         {
             case "edit": state.Editor.InsertText("r"); break;
@@ -599,6 +604,7 @@ public sealed class CompletionRequesterTests
             requester.Refresh(state);
             return engine.Calls.Count == 3;
         });
+
         await ReleaseAsync(engine, state, 2);
         Assert.AreEqual(expected, state.Text);
         Assert.AreEqual(caret, state.Editor.Cursor.Position);
@@ -612,6 +618,7 @@ public sealed class CompletionRequesterTests
         {
             Requester = new CompletionRequester(engine),
         };
+
         state.SetText(text, text.Length);
         return state;
     }

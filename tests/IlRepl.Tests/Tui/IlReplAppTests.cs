@@ -1,3 +1,4 @@
+using System.Text;
 using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
@@ -362,7 +363,7 @@ public sealed class IlReplAppTests
         await auto.WaitUntilAsync(_ => recorder.Output.Contains("\x1b]52;c;", StringComparison.Ordinal));
         var payload = recorder.Output[(recorder.Output.LastIndexOf("\x1b]52;c;", StringComparison.Ordinal) + 7)..];
         payload = payload[..payload.IndexOfAny(['\x07', '\x1b'])];
-        var copied = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+        var copied = Encoding.UTF8.GetString(Convert.FromBase64String(payload));
         Assert.Contains("ldc.i4 6", copied, "the selected row should be what was copied");
 
         // The yank is confirmed on the status bar, the selection is gone, and the message clears.
@@ -511,7 +512,7 @@ public sealed class IlReplAppTests
         await auto.WaitUntilAsync(_ => recorder.Output.Contains("\x1b]52;c;", StringComparison.Ordinal));
         var payload = recorder.Output[(recorder.Output.LastIndexOf("\x1b]52;c;", StringComparison.Ordinal) + 7)..];
         payload = payload[..payload.IndexOfAny(['\x07', '\x1b'])];
-        var copied = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+        var copied = Encoding.UTF8.GetString(Convert.FromBase64String(payload));
         Assert.Contains("ldc.i4 6", copied, "the echoed line should be in the yank");
         Assert.Contains("[int32]", copied, "the stack line should be in the yank");
         await auto.WaitUntilTextAsync("Yanked 2 lines");

@@ -108,6 +108,7 @@ public sealed class PromptHelpAppearanceTests
             prompt = state;
             state.OpenDocumentation = url => Volatile.Write(ref opened, url);
         }).WithPresentation(adapter).Build();
+
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var run = terminal.RunAsync(cancellation.Token);
         try

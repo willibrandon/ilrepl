@@ -38,6 +38,7 @@ public sealed class NativeSymbolDisplayTests
             Address = 0x12345678, Kind = "type", Symbol = "Example.Owner, First, Version=1.0.0.0",
             DisplaySymbol = "Example.Owner", Evidence = "RuntimeTypeHandle.Value",
         };
+
         var second = first with { Address = 0x87654321, Symbol = "Example.Owner, Second, Version=1.0.0.0" };
         var left = Normalize(first);
         var right = Normalize(second);
@@ -59,6 +60,7 @@ public sealed class NativeSymbolDisplayTests
             Listing = "; BEGIN METHOD Owner:Value\n    mov rax, 0x" + fact.Address.ToString("X")
                 + "\n    ret\n; END METHOD Owner:Value",
         };
+
         var result = NativeNormalizer.Normalize(listing, [fact], [], [], "X64", [], pointerReturn: true);
         Assert.IsEmpty(result.Problems);
         return result.Lines;

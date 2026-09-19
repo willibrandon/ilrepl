@@ -133,6 +133,7 @@ public sealed class InvocationIdentityComparisonTests
             "return" or "task" or "valuetask" or "throw" => returned,
             _ => arguments[0],
         };
+
         if (replaced || shape == "out")
         {
             Assert.AreNotSame(before, after);

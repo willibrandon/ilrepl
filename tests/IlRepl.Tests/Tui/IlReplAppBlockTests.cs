@@ -1,3 +1,4 @@
+using System.Text;
 using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
@@ -229,6 +230,7 @@ public sealed class IlReplAppBlockTests
             var visible = s.Height - 1 - AppTest.PromptTop(s);
             return visible > 4 && rows.TakeLast(visible).Select((r, i) => AppTest.PromptRow(s, i) == r).All(b => b);
         }, description: "every row sits at its region's depth");
+
         await auto.WaitUntilTextAsync("Enter sends 10 lines");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("end of method F");
@@ -357,7 +359,7 @@ public sealed class IlReplAppBlockTests
             description: "the terminal is asked to copy");
         var payload = recorder.Output[(recorder.Output.LastIndexOf("\x1b]52;c;", StringComparison.Ordinal) + 7)..];
         payload = payload[..payload.IndexOfAny(['\x07', '\x1b'])];
-        var copied = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+        var copied = Encoding.UTF8.GetString(Convert.FromBase64String(payload));
         Assert.AreEqual(".method void F() {\n", copied);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.PromptRow(s, 1) == "  ...>   nop",
             description: "the buffer is untouched");

@@ -37,6 +37,7 @@ public static class HashtableComparisonExamples
             _ => "call class StringComparer StringComparer::get_" + comparer
                 + "()\nnewobj instance void Hashtable::.ctor(class IEqualityComparer)\n",
         };
+
         var entries = Contents(count, edited);
         foreach (var (key, value) in reverse ? entries.Reverse() : entries)
         {

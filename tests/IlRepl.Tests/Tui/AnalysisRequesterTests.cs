@@ -49,6 +49,7 @@ public sealed class AnalysisRequesterTests
             requester.Refresh(state);
             return engine.Analyses.Count == 2;
         });
+
         Assert.IsNull(state.Analysis);
         var current = engine.Analyses.Last();
         current.Release.SetResult();
@@ -57,6 +58,7 @@ public sealed class AnalysisRequesterTests
             requester.Refresh(state);
             return state.Analysis is not null;
         });
+
         Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
         await requester.SettleAsync(TimeSpan.FromSeconds(2));
     }
@@ -90,6 +92,7 @@ public sealed class AnalysisRequesterTests
             requester.Refresh(state);
             return engine.Analyses.Count == 2;
         });
+
         Assert.IsTrue(requester.IsPending);
         Assert.IsNull(state.Analysis, "The cancelled same-key response cannot satisfy the replacement request.");
         var current = engine.Analyses.Last();
@@ -102,12 +105,14 @@ public sealed class AnalysisRequesterTests
             requester.Refresh(state);
             return engine.Analyses.Count == 3;
         });
+
         engine.Analyses.Last().Release.SetResult();
         await WaitAsync(() =>
         {
             requester.Refresh(state);
             return state.Analysis is not null;
         });
+
         Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
         await requester.SettleAsync(TimeSpan.FromSeconds(2));
     }
@@ -191,6 +196,7 @@ public sealed class AnalysisRequesterTests
             requester.Refresh(state);
             return state.Analysis is not null;
         });
+
         Assert.AreEqual("[]", state.Analysis!.Stack!.Render());
         var calls = engine.Analyses.Count;
         state.Editor.SetCursorPosition(new DocumentOffset(9));
@@ -238,6 +244,7 @@ public sealed class AnalysisRequesterTests
                 requester.Refresh(state);
                 return engine.Analyses.Count == 2;
             });
+
             var restored = engine.Analyses.Last();
             await restored.Prepared;
             for (var index = 0; index < 20; index++)
@@ -254,6 +261,7 @@ public sealed class AnalysisRequesterTests
                 requester.Refresh(state);
                 return state.Analysis is not null;
             });
+
             Assert.AreEqual("ldc.i4.1\nret", state.Text);
             Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
             Assert.IsEmpty(state.Analysis.Diagnostics);
@@ -303,6 +311,7 @@ public sealed class AnalysisRequesterTests
             requester.Refresh(state);
             return engine.Analyses.Count == 2;
         });
+
         Assert.AreEqual("ldc.i4 99", engine.Analyses.Last().Request.Lines[0]);
         engine.Analyses.Last().Release.SetResult();
         await WaitAsync(() =>
@@ -310,6 +319,7 @@ public sealed class AnalysisRequesterTests
             requester.Refresh(state);
             return state.Analysis is not null;
         });
+
         Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
         await requester.SettleAsync(TimeSpan.FromSeconds(2));
     }
@@ -400,6 +410,7 @@ public sealed class AnalysisRequesterTests
                 // Attach the real analyzer after the completion palette has appeared.
                 value.Analyzer = null;
             }).WithPresentation(adapter).AddPresentationFilter(recorder).Build();
+
         recorder.Terminal = terminal;
         using var terminalCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var run = terminal.RunAsync(terminalCancellation.Token);

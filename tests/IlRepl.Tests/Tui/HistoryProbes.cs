@@ -1,3 +1,4 @@
+using System.Globalization;
 using IlRepl.Tui;
 
 namespace IlRepl.Tests.Tui;
@@ -60,7 +61,7 @@ internal static class HistoryProbes
     {
         var path = Environment.GetEnvironmentVariable(PathVariable)!;
         var sentinel = Environment.GetEnvironmentVariable(SentinelVariable)!;
-        var hold = int.Parse(Environment.GetEnvironmentVariable(HoldVariable)!, System.Globalization.CultureInfo.InvariantCulture);
+        var hold = int.Parse(Environment.GetEnvironmentVariable(HoldVariable)!, CultureInfo.InvariantCulture);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         using (new FileStream(path + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1))
         {
@@ -73,7 +74,7 @@ internal static class HistoryProbes
     private static async Task AppendMany()
     {
         var path = Environment.GetEnvironmentVariable(PathVariable)!;
-        var count = int.Parse(Environment.GetEnvironmentVariable(CountVariable)!, System.Globalization.CultureInfo.InvariantCulture);
+        var count = int.Parse(Environment.GetEnvironmentVariable(CountVariable)!, CultureInfo.InvariantCulture);
         var prefix = Environment.GetEnvironmentVariable(PrefixVariable)!;
         var store = new FileHistoryStore(path, TimeSpan.FromSeconds(30));
         for (var i = 0; i < count; i++)

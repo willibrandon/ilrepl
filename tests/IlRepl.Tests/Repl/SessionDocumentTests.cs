@@ -215,6 +215,7 @@ public sealed class SessionDocumentTests
         {
             Action = new SessionAction { Operation = SessionOperation.Cell, Numbers = [1] },
         }, token);
+
         Assert.IsNotNull(recalled.Reply.SessionEditor);
         Assert.AreSequenceEqual(expected.Split('\n'), recalled.Reply.SessionEditor.Lines);
         await using var fresh = new InProcessEngine();

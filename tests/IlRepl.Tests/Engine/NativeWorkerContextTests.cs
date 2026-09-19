@@ -315,6 +315,7 @@ public sealed class NativeWorkerContextTests
             {
                 using var rejected = new NativeWorkerContext(duplicate, new NativeOptions());
             });
+
             compiled = CellCompiler.CompileForInspection(session);
 
             Assert.IsTrue(compiled.Assembly.IsCollectible, "A failed worker setup leaked its noncollectible lifetime into the caller.");

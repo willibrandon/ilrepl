@@ -1,3 +1,4 @@
+using System.Text;
 using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
@@ -34,7 +35,7 @@ public sealed class IlReplAppPasteTests
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");
-        await adapter.SendAsync(System.Text.Encoding.UTF8.GetBytes("\x1b[200~ldc.i4.s 42\nret\x1b[201~\r"));
+        await adapter.SendAsync(Encoding.UTF8.GetBytes("\x1b[200~ldc.i4.s 42\nret\x1b[201~\r"));
         await auto.WaitUntilTextAsync("= 42 : int32");
         Assert.AreSequenceEqual(["il[1]> ldc.i4.s 42", "il[1]> ret"], AppTest.Echoes(transcript));
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);

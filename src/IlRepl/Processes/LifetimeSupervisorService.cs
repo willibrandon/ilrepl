@@ -71,6 +71,7 @@ internal sealed class LifetimeSupervisorService(long epoch) : ISupervisorService
                 UseShellExecute = false,
                 RedirectStandardInput = true,
             };
+
             foreach (var argument in request.Arguments)
             {
                 start.ArgumentList.Add(argument);

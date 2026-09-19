@@ -51,6 +51,7 @@ public sealed class TranscriptLineWidgetTests
                         ctx.VStack(v => [widget, neighbor, v.Text("phase " + phase)]));
                 };
             }).Build();
+
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
         var run = terminal.RunAsync(cancellation.Token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));
@@ -70,6 +71,7 @@ public sealed class TranscriptLineWidgetTests
                 foreground = Hex1bColor.FromRgb(210, 180, 160);
                 background = Hex1bColor.FromRgb(24, 36, 48);
             });
+
             using (var snapshot = auto.CreateSnapshot())
             {
                 AssertCell(snapshot, "plain", foreground, background);
@@ -105,6 +107,7 @@ public sealed class TranscriptLineWidgetTests
             {
                 Line = TranscriptLine.Of(LineKind.Output, "replacement", SpanStyle.Number),
             });
+
             using (var snapshot = auto.CreateSnapshot())
             {
                 Assert.IsFalse(snapshot.ContainsText("plain"));
@@ -132,6 +135,7 @@ public sealed class TranscriptLineWidgetTests
                 change();
                 phase = expected;
             });
+
             app.Invalidate();
             await auto.WaitUntilTextAsync("phase " + expected);
         }
@@ -180,6 +184,7 @@ public sealed class TranscriptLineWidgetTests
                     ]);
                 };
             }).Build();
+
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
         var run = terminal.RunAsync(cancellation.Token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));

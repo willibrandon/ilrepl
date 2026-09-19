@@ -66,6 +66,7 @@ public sealed class IlReplAppHelpTests
                     }
                 };
             }).WithPresentation(adapter).Build();
+
         using var terminalCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var run = terminal.RunAsync(terminalCancellation.Token);
         try
@@ -150,6 +151,7 @@ public sealed class IlReplAppHelpTests
                 prompt = state;
                 state.DocumentationTargetChanged = (_, sequence, _) => Volatile.Write(ref publishedSequence, sequence);
             }).WithPresentation(adapter).Build();
+
         using var terminalCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var run = terminal.RunAsync(terminalCancellation.Token);
         try
@@ -216,6 +218,7 @@ public sealed class IlReplAppHelpTests
                 prompt = state;
                 state.DocumentationTargetChanged = (_, sequence, _) => Volatile.Write(ref publishedSequence, sequence);
             }).WithPresentation(adapter).Build();
+
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");
@@ -322,6 +325,7 @@ public sealed class IlReplAppHelpTests
                 prompt = state;
                 state.OpenDocumentation = url => Volatile.Write(ref opened, url);
             }).WithPresentation(adapter).Build();
+
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");

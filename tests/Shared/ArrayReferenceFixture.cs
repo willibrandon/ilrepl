@@ -191,6 +191,7 @@ public static class ArrayReferenceFixture
                         EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
                     }
                 });
+
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
             if (method is not MethodInfo { IsGenericMethod: true } closed)
@@ -251,6 +252,7 @@ public static class ArrayReferenceFixture
             "runtime-hash" => typeof(RuntimeHelpers).GetMethod(nameof(RuntimeHelpers.GetHashCode), [typeof(object)]),
             _ => null,
         };
+
         var instructions = new InstructionEncoder(new BlobBuilder(), new ControlFlowBuilder());
         void Call(MethodBase called)
         {
@@ -631,6 +633,7 @@ public static class ArrayReferenceFixture
                 "helper-write" => [0, 3, 1, 29, 28, 8, 28],
                 _ => [0, 2, 28, 29, 28, 8],
             };
+
             metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.Static, MethodImplAttributes.IL,
                 metadata.GetOrAddString("ObserveArray"), metadata.GetOrAddBlob(helperSignature), encoder.AddMethodBody(instructions),
                 MetadataTokens.ParameterHandle(1));

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
+using System.Text;
 using IlRepl.Tui;
 
 namespace IlRepl.Tests.Tui;
@@ -105,7 +106,7 @@ public sealed class FileHistoryStoreTests
     {
         var path = TempPath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var content = new System.Text.StringBuilder();
+        var content = new StringBuilder();
         for (var i = 0; i < 1005; i++)
         {
             content.Append(FileHistoryStore.Format("entry " + i, DateTimeOffset.Now));
@@ -224,6 +225,7 @@ public sealed class FileHistoryStoreTests
             [HistoryProbes.SentinelVariable] = sentinel,
             [HistoryProbes.HoldVariable] = "1500",
         });
+
         var waited = Stopwatch.StartNew();
         while (!File.Exists(sentinel))
         {
@@ -265,6 +267,7 @@ public sealed class FileHistoryStoreTests
             [HistoryProbes.CountVariable] = "100",
             [HistoryProbes.PrefixVariable] = "a",
         });
+
         using var second = StartProbe(new Dictionary<string, string>
         {
             [HistoryProbes.Probe] = "append",
@@ -272,6 +275,7 @@ public sealed class FileHistoryStoreTests
             [HistoryProbes.CountVariable] = "100",
             [HistoryProbes.PrefixVariable] = "b",
         });
+
         await first.WaitForExitAsync(TestContext.CancellationToken);
         await second.WaitForExitAsync(TestContext.CancellationToken);
         Assert.AreEqual(0, first.ExitCode, await first.StandardOutput.ReadToEndAsync(TestContext.CancellationToken));
@@ -370,6 +374,7 @@ public sealed class FileHistoryStoreTests
             UseShellExecute = false,
             WorkingDirectory = AppContext.BaseDirectory,
         };
+
         foreach (var (name, value) in environment)
         {
             startInfo.Environment[name] = value;

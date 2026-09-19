@@ -73,6 +73,7 @@ public sealed class HostRecoveryTests
             Cells = [new SessionCell { Source = crash }, new SessionCell { Number = 2, Source = later }],
             Editor = new SessionEditor { Lines = ["// keep the draft"], Caret = 4, Anchor = 2 },
         };
+
         await files.WriteAsync(document, token);
         var original = await File.ReadAllBytesAsync(files.SessionPath, token);
         var running = false;
@@ -86,16 +87,19 @@ public sealed class HostRecoveryTests
 
             return await HostPaths.StartEngineAsync(ct);
         });
+
         await controller.SessionAsync(new SessionRequest
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         var epoch = controller.AssemblyVersion >> 32;
         running = true;
         var result = await controller.SessionAsync(new SessionRequest
         {
             Action = new SessionAction { Operation = SessionOperation.Run }, Editor = controller.Editor,
         }, token);
+
         Assert.IsFalse(result.Reply.Succeeded);
         Assert.AreEqual(epoch + 1, controller.AssemblyVersion >> 32);
         Assert.AreEqual(recoveryFails ? SessionRuntimeState.Unavailable : SessionRuntimeState.Ready, controller.RuntimeState);
@@ -110,6 +114,7 @@ public sealed class HostRecoveryTests
         {
             Action = new SessionAction { Operation = SessionOperation.Save, Path = files.SessionPath }, Editor = controller.Editor,
         }, token);
+
         Assert.IsFalse(saved.Dirty);
         var reopened = SessionCodec.Read(await File.ReadAllBytesAsync(files.SessionPath, token));
         Assert.AreEqual("interrupted", reopened.Cells[0].State);
@@ -123,6 +128,7 @@ public sealed class HostRecoveryTests
         {
             Action = new SessionAction { Operation = SessionOperation.Run, Numbers = [2] }, Editor = controller.Editor,
         }, token);
+
         Assert.IsTrue(replayed.Reply.Succeeded, string.Join('\n', replayed.Reply.Lines.Select(line => line.PlainText)));
         Assert.Contains(line => line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal), replayed.Reply.Lines);
     }

@@ -67,6 +67,7 @@ internal static class IsolatedTestProcess
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+
         if (string.Equals(Path.GetFileNameWithoutExtension(start.FileName), "dotnet", StringComparison.OrdinalIgnoreCase))
         {
             start.ArgumentList.Add(typeof(IsolatedTestProcess).Assembly.Location);

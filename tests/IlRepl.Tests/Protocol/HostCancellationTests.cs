@@ -41,6 +41,7 @@ public sealed class HostCancellationTests
                 cancelling.TrySetResult();
             }
         };
+
         foreach (var line in new[] { "ldstr " + LiteralParser.Escape(marker), "ldstr \"entered\"",
             "call void File::WriteAllText(string, string)", "WAIT: ldstr " + LiteralParser.Escape(release),
             "call bool File::Exists(string)", "brfalse WAIT", "ldc.i4 73" })

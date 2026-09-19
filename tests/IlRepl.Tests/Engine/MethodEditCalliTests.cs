@@ -29,6 +29,7 @@ public sealed class MethodEditCalliTests
             "modifier" => "int32 modopt(Local)()",
             _ => "void(method class Local *())",
         };
+
         var arguments = shape == "parameter" ? "ldnull\n" : shape == "nested" ? "ldc.i4.0\nconv.i\n" : "";
         var pop = shape is "return" or "modifier" ? "pop\n" : "";
         var session = IlLines.Load((".class public Local {\n.field public int32 Original\n}\n"
@@ -56,6 +57,7 @@ public sealed class MethodEditCalliTests
             "modifier" => ".method int32 Target() {\nldc.i4.0\nret\n}",
             _ => ".method void Target(method class " + typeName + " *() pointer) {\nret\n}",
         };
+
         foreach (var line in (target + "\n.method int32 Scenario() {\nldftn Target\ncall Copy\nret\n}").Split('\n'))
         {
             session.AddLine(line);
@@ -77,6 +79,7 @@ public sealed class MethodEditCalliTests
                 "modifier" => ((OptionalModifierType)site.ReturnType).ModifierType,
                 _ => ((FunctionPointerType)site.Parameters[0].ParameterType).ReturnType,
             };
+
             Assert.AreSame(module, referenced.Scope);
             var context = new AssemblyLoadContext("calli-export", isCollectible: true);
             try
@@ -114,6 +117,7 @@ public sealed class MethodEditCalliTests
             il.Emit(OpCodes.Ldc_I4, 42);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var family = ImportedMethodFamily.Capture("Copy", original.GetMethod("Read")!, session);
         var dependency = family.Dependencies.Single(dependency => dependency.Symbol == "CalliOptionalHidden");
         Assert.AreEqual("copied (distinct type identity)", dependency.Disposition);

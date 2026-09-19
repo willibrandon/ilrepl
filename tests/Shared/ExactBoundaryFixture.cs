@@ -73,6 +73,7 @@ public static class ExactBoundaryFixture
             "field-array-modifier" => [0x1d, 0x20, nominal, 8],
             _ => [0x1b, 0, 0, 0x12, nominal],
         };
+
         var field = kind.StartsWith("field", StringComparison.Ordinal);
         var parameter = kind.StartsWith("parameter", StringComparison.Ordinal);
         var functionReturn = kind == "return-function";

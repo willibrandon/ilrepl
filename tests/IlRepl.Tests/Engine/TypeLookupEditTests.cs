@@ -39,6 +39,7 @@ public sealed class TypeLookupEditTests
             il.Emit(OpCodes.Ldc_I4, 42);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         foreach (var line in IlLines.Expand(".method int32 Work() {", "ldstr \"name\"",
             "call int32 [" + assembly.GetName().Name + "]System.Type::GetType(string)", "ret", "}"))
         {

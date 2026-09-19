@@ -173,6 +173,7 @@ public sealed class FrameworkAccessTests
             "NT" => [$"call int32 {target}/NT_{word}::Hello()"],
             _ => [$"call int32 {target}::Echo<class {target}/NT_{word}>()"],
         };
+
         try
         {
             if (fromDerived)

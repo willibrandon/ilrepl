@@ -319,6 +319,7 @@ public static class ControlFlowReceiverExamples
             "stloc saved",
             ".try {",
         };
+
         for (var index = 0; index < Paths; index++)
         {
             lines.Add("ldarg choice");
@@ -385,6 +386,7 @@ public static class ControlFlowReceiverExamples
             "ldarg.0",
             "call instance void object::.ctor()",
         };
+
         for (var index = 1; index <= Sources; index++)
         {
             lines.Add("ldarg.0");
@@ -433,6 +435,7 @@ public static class ControlFlowReceiverExamples
             "call instance void object::.ctor()",
             ".try {",
         };
+
         for (var index = 0; index < Paths; index++)
         {
             lines.Add($"ldarg {Paths + 1}");
@@ -490,6 +493,7 @@ public static class ControlFlowReceiverExamples
             "ldarg.0",
             "stloc saved",
         };
+
         for (var index = 1; index <= Paths; index++)
         {
             if (index == unsafeParameter)
@@ -561,6 +565,7 @@ public static class ControlFlowReceiverExamples
             $"switch ({paths})",
             "br PATH_0",
         };
+
         for (var index = 0; index < cases; index++)
         {
             lines.Add($"PATH_{index}: ldarg.0");
@@ -615,6 +620,7 @@ public static class ControlFlowReceiverExamples
             $"switch ({fillers})",
             "br CONDITIONS",
         };
+
         for (var index = 0; index < Fillers; index++)
         {
             lines.Add($"FILLER_{index}: br BEFORE");
@@ -939,6 +945,7 @@ public static class ControlFlowReceiverExamples
             "leave DONE",
             "} finally {",
         };
+
         AddReceiverSwitch(lines, Paths, Paths + 1, "FIRST");
         lines.Add("}");
         lines.Add("} finally {");
@@ -1004,6 +1011,7 @@ public static class ControlFlowReceiverExamples
             "} filter {",
             "pop",
         };
+
         for (var index = 0; index < Diamonds; index++)
         {
             lines.Add("ldarg.2");
@@ -2377,6 +2385,7 @@ public static class ControlFlowReceiverExamples
             "} filter {",
             "pop",
         };
+
         for (var index = 0; index < diamonds; index++)
         {
             lines.Add("ldarg.1");
@@ -2479,6 +2488,7 @@ public static class ControlFlowReceiverExamples
             "load" => "Load",
             _ => throw new ArgumentOutOfRangeException(nameof(use)),
         };
+
         var name = $"FlowAddress{suffix}Argument";
         return
         [
@@ -2513,6 +2523,7 @@ public static class ControlFlowReceiverExamples
             "filter" => "Filter",
             _ => throw new ArgumentOutOfRangeException(nameof(clause)),
         };
+
         var name = $"ExceptionalAddress{clauseName}{(throwAfterStore ? "Later" : "")}Argument";
         var handler = clause == "catch"
             ? new[] { "} catch object {", "pop" }

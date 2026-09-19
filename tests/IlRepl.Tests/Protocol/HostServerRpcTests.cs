@@ -204,6 +204,7 @@ public sealed class HostServerRpcTests
             Assert.AreNotEqual(mark.Generation, ran.Status.Mark.Generation);
         }
     }
+
     /// <summary>
     /// Whole-document analysis and earlier source locations survive the same generated RPC contract as the native host.
     /// </summary>

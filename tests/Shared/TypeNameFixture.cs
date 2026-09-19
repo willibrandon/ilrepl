@@ -175,6 +175,7 @@ public static class TypeNameFixture
                         EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
                     }
                 });
+
             return metadata.AddMemberReference(SignatureType(declaring), metadata.GetOrAddString(method.Name),
                 metadata.GetOrAddBlob(signature));
         }
@@ -202,6 +203,7 @@ public static class TypeNameFixture
                 returns => EncodeType(returns.Type(), result), _ =>
                 {
                 });
+
             var method = metadata.AddMethodDefinition(MethodAttributes.Static
                 | (methodName == "Read" || methodName == "Probe" ? MethodAttributes.Public : MethodAttributes.Private),
                 MethodImplAttributes.IL, metadata.GetOrAddString(methodName), metadata.GetOrAddBlob(signature),
@@ -481,6 +483,7 @@ public static class TypeNameFixture
             "bcl" => "String", "sibling" => "Sibling", "nested" => "Nested", "auxiliary" => "Auxiliary",
             "array" => "Owner[]", "auxiliary-array" => "Auxiliary[]", "constructed" => "List`1", _ => "Owner",
         };
+
         if (api == "Name")
         {
             return simple;

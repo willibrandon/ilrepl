@@ -110,6 +110,7 @@ public static class PublicHelperFixture
                         type.Int32();
                     }
                 });
+
             return metadata.GetOrAddBlob(blob);
         }
 
@@ -145,6 +146,7 @@ public static class PublicHelperFixture
                 parameters.AddParameter().Type().Int32();
                 parameters.AddParameter().Type().Int32();
             });
+
             Field(selected, ILOpCode.Ldsfld, state);
             selected.LoadConstantI4(0);
             selected.Call(metadata.AddMemberReference(Type("System", "Math"), metadata.GetOrAddString("Max"),
@@ -185,6 +187,7 @@ public static class PublicHelperFixture
                     parameters.AddParameter().Type().String();
                     parameters.AddParameter().Type().String();
                 });
+
                 selected.LoadString(metadata.GetOrAddUserString("PublicContext.Helper"));
                 selected.Call(metadata.AddMemberReference(Type("System", "String"), metadata.GetOrAddString("op_Equality"),
                     metadata.GetOrAddBlob(equalSignature)));
@@ -205,6 +208,7 @@ public static class PublicHelperFixture
                     result => result.Type().GenericTypeParameter(0), _ =>
                     {
                     });
+
                 selected.OpCode(ILOpCode.Callvirt);
                 selected.Token(metadata.AddMemberReference(callbackType, metadata.GetOrAddString("Invoke"),
                     metadata.GetOrAddBlob(invoke)));
@@ -240,6 +244,7 @@ public static class PublicHelperFixture
                     result => result.Type().String(), _ =>
                     {
                     });
+
                 body.OpCode(ILOpCode.Callvirt);
                 body.Token(metadata.AddMemberReference(reflected, metadata.GetOrAddString("get_FullName"),
                     metadata.GetOrAddBlob(property)));
@@ -251,6 +256,7 @@ public static class PublicHelperFixture
                     result => result.Type().Type(assembly, isValueType: false), _ =>
                     {
                     });
+
                 body.OpCode(ILOpCode.Callvirt);
                 body.Token(metadata.AddMemberReference(reflected, metadata.GetOrAddString("get_Assembly"),
                     metadata.GetOrAddBlob(property)));
@@ -285,6 +291,7 @@ public static class PublicHelperFixture
                 parameters.AddParameter().Type().Object();
                 parameters.AddParameter().Type().IntPtr();
             });
+
             body.OpCode(ILOpCode.Ldnull);
             body.OpCode(ILOpCode.Ldftn);
             body.Token(readState);

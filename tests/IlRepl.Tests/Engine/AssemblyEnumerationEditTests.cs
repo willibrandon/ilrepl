@@ -68,6 +68,7 @@ public sealed class AssemblyEnumerationEditTests
             }
         }
     }
+
     /// <summary>
     /// An unrelated user method with an enumeration API's name remains a normal copyable dependency.
     /// </summary>

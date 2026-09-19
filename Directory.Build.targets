@@ -2,7 +2,8 @@
   <!--
     Every project is checked by the repository's own analyzers. The host that a frontend build publishes for itself is the
     exception: that nested build forces its target framework and runtime onto every project it reaches, and the same
-    source is already checked when the host builds normally.
+    source is already checked when the host builds normally. That build announces itself with _IlReplHostBuild. The host's
+    build directory cannot be the sign, because the frontends that import build/IlRepl.Host.targets define it as well.
 
     A property a project passes to its references would otherwise travel on to the analyzers and build them a second
     time into the same folder, where one build's clean removes the assembly another project is compiling against.
@@ -14,7 +15,7 @@
       >$(_AnalyzerPropertiesToRemove);PublishAot;PublishReadyToRun;PublishSingleFile;PublishTrimmed</_AnalyzerPropertiesToRemove>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(MSBuildProjectName)' != 'IlRepl.SourceGen' and '$(_IlReplHostBuildDirectory)' == ''
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'IlRepl.SourceGen' and '$(_IlReplHostBuild)' != 'true'
                         and Exists('$(MSBuildThisFileDirectory)src/IlRepl.SourceGen/IlRepl.SourceGen.csproj')">
     <ProjectReference Include="$(MSBuildThisFileDirectory)src/IlRepl.SourceGen/IlRepl.SourceGen.csproj"
                       OutputItemType="Analyzer"

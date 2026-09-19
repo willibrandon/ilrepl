@@ -175,6 +175,7 @@ public sealed class ArrayAddressHelpTests
                 session.AddLine(line);
             }
         });
+
         Assert.Contains("readonly. cannot prefix call", error.Message);
         Assert.HasCount(1, session.Methods);
     }

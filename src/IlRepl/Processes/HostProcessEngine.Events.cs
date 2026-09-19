@@ -133,6 +133,7 @@ public sealed partial class HostProcessEngine : IReplClient, IHostedEngine, IPro
             // Disposal has already consumed the process lifetime.
         }
     }
+
     /// <inheritdoc />
     public ProcessSupervisionState Supervision => _lifetime.Supervision;
 

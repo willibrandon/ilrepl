@@ -25,38 +25,20 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxNodeAction(AnalyzeSequence, SyntaxKind.Block, SyntaxKind.SwitchSection, SyntaxKind.CompilationUnit,
             SyntaxKind.NamespaceDeclaration, SyntaxKind.FileScopedNamespaceDeclaration, SyntaxKind.ClassDeclaration,
             SyntaxKind.StructDeclaration, SyntaxKind.InterfaceDeclaration, SyntaxKind.RecordDeclaration,
-            SyntaxKind.RecordStructDeclaration);
+            SyntaxKind.RecordStructDeclaration, SyntaxKind.AccessorList);
     }
 
     private static void AnalyzeSequence(SyntaxNodeAnalysisContext context)
     {
-        IReadOnlyList<SyntaxNode> items;
-        var end = default(SyntaxToken);
-        switch (context.Node)
+        IReadOnlyList<SyntaxNode> items = context.Node switch
         {
-            case BlockSyntax block:
-                items = block.Statements;
-                end = block.CloseBraceToken;
-                break;
-            case SwitchSectionSyntax section:
-                items = section.Statements;
-                break;
-            case CompilationUnitSyntax unit:
-                items = unit.Members;
-                break;
-            case NamespaceDeclarationSyntax space:
-                items = space.Members;
-                end = space.CloseBraceToken;
-                break;
-            case FileScopedNamespaceDeclarationSyntax space:
-                items = space.Members;
-                break;
-            default:
-                var type = (TypeDeclarationSyntax)context.Node;
-                items = type.Members;
-                end = type.CloseBraceToken;
-                break;
-        }
+            BlockSyntax block => block.Statements,
+            SwitchSectionSyntax section => section.Statements,
+            CompilationUnitSyntax unit => unit.Members,
+            BaseNamespaceDeclarationSyntax space => space.Members,
+            AccessorListSyntax accessors => accessors.Accessors,
+            _ => ((TypeDeclarationSyntax)context.Node).Members,
+        };
 
         for (var index = 0; index < items.Count; index++)
         {
@@ -68,19 +50,16 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
             var last = items[index].GetLastToken();
             if (index + 1 == items.Count)
             {
-                // Only a comment can stand between the last item and the brace that closes its container.
-                if (!end.IsKind(SyntaxKind.None) && !end.IsMissing)
-                {
-                    Check(context, last, end, codeAlso: false);
-                }
-
+                // Only a comment can stand between the last item and what ends its container: a brace, the next case, or the file.
+                Check(context, last, last.GetNextToken(includeZeroWidth: true), codeAlso: false);
                 continue;
             }
 
             // The SDK's rule already reports a statement placed right under a block, so that one case is left to it.
+            // Accessors stay together, which leaves only a comment under one of them to report.
             var next = items[index + 1];
             var sdkReports = last.IsKind(SyntaxKind.CloseBraceToken) && IsStatement(items[index]) && IsStatement(next);
-            Check(context, last, next.GetFirstToken(), codeAlso: !sdkReports);
+            Check(context, last, next.GetFirstToken(), codeAlso: !sdkReports && context.Node is not AccessorListSyntax);
         }
     }
 

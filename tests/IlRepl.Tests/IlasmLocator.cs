@@ -78,6 +78,7 @@ internal static class IlasmLocator
             {
                 WorkingDirectory = directory,
             };
+
             var result = await ToolProcess.RunAsync(start, cancellationToken);
             var image = result.ExitCode == 0 ? await File.ReadAllBytesAsync(dll, cancellationToken) : [];
             return new IlasmResult(result, image);

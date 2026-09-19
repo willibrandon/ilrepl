@@ -128,6 +128,7 @@ public sealed class EngineResponsivenessTests
                 progress.Add(item);
             }
         };
+
         var running = engine.RunOperationAsync("restore", async cancellationToken =>
         {
             var reply = await engine.HandleAsync("nop", cancellationToken);
@@ -136,6 +137,7 @@ public sealed class EngineResponsivenessTests
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return true;
         }, TestContext.CancellationToken);
+
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.CancellationToken);
         var active = engine.Progress;
         Assert.IsTrue(active.IsRunning);
@@ -158,6 +160,7 @@ public sealed class EngineResponsivenessTests
         Assert.IsTrue(stillUsable.Succeeded);
         Assert.AreEqual("[int32]", stillUsable.Status.Stack);
     }
+
     /// <summary>
     /// Cancelling before invocation does not mark a loaded dependency as activated, while the later actual call does.
     /// </summary>
@@ -261,6 +264,7 @@ public sealed class EngineResponsivenessTests
         {
             Action = new SessionAction { Operation = SessionOperation.Capture },
         }, TestContext.CancellationToken);
+
         Assert.IsNotNull(snapshot.Document);
         Assert.Contains(entry => entry.Source.Contains("ldc.i4.s 42"), snapshot.Document.Entries);
         Assert.IsEmpty(snapshot.Document.Cells);
@@ -303,6 +307,7 @@ public sealed class EngineResponsivenessTests
                 Assert.IsFalse(File.Exists(marker), "Module initialization must not happen during cooperative compilation.");
                 entered = true;
             };
+
             var reply = await engine.HandleAsync("ret", TestContext.CancellationToken);
             Assert.IsTrue(reply.Succeeded);
             Assert.IsTrue(entered);

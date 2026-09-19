@@ -49,6 +49,7 @@ public sealed class HostOutputTests
                 received.TrySetResult(transcript.Lines.ToArray());
             }
         };
+
         try
         {
             await ObserveAsync("ret");

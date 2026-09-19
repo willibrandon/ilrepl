@@ -143,6 +143,7 @@ public sealed class ObservedBindingTests
 
                 module.Types.Add(owner);
             })));
+
             var actualOwner = requester.GetType("N.Owner")!;
             var runtime = new RuntimeBindingScope(new ParseContext([], [], GenericContext.Empty, new TypeResolver(), []));
             var ownerSymbol = runtime.ImportType(actualOwner);

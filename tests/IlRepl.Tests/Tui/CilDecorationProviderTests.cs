@@ -52,6 +52,7 @@ public sealed class CilDecorationProviderTests
                     return ctx.VStack(v => [v.Editor(editor).Decorations(provider).FixedHeight(2), v.Text("phase " + phase)]);
                 };
             }).Build();
+
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
         var run = terminal.RunAsync(cancellation.Token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));

@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
@@ -68,6 +70,7 @@ public sealed class ArrayCompletionTests
                 type.Methods.Add(fetch);
             }
         }, session.State.Resolver, "BoundedArrays" + Guid.NewGuid().ToString("N") + (shape == 3 ? "`1" : ""));
+
         var fixture = shape == 3 ? definition.MakeGenericType(typeof(int)) : definition;
         using var completer = new OperandCompleter(session);
         var owner = $"[{assembly.GetName().Name}]{definition.FullName}" + (shape == 3 ? "<int32>" : "");
@@ -90,6 +93,7 @@ public sealed class ArrayCompletionTests
                 1 => index == 0 ? "int32[3]" : "int32[4]",
                 _ => index == 0 ? "int32[1...4,-2...1]" : "int32[2...5,-3...0]",
             };
+
             Assert.AreEqual(expectedSpelling, spelling);
             Assert.AreEqual(expected, RuntimeSymbolImporter.Import(field).FieldType);
             Assert.AreEqual(expected, RuntimeSymbolImporter.Import(fixture.GetMethod("Fetch" + index)!).ReturnType);
@@ -131,7 +135,7 @@ public sealed class ArrayCompletionTests
 
             session.AddLine("call Check");
             var image = IlasmLocator.Assemble(session.ToIlAsm());
-            var context = new System.Runtime.Loader.AssemblyLoadContext("array-roundtrip", isCollectible: true);
+            var context = new AssemblyLoadContext("array-roundtrip", isCollectible: true);
             context.Resolving += (_, name) => name.Name == assembly.GetName().Name ? assembly : null;
             try
             {
@@ -169,6 +173,7 @@ public sealed class ArrayCompletionTests
             method.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
             type.Methods.Add(method);
         }, session.State.Resolver, "ArrayLifetime" + Guid.NewGuid().ToString("N"));
+
         session.AddLine("ldnull");
         session.AddLine($"call [{assembly.GetName().Name}]{fixture.FullName}::Accept<int32>(int32[1...4])");
         var weak = CompileAndRelease(session);
@@ -182,7 +187,7 @@ public sealed class ArrayCompletionTests
         GC.KeepAlive(session);
     }
 
-    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    [System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference CompileAndRelease(Session session)
     {
         var compiled = CellCompiler.Compile(session);

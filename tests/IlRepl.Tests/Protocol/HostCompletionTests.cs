@@ -75,6 +75,7 @@ public sealed class HostCompletionTests
             entered.TrySetResult();
             return release.Task;
         };
+
         var pending = connection.Proxy.HandleAsync("ldc.i4.s 42", token);
         try
         {
@@ -138,6 +139,7 @@ public sealed class HostCompletionTests
 
             return Task.CompletedTask;
         };
+
         var pending = retained
             ? connection.Proxy.HandleRetainedSourceAsync("ldc.i4.s 99", new AnalysisLocation("paste", 0, 0, 11),
                 CancellationToken.None)
@@ -201,6 +203,7 @@ public sealed class HostCompletionTests
             entered.TrySetResult();
             return release.Task;
         };
+
         var pending = connection.Proxy.HandleAsync(".load " + LiteralParser.Escape(path), token);
         try
         {
@@ -262,6 +265,7 @@ public sealed class HostCompletionTests
                 release.Wait(token);
             }
         };
+
         var first = located
             ? host.HandleSourceAsync("ldc.i4.6", new AnalysisLocation("source", 0, 0, 8), token)
             : host.HandleAsync("ldc.i4.6", token);

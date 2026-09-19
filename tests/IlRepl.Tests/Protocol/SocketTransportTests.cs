@@ -91,6 +91,7 @@ public sealed class SocketTransportTests
         Assert.IsTrue(server.CanRead);
         Assert.IsTrue(client.CanWrite);
     }
+
     /// <summary>
     /// Rejected bootstrap connections receive an explicit response and cannot consume the expected host connection.
     /// </summary>

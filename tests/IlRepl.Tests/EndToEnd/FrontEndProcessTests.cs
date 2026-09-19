@@ -487,6 +487,7 @@ public sealed class FrontEndProcessTests
             UseShellExecute = false,
             WorkingDirectory = RepoPaths.Root,
         };
+
         startInfo.ArgumentList.Add(RepoPaths.FrontEndAssembly);
         foreach (var argument in arguments)
         {

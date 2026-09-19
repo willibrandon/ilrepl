@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Runtime.Loader;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
@@ -98,18 +101,18 @@ public sealed class LiteralParserTests
 
         // Reflection.Emit: the cell's path. The body is persisted and read back, because a JIT
         // folds float constants through double and would quiet the NaN before any bits were read.
-        var persisted = new System.Reflection.Emit.PersistedAssemblyBuilder(new System.Reflection.AssemblyName("IlReplFloatBits"),
+        var persisted = new PersistedAssemblyBuilder(new AssemblyName("IlReplFloatBits"),
             typeof(object).Assembly);
-        var builder = persisted.DefineDynamicModule("IlReplFloatBits").DefineType("T", System.Reflection.TypeAttributes.Public);
-        var il = builder.DefineMethod("F", System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
+        var builder = persisted.DefineDynamicModule("IlReplFloatBits").DefineType("T", TypeAttributes.Public);
+        var il = builder.DefineMethod("F", MethodAttributes.Public | MethodAttributes.Static,
             typeof(float), Type.EmptyTypes).GetILGenerator();
-        il.Emit(System.Reflection.Emit.OpCodes.Ldc_R4, value);
-        il.Emit(System.Reflection.Emit.OpCodes.Ret);
+        il.Emit(OpCodes.Ldc_R4, value);
+        il.Emit(OpCodes.Ret);
         builder.CreateType();
         using var stream = new MemoryStream();
         persisted.Save(stream);
         stream.Position = 0;
-        var emitted = new System.Runtime.Loader.AssemblyLoadContext("IlReplFloatBits", isCollectible: true).LoadFromStream(stream);
+        var emitted = new AssemblyLoadContext("IlReplFloatBits", isCollectible: true).LoadFromStream(stream);
         var emittedBytes = emitted.GetType("T")!.GetMethod("F")!.GetMethodBody()!.GetILAsByteArray()!;
         Assert.AreEqual(0x22, emittedBytes[0]);
         Assert.AreEqual(0x7F800001u, BitConverter.ToUInt32(emittedBytes, 1));

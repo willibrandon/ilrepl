@@ -193,6 +193,7 @@ public static class AssemblyReferenceFixture
                         EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
                     }
                 });
+
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
             if (method is not MethodInfo { IsGenericMethod: true } closed)
@@ -256,6 +257,7 @@ public static class AssemblyReferenceFixture
             "runtime-hash" => typeof(RuntimeHelpers).GetMethod(nameof(RuntimeHelpers.GetHashCode), [typeof(object)]),
             _ => null,
         };
+
         var instructions = new InstructionEncoder(new BlobBuilder(), new ControlFlowBuilder());
         void Call(MethodBase called)
         {

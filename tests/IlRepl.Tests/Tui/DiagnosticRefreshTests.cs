@@ -65,6 +65,7 @@ public sealed class DiagnosticRefreshTests
                 return prompt.Text == expected && engine.Analyses.LastOrDefault()?.Request.Lines[0] == expected
                     && prompt.Analysis is null;
             });
+
             var caret = prompt.Editor.Cursor.Position;
             await auto.KeyAsync(Hex1bKey.F8, ct: ct);
             await auto.WaitUntilAsync(_ => recorder.Count > start);
@@ -129,6 +130,7 @@ public sealed class DiagnosticRefreshTests
             requester.Refresh(state);
             return state.Analysis is not null;
         });
+
         var display = PromptDiagnostics.Display(state);
         state.Editor.InsertText("x");
         requester.Refresh(state);

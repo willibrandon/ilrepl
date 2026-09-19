@@ -333,6 +333,7 @@ public sealed class HashtableComparisonTests
                 }
             }
         }, TestContext.CancellationToken);
+
         try
         {
             started.Wait(TestContext.CancellationToken);

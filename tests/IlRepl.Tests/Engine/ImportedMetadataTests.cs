@@ -41,17 +41,20 @@ public sealed class ImportedMetadataTests
             {
                 MarshalInfo = new FixedArrayMarshalInfo { Size = 3, ElementType = NativeType.I2 },
             });
+
             type.Fields.Add(new CecilFieldDefinition("Name", CecilFieldAttributes.Public | CecilFieldAttributes.HasFieldMarshal,
                 module.TypeSystem.String)
             {
                 MarshalInfo = new FixedSysStringMarshalInfo { Size = 5 },
             });
+
             var method = new CecilMethodDefinition("Value", CecilMethodAttributes.Public | CecilMethodAttributes.Static,
                 module.TypeSystem.Int32);
             type.Methods.Add(method);
             method.Body.GetILProcessor().Emit(CecilOpCodes.Ldc_I4, 42);
             method.Body.GetILProcessor().Emit(CecilOpCodes.Ret);
         }, session.Resolver);
+
         var edit = Commit(session, $"int32 [{assembly.GetName().Name}]N.Fixture::Value()");
         Assert.AreEqual(42, edit.Method!.Invoke(null, null));
         AssertNativeLayout(original);
@@ -84,12 +87,14 @@ public sealed class ImportedMetadataTests
             {
                 MarshalInfo = ArrayDescriptor(details),
             });
+
             method.Parameters.Add(new ParameterDefinition("count", CecilParameterAttributes.None, module.TypeSystem.Int32));
             method.MethodReturnType.MarshalInfo = ArrayDescriptor(details);
             method.MethodReturnType.Attributes = CecilParameterAttributes.HasFieldMarshal;
             method.Body.GetILProcessor().Emit(CecilOpCodes.Ldarg_0);
             method.Body.GetILProcessor().Emit(CecilOpCodes.Ret);
         }, session.Resolver);
+
         var edit = Commit(session, $"int32[] [{assembly.GetName().Name}]N.Fixture::Echo(int32[], int32)");
         int[] values = [10, 20, 30];
         Assert.AreSame(values, original.GetMethod("Echo")!.Invoke(null, [values, 3]));
@@ -120,11 +125,13 @@ public sealed class ImportedMetadataTests
             {
                 MarshalInfo = new MarshalInfo(NativeType.I1),
             });
+
             method.MethodReturnType.MarshalInfo = new MarshalInfo(NativeType.U1);
             method.MethodReturnType.Attributes = CecilParameterAttributes.HasFieldMarshal;
             method.Body.GetILProcessor().Emit(CecilOpCodes.Ldarg_0);
             method.Body.GetILProcessor().Emit(CecilOpCodes.Ret);
         }, session.Resolver);
+
         var edit = Commit(session, $"bool [{assembly.GetName().Name}]N.Fixture::Echo(bool)");
         var method = (MethodInfo)edit.Method!;
         Assert.IsTrue((bool)method.Invoke(null, [true])!);
@@ -164,6 +171,7 @@ public sealed class ImportedMetadataTests
                     PackingSize = 1,
                     ClassSize = bytes.Length,
                 };
+
                 type.NestedTypes.Add(blob);
                 fieldType = blob;
             }
@@ -182,6 +190,7 @@ public sealed class ImportedMetadataTests
             il.Emit(CecilOpCodes.Call, module.ImportReference(typeof(RuntimeHelpers).GetMethod(nameof(RuntimeHelpers.InitializeArray))!));
             il.Emit(CecilOpCodes.Ret);
         }, session.Resolver);
+
         Assert.IsEmpty(assembly.Location);
         Assert.IsFalse(SessionAssemblies.TryGetDefinition(assembly, out _));
         Assert.IsTrue(session.Resolver.TryGetImage(assembly, out var retained));
@@ -219,6 +228,7 @@ public sealed class ImportedMetadataTests
             {
                 InitialValue = BitConverter.GetBytes(42),
             };
+
             storage.Fields.Add(field);
             var initializer = new CecilMethodDefinition(".cctor", CecilMethodAttributes.Private | CecilMethodAttributes.Static
                 | CecilMethodAttributes.SpecialName | CecilMethodAttributes.RTSpecialName, module.TypeSystem.Void);
@@ -238,6 +248,7 @@ public sealed class ImportedMetadataTests
             il.Emit(CecilOpCodes.Call, module.ImportReference(typeof(RuntimeHelpers).GetMethod(nameof(RuntimeHelpers.InitializeArray))!));
             il.Emit(CecilOpCodes.Ret);
         }, session.Resolver);
+
         int[] expected = [42];
         Assert.AreSequenceEqual(expected, (int[])original.GetMethod("Read")!.Invoke(null, null)!);
 

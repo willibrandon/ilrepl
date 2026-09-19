@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
+using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 using IlRepl.Engine;
 
@@ -125,7 +126,7 @@ public sealed class AssemblyExporterTests
             Assert.IsFalse(take[1].IsOptional);
             Assert.AreEqual("bare", bare.GetCustomAttribute<ObsoleteAttribute>()!.Message);
             var union = assembly.GetType("Union")!;
-            Assert.AreEqual(System.Runtime.InteropServices.LayoutKind.Explicit, union.StructLayoutAttribute!.Value);
+            Assert.AreEqual(LayoutKind.Explicit, union.StructLayoutAttribute!.Value);
             Assert.AreEqual(8, union.StructLayoutAttribute.Size);
         }
         finally

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
 using IlRepl.Engine;
 using Mono.Cecil;
@@ -53,7 +55,7 @@ public sealed partial class DefinitionAssemblyTests
             il.Emit(OpCodes.Add);
             il.Emit(OpCodes.Ret);
             holder.Methods.Add(read);
-            var attribute = new CustomAttribute(module.ImportReference(typeof(System.Diagnostics.DebuggerTypeProxyAttribute).GetConstructor(
+            var attribute = new CustomAttribute(module.ImportReference(typeof(DebuggerTypeProxyAttribute).GetConstructor(
                 [typeof(Type)])!));
             attribute.ConstructorArguments.Add(new CustomAttributeArgument(module.ImportReference(typeof(Type)), pointType));
             holder.CustomAttributes.Add(attribute);
@@ -68,7 +70,7 @@ public sealed partial class DefinitionAssemblyTests
             var name = SessionAssemblies.NextName(SessionAssemblyKind.Types);
             var assembly = New(name);
             var module = assembly.MainModule;
-            var type = new TypeDefinition("", "C" + index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            var type = new TypeDefinition("", "C" + index.ToString(CultureInfo.InvariantCulture),
                 TypeAttributes.Public | TypeAttributes.Class, module.ImportReference(typeof(object)));
             module.Types.Add(type);
             var sum = new MethodDefinition("Sum", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Int32);

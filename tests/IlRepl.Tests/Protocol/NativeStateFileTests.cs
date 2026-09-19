@@ -28,6 +28,7 @@ public sealed class NativeStateFileTests
         {
             MethodId = 11, Report = new NativeReport { Name = "before", Invocations = 1 },
         });
+
         await using var original = NativeStateFile.OpenRead(path);
 
         await Task.Run(() => NativeStateFile.WriteAsync(files.DirectoryPath, new NativeWorkerState

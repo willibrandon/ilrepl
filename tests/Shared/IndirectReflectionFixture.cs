@@ -142,6 +142,7 @@ public static class IndirectReflectionFixture
                 + "callvirt instance class Delegate MethodInfo::CreateDelegate(class Type)\ncastclass class Func<int32>\n"
                 + "callvirt instance !0 class Func<int32>::Invoke()\n",
         };
+
         var source = ReflectionDependencyExamples.Source("method").Replace(invocation, replacement, StringComparison.Ordinal);
         return dispatch == "function pointer" ? source.Replace(".method public static int32 Read() {",
             ".method public static int32 Read() {\n.locals init (valuetype RuntimeMethodHandle pointer)",
@@ -262,6 +263,7 @@ public static class IndirectReflectionFixture
                         EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
                     }
                 });
+
             var declaring = definition.DeclaringType!;
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
@@ -302,11 +304,13 @@ public static class IndirectReflectionFixture
         {
             "Assembly" => typeof(Assembly), "Type" => typeof(Type), "Activator" => typeof(Activator), _ => typeof(Module),
         };
+
         var property = dispatch.StartsWith("property", StringComparison.Ordinal);
         var apiName = api switch
         {
             "typed resource" => "GetManifestResourceStream", "typed attributes" => "GetCustomAttributes", _ => api,
         };
+
         var parameterTypes = api switch
         {
             "GetManifestResourceInfo" or "GetManifestResourceStream" => new[] { typeof(string) },
@@ -318,6 +322,7 @@ public static class IndirectReflectionFixture
             "CreateInstance" => [typeof(string)],
             _ => Type.EmptyTypes,
         };
+
         var inspection = property ? receiver.GetProperty(apiName)!.GetMethod! : receiver.GetMethod(apiName, parameterTypes)!;
         void Call(MethodBase method)
         {
@@ -447,6 +452,7 @@ public static class IndirectReflectionFixture
                         "typed resource" => "payload",
                         _ => "IndirectReflection.payload",
                     };
+
                     instructions.LoadString(metadata.GetOrAddUserString(value));
                 }
                 else
@@ -601,6 +607,7 @@ public static class IndirectReflectionFixture
                 value => EncodeType(value.Type(), inspection.ReturnType), _ =>
                 {
                 });
+
             instructions.OpCode(ILOpCode.Calli);
             instructions.Token(metadata.AddStandaloneSignature(metadata.GetOrAddBlob(indirectSignature)));
         }
@@ -699,6 +706,7 @@ public static class IndirectReflectionFixture
         {
             "array alias" => typeof(MethodInfo[]), "function pointer" => typeof(RuntimeMethodHandle), _ => typeof(MethodInfo),
         };
+
         EncodeType(new BlobEncoder(locals).LocalVariableSignature(1).AddVariable().Type(), localType);
         var bodyEncoder = new MethodBodyStreamEncoder(bodies);
         var offset = bodyEncoder.AddMethodBody(instructions, maxStack: 12,
@@ -728,6 +736,7 @@ public static class IndirectReflectionFixture
                     EncodeType(parameters.AddParameter().Type(), typeof(Type));
                     parameters.AddParameter().Type().String();
                 });
+
             metadata.AddMethodDefinition(MethodAttributes.Private | MethodAttributes.Static, MethodImplAttributes.IL,
                 metadata.GetOrAddString("Resolve"), metadata.GetOrAddBlob(helperSignature), helperOffset,
                 MetadataTokens.ParameterHandle(1));
@@ -749,6 +758,7 @@ public static class IndirectReflectionFixture
                     parameters.AddParameter().Type().String();
                     parameters.AddParameter().Type().Boolean();
                 });
+
             metadata.AddMethodDefinition(MethodAttributes.Private | MethodAttributes.Static, MethodImplAttributes.IL,
                 metadata.GetOrAddString("ResolveType"), metadata.GetOrAddBlob(callbackSignature), callbackOffset,
                 MetadataTokens.ParameterHandle(1));

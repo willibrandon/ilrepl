@@ -126,6 +126,7 @@ public sealed class HostInteractionTests
             await launch.Task.WaitAsync(ct);
             return await HostPaths.StartEngineAsync(ct);
         });
+
         PromptState? prompt = null;
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(controller, transcript, onPrompt: state => prompt = state);
@@ -177,6 +178,7 @@ public sealed class HostInteractionTests
             "finally" => [".try {", "leave DONE", "} finally {", "LOOP: br LOOP", "endfinally", "}", "DONE: ret"],
             _ => ["LOOP: br LOOP"],
         };
+
         await AppTest.TypeLinesAsync(auto,
         [
             ".method void WaitForever() {", "ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"running\"",
@@ -284,6 +286,7 @@ public sealed class HostInteractionTests
             auto!.TypeAsync(".clear", ct: token).GetAwaiter().GetResult();
             auto.WaitUntilAsync(_ => prompt!.Text == ".clear").GetAwaiter().GetResult();
         };
+
         await using var terminal = AppTest.Build(controller, new Transcript(), width: 80, height: 30,
             onPrompt: value => prompt = value);
         auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);

@@ -53,6 +53,7 @@ public static class EditedOverrideExamples
             "object" => ".override Object::GetHashCode\n",
             _ => "",
         };
+
         return ".method public virtual newslot instance int32 Alternate() {\n" + mappings + (repeat ? mappings : "")
             + "ldc.i4.s 43\nret\n}";
     }

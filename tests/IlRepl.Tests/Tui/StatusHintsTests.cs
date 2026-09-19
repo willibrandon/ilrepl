@@ -164,6 +164,7 @@ public sealed class StatusHintsTests
         state.Submission = new Submission(engine, [], 0, false, _ => Task.CompletedTask, _ =>
         {
         });
+
         Assert.IsTrue(state.Busy);
         Assert.AreEqual(EnterAction.Submit, PromptWidget.EnterActionFor(state, paletteVisible: false, openDepth: 0, commentOpen: false));
         Assert.AreSequenceEqual(s_busy, IlReplApp.StatusHints(s_facts, 100, copyMode: false, EnterAction.Busy, 1));

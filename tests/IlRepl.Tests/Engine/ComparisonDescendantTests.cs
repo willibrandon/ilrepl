@@ -124,6 +124,7 @@ public sealed class ComparisonDescendantTests
             {
                 TimeoutMilliseconds = mode == "timeout" ? 15_000 : 60_000,
             };
+
             running = ProcessComparisonRunner.RunAsync(package, cancel.Token);
             if (mode == "cancel")
             {

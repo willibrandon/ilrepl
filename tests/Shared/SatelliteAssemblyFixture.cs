@@ -128,6 +128,7 @@ public static class SatelliteAssemblyFixture
                         EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
                     }
                 });
+
             return metadata.AddMemberReference(TypeReference(method.DeclaringType!), metadata.GetOrAddString(method.Name),
                 metadata.GetOrAddBlob(signature));
         }
@@ -264,6 +265,7 @@ public static class SatelliteAssemblyFixture
                         EncodeType(arguments.AddParameter().Type(), parameter);
                     }
                 });
+
             metadata.AddMethodDefinition(MethodAttributes.Private | MethodAttributes.Static, MethodImplAttributes.IL,
                 metadata.GetOrAddString(inspection.Name), metadata.GetOrAddBlob(signature), helperOffset,
                 MetadataTokens.ParameterHandle(1));

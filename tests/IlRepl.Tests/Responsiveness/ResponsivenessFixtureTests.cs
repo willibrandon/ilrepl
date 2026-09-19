@@ -61,6 +61,7 @@ public sealed class ResponsivenessFixtureTests
         {
             Action = new SessionAction { Operation = SessionOperation.Hydrate }, Document = document,
         }, TestContext.CancellationToken);
+
         Assert.IsTrue(restored.Reply.Succeeded);
         Assert.IsTrue((await engine.HandleAsync("call int32 Retained3()", TestContext.CancellationToken)).Succeeded);
         var result = await engine.HandleAsync("ret", TestContext.CancellationToken);

@@ -24,6 +24,7 @@ public static class InvocationIdentityExamples
             "throw" => "ldstr \"same exception\"\nnewobj instance void Exception::.ctor(string)\n",
             _ => "ldc.i4.s 42\nnewobj instance void Payload::.ctor(int32)\n",
         };
+
         return """
             .class public Payload {
               .field public int32 Number
@@ -64,6 +65,7 @@ public static class InvocationIdentityExamples
             "valuetask" => ".method public static " + ValueTaskType + " Read(object value)",
             _ => ".method public static void Read(object& value)",
         };
+
         const string fresh = "call object Owner::NewValue()\n";
         var body = shape switch
         {
@@ -84,6 +86,7 @@ public static class InvocationIdentityExamples
                     + "::.ctor(class System.Threading.Tasks.Task`1<!0>)\n" : ""),
             _ => replace ? "ldarg.0\n" + fresh + "stind.ref\n" : "",
         };
+
         var retained = "ldtoken method instance void Owner::.ctor()\npop\n";
         if (shape is "task" or "valuetask")
         {
@@ -144,6 +147,7 @@ public static class InvocationIdentityExamples
                 + "ldloc.s 5\ncallvirt instance !0 " + TaskType + "::get_Result()\nstloc.1\n",
             _ => "ldloca.s 1\ncall Copy\n",
         };
+
         body += witness ? "ldloc.0\nldloc.1\ncall bool Object::ReferenceEquals(object, object)\nconv.i4\n" : "ldc.i4.s 42\n";
         return ".method int32 " + (witness ? "Witness" : "Scenario") + "() {\n.locals init (" + locals + ")\n" + body + "ret\n}";
     }

@@ -77,7 +77,7 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    // What closes the expression or statement around a block may follow its brace, as in "});" or "} while (more);".
+    // Only what completes the expression around a block may follow its brace, as in "});". The "while" of a "do" takes the next line.
     private static bool ContinuesWithCode(SyntaxToken close)
     {
         var next = close.GetNextToken();
@@ -94,24 +94,28 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
             case SyntaxKind.CommaToken:
             case SyntaxKind.DotToken:
                 return false;
-            case SyntaxKind.WhileKeyword:
-                return next.Parent is not DoStatementSyntax;
+            case SyntaxKind.EqualsToken:
+                // A property's initializer can only follow its accessors.
+                return next.Parent is not EqualsValueClauseSyntax { Parent: PropertyDeclarationSyntax };
             default:
                 return true;
         }
     }
 
-    // A comment is trivia, so the neighbouring tokens do not show it.
+    // A comment is trivia, so the neighbouring tokens do not show it. One written after "});" hangs on the last token of that line.
     private static bool HasCommentBeside(SyntaxToken brace)
     {
         var tree = brace.SyntaxTree!;
         var line = tree.GetLineSpan(brace.Span).StartLinePosition.Line;
-        foreach (var trivia in brace.LeadingTrivia.Concat(brace.TrailingTrivia))
+        for (var token = brace; SharesLine(brace, token); token = token.GetNextToken())
         {
-            var span = tree.GetLineSpan(trivia.Span);
-            if (IsComment(trivia) && (span.StartLinePosition.Line == line || span.EndLinePosition.Line == line))
+            foreach (var trivia in token.LeadingTrivia.Concat(token.TrailingTrivia))
             {
-                return true;
+                var span = tree.GetLineSpan(trivia.Span);
+                if (IsComment(trivia) && (span.StartLinePosition.Line == line || span.EndLinePosition.Line == line))
+                {
+                    return true;
+                }
             }
         }
 

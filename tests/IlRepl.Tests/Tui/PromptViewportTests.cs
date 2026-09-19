@@ -1,3 +1,4 @@
+using System.Globalization;
 using IlRepl.Tui;
 
 namespace IlRepl.Tests.Tui;
@@ -110,7 +111,7 @@ public sealed class PromptViewportTests
         var joined = "ldstr \"" + string.Concat(Enumerable.Repeat("👩\u200D💻", 20)) + "\"";
         var family = PromptView.RevealWide(new ViewportOffsets(1, 0), 20, joined, joined.Length);
         var elements = new List<int>();
-        for (var i = 0; i < joined.Length; i += System.Globalization.StringInfo.GetNextTextElementLength(joined.AsSpan(i)))
+        for (var i = 0; i < joined.Length; i += StringInfo.GetNextTextElementLength(joined.AsSpan(i)))
         {
             elements.Add(i);
         }
@@ -144,7 +145,7 @@ public sealed class PromptViewportTests
         var joined = "ldstr \"" + string.Concat(Enumerable.Repeat("👩\u200D💻", 30)) + "\"";
         var family = PromptView.RevealCaret(new ViewportOffsets(1, 0), 1, 40, joined, 1, joined.Length, 1);
         var elements = new List<int>();
-        for (var i = 0; i < joined.Length; i += System.Globalization.StringInfo.GetNextTextElementLength(joined.AsSpan(i)))
+        for (var i = 0; i < joined.Length; i += StringInfo.GetNextTextElementLength(joined.AsSpan(i)))
         {
             elements.Add(i);
         }

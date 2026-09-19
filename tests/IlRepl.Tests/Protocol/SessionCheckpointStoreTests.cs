@@ -70,6 +70,7 @@ public sealed class SessionCheckpointStoreTests
         {
             Entries = [new SessionEntry { Source = ["// prefix"] }, entry, new SessionEntry { Source = ["ret"] }],
         };
+
         var accepted = receiver.Apply(RoundTrip(sender.Encode(new SessionReply { Document = previous })));
         Assert.IsNotNull(accepted);
         var changed = change switch
@@ -88,6 +89,7 @@ public sealed class SessionCheckpointStoreTests
             },
             _ => throw new ArgumentException("unknown transition", nameof(change)),
         };
+
         var current = previous with { Entries = [previous.Entries[0], changed, previous.Entries[2]] };
         var originalBytes = SessionCodec.Write(previous);
         var currentBytes = SessionCodec.Write(current);
@@ -142,6 +144,7 @@ public sealed class SessionCheckpointStoreTests
             },
             _ => throw new ArgumentException("unknown corruption", nameof(corruption)),
         };
+
         Assert.ThrowsExactly<InvalidDataException>(() => receiver.Apply(RoundTrip(malformed)));
         Assert.AreSequenceEqual(SessionCodec.Write(first), SessionCodec.Write(retained.Document));
         var recovered = receiver.Apply(valid);
@@ -163,6 +166,7 @@ public sealed class SessionCheckpointStoreTests
             Entries = [new SessionEntry { Source = ["ldc.i4.1"] }],
             Assets = [new SessionAsset { Hash = SessionCodec.Hash(image), Image = image }],
         };
+
         AssertRevision(first);
         var second = first with
         {
@@ -170,6 +174,7 @@ public sealed class SessionCheckpointStoreTests
             Cells = [new SessionCell { Source = ["ldc.i4.1", "ret"], State = "succeeded" }],
             Editor = new SessionEditor { Lines = ["// draft"], Caret = 3, Anchor = 1 },
         };
+
         var append = AssertRevision(second);
         Assert.AreEqual(1, append.CheckpointDelta!.EntriesKept);
         Assert.HasCount(1, append.Document.Entries);
@@ -209,6 +214,7 @@ public sealed class SessionCheckpointStoreTests
         {
             CheckpointDelta = first.CheckpointDelta! with { EntriesKept = 1 },
         }));
+
         Assert.IsNotNull(receiver.Apply(first));
         Assert.IsNotNull(receiver.Apply(second));
     }

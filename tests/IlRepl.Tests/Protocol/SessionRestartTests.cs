@@ -70,6 +70,7 @@ public sealed class SessionRestartTests
 
             return new InProcessEngine();
         });
+
         controller.Editor = new SessionEditor { Lines = [".class KeepThis {"], Caret = 3, Anchor = 3 };
         await entered.Task.WaitAsync(token);
         controller.CancelStartup();
@@ -107,6 +108,7 @@ public sealed class SessionRestartTests
             Action = new SessionAction { Operation = SessionOperation.Save, Path = files.SessionPath },
             Editor = controller.Editor,
         }, token);
+
         Assert.IsFalse(saved.Dirty);
         var bytes = await File.ReadAllBytesAsync(files.SessionPath, token);
         controller.Editor = new SessionEditor { Lines = [edit ? "// changed draft" : draft] };

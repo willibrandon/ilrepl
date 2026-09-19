@@ -24,6 +24,7 @@ public static class AssemblyAttributeFixture
             "attribute" => typeof(Attribute), "extensions" => typeof(CustomAttributeExtensions),
             "data" => typeof(CustomAttributeData), "provider" => typeof(ICustomAttributeProvider), _ => receiver,
         };
+
         return owner.GetMethods(BindingFlags.Public | (dispatch is "instance" or "provider" ? BindingFlags.Instance : BindingFlags.Static))
             .Where(method => method.Name is "GetCustomAttributes" or "GetCustomAttribute" or "IsDefined"
                 or "GetCustomAttributesData" or "get_CustomAttributes")
@@ -135,6 +136,7 @@ public static class AssemblyAttributeFixture
                         EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
                     }
                 });
+
             var member = metadata.AddMemberReference(TypeReference(definition.DeclaringType!), metadata.GetOrAddString(definition.Name),
                 metadata.GetOrAddBlob(signature));
             if (method is not MethodInfo { IsGenericMethod: true } closed)

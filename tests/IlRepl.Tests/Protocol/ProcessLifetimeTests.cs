@@ -43,6 +43,7 @@ public sealed partial class ProcessLifetimeTests
                 entered.TrySetResult();
             }
         };
+
         await SubmitAsync(engine, token, "WAIT: ldstr " + LiteralParser.Escape(release),
             "call bool File::Exists(string)", "brfalse WAIT", "ldsfld int32 Keeper::Value");
         var pending = engine.HandleAsync("ret", token);
@@ -142,6 +143,7 @@ public sealed partial class ProcessLifetimeTests
                 degraded.TrySetResult();
             }
         };
+
         File.Move(assembly, assembly + ".unavailable");
         using (var supervisor = Process.GetProcessById(lifetime.SupervisorProcessId!.Value))
         {
@@ -186,6 +188,7 @@ public sealed partial class ProcessLifetimeTests
         {
             UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
         };
+
         start.ArgumentList.Add(RepoPaths.FrontEndAssembly);
         start.ArgumentList.Add("--batch");
         start.ArgumentList.Add("--quiet");

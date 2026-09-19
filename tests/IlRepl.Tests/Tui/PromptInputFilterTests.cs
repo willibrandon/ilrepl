@@ -49,6 +49,7 @@ public sealed class PromptInputFilterTests
                 return true;
             };
         }).WithPresentation(adapter).Build();
+
         var run = terminal.RunAsync(token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");

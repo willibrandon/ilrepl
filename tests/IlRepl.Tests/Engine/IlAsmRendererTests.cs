@@ -1,4 +1,7 @@
+using System.Diagnostics;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
@@ -183,13 +186,14 @@ public sealed class IlAsmRendererTests
             var source = Path.Combine(directory, "cell.il");
             File.WriteAllText(source, session.ToIlAsm());
             // Options take a dash: a slash is a path on Unix.
-            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ilasm,
+            using var process = Process.Start(new ProcessStartInfo(ilasm,
                 ["-DLL", "-QUIET", "-OUTPUT=" + Path.Combine(directory, "cell.dll"), source])
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
             })!;
+
             var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
             process.WaitForExit();
             Assert.AreEqual(0, process.ExitCode, output);
@@ -279,7 +283,7 @@ public sealed class IlAsmRendererTests
         var text = session.ToIlAsm();
         Assert.AreEqual(14, session.Run().Value);
         var image = IlasmLocator.Assemble(text);
-        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-types", isCollectible: true);
+        var context = new AssemblyLoadContext("ilasm-types", isCollectible: true);
         try
         {
             var assembly = context.LoadFromStream(new MemoryStream(image));
@@ -309,7 +313,7 @@ public sealed class IlAsmRendererTests
         Assert.Contains("call int32 N.A::F()", text);
         Assert.Contains(".override method int32 IZero::Zero() with method int32 Num::Zero()", text);
         var image = IlasmLocator.Assemble(text);
-        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-review", isCollectible: true);
+        var context = new AssemblyLoadContext("ilasm-review", isCollectible: true);
         try
         {
             Assert.AreEqual(1,
@@ -337,7 +341,7 @@ public sealed class IlAsmRendererTests
         var text = session.ToIlAsm();
         Assert.Contains("        .try\n        {\n            .try\n", text.Replace("\r", "", StringComparison.Ordinal));
         var image = IlasmLocator.Assemble(text);
-        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-regions", isCollectible: true);
+        var context = new AssemblyLoadContext("ilasm-regions", isCollectible: true);
         try
         {
             Assert.AreEqual(11,
@@ -377,7 +381,7 @@ public sealed class IlAsmRendererTests
         Assert.Contains("newobj instance void class Outer/Box`1<int32>::.ctor(!0)", text);
         Assert.Contains("callvirt instance !!0 IFoo::Id<int32>(!!0)", text);
         var image = IlasmLocator.Assemble(text);
-        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-generic-refs", isCollectible: true);
+        var context = new AssemblyLoadContext("ilasm-generic-refs", isCollectible: true);
         try
         {
             Assert.AreEqual(9,
@@ -409,7 +413,7 @@ public sealed class IlAsmRendererTests
         Assert.Contains("endfinally", text);
         Assert.Contains("IlReplEnd0:", text);
         var image = IlasmLocator.Assemble(text);
-        var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-implicit", isCollectible: true);
+        var context = new AssemblyLoadContext("ilasm-implicit", isCollectible: true);
         try
         {
             Assert.AreEqual(12,
@@ -436,7 +440,7 @@ public sealed class IlAsmRendererTests
             add.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ret);
             type.Methods.Add(add);
             type.Fields.Add(new Mono.Cecil.FieldDefinition("Data", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static,
-                new Mono.Cecil.RequiredModifierType(module.ImportReference(typeof(System.Runtime.CompilerServices.IsVolatile)),
+                new Mono.Cecil.RequiredModifierType(module.ImportReference(typeof(IsVolatile)),
                 module.TypeSystem.Int32)));
             var closure = new Mono.Cecil.TypeDefinition("", "<>c", Mono.Cecil.TypeAttributes.NestedPublic | Mono.Cecil.TypeAttributes.Class,
                 module.TypeSystem.Object);
@@ -446,6 +450,7 @@ public sealed class IlAsmRendererTests
             closure.Methods.Add(lambda);
             type.NestedTypes.Add(closure);
         });
+
         var assembly = fixture.Assembly.GetName().Name;
         var add = new Instruction { Op = OpCodes.Call, Text = "call", Kind = OperandKind.Method,
             Operand = new ResolvedMethod(fixture.GetMethod("add")!, null) };

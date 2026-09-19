@@ -233,6 +233,7 @@ public static class AssemblyLocationFixture
                             parameter.ParameterType.IsByRef ? parameter.ParameterType.GetElementType()! : parameter.ParameterType);
                     }
                 });
+
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
             if (method is not MethodInfo { IsGenericMethod: true } closed)
@@ -271,6 +272,7 @@ public static class AssemblyLocationFixture
         {
             "Module" => typeof(Module), "ModuleHandle" => typeof(ModuleHandle), "Type" => typeof(Type), _ => typeof(Assembly),
         };
+
         var inspection = api switch
         {
             "GetFile" or "GetModule" => receiver.GetMethod(api, [typeof(string)])!,
@@ -282,6 +284,7 @@ public static class AssemblyLocationFixture
             "ToString" => receiver.GetMethod(api, Type.EmptyTypes)!,
             _ => receiver.GetProperty(api)!.GetMethod!,
         };
+
         var expected = api switch
         {
             "Location" or "FullyQualifiedName" => stream ? "" : path,
@@ -299,6 +302,7 @@ public static class AssemblyLocationFixture
             "EntryPoint" => "Main",
             _ => path,
         };
+
         if (IsModuleTable(api))
         {
             expected = Scope;

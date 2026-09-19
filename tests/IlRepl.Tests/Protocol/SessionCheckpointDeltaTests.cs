@@ -144,6 +144,7 @@ public sealed class SessionCheckpointDeltaTests
             TypeArguments = ["System.String", null], MethodArguments = ["System.Int32"],
             Extensions = new() { ["future"] = JsonSerializer.SerializeToElement(1) },
         };
+
         var edit = new SessionEditSnapshot
         {
             Name = "Example", Reference = "int32 Fixture::Method()", Fingerprint = "original", Source = ["ldc.i4.s 42", "ret"],
@@ -151,6 +152,7 @@ public sealed class SessionCheckpointDeltaTests
             MethodAliases = new() { ["Alias"] = method }, TypeAliases = new() { ["Type"] = "System.String" },
             SignatureHeaders = new() { ["Method"] = "int32 Method()" },
         };
+
         var image = Encoding.UTF8.GetBytes("verified asset");
         return new SessionDocument
         {

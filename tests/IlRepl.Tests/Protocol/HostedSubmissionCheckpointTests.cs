@@ -366,6 +366,7 @@ public sealed class HostedSubmissionCheckpointTests
             entered.TrySetResult();
             return release.Task;
         };
+
         var pending = connection.Proxy.HandleRetainedSourceAsync("ret", new AnalysisLocation("paste", 1, 0, 3), token);
         try
         {

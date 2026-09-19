@@ -33,6 +33,7 @@ public static class AssemblyEnumerationExamples
                 + "callvirt instance class Type[] Module::FindTypes(class TypeFilter, object)\n",
             _ => throw new ArgumentException("Unknown enumeration API.", nameof(api)),
         });
+
         return ".method public static int32 Read() {\n.locals init (class Type[] types, int32 index)\n" + query + """
             stloc.0
             ldc.i4.0

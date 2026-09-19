@@ -46,6 +46,7 @@ public sealed class VarArgGenericObservationTests
                 Attributes = valueType ? GenericParameterAttributes.NotNullableValueTypeConstraint
                     | GenericParameterAttributes.DefaultConstructorConstraint : GenericParameterAttributes.ReferenceTypeConstraint,
             };
+
             caller.GenericParameters.Add(typeParameter);
             var method = new MethodDefinition("Run", MethodAttributes.Public | MethodAttributes.Static, writer.Module.TypeSystem.Int32);
             caller.Methods.Add(method);
@@ -64,6 +65,7 @@ public sealed class VarArgGenericObservationTests
                 {
                     CallingConvention = MethodCallingConvention.VarArg,
                 };
+
                 call.Parameters.Add(new ParameterDefinition(writer.Module.TypeSystem.Int32));
                 call.Parameters.Add(new ParameterDefinition(new SentinelType(optional)));
                 il.Emit(OpCodes.Ldc_I4, 41);

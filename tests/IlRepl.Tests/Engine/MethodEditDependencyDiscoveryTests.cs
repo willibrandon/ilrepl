@@ -65,6 +65,7 @@ public sealed class MethodEditDependencyDiscoveryTests
             il.Emit(OpCodes.Add);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         Assert.AreEqual(42, original.GetMethod("Read")!.Invoke(null, null));
         var edit = session.PrepareEdit("int32 [" + assembly.GetName().Name + "]N.Fixture::Read()", "Copy");
 

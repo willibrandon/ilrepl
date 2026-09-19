@@ -92,6 +92,7 @@ public sealed class DiagnosticNavigationRefreshTests
 
                 return false;
             };
+
             if (backwards)
             {
                 await auto.Shift().KeyAsync(Hex1bKey.F8, ct: ct);
@@ -169,6 +170,7 @@ public sealed class DiagnosticNavigationRefreshTests
                 requester.Refresh(state);
                 return state.Analysis is not null;
             });
+
             Assert.Contains(item => item.Code == "FLOW005", state.Analysis!.Diagnostics);
             var caret = state.Editor.Cursor.Position;
             var revision = controller.Status.Revision;

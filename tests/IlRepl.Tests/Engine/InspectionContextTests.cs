@@ -1,3 +1,4 @@
+using System.Reflection.Emit;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
@@ -65,7 +66,7 @@ public sealed class InspectionContextTests
         var resolved = MemberResolver.ResolveMethod("instance int32 Point::Sum()", session.InspectionContext, false);
         Assert.IsNotNull(resolved.Method);
         Assert.IsNull(resolved.Declared);
-        Assert.IsFalse(resolved.Method.DeclaringType is System.Reflection.Emit.TypeBuilder);
+        Assert.IsFalse(resolved.Method.DeclaringType is TypeBuilder);
         Assert.IsNotNull(resolved.Method.GetMethodBody());
 
         // The editor's own context still sees the prototype.

@@ -156,6 +156,7 @@ internal static class ResponsivenessProbe
                         "generic-64" => ResponsivenessFixtures.Generic(64),
                         _ => "// input",
                     };
+
                     Progress("large draft preparation");
                     await terminal.DraftAsync(draft);
                     Progress("typing and caret measurements");
@@ -294,6 +295,7 @@ internal static class ResponsivenessProbe
                 Failure = failure is null ? null : failure.GetType().Name + ": " + failure.Message.Split('\n')[0],
                 FailureStage = failureStage,
             };
+
             await File.WriteAllTextAsync(Path.Combine(output, scenario + ".json"),
                 JsonSerializer.Serialize(record, ResponsivenessJsonContext.Default.ResponsivenessRecord),
                 failure is null ? token : CancellationToken.None);
@@ -384,6 +386,7 @@ internal static class ResponsivenessProbe
         {
             Action = new SessionAction { Operation = SessionOperation.Capture },
         }, cancellationToken);
+
         var document = snapshot.Document ?? throw new InvalidOperationException("The fixture host did not return its source.");
         if (document.Cells.Length != submissions)
         {

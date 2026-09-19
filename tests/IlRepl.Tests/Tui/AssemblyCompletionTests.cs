@@ -39,6 +39,7 @@ public sealed class AssemblyCompletionTests
         {
             Requester = new CompletionRequester(engine),
         };
+
         try
         {
             foreach (var line in new[] { ".load " + first, ".load " + SampleHost.Samples.GreeterDll,

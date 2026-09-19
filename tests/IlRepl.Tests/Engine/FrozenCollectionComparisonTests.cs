@@ -310,6 +310,7 @@ public sealed class FrozenCollectionComparisonTests
                 "text" => new string((char)('a' + index), 65500),
                 _ => index,
             };
+
             entries.Add(key, index);
         }
 
@@ -333,6 +334,7 @@ public sealed class FrozenCollectionComparisonTests
                 "text" => key.Value![0] - 'a',
                 _ => int.Parse(key.Value!, CultureInfo.InvariantCulture),
             };
+
             numbers.Add(number);
             if (!set)
             {

@@ -125,6 +125,7 @@ public sealed class DependencyCancellationTests
         {
             Action = new SessionAction { Operation = SessionOperation.Capture },
         }, TestContext.CancellationToken);
+
         Assert.IsEmpty(capture.Document.References);
         var result = await controller.HandleAsync("ret", TestContext.CancellationToken);
         Assert.IsTrue(result.Succeeded);

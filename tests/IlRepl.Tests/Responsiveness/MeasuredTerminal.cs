@@ -54,6 +54,7 @@ internal sealed class MeasuredTerminal : IAsyncDisposable
                     frontend, .. arguments];
             }
         }).WithHeadless().WithDimensions(120, 36).AddPresentationFilter(_recorder).Build();
+
         _recorder.Terminal = _terminal;
         Started = Stopwatch.GetTimestamp();
         _run = _terminal.RunAsync(cancellationToken);

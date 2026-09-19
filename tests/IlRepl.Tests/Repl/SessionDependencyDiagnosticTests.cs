@@ -76,12 +76,14 @@ public sealed class SessionDependencyDiagnosticTests
                 },
             ],
         };
+
         var document = new SessionDocument
         {
             References = [reference],
             Entries = [new SessionEntry { Kind = SessionEntryKind.Reference, Reference = reference.Identity,
                 Source = [".load " + reference.Request] }],
         };
+
         var options = new ReplOptions { SupportsDependencyRestore = canRestore };
         using var core = new ReplCore(new Session(), options);
         await using var engine = new InProcessEngine(core);
@@ -100,6 +102,7 @@ public sealed class SessionDependencyDiagnosticTests
             "changed" => "changed",
             _ => "is missing",
         };
+
         Assert.Contains(detail, diagnostic);
         if (canRestore)
         {

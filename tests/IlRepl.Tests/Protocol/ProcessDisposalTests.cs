@@ -43,6 +43,7 @@ public sealed class ProcessDisposalTests
                 release.Task.GetAwaiter().GetResult();
             }
         };
+
         Task? first = null;
         Task? second = null;
         Task? terminated = null;

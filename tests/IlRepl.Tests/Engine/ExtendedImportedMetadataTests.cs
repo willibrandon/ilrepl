@@ -104,12 +104,14 @@ public sealed class ExtendedImportedMetadataTests
                     | PInvokeAttributes.SupportsLastError, entry, nativeModule),
                 ImplAttributes = CecilMethodImplAttributes.PreserveSig,
             };
+
             type.Methods.Add(native);
             var read = new CecilMethod("Read", CecilMethodAttributes.Public | CecilMethodAttributes.Static, module.TypeSystem.Int32);
             type.Methods.Add(read);
             read.Body.GetILProcessor().Emit(OpCodes.Call, native);
             read.Body.GetILProcessor().Emit(OpCodes.Ret);
         }, session.Resolver);
+
         Assert.AreEqual(Environment.ProcessId, original.GetMethod("Read")!.Invoke(null, null));
         var edit = Commit(session, "int32 [" + assembly.GetName().Name + "]N.Fixture::Read()");
         Assert.AreEqual(Environment.ProcessId, edit.OriginalMethod.Invoke(null, null));
@@ -160,6 +162,7 @@ public sealed class ExtendedImportedMetadataTests
                 GetMethod = getter,
                 Constant = 17,
             };
+
             type.Properties.Add(property);
             var read = new CecilMethod("Read", CecilMethodAttributes.Public | CecilMethodAttributes.Static, module.TypeSystem.Int32);
             read.Parameters.Add(new ParameterDefinition(module.TypeSystem.Int32));
@@ -168,6 +171,7 @@ public sealed class ExtendedImportedMetadataTests
             read.Body.GetILProcessor().Emit(OpCodes.Call, getter);
             read.Body.GetILProcessor().Emit(OpCodes.Ret);
         }, session.Resolver);
+
         AssertProperty(original);
         var edit = Commit(session, "int32 [" + assembly.GetName().Name + "]N.Fixture::Read(int32)");
         AssertProperty(edit.OriginalMethod.DeclaringType!);
@@ -283,6 +287,7 @@ public sealed class ExtendedImportedMetadataTests
             read.Body.GetILProcessor().Emit(OpCodes.Callvirt, declaration);
             read.Body.GetILProcessor().Emit(OpCodes.Ret);
         }, session.Resolver);
+
         AssertDispatch(original);
         var edit = Commit(session, "int32 [" + assembly.GetName().Name + "]N.Fixture::Read()");
         AssertDispatch(edit.OriginalMethod.DeclaringType!);

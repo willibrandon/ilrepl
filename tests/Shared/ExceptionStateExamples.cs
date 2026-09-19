@@ -48,6 +48,7 @@ public static class ExceptionStateExamples
                 + "callvirt instance void Exception::set_" + (kind == "help" ? "HelpLink" : "Source") + "(string)\n",
             _ => throw new ArgumentException("Unknown detail.", nameof(kind)),
         };
+
         return ".method public static int32 Read() {\n" + body + "throw\n}";
     }
 }

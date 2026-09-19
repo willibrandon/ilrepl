@@ -58,6 +58,7 @@ public sealed class VirtualVarArgComparisonTests
             HasThis = true,
             CallingConvention = MethodCallingConvention.VarArg,
         };
+
         reference.Parameters.Add(new ParameterDefinition(writer.Module.TypeSystem.Int32));
         reference.Parameters.Add(new ParameterDefinition(new SentinelType(writer.Module.TypeSystem.Int32)));
         reference.Parameters.Add(new ParameterDefinition(writer.Module.TypeSystem.String));

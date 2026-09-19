@@ -523,6 +523,7 @@ public sealed class SessionPackageAssetTests
             PInvokeInfo = new PInvokeInfo(OperatingSystem.IsWindows() ? PInvokeAttributes.CallConvWinapi : PInvokeAttributes.CallConvCdecl,
                 entryPoint, library),
         };
+
         owner.Methods.Add(native);
         var method = owner.Methods.Single(method => method.Name == "Read");
         method.Body.Instructions.Clear();
