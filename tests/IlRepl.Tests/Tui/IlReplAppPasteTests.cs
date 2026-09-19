@@ -70,6 +70,40 @@ public sealed class IlReplAppPasteTests
     }
 
     /// <summary>
+    /// A paste meant for the prompt reaches the editor while focus is elsewhere, and the keys typed after it still follow it.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task Paste_WhileFocusIsElsewhere_StillReachesTheEditor()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        Hex1bApp? app = null;
+        PromptState? prompt = null;
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript,
+            onApp: value => app = value, onPrompt: value => prompt = value).WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.WaitUntilAsync(_ => app?.FocusedNode is EditorNode);
+
+        // Focus delivery walks to the focused node, so with focus off the editor it has no way to reach the prompt.
+        Assert.IsTrue(app!.FocusWhere(node => node is not EditorNode), "The view needs a second focusable node for this test.");
+        await auto.WaitUntilAsync(_ => app.FocusedNode is not EditorNode);
+        await adapter.PasteAsync("ldc.i4.s 42");
+        await auto.WaitUntilAsync(_ => prompt!.Text == "ldc.i4.s 42");
+
+        app.FocusWhere(node => node is EditorNode);
+        await auto.WaitUntilAsync(_ => app.FocusedNode is EditorNode);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("stack [int32]");
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
     /// A pasted block sits in the editor until Enter sends it.
     /// </summary>
     [TestMethod]

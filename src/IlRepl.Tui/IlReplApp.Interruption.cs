@@ -133,6 +133,18 @@ public static partial class IlReplApp
         prompt.Invalidate?.Invoke();
     }
 
+    private static bool TakePaste(PromptState prompt, PasteContext paste)
+    {
+        // A dialog and the help surface own their input, so a paste for them still travels through focus.
+        if (prompt.SessionDialog is not null || prompt.Help is not null)
+        {
+            return false;
+        }
+
+        _ = prompt.AcceptPasteAsync(paste);
+        return true;
+    }
+
     private static bool FilterPromptInput(PromptState prompt, Hex1bEvent input)
     {
         // Selecting an empty document leaves a zero-length anchor in Hex1b. Clear it before insertion

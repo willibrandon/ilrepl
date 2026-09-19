@@ -237,6 +237,25 @@ public sealed partial class PromptState
     }
 
     /// <summary>
+    /// Reads a paste to its end and posts the text, or the reason it could not be read, for the next frame to apply.
+    /// </summary>
+    /// <param name="paste">The paste to read.</param>
+    /// <returns>A task that completes once the paste has been posted.</returns>
+    internal async Task AcceptPasteAsync(PasteContext paste)
+    {
+        try
+        {
+            var text = await paste.ReadToEndAsync(ct: paste.CancellationToken).ConfigureAwait(false);
+            Post(SubmissionEvent.Paste(text));
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or IOException or OperationCanceledException)
+        {
+            paste.Cancel();
+            Post(new SubmissionEvent(SubmissionEventKind.Paste, Note: "paste failed: " + exception.Message));
+        }
+    }
+
+    /// <summary>
     /// Replaces the buffer, puts the caret somewhere in it, and forgets the undo history.
     /// </summary>
     /// <param name="text">The new buffer.</param>

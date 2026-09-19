@@ -107,7 +107,10 @@ public static partial class IlReplApp
                         size.EscapePressed += () => workload.TryWriteInputEvent(Hex1bKeyEvent.Plain(Hex1bKey.Escape));
                     }
 
-                    prompt.PasteInput = new PromptInputReader(adapter.InputEvents, input => FilterPromptInput(prompt, input));
+                    prompt.PasteInput = new PromptInputReader(
+                        adapter.InputEvents,
+                        input => FilterPromptInput(prompt, input),
+                        paste => TakePaste(prompt, paste));
                     options.WorkloadAdapter = new PromptInputAdapter(adapter, prompt.PasteInput, prompt.Interruption.TakeFrameMarker);
                     // The prompt paints its own caret cell, so no hardware caret follows the mouse,
                     // and Ctrl+C belongs to the prompt's copy, interrupt, and clear bindings.
