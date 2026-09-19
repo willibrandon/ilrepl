@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 
@@ -34,11 +35,19 @@ public sealed class DocumentedMembersAnalyzer : DiagnosticAnalyzer
         }
 
         // A partial type is documented once, on whichever part carries the comment, and the symbol sees all of its parts.
+        // The comment is a triple slash one: a "/** */" block also yields XML, and the convention does not take it.
         var xml = symbol.GetDocumentationCommentXml(cancellationToken: context.CancellationToken);
-        if (string.IsNullOrWhiteSpace(xml))
+        if (string.IsNullOrWhiteSpace(xml) || !symbol.DeclaringSyntaxReferences.Any(reference => HasTripleSlash(reference.GetSyntax())))
         {
             context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.MemberIsNotDocumented, symbol.Locations[0], symbol.Name));
         }
+    }
+
+    // A field or an event is declared by its variable, and the comment stands on the declaration around it.
+    private static bool HasTripleSlash(SyntaxNode node)
+    {
+        var owner = node is VariableDeclaratorSyntax { Parent.Parent: { } declaration } ? declaration : node;
+        return owner.GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
     }
 
     // Public or internal all the way out: a member is no more visible than the types that hold it.
