@@ -71,7 +71,10 @@ public sealed class WindowsConsoleTests
                 frontendRecord, RepoPaths.FrontEndAssembly, "--no-color", script];
             options.WorkingDirectory = files.DirectoryPath;
         }).AddWorkloadFilter(recorder).WithHeadless().WithDimensions(100, 30).Build();
-        var run = terminal.RunAsync(token);
+        // The run ends when the PTY process is seen to exit or this token is cancelled. Closing the console disposes the
+        // terminal, which releases that process, so the close case ends the run itself instead of waiting to see the exit.
+        using var running = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var run = terminal.RunAsync(running.Token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(20));
         Process? frontend = null;
         Process? host = null;
@@ -139,9 +142,23 @@ public sealed class WindowsConsoleTests
                     if (process is { HasExited: false }) process.Kill(entireProcessTree: true);
                 }
             await terminal.DisposeAsync();
-            try { await run.WaitAsync(TimeSpan.FromSeconds(20), CancellationToken.None); }
-            catch (OperationCanceledException) when (close || token.IsCancellationRequested) { }
-            catch (ObjectDisposedException) when (close) { }
+            if (close)
+            {
+                await running.CancelAsync();
+            }
+
+            try
+            {
+                await run.WaitAsync(TimeSpan.FromSeconds(20), CancellationToken.None);
+            }
+            catch (OperationCanceledException) when (close || token.IsCancellationRequested)
+            {
+                // The close case ends its own run, and a cancelled test ends every run.
+            }
+            catch (ObjectDisposedException) when (close)
+            {
+                // The terminal was disposed while its run was still observing the console.
+            }
         }
 
         bool IsReady() => File.Exists(frontendRecord) && File.Exists(descendantsReady)
