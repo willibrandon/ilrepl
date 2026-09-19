@@ -111,6 +111,7 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
             b.Mouse(MouseButton.ScrollUp).Action(_ => help.Scroll = Math.Max(0, help.Scroll - 3), "Scroll help up");
             b.Mouse(MouseButton.ScrollDown).Action(_ => help.Scroll += 3, "Scroll help down");
         }
+
         b.Ctrl().Key(Hex1bKey.Q).Action(context => context.RequestStop(), "Quit");
         b.AnyCharacter().Action(_ => { }, "Read-only help");
     }

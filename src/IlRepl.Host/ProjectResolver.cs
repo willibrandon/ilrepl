@@ -21,7 +21,9 @@ internal static class ProjectResolver
     /// <param name="action">The project load and build options.</param>
     /// <param name="cancellationToken">Cancels the SDK process and asset reads.</param>
     /// <returns>The candidate workspace with its evaluated project outputs.</returns>
-    internal static async Task<SessionDocument> ResolveAsync(SessionDocument document, SessionAction action,
+    internal static async Task<SessionDocument> ResolveAsync(
+        SessionDocument document,
+        SessionAction action,
         CancellationToken cancellationToken)
     {
         var path = Path.GetFullPath(action.Path ?? throw new InvalidDataException("a project path is required"));
@@ -225,7 +227,9 @@ internal static class ProjectResolver
         .GetProperty("FrameworkReference").EnumerateArray().Select(item => item.GetProperty("Identity").GetString()!)
         .Where(name => name != "Microsoft.NETCore.App")];
 
-    private static async Task<JsonDocument> EvaluateAsync(string directory, IEnumerable<string> arguments,
+    private static async Task<JsonDocument> EvaluateAsync(
+        string directory,
+        IEnumerable<string> arguments,
         CancellationToken cancellationToken)
     {
         var output = await RunAsync(directory, arguments, cancellationToken).ConfigureAwait(false);
@@ -234,7 +238,11 @@ internal static class ProjectResolver
             try
             {
                 var parsed = JsonDocument.Parse(output[start..]);
-                if (parsed.RootElement.TryGetProperty("Properties", out _)) return parsed;
+                if (parsed.RootElement.TryGetProperty("Properties", out _))
+                {
+                    return parsed;
+                }
+
                 parsed.Dispose();
             }
             catch (JsonException)
@@ -263,6 +271,7 @@ internal static class ProjectResolver
         {
             process.StartInfo.ArgumentList.Add(argument);
         }
+
         process.StartInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
         process.StartInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
         process.StartInfo.Environment["UseSharedCompilation"] = "false";

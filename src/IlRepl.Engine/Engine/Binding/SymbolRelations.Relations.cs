@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
@@ -258,12 +260,12 @@ public static partial class SymbolRelations
             }
 
             var variance = i < parameters.Count
-                ? parameters[i].Attributes & System.Reflection.GenericParameterAttributes.VarianceMask
-                : System.Reflection.GenericParameterAttributes.None;
+                ? parameters[i].Attributes & GenericParameterAttributes.VarianceMask
+                : GenericParameterAttributes.None;
             var ok = variance switch
             {
-                System.Reflection.GenericParameterAttributes.Covariant => IsAssignable(a, b, scope),
-                System.Reflection.GenericParameterAttributes.Contravariant => IsAssignable(b, a, scope),
+                GenericParameterAttributes.Covariant => IsAssignable(a, b, scope),
+                GenericParameterAttributes.Contravariant => IsAssignable(b, a, scope),
                 _ => false,
             };
             if (!ok)

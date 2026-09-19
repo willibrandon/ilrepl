@@ -1,5 +1,5 @@
-using IlRepl.Host;
 using IlRepl.Engine;
+using IlRepl.Host;
 using IlRepl.Protocol;
 using IlRepl.Repl;
 
@@ -37,8 +37,15 @@ public sealed class SessionControllerTests
 
         Assert.IsTrue(reply.Reply.Succeeded);
         var output = string.Join('\n', reply.Reply.Lines.Select(line => line.PlainText));
-        if (announce) Assert.Contains("Session opened. Nothing has run yet.", output);
-        else Assert.DoesNotContain("Session opened.", output);
+        if (announce)
+        {
+            Assert.Contains("Session opened. Nothing has run yet.", output);
+        }
+        else
+        {
+            Assert.DoesNotContain("Session opened.", output);
+        }
+
         Assert.Contains("= 42 : int32", output);
         Assert.Contains("previous attempt starting at prompt 2 was interrupted; no code was replayed", output);
         Assert.Contains("end of saved history; no code executed", output);
@@ -593,8 +600,12 @@ public sealed class SessionControllerTests
     private static SessionController CreateController(InProcessEngine? initial = null) =>
         new(initial ?? new InProcessEngine(), static _ => Task.FromResult<IReplEngine>(new InProcessEngine()));
 
-    private static SessionRequest Request(SessionController controller, SessionOperation operation, SessionDocument? document = null,
-        string? path = null, bool force = false) => new()
+    private static SessionRequest Request(
+        SessionController controller,
+        SessionOperation operation,
+        SessionDocument? document = null,
+        string? path = null,
+        bool force = false) => new()
     {
         Action = new SessionAction { Operation = operation, Path = path, Force = force },
         Editor = controller.Editor,

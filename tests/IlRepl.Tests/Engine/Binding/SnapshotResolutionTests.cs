@@ -38,9 +38,21 @@ public sealed class SnapshotResolutionTests
         }
 
         AssemblyLoadEventHandler loaded = (_, e) => Record("AssemblyLoad " + e.LoadedAssembly.GetName().Name);
-        ResolveEventHandler assemblyResolve = (_, e) => { Record("AssemblyResolve " + e.Name); return null; };
-        ResolveEventHandler typeResolve = (_, e) => { Record("TypeResolve " + e.Name); return null; };
-        Func<AssemblyLoadContext, AssemblyName, Assembly?> resolving = (_, name) => { Record("Resolving " + name.Name); return null; };
+        ResolveEventHandler assemblyResolve = (_, e) =>
+        {
+            Record("AssemblyResolve " + e.Name);
+            return null;
+        };
+        ResolveEventHandler typeResolve = (_, e) =>
+        {
+            Record("TypeResolve " + e.Name);
+            return null;
+        };
+        Func<AssemblyLoadContext, AssemblyName, Assembly?> resolving = (_, name) =>
+        {
+            Record("Resolving " + name.Name);
+            return null;
+        };
         AppDomain.CurrentDomain.AssemblyLoad += loaded;
         AppDomain.CurrentDomain.AssemblyResolve += assemblyResolve;
         AppDomain.CurrentDomain.TypeResolve += typeResolve;

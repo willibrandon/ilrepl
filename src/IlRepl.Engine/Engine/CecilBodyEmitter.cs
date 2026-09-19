@@ -205,7 +205,8 @@ public static class CecilBodyEmitter
                     Append(_il.Create(op, FieldOperand(instruction)));
                     break;
                 case OperandKind.Method:
-                    Append(_il.Create(op, MethodOperand((ResolvedMethod)instruction.Operand!, callSite: op.Code is Code.Call or Code.Callvirt)));
+                    Append(_il.Create(op,
+                        MethodOperand((ResolvedMethod)instruction.Operand!, callSite: op.Code is Code.Call or Code.Callvirt)));
                     break;
                 case OperandKind.Token:
                     Append(instruction.Operand switch
@@ -362,7 +363,8 @@ public static class CecilBodyEmitter
             {
                 site.HasThis = signature.ManagedConvention.HasFlag(CallingConventions.HasThis);
                 site.ExplicitThis = signature.ManagedConvention.HasFlag(CallingConventions.ExplicitThis);
-                site.CallingConvention = signature.ManagedConvention.HasFlag(CallingConventions.VarArgs) ? MethodCallingConvention.VarArg : MethodCallingConvention.Default;
+                site.CallingConvention = signature.ManagedConvention.HasFlag(CallingConventions.VarArgs) ? MethodCallingConvention.VarArg
+                    : MethodCallingConvention.Default;
             }
 
             if (exact is not null)
@@ -412,7 +414,8 @@ public static class CecilBodyEmitter
                     break;
                 case BlockKind.Catch:
                     LeaveCurrent();
-                    _frames[^1].Handlers.Add(new Handler { Kind = BlockKind.Catch, CatchType = writer.Import(map.Map(entry.CatchType ?? typeof(object))), Start = Mark() });
+                    _frames[^1].Handlers.Add(new Handler { Kind = BlockKind.Catch,
+                        CatchType = writer.Import(map.Map(entry.CatchType ?? typeof(object))), Start = Mark() });
                     break;
                 case BlockKind.Filter:
                     LeaveCurrent();

@@ -19,7 +19,20 @@ namespace IlRepl.Tests.Engine;
 /// <param name="InitialFiles">The initial relative filesystem contents restored before each artifact.</param>
 /// <param name="StackSize">The explicitly requested execution-thread stack size in bytes.</param>
 /// <param name="EndOfInput">Whether the supplied input is immediately followed by EOF.</param>
-internal sealed record ExportRequest(string ImagePath, string Type, string Method, ExportValue[] Arguments,
-    string[] GenericArguments, string Culture, string UICulture, byte[] StandardInput, string InputEncoding,
-    Dictionary<string, string> Environment, string Profile, string WorkingDirectory, string[] Dependencies,
-    Dictionary<string, string> InitialFiles, int StackSize, bool EndOfInput);
+internal sealed record ExportRequest(
+    string ImagePath,
+    string Type,
+    string Method,
+    ExportValue[] Arguments,
+    string[] GenericArguments,
+    string Culture,
+    string UICulture,
+    byte[] StandardInput,
+    string InputEncoding,
+    Dictionary<string, string> Environment,
+    string Profile,
+    string WorkingDirectory,
+    string[] Dependencies,
+    Dictionary<string, string> InitialFiles,
+    int StackSize,
+    bool EndOfInput);

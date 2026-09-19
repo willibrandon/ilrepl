@@ -8,9 +8,20 @@ using IlRepl.Protocol;
 using IlRepl.Repl;
 
 var root = new DirectoryInfo(Directory.GetCurrentDirectory());
-while (root is not null && !File.Exists(Path.Combine(root.FullName, "IlRepl.slnx"))) root = root.Parent;
-if (root is null) throw new InvalidOperationException("Run the generator inside the ilrepl repository.");
-if (args.Any(argument => argument != "--check")) throw new ArgumentException("usage: Generate-BootstrapCatalog.cs [--check]");
+while (root is not null && !File.Exists(Path.Combine(root.FullName, "IlRepl.slnx")))
+{
+    root = root.Parent;
+}
+
+if (root is null)
+{
+    throw new InvalidOperationException("Run the generator inside the ilrepl repository.");
+}
+
+if (args.Any(argument => argument != "--check"))
+{
+    throw new ArgumentException("usage: Generate-BootstrapCatalog.cs [--check]");
+}
 
 var snapshot = new HostHello(Completer.Catalog, CilVocabularyBuilder.Vocabulary, SessionStatus.Initial);
 var json = JsonSerializer.Serialize(snapshot, ProtocolJsonContext.Default.HostHello);
@@ -27,18 +38,25 @@ for (var offset = 0; offset < json.Length; offset += 48)
     pieces.Add("\"" + piece.Replace("\\", "\\\\", StringComparison.Ordinal)
         .Replace("\"", "\\\"", StringComparison.Ordinal) + "\"");
 }
+
 var groups = pieces.Chunk(32).ToArray();
 text.AppendLine("    private const string Data =");
 for (var index = 0; index < groups.Length; index++)
+{
     text.Append("        Part").Append(index).AppendLine(index == groups.Length - 1 ? ";" : " +");
+}
+
 for (var index = 0; index < groups.Length; index++)
 {
     text.AppendLine();
     text.Append("    private const string Part").Append(index).AppendLine(" =");
     var group = groups[index];
     for (var piece = 0; piece < group.Length; piece++)
+    {
         text.Append("        ").Append(group[piece]).AppendLine(piece == group.Length - 1 ? ";" : " +");
+    }
 }
+
 text.AppendLine("}");
 var content = text.ToString().ReplaceLineEndings("\n");
 var output = Path.Combine(root.FullName, "src", "IlRepl.Protocol", "BootstrapCatalog.Generated.cs");
@@ -49,6 +67,7 @@ if (args.Contains("--check", StringComparer.Ordinal))
         Console.Error.WriteLine("The bootstrap catalog is stale. Run scripts/Generate-BootstrapCatalog.cs to update it.");
         return 1;
     }
+
     Console.WriteLine("The bootstrap catalog matches the engine tables.");
 }
 else
@@ -56,4 +75,5 @@ else
     File.WriteAllText(output, content, new UTF8Encoding(false));
     Console.WriteLine("Wrote " + output);
 }
+
 return 0;

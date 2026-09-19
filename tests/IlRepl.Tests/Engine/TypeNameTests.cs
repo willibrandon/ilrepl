@@ -106,6 +106,7 @@ public sealed class TypeNameTests
                 .Select(entry => entry.Instruction?.Operand).OfType<Type>().Where(type => type.FullName == "TypeNames.Sibling"));
             Assert.AreSame(assembly.GetType("TypeNames.Sibling"), retained);
         }
+
         await AssertComparison(session, 42);
         AssertExports(session, assembly, 42);
 
@@ -156,7 +157,10 @@ public sealed class TypeNameTests
             var error = Assert.ThrowsExactly<TargetInvocationException>(() => query.Invoke(null, null));
             Assert.IsInstanceOfType<NullReferenceException>(error.InnerException);
         }
-        else Assert.AreEqual(expected, query.Invoke(null, null));
+        else
+        {
+            Assert.AreEqual(expected, query.Invoke(null, null));
+        }
     }
 
     private static void AssertProblem(MethodEdit edit, string api)

@@ -101,6 +101,7 @@ public sealed class SafeArrayDependencyTests
             Assert.AreEqual(VarEnum.VT_UNKNOWN, marshal.SafeArraySubType);
             Assert.AreEqual(subtype, marshal.SafeArrayUserDefinedSubType);
         }
+
         if (generic)
         {
             Assert.AreEqual(typeof(List<>), subtype.GetGenericTypeDefinition());

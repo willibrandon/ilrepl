@@ -22,13 +22,28 @@ internal sealed class InterruptState
     {
         lock (_lock)
         {
-            if (progress.Identity == _progress.Identity && progress.Sequence <= _progress.Sequence) return;
+            if (progress.Identity == _progress.Identity && progress.Sequence <= _progress.Sequence)
+            {
+                return;
+            }
+
             if (_requestedIdentity == _progress.Identity && _progress.IsRunning
-                && (!progress.IsRunning || progress.Identity != _progress.Identity)) _settled = true;
-            if (_requestedIdentity == progress.Identity && progress.Phase != _progress.Phase) _requestedAt = now;
+                && (!progress.IsRunning || progress.Identity != _progress.Identity))
+            {
+                _settled = true;
+            }
+
+            if (_requestedIdentity == progress.Identity && progress.Phase != _progress.Phase)
+            {
+                _requestedAt = now;
+            }
+
             _progress = progress;
             _builtRevision = _renderedRevision = -1;
-            if (!progress.IsRunning && _requestedIdentity == progress.Identity) _settled = true;
+            if (!progress.IsRunning && _requestedIdentity == progress.Identity)
+            {
+                _settled = true;
+            }
         }
     }
 
@@ -40,9 +55,16 @@ internal sealed class InterruptState
         lock (_lock)
         {
             progress = _progress;
-            if (!_progress.IsRunning) return _settled ? InterruptAction.Consume : InterruptAction.None;
+            if (!_progress.IsRunning)
+            {
+                return _settled ? InterruptAction.Consume : InterruptAction.None;
+            }
+
             if (_requestedIdentity == _progress.Identity)
+            {
                 return _renderedRevision == _progress.Sequence ? InterruptAction.Restart : InterruptAction.Consume;
+            }
+
             _requestedIdentity = _progress.Identity;
             _requestedAt = now;
             _settled = false;
@@ -57,7 +79,11 @@ internal sealed class InterruptState
     {
         lock (_lock)
         {
-            if (!_progress.IsRunning || _requestedIdentity != _progress.Identity) return null;
+            if (!_progress.IsRunning || _requestedIdentity != _progress.Identity)
+            {
+                return null;
+            }
+
             var grace = _progress.Phase switch
             {
                 ExecutionPhase.UserCode => TimeSpan.FromMilliseconds(250),
@@ -69,6 +95,7 @@ internal sealed class InterruptState
                 _builtRevision = _progress.Sequence;
                 return "Press Ctrl+C again to restart the runtime; objects and static values will be lost";
             }
+
             return _progress.Phase == ExecutionPhase.UserCode ? "Interrupt requested"
                 : "Cancelling " + _progress.Name;
         }
@@ -82,7 +109,9 @@ internal sealed class InterruptState
         lock (_lock)
         {
             if (_progress.IsRunning && identity == _progress.Identity && revision == _progress.Sequence)
+            {
                 _renderedRevision = revision;
+            }
         }
     }
 
@@ -93,7 +122,11 @@ internal sealed class InterruptState
     {
         lock (_lock)
         {
-            if (_builtRevision != _progress.Sequence || !_progress.IsRunning) return null;
+            if (_builtRevision != _progress.Sequence || !_progress.IsRunning)
+            {
+                return null;
+            }
+
             _builtRevision = -1;
             return "\u001b]7777;ilrepl-interrupt:" + _progress.Identity + ":" + _progress.Sequence + "\u0007";
         }
@@ -104,6 +137,9 @@ internal sealed class InterruptState
     /// </summary>
     internal void Edited()
     {
-        lock (_lock) { _settled = false; }
+        lock (_lock)
+        {
+            _settled = false;
+        }
     }
 }

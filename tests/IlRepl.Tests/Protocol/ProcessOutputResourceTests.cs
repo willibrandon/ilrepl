@@ -28,7 +28,10 @@ public sealed class ProcessOutputResourceTests
     [Timeout(120_000, CooperativeCancellation = true)]
     public async Task Run_ClosesObservedWorkerPipesWithoutFinalization(bool native)
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
 
         using var files = new SessionWorkspaceFixture();
         using var core = new ReplCore();
@@ -47,7 +50,9 @@ public sealed class ProcessOutputResourceTests
             "call bool File::Exists(string)", "brfalse WAIT", "ldstr \"output\"", "call void Console::Write(string)",
             "call class System.IO.TextWriter Console::get_Error()", "ldstr \"error\"",
             "callvirt instance void System.IO.TextWriter::Write(string)", "ret", "}"))
+        {
             Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + string.Join('\n', core.Transcript.Lines.Select(row => row.PlainText)));
+        }
 
         var edit = core.Session.PrepareEdit("Work", "Copy");
         core.Session.CommitEdit("Copy", edit.Source);
@@ -121,13 +126,18 @@ public sealed class ProcessOutputResourceTests
 
                 var remaining = PipeLinks();
                 foreach (var pipe in observedPipes)
+                {
                     Assert.DoesNotContain(pipe, remaining, $"Worker pipe {pipe} survived completion at iteration {iteration}.");
+                }
             }
             finally
             {
                 try
                 {
-                    if (noCollection) GC.EndNoGCRegion();
+                    if (noCollection)
+                    {
+                        GC.EndNoGCRegion();
+                    }
                 }
                 finally
                 {
@@ -160,7 +170,10 @@ public sealed class ProcessOutputResourceTests
         foreach (var path in Directory.EnumerateFiles("/proc/self/fd"))
         {
             var target = new FileInfo(path).LinkTarget;
-            if (target is not null && target.StartsWith("pipe:[", StringComparison.Ordinal)) pipes.Add(target);
+            if (target is not null && target.StartsWith("pipe:[", StringComparison.Ordinal))
+            {
+                pipes.Add(target);
+            }
         }
 
         return pipes;

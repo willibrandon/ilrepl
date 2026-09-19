@@ -51,7 +51,8 @@ public sealed class FieldDeclarationParserTests
         Assert.IsTrue(field.IsInitOnly);
         Assert.Contains("must be static", Assert.ThrowsExactly<ReplException>(() => Parse("public literal int32 Max = int32(5)")).Message);
         Assert.Contains("needs its value", Assert.ThrowsExactly<ReplException>(() => Parse("public static literal int32 Max")).Message);
-        Assert.Contains("not both", Assert.ThrowsExactly<ReplException>(() => Parse("public static literal initonly int32 Max = int32(5)")).Message);
+        Assert.Contains("not both",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public static literal initonly int32 Max = int32(5)")).Message);
     }
 
     /// <summary>
@@ -81,8 +82,10 @@ public sealed class FieldDeclarationParserTests
         Assert.AreEqual((byte)200, Parse("public static literal uint8 U = uint8(200)").DefaultValue);
         Assert.AreEqual(5L, Parse("public static literal int64 L = 5").DefaultValue);
         Assert.IsNull(Parse("public static string N = nullref").DefaultValue);
-        Assert.Contains("write int32(...)", Assert.ThrowsExactly<ReplException>(() => Parse("public static literal int32 X = int64(5)")).Message);
-        Assert.Contains("nullref is not a valid int32", Assert.ThrowsExactly<ReplException>(() => Parse("public static int32 X = nullref")).Message);
+        Assert.Contains("write int32(...)",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public static literal int32 X = int64(5)")).Message);
+        Assert.Contains("nullref is not a valid int32",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public static int32 X = nullref")).Message);
     }
 
     /// <summary>

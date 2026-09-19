@@ -474,7 +474,11 @@ public sealed class SessionReplayTests
     public void RunSession_BlankEditorDoesNotBecomeSource(bool pending)
     {
         using var source = new ReplCore();
-        if (pending) Submit(source, "ldc.i4 42");
+        if (pending)
+        {
+            Submit(source, "ldc.i4 42");
+        }
+
         var editor = new SessionEditor { Lines = ["", " \t", ""] };
         var document = source.CaptureSession(editor);
         using var replay = new ReplCore();

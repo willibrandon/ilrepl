@@ -23,7 +23,11 @@ internal static partial class WindowsConsoleProbe
     /// <returns>The launched frontend's status, or zero after the signal sender observes its event.</returns>
     internal static async Task<int> RunAsync(string[] args)
     {
-        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Windows console events require Windows.");
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("Windows console events require Windows.");
+        }
+
         if (args[1] == "launch")
         {
             Publish(args[2] + ".launcher", Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
@@ -31,7 +35,11 @@ internal static partial class WindowsConsoleProbe
             {
                 InstallHandler();
                 var start = new ProcessStartInfo(HostLocator.FindDotnet()) { UseShellExecute = false, RedirectStandardError = true };
-                foreach (var argument in args[3..]) start.ArgumentList.Add(argument);
+                foreach (var argument in args[3..])
+                {
+                    start.ArgumentList.Add(argument);
+                }
+
                 using var frontend = StartFrontend(start);
                 var errors = frontend.StandardError.ReadToEndAsync();
                 Publish(args[2], frontend.Id.ToString(CultureInfo.InvariantCulture));
@@ -44,7 +52,11 @@ internal static partial class WindowsConsoleProbe
                 }
                 finally
                 {
-                    if (!frontend.HasExited) frontend.Kill(entireProcessTree: true);
+                    if (!frontend.HasExited)
+                    {
+                        frontend.Kill(entireProcessTree: true);
+                    }
+
                     await OwnedProcessGroup.WaitForExitAsync(frontend, CancellationToken.None);
                 }
             }
@@ -57,10 +69,17 @@ internal static partial class WindowsConsoleProbe
 
         _ = FreeConsole();
         if (AttachConsole(uint.Parse(args[2], CultureInfo.InvariantCulture)) == 0)
+        {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
+
         try
         {
-            if (args[1] == "observe-close") _closeMarker = args[3];
+            if (args[1] == "observe-close")
+            {
+                _closeMarker = args[3];
+            }
+
             InstallHandler();
             if (args[1] == "observe-close")
             {
@@ -68,16 +87,27 @@ internal static partial class WindowsConsoleProbe
                 await Task.Delay(Timeout.InfiniteTimeSpan);
                 return 0;
             }
-            if (GenerateConsoleCtrlEvent(1, 0) == 0) throw new Win32Exception(Marshal.GetLastPInvokeError());
+
+            if (GenerateConsoleCtrlEvent(1, 0) == 0)
+            {
+                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            }
+
             await BreakReceived.Task.WaitAsync(TimeSpan.FromSeconds(20));
             return 0;
         }
-        finally { _ = FreeConsole(); }
+        finally
+        {
+            _ = FreeConsole();
+        }
     }
 
     private static unsafe void InstallHandler()
     {
-        if (SetConsoleCtrlHandler(&HandleControl, 1) == 0) throw new Win32Exception(Marshal.GetLastPInvokeError());
+        if (SetConsoleCtrlHandler(&HandleControl, 1) == 0)
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
     }
 
     private static Process StartFrontend(ProcessStartInfo start)
@@ -87,15 +117,24 @@ internal static partial class WindowsConsoleProbe
         using var input = File.OpenHandle(@"\\.\CONIN$", FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
         using var output = File.OpenHandle(@"\\.\CONOUT$", FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
         if (GetConsoleMode(input, out _) == 0 || GetConsoleMode(output, out _) == 0)
+        {
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "The launcher must use its attached console.");
+        }
+
         if (SetHandleInformation(input, 1, 1) == 0 || SetHandleInformation(output, 1, 1) == 0)
+        {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
+
         using var originalInput = new SafeFileHandle(GetStdHandle(-10), ownsHandle: false);
         using var originalOutput = new SafeFileHandle(GetStdHandle(-11), ownsHandle: false);
         try
         {
             if (SetStdHandle(-10, input) == 0 || SetStdHandle(-11, output) == 0)
+            {
                 throw new Win32Exception(Marshal.GetLastPInvokeError());
+            }
+
             return Process.Start(start) ?? throw new InvalidOperationException("The frontend did not start.");
         }
         finally
@@ -120,12 +159,20 @@ internal static partial class WindowsConsoleProbe
             BreakReceived.TrySetResult();
             return 1;
         }
+
         if (control == 2 && _closeMarker is { } marker)
         {
             // A control callback must never propagate a managed exception across the native boundary.
-            try { Publish(marker, "CTRL_CLOSE_EVENT"); }
-            catch { return 0; }
+            try
+            {
+                Publish(marker, "CTRL_CLOSE_EVENT");
+            }
+            catch
+            {
+                return 0;
+            }
         }
+
         return 0;
     }
 

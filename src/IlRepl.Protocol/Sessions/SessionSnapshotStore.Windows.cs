@@ -18,7 +18,10 @@ public static partial class SessionSnapshotStore
         const uint replaceExistingWithPosixSemantics = 3;
         using var handle = CreateFileW(ExtendedWindowsPath(source), deleteAccess, FileShare.ReadWrite | FileShare.Delete,
             nint.Zero, FileMode.Open, 0, nint.Zero);
-        if (handle.IsInvalid) throw ReplacementError(Marshal.GetLastPInvokeError(), destination);
+        if (handle.IsInvalid)
+        {
+            throw ReplacementError(Marshal.GetLastPInvokeError(), destination);
+        }
 
         // FILE_RENAME_INFO aligns RootDirectory to pointer size; FileName follows its DWORD byte length.
         var lengthOffset = 2 * nint.Size;
@@ -29,7 +32,10 @@ public static partial class SessionSnapshotStore
         BinaryPrimitives.WriteUInt32LittleEndian(information, replaceExistingWithPosixSemantics);
         BinaryPrimitives.WriteUInt32LittleEndian(information.AsSpan(lengthOffset), (uint)nameBytes);
         Encoding.Unicode.GetBytes(name, information.AsSpan(nameOffset));
-        if (SetFileInformationByHandle(handle, fileRenameInfoEx, information, (uint)information.Length) != 0) return;
+        if (SetFileInformationByHandle(handle, fileRenameInfoEx, information, (uint)information.Length) != 0)
+        {
+            return;
+        }
 
         var error = Marshal.GetLastPInvokeError();
         if (error is 1 or 50 or 87)
@@ -51,11 +57,20 @@ public static partial class SessionSnapshotStore
 
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    private static partial SafeFileHandle CreateFileW(string path, uint access, FileShare share,
-        nint securityAttributes, FileMode creationDisposition, uint flags, nint template);
+    private static partial SafeFileHandle CreateFileW(
+        string path,
+        uint access,
+        FileShare share,
+        nint securityAttributes,
+        FileMode creationDisposition,
+        uint flags,
+        nint template);
 
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true)]
-    private static partial int SetFileInformationByHandle(SafeFileHandle handle, int informationClass,
-        ReadOnlySpan<byte> information, uint size);
+    private static partial int SetFileInformationByHandle(
+        SafeFileHandle handle,
+        int informationClass,
+        ReadOnlySpan<byte> information,
+        uint size);
 }

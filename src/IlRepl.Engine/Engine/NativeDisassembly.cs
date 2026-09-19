@@ -21,14 +21,29 @@ public static partial class NativeDisassembly
         for (var index = 0; index < lines.Length; index++)
         {
             var header = Header().Match(lines[index]);
-            if (!header.Success) continue;
+            if (!header.Success)
+            {
+                continue;
+            }
+
             var start = index;
             var end = index + 1;
-            while (end < lines.Length && !Header().IsMatch(lines[end]) && !Size().IsMatch(lines[end])) end++;
-            if (end == lines.Length || !Size().IsMatch(lines[end])) continue;
+            while (end < lines.Length && !Header().IsMatch(lines[end]) && !Size().IsMatch(lines[end]))
+            {
+                end++;
+            }
+
+            if (end == lines.Length || !Size().IsMatch(lines[end]))
+            {
+                continue;
+            }
+
             var block = string.Join('\n', lines[start..(end + 1)]);
             if (!block.Contains("; BEGIN METHOD ", StringComparison.Ordinal) || !block.Contains("; END METHOD ", StringComparison.Ordinal))
+            {
                 continue;
+            }
+
             var pgo = block.Contains("Dynamic PGO", StringComparison.Ordinal) ? "Dynamic"
                 : block.Contains("Synthesized PGO", StringComparison.Ordinal) ? "Synthesized"
                 : block.Contains("Static PGO", StringComparison.Ordinal) ? "Static"
@@ -41,6 +56,7 @@ public static partial class NativeDisassembly
             });
             index = end;
         }
+
         return [.. result];
     }
 
@@ -51,7 +67,9 @@ public static partial class NativeDisassembly
     /// <param name="methodNames">The selected concrete and canonical header signatures.</param>
     /// <param name="attributed">The blocks already attributed to published code.</param>
     /// <returns>Unmodified blocks that cannot contribute to a comparison conclusion.</returns>
-    public static string[] Unattributed(string text, IReadOnlyList<string> methodNames,
+    public static string[] Unattributed(
+        string text,
+        IReadOnlyList<string> methodNames,
         IReadOnlyList<NativeCompilation> attributed)
     {
         var result = new List<string>();
@@ -60,14 +78,31 @@ public static partial class NativeDisassembly
         for (var index = 0; index < lines.Length; index++)
         {
             var header = Header().Match(lines[index]);
-            if (!header.Success || !methodNames.Contains(header.Groups[1].Value, StringComparer.Ordinal)) continue;
+            if (!header.Success || !methodNames.Contains(header.Groups[1].Value, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
             var end = index + 1;
-            while (end < lines.Length && !Header().IsMatch(lines[end]) && !Size().IsMatch(lines[end])) end++;
-            if (end < lines.Length && Size().IsMatch(lines[end])) end++;
+            while (end < lines.Length && !Header().IsMatch(lines[end]) && !Size().IsMatch(lines[end]))
+            {
+                end++;
+            }
+
+            if (end < lines.Length && Size().IsMatch(lines[end]))
+            {
+                end++;
+            }
+
             var block = string.Join('\n', lines[index..end]);
-            if (!remaining.Remove(block)) result.Add(block);
+            if (!remaining.Remove(block))
+            {
+                result.Add(block);
+            }
+
             index = end - 1;
         }
+
         return [.. result];
     }
 
@@ -83,13 +118,31 @@ public static partial class NativeDisassembly
         var lines = new List<string>();
         foreach (var text in compilation.Listing.Split('\n'))
         {
-            if (text.StartsWith("; BEGIN METHOD ", StringComparison.Ordinal)) { active = true; continue; }
-            if (text.TrimStart().StartsWith("; END METHOD ", StringComparison.Ordinal) || Size().IsMatch(text)) continue;
-            if (!active || string.IsNullOrWhiteSpace(text)) continue;
+            if (text.StartsWith("; BEGIN METHOD ", StringComparison.Ordinal))
+            {
+                active = true;
+                continue;
+            }
+
+            if (text.TrimStart().StartsWith("; END METHOD ", StringComparison.Ordinal) || Size().IsMatch(text))
+            {
+                continue;
+            }
+
+            if (!active || string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
             var line = raw ? text.TrimEnd() : Bytes().Replace(text, "    ").TrimEnd();
-            if (!raw) line = Label().Replace(Offset().Replace(line, ""), "L$1").TrimEnd();
+            if (!raw)
+            {
+                line = Label().Replace(Offset().Replace(line, ""), "L$1").TrimEnd();
+            }
+
             lines.Add(line);
         }
+
         return [.. lines];
     }
 

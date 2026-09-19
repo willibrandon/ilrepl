@@ -53,7 +53,11 @@ public sealed class SessionCheckpointProcessTests
             await cancellation.CancelAsync();
             await Assert.ThrowsAsync<OperationCanceledException>(() => cancelled);
         }
-        finally { release.Set(); }
+        finally
+        {
+            release.Set();
+        }
+
         var firstReply = await first;
         Assert.AreEqual("// first", firstReply.Document.Editor.Lines[0]);
         Assert.AreSame(checkpoints.Last().Document, firstReply.Document);
@@ -79,6 +83,7 @@ public sealed class SessionCheckpointProcessTests
             Assert.IsNull(acknowledged.CheckpointDelivery);
             Assert.AreEqual("ldc.i4.s 42", reply.Document.Entries.Single().Source.Single());
         }
+
         Assert.DoesNotContain(checkpoint => checkpoint.Document.Editor.Lines.Contains("// cancelled"), checkpoints);
         var executed = await host.HandleAsync("ret", token);
         Assert.Contains(line => line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal), executed.Lines);

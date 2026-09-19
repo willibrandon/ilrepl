@@ -52,7 +52,8 @@ public sealed class MethodDisassemblerTests
     {
         session ??= new Session();
         var (_, _, fixture) = CecilFixture.Build(populate, session.Resolver);
-        return MethodDisassembler.Disassemble(fixture.GetMethod(method, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance)!, session);
+        return MethodDisassembler.Disassemble(fixture.GetMethod(method,
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance)!, session);
     }
 
     private static MethodDefinition Static(TypeDefinition type, string name, Mono.Cecil.TypeReference returnType)
@@ -91,7 +92,8 @@ public sealed class MethodDisassemblerTests
     [TestMethod]
     public void Disassemble_SessionMethod_ShowsImplicitLeaveAndBox()
     {
-        var session = Session(".method object Box() {", ".locals init (int32 v)", ".try {", "ldc.i4 1", "stloc v", "} catch [System.Runtime]System.Exception {", "pop", "ldc.i4 2", "stloc v", "}", "ldloc v", "box int32", "ret", "}");
+        var session = Session(".method object Box() {", ".locals init (int32 v)", ".try {", "ldc.i4 1", "stloc v",
+            "} catch [System.Runtime]System.Exception {", "pop", "ldc.i4 2", "stloc v", "}", "ldloc v", "box int32", "ret", "}");
         var box = MethodDisassembler.Disassemble(session.Methods[0].Version.Body, session);
         var lines = DisassemblyText.Lines(box);
         var text = string.Join("\n", lines);
@@ -115,7 +117,8 @@ public sealed class MethodDisassemblerTests
     [TestMethod]
     public void Disassemble_SessionTypeMember_ReadsRuntimeType()
     {
-        var session = Session(".class public Point {", ".field public int32 X", ".method public instance int32 Get() {", "ldarg.0", "ldfld int32 Point::X", "ret", "}", "}");
+        var session = Session(".class public Point {", ".field public int32 X", ".method public instance int32 Get() {", "ldarg.0",
+            "ldfld int32 Point::X", "ret", "}", "}");
         var resolved = MemberResolver.ResolveMethod("instance int32 Point::Get()", session.InspectionContext, false);
         var get = MethodDisassembler.Disassemble(resolved.Method!, session);
         var text = string.Join("\n", DisassemblyText.LinesWithStack(get));
@@ -151,8 +154,10 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Endfinally);
             il.Append(end);
             il.Emit(OpCodes.Ret);
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = catchStart, HandlerStart = catchStart, HandlerEnd = finallyStart, CatchType = module.ImportReference(typeof(Exception)) });
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally) { TryStart = tryStart, TryEnd = finallyStart, HandlerStart = finallyStart, HandlerEnd = end });
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = catchStart,
+                HandlerStart = catchStart, HandlerEnd = finallyStart, CatchType = module.ImportReference(typeof(Exception)) });
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally) { TryStart = tryStart, TryEnd = finallyStart,
+                HandlerStart = finallyStart, HandlerEnd = end });
         });
         var blocks = method.Entries.Where(e => e.Kind == DisassembledEntryKind.Block).Select(e => e.Block!.Value).ToList();
         Assert.AreSequenceEqual([BlockKind.Try, BlockKind.Catch, BlockKind.Finally, BlockKind.End], blocks);
@@ -194,12 +199,16 @@ public sealed class MethodDisassemblerTests
             il.Append(faultStart);
             il.Emit(OpCodes.Endfinally);
             il.Append(end);
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Filter) { TryStart = tryStart, TryEnd = filterStart, FilterStart = filterStart, HandlerStart = handlerStart, HandlerEnd = faultStart });
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Fault) { TryStart = tryStart, TryEnd = faultStart, HandlerStart = faultStart, HandlerEnd = end });
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Filter) { TryStart = tryStart, TryEnd = filterStart,
+                FilterStart = filterStart, HandlerStart = handlerStart, HandlerEnd = faultStart });
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Fault) { TryStart = tryStart, TryEnd = faultStart,
+                HandlerStart = faultStart, HandlerEnd = end });
         });
         var blocks = method.Entries.Where(e => e.Kind == DisassembledEntryKind.Block).Select(e => (e.Block!.Value, e.Offset)).ToList();
         var filter = method.Clauses.Single(c => c.Kind == IlClauseKind.Filter);
-        Assert.AreSequenceEqual([(BlockKind.Try, 0), (BlockKind.Filter, filter.FilterStart!.Value), (BlockKind.FilterHandler, filter.HandlerStart), (BlockKind.Fault, filter.HandlerEnd), (BlockKind.End, method.CodeSize - 1)], blocks);
+        Assert.AreSequenceEqual([(BlockKind.Try, 0), (BlockKind.Filter, filter.FilterStart!.Value),
+            (BlockKind.FilterHandler, filter.HandlerStart), (BlockKind.Fault, filter.HandlerEnd), (BlockKind.End, method.CodeSize - 1)],
+            blocks);
         Assert.IsEmpty(method.Notes, string.Join("; ", method.Notes));
         Assert.AreEqual("[]", DisassemblyText.StackAt(method, filter.FilterStart.Value));
         Assert.AreEqual("[]", DisassemblyText.StackAt(method, filter.HandlerStart));
@@ -227,12 +236,14 @@ public sealed class MethodDisassemblerTests
             il.Append(handlerStart);
             il.Emit(OpCodes.Leave, end);
             il.Append(end);
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = gap, HandlerStart = handlerStart, HandlerEnd = end, CatchType = module.ImportReference(typeof(Exception)) });
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = gap,
+                HandlerStart = handlerStart, HandlerEnd = end, CatchType = module.ImportReference(typeof(Exception)) });
         });
         Assert.DoesNotContain(e => e.Kind == DisassembledEntryKind.Block, method.Entries);
         Assert.HasCount(1, method.Clauses);
         var clause = method.Clauses[0];
-        Assert.Contains(n => n.Contains(".try IL_0000 to IL_0006 catch [System.Runtime]System.Exception handler IL_", StringComparison.Ordinal), method.Notes);
+        Assert.Contains(n => n.Contains(".try IL_0000 to IL_0006 catch [System.Runtime]System.Exception handler IL_",
+            StringComparison.Ordinal), method.Notes);
         var labels = method.Entries.Where(e => e.Kind == DisassembledEntryKind.Label).Select(e => e.Offset).ToList();
         Assert.Contains(clause.TryEnd, labels);
         Assert.Contains(clause.HandlerStart, labels);
@@ -260,7 +271,8 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Ret);
             il.Append(handlerStart);
             il.Emit(OpCodes.Endfinally);
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally) { TryStart = tryStart, TryEnd = gap, HandlerStart = handlerStart, HandlerEnd = null });
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally) { TryStart = tryStart, TryEnd = gap,
+                HandlerStart = handlerStart, HandlerEnd = null });
         });
         Assert.AreEqual(IlReader.LabelFor(method.CodeSize), method.Entries[^1].Label);
         Assert.AreEqual(DisassembledEntryKind.Label, method.Entries[^1].Kind);
@@ -355,15 +367,19 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Jmp, target);
         });
         var texts = DisassemblyText.Instructions(method);
-        Assert.AreSequenceEqual(["ldarg.0", "switch (IL_000e, IL_000f)", "nop", "nop", "ldarga.s 0", "volatile.", "ldind.i4", "pop", "tail.", "call void [" + method.Method.Module.Assembly.GetName().Name + "]N.Fixture::Target()", "ret", "jmp void [" + method.Method.Module.Assembly.GetName().Name + "]N.Fixture::Target()"], texts);
+        Assert.AreSequenceEqual(["ldarg.0", "switch (IL_000e, IL_000f)", "nop", "nop", "ldarga.s 0", "volatile.", "ldind.i4", "pop",
+            "tail.", "call void [" + method.Method.Module.Assembly.GetName().Name + "]N.Fixture::Target()", "ret",
+            "jmp void [" + method.Method.Module.Assembly.GetName().Name + "]N.Fixture::Target()"], texts);
         var column = DisassemblyText.LinesWithStack(method);
         Assert.Contains(l => l.EndsWith("switch (IL_000e, IL_000f)\t[]", StringComparison.Ordinal), column);
-        Assert.Contains(l => l.EndsWith("jmp void [" + method.Method.Module.Assembly.GetName().Name + "]N.Fixture::Target()\tunreachable", StringComparison.Ordinal), column);
+        Assert.Contains(l => l.EndsWith("jmp void [" + method.Method.Module.Assembly.GetName().Name + "]N.Fixture::Target()\tunreachable",
+            StringComparison.Ordinal), column);
 
         // A vararg method provides a real arglist instruction and its required calling convention.
         var vararg = Cecil((module, type) =>
         {
-            var m = new MethodDefinition("V", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void) { CallingConvention = MethodCallingConvention.VarArg };
+            var m = new MethodDefinition("V", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Void) { CallingConvention = MethodCallingConvention.VarArg };
             var il = m.Body.GetILProcessor();
             il.Emit(OpCodes.Arglist);
             il.Emit(OpCodes.Pop);
@@ -389,7 +405,9 @@ public sealed class MethodDisassemblerTests
         Assert.Contains("!0", string.Join("\n", DisassemblyText.Lines(add)));
         Assert.StartsWith(".method public hidebysig newslot virtual final instance void Add(!T item) cil managed", add.Header);
 
-        var first = MethodDisassembler.Disassemble(typeof(Enumerable).GetMethod("First", [typeof(IEnumerable<>).MakeGenericType(Type.MakeGenericMethodParameter(0))])!.MakeGenericMethod(typeof(int)), session);
+        var first = MethodDisassembler.Disassemble(typeof(Enumerable)
+            .GetMethod("First",
+            [typeof(IEnumerable<>).MakeGenericType(Type.MakeGenericMethodParameter(0))])!.MakeGenericMethod(typeof(int)), session);
         Assert.Contains(n => n.StartsWith("showing the definition", StringComparison.Ordinal), first.Notes);
         Assert.IsTrue(first.Method.IsGenericMethodDefinition);
         Assert.Contains("<TSource>", first.Header);
@@ -404,7 +422,8 @@ public sealed class MethodDisassemblerTests
     {
         var method = Cecil((module, type) =>
         {
-            type.Fields.Add(new FieldDefinition("F", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static, module.TypeSystem.Int32));
+            type.Fields.Add(new FieldDefinition("F", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static,
+                module.TypeSystem.Int32));
             var m = Static(type, "M", module.TypeSystem.Void);
             var il = m.Body.GetILProcessor();
             il.Emit(OpCodes.Ldtoken, module.TypeSystem.Int32);
@@ -452,7 +471,8 @@ public sealed class MethodDisassemblerTests
     {
         var method = Cecil((module, type) =>
         {
-            var callee = new MethodDefinition("Count", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Int32) { CallingConvention = MethodCallingConvention.VarArg };
+            var callee = new MethodDefinition("Count", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Int32) { CallingConvention = MethodCallingConvention.VarArg };
             callee.Body.GetILProcessor().Emit(OpCodes.Ldc_I4_0);
             callee.Body.GetILProcessor().Emit(OpCodes.Ret);
             type.Methods.Add(callee);
@@ -551,20 +571,29 @@ public sealed class MethodDisassemblerTests
         var (_, _, fixture) = CecilFixture.Build((module, type) =>
         {
             type.Attributes |= Mono.Cecil.TypeAttributes.Abstract;
-            type.Methods.Add(new MethodDefinition("Abstract", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Abstract | Mono.Cecil.MethodAttributes.Virtual | Mono.Cecil.MethodAttributes.NewSlot, module.TypeSystem.Void));
-            type.Methods.Add(new MethodDefinition("Internal", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void) { ImplAttributes = Mono.Cecil.MethodImplAttributes.InternalCall });
+            type.Methods.Add(new MethodDefinition("Abstract",
+                Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Abstract | Mono.Cecil.MethodAttributes.Virtual
+                | Mono.Cecil.MethodAttributes.NewSlot, module.TypeSystem.Void));
+            type.Methods.Add(new MethodDefinition("Internal", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Void) { ImplAttributes = Mono.Cecil.MethodImplAttributes.InternalCall });
             module.ModuleReferences.Add(new ModuleReference("libc"));
-            var native = new MethodDefinition("Native", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static | Mono.Cecil.MethodAttributes.PInvokeImpl, module.TypeSystem.Int32)
+            var native = new MethodDefinition("Native",
+                Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static | Mono.Cecil.MethodAttributes.PInvokeImpl,
+                module.TypeSystem.Int32)
             {
                 PInvokeInfo = new PInvokeInfo(PInvokeAttributes.CallConvCdecl, "getpid", module.ModuleReferences[0]),
                 ImplAttributes = Mono.Cecil.MethodImplAttributes.PreserveSig,
             };
             type.Methods.Add(native);
         });
-        Assert.Contains("is abstract", Assert.Throws<ReplException>(() => MethodDisassembler.Disassemble(fixture.GetMethod("Abstract")!, session)).Message);
-        Assert.Contains("implemented by the runtime", Assert.Throws<ReplException>(() => MethodDisassembler.Disassemble(fixture.GetMethod("Internal")!, session)).Message);
-        Assert.Contains("implemented by the runtime", Assert.Throws<ReplException>(() => MethodDisassembler.Disassemble(fixture.GetMethod("Native")!, session)).Message);
-        Assert.Contains("is abstract", Assert.Throws<ReplException>(() => MethodDisassembler.Disassemble(typeof(Stream).GetMethod("Flush")!, session)).Message);
+        Assert.Contains("is abstract",
+            Assert.Throws<ReplException>(() => MethodDisassembler.Disassemble(fixture.GetMethod("Abstract")!, session)).Message);
+        Assert.Contains("implemented by the runtime",
+            Assert.Throws<ReplException>(() => MethodDisassembler.Disassemble(fixture.GetMethod("Internal")!, session)).Message);
+        Assert.Contains("implemented by the runtime",
+            Assert.Throws<ReplException>(() => MethodDisassembler.Disassemble(fixture.GetMethod("Native")!, session)).Message);
+        Assert.Contains("is abstract",
+            Assert.Throws<ReplException>(() => MethodDisassembler.Disassemble(typeof(Stream).GetMethod("Flush")!, session)).Message);
         var dynamic = new System.Reflection.Emit.DynamicMethod("D", typeof(void), Type.EmptyTypes);
         dynamic.GetILGenerator().Emit(System.Reflection.Emit.OpCodes.Ret);
         Assert.Contains("dynamic method", Assert.Throws<ReplException>(() => MethodDisassembler.Disassemble(dynamic, session)).Message);
@@ -579,7 +608,8 @@ public sealed class MethodDisassemblerTests
         var session = Session(
             ".class public Witness {", ".field public static int32 Count", "}",
             ".class public Lazy {", ".field public static int32 Value",
-            ".method public static specialname rtspecialname void .cctor() {", "ldsfld int32 Witness::Count", "ldc.i4 1", "add", "stsfld int32 Witness::Count", "ldc.i4 42", "stsfld int32 Lazy::Value", "ret", "}",
+            ".method public static specialname rtspecialname void .cctor() {", "ldsfld int32 Witness::Count", "ldc.i4 1", "add",
+            "stsfld int32 Witness::Count", "ldc.i4 42", "stsfld int32 Lazy::Value", "ret", "}",
             ".method public static int32 Get() {", "ldsfld int32 Lazy::Value", "ret", "}", "}");
         var witness = session.TypeTable.TryResolve("Witness", false, false, out var w) ? w! : throw new AssertFailedException("Witness");
         var get = MemberResolver.ResolveMethod("int32 Lazy::Get()", session.InspectionContext, false).Method!;
@@ -593,7 +623,9 @@ public sealed class MethodDisassemblerTests
     /// A loaded assembly lists from the bytes read at load time, even after the file changes.
     /// </summary>
     [TestMethod]
-    [OSCondition(ConditionMode.Exclude, OperatingSystems.Windows, IgnoreMessage = "Windows keeps a loaded assembly's file locked, so it cannot be replaced while loaded; the image path is exercised on Unix")]
+    [OSCondition(ConditionMode.Exclude, OperatingSystems.Windows,
+        IgnoreMessage = "Windows keeps a loaded assembly's file locked, so it cannot be replaced while loaded; the image path is " +
+        "exercised on Unix")]
     public void Disassemble_LoadedAssembly_UsesImageReadAtLoad()
     {
         var directory = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N"));
@@ -603,11 +635,14 @@ public sealed class MethodDisassemblerTests
         {
             static byte[] Write(int value)
             {
-                using var definition = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("Replaced", new Version(1, 0, 0, 0)), "Replaced", ModuleKind.Dll);
+                using var definition = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("Replaced", new Version(1, 0, 0, 0)),
+                    "Replaced", ModuleKind.Dll);
                 var module = definition.MainModule;
-                var type = new TypeDefinition("N", "R", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+                var type = new TypeDefinition("N", "R", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class,
+                    module.TypeSystem.Object);
                 module.Types.Add(type);
-                var m = new MethodDefinition("Value", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Int32);
+                var m = new MethodDefinition("Value", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                    module.TypeSystem.Int32);
                 m.Body.GetILProcessor().Emit(OpCodes.Ldc_I4, value);
                 m.Body.GetILProcessor().Emit(OpCodes.Ret);
                 type.Methods.Add(m);
@@ -650,7 +685,8 @@ public sealed class MethodDisassemblerTests
         Assert.Contains("catch [System.Runtime]System.ArgumentException", notes[1]);
         var native = IlAsmClauseWriter.Write(method);
         Assert.Contains(".try IL_0000 to IL_", native);
-        Assert.IsLessThan(native.IndexOf("System.ArgumentException handler", StringComparison.Ordinal), native.IndexOf("System.Exception handler", StringComparison.Ordinal), native);
+        Assert.IsLessThan(native.IndexOf("System.ArgumentException handler", StringComparison.Ordinal),
+            native.IndexOf("System.Exception handler", StringComparison.Ordinal), native);
     }
 
     /// <summary>
@@ -679,8 +715,10 @@ public sealed class MethodDisassemblerTests
         il.Emit(OpCodes.Leave, end);
         il.Append(end);
         il.Emit(OpCodes.Ret);
-        m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = argumentHandler, HandlerStart = exceptionHandler, HandlerEnd = end, CatchType = module.ImportReference(typeof(Exception)) });
-        m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = argumentHandler, HandlerStart = argumentHandler, HandlerEnd = exceptionHandler, CatchType = module.ImportReference(typeof(ArgumentException)) });
+        m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = argumentHandler,
+            HandlerStart = exceptionHandler, HandlerEnd = end, CatchType = module.ImportReference(typeof(Exception)) });
+        m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = argumentHandler,
+            HandlerStart = argumentHandler, HandlerEnd = exceptionHandler, CatchType = module.ImportReference(typeof(ArgumentException)) });
     }
 
     /// <summary>
@@ -713,7 +751,8 @@ public sealed class MethodDisassemblerTests
         var session = new Session();
         var method = Cecil((module, type) =>
         {
-            var generic = new MethodDefinition("Generic", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            var generic = new MethodDefinition("Generic", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Void);
             var t = new Mono.Cecil.GenericParameter("T", generic);
             generic.GenericParameters.Add(t);
             generic.ReturnType = t;
@@ -749,7 +788,8 @@ public sealed class MethodDisassemblerTests
     {
         var method = Cecil((module, type) =>
         {
-            var owner = new TypeDefinition("N", "GenericOwner`1", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            var owner = new TypeDefinition("N", "GenericOwner`1", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class,
+                module.TypeSystem.Object);
             module.Types.Add(owner);
             var t = new Mono.Cecil.GenericParameter("T", owner);
             owner.GenericParameters.Add(t);
@@ -789,8 +829,10 @@ public sealed class MethodDisassemblerTests
     {
         var method = Cecil((module, type) =>
         {
-            var paren = new TypeDefinition("N", "Paren(Name", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
-            var comma = new TypeDefinition("N", "Comma,Name<T", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            var paren = new TypeDefinition("N", "Paren(Name", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class,
+                module.TypeSystem.Object);
+            var comma = new TypeDefinition("N", "Comma,Name<T", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class,
+                module.TypeSystem.Object);
             module.Types.Add(paren);
             module.Types.Add(comma);
             var use = Static(type, "Use", module.TypeSystem.Void);
@@ -806,7 +848,8 @@ public sealed class MethodDisassemblerTests
         });
         var assembly = method.Method.Module.Assembly.GetName().Name;
         var call = DisassemblyText.Instructions(method)[2];
-        Assert.AreEqual($"call void [{assembly}]N.Fixture::Use(class [{assembly}]N.'Paren(Name', class [{assembly}]N.'Comma,Name<T')", call);
+        Assert.AreEqual($"call void [{assembly}]N.Fixture::Use(class [{assembly}]N.'Paren(Name', class [{assembly}]N.'Comma,Name<T')",
+            call);
         var parsed = (ResolvedMethod)InstructionParser.Parse(call, method.Context).Operand!;
         Assert.AreEqual("Use", parsed.Method!.Name);
         Assert.AreEqual("[]", DisassemblyText.StackAt(method, method.Entries[2].Offset));
@@ -821,7 +864,8 @@ public sealed class MethodDisassemblerTests
         var session = new Session();
         var (_, image, _) = CecilFixture.Build((module, type) =>
         {
-            type.Fields.Add(new FieldDefinition("F", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static, module.TypeSystem.Int32));
+            type.Fields.Add(new FieldDefinition("F", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static,
+                module.TypeSystem.Int32));
             var generic = Static(type, "G", module.TypeSystem.Void);
             generic.GenericParameters.Add(new Mono.Cecil.GenericParameter("T", generic));
             generic.Body.GetILProcessor().Emit(OpCodes.Ret);
@@ -856,7 +900,8 @@ public sealed class MethodDisassemblerTests
         Assert.AreEqual(3, found, "three ldtoken operands should be in the image");
         var assembly = session.Resolver.LoadImage(patched);
         var listing = MethodDisassembler.Disassemble(assembly.GetType("N.Fixture")!.GetMethod("M")!, session);
-        Assert.AreSequenceEqual(["ldtoken 0x04ffffff", "pop", "ldtoken 0x06ffffff", "pop", "ldtoken 0x2bffffff", "pop", "ret"], DisassemblyText.Instructions(listing));
+        Assert.AreSequenceEqual(["ldtoken 0x04ffffff", "pop", "ldtoken 0x06ffffff", "pop", "ldtoken 0x2bffffff", "pop", "ret"],
+            DisassemblyText.Instructions(listing));
     }
 
     /// <summary>
@@ -911,7 +956,8 @@ public sealed class MethodDisassemblerTests
         var caller = MemberResolver.ResolveMethod("int32 Greeter.Hello::CallCountArgs()", session.InspectionContext, false).Method!;
         var listing = MethodDisassembler.Disassemble(caller, session);
         var lines = DisassemblyText.LinesWithStack(listing);
-        Assert.Contains(l => l.EndsWith("call vararg int32 [Greeter]Greeter.Hello::CountArgs(..., int32)\t[int32]", StringComparison.Ordinal), lines, string.Join("\n", lines));
+        Assert.Contains(l => l.EndsWith("call vararg int32 [Greeter]Greeter.Hello::CountArgs(..., int32)\t[int32]",
+            StringComparison.Ordinal), lines, string.Join("\n", lines));
         Assert.IsEmpty(listing.Notes, string.Join("; ", listing.Notes));
         var say = MemberResolver.ResolveMethod("string Greeter.Hello::Say(string)", session.InspectionContext, false).Method!;
         var sayListing = MethodDisassembler.Disassemble(say, session);
@@ -959,7 +1005,8 @@ public sealed class MethodDisassemblerTests
     {
         foreach (var (name, value) in new[] { ("Slash\\Name", 1), ("SlashName", 2) })
         {
-            var owner = new TypeDefinition("N", name, Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            var owner = new TypeDefinition("N", name, Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class,
+                module.TypeSystem.Object);
             module.Types.Add(owner);
             var valueMethod = Static(owner, "Value", module.TypeSystem.Int32);
             valueMethod.Body.GetILProcessor().Emit(OpCodes.Ldc_I4, value);
@@ -977,12 +1024,18 @@ public sealed class MethodDisassemblerTests
     /// each with a Value method returning 1 and 2, and a method M that calls the first, closed over
     /// int32 when the types are generic.
     /// </summary>
-    internal static Action<ModuleDefinition, TypeDefinition> CollidingTypes(string firstNamespace, string firstName, string secondNamespace, string secondName, bool generic) => (module, type) =>
+    internal static Action<ModuleDefinition, TypeDefinition> CollidingTypes(
+        string firstNamespace,
+        string firstName,
+        string secondNamespace,
+        string secondName,
+        bool generic) => (module, type) =>
     {
         var first = default(MethodDefinition);
         foreach (var (ns, name, value) in new[] { (firstNamespace, firstName, 1), (secondNamespace, secondName, 2) })
         {
-            var owner = new TypeDefinition(ns, generic ? name + "`1" : name, Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            var owner = new TypeDefinition(ns, generic ? name + "`1" : name,
+                Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
             module.Types.Add(owner);
             if (generic)
             {
@@ -1023,7 +1076,13 @@ public sealed class MethodDisassemblerTests
     [DataRow("N", "Slash\\Name", "N", "SlashName", true, "class [{0}]N.'Slash\\\\Name`1'<int32>")]
     [DataRow("N", "Quote'Name", "N", "QuoteName", true, "class [{0}]N.'Quote\\'Name`1'<int32>")]
     [DataRow("Ns\\Part", "Plain", "NsPart", "Plain", false, "[{0}]'Ns\\\\Part'.Plain")]
-    public void Disassemble_SpecialCharactersInNames_KeepIdentity(string firstNamespace, string firstName, string secondNamespace, string secondName, bool generic, string expectedOwner)
+    public void Disassemble_SpecialCharactersInNames_KeepIdentity(
+        string firstNamespace,
+        string firstName,
+        string secondNamespace,
+        string secondName,
+        bool generic,
+        string expectedOwner)
     {
         var method = Cecil(CollidingTypes(firstNamespace, firstName, secondNamespace, secondName, generic));
         var assembly = method.Method.Module.Assembly.GetName().Name;
@@ -1035,7 +1094,7 @@ public sealed class MethodDisassemblerTests
     }
 
     /// <summary>
-    /// A literal backslash in a type name survives reflection's escaping, ILAsm quoting, and the parser, so the listing names the same type.
+    /// A literal backslash in a type name survives reflection's escaping, ILAsm quoting, and the parser, naming the same type.
     /// </summary>
     [TestMethod]
     public void Disassemble_BackslashInTypeName_KeepsIdentity()

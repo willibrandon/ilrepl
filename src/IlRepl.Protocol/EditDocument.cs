@@ -9,7 +9,12 @@ namespace IlRepl.Protocol;
 /// <param name="OriginalReference">The source method reference.</param>
 /// <param name="BaselineFingerprint">The identity of the immutable original.</param>
 /// <param name="Revision">The last successfully committed revision.</param>
-public sealed record EditDocument(string Identity, string Name, string Source, string OriginalReference, string BaselineFingerprint,
+public sealed record EditDocument(
+    string Identity,
+    string Name,
+    string Source,
+    string OriginalReference,
+    string BaselineFingerprint,
     int Revision)
 {
     /// <summary>

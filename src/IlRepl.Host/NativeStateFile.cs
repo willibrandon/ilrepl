@@ -33,11 +33,21 @@ public static class NativeStateFile
                 return await JsonSerializer.DeserializeAsync(stream, ProtocolJsonContext.Default.NativeWorkerState,
                     cancellationToken).ConfigureAwait(false);
             }
-            catch (FileNotFoundException) { return null; }
-            catch (DirectoryNotFoundException) { return null; }
+            catch (FileNotFoundException)
+            {
+                return null;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return null;
+            }
             catch (IOException exception) when ((exception.HResult & 0xffff) is 32 or 33)
             {
-                if (attempt == 2) return null;
+                if (attempt == 2)
+                {
+                    return null;
+                }
+
                 await Task.Yield();
             }
         }
@@ -55,7 +65,13 @@ public static class NativeStateFile
         await File.WriteAllTextAsync(path + ".tmp", JsonSerializer.Serialize(state,
             ProtocolJsonContext.Default.NativeWorkerState)).ConfigureAwait(false);
         // MoveFileEx cannot overwrite an open destination on Windows, even when the reader shares deletion.
-        if (OperatingSystem.IsWindows() && File.Exists(path)) File.Replace(path + ".tmp", path, null);
-        else File.Move(path + ".tmp", path, overwrite: true);
+        if (OperatingSystem.IsWindows() && File.Exists(path))
+        {
+            File.Replace(path + ".tmp", path, null);
+        }
+        else
+        {
+            File.Move(path + ".tmp", path, overwrite: true);
+        }
     }
 }

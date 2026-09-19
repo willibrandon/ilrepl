@@ -95,7 +95,11 @@ public sealed class TypeLifetimeTests
     [Timeout(30_000, CooperativeCancellation = true)]
     public async Task Reset_CollectsWhileOtherThreadsResolveNames()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         using var resolver = new TypeResolver();
         var context = new ParseContext([], [], GenericContext.Empty, resolver, []);
         var ct = TestContext.CancellationToken;
@@ -148,12 +152,21 @@ public sealed class TypeLifetimeTests
         while (true)
         {
             progress.Reset();
-            if (Enumerable.Range(0, searches.Length).All(index => Volatile.Read(ref searches[index]) - starts[index] >= 5)) return;
+            if (Enumerable.Range(0, searches.Length).All(index => Volatile.Read(ref searches[index]) - starts[index] >= 5))
+            {
+                return;
+            }
+
             progress.Wait(cancellationToken);
         }
     }
 
-    private static void Repeat(Action miss, int[] searches, int index, Barrier cycle, ManualResetEventSlim progress,
+    private static void Repeat(
+        Action miss,
+        int[] searches,
+        int index,
+        Barrier cycle,
+        ManualResetEventSlim progress,
         CancellationToken token)
     {
         try

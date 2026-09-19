@@ -11,7 +11,15 @@ public sealed class MethodBodyImage : IDisposable
 {
     private readonly PEReader? _pe;
 
-    internal MethodBodyImage(byte[] il, int maxStack, bool initLocals, int localSignatureToken, IReadOnlyList<RawExceptionRegion> regions, MetadataReader? metadata, PEReader? pe, string source)
+    internal MethodBodyImage(
+        byte[] il,
+        int maxStack,
+        bool initLocals,
+        int localSignatureToken,
+        IReadOnlyList<RawExceptionRegion> regions,
+        MetadataReader? metadata,
+        PEReader? pe,
+        string source)
     {
         Il = il;
         MaxStack = maxStack;

@@ -68,7 +68,11 @@ public sealed partial class DefinitionAssemblyTests
     public async Task Release_RetainedType_KeepsDependencyThenCollects()
     {
         TestSkip.Unless(!OperatingSystem.IsBrowser(), "unloading needs CoreCLR");
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var (holderWeak, pointWeak) = RetainedScenario();
         Collect(() => AreCollected(holderWeak, pointWeak));
         Assert.IsFalse(holderWeak.TryGetTarget(out _), "the retained definition should collect once it is dropped");

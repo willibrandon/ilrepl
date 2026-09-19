@@ -54,7 +54,10 @@ public sealed class StartupDeliveryTests
                 value.FilterInput = input =>
                 {
                     if (input is not Hex1bKeyEvent { Key: Hex1bKey.Enter } || Interlocked.Exchange(ref entered, 1) != 0)
+                    {
                         return false;
+                    }
+
                     launch.TrySetResult();
                     controller.Initialization.WaitAsync(token).GetAwaiter().GetResult();
                     boundary.TrySetResult((controller.RuntimeState == SessionRuntimeState.Ready,

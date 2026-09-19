@@ -45,8 +45,13 @@ public sealed class ConstructorReflectionTests
     [DataRow("one", false, false, "direct", true, false)]
     [DataRow("four", true, true, "local", true, true)]
     [DataRow("two", true, true, "return", false, true)]
-    public async Task Compare_ReflectedConstructorsPreserveContext(string lookup, bool argument, bool privateConstructor,
-        string flow, bool invoker, bool generic)
+    public async Task Compare_ReflectedConstructorsPreserveContext(
+        string lookup,
+        bool argument,
+        bool privateConstructor,
+        string flow,
+        bool invoker,
+        bool generic)
     {
         var source = ConstructorReflectionExamples.Source(lookup, argument, privateConstructor, flow, invoker, generic);
         var session = IlLines.Load(source.Split('\n'));
@@ -63,6 +68,7 @@ public sealed class ConstructorReflectionTests
             Assert.AreEqual(42, method.Invoke(null, null));
             Assert.AreEqual(1, Counter(method));
         }
+
         await AssertComparisonAsync(session, "match", "42");
         session.CommitEdit(edit.Name, ConstructorReflectionExamples.Method(lookup, argument, privateConstructor,
             flow, invoker, generic, edited: true));
@@ -129,7 +135,11 @@ public sealed class ConstructorReflectionTests
         Assert.AreEqual(0, binder.Calls);
         Assert.AreEqual(42, edit.Original.Requested.Invoke(null, [input]));
         Assert.AreEqual(1, Counter(edit.Original.Requested));
-        if (flow == "binder") Assert.IsGreaterThan(0, binder.Calls);
+        if (flow == "binder")
+        {
+            Assert.IsGreaterThan(0, binder.Calls);
+        }
+
         var parameter = flow == "unknown" ? "class ConstructorInfo constructor" : "class Binder binder";
         var corrected = ".method public static int32 Read(" + parameter + ") {\nldc.i4.s 42\nret\n}";
         session.CommitEdit(edit.Name, corrected);

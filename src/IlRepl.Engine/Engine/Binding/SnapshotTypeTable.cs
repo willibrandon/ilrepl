@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
@@ -128,8 +130,11 @@ public sealed class SnapshotTypeTable
     /// <returns>True when a session type matched.</returns>
     /// <exception cref="ReplException">A short name matched more than one type.</exception>
     public bool TryResolve(
-        string name, bool withArguments, bool valueType,
-        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TypeSymbol? type, bool allowForward = true)
+        string name,
+        bool withArguments,
+        bool valueType,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TypeSymbol? type,
+        bool allowForward = true)
     {
         ArgumentNullException.ThrowIfNull(name);
         type = null;
@@ -200,8 +205,8 @@ public sealed class SnapshotTypeTable
             enclosing?.Namespace ?? "",
             enclosing,
             "",
-            System.Reflection.TypeAttributes.NestedPublic | (
-                valueType ? System.Reflection.TypeAttributes.Sealed : System.Reflection.TypeAttributes.Class),
+            TypeAttributes.NestedPublic | (
+                valueType ? TypeAttributes.Sealed : TypeAttributes.Class),
             valueType,
             []);
         _placeholders[name] = placeholder;

@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/IlRepl.SourceGen/IlRepl.SourceGen.csproj" />
     <Project Path="src/IlRepl.Protocol/IlRepl.Protocol.csproj" />
     <Project Path="src/IlRepl.Engine/IlRepl.Engine.csproj" />
     <Project Path="src/IlRepl.Host/IlRepl.Host.csproj" />

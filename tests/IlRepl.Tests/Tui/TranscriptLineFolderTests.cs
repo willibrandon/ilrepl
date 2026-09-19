@@ -135,7 +135,8 @@ public sealed class TranscriptLineFolderTests
         var line = TranscriptLine.Of(LineKind.Listing, "  call int32 [System.Runtime]System.Math::Max(int32, int32)");
         var rows = TranscriptLineFolder.Fold(line.Spans, 30);
         Assert.StartsWith("  call int32", Join(rows[0]));
-        Assert.AreEqual(Text(line).Replace(" ", "", StringComparison.Ordinal), string.Concat(rows.Select(r => Join(r).Replace(" ", "", StringComparison.Ordinal))), "every character should survive folding");
+        Assert.AreEqual(Text(line).Replace(" ", "", StringComparison.Ordinal),
+            string.Concat(rows.Select(r => Join(r).Replace(" ", "", StringComparison.Ordinal))), "every character should survive folding");
         Assert.DoesNotContain(r => Join(r).Length > 30, rows);
     }
 
@@ -173,6 +174,7 @@ public sealed class TranscriptLineFolderTests
             Assert.AreNotEqual(' ', Join(row)[7]);
         }
 
-        Assert.AreEqual(echo.PlainText.Replace(" ", "", StringComparison.Ordinal), string.Concat(rows.Select(Join)).Replace(" ", "", StringComparison.Ordinal));
+        Assert.AreEqual(echo.PlainText.Replace(" ", "", StringComparison.Ordinal),
+            string.Concat(rows.Select(Join)).Replace(" ", "", StringComparison.Ordinal));
     }
 }

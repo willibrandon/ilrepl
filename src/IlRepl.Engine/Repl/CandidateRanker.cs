@@ -53,7 +53,10 @@ public static class CandidateRanker
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The complete stable order, before candidate confirmation and paging.</returns>
     public static IReadOnlyList<T> Rank<T>(
-        IEnumerable<T> candidates, string query, Func<T, CandidateRankFacts> facts, CancellationToken cancellationToken = default)
+        IEnumerable<T> candidates,
+        string query,
+        Func<T, CandidateRankFacts> facts,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentNullException.ThrowIfNull(facts);

@@ -57,8 +57,12 @@ public sealed class FunctionPointerCompletionTests
         VerifyMembers(vararg ? MethodCallingConvention.VarArg : MethodCallingConvention.Default,
             false, hasThis, explicitThis, generic);
 
-    private async Task VerifyMembers(MethodCallingConvention convention, bool useModifier,
-        bool hasThis, bool explicitThis, bool generic)
+    private async Task VerifyMembers(
+        MethodCallingConvention convention,
+        bool useModifier,
+        bool hasThis,
+        bool explicitThis,
+        bool generic)
     {
         var session = new Session();
         var (assembly, _, definition) = CecilFixture.Build((module, type) =>

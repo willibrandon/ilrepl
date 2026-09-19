@@ -106,7 +106,11 @@ public sealed partial class ReplCore
 
         var images = document.Assets.ToDictionary(asset => asset.Hash, asset => asset.Image, StringComparer.Ordinal);
         Session.Resolver.ReplaceImages(changed.Select(asset => images[asset.Hash]), removed.Select(asset => new AssemblyName(asset.Name)));
-        if (removed.Length != 0) Session.AdvanceGeneration();
+        if (removed.Length != 0)
+        {
+            Session.AdvanceGeneration();
+        }
+
         _references.Clear();
         _references.AddRange(document.References);
         foreach (var asset in document.Assets)
@@ -134,7 +138,11 @@ public sealed partial class ReplCore
 
     private bool HasLoadedReference(SessionReference reference)
     {
-        if (reference.Origin != "assembly") return false;
+        if (reference.Origin != "assembly")
+        {
+            return false;
+        }
+
         try
         {
             var name = new AssemblyName(reference.Request).Name;

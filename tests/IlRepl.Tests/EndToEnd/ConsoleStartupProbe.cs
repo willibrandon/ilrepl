@@ -45,7 +45,11 @@ internal static partial class ConsoleStartupProbe
             using var monitorReady = new ManualResetEventSlim();
             Exception? monitorError = null;
             Thread? monitor = null;
-            if (mode == "cancel-before") cancellation.Cancel();
+            if (mode == "cancel-before")
+            {
+                cancellation.Cancel();
+            }
+
             if (mode == "cancel-during")
             {
                 monitor = new Thread(() =>
@@ -60,10 +64,15 @@ internal static partial class ConsoleStartupProbe
                                 cancellation.Cancel();
                                 return;
                             }
+
                             Thread.Yield();
                         }
                     }
-                    catch (Exception exception) { monitorError = exception; cancellation.Cancel(); }
+                    catch (Exception exception)
+                    {
+                        monitorError = exception;
+                        cancellation.Cancel();
+                    }
                 }) { IsBackground = true };
                 monitor.Start();
                 monitorReady.Wait(token);
@@ -73,25 +82,49 @@ internal static partial class ConsoleStartupProbe
             try
             {
                 await using var presentation = new ConsolePresentation();
-                try { await presentation.EnterRawModeAsync(cancellation.Token); }
-                catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { cancelled = true; }
+                try
+                {
+                    await presentation.EnterRawModeAsync(cancellation.Token);
+                }
+                catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+                {
+                    cancelled = true;
+                }
+
                 if (OperatingSystem.IsWindows() && mode == "cancel-during" && !cancelled)
                 {
                     // The Windows driver has no asynchronous capability probe. Keep its entered native mode observable
                     // until cancellation is acknowledged, then prove that the cancelled caller cannot re-enter it.
                     monitor!.Join();
                     if (!cancellation.IsCancellationRequested || CaptureMode().SequenceEqual(original))
+                    {
                         throw new InvalidOperationException("Windows raw-mode cancellation was not observed.");
-                    try { await presentation.EnterRawModeAsync(cancellation.Token); }
-                    catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { cancelled = true; }
+                    }
+
+                    try
+                    {
+                        await presentation.EnterRawModeAsync(cancellation.Token);
+                    }
+                    catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+                    {
+                        cancelled = true;
+                    }
                 }
+
                 if (mode == "normal")
                 {
-                    if (CaptureMode().SequenceEqual(original)) throw new InvalidOperationException("Raw mode was never entered.");
+                    if (CaptureMode().SequenceEqual(original))
+                    {
+                        throw new InvalidOperationException("Raw mode was never entered.");
+                    }
+
                     await presentation.ExitRawModeAsync(token);
                     RequireRestored(original);
                     await presentation.EnterRawModeAsync(token);
-                    if (CaptureMode().SequenceEqual(original)) throw new InvalidOperationException("Repeated raw-mode entry failed.");
+                    if (CaptureMode().SequenceEqual(original))
+                    {
+                        throw new InvalidOperationException("Repeated raw-mode entry failed.");
+                    }
                 }
             }
             finally
@@ -100,9 +133,15 @@ internal static partial class ConsoleStartupProbe
                 monitor?.Join();
             }
 
-            if (monitorError is not null) throw new InvalidOperationException("Console-mode observation failed.", monitorError);
+            if (monitorError is not null)
+            {
+                throw new InvalidOperationException("Console-mode observation failed.", monitorError);
+            }
+
             if (cancelled != mode.StartsWith("cancel-", StringComparison.Ordinal))
+            {
                 throw new InvalidOperationException("Caller cancellation was not preserved.");
+            }
         }
 
         RequireRestored(original);
@@ -112,7 +151,11 @@ internal static partial class ConsoleStartupProbe
         Console.WriteLine("cooked-line:" + line);
         // PTY process exit can stop the parent's output pump before it applies the final bytes.
         // Retain the actual input and stay alive until the parent observes the complete rendered line.
-        while (!File.Exists(Path.Combine(directory, "cooked-line.observed"))) await Task.Delay(1, token);
+        while (!File.Exists(Path.Combine(directory, "cooked-line.observed")))
+        {
+            await Task.Delay(1, token);
+        }
+
         return line == "restored λ" ? 0 : 1;
     }
 
@@ -128,15 +171,23 @@ internal static partial class ConsoleStartupProbe
 
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(token);
         var pending = presentation.ReadInputAsync(caller.Token).AsTask();
-        if (pending.IsCompleted) throw new InvalidOperationException("The real console read was not pending.");
+        if (pending.IsCompleted)
+        {
+            throw new InvalidOperationException("The real console read was not pending.");
+        }
+
         if (mode == "read-cancel")
         {
             await caller.CancelAsync();
             await pending.WaitAsync(token);
             pending = presentation.ReadInputAsync(token).AsTask();
         }
+
         var queued = presentation.ReadInputAsync(token).AsTask();
-        if (queued.IsCompleted) throw new InvalidOperationException("The second console read was not pending.");
+        if (queued.IsCompleted)
+        {
+            throw new InvalidOperationException("The second console read was not pending.");
+        }
 
         if (mode == "read-dispose")
         {
@@ -151,10 +202,17 @@ internal static partial class ConsoleStartupProbe
         {
             await Task.WhenAll(presentation.ExitRawModeAsync(token).AsTask(), presentation.ExitRawModeAsync(token).AsTask());
         }
+
         if (!pending.IsCompleted || !queued.IsCompleted)
+        {
             throw new InvalidOperationException("Console restoration returned before its readers settled.");
+        }
+
         if (!(await pending).IsEmpty || !(await queued).IsEmpty)
+        {
             throw new InvalidOperationException("A stopped reader consumed unexpected input.");
+        }
+
         RequireRestored(original);
 
         if (mode == "read-repeat")
@@ -164,7 +222,11 @@ internal static partial class ConsoleStartupProbe
             await ReadTextAsync(presentation, "again 日本", token);
             pending = presentation.ReadInputAsync(token).AsTask();
             await presentation.ExitRawModeAsync(token);
-            if (!pending.IsCompleted) throw new InvalidOperationException("Repeated restoration left an active reader.");
+            if (!pending.IsCompleted)
+            {
+                throw new InvalidOperationException("Repeated restoration left an active reader.");
+            }
+
             await pending;
             RequireRestored(original);
         }
@@ -177,16 +239,26 @@ internal static partial class ConsoleStartupProbe
         while (bytes.Count < length)
         {
             var next = await presentation.ReadInputAsync(token);
-            if (next.IsEmpty) throw new InvalidOperationException("The raw console reader stopped before receiving its input.");
+            if (next.IsEmpty)
+            {
+                throw new InvalidOperationException("The raw console reader stopped before receiving its input.");
+            }
+
             bytes.AddRange(next.ToArray());
         }
+
         if (Encoding.UTF8.GetString(bytes.ToArray()) != expected)
+        {
             throw new InvalidOperationException("The real console reader changed its input.");
+        }
     }
 
     private static void RequireRestored(byte[] original)
     {
-        if (!CaptureMode().SequenceEqual(original)) throw new InvalidOperationException("The original console mode was not restored.");
+        if (!CaptureMode().SequenceEqual(original))
+        {
+            throw new InvalidOperationException("The original console mode was not restored.");
+        }
     }
 
     private static unsafe byte[] CaptureMode()
@@ -194,7 +266,10 @@ internal static partial class ConsoleStartupProbe
         if (OperatingSystem.IsWindows())
         {
             if (GetConsoleMode(GetStdHandle(-10), out var input) == 0 || GetConsoleMode(GetStdHandle(-11), out var output) == 0)
+            {
                 throw new Win32Exception(Marshal.GetLastPInvokeError());
+            }
+
             return [.. BitConverter.GetBytes(input), .. BitConverter.GetBytes(output)];
         }
 
@@ -202,8 +277,12 @@ internal static partial class ConsoleStartupProbe
         var attributes = new byte[256];
         fixed (byte* address = attributes)
         {
-            if (GetTerminalAttributes(0, address) != 0) throw new Win32Exception(Marshal.GetLastPInvokeError());
+            if (GetTerminalAttributes(0, address) != 0)
+            {
+                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            }
         }
+
         return attributes;
     }
 

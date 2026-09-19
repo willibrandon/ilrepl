@@ -11,4 +11,12 @@ namespace IlRepl.Engine;
 /// <param name="FilterOffset">The start of the filter code, for a filter clause.</param>
 /// <param name="CatchToken">The catch type token, or 0.</param>
 /// <param name="CatchType">The catch type when the reflection path already resolved it; null otherwise.</param>
-public sealed record RawExceptionRegion(IlClauseKind Kind, int TryOffset, int TryLength, int HandlerOffset, int HandlerLength, int FilterOffset, int CatchToken, Type? CatchType);
+public sealed record RawExceptionRegion(
+    IlClauseKind Kind,
+    int TryOffset,
+    int TryLength,
+    int HandlerOffset,
+    int HandlerLength,
+    int FilterOffset,
+    int CatchToken,
+    Type? CatchType);

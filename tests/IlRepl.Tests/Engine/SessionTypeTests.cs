@@ -183,7 +183,8 @@ public sealed class SessionTypeTests
         Assert.Contains("referenced and never declared", Assert.ThrowsExactly<ReplException>(() => session.AddLine("}")).Message);
         Assert.AreEqual("Outer", session.OpenType);
         var kind = Load(".class public Outer {", ".field public static valuetype Outer/Inner Slot");
-        Assert.Contains("referenced as a valuetype", Assert.ThrowsExactly<ReplException>(() => kind.AddLine(".class nested public Inner {")).Message);
+        Assert.Contains("referenced as a valuetype",
+            Assert.ThrowsExactly<ReplException>(() => kind.AddLine(".class nested public Inner {")).Message);
     }
 
     /// <summary>
@@ -245,16 +246,21 @@ public sealed class SessionTypeTests
     public void AddLine_Placement_IsChecked()
     {
         var session = Load(Point[0]);
-        Assert.Contains("belongs in a method body", Assert.ThrowsExactly<ReplException>(() => session.AddLine(".locals init (int32 i)")).Message);
-        Assert.Contains("instructions belong in a method body", Assert.ThrowsExactly<ReplException>(() => session.AddLine("ldc.i4 1")).Message);
+        Assert.Contains("belongs in a method body",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine(".locals init (int32 i)")).Message);
+        Assert.Contains("instructions belong in a method body",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine("ldc.i4 1")).Message);
         session.AddLine(".method public instance int32 Sum() {");
-        Assert.Contains("not allowed inside a method", Assert.ThrowsExactly<ReplException>(() => session.AddLine(".field public int32 Z")).Message);
-        Assert.Contains("cannot be declared inside a method", Assert.ThrowsExactly<ReplException>(() => session.AddLine(".class nested public Inner {")).Message);
+        Assert.Contains("not allowed inside a method",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine(".field public int32 Z")).Message);
+        Assert.Contains("cannot be declared inside a method",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine(".class nested public Inner {")).Message);
         session.AddLine("ldc.i4 1");
         session.AddLine("ret");
         session.AddLine("}");
         session.AddLine("}");
-        Assert.Contains("belongs inside a .class block", Assert.ThrowsExactly<ReplException>(() => session.AddLine(".field public int32 Z")).Message);
+        Assert.Contains("belongs inside a .class block",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine(".field public int32 Z")).Message);
     }
 
     /// <summary>
@@ -265,12 +271,15 @@ public sealed class SessionTypeTests
     {
         var session = Load(".class public Shape {", ".field public int32 X");
         Assert.Contains("already declared", Assert.ThrowsExactly<ReplException>(() => session.AddLine(".field public int32 X")).Message);
-        Assert.Contains("add 'abstract' to the .class header", Assert.ThrowsExactly<ReplException>(() => session.AddLine(".method public abstract virtual instance int32 Area() { }")).Message);
+        Assert.Contains("add 'abstract' to the .class header",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine(".method public abstract virtual instance int32 Area() { }"))
+            .Message);
         session.AddLine(".method public instance int32 Area() {");
         session.AddLine("ldc.i4 1");
         session.AddLine("ret");
         session.AddLine("}");
-        Assert.Contains("already declared", Assert.ThrowsExactly<ReplException>(() => session.AddLine(".method public instance int32 Area() {")).Message);
+        Assert.Contains("already declared",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine(".method public instance int32 Area() {")).Message);
     }
 
     /// <summary>
@@ -280,7 +289,8 @@ public sealed class SessionTypeTests
     public void AddLine_AbstractAndInterfaceMembers()
     {
         var session = Load(".class interface public abstract IArea {");
-        Assert.AreEqual("method instance float64 Area(); end of method Area", session.AddLine(".method public abstract virtual instance float64 Area() { }").Message);
+        Assert.AreEqual("method instance float64 Area(); end of method Area",
+            session.AddLine(".method public abstract virtual instance float64 Area() { }").Message);
         session.AddLine(".method public virtual instance int32 Read() {");
         session.AddLine("ldc.i4 3");
         session.AddLine("ret");
@@ -307,7 +317,8 @@ public sealed class SessionTypeTests
         session.AddLine(".method public instance void Set(int32 v) {");
         session.AddLine("ldarg.0");
         session.AddLine("ldarg v");
-        Assert.Contains("initonly; it can only be stored through this", Assert.ThrowsExactly<ReplException>(() => session.AddLine("stfld int32 Box::V")).Message);
+        Assert.Contains("initonly; it can only be stored through this",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine("stfld int32 Box::V")).Message);
         session.AddLine("pop");
         session.AddLine("pop");
         session.AddLine("ldc.i4 1");
@@ -323,7 +334,8 @@ public sealed class SessionTypeTests
         session.AddLine(".method public instance void Other(class Box other) {");
         session.AddLine("ldarg other");
         session.AddLine("ldc.i4 1");
-        Assert.Contains("through this", Assert.ThrowsExactly<ReplException>(() => session.AddLine("stfld int32 Box::V")).Message, "a receiver that is not this is refused even in the declaring type");
+        Assert.Contains("through this", Assert.ThrowsExactly<ReplException>(() => session.AddLine("stfld int32 Box::V")).Message,
+            "a receiver that is not this is refused even in the declaring type");
     }
 
     /// <summary>
@@ -334,7 +346,8 @@ public sealed class SessionTypeTests
     {
         var session = Load(".class public Opts {", ".method public static int32 M(int32 x) {");
         Assert.AreEqual("param 1 = int32(7)", session.AddLine(".param [1] = int32(7)").Message);
-        Assert.Contains("ObsoleteAttribute", session.AddLine(".custom instance void [System.Runtime]System.ObsoleteAttribute::.ctor(string) = { string('old') }").Message!);
+        Assert.Contains("ObsoleteAttribute",
+            session.AddLine(".custom instance void [System.Runtime]System.ObsoleteAttribute::.ctor(string) = { string('old') }").Message!);
         session.AddLine("ldarg x");
         session.AddLine("ret");
         session.AddLine("}");
@@ -400,7 +413,8 @@ public sealed class SessionTypeTests
     [TestMethod]
     public void AddLine_InheritedMembers_ResolveOnOpenTypes()
     {
-        var session = Load(".class public Base {", ".field public int32 N", ".method public instance int32 F() {", "ldc.i4 7", "ret", "}", "}",
+        var session = Load(".class public Base {", ".field public int32 N", ".method public instance int32 F() {", "ldc.i4 7", "ret", "}",
+            "}",
             ".class public Derived extends Base {", ".method public instance int32 G() {", "ldarg.0");
         Assert.AreEqual(LineOutcome.Instruction, session.AddLine("call instance int32 Derived::F()").Outcome);
         session.AddLine("ldarg.0");
@@ -409,7 +423,8 @@ public sealed class SessionTypeTests
         session.AddLine("ret");
         session.AddLine("}");
         Assert.AreEqual("end of class Derived", session.AddLine("}").Message);
-        var open = Load(".class public Outer {", ".class nested public Base {", ".method public instance int32 F() {", "ldc.i4 3", "ret", "}", "}", ".class nested public Derived extends Outer/Base {", ".method public instance int32 G() {", "ldarg.0");
+        var open = Load(".class public Outer {", ".class nested public Base {", ".method public instance int32 F() {", "ldc.i4 3", "ret",
+            "}", "}", ".class nested public Derived extends Outer/Base {", ".method public instance int32 G() {", "ldarg.0");
         Assert.AreEqual(LineOutcome.Instruction, open.AddLine("call instance int32 Outer/Derived::F()").Outcome);
     }
 
@@ -439,10 +454,12 @@ public sealed class SessionTypeTests
     [TestMethod]
     public void Undo_AfterInlineAbstractMembers_Replays()
     {
-        var session = Load(".class interface public abstract IPair {", ".method public abstract virtual instance int32 F() { }", ".method public abstract virtual instance int32 G() { }");
+        var session = Load(".class interface public abstract IPair {", ".method public abstract virtual instance int32 F() { }",
+            ".method public abstract virtual instance int32 G() { }");
         Assert.IsTrue(session.Undo());
         Assert.AreEqual("IPair", session.OpenType);
-        Assert.AreEqual("method instance int32 G(); end of method G", session.AddLine(".method public abstract virtual instance int32 G() { }").Message);
+        Assert.AreEqual("method instance int32 G(); end of method G",
+            session.AddLine(".method public abstract virtual instance int32 G() { }").Message);
         Assert.AreEqual("end of interface IPair", session.AddLine("}").Message);
     }
 
@@ -453,7 +470,8 @@ public sealed class SessionTypeTests
     public void AddLine_RejectedNestedHeader_LeavesNoTrace()
     {
         var session = Load(".class public A {");
-        Assert.Contains("sealed", Assert.ThrowsExactly<ReplException>(() => session.AddLine(".class nested public B extends string {")).Message);
+        Assert.Contains("sealed",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine(".class nested public B extends string {")).Message);
         Assert.AreEqual("A", session.OpenType);
         Assert.AreEqual("class A/B; end of class A/B", session.AddLine(".class nested public B { }").Message);
         Assert.AreEqual("end of class A", session.AddLine("}").Message);
@@ -505,7 +523,8 @@ public sealed class SessionTypeTests
     [TestMethod]
     public void AddLine_CallsPickOverloadsByArity()
     {
-        var session = IlLines.Load(".class public Over {", ".method public static int32 F() { ldc.i4 1; ret }", ".method public static int32 F<T>() { ldc.i4 2; ret }",
+        var session = IlLines.Load(".class public Over {", ".method public static int32 F() { ldc.i4 1; ret }",
+            ".method public static int32 F<T>() { ldc.i4 2; ret }",
             ".method public static int32 Both() { call int32 Over::F(); call int32 Over::F<string>(); add; ret }", "}");
         Assert.AreEqual(3, session.Types[0].RuntimeType!.GetMethod("Both")!.Invoke(null, null));
     }

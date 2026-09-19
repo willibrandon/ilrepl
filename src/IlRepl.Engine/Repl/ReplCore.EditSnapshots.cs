@@ -22,19 +22,40 @@ public sealed partial class ReplCore
         var visited = new HashSet<Assembly>();
         void Capture(Assembly assembly, TypeResolver resolver)
         {
-            if (!visited.Add(assembly) || IsShared(assembly)) return;
+            if (!visited.Add(assembly) || IsShared(assembly))
+            {
+                return;
+            }
+
             byte[]? image = null;
-            if (SessionAssemblies.TryGetDefinition(assembly, out var definition)) image = definition.Image;
-            else if (resolver.TryGetImage(assembly, out var retained)) image = retained;
-            else if (!assembly.IsDynamic && File.Exists(assembly.Location)) image = File.ReadAllBytes(assembly.Location);
-            if (image is null) throw new ReplException("the original assembly image is unavailable: " + assembly.FullName);
+            if (SessionAssemblies.TryGetDefinition(assembly, out var definition))
+            {
+                image = definition.Image;
+            }
+            else if (resolver.TryGetImage(assembly, out var retained))
+            {
+                image = retained;
+            }
+            else if (!assembly.IsDynamic && File.Exists(assembly.Location))
+            {
+                image = File.ReadAllBytes(assembly.Location);
+            }
+
+            if (image is null)
+            {
+                throw new ReplException("the original assembly image is unavailable: " + assembly.FullName);
+            }
+
             var hash = SessionCodec.Hash(image);
             captured[hash] = new SessionReferenceAsset { Name = assembly.FullName!, Hash = hash,
                 Mvid = assembly.ManifestModule.ModuleVersionId.ToString() };
             _assets.TryAdd(hash, new SessionAsset { Hash = hash, Image = image });
             if (definition is not null)
             {
-                foreach (var dependency in definition.Dependencies) Capture(dependency.Assembly, resolver);
+                foreach (var dependency in definition.Dependencies)
+                {
+                    Capture(dependency.Assembly, resolver);
+                }
             }
 
             var context = AssemblyLoadContext.GetLoadContext(assembly);
@@ -53,7 +74,11 @@ public sealed partial class ReplCore
         }
 
         var bindings = edit.Baseline.CaptureSnapshot(Capture);
-        if (edit.Baseline.Definition is { } baseline) Capture(baseline.Assembly, Session.Resolver);
+        if (edit.Baseline.Definition is { } baseline)
+        {
+            Capture(baseline.Assembly, Session.Resolver);
+        }
+
         foreach (var (name, path) in edit.Baseline.SourceResolver.NativeLibraries)
         {
             var image = File.ReadAllBytes(path);
@@ -80,7 +105,11 @@ public sealed partial class ReplCore
 
     private MethodEdit RestoreEditSnapshot(SessionEditSnapshot snapshot)
     {
-        if (snapshot.Original is null) return Session.PrepareEdit(snapshot.Reference, snapshot.Name);
+        if (snapshot.Original is null)
+        {
+            return Session.PrepareEdit(snapshot.Reference, snapshot.Name);
+        }
+
         var reference = _references.SingleOrDefault(candidate => candidate.Identity == snapshot.BaselineReference)
             ?? throw new ReplException("the immutable original's dependency graph is missing");
         var images = reference.Assets.Where(asset => asset.Kind is "managed" or "satellite")
@@ -96,7 +125,11 @@ public sealed partial class ReplCore
 
     private static bool IsShared(Assembly assembly)
     {
-        if (assembly == typeof(Session).Assembly || assembly == typeof(SessionDocument).Assembly) return true;
+        if (assembly == typeof(Session).Assembly || assembly == typeof(SessionDocument).Assembly)
+        {
+            return true;
+        }
+
         if (OperatingSystem.IsBrowser())
         {
             var name = assembly.GetName().Name!;

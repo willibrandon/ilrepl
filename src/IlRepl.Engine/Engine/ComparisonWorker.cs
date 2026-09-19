@@ -21,8 +21,14 @@ public static partial class ComparisonWorker
     /// <param name="useStandardInput">Whether the host supplies captured input through the actual standard-input stream.</param>
     /// <param name="restoreFileTimes">An optional host implementation for restoring timestamps on its filesystem.</param>
     /// <returns>The completed observations or setup failure.</returns>
-    public static async Task<ComparisonSide> ExecuteAsync(ComparisonPackage package, bool original, Action ready, Action outputLimit,
-        bool captureOutput = true, bool useStandardInput = false, Action<ComparisonFile>? restoreFileTimes = null)
+    public static async Task<ComparisonSide> ExecuteAsync(
+        ComparisonPackage package,
+        bool original,
+        Action ready,
+        Action outputLimit,
+        bool captureOutput = true,
+        bool useStandardInput = false,
+        Action<ComparisonFile>? restoreFileTimes = null)
     {
         ArgumentNullException.ThrowIfNull(package);
         ArgumentNullException.ThrowIfNull(ready);
@@ -68,7 +74,11 @@ public static partial class ComparisonWorker
 
         using var reflection = executionContext.EnterContextualReflection();
         AssemblyLoadContext.Default.Resolving += Resolve;
-        if (executionContext != AssemblyLoadContext.Default) executionContext.Resolving += Resolve;
+        if (executionContext != AssemblyLoadContext.Default)
+        {
+            executionContext.Resolving += Resolve;
+        }
+
         try
         {
             nativeLibraries = MaterializeNativeLibraries(image);
@@ -77,10 +87,12 @@ public static partial class ComparisonWorker
                 Console.SetOut(stdout!);
                 Console.SetError(stderr!);
             }
+
             if (stdin is not null)
             {
                 Console.SetIn(stdin);
             }
+
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(package.Culture);
             CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(package.UICulture);
             foreach (var key in Environment.GetEnvironmentVariables().Keys.Cast<string>().ToArray())
@@ -105,20 +117,34 @@ public static partial class ComparisonWorker
                 {
                     var name = new AssemblyName(satellite.Name);
                     if (!string.IsNullOrEmpty(name.CultureName) && name.Name?.EndsWith(".resources", StringComparison.Ordinal) == true)
+                    {
                         Resolve(executionContext, name);
+                    }
                 }
+
                 foreach (var parent in package.Dependencies)
                 {
-                    if (parent.OriginalSatelliteFiles is not { } paths) continue;
+                    if (parent.OriginalSatelliteFiles is not { } paths)
+                    {
+                        continue;
+                    }
+
                     var current = ComparisonSatelliteFiles.Paths(parent);
                     var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
                     if (!paths.SequenceEqual(current, comparer))
+                    {
                         throw new ReplException("the original assembly's satellite files changed after comparison capture: "
                             + parent.OriginalLocation);
+                    }
                 }
+
                 var dependency = package.Dependencies.FirstOrDefault(dependency =>
                     string.Equals(dependency.Name, identity, StringComparison.OrdinalIgnoreCase));
-                if (dependency?.OriginalLocation is { } location) VerifyOriginalFile(dependency, location);
+                if (dependency?.OriginalLocation is { } location)
+                {
+                    VerifyOriginalFile(dependency, location);
+                }
+
                 var originalAssembly = executionContext.LoadFromAssemblyName(new AssemblyName(identity));
                 if (image.OriginalModule is { } module && originalAssembly.ManifestModule.ModuleVersionId != module)
                 {
@@ -184,6 +210,7 @@ public static partial class ComparisonWorker
                 executionContext.Resolving -= Resolve;
                 executionContext.Unload();
             }
+
             Console.SetOut(previousOut);
             Console.SetError(previousError);
             Console.SetIn(previousInput);

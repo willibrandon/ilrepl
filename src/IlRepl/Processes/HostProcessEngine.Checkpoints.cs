@@ -13,7 +13,11 @@ public sealed partial class HostProcessEngine
     private SessionReply? AcceptCheckpoint(SessionReply checkpoint)
     {
         var accepted = _checkpoints.Apply(checkpoint);
-        if (accepted is null) return null;
+        if (accepted is null)
+        {
+            return null;
+        }
+
         _deliveries.Remember(accepted);
         return accepted with { CheckpointDelivery = null };
     }

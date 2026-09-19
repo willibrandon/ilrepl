@@ -22,8 +22,15 @@ public static class SiblingTypeLookupFixture
     /// <param name="flow">literal, local, return, argument, identity, concat, or runtime.</param>
     /// <param name="path">The assembly file used by CreateInstanceFrom.</param>
     /// <returns>An independent executable PE image whose original Read method returns 42.</returns>
-    public static byte[] Create(string api, string shape, int arity, bool ignoreCase = false, bool internalType = false,
-        bool qualified = false, string flow = "literal", string? path = null)
+    public static byte[] Create(
+        string api,
+        string shape,
+        int arity,
+        bool ignoreCase = false,
+        bool internalType = false,
+        bool qualified = false,
+        string flow = "literal",
+        string? path = null)
     {
         var metadata = new MetadataBuilder();
         var assemblyName = "SiblingLookup" + Guid.NewGuid().ToString("N");
@@ -35,7 +42,11 @@ public static class SiblingTypeLookupFixture
         var types = new Dictionary<Type, TypeReferenceHandle>();
         TypeReferenceHandle TypeReference(Type type)
         {
-            if (types.TryGetValue(type, out var handle)) return handle;
+            if (types.TryGetValue(type, out var handle))
+            {
+                return handle;
+            }
+
             if (!references.TryGetValue(type.Assembly, out var reference))
             {
                 var name = type.Assembly.GetName();
@@ -52,12 +63,30 @@ public static class SiblingTypeLookupFixture
 
         void EncodeType(SignatureTypeEncoder encoder, Type type)
         {
-            if (type == typeof(bool)) encoder.Boolean();
-            else if (type == typeof(int)) encoder.Int32();
-            else if (type == typeof(string)) encoder.String();
-            else if (type == typeof(object)) encoder.Object();
-            else if (type.IsArray) EncodeType(encoder.SZArray(), type.GetElementType()!);
-            else encoder.Type(TypeReference(type), type.IsValueType);
+            if (type == typeof(bool))
+            {
+                encoder.Boolean();
+            }
+            else if (type == typeof(int))
+            {
+                encoder.Int32();
+            }
+            else if (type == typeof(string))
+            {
+                encoder.String();
+            }
+            else if (type == typeof(object))
+            {
+                encoder.Object();
+            }
+            else if (type.IsArray)
+            {
+                EncodeType(encoder.SZArray(), type.GetElementType()!);
+            }
+            else
+            {
+                encoder.Type(TypeReference(type), type.IsValueType);
+            }
         }
 
         EntityHandle MethodReference(MethodBase method)
@@ -67,11 +96,20 @@ public static class SiblingTypeLookupFixture
             new BlobEncoder(signature).MethodSignature(isInstanceMethod: !method.IsStatic).Parameters(parameters.Length,
                 result =>
                 {
-                    if (method is not MethodInfo info || info.ReturnType == typeof(void)) result.Void();
-                    else EncodeType(result.Type(), info.ReturnType);
+                    if (method is not MethodInfo info || info.ReturnType == typeof(void))
+                    {
+                        result.Void();
+                    }
+                    else
+                    {
+                        EncodeType(result.Type(), info.ReturnType);
+                    }
                 }, arguments =>
                 {
-                    foreach (var parameter in parameters) EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    foreach (var parameter in parameters)
+                    {
+                        EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    }
                 });
             return metadata.AddMemberReference(TypeReference(method.DeclaringType!), metadata.GetOrAddString(method.Name),
                 metadata.GetOrAddBlob(signature));
@@ -84,7 +122,11 @@ public static class SiblingTypeLookupFixture
             metadata.AddTypeDefinition(attributes, metadata.GetOrAddString(space), metadata.GetOrAddString(name),
                 TypeReference(typeof(object)), MetadataTokens.FieldDefinitionHandle(metadata.GetRowCount(TableIndex.Field) + 1),
                 MetadataTokens.MethodDefinitionHandle(metadata.GetRowCount(TableIndex.MethodDef) + 1));
-        MethodDefinitionHandle AddMethod(string name, byte[] signature, InstructionEncoder code, MethodAttributes attributes,
+        MethodDefinitionHandle AddMethod(
+            string name,
+            byte[] signature,
+            InstructionEncoder code,
+            MethodAttributes attributes,
             bool locals = false)
         {
             var localSignature = locals ? metadata.AddStandaloneSignature(metadata.GetOrAddBlob(new byte[] { 7, 2, 14, 28 })) : default;
@@ -108,7 +150,11 @@ public static class SiblingTypeLookupFixture
             "array" => "Lookup.Sibling[]", "bounded" => "Lookup.Sibling[*]", "matrix" => "Lookup.Sibling[,]",
             "component" => "System.Collections.Generic.List`1[Lookup.Sibling[]]", _ => "Lookup.Sibling",
         };
-        if (ignoreCase) target = target.ToLowerInvariant();
+        if (ignoreCase)
+        {
+            target = target.ToLowerInvariant();
+        }
+
         if (qualified && api == "type")
         {
             target = shape == "component"
@@ -132,8 +178,14 @@ public static class SiblingTypeLookupFixture
             && (api != "type" || method.GetParameters().Skip(1).All(parameter => parameter.ParameterType == typeof(bool))));
         void LoadName(InstructionEncoder code, bool argument)
         {
-            if (argument) code.LoadArgument(0);
-            else if (flow == "return") code.Call(MetadataTokens.MethodDefinitionHandle(2));
+            if (argument)
+            {
+                code.LoadArgument(0);
+            }
+            else if (flow == "return")
+            {
+                code.Call(MetadataTokens.MethodDefinitionHandle(2));
+            }
             else if (flow == "concat")
             {
                 code.LoadString(metadata.GetOrAddUserString(target[..7]));
@@ -143,8 +195,16 @@ public static class SiblingTypeLookupFixture
             else
             {
                 code.LoadString(metadata.GetOrAddUserString(target));
-                if (flow == "local") { code.StoreLocal(0); code.LoadLocal(0); }
-                if (flow == "identity") code.Call(MetadataTokens.MethodDefinitionHandle(2));
+                if (flow == "local")
+                {
+                    code.StoreLocal(0);
+                    code.LoadLocal(0);
+                }
+
+                if (flow == "identity")
+                {
+                    code.Call(MetadataTokens.MethodDefinitionHandle(2));
+                }
             }
         }
 
@@ -153,24 +213,43 @@ public static class SiblingTypeLookupFixture
             if (api is "assembly" or "module" or "assembly-create")
             {
                 Call(code, typeof(Assembly).GetMethod(nameof(Assembly.GetExecutingAssembly))!);
-                if (api == "module") Call(code, typeof(Assembly).GetProperty(nameof(Assembly.ManifestModule))!.GetMethod!);
+                if (api == "module")
+                {
+                    Call(code, typeof(Assembly).GetProperty(nameof(Assembly.ManifestModule))!.GetMethod!);
+                }
             }
+
             if (api is "activator" or "activator-from")
+            {
                 code.LoadString(metadata.GetOrAddUserString(api == "activator-from" ? path! : qualified ? identity : assemblyName));
+            }
+
             LoadName(code, argument);
             foreach (var parameter in lookup.GetParameters().Skip(api is "activator" or "activator-from" ? 2 : 1))
             {
                 if (parameter.ParameterType == typeof(bool))
+                {
                     code.LoadConstantI4(parameter.Name == "ignoreCase" ? ignoreCase ? 1 : 0 : 1);
+                }
                 else if (parameter.ParameterType == typeof(BindingFlags))
+                {
                     code.LoadConstantI4((int)(BindingFlags.Public | BindingFlags.NonPublic
                         | BindingFlags.Instance | BindingFlags.CreateInstance));
-                else code.OpCode(ILOpCode.Ldnull);
+                }
+                else
+                {
+                    code.OpCode(ILOpCode.Ldnull);
+                }
             }
+
             Call(code, lookup);
             if (activating)
             {
-                if (api is "activator" or "activator-from") Call(code, lookup.ReturnType.GetMethod("Unwrap")!);
+                if (api is "activator" or "activator-from")
+                {
+                    Call(code, lookup.ReturnType.GetMethod("Unwrap")!);
+                }
+
                 code.StoreLocal(1);
                 code.LoadLocal(1);
                 Call(code, typeof(object).GetMethod(nameof(object.GetType))!);
@@ -187,13 +266,18 @@ public static class SiblingTypeLookupFixture
                     code.LoadConstantI4(0);
                     code.OpCode(ILOpCode.Ldelem_ref);
                 }
+
                 if (shape is "array" or "bounded" or "matrix" or "component")
+                {
                     Call(code, typeof(Type).GetMethod(nameof(Type.GetElementType))!);
+                }
+
                 code.LoadString(metadata.GetOrAddUserString("State"));
                 Call(code, typeof(Type).GetMethod(nameof(Type.GetField), [typeof(string)])!);
                 code.OpCode(ILOpCode.Ldnull);
                 Call(code, typeof(FieldInfo).GetMethod(nameof(FieldInfo.GetValue))!);
             }
+
             code.OpCode(ILOpCode.Unbox_any);
             code.Token(TypeReference(typeof(int)));
             code.OpCode(ILOpCode.Ret);
@@ -206,19 +290,34 @@ public static class SiblingTypeLookupFixture
             read.Call(MetadataTokens.MethodDefinitionHandle(2));
             read.OpCode(ILOpCode.Ret);
         }
-        else Lookup(read, flow == "runtime");
+        else
+        {
+            Lookup(read, flow == "runtime");
+        }
+
         AddMethod("Read", flow == "runtime" ? [0, 1, 8, 14] : [0, 0, 8], read,
             MethodAttributes.Public | MethodAttributes.Static, locals: true);
         if (flow is "return" or "argument" or "identity")
         {
             var helper = new InstructionEncoder(new BlobBuilder());
-            if (flow == "argument") Lookup(helper, true);
+            if (flow == "argument")
+            {
+                Lookup(helper, true);
+            }
             else
             {
-                if (flow == "return") helper.LoadString(metadata.GetOrAddUserString(target));
-                else helper.LoadArgument(0);
+                if (flow == "return")
+                {
+                    helper.LoadString(metadata.GetOrAddUserString(target));
+                }
+                else
+                {
+                    helper.LoadArgument(0);
+                }
+
                 helper.OpCode(ILOpCode.Ret);
             }
+
             AddMethod("NameHelper", flow switch { "return" => [0, 0, 14], "argument" => [0, 1, 8, 14], _ => [0, 1, 14, 14] },
                 helper, MethodAttributes.Private | MethodAttributes.Static, locals: true);
         }
@@ -226,7 +325,11 @@ public static class SiblingTypeLookupFixture
         TypeDefinitionHandle Sibling(string name, TypeAttributes attributes, bool generic = false)
         {
             var type = AddType(name, attributes, name == "Nested" ? "" : "Lookup");
-            if (generic) metadata.AddGenericParameter(type, GenericParameterAttributes.None, metadata.GetOrAddString("T"), 0);
+            if (generic)
+            {
+                metadata.AddGenericParameter(type, GenericParameterAttributes.None, metadata.GetOrAddString("T"), 0);
+            }
+
             EntityHandle state = metadata.AddFieldDefinition(FieldAttributes.Public | FieldAttributes.Static,
                 metadata.GetOrAddString("State"), metadata.GetOrAddBlob(new byte[] { 6, 8 }));
             EntityHandle value = metadata.AddFieldDefinition(FieldAttributes.Private, metadata.GetOrAddString("Constructed"),
@@ -241,6 +344,7 @@ public static class SiblingTypeLookupFixture
                 state = metadata.AddMemberReference(closed, metadata.GetOrAddString("State"), fieldSignature);
                 value = metadata.AddMemberReference(closed, metadata.GetOrAddString("Constructed"), fieldSignature);
             }
+
             var constructor = new InstructionEncoder(new BlobBuilder());
             constructor.LoadArgument(0);
             Call(constructor, typeof(object).GetConstructor(Type.EmptyTypes)!);
@@ -253,8 +357,15 @@ public static class SiblingTypeLookupFixture
             AddMethod(".ctor", [32, 0, 1], constructor,
                 MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName);
             var initializer = new InstructionEncoder(new BlobBuilder());
-            if (generic) initializer.LoadConstantI4(42);
-            else initializer.Call(MetadataTokens.MethodDefinitionHandle(metadata.GetRowCount(TableIndex.MethodDef) + 3));
+            if (generic)
+            {
+                initializer.LoadConstantI4(42);
+            }
+            else
+            {
+                initializer.Call(MetadataTokens.MethodDefinitionHandle(metadata.GetRowCount(TableIndex.MethodDef) + 3));
+            }
+
             initializer.OpCode(ILOpCode.Stsfld);
             initializer.Token(state);
             initializer.OpCode(ILOpCode.Ret);
@@ -279,6 +390,7 @@ public static class SiblingTypeLookupFixture
                 constant.OpCode(ILOpCode.Ret);
                 AddMethod("Initial", [0, 0, 8], constant, MethodAttributes.Public | MethodAttributes.Static);
             }
+
             return type;
         }
 
@@ -287,7 +399,10 @@ public static class SiblingTypeLookupFixture
         nestedTypes.Add((Sibling("Nested", TypeAttributes.NestedPublic), sibling));
         Sibling("GenericSibling`1", visibility, generic: true);
         foreach (var (nested, parent) in nestedTypes.OrderBy(pair => MetadataTokens.GetRowNumber(pair.Nested)))
+        {
             metadata.AddNestedType(nested, parent);
+        }
+
         var image = new BlobBuilder();
         new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
             new MetadataRootBuilder(metadata), bodies, flags: CorFlags.ILOnly).Serialize(image);

@@ -34,7 +34,8 @@ public sealed record GenericParameterDeclaration(string Name, GenericParameterAt
         }
 
         words.AddRange(Constraints.Select(TypeNameFormatter.Pretty));
-        var variance = Attributes.HasFlag(GenericParameterAttributes.Covariant) ? "+" : Attributes.HasFlag(GenericParameterAttributes.Contravariant) ? "-" : "";
+        var variance = Attributes.HasFlag(GenericParameterAttributes.Covariant) ? "+"
+            : Attributes.HasFlag(GenericParameterAttributes.Contravariant) ? "-" : "";
         var constraints = words.Count == 0 ? "" : "(" + string.Join(", ", words) + ") ";
         return variance + constraints + Name;
     }

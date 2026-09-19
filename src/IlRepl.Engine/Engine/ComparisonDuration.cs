@@ -19,7 +19,10 @@ internal static class ComparisonDuration
             : value.EndsWith('s') || value.EndsWith('m') ? value[..^1] : value;
         if (!double.TryParse(number, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var duration)
             || !double.IsFinite(duration) || duration * factor is < 1 or > int.MaxValue)
+        {
             throw new ReplException("--timeout requires a positive duration, for example 500ms, 30s, or 2m");
+        }
+
         return (int)(duration * factor);
     }
 }

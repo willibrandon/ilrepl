@@ -246,7 +246,9 @@ public sealed class RuntimeBindingScope : IBindingScope
     }
 
     /// <inheritdoc/>
-    public bool TryGetDeclaration(TypeSymbol declaring, [NotNullWhen(
+    public bool TryGetDeclaration(
+        TypeSymbol declaring,
+        [NotNullWhen(
         true)] out IDeclarationMembers? members)
     {
         ArgumentNullException.ThrowIfNull(declaring);
@@ -666,5 +668,4 @@ public sealed class RuntimeBindingScope : IBindingScope
 
         return symbol;
     }
-
 }

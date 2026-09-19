@@ -26,7 +26,8 @@ internal static class IlLines
             }
 
             yield return spec[..(open + 1)];
-            foreach (var statement in spec[(open + 2)..^1].Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            foreach (var statement in spec[(open + 2)..^1].Split(';',
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
             {
                 yield return statement;
             }

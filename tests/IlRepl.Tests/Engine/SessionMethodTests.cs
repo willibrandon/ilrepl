@@ -123,8 +123,10 @@ public sealed class SessionMethodTests
     public void AddLine_TypeargsInsideMethod_Throws()
     {
         var session = Load(".method void F() {");
-        Assert.Contains("close the method with } first", Assert.ThrowsExactly<ReplException>(() => session.AddLine(".typeargs (int32)")).Message);
-        Assert.Contains("not allowed inside a method", Assert.ThrowsExactly<ReplException>(() => session.AddLine(".typeparams (T)")).Message);
+        Assert.Contains("close the method with } first",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine(".typeargs (int32)")).Message);
+        Assert.Contains("not allowed inside a method",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine(".typeparams (T)")).Message);
         Assert.Contains("already open (F)", Assert.ThrowsExactly<ReplException>(() => session.AddLine(".method void G() {")).Message);
     }
 
@@ -265,7 +267,8 @@ public sealed class SessionMethodTests
         session.Reset();
         Assert.IsEmpty(session.Methods);
         Assert.IsNull(session.OpenMethod);
-        Assert.Contains("no method 'Two' in the session (define one with .method", Assert.ThrowsExactly<ReplException>(() => session.AddLine("call int32 Two()")).Message);
+        Assert.Contains("no method 'Two' in the session (define one with .method",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine("call int32 Two()")).Message);
     }
 
     /// <summary>
@@ -431,8 +434,10 @@ public sealed class SessionMethodTests
     {
         var session = Load(
             ".method bool IsEven(int32 n) {", "ldc.i4 1", "ret", "}",
-            ".method bool IsOdd(int32 n) {", "ldarg n", "brfalse ZERO", "ldarg n", "ldc.i4 1", "sub", "call bool IsEven(int32)", "ret", "ZERO: ldc.i4 0", "ret", "}",
-            ".method bool IsEven(int32 n) {", "ldarg n", "brfalse ZERO", "ldarg n", "ldc.i4 1", "sub", "call bool IsOdd(int32)", "ret", "ZERO: ldc.i4 1", "ret", "}");
+            ".method bool IsOdd(int32 n) {", "ldarg n", "brfalse ZERO", "ldarg n", "ldc.i4 1", "sub", "call bool IsEven(int32)", "ret",
+            "ZERO: ldc.i4 0", "ret", "}",
+            ".method bool IsEven(int32 n) {", "ldarg n", "brfalse ZERO", "ldarg n", "ldc.i4 1", "sub", "call bool IsOdd(int32)", "ret",
+            "ZERO: ldc.i4 1", "ret", "}");
         Assert.IsTrue((bool)RunCell(session, "ldc.i4 7", "call bool IsOdd(int32)")!);
         Assert.IsTrue((bool)RunCell(session, "ldc.i4 10", "call bool IsEven(int32)")!);
         Assert.IsFalse((bool)RunCell(session, "ldc.i4 10", "call bool IsOdd(int32)")!);
@@ -482,7 +487,8 @@ public sealed class SessionMethodTests
         var session = Load(Fib);
         Assert.AreEqual("Fib", RunCell(session,
             "ldtoken method int32 Fib(int32)",
-            "call class [System.Runtime]System.Reflection.MethodBase [System.Runtime]System.Reflection.MethodBase::GetMethodFromHandle(valuetype [System.Runtime]System.RuntimeMethodHandle)",
+            "call class [System.Runtime]System.Reflection.MethodBase " +
+            "[System.Runtime]System.Reflection.MethodBase::GetMethodFromHandle(valuetype [System.Runtime]System.RuntimeMethodHandle)",
             "callvirt instance string [System.Runtime]System.Reflection.MemberInfo::get_Name()"));
     }
 
@@ -492,7 +498,8 @@ public sealed class SessionMethodTests
     [TestMethod]
     public void Run_MethodReturningReferenceType_Works()
     {
-        var session = Load(".method string Greet(string name) {", "ldstr \"hi \"", "ldarg name", "call string String::Concat(string, string)", "ret", "}");
+        var session = Load(".method string Greet(string name) {", "ldstr \"hi \"", "ldarg name",
+            "call string String::Concat(string, string)", "ret", "}");
         Assert.AreEqual("hi x", RunCell(session, "ldstr \"x\"", "call string Greet(string)"));
         Assert.AreEqual("hi x", RunCell(session, "ldstr \"x\"", "call Greet(string)"), "the return type is optional in the call");
     }
@@ -525,7 +532,8 @@ public sealed class SessionMethodTests
         Assert.AreEqual(LineOutcome.MethodStart, session.AddLine(".method int32 F() {").Outcome, "the same signature is always allowed");
 
         var cell = Load(".method int32 F() {", "ldc.i4 1", "ret", "}", "ldftn F", "pop");
-        Assert.Contains("the cell body references int32 F()", Assert.ThrowsExactly<ReplException>(() => cell.AddLine(".method int64 F() {")).Message);
+        Assert.Contains("the cell body references int32 F()",
+            Assert.ThrowsExactly<ReplException>(() => cell.AddLine(".method int64 F() {")).Message);
         Assert.IsNull(cell.OpenMethod);
     }
 
@@ -540,7 +548,8 @@ public sealed class SessionMethodTests
             ".method string Deref(string& s) {", "ldarg s", "ldind.ref", "ret", "}",
             ".method object Widen() {", "ldstr \"x\"", "castclass object", "}");
         Assert.AreEqual(1, RunCell(session, "call class IComparable Boxed()"));
-        Assert.AreEqual("x", RunCell(session, ".locals init (string s)", "ldstr \"x\"", "stloc s", "ldloca s", "call string Deref(string&)"));
+        Assert.AreEqual("x",
+            RunCell(session, ".locals init (string s)", "ldstr \"x\"", "stloc s", "ldloca s", "call string Deref(string&)"));
         Assert.AreEqual("x", RunCell(session, "call object Widen()"));
     }
 
@@ -554,7 +563,8 @@ public sealed class SessionMethodTests
         var session = Load(
             ".method int32 'F'() {", "ldc.i4 7", "ret", "}",
             ".method int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsLong) Long() {", "ldc.i4 8", "ret", "}",
-            ".method int32 Len([System.Runtime]System.String s, [in] int32 extra) {", "ldarg s", "callvirt instance int32 String::get_Length()", "ldarg extra", "add", "ret", "}");
+            ".method int32 Len([System.Runtime]System.String s, [in] int32 extra) {", "ldarg s",
+            "callvirt instance int32 String::get_Length()", "ldarg extra", "add", "ret", "}");
         Assert.AreEqual(7, RunCell(session, "call int32 'F'()"));
         Assert.AreEqual(7, RunCell(session, "ldftn int32 'F'()", "calli int32()"));
         Assert.AreEqual(8, RunCell(session, "call int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsLong) Long()"));
@@ -569,7 +579,8 @@ public sealed class SessionMethodTests
     {
         var session = Load(
             ".method int32 First(int32[] a) {", "ldarg a", "ldc.i4 0", "ldelem.i4", "ret", "}",
-            ".method int32 Read() {", "ldc.i4 1", "newarr int32", "dup", "ldc.i4 0", "ldc.i4 9", "stelem.i4", "ldftn First", "calli int32(int32[])", "ret", "}");
+            ".method int32 Read() {", "ldc.i4 1", "newarr int32", "dup", "ldc.i4 0", "ldc.i4 9", "stelem.i4", "ldftn First",
+            "calli int32(int32[])", "ret", "}");
         Assert.AreEqual(9, RunCell(session, "call int32 Read()"));
         var ex = Assert.ThrowsExactly<ReplException>(() => session.AddLine(".method int32 First(int32[0...] a) {"));
         Assert.Contains("cannot redefine First as int32 First(int32[0...]): method Read references int32 First(int32[])", ex.Message);
@@ -584,7 +595,8 @@ public sealed class SessionMethodTests
     public void AddLine_ExactObjectForStringReturn_IsRefused()
     {
         var session = Load(".method string F() {", "newobj instance void Object::.ctor()");
-        Assert.Contains("ret needs string on the stack but found object", Assert.ThrowsExactly<ReplException>(() => session.AddLine("ret")).Message);
+        Assert.Contains("ret needs string on the stack but found object",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine("ret")).Message);
         Assert.Contains("but F returns string", Assert.ThrowsExactly<ReplException>(() => session.AddLine("}")).Message);
         Assert.AreEqual("F", session.OpenMethod!.Name);
     }
@@ -597,7 +609,8 @@ public sealed class SessionMethodTests
     public void AddLine_BoxedValueForStringReturn_IsRefused()
     {
         var session = Load(".method string Bad() {", "ldc.i4.1", "box int32");
-        Assert.Contains("ret needs string on the stack but found object", Assert.ThrowsExactly<ReplException>(() => session.AddLine("ret")).Message);
+        Assert.Contains("ret needs string on the stack but found object",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine("ret")).Message);
         Assert.Contains("but Bad returns string", Assert.ThrowsExactly<ReplException>(() => session.AddLine("}")).Message);
         session.AddLine("box object");
         Assert.Contains("but Bad returns string", Assert.ThrowsExactly<ReplException>(() => session.AddLine("}")).Message);
@@ -605,7 +618,8 @@ public sealed class SessionMethodTests
         session.AbandonMethod();
 
         Add(session, ".method string First(string[] a) {", "ldarg a", "ldc.i4 0", "ldelem.ref", "ret", "}");
-        Assert.AreEqual("x", RunCell(session, "ldc.i4 1", "newarr string", "dup", "ldc.i4 0", "ldstr \"x\"", "stelem.ref", "call string First(string[])"));
+        Assert.AreEqual("x",
+            RunCell(session, "ldc.i4 1", "newarr string", "dup", "ldc.i4 0", "ldstr \"x\"", "stelem.ref", "call string First(string[])"));
         Add(session, ".method string Second(object[] a) {", "ldarg a", "ldc.i4 0", "ldelem.ref");
         Assert.Contains("found object", Assert.ThrowsExactly<ReplException>(() => session.AddLine("ret")).Message);
     }

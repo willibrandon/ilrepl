@@ -30,7 +30,10 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
     /// <summary>
     /// Cooperatively analyzes large bodies so browser input and cancellation remain responsive.
     /// </summary>
-    public async ValueTask<FlowResult<T>> RunAsync(FlowGraph<T> graph, T? returnType, bool cell,
+    public async ValueTask<FlowResult<T>> RunAsync(
+        FlowGraph<T> graph,
+        T? returnType,
+        bool cell,
         CancellationToken cancellationToken = default)
     {
         foreach (var result in Steps(graph, returnType, cell, cancellationToken))
@@ -91,9 +94,14 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         }
     }
 
-    private IEnumerable<FlowResult<T>?> AnalyzeSteps(FlowGraph<T> graph, T? returnType, bool cell,
-        CancellationToken cancellationToken, IReadOnlyDictionary<int, FlowState<T>>? seeds = null,
-        int start = 0, int? end = null,
+    private IEnumerable<FlowResult<T>?> AnalyzeSteps(
+        FlowGraph<T> graph,
+        T? returnType,
+        bool cell,
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<int, FlowState<T>>? seeds = null,
+        int start = 0,
+        int? end = null,
         Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
             FilterPathState[] Transformations)>? finalizerEffects = null,
         bool validateGraph = true)
@@ -105,6 +113,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         {
             graph.ValidateRegions();
         }
+
         var before = new FlowState<T>?[count];
         var after = new FlowState<T>?[count];
         var incomingStates = new FlowState<T>?[count];
@@ -130,8 +139,13 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             }
         }
 
-        void Report(int position, string code, string message, AnalysisDiagnosticKind kind = AnalysisDiagnosticKind.Error,
-            IReadOnlyList<AnalysisRelatedLocation>? related = null, StackProblem? problem = null)
+        void Report(
+            int position,
+            string code,
+            string message,
+            AnalysisDiagnosticKind kind = AnalysisDiagnosticKind.Error,
+            IReadOnlyList<AnalysisRelatedLocation>? related = null,
+            StackProblem? problem = null)
         {
             var location = position < nodes.Count ? nodes[position].Location
                 : nodes.Count > 0 ? nodes[^1].Location : new AnalysisLocation("cell", -1, 0, 0);
@@ -143,10 +157,14 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             }
         }
 
-        void ContinueFilterSearch(int source, FilterPathState[]? paths, bool fallbackThis,
+        void ContinueFilterSearch(
+            int source,
+            FilterPathState[]? paths,
+            bool fallbackThis,
             bool fallbackIsCorrelationOnly,
             ConstructorThisState fallbackConstructorState,
-            IReadOnlyList<int>? fallbackUnwindHandlers, int? syntheticFilter)
+            IReadOnlyList<int>? fallbackUnwindHandlers,
+            int? syntheticFilter)
         {
             foreach (var target in graph.FilterContinuationTargets(source))
             {
@@ -166,6 +184,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                         continue;
                     }
                 }
+
                 var entry = graph.Seeds[target];
                 var targetState = entry with
                 {
@@ -220,6 +239,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             {
                 _ = TryMerge(current, state, out state);
             }
+
             unwindEntries[key] = state;
             Propagate(section.Start, source, state);
         }
@@ -295,6 +315,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 }
             }
         }
+
         KeyValuePair<int, FlowState<T>>[]? deferredEntries = null;
         var seedDeferredFilterHandlers = false;
         if (seeds is not null)
@@ -329,6 +350,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             {
                 yield return null;
             }
+
             var slot = index - start;
             queued[slot] = false;
             var state = incomingStates[slot];
@@ -791,6 +813,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                     {
                         fallbackEntry ??= before[protectedSection.Value.Start - start];
                     }
+
                     if (clause.Kind != BlockKind.Finally || before[position - start] is not null)
                     {
                         continue;
@@ -855,6 +878,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 // Revalidation updates this pair together; an invalid later join must not erase an established failing operand.
                 (problem, state) = evidence;
             }
+
             var paths = new List<(int Position, FlowState<T> State)>();
             if (diagnostic.Code == "FLOW003" && slot >= 0 && slot < incomingStates.Length)
             {
@@ -891,7 +915,10 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
 
     private static (bool Completes, ConstructorThisState ConstructorState,
         FilterPathState[] Transformations) FinalizerEffect(
-        FlowGraph<T> graph, int sectionId, FlowRegion section, FlowResult<T> result)
+            FlowGraph<T> graph,
+            int sectionId,
+            FlowRegion section,
+            FlowResult<T> result)
     {
         var transformations = new List<FilterPathState>();
         var completes = false;
@@ -943,7 +970,9 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             transformations.Count > MaxFilterPaths ? CollapseFilterPaths([.. transformations]) : [.. transformations]);
     }
 
-    private static FlowState<T> QueueUnwindHandlers(FlowState<T> state, IEnumerable<int> handlers,
+    private static FlowState<T> QueueUnwindHandlers(
+        FlowState<T> state,
+        IEnumerable<int> handlers,
         Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
             FilterPathState[] Transformations)>? effects)
     {
@@ -962,7 +991,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return WithExceptional(queued, pending, state.SyntheticHandler);
     }
 
-    private static PendingUnwindEffect? AppendUnwindEffect(PendingUnwindEffect? current,
+    private static PendingUnwindEffect? AppendUnwindEffect(
+        PendingUnwindEffect? current,
         IEnumerable<int> handlers,
         Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
             FilterPathState[] Transformations)>? effects)
@@ -992,6 +1022,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 boundEntries ??= [];
                 boundEntries.Add(handler, boundOutputs);
             }
+
             changed = true;
             var effectTransformations = effects is not null && effects.TryGetValue(handler, out var effect)
                 && effect.Completes ? effect.Transformations : null;
@@ -1008,7 +1039,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             current?.CorrelationLost == true) : current;
     }
 
-    private static FlowState<T>? ApplyUnwindEffects(FlowState<T>? state,
+    private static FlowState<T>? ApplyUnwindEffects(
+        FlowState<T>? state,
         Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
             FilterPathState[] Transformations)>? effects,
         Action<int, FlowState<T>>? enterHandler = null)
@@ -1161,13 +1193,16 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         }, null, state.SyntheticHandler);
     }
 
-    private static bool UnwindCompletes(int handler,
+    private static bool UnwindCompletes(
+        int handler,
         Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
             FilterPathState[] Transformations)>? effects) =>
         effects is not null && effects.TryGetValue(handler, out var effect) && effect.Completes;
 
-    private static ConstructorThisState ConstructorStateAtHandler(ConstructorThisState state,
-        IReadOnlyList<int> handlers, int target,
+    private static ConstructorThisState ConstructorStateAtHandler(
+        ConstructorThisState state,
+        IReadOnlyList<int> handlers,
+        int target,
         Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
             FilterPathState[] Transformations)>? effects)
     {
@@ -1187,7 +1222,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return state;
     }
 
-    private static ConstructorThisState ApplyConstructorEffects(ConstructorThisState state,
+    private static ConstructorThisState ApplyConstructorEffects(
+        ConstructorThisState state,
         IEnumerable<int> handlers,
         Dictionary<int, (bool Completes, ConstructorThisState ConstructorState,
             FilterPathState[] Transformations)>? effects)
@@ -1203,7 +1239,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return state;
     }
 
-    private static ConstructorThisState ApplyConstructorEffect(ConstructorThisState state,
+    private static ConstructorThisState ApplyConstructorEffect(
+        ConstructorThisState state,
         ConstructorThisState effect) => effect switch
         {
             ConstructorThisState.Initialized => ConstructorThisState.Initialized,
@@ -1214,7 +1251,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
     private static bool OriginalReceiverFor(FilterPathState[]? paths, bool fallback) =>
         paths is { Length: > 0 } ? paths.All(path => path.ThisArgumentIsOriginal) : fallback;
 
-    private static ConstructorThisState ConstructorStateFor(FilterPathState[]? paths,
+    private static ConstructorThisState ConstructorStateFor(
+        FilterPathState[]? paths,
         ConstructorThisState fallback) => paths is { Length: > 0 }
             ? ExpandFilterPaths(paths).Select(path => path.ConstructorState).Aggregate(MergeConstructorStates)
             : fallback;
@@ -1365,8 +1403,10 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             && SameSet(pair.First.EqualSources, pair.Second.EqualSources)
             && SameSet(pair.First.ExcludedSources, pair.Second.ExcludedSources));
 
-    private static FilterPathState CollapseFilterPathGroup(IReadOnlyList<FilterPathState> paths,
-        bool bindUnwind = false, bool widenUnwind = false)
+    private static FilterPathState CollapseFilterPathGroup(
+        IReadOnlyList<FilterPathState> paths,
+        bool bindUnwind = false,
+        bool widenUnwind = false)
     {
         var knownStack = paths.All(path => !path.StackUnknown)
             && paths.Select(path => path.Values.Length).Distinct().Count() == 1;
@@ -1526,7 +1566,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             correlationLost ? null : ToHandlerEntryArrays(handlerEntries), correlationLost);
     }
 
-    private static void MergeHandlerEntries(Dictionary<int, List<FilterPathState>> target,
+    private static void MergeHandlerEntries(
+        Dictionary<int, List<FilterPathState>> target,
         IReadOnlyDictionary<int, FilterPathState[]>? source)
     {
         if (source is null)
@@ -1642,7 +1683,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
     }
 
     private static Dictionary<int, FilterPathValue>? CollapseReceiverMappings(
-        IReadOnlyList<FilterPathState> paths, bool locals)
+        IReadOnlyList<FilterPathState> paths,
+        bool locals)
     {
         var keys = paths.SelectMany(path => (locals ? path.Locals : path.Arguments)?.Keys ?? []).Distinct().ToArray();
         if (keys.Length == 0)
@@ -1699,7 +1741,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return new FilterPathValue(null, null, source == 0 && path.ThisArgumentIsOriginal, source);
     }
 
-    private static bool TryApplyReceiverConditions(FilterPathState path,
+    private static bool TryApplyReceiverConditions(
+        FilterPathState path,
         IReadOnlyDictionary<int, FilterPathValue>? required,
         out IReadOnlyDictionary<int, FilterPathValue>? result)
     {
@@ -1758,8 +1801,10 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return [.. result.Distinct().Order()];
     }
 
-    private static bool TryApplyReceiverTransformation(FilterPathState path,
-        FilterPathState transformation, out FilterPathState result)
+    private static bool TryApplyReceiverTransformation(
+        FilterPathState path,
+        FilterPathState transformation,
+        out FilterPathState result)
     {
         result = path;
         if (!TryApplyReceiverConditions(path, transformation.ReceiverConditions, out var conditions))
@@ -1802,7 +1847,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return true;
     }
 
-    private static FilterPathState[] ComposeReceiverTransformations(FilterPathState[] preceding,
+    private static FilterPathState[] ComposeReceiverTransformations(
+        FilterPathState[] preceding,
         FilterPathState[] following)
     {
         var result = new List<FilterPathState>();
@@ -1823,7 +1869,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return result.Count > MaxFilterPaths ? CollapseFilterPaths([.. result]) : [.. result];
     }
 
-    private static FilterPathState[] ApplyReceiverTransformations(FilterPathState[] inputs,
+    private static FilterPathState[] ApplyReceiverTransformations(
+        FilterPathState[] inputs,
         FilterPathState[] transformations)
     {
         var result = new List<FilterPathState>();
@@ -1844,8 +1891,10 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return result.Count > MaxFilterPaths ? CollapseFilterPaths([.. result]) : [.. result];
     }
 
-    private static bool TryComposeReceiverTransformation(FilterPathState preceding,
-        FilterPathState following, out FilterPathState result)
+    private static bool TryComposeReceiverTransformation(
+        FilterPathState preceding,
+        FilterPathState following,
+        out FilterPathState result)
     {
         result = preceding;
         if (!TryApplyReceiverConditions(preceding, following.ReceiverConditions, out var conditions))
@@ -1883,7 +1932,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return true;
     }
 
-    private static FilterPathValue SubstituteReceiverSources(FilterPathState preceding,
+    private static FilterPathValue SubstituteReceiverSources(
+        FilterPathState preceding,
         FilterPathValue value)
     {
         var candidates = new List<FilterPathValue>();
@@ -1923,7 +1973,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         transformation.Arguments?.TryGetValue(0, out var receiver) != true
         || !receiver.HasNonSourceAlternative && ReceiverSourcesOf(receiver).SequenceEqual([0]));
 
-    private static List<int>? AppendUnwindHandlers(IReadOnlyList<int>? pending,
+    private static List<int>? AppendUnwindHandlers(
+        IReadOnlyList<int>? pending,
         IEnumerable<int> handlers)
     {
         var result = pending is null ? [] : new List<int>(pending);
@@ -1938,11 +1989,14 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return result.Count == 0 ? null : result;
     }
 
-    private static List<int>? MergeUnwindHandlers(IReadOnlyList<int>? left,
+    private static List<int>? MergeUnwindHandlers(
+        IReadOnlyList<int>? left,
         IReadOnlyList<int>? right) => AppendUnwindHandlers(left, right ?? []);
 
-    private static FlowState<T> WithExceptional(FlowState<T> state,
-        IReadOnlyList<int>? pending, int? synthetic)
+    private static FlowState<T> WithExceptional(
+        FlowState<T> state,
+        IReadOnlyList<int>? pending,
+        int? synthetic)
     {
         if (pending is not null || synthetic is not null)
         {
@@ -2040,8 +2094,14 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return view.StoreRestriction;
     }
 
-    private StackProblem? ValidateStack(StackOperandView<T> view, FlowValue<T>[] values, FlowGraph<T> graph, int index,
-        T? returnType, bool cell, bool receiverPathFeasible)
+    private StackProblem? ValidateStack(
+        StackOperandView<T> view,
+        FlowValue<T>[] values,
+        FlowGraph<T> graph,
+        int index,
+        T? returnType,
+        bool cell,
+        bool receiverPathFeasible)
     {
         var op = view.Op;
         var count = values.Length;
@@ -2163,6 +2223,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             {
                 return _types.Name(constrained) + "&";
             }
+
             return owner is not null && _types.Algebra.IsValueType(owner)
                 ? _types.Name(owner) + "& or " + _types.Name(owner) + "* or native int" : _types.Name(owner);
         }
@@ -2306,12 +2367,14 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                         count - 1, "function pointer", "native int");
                 }
             }
+
             if (view.IsInstance && !Receiver(values[first].Type, view.DeclaringType))
             {
                 return OperandFailure(
                     $"{op.Name} needs a {_types.Name(view.DeclaringType)} receiver but found {_types.Name(values[first].Type)}",
                     first, "receiver", ReceiverRequirement(view.DeclaringType));
             }
+
             if (view.HasImplicitThis && !Address(values[first].Type) && !Reference(values[first].Type))
             {
                 return OperandFailure($"calli needs a reference or pointer receiver but found {_types.Name(values[first].Type)}",
@@ -2472,6 +2535,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 return OperandFailure($"{arrayOp} needs an integer index but found {_types.Name(offset)}",
                     count - pops + 1, "index", "int32 or native int");
             }
+
             var actualElement = array is not null && _types.Algebra.IsArray(array) ? _types.Algebra.ElementOf(array) : null;
             var instructionElement = ArrayInstructionType(view);
             if (actualElement is not null && arrayOp is ("ldelem.ref" or "stelem.ref") && !Reference(actualElement))
@@ -2830,8 +2894,11 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return false;
     }
 
-    private bool ConstructorOperationIsUnverifiable(StackOperandView<T> view, FlowValue<T>[] values,
-        FlowGraph<T> graph, ConstructorThisState state)
+    private bool ConstructorOperationIsUnverifiable(
+        StackOperandView<T> view,
+        FlowValue<T>[] values,
+        FlowGraph<T> graph,
+        ConstructorThisState state)
     {
         if (graph.TracksConstructorInitialization && state is ConstructorThisState.Uninitialized or ConstructorThisState.Mixed)
         {
@@ -2873,16 +2940,22 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return !InitializesConstructorThis(view, values, graph, state);
     }
 
-    private bool InitializesConstructorThis(StackOperandView<T> view, FlowValue<T>[] values,
-        FlowGraph<T> graph, ConstructorThisState state)
+    private bool InitializesConstructorThis(
+        StackOperandView<T> view,
+        FlowValue<T>[] values,
+        FlowGraph<T> graph,
+        ConstructorThisState state)
     {
         return CanInitializeConstructorThis(view, graph, state,
             view.ArgumentPops > 0 && view.ArgumentPops <= values.Length
                 && values[values.Length - view.ArgumentPops].IsThis);
     }
 
-    private bool FilterPathInitializesConstructor(FilterPathState[]? paths, StackOperandView<T> view,
-        int pops, FlowGraph<T> graph)
+    private bool FilterPathInitializesConstructor(
+        FilterPathState[]? paths,
+        StackOperandView<T> view,
+        int pops,
+        FlowGraph<T> graph)
     {
         if (paths is null)
         {
@@ -2903,8 +2976,11 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return false;
     }
 
-    private bool CanInitializeConstructorThis(StackOperandView<T> view, FlowGraph<T> graph,
-        ConstructorThisState state, bool receiverIsThis)
+    private bool CanInitializeConstructorThis(
+        StackOperandView<T> view,
+        FlowGraph<T> graph,
+        ConstructorThisState state,
+        bool receiverIsThis)
     {
         if (!graph.TracksConstructorInitialization || state != ConstructorThisState.Uninitialized
             || view.Op != OpCodes.Call || view.MethodIsConstructor != true || view.MethodIsStatic != false
@@ -3064,9 +3140,15 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return filter >= 0 && graph.Regions[target].Contains(filter);
     }
 
-    private FilterPathState[]? TransferFilterPaths(FilterPathState[]? paths, StackOperandView<T> view,
-        int pops, int pushes, FlowValue<T>[] popped, FlowGraph<T> graph,
-        IReadOnlyList<(bool IsArgument, int Index)>? invalidatedAddressSlots = null, bool bounded = true)
+    private FilterPathState[]? TransferFilterPaths(
+        FilterPathState[]? paths,
+        StackOperandView<T> view,
+        int pops,
+        int pushes,
+        FlowValue<T>[] popped,
+        FlowGraph<T> graph,
+        IReadOnlyList<(bool IsArgument, int Index)>? invalidatedAddressSlots = null,
+        bool bounded = true)
     {
         if (paths is null)
         {
@@ -3130,6 +3212,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 {
                     result.Add(unknown);
                 }
+
                 continue;
             }
 
@@ -3196,6 +3279,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             {
                 pushed = pushed with { MayBeNaN = true };
             }
+
             pushed = RefineComputedFilterValue(view, pathPopped, pushed);
             pushed = ApplyReceiverConditions(pushed, path.ReceiverConditions);
             for (var index = 0; index < pushes; index++)
@@ -3227,8 +3311,10 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return bounded && result.Count > MaxFilterPaths ? CollapseFilterPaths([.. result]) : [.. result];
     }
 
-    private static FilterPathValue RefineComputedFilterValue(StackOperandView<T> view,
-        FilterPathValue[] inputs, FilterPathValue fallback)
+    private static FilterPathValue RefineComputedFilterValue(
+        StackOperandView<T> view,
+        FilterPathValue[] inputs,
+        FilterPathValue fallback)
     {
         if (view.Op != OpCodes.Ceq || inputs.Length != 2)
         {
@@ -3239,7 +3325,9 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
     }
 
     private static FilterPathValue EqualityFilterValue(
-        FilterPathValue left, FilterPathValue right, FilterPathValue fallback)
+        FilterPathValue left,
+        FilterPathValue right,
+        FilterPathValue fallback)
     {
         if (KnownEqual(left, right) is { } equal)
         {
@@ -3267,7 +3355,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
     }
 
     private static (int Source, long? Integer, bool WithNull)? EqualitySource(
-        FilterPathValue left, FilterPathValue right)
+        FilterPathValue left,
+        FilterPathValue right)
     {
         var rightSources = ReceiverSourcesOf(right).ToArray();
         if (left.IntegerValue is { } leftInteger && rightSources is [var rightSource]
@@ -3364,7 +3453,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return right.IntegerValue == 1 && left.IsOne is { } leftOne ? leftOne : null;
     }
 
-    private static FilterPathValue ApplyReceiverConditions(FilterPathValue value,
+    private static FilterPathValue ApplyReceiverConditions(
+        FilterPathValue value,
         IReadOnlyDictionary<int, FilterPathValue>? conditions)
     {
         var sources = ReceiverSourcesOf(value).ToArray();
@@ -3385,7 +3475,9 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         };
     }
 
-    private static FilterPathState TransferUnknownFilterPath(FilterPathState path, StackOperandView<T> view,
+    private static FilterPathState TransferUnknownFilterPath(
+        FilterPathState path,
+        StackOperandView<T> view,
         IReadOnlyList<(bool IsArgument, int Index)> invalidatedAddressSlots)
     {
         var unknown = new FilterPathValue(null, null, false);
@@ -3401,6 +3493,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             arguments ??= [];
             arguments[storedArgument] = unknown;
         }
+
         foreach (var (isArgument, slot) in invalidatedAddressSlots)
         {
             if (isArgument)
@@ -3431,12 +3524,15 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         };
     }
 
-    private static bool InvalidatesBoundUnwind(StackOperandView<T> view,
+    private static bool InvalidatesBoundUnwind(
+        StackOperandView<T> view,
         IReadOnlyList<(bool IsArgument, int Index)> invalidatedAddressSlots) => StoresLocal(view)
         || StoresArgument(view) || invalidatedAddressSlots.Count > 0;
 
     private static (bool IsArgument, int Index)[] InvalidatedAddressSlots(
-        StackOperandView<T> view, FlowValue<T>[] popped, FlowGraph<T> graph)
+        StackOperandView<T> view,
+        FlowValue<T>[] popped,
+        FlowGraph<T> graph)
     {
         var result = (HashSet<(bool IsArgument, int Index)>?)null;
         for (var position = 0; position < popped.Length; position++)
@@ -3479,11 +3575,13 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         || view.Op.Name is "stobj" or "initobj" or "cpobj" or "cpblk" or "initblk";
 
     private static bool LoadsReceiverThroughAddress(
-        StackOperandView<T> view, IReadOnlyList<FlowValue<T>> popped) => popped is [{ IsThis: true }]
+        StackOperandView<T> view,
+        IReadOnlyList<FlowValue<T>> popped) => popped is [{ IsThis: true }]
         && view.Op.Name is "ldind.ref" or "ldobj";
 
     private static bool LoadsReceiverThroughAddress(
-        StackOperandView<T> view, IReadOnlyList<FilterPathValue> popped) => popped is [{ IsThis: true }]
+        StackOperandView<T> view,
+        IReadOnlyList<FilterPathValue> popped) => popped is [{ IsThis: true }]
         && view.Op.Name is "ldind.ref" or "ldobj";
 
     private bool PreservesFilterDecision(StackOperandView<T> view, FlowValue<T>[] popped)
@@ -3517,8 +3615,12 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s"
         or "beq" or "beq.s" or "bne.un" or "bne.un.s";
 
-    private static FilterPathState[]? SelectSwitchTargetPaths(FilterPathState[]? paths,
-        StackOperandView<T> view, IEnumerable<FlowEdge> edges, int target, int switchCaseCount)
+    private static FilterPathState[]? SelectSwitchTargetPaths(
+        FilterPathState[]? paths,
+        StackOperandView<T> view,
+        IEnumerable<FlowEdge> edges,
+        int target,
+        int switchCaseCount)
     {
         if (paths is null)
         {
@@ -3534,8 +3636,11 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return [.. result];
     }
 
-    private static FilterPathState[]? SelectBranchPaths(FilterPathState[]? paths, StackOperandView<T> view,
-        FlowEdge edge, int switchCaseCount)
+    private static FilterPathState[]? SelectBranchPaths(
+        FilterPathState[]? paths,
+        StackOperandView<T> view,
+        FlowEdge edge,
+        int switchCaseCount)
     {
         if (paths is null)
         {
@@ -3581,8 +3686,12 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return [.. result];
     }
 
-    private static void AddSwitchBranchPaths(List<FilterPathState> result, FilterPathState path,
-        FilterPathValue value, IReadOnlyList<int>? switchCases, int switchCaseCount)
+    private static void AddSwitchBranchPaths(
+        List<FilterPathState> result,
+        FilterPathState path,
+        FilterPathValue value,
+        IReadOnlyList<int>? switchCases,
+        int switchCaseCount)
     {
         if (switchCases is null)
         {
@@ -3601,8 +3710,11 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         }
     }
 
-    private static void AddConditionedPath(List<FilterPathState> result, FilterPathState path,
-        FilterPathValue value, FilterPathValue condition)
+    private static void AddConditionedPath(
+        List<FilterPathState> result,
+        FilterPathState path,
+        FilterPathValue value,
+        FilterPathValue condition)
     {
         if (!ConditionsCompatible(value, condition))
         {
@@ -3617,6 +3729,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             {
                 result.Add(path with { ReceiverConditions = comparisonConditions });
             }
+
             return;
         }
 
@@ -3627,6 +3740,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             {
                 result.Add(path with { ReceiverConditions = conditions });
             }
+
             return;
         }
 
@@ -3675,8 +3789,10 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return condition.IsZero == true ? false : null;
     }
 
-    private static bool TryAddReceiverCondition(IReadOnlyDictionary<int, FilterPathValue>? existing,
-        int source, FilterPathValue condition,
+    private static bool TryAddReceiverCondition(
+        IReadOnlyDictionary<int, FilterPathValue>? existing,
+        int source,
+        FilterPathValue condition,
         out IReadOnlyDictionary<int, FilterPathValue>? result)
     {
         var conditions = existing is null ? [] : new Dictionary<int, FilterPathValue>(existing);
@@ -3755,11 +3871,13 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                     sourceExclusions = [];
                     exclusions.Add(sourceRoot, sourceExclusions);
                 }
+
                 if (!exclusions.TryGetValue(excludedRoot, out var excludedExclusions))
                 {
                     excludedExclusions = [];
                     exclusions.Add(excludedRoot, excludedExclusions);
                 }
+
                 sourceExclusions.Add(excludedRoot);
                 excludedExclusions.Add(sourceRoot);
             }
@@ -3778,6 +3896,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 result = conditions;
                 return false;
             }
+
             scalarConditions[root] = scalar;
         }
 
@@ -3801,7 +3920,9 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return true;
     }
 
-    private static bool TryMergeReceiverCondition(FilterPathValue left, FilterPathValue right,
+    private static bool TryMergeReceiverCondition(
+        FilterPathValue left,
+        FilterPathValue right,
         out FilterPathValue result)
     {
         result = left;
@@ -3947,7 +4068,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         return localsMatch && argumentsMatch;
     }
 
-    private static bool SameReceiverConditions(IReadOnlyDictionary<int, FilterPathValue>? left,
+    private static bool SameReceiverConditions(
+        IReadOnlyDictionary<int, FilterPathValue>? left,
         IReadOnlyDictionary<int, FilterPathValue>? right) => ReferenceEquals(left, right)
         || left is not null && right is not null && left.Count == right.Count
             && left.All(pair => right.TryGetValue(pair.Key, out var condition)
@@ -3986,7 +4108,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                     && SameHandlerEntries(left.BoundHandlerEntries, right.BoundHandlerEntries));
     }
 
-    private static bool SameHandlerEntries(IReadOnlyDictionary<int, FilterPathState[]> left,
+    private static bool SameHandlerEntries(
+        IReadOnlyDictionary<int, FilterPathState[]> left,
         IReadOnlyDictionary<int, FilterPathState[]> right) => ReferenceEquals(left, right) || left.Count == right.Count
         && left.All(pair => right.TryGetValue(pair.Key, out var entries)
             && SameTransformations(pair.Value, entries));
@@ -3995,7 +4118,8 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
         SameFilterPaths(left, right);
 
     private static bool SameFilterValues(FilterPathValue[] left, FilterPathValue[] right) =>
-        ReferenceEquals(left, right) || left.Length == right.Length && left.Zip(right).All(pair => SameFilterValue(pair.First, pair.Second));
+        ReferenceEquals(left, right) || left.Length == right.Length
+        && left.Zip(right).All(pair => SameFilterValue(pair.First, pair.Second));
 
     private static bool SameFilterValue(FilterPathValue left, FilterPathValue right) =>
         left.IsZero == right.IsZero && left.IsOne == right.IsOne && left.IsThis == right.IsThis

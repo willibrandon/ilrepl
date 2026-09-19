@@ -1,0 +1,19 @@
+<Project>
+  <!--
+    Every project is checked by the repository's own analyzers. The host that a frontend build publishes for itself is the
+    exception: that nested build forces its target framework and runtime onto every project it reaches, and the same
+    source is already checked when the host builds normally.
+
+    A property a project passes to its references would otherwise travel on to the analyzers and build them a second
+    time into the same folder, where one build's clean removes the assembly another project is compiling against.
+    Removing those properties leaves exactly one build of the analyzers.
+  -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'IlRepl.SourceGen' and '$(_IlReplHostBuildDirectory)' == ''
+                        and Exists('$(MSBuildThisFileDirectory)src/IlRepl.SourceGen/IlRepl.SourceGen.csproj')">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)src/IlRepl.SourceGen/IlRepl.SourceGen.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all"
+                      GlobalPropertiesToRemove="IncludeIlReplHostInOutput;RuntimeIdentifier;SelfContained;PublishAot;PublishReadyToRun;PublishSingleFile;PublishTrimmed" />
+  </ItemGroup>
+</Project>

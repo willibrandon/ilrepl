@@ -55,8 +55,11 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
     /// <param name="environment">Environment overrides applied only to this host.</param>
     /// <param name="cancellationToken">Cancels startup.</param>
     /// <returns>The connected engine, whose disposal leaves this lifetime reusable.</returns>
-    public Task<HostProcessEngine> StartAsync(string? hostAssemblyPath = null, string? workingDirectory = null,
-        IReadOnlyDictionary<string, string?>? environment = null, CancellationToken cancellationToken = default) =>
+    public Task<HostProcessEngine> StartAsync(
+        string? hostAssemblyPath = null,
+        string? workingDirectory = null,
+        IReadOnlyDictionary<string, string?>? environment = null,
+        CancellationToken cancellationToken = default) =>
         HostProcessEngine.StartCoreAsync(hostAssemblyPath, workingDirectory, environment, this, false, cancellationToken);
 
     /// <summary>
@@ -91,6 +94,7 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
                     DiagnosticTail.DrainAsync(process.StandardOutput, () => diagnostics));
                 return new OwnedHostProcess(process, scope, diagnostics, drained);
             }
+
             await EnsureSupervisorCoreAsync(cancellationToken).ConfigureAwait(false);
             var current = _current!;
             var buffer = current.BeginDiagnostics();
@@ -104,7 +108,10 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
             // The supervisor relays these diagnostics, and ExitCodeAsync confirms their boundary.
             return new OwnedHostProcess(Process.GetProcessById(launched.ProcessId), launched, buffer, Task.CompletedTask);
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     /// <summary>
@@ -126,10 +133,16 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
             {
                 await EnsureSupervisorCoreAsync(cancellationToken).ConfigureAwait(false);
                 await AdoptCoreAsync(_current!, cancellationToken).ConfigureAwait(false);
-                if (!_scopes.ContainsKey(scope.Identity)) throw new IOException("the worker exited before ownership acknowledgement");
+                if (!_scopes.ContainsKey(scope.Identity))
+                {
+                    throw new IOException("the worker exited before ownership acknowledgement");
+                }
             }
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     /// <summary>
@@ -143,29 +156,54 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
         try
         {
             ObjectDisposedException.ThrowIf(_disposed || _stopping, this);
-            if (!OperatingSystem.IsWindows()) await EnsureSupervisorCoreAsync(cancellationToken).ConfigureAwait(false);
+            if (!OperatingSystem.IsWindows())
+            {
+                await EnsureSupervisorCoreAsync(cancellationToken).ConfigureAwait(false);
+            }
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     /// <inheritdoc />
     public async Task RetrySupervisionAsync(CancellationToken cancellationToken)
     {
-        if (OperatingSystem.IsWindows()) return;
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (_current is not null && !_current.Process.HasExited && !_current.Rpc.Completion.IsCompleted
-                && !Supervision.Degraded) return;
+                && !Supervision.Degraded)
+            {
+                return;
+            }
+
             await RestoreCoreAsync(cancellationToken).ConfigureAwait(false);
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     private async Task EnsureSupervisorCoreAsync(CancellationToken cancellationToken)
     {
-        if (_current is not null && !_current.Process.HasExited && !_current.Rpc.Completion.IsCompleted) return;
-        if (Supervision.Degraded) throw new ReplEngineException(Supervision.Detail ?? "process supervision is unavailable");
+        if (_current is not null && !_current.Process.HasExited && !_current.Rpc.Completion.IsCompleted)
+        {
+            return;
+        }
+
+        if (Supervision.Degraded)
+        {
+            throw new ReplEngineException(Supervision.Detail ?? "process supervision is unavailable");
+        }
+
         await RestoreCoreAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -198,7 +236,9 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
             [.. _scopes.Values]), cancellationToken).ConfigureAwait(false);
         var acknowledged = retained.ToHashSet(StringComparer.Ordinal);
         foreach (var identity in _scopes.Keys.Where(identity => !acknowledged.Contains(identity)).ToArray())
+        {
             _scopes.Remove(identity);
+        }
     }
 
     private async Task ObserveSupervisorAsync(SupervisorConnection connection)
@@ -209,13 +249,22 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
             await _gate.WaitAsync(_lifetime.Token).ConfigureAwait(false);
             try
             {
-                if (_disposed || !ReferenceEquals(_current, connection)) return;
+                if (_disposed || !ReferenceEquals(_current, connection))
+                {
+                    return;
+                }
+
                 _current = null;
                 await RestoreCoreAsync(_lifetime.Token).ConfigureAwait(false);
             }
-            finally { _gate.Release(); }
+            finally
+            {
+                _gate.Release();
+            }
         }
-        catch (Exception exception) when (exception is OperationCanceledException or ReplEngineException or ObjectDisposedException) { }
+        catch (Exception exception) when (exception is OperationCanceledException or ReplEngineException or ObjectDisposedException)
+        {
+        }
     }
 
     /// <summary>
@@ -227,7 +276,9 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
     internal Task StopAsync(string identity, CancellationToken cancellationToken)
     {
         lock (_stopLock)
+        {
             return _disposeTask is { } disposal ? disposal.WaitAsync(cancellationToken) : StopCoreAsync(identity, cancellationToken);
+        }
     }
 
     private async Task StopCoreAsync(string identity, CancellationToken cancellationToken)
@@ -237,28 +288,48 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
         {
             if (_jobs.Remove(identity, out var job))
             {
-                using (job) await job.StopAsync().ConfigureAwait(false);
+                using (job)
+                {
+                    await job.StopAsync().ConfigureAwait(false);
+                }
             }
             else if (!OperatingSystem.IsWindows())
             {
                 foreach (var scope in _scopes.Values.Where(scope => scope.Identity == identity || scope.ParentIdentity == identity))
                 {
-                    if (!OwnedProcessGroup.IsCurrent(scope)) continue;
+                    if (!OwnedProcessGroup.IsCurrent(scope))
+                    {
+                        continue;
+                    }
+
                     using var group = new OwnedProcessGroup();
                     group.Adopt(scope.ProcessId);
                     await group.StopAsync().ConfigureAwait(false);
                 }
             }
+
             if (_current is { } current && !current.Rpc.Completion.IsCompleted)
             {
-                try { await current.Service.StopAsync(identity, current.Epoch, cancellationToken).ConfigureAwait(false); }
-                catch (ConnectionLostException) { }
+                try
+                {
+                    await current.Service.StopAsync(identity, current.Epoch, cancellationToken).ConfigureAwait(false);
+                }
+                catch (ConnectionLostException)
+                {
+                }
             }
+
             foreach (var scope in _scopes.Values.Where(scope => scope.Identity == identity || scope.ParentIdentity == identity).ToArray())
+            {
                 _scopes.Remove(scope.Identity);
+            }
+
             _revision++;
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     /// <summary>
@@ -268,7 +339,11 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
     /// <returns>The available native exit status.</returns>
     internal async Task<int?> ExitCodeAsync(string identity)
     {
-        if (!_diagnosticOwners.TryRemove(identity, out var original)) return null;
+        if (!_diagnosticOwners.TryRemove(identity, out var original))
+        {
+            return null;
+        }
+
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         int? code = null;
         try
@@ -279,6 +354,7 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
         catch (Exception exception) when (exception is ConnectionLostException or OperationCanceledException or InvalidOperationException)
         {
         }
+
         try
         {
             await original.DrainDiagnosticsAsync(timeout.Token).ConfigureAwait(false);
@@ -286,6 +362,7 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
         catch (Exception exception) when (exception is ConnectionLostException or OperationCanceledException or InvalidOperationException)
         {
         }
+
         return code;
     }
 
@@ -303,7 +380,11 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
     public Task TerminateAsync(CancellationToken cancellationToken)
     {
         Task stopped;
-        lock (_stopLock) stopped = _disposeTask ?? (_stopTask ??= StopAllAsync());
+        lock (_stopLock)
+        {
+            stopped = _disposeTask ?? (_stopTask ??= StopAllAsync());
+        }
+
         return stopped.WaitAsync(cancellationToken);
     }
 
@@ -317,8 +398,15 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
             _stopping = true;
             roots = [.. _scopes.Values.Where(scope => scope.ParentIdentity is null)];
         }
-        finally { _gate.Release(); }
-        foreach (var scope in roots) await StopCoreAsync(scope.Identity, CancellationToken.None).ConfigureAwait(false);
+        finally
+        {
+            _gate.Release();
+        }
+
+        foreach (var scope in roots)
+        {
+            await StopCoreAsync(scope.Identity, CancellationToken.None).ConfigureAwait(false);
+        }
     }
 
     /// <inheritdoc />
@@ -326,7 +414,11 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
     {
         lock (_stopLock)
         {
-            if (_disposeTask is not null) return new ValueTask(_disposeTask);
+            if (_disposeTask is not null)
+            {
+                return new ValueTask(_disposeTask);
+            }
+
             _disposed = true;
             return new ValueTask(_disposeTask = DisposeCoreAsync(_stopTask ??= StopAllAsync()));
         }
@@ -341,14 +433,24 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
         {
             connections = [.. _connections];
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _gate.Release();
+        }
+
         List<Exception> failures = [];
         try
         {
             foreach (var connection in connections)
             {
-                try { await connection.DisposeAsync().ConfigureAwait(false); }
-                catch (Exception exception) { failures.Add(exception); }
+                try
+                {
+                    await connection.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    failures.Add(exception);
+                }
             }
         }
         finally
@@ -356,7 +458,15 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
             _lifetime.Dispose();
             _gate.Dispose();
         }
-        if (failures.Count == 1) ExceptionDispatchInfo.Capture(failures[0]).Throw();
-        if (failures.Count > 1) throw new AggregateException(failures);
+
+        if (failures.Count == 1)
+        {
+            ExceptionDispatchInfo.Capture(failures[0]).Throw();
+        }
+
+        if (failures.Count > 1)
+        {
+            throw new AggregateException(failures);
+        }
     }
 }

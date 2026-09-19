@@ -31,13 +31,23 @@ public sealed class HostCancellationTests
         var cancelling = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         engine.ProgressChanged += progress =>
         {
-            if (progress.Phase == ExecutionPhase.UserCode && progress.IsRunning) entered.TrySetResult();
-            if (progress.CancellationRequested) cancelling.TrySetResult();
+            if (progress.Phase == ExecutionPhase.UserCode && progress.IsRunning)
+            {
+                entered.TrySetResult();
+            }
+
+            if (progress.CancellationRequested)
+            {
+                cancelling.TrySetResult();
+            }
         };
         foreach (var line in new[] { "ldstr " + LiteralParser.Escape(marker), "ldstr \"entered\"",
             "call void File::WriteAllText(string, string)", "WAIT: ldstr " + LiteralParser.Escape(release),
             "call bool File::Exists(string)", "brfalse WAIT", "ldc.i4 73" })
+        {
             Assert.IsTrue((await engine.HandleAsync(line, token)).Succeeded);
+        }
+
         using var active = CancellationTokenSource.CreateLinkedTokenSource(token);
         var pending = engine.HandleAsync("ret", active.Token);
         try
@@ -45,7 +55,11 @@ public sealed class HostCancellationTests
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(15), token);
             using var executing = CancellationTokenSource.CreateLinkedTokenSource(token);
             executing.CancelAfter(TimeSpan.FromSeconds(15));
-            while (!File.Exists(marker)) await Task.Delay(5, executing.Token);
+            while (!File.Exists(marker))
+            {
+                await Task.Delay(5, executing.Token);
+            }
+
             using var queued = CancellationTokenSource.CreateLinkedTokenSource(token);
             var waiting = engine.HandleAsync("ldc.i4 99", queued.Token);
             await queued.CancelAsync();

@@ -44,7 +44,10 @@ public sealed class SessionHistoryLimitTests
         Assert.Contains(line => line.Spans.Any(span => span.Style == SpanStyle.Comment
             && span.Text.Contains("restored comment", StringComparison.Ordinal)), complete);
         for (var count = 1; count <= complete.Length + 1; count++)
+        {
             AssertRows(complete.TakeLast(count).ToArray(), ReplCore.RenderSessionHistoryTail(document, count));
+        }
+
         AssertRows(complete, ReplCore.RenderSessionHistoryTail(document, 0));
     }
 

@@ -99,6 +99,7 @@ public sealed class InitialMethodBindingTests
             {
                 await running.WaitAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
             }
+
             ExecutionThreadFixture.Unregister(name);
         }
     }

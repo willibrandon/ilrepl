@@ -15,12 +15,20 @@ namespace IlRepl.Engine;
 /// </remarks>
 public sealed partial class Session
 {
-    private LineResult ReplaceWithDependents(OpenTypeBlock block, TypeDeclaration declaration, SessionType previous,
+    private LineResult ReplaceWithDependents(
+        OpenTypeBlock block,
+        TypeDeclaration declaration,
+        SessionType previous,
         (List<SessionType> Types, List<SessionMethod> Methods) closure)
         => RebuildDefinitions(block, declaration, previous, closure, null, block.KindWord + " " + block.Path);
 
-    private LineResult RebuildDefinitions(OpenTypeBlock? block, TypeDeclaration? declaration, SessionType? previous,
-        (List<SessionType> Types, List<SessionMethod> Methods) closure, Action<EmitMap>? mapReplacedTypes, string subject)
+    private LineResult RebuildDefinitions(
+        OpenTypeBlock? block,
+        TypeDeclaration? declaration,
+        SessionType? previous,
+        (List<SessionType> Types, List<SessionMethod> Methods) closure,
+        Action<EmitMap>? mapReplacedTypes,
+        string subject)
     {
         var savedTypes = _types.ToList();
         var savedMethods = _methods.ToList();
@@ -49,8 +57,11 @@ public sealed partial class Session
             {
                 members.Add((previous, declaration!, block.HeaderLine, [.. block.Lines], int.MaxValue));
             }
-            members.AddRange(closure.Types.Select(t => (Old: (SessionType?)t, t.Declaration, t.Declaration.HeaderLine, t.Declaration.Lines, t.Order)));
-            var predeclared = new Dictionary<string, Dictionary<string, (TypeBuilder Prototype, OwnMembers Members)>>(StringComparer.Ordinal);
+
+            members.AddRange(closure.Types.Select(t => (Old: (SessionType?)t, t.Declaration, t.Declaration.HeaderLine, t.Declaration.Lines,
+                t.Order)));
+            var predeclared =
+                new Dictionary<string, Dictionary<string, (TypeBuilder Prototype, OwnMembers Members)>>(StringComparer.Ordinal);
             foreach (var member in members)
             {
                 var module = NewPrototypeModule();
@@ -107,8 +118,10 @@ public sealed partial class Session
             }
 
             // 3. Replay every member of the group in the order it was accepted.
-            var replays = members.Select(m => (m.Order, Name: m.Declaration.KindWord + " " + m.Declaration.FullName, Replay: (Action)(() => ReplayFamilyLines(m.HeaderLine, m.Lines))))
-                .Concat(closure.Methods.Select(m => (m.Order, Name: "method " + m.Signature.Name, Replay: (Action)(() => ReplayMethodLines(m)))))
+            var replays = members.Select(m => (m.Order, Name: m.Declaration.KindWord + " " + m.Declaration.FullName,
+                Replay: (Action)(() => ReplayFamilyLines(m.HeaderLine, m.Lines))))
+                .Concat(closure.Methods.Select(m => (m.Order, Name: "method " + m.Signature.Name,
+                Replay: (Action)(() => ReplayMethodLines(m)))))
                 .OrderBy(r => r.Order)
                 .ToList();
             foreach (var (_, name, replay) in replays)
@@ -130,7 +143,8 @@ public sealed partial class Session
             }
 
             // 4. Write the group: each family under a name taken in advance, the others referenced by it.
-            var names = _pendingFamilies.ToDictionary(f => f.Declaration.FullName, _ => SessionAssemblies.NextName(SessionAssemblyKind.Types), StringComparer.Ordinal);
+            var names = _pendingFamilies.ToDictionary(f => f.Declaration.FullName,
+                _ => SessionAssemblies.NextName(SessionAssemblyKind.Types), StringComparer.Ordinal);
             var externals = new Dictionary<Type, CecilWriter.ExternalPrototype>(ReferenceEqualityComparer.Instance);
             foreach (var pending in _pendingFamilies)
             {
@@ -139,7 +153,8 @@ public sealed partial class Session
                     var (prototype, own) = pending.Prototypes[nested.FullName];
                     var enclosingPath = nested.FullName.Contains('/') ? nested.FullName[..nested.FullName.LastIndexOf('/')] : null;
                     var enclosing = enclosingPath is null ? null : pending.Prototypes[enclosingPath].Prototype;
-                    externals[prototype] = new CecilWriter.ExternalPrototype(names[pending.Declaration.FullName], nested.IsNested ? "" : nested.Namespace, nested.Name, enclosing, own);
+                    externals[prototype] = new CecilWriter.ExternalPrototype(names[pending.Declaration.FullName],
+                        nested.IsNested ? "" : nested.Namespace, nested.Name, enclosing, own);
                 }
             }
 
@@ -166,7 +181,8 @@ public sealed partial class Session
                     }
                 }
 
-                var (image, dependencies) = TypeEmitter.Write(pending.Declaration, pending.Prototypes, trampolines, names[pending.Declaration.FullName], foreign);
+                var (image, dependencies) = TypeEmitter.Write(pending.Declaration, pending.Prototypes, trampolines,
+                    names[pending.Declaration.FullName], foreign);
                 images.Add((pending, image, dependencies));
             }
 
@@ -174,7 +190,8 @@ public sealed partial class Session
             var compiled = new List<(PendingFamily Pending, CompiledFamily Family)>();
             foreach (var (pending, image, dependencies) in images)
             {
-                var definition = SessionAssemblies.Load(image, names[pending.Declaration.FullName], SessionAssemblyKind.Types, dependencies);
+                var definition = SessionAssemblies.Load(image, names[pending.Declaration.FullName], SessionAssemblyKind.Types,
+                    dependencies);
                 created.Add(definition);
                 compiled.Add((pending, new CompiledFamily(definition, new Dictionary<string, Type>(StringComparer.Ordinal))));
             }
@@ -183,7 +200,8 @@ public sealed partial class Session
             {
                 foreach (var (b, _) in compiled)
                 {
-                    compiled.First(c => ReferenceEquals(c.Pending, a)).Family.Definition.AddDependency(compiled.First(c => ReferenceEquals(c.Pending, b)).Family.Definition);
+                    compiled.First(c => ReferenceEquals(c.Pending, a))
+                        .Family.Definition.AddDependency(compiled.First(c => ReferenceEquals(c.Pending, b)).Family.Definition);
                 }
 
                 foreach (var trampoline in newTrampolines.Values)
@@ -265,7 +283,8 @@ public sealed partial class Session
             foreach (var (pending, family) in loaded)
             {
                 Submissions++;
-                var accepted = new SessionType(pending.Declaration, family.Types, family.Types[pending.Declaration.FullName], family.Definition, pending.Prototypes) { Order = Submissions };
+                var accepted = new SessionType(pending.Declaration, family.Types, family.Types[pending.Declaration.FullName],
+                    family.Definition, pending.Prototypes) { Order = Submissions };
                 var index = pending.Previous is null ? -1 : _types.IndexOf(pending.Previous);
                 if (index < 0)
                 {
@@ -303,7 +322,8 @@ public sealed partial class Session
             {
                 // The record replayed against was a mapped copy; the original is found by name.
                 var index = _methods.FindIndex(m => m.Signature.Name == pending.Signature.Name);
-                var committed = new SessionMethod(MapSignature(pending.Signature, runtimeMap), pending.HeaderLine, pending.BodyLines, pending.State, trampoline, version) { Order = index < 0 ? Submissions : _methods[index].Order };
+                var committed = new SessionMethod(MapSignature(pending.Signature, runtimeMap), pending.HeaderLine, pending.BodyLines,
+                    pending.State, trampoline, version) { Order = index < 0 ? Submissions : _methods[index].Order };
                 if (index < 0)
                 {
                     _methods.Add(committed);
@@ -314,6 +334,7 @@ public sealed partial class Session
                     released.Add(_methods[index].Trampoline.Definition);
                     _methods[index] = committed;
                 }
+
                 InvalidateSignatures();
             }
 
@@ -379,12 +400,21 @@ public sealed partial class Session
     /// Defines the prototype of a declaration and its nested types ahead of their lines, and
     /// maps the identities the session holds for them onto the new builders.
     /// </summary>
-    private static void DeclareAhead(TypeDeclaration declaration, TypeBuilder? enclosing, ModuleBuilder module, Dictionary<string, (TypeBuilder Prototype, OwnMembers Members)> family, EmitMap map, IReadOnlyDictionary<string, Type>? oldTypes, IReadOnlyList<IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)>> oldPrototypes)
+    private static void DeclareAhead(
+        TypeDeclaration declaration,
+        TypeBuilder? enclosing,
+        ModuleBuilder module,
+        Dictionary<string, (TypeBuilder Prototype, OwnMembers Members)> family,
+        EmitMap map,
+        IReadOnlyDictionary<string, Type>? oldTypes,
+        IReadOnlyList<IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)>> oldPrototypes)
     {
         var builder = enclosing is null
-            ? module.DefineType(declaration.Namespace.Length == 0 ? declaration.Name : declaration.Namespace + "." + declaration.Name, declaration.Attributes)
+            ? module.DefineType(declaration.Namespace.Length == 0 ? declaration.Name : declaration.Namespace + "." + declaration.Name,
+            declaration.Attributes)
             : enclosing.DefineNestedType(declaration.Name, declaration.Attributes);
-        Type[] generics = declaration.TypeParameters.Count > 0 ? builder.DefineGenericParameters([.. declaration.TypeParameters.Select(p => p.Name)]) : [];
+        Type[] generics = declaration.TypeParameters.Count > 0
+            ? builder.DefineGenericParameters([.. declaration.TypeParameters.Select(p => p.Name)]) : [];
         family[declaration.FullName] = (builder, new OwnMembers());
         void MapOld(Type old)
         {
@@ -421,7 +451,10 @@ public sealed partial class Session
     /// Gives a prototype declared ahead its base, interfaces, constraints, fields, and method
     /// builders, every type mapped onto the new identities, so lines can claim them.
     /// </summary>
-    private static void ShapeAhead(TypeDeclaration declaration, Dictionary<string, (TypeBuilder Prototype, OwnMembers Members)> family, EmitMap map)
+    private static void ShapeAhead(
+        TypeDeclaration declaration,
+        Dictionary<string, (TypeBuilder Prototype, OwnMembers Members)> family,
+        EmitMap map)
     {
         var (builder, own) = family[declaration.FullName];
         var baseType = declaration.BaseType is null ? null : map.Map(declaration.BaseType);
@@ -468,7 +501,8 @@ public sealed partial class Session
                 RequiredModifiers = [.. field.RequiredModifiers.Select(map.Map)],
                 OptionalModifiers = [.. field.OptionalModifiers.Select(map.Map)],
             };
-            var fieldBuilder = builder.DefineField(mapped.Name, mapped.Type, [.. mapped.RequiredModifiers], [.. mapped.OptionalModifiers], mapped.Attributes);
+            var fieldBuilder = builder.DefineField(mapped.Name, mapped.Type, [.. mapped.RequiredModifiers], [.. mapped.OptionalModifiers],
+                mapped.Attributes);
             if (mapped.Offset is { } offset)
             {
                 fieldBuilder.SetOffset(offset);
@@ -496,7 +530,10 @@ public sealed partial class Session
                 signature = MapSignature(signature, methodMap);
                 if (methodBuilder is MethodBuilder generic)
                 {
-                    generic.SetSignature(signature.ReturnType, [.. signature.ReturnRequiredModifiers], [.. signature.ReturnOptionalModifiers], signature.ParameterTypes, [.. signature.Parameters.Select(p => p.RequiredModifiers.ToArray())], [.. signature.Parameters.Select(p => p.OptionalModifiers.ToArray())]);
+                    generic.SetSignature(signature.ReturnType, [.. signature.ReturnRequiredModifiers],
+                        [.. signature.ReturnOptionalModifiers], signature.ParameterTypes,
+                        [.. signature.Parameters.Select(p => p.RequiredModifiers.ToArray())],
+                        [.. signature.Parameters.Select(p => p.OptionalModifiers.ToArray())]);
                 }
             }
 

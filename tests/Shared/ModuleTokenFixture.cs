@@ -73,7 +73,11 @@ public static class ModuleTokenFixture
         var types = new Dictionary<Type, TypeReferenceHandle>();
         TypeReferenceHandle TypeReference(Type type)
         {
-            if (types.TryGetValue(type, out var handle)) return handle;
+            if (types.TryGetValue(type, out var handle))
+            {
+                return handle;
+            }
+
             if (!references.TryGetValue(type.Assembly, out var reference))
             {
                 var identity = type.Assembly.GetName();
@@ -90,26 +94,59 @@ public static class ModuleTokenFixture
 
         void EncodeType(SignatureTypeEncoder encoder, Type type)
         {
-            if (type == typeof(bool)) encoder.Boolean();
-            else if (type == typeof(byte)) encoder.Byte();
-            else if (type == typeof(int)) encoder.Int32();
-            else if (type == typeof(string)) encoder.String();
-            else if (type == typeof(object)) encoder.Object();
-            else if (type == typeof(nint)) encoder.IntPtr();
-            else if (type.IsArray) EncodeType(encoder.SZArray(), type.GetElementType()!);
+            if (type == typeof(bool))
+            {
+                encoder.Boolean();
+            }
+            else if (type == typeof(byte))
+            {
+                encoder.Byte();
+            }
+            else if (type == typeof(int))
+            {
+                encoder.Int32();
+            }
+            else if (type == typeof(string))
+            {
+                encoder.String();
+            }
+            else if (type == typeof(object))
+            {
+                encoder.Object();
+            }
+            else if (type == typeof(nint))
+            {
+                encoder.IntPtr();
+            }
+            else if (type.IsArray)
+            {
+                EncodeType(encoder.SZArray(), type.GetElementType()!);
+            }
             else if (type.IsGenericParameter)
             {
-                if (type.DeclaringMethod is null) encoder.GenericTypeParameter(type.GenericParameterPosition);
-                else encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+                if (type.DeclaringMethod is null)
+                {
+                    encoder.GenericTypeParameter(type.GenericParameterPosition);
+                }
+                else
+                {
+                    encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+                }
             }
             else if (type.IsGenericType)
             {
                 var arguments = type.GetGenericArguments();
                 var parameters = encoder.GenericInstantiation(TypeReference(type.GetGenericTypeDefinition()), arguments.Length,
                     type.IsValueType);
-                foreach (var argument in arguments) EncodeType(parameters.AddArgument(), argument);
+                foreach (var argument in arguments)
+                {
+                    EncodeType(parameters.AddArgument(), argument);
+                }
             }
-            else encoder.Type(TypeReference(type), type.IsValueType);
+            else
+            {
+                encoder.Type(TypeReference(type), type.IsValueType);
+            }
         }
 
         EntityHandle MethodReference(MethodBase method)
@@ -117,33 +154,57 @@ public static class ModuleTokenFixture
             var definition = method is MethodInfo { IsGenericMethod: true } generic ? generic.GetGenericMethodDefinition() : method;
             var declaring = method.DeclaringType!;
             if (declaring.IsConstructedGenericType)
+            {
                 definition = declaring.GetGenericTypeDefinition().GetMethods().Cast<MethodBase>()
                     .Concat(declaring.GetGenericTypeDefinition().GetConstructors())
                     .Single(candidate => candidate.MetadataToken == definition.MetadataToken);
+            }
+
             var signature = new BlobBuilder();
             var parameters = definition.GetParameters();
             new BlobEncoder(signature).MethodSignature(genericParameterCount: definition.IsGenericMethod
                 ? definition.GetGenericArguments().Length : 0, isInstanceMethod: !definition.IsStatic).Parameters(parameters.Length,
                 result =>
                 {
-                    if (definition is not MethodInfo info || info.ReturnType == typeof(void)) result.Void();
-                    else EncodeType(result.Type(), info.ReturnType);
+                    if (definition is not MethodInfo info || info.ReturnType == typeof(void))
+                    {
+                        result.Void();
+                    }
+                    else
+                    {
+                        EncodeType(result.Type(), info.ReturnType);
+                    }
                 }, arguments =>
                 {
-                    foreach (var parameter in parameters) EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    foreach (var parameter in parameters)
+                    {
+                        EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    }
                 });
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
-            if (method is not MethodInfo { IsGenericMethod: true } closed) return member;
+            if (method is not MethodInfo { IsGenericMethod: true } closed)
+            {
+                return member;
+            }
+
             var specification = new BlobBuilder();
             var encoded = new BlobEncoder(specification).MethodSpecificationSignature(closed.GetGenericArguments().Length);
-            foreach (var argument in closed.GetGenericArguments()) EncodeType(encoded.AddArgument(), argument);
+            foreach (var argument in closed.GetGenericArguments())
+            {
+                EncodeType(encoded.AddArgument(), argument);
+            }
+
             return metadata.AddMethodSpecification(member, metadata.GetOrAddBlob(specification));
         }
 
         EntityHandle SignatureType(Type type)
         {
-            if (!type.IsArray && !type.IsGenericType) return TypeReference(type);
+            if (!type.IsArray && !type.IsGenericType)
+            {
+                return TypeReference(type);
+            }
+
             var signature = new BlobBuilder();
             EncodeType(new BlobEncoder(signature).TypeSpecificationSignature(), type);
             return metadata.AddTypeSpecification(metadata.GetOrAddBlob(signature));
@@ -178,7 +239,11 @@ public static class ModuleTokenFixture
             _ when apiName.Contains("Field", StringComparison.Ordinal) => "HiddenField",
             _ when apiName.Contains("Type", StringComparison.Ordinal) => "HiddenType", _ => "HiddenMethod",
         };
-        if (dispatch == "lookalike") expected = "user token result";
+        if (dispatch == "lookalike")
+        {
+            expected = "user token result";
+        }
+
         var instructions = new InstructionEncoder(new BlobBuilder());
         void Call(MethodBase method)
         {
@@ -197,7 +262,11 @@ public static class ModuleTokenFixture
         {
             Call(typeof(Assembly).GetMethod(nameof(Assembly.GetExecutingAssembly))!);
             Call(typeof(Assembly).GetProperty(nameof(Assembly.ManifestModule))!.GetMethod!);
-            if (target != "ModuleHandle") return;
+            if (target != "ModuleHandle")
+            {
+                return;
+            }
+
             Call(typeof(Module).GetProperty(nameof(Module.ModuleHandle))!.GetMethod!);
             if (boxed)
             {
@@ -220,7 +289,10 @@ public static class ModuleTokenFixture
         }
         else
         {
-            if (dispatch == "lookalike") instructions.Call(MetadataTokens.MethodDefinitionHandle(3));
+            if (dispatch == "lookalike")
+            {
+                instructions.Call(MetadataTokens.MethodDefinitionHandle(3));
+            }
             else
             {
                 if (dispatch == "lookup")
@@ -269,25 +341,49 @@ public static class ModuleTokenFixture
                         instructions.OpCode(ILOpCode.Ldnull);
                         instructions.OpCode(ILOpCode.Ldnull);
                     }
-                    if (target == "ModuleHandle") instructions.Call(MethodReference(resolver));
-                    else Call(resolver);
+
+                    if (target == "ModuleHandle")
+                    {
+                        instructions.Call(MethodReference(resolver));
+                    }
+                    else
+                    {
+                        Call(resolver);
+                    }
                 }
+
                 if (target == "ModuleHandle")
                 {
                     if (resolver.ReturnType == typeof(RuntimeMethodHandle))
+                    {
                         Call(typeof(MethodBase).GetMethod(nameof(MethodBase.GetMethodFromHandle), [typeof(RuntimeMethodHandle)])!);
+                    }
                     else if (resolver.ReturnType == typeof(RuntimeFieldHandle))
+                    {
                         Call(typeof(FieldInfo).GetMethod(nameof(FieldInfo.GetFieldFromHandle), [typeof(RuntimeFieldHandle)])!);
-                    else Call(typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle))!);
+                    }
+                    else
+                    {
+                        Call(typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle))!);
+                    }
                 }
-                if (apiName == "ResolveSignature") Call(typeof(Convert).GetMethod(nameof(Convert.ToBase64String), [typeof(byte[])])!);
-                else if (apiName != "ResolveString") Call(typeof(MemberInfo).GetProperty(nameof(MemberInfo.Name))!.GetMethod!);
+
+                if (apiName == "ResolveSignature")
+                {
+                    Call(typeof(Convert).GetMethod(nameof(Convert.ToBase64String), [typeof(byte[])])!);
+                }
+                else if (apiName != "ResolveString")
+                {
+                    Call(typeof(MemberInfo).GetProperty(nameof(MemberInfo.Name))!.GetMethod!);
+                }
             }
+
             instructions.LoadString(metadata.GetOrAddUserString(expected));
             Call(typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
             instructions.LoadConstantI4(42);
             instructions.OpCode(ILOpCode.Mul);
         }
+
         instructions.OpCode(ILOpCode.Ret);
         var locals = new BlobBuilder();
         new BlobEncoder(locals).LocalVariableSignature(1).AddVariable().Type().Type(TypeReference(typeof(ModuleHandle)), true);
@@ -314,6 +410,7 @@ public static class ModuleTokenFixture
                 metadata.GetOrAddString(apiName), metadata.GetOrAddBlob(helperSignature), encoder.AddMethodBody(helper),
                 MetadataTokens.ParameterHandle(1));
         }
+
         var image = new BlobBuilder();
         new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
             new MetadataRootBuilder(metadata), bodies, flags: CorFlags.ILOnly).Serialize(image);

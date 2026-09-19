@@ -102,7 +102,8 @@ public sealed class ReplCoreRollbackTests
     public void Rollback_AfterRedefinitionRefusedAtClose_Works()
     {
         var core = new ReplCore();
-        foreach (var line in new[] { ".class public C {", ".method public static int32 M() {", "ldc.i4 1", "ret", "}", "}", "call int32 C::M()" })
+        foreach (var line in new[] { ".class public C {", ".method public static int32 M() {", "ldc.i4 1", "ret", "}", "}",
+            "call int32 C::M()" })
         {
             Assert.IsTrue(core.Handle(line).Succeeded, line);
         }

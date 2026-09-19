@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
@@ -105,7 +106,7 @@ public sealed class AssemblySymbolSource
         {
             try
             {
-                pe = new PEReader(System.Collections.Immutable.ImmutableArray.Create(image));
+                pe = new PEReader(ImmutableArray.Create(image));
                 reader = pe.HasMetadata ? pe.GetMetadataReader() : null;
             }
             catch (BadImageFormatException)
@@ -495,8 +496,12 @@ public sealed class AssemblySymbolSource
         return GenericParameters(definition.GetGenericParameters(), owner.Type, false, owner, catalog);
     }
 
-    private List<GenericParameterSymbol> GenericParameters(GenericParameterHandleCollection handles, DefinitionId ownerId, bool isMethod,
-        SymbolGenericOwner owner, LoadedBindingCatalog catalog)
+    private List<GenericParameterSymbol> GenericParameters(
+        GenericParameterHandleCollection handles,
+        DefinitionId ownerId,
+        bool isMethod,
+        SymbolGenericOwner owner,
+        LoadedBindingCatalog catalog)
     {
         var parameters = new List<GenericParameterSymbol>();
         foreach (var handle in handles)

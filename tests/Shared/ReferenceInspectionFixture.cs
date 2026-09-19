@@ -43,7 +43,11 @@ public static class ReferenceInspectionFixture
         var types = new Dictionary<Type, TypeReferenceHandle>();
         TypeReferenceHandle TypeReference(Type type)
         {
-            if (types.TryGetValue(type, out var handle)) return handle;
+            if (types.TryGetValue(type, out var handle))
+            {
+                return handle;
+            }
+
             if (!references.TryGetValue(type.Assembly, out var reference))
             {
                 var identity = type.Assembly.GetName();
@@ -60,25 +64,55 @@ public static class ReferenceInspectionFixture
 
         void EncodeType(SignatureTypeEncoder encoder, Type type)
         {
-            if (type == typeof(bool)) encoder.Boolean();
-            else if (type == typeof(int)) encoder.Int32();
-            else if (type == typeof(string)) encoder.String();
-            else if (type == typeof(object)) encoder.Object();
-            else if (type == typeof(nint)) encoder.IntPtr();
-            else if (type.IsArray) EncodeType(encoder.SZArray(), type.GetElementType()!);
+            if (type == typeof(bool))
+            {
+                encoder.Boolean();
+            }
+            else if (type == typeof(int))
+            {
+                encoder.Int32();
+            }
+            else if (type == typeof(string))
+            {
+                encoder.String();
+            }
+            else if (type == typeof(object))
+            {
+                encoder.Object();
+            }
+            else if (type == typeof(nint))
+            {
+                encoder.IntPtr();
+            }
+            else if (type.IsArray)
+            {
+                EncodeType(encoder.SZArray(), type.GetElementType()!);
+            }
             else if (type.IsGenericParameter)
             {
-                if (type.DeclaringMethod is null) encoder.GenericTypeParameter(type.GenericParameterPosition);
-                else encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+                if (type.DeclaringMethod is null)
+                {
+                    encoder.GenericTypeParameter(type.GenericParameterPosition);
+                }
+                else
+                {
+                    encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+                }
             }
             else if (type.IsGenericType)
             {
                 var arguments = type.GetGenericArguments();
                 var parameters = encoder.GenericInstantiation(TypeReference(type.GetGenericTypeDefinition()), arguments.Length,
                     type.IsValueType);
-                foreach (var argument in arguments) EncodeType(parameters.AddArgument(), argument);
+                foreach (var argument in arguments)
+                {
+                    EncodeType(parameters.AddArgument(), argument);
+                }
             }
-            else encoder.Type(TypeReference(type), type.IsValueType);
+            else
+            {
+                encoder.Type(TypeReference(type), type.IsValueType);
+            }
         }
 
         EntityHandle MethodReference(MethodBase method)
@@ -90,25 +124,46 @@ public static class ReferenceInspectionFixture
                 ? definition.GetGenericArguments().Length : 0, isInstanceMethod: !definition.IsStatic).Parameters(parameters.Length,
                 result =>
                 {
-                    if (definition is not MethodInfo info || info.ReturnType == typeof(void)) result.Void();
-                    else EncodeType(result.Type(), info.ReturnType);
+                    if (definition is not MethodInfo info || info.ReturnType == typeof(void))
+                    {
+                        result.Void();
+                    }
+                    else
+                    {
+                        EncodeType(result.Type(), info.ReturnType);
+                    }
                 }, arguments =>
                 {
-                    foreach (var parameter in parameters) EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    foreach (var parameter in parameters)
+                    {
+                        EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    }
                 });
             var declaring = definition.DeclaringType!;
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
-            if (method is not MethodInfo { IsGenericMethod: true } closed) return member;
+            if (method is not MethodInfo { IsGenericMethod: true } closed)
+            {
+                return member;
+            }
+
             var specification = new BlobBuilder();
             var encoded = new BlobEncoder(specification).MethodSpecificationSignature(closed.GetGenericArguments().Length);
-            foreach (var argument in closed.GetGenericArguments()) EncodeType(encoded.AddArgument(), argument);
+            foreach (var argument in closed.GetGenericArguments())
+            {
+                EncodeType(encoded.AddArgument(), argument);
+            }
+
             return metadata.AddMethodSpecification(member, metadata.GetOrAddBlob(specification));
         }
 
         EntityHandle SignatureType(Type type)
         {
-            if (!type.IsArray && !type.IsGenericType) return TypeReference(type);
+            if (!type.IsArray && !type.IsGenericType)
+            {
+                return TypeReference(type);
+            }
+
             var signature = new BlobBuilder();
             EncodeType(new BlobEncoder(signature).TypeSpecificationSignature(), type);
             return metadata.AddTypeSpecification(metadata.GetOrAddBlob(signature));
@@ -180,8 +235,15 @@ public static class ReferenceInspectionFixture
                 {
                     LoadType(delegateType);
                     LoadAssembly();
-                    if (dispatch == "runtime named delegate") instructions.LoadArgument(0);
-                    else instructions.LoadString(metadata.GetOrAddUserString(nameof(Assembly.GetReferencedAssemblies)));
+                    if (dispatch == "runtime named delegate")
+                    {
+                        instructions.LoadArgument(0);
+                    }
+                    else
+                    {
+                        instructions.LoadString(metadata.GetOrAddUserString(nameof(Assembly.GetReferencedAssemblies)));
+                    }
+
                     Call(typeof(Delegate).GetMethod(nameof(Delegate.CreateDelegate), [typeof(Type), typeof(object), typeof(string)])!);
                 }
 

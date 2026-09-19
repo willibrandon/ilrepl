@@ -22,7 +22,11 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Refresh_OutOfOrderReplies_DropsSupersededRows()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call Console::Wr");
@@ -36,7 +40,11 @@ public sealed class CompletionRequesterTests
         Assert.HasCount(1, engine.Calls);
         Assert.IsTrue(engine.Calls[0].Cancellation.IsCancellationRequested);
         engine.Calls[0].Release.SetResult();
-        await WaitAsync(() => { requester.Refresh(state); return engine.Calls.Count == 2; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return engine.Calls.Count == 2;
+        });
         Assert.AreEqual("call Console::Writ", engine.Calls[1].Request.Lines[0]);
         Assert.IsNull(state.Completions);
         await ReleaseAsync(engine, state, 1);
@@ -52,7 +60,11 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Refresh_ReplacementPending_KeepsOnlyDisabledDisplayRows()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call Console::Wr");
@@ -81,7 +93,11 @@ public sealed class CompletionRequesterTests
     [DataRow(true)]
     public async Task Refresh_EmptyReplacementPages_PreserveDisabledRows(bool hasMatch)
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call string::Substring");
@@ -89,7 +105,11 @@ public sealed class CompletionRequesterTests
         requester.Refresh(state);
         await ReleaseAsync(engine, state, 0);
         var original = state.Completions!.Reply.Items;
-        for (var index = 0; index < "Substring".Length; index++) state.Editor.DeleteBackward();
+        for (var index = 0; index < "Substring".Length; index++)
+        {
+            state.Editor.DeleteBackward();
+        }
+
         requester.Request(state);
         for (var page = 1; page <= 2; page++)
         {
@@ -102,6 +122,7 @@ public sealed class CompletionRequesterTests
             requester.Refresh(state);
             Assert.AreEqual(result.Reply.Cursor, engine.Calls[page + 1].Request.Cursor);
         }
+
         var final = await ReleaseAsync(engine, state, 3, apply: false);
         var items = hasMatch ? final.Reply!.Items.Take(1).ToArray() : [];
         requester.Apply(state, final with { Reply = final.Reply! with { Items = items, Cursor = null, Total = items.Length } });
@@ -117,7 +138,11 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Refresh_EditDuringEmptyPage_PreservesDisabledRows()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call string::Substring");
@@ -125,7 +150,11 @@ public sealed class CompletionRequesterTests
         requester.Refresh(state);
         await ReleaseAsync(engine, state, 0);
         var originalCount = state.Completions!.Reply.Items.Count;
-        for (var index = 0; index < "Substring".Length; index++) state.Editor.DeleteBackward();
+        for (var index = 0; index < "Substring".Length; index++)
+        {
+            state.Editor.DeleteBackward();
+        }
+
         requester.Request(state);
         var result = await ReleaseAsync(engine, state, 1, apply: false);
         requester.Apply(state, result with { Reply = result.Reply! with { Items = [] } });
@@ -145,13 +174,21 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Refresh_PendingAndDismissed_OnlyRequestsWhenNeeded()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call Console::Wr");
         var requester = state.Requester!;
         requester.Refresh(state);
-        for (var index = 0; index < 20; index++) requester.Refresh(state);
+        for (var index = 0; index < 20; index++)
+        {
+            requester.Refresh(state);
+        }
+
         Assert.HasCount(1, engine.Calls);
         requester.Cancel(state);
         state.PaletteDismissed = true;
@@ -161,7 +198,11 @@ public sealed class CompletionRequesterTests
         requester.Request(state);
         Assert.HasCount(1, engine.Calls);
         engine.Calls[0].Release.SetResult();
-        await WaitAsync(() => { requester.Refresh(state); return engine.Calls.Count == 2; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return engine.Calls.Count == 2;
+        });
         Assert.AreEqual(PaletteMode.Requested, state.Palette);
         await ReleaseAsync(engine, state, 1);
         Assert.AreEqual(PaletteMode.Open, state.Palette);
@@ -174,7 +215,11 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Refresh_FaultAndCancellation_ApplyDifferentRetryRules()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call Console::Wr");
@@ -202,7 +247,11 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Refresh_PagedResults_PreservesCursorAndQueryStamps()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call string::");
@@ -216,7 +265,11 @@ public sealed class CompletionRequesterTests
         requester.Refresh(state);
         Assert.AreEqual(first.Cursor, engine.Calls[1].Request.Cursor);
         requester.RequestMore(state);
-        for (var index = 0; index < 20; index++) requester.Refresh(state);
+        for (var index = 0; index < 20; index++)
+        {
+            requester.Refresh(state);
+        }
+
         Assert.HasCount(2, engine.Calls);
         await ReleaseAsync(engine, state, 1);
         var combined = state.Completions!.Reply;
@@ -234,7 +287,11 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Refresh_CommentMutation_RequeriesAndRefusesOldEdits()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call Console::Wr");
@@ -258,7 +315,11 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Refresh_EmptyBroadSite_WaitsForExplicitRequest()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call ");
@@ -279,7 +340,11 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Refresh_CaretMove_InvalidatesRowsImmediately()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call Console::Wr");
@@ -304,7 +369,11 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Refresh_BusySubmission_PreservesCurrentPreview()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call Console::Wr");
@@ -332,7 +401,11 @@ public sealed class CompletionRequesterTests
         finally
         {
             release.TrySetResult();
-            if (state.Submission is { } pending) await pending.Completion;
+            if (state.Submission is { } pending)
+            {
+                await pending.Completion;
+            }
+
             await requester.SettleAsync(TimeSpan.FromSeconds(2));
         }
     }
@@ -343,7 +416,11 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Settle_SupersededTasks_CannotPublishIntoTheNextSession()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call Console::Wr");
@@ -372,7 +449,11 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Refresh_AssemblyLoad_InvalidatesCachedRowsAndRequeries()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call Console::Wr");
@@ -412,7 +493,11 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Apply_AssemblyLoad_DropsThePendingReply()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = State(engine, "call Console::Wr");
@@ -436,7 +521,11 @@ public sealed class CompletionRequesterTests
     [TestMethod]
     public async Task Acceptance_AssemblyChange_RebindsThenAppliesOneUndoableEdit()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         const string original = "call Environment::get_CurrentManagedTh";
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
@@ -449,7 +538,11 @@ public sealed class CompletionRequesterTests
         Assert.IsFalse(CompletionEdit.Accept(state, selected));
         requester.QueueAcceptance(state, selected);
         Assert.AreEqual(original, state.Text);
-        await WaitAsync(() => { requester.Refresh(state); return engine.Calls.Count == 2; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return engine.Calls.Count == 2;
+        });
         await ReleaseAsync(engine, state, 1);
         Assert.AreEqual("call Environment::get_CurrentManagedThreadId()", state.Text);
         Assert.IsTrue(state.PaletteDismissed);
@@ -468,7 +561,11 @@ public sealed class CompletionRequesterTests
     [DataRow("session")]
     public async Task Acceptance_ChangedContext_DiscardsPendingIntent(string change)
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         const string original = "call Environment::get_CurrentManagedTh";
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
@@ -479,18 +576,27 @@ public sealed class CompletionRequesterTests
         var selected = state.Completions!.Reply.Items.Single();
         CompletionEngine.ChangeAssemblies();
         requester.QueueAcceptance(state, selected);
-        await WaitAsync(() => { requester.Refresh(state); return engine.Calls.Count == 2; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return engine.Calls.Count == 2;
+        });
         switch (change)
         {
             case "edit": state.Editor.InsertText("r"); break;
             case "caret": state.Editor.SetCursorPosition(new DocumentOffset(original.Length - 1)); break;
             case "session": await engine.HandleAsync(".clear", TestContext.CancellationToken); break;
         }
+
         var expected = state.Text;
         var caret = state.Editor.Cursor.Position;
         await engine.Calls[1].Prepared.WaitAsync(TimeSpan.FromSeconds(10), TestContext.CancellationToken);
         engine.Calls[1].Release.SetResult();
-        await WaitAsync(() => { requester.Refresh(state); return engine.Calls.Count == 3; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return engine.Calls.Count == 3;
+        });
         await ReleaseAsync(engine, state, 2);
         Assert.AreEqual(expected, state.Text);
         Assert.AreEqual(caret, state.Editor.Cursor.Position);
@@ -524,9 +630,13 @@ public sealed class CompletionRequesterTests
             if (message.CompletionResult is { } result)
             {
                 completion = result;
-                if (apply) state.Requester!.Apply(state, result);
+                if (apply)
+                {
+                    state.Requester!.Apply(state, result);
+                }
             }
         }
+
         Assert.IsNotNull(completion);
         return completion;
     }
@@ -535,12 +645,19 @@ public sealed class CompletionRequesterTests
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(10));
-        while (!ready()) await Task.Delay(1, deadline.Token);
+        while (!ready())
+        {
+            await Task.Delay(1, deadline.Token);
+        }
     }
 
     private static async Task CloseAsync(CompletionEngine engine, CompletionRequester requester)
     {
-        foreach (var call in engine.Calls) call.Release.TrySetResult();
+        foreach (var call in engine.Calls)
+        {
+            call.Release.TrySetResult();
+        }
+
         await requester.SettleAsync(TimeSpan.FromSeconds(2));
     }
 }

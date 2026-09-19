@@ -54,6 +54,7 @@ public sealed class AssemblyReferenceTests
             Assert.Contains(dependency => dependency.Symbol.Contains(api, StringComparison.Ordinal)
                 && dependency.Disposition.Contains(problem, StringComparison.Ordinal), edit.Dependencies);
         }
+
         var source = edit.Source;
         var completion = session.CompletionRevision;
         var error = Assert.ThrowsExactly<ReplException>(() => session.CommitEdit(edit.Name, source));

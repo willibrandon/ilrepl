@@ -81,9 +81,13 @@ public sealed class DependencyCancellationTests
             while (!File.Exists(marker))
             {
                 if (running.IsCompleted)
+                {
                     Assert.Fail(string.Join('\n', (await running).Lines.Select(line => line.PlainText)));
+                }
+
                 await Task.Delay(10, deadline.Token);
             }
+
             var pid = int.Parse(await File.ReadAllTextAsync(marker, deadline.Token), CultureInfo.InvariantCulture);
             using var build = Process.GetProcessById(pid);
             Assert.IsFalse(build.HasExited);
@@ -101,8 +105,13 @@ public sealed class DependencyCancellationTests
             if (!running.IsCompleted)
             {
                 await controller.InterruptAsync(controller.Progress.Identity, CancellationToken.None);
-                try { await running.WaitAsync(TimeSpan.FromSeconds(15), CancellationToken.None); }
-                catch (OperationCanceledException) { }
+                try
+                {
+                    await running.WaitAsync(TimeSpan.FromSeconds(15), CancellationToken.None);
+                }
+                catch (OperationCanceledException)
+                {
+                }
             }
         }
     }

@@ -31,7 +31,11 @@ public sealed class ExternalInterfaceEditTests
         using var module = ModuleDefinition.ReadModule(new MemoryStream(fixture.Image));
         var parent = module.GetType("ExternalBase");
         parent.Interfaces.Clear();
-        foreach (var method in parent.Methods) method.Overrides.Clear();
+        foreach (var method in parent.Methods)
+        {
+            method.Overrides.Clear();
+        }
+
         using var image = new MemoryStream();
         module.Write(image);
         var session = new Session();

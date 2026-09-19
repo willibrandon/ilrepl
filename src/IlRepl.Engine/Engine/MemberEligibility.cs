@@ -201,8 +201,13 @@ public static partial class MemberEligibility
     /// <param name="exactGenericArguments">Generic arguments with metadata-only shapes retained.</param>
     /// <param name="exactOptionalParameterTypes">Vararg call-site types with metadata-only shapes retained.</param>
     /// <returns>The reason, or null.</returns>
-    public static string? MethodVerdict(MethodSymbol method, AccessContext where, AccessFacts facts, bool judgeAll = false,
-        IReadOnlyList<TypeSymbol>? exactGenericArguments = null, IReadOnlyList<TypeSymbol>? exactOptionalParameterTypes = null)
+    public static string? MethodVerdict(
+        MethodSymbol method,
+        AccessContext where,
+        AccessFacts facts,
+        bool judgeAll = false,
+        IReadOnlyList<TypeSymbol>? exactGenericArguments = null,
+        IReadOnlyList<TypeSymbol>? exactOptionalParameterTypes = null)
     {
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(where);

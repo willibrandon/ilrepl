@@ -56,6 +56,7 @@ public sealed class StartupSessionTests
                 deliver.Task.GetAwaiter().GetResult();
             };
         }
+
         PromptState? prompt = null;
         var transcript = new Transcript();
         var adapter = new ScriptedPresentationAdapter(100, 30);
@@ -73,8 +74,12 @@ public sealed class StartupSessionTests
             {
                 await adapter.PasteAsync(early);
                 await auto.WaitUntilAsync(_ => prompt!.Text == early);
-                if (!lateInput) typed = await SelectEndAsync();
+                if (!lateInput)
+                {
+                    typed = await SelectEndAsync();
+                }
             }
+
             launch.TrySetResult();
             if (lateInput)
             {
@@ -85,6 +90,7 @@ public sealed class StartupSessionTests
                 typed = await SelectEndAsync();
                 deliver.TrySetResult();
             }
+
             await controller.Initialization.WaitAsync(token);
             var prefix = savedDraft && edit ? string.Join('\n', saved.Lines) + "\n" : "";
             var expected = edit ? prefix + (lateInput ? late : early) : string.Join('\n', saved.Lines);
@@ -110,6 +116,7 @@ public sealed class StartupSessionTests
                 await auto.WaitUntilTextAsync("= 47 : int32");
                 Assert.IsFalse(File.Exists(files.MarkerPath));
             }
+
             await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
             if (edit)
             {
@@ -117,6 +124,7 @@ public sealed class StartupSessionTests
                 await auto.DownAsync(ct: token);
                 await auto.EnterAsync(ct: token);
             }
+
             await run.WaitAsync(token);
         }
         finally

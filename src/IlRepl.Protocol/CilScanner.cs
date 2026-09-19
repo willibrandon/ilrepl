@@ -45,7 +45,9 @@ internal static class CilScanner
         {
             var left = lexemes[i];
             var right = lexemes[i + 1];
-            if (left.End == right.Start && left.Kind is CilLexemeKind.Word or CilLexemeKind.Quoted && right.Kind is CilLexemeKind.Word or CilLexemeKind.Quoted && (left.Kind == CilLexemeKind.Word || right.Kind == CilLexemeKind.Word))
+            if (left.End == right.Start && left.Kind is CilLexemeKind.Word or CilLexemeKind.Quoted
+                && right.Kind is CilLexemeKind.Word or CilLexemeKind.Quoted
+                && (left.Kind == CilLexemeKind.Word || right.Kind == CilLexemeKind.Word))
             {
                 lexemes[i] = new CilLexeme(left.Start, right.End - left.Start, CilLexemeKind.Word);
                 lexemes.RemoveAt(i + 1);
@@ -192,7 +194,9 @@ internal static class CilScanner
                 continue;
             }
 
-            lexemes.Add(new CilLexeme(i, 1, c is '(' or ')' or ']' or '<' or '>' or ',' or '&' or '*' or ';' or '{' or '}' or '|' ? CilLexemeKind.Punctuation : CilLexemeKind.Other));
+            lexemes.Add(new CilLexeme(i, 1,
+                c is '(' or ')' or ']' or '<' or '>' or ',' or '&' or '*' or ';' or '{' or '}' or '|' ? CilLexemeKind.Punctuation
+                : CilLexemeKind.Other));
             i++;
         }
     }

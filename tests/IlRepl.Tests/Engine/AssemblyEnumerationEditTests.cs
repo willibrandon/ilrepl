@@ -100,5 +100,4 @@ public sealed class AssemblyEnumerationEditTests
         Assert.AreEqual("GetTypes", edit.Original.Requested.Invoke(null, null));
         Assert.AreEqual("GetTypes", edit.Method!.Invoke(null, null));
     }
-
 }

@@ -23,7 +23,13 @@ public sealed partial class SessionController : IInterruptibleEngine
     /// </summary>
     public SessionRuntimeState RuntimeState
     {
-        get { lock (_lifecycleLock) { return _runtimeState; } }
+        get
+        {
+            lock (_lifecycleLock)
+            {
+                return _runtimeState;
+            }
+        }
     }
 
     /// <summary>
@@ -31,7 +37,13 @@ public sealed partial class SessionController : IInterruptibleEngine
     /// </summary>
     public HostExit? LastHostExit
     {
-        get { lock (_lifecycleLock) { return _lastHostExit; } }
+        get
+        {
+            lock (_lifecycleLock)
+            {
+                return _lastHostExit;
+            }
+        }
     }
 
     /// <summary>
@@ -76,15 +88,21 @@ public sealed partial class SessionController : IInterruptibleEngine
             interruptible = (_runningCandidate ?? _engine) as IInterruptibleEngine;
             if (_runningCandidate is not null)
             {
-                if (interruptible?.Progress is not { IsRunning: true } progress || progress.Identity != identity) return false;
+                if (interruptible?.Progress is not { IsRunning: true } progress || progress.Identity != identity)
+                {
+                    return false;
+                }
+
                 replayCancellation = _executionCancellation?.CancelAsync();
             }
         }
+
         if (replayCancellation is not null)
         {
             await replayCancellation.WaitAsync(cancellationToken).ConfigureAwait(false);
             return true;
         }
+
         return interruptible is not null && await interruptible.InterruptAsync(identity, cancellationToken).ConfigureAwait(false);
     }
 
@@ -102,9 +120,14 @@ public sealed partial class SessionController : IInterruptibleEngine
         {
             var progress = Progress;
             if (_runtimeState != SessionRuntimeState.Ready || !progress.IsRunning || !progress.CancellationRequested
-                || progress.Identity != identity || progress.Sequence != sequence) return false;
+                || progress.Identity != identity || progress.Sequence != sequence)
+            {
+                return false;
+            }
+
             restart = BeginRestartLocked();
         }
+
         await restart.WaitAsync(cancellationToken).ConfigureAwait(false);
         return true;
     }
@@ -125,7 +148,11 @@ public sealed partial class SessionController : IInterruptibleEngine
     private Task<SessionReply> BeginRestartLocked()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_restartTask is { IsCompleted: false }) return _restartTask;
+        if (_restartTask is { IsCompleted: false })
+        {
+            return _restartTask;
+        }
+
         _runtimeState = SessionRuntimeState.Restarting;
         CancelStartup();
         var previous = _engine;
@@ -142,13 +169,25 @@ public sealed partial class SessionController : IInterruptibleEngine
         {
             interruptible.ProgressChanged += progress =>
             {
-                if (ReferenceEquals(engine, _engine)) ProgressChanged?.Invoke(progress);
+                if (ReferenceEquals(engine, _engine))
+                {
+                    ProgressChanged?.Invoke(progress);
+                }
             };
         }
-        if (engine is not IHostedEngine hosted) return;
+
+        if (engine is not IHostedEngine hosted)
+        {
+            return;
+        }
+
         hosted.CheckpointReceived += checkpoint =>
         {
-            if (!ReferenceEquals(engine, _engine)) return;
+            if (!ReferenceEquals(engine, _engine))
+            {
+                return;
+            }
+
             _checkpointPendingInput = PendingInput;
             var current = Workspace;
             Workspace = checkpoint with
@@ -160,18 +199,32 @@ public sealed partial class SessionController : IInterruptibleEngine
         };
         hosted.OutputReceived += output =>
         {
-            if (ReferenceEquals(engine, _engine)) ForwardOutput(output);
+            if (ReferenceEquals(engine, _engine))
+            {
+                ForwardOutput(output);
+            }
         };
         hosted.Exited += exit =>
         {
             lock (_lifecycleLock)
             {
-                if (_disposed || !ReferenceEquals(engine, _engine) || exit.Expected) return;
+                if (_disposed || !ReferenceEquals(engine, _engine) || exit.Expected)
+                {
+                    return;
+                }
+
                 _lastHostExit = exit;
                 _pendingHostExit = exit;
-                if (RecoverHostFailures) _ = BeginRestartLocked();
-                else _runtimeState = SessionRuntimeState.Unavailable;
+                if (RecoverHostFailures)
+                {
+                    _ = BeginRestartLocked();
+                }
+                else
+                {
+                    _runtimeState = SessionRuntimeState.Unavailable;
+                }
             }
+
             RuntimeStateChanged?.Invoke(RuntimeState);
         };
     }
@@ -213,6 +266,7 @@ public sealed partial class SessionController : IInterruptibleEngine
         {
             await hosted.TerminateAsync(cancellationToken).ConfigureAwait(false);
         }
+
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         SessionReply result;
         try
@@ -225,6 +279,7 @@ public sealed partial class SessionController : IInterruptibleEngine
                     Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = Editor,
                 }, cancellationToken).ConfigureAwait(false);
             }
+
             retained = InterruptedWorkspace(retained, exit);
             Workspace = retained;
             await previous.DisposeAsync().ConfigureAwait(false);
@@ -253,12 +308,17 @@ public sealed partial class SessionController : IInterruptibleEngine
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
-                if (candidate is not null) await candidate.DisposeAsync().ConfigureAwait(false);
+                if (candidate is not null)
+                {
+                    await candidate.DisposeAsync().ConfigureAwait(false);
+                }
+
                 result = retained with { Reply = Failure("host unavailable: " + exception.Message
                     + "; source remains editable; use .session save or .session restart") with
                     { SessionEditor = retained.Document.Editor } };
                 SetRuntimeState(SessionRuntimeState.Unavailable);
             }
+
             Editor = result.Document.Editor;
             _checkpointPendingInput = [];
             QueuedInput = [];
@@ -268,6 +328,7 @@ public sealed partial class SessionController : IInterruptibleEngine
         {
             _gate.Release();
         }
+
         RecoveryCompleted?.Invoke(result with { RecoveredInput = _recoveredInput });
         return result;
     }
@@ -294,6 +355,7 @@ public sealed partial class SessionController : IInterruptibleEngine
                 Entries = [.. document.Entries, new SessionEntry { Number = number, Kind = SessionEntryKind.Run, Source = ["ret"] }],
             };
         }
+
         return retained with
         {
             Document = document,
@@ -311,20 +373,30 @@ public sealed partial class SessionController : IInterruptibleEngine
         var editor = Editor;
         string[] prefix = [.. _checkpointPendingInput, .. QueuedInput];
         _recoveredInput = prefix;
-        if (prefix.Length == 0) return editor;
+        if (prefix.Length == 0)
+        {
+            return editor;
+        }
+
         var offset = string.Join('\n', prefix).Length + (editor.Lines.Length == 0 ? 0 : 1);
         return editor with { Lines = [.. prefix, .. editor.Lines], Caret = editor.Caret + offset, Anchor = editor.Anchor + offset };
     }
 
     private static IEnumerable<TranscriptLine> ExitLines(HostExit? exit)
     {
-        if (exit is null) yield break;
+        if (exit is null)
+        {
+            yield break;
+        }
+
         yield return TranscriptLine.Of(LineKind.Error,
             $"  execution host exited (process {exit.ProcessId}, exit code {exit.ExitCode?.ToString() ?? "unknown"})", SpanStyle.Error);
         if (exit.StandardError.Length != 0)
         {
             foreach (var line in exit.StandardError.TrimEnd().Split('\n'))
+            {
                 yield return TranscriptLine.Of(LineKind.Error, "  " + line.TrimEnd('\r'), SpanStyle.Error);
+            }
         }
     }
 
@@ -338,8 +410,13 @@ public sealed partial class SessionController : IInterruptibleEngine
             _engine = engine;
             Interlocked.Increment(ref _epoch);
         }
+
         ObserveEngine(engine);
-        if (engine is IInterruptibleEngine interruptible) ProgressChanged?.Invoke(interruptible.Progress);
+        if (engine is IInterruptibleEngine interruptible)
+        {
+            ProgressChanged?.Invoke(interruptible.Progress);
+        }
+
         await cancellation.CancelAsync().ConfigureAwait(false);
         cancellation.Dispose();
     }
@@ -356,7 +433,11 @@ public sealed partial class SessionController : IInterruptibleEngine
 
     private void SetRuntimeState(SessionRuntimeState state)
     {
-        lock (_lifecycleLock) { _runtimeState = state; }
+        lock (_lifecycleLock)
+        {
+            _runtimeState = state;
+        }
+
         RuntimeStateChanged?.Invoke(state);
     }
 }

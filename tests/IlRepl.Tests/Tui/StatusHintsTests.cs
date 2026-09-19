@@ -94,7 +94,8 @@ public sealed class StatusHintsTests
     {
         var state = NewState(Block);
         Assert.AreEqual(EnterAction.Submit, PromptWidget.EnterActionFor(state, paletteVisible: false, openDepth: 0, commentOpen: false));
-        Assert.AreSequenceEqual(["Ctrl+C clears", "Ctrl+Q quit", "Enter sends 4 lines"], IlReplApp.StatusHints(s_facts, 100, copyMode: false, EnterAction.Submit, state.LineCount));
+        Assert.AreSequenceEqual(["Ctrl+C clears", "Ctrl+Q quit", "Enter sends 4 lines"],
+            IlReplApp.StatusHints(s_facts, 100, copyMode: false, EnterAction.Submit, state.LineCount));
     }
 
     /// <summary>
@@ -122,7 +123,8 @@ public sealed class StatusHintsTests
         var state = NewState(".method void F() {");
         Assert.AreEqual(EnterAction.Continue, PromptWidget.EnterActionFor(state, paletteVisible: false, openDepth: 0, commentOpen: false));
         Assert.AreSequenceEqual(s_continue, IlReplApp.StatusHints(s_facts, 100, copyMode: false, EnterAction.Continue, 1));
-        Assert.AreSequenceEqual(["Ctrl+Q quit", "Enter continues"], IlReplApp.StatusHints(s_facts, 90, copyMode: false, EnterAction.Continue, 1));
+        Assert.AreSequenceEqual(["Ctrl+Q quit", "Enter continues"],
+            IlReplApp.StatusHints(s_facts, 90, copyMode: false, EnterAction.Continue, 1));
         Assert.AreSequenceEqual(["Enter continues"], IlReplApp.StatusHints(s_facts, 70, copyMode: false, EnterAction.Continue, 1));
     }
 
@@ -146,7 +148,8 @@ public sealed class StatusHintsTests
         var state = NewState("ldc.i4.");
         Assert.AreEqual(EnterAction.Submit, PromptWidget.EnterActionFor(state, paletteVisible: true, openDepth: 0, commentOpen: false));
         state.PaletteNavigated = true;
-        Assert.AreEqual(EnterAction.AcceptCompletion, PromptWidget.EnterActionFor(state, paletteVisible: true, openDepth: 0, commentOpen: false));
+        Assert.AreEqual(EnterAction.AcceptCompletion,
+            PromptWidget.EnterActionFor(state, paletteVisible: true, openDepth: 0, commentOpen: false));
         Assert.AreSequenceEqual(s_accept, IlReplApp.StatusHints(s_facts, 100, copyMode: false, EnterAction.AcceptCompletion, 1));
     }
 
@@ -190,9 +193,12 @@ public sealed class StatusHintsTests
         // A block the engine already has open continues until the buffer closes it.
         var closing = NewState("  ret\n}");
         Assert.AreEqual(EnterAction.Submit, PromptWidget.EnterActionFor(closing, paletteVisible: false, openDepth: 1, commentOpen: false));
-        Assert.AreEqual(EnterAction.Continue, PromptWidget.EnterActionFor(NewState("  ret"), paletteVisible: false, openDepth: 1, commentOpen: false));
-        Assert.AreEqual(EnterAction.Continue, PromptWidget.EnterActionFor(NewState("still open"), paletteVisible: false, openDepth: 0, commentOpen: true));
-        Assert.AreEqual(EnterAction.Submit, PromptWidget.EnterActionFor(NewState("closed */"), paletteVisible: false, openDepth: 0, commentOpen: true));
+        Assert.AreEqual(EnterAction.Continue,
+            PromptWidget.EnterActionFor(NewState("  ret"), paletteVisible: false, openDepth: 1, commentOpen: false));
+        Assert.AreEqual(EnterAction.Continue,
+            PromptWidget.EnterActionFor(NewState("still open"), paletteVisible: false, openDepth: 0, commentOpen: true));
+        Assert.AreEqual(EnterAction.Submit,
+            PromptWidget.EnterActionFor(NewState("closed */"), paletteVisible: false, openDepth: 0, commentOpen: true));
     }
 
     private static PromptState NewState(string text)

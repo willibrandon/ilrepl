@@ -39,10 +39,15 @@ public static class FrozenCollectionComparisonExamples
         foreach (var (key, value) in reverse ? entries.Reverse() : entries)
         {
             source += "dup\nldstr \"" + key + "\"\n";
-            if (!set) source += "ldc.i4 " + value.ToString(CultureInfo.InvariantCulture) + "\n";
+            if (!set)
+            {
+                source += "ldc.i4 " + value.ToString(CultureInfo.InvariantCulture) + "\n";
+            }
+
             source += "callvirt instance " + (set ? "bool " : "void ") + mutable
                 + (set ? "::Add(string)\npop\n" : "::Add(string, int32)\n");
         }
+
         source += comparer == "default" ? "ldnull\n" : "call class StringComparer StringComparer::get_" + comparer + "()\n";
         source += "call " + frozen + " System.Collections.Frozen." + (set ? "FrozenSet::ToFrozenSet<string>"
             : "FrozenDictionary::ToFrozenDictionary<string, int32>") + "(class IEnumerable<"

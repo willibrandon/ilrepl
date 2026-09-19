@@ -24,23 +24,71 @@ internal static class NativeActivationGraph
         pending.Enqueue(root);
         while (pending.TryDequeue(out var method))
         {
-            if (!methods.Add(method)) continue;
-            if (methods.Count > 4096) throw new ReplException("native inspection cannot establish a finite activation closure");
+            if (!methods.Add(method))
+            {
+                continue;
+            }
+
+            if (methods.Count > 4096)
+            {
+                throw new ReplException("native inspection cannot establish a finite activation closure");
+            }
+
             assemblies.Add(method.Module.Assembly.FullName!);
-            if (method.DeclaringType is { } declaring) VisitType(declaring);
+            if (method.DeclaringType is { } declaring)
+            {
+                VisitType(declaring);
+            }
+
             if (method.IsGenericMethod)
-                foreach (var argument in method.GetGenericArguments()) VisitType(argument);
-            foreach (var parameter in method.GetParameters()) VisitType(parameter.ParameterType);
-            if (method is MethodInfo info) VisitType(info.ReturnType);
-            if (bindings.TryGetValue(method, out var bodyMethod)) pending.Enqueue(bodyMethod);
-            if (Path.GetDirectoryName(method.Module.Assembly.Location) == framework || method.GetMethodBody() is not { } body) continue;
-            foreach (var local in body.LocalVariables) VisitType(local.LocalType);
+            {
+                foreach (var argument in method.GetGenericArguments())
+                {
+                    VisitType(argument);
+                }
+            }
+
+            foreach (var parameter in method.GetParameters())
+            {
+                VisitType(parameter.ParameterType);
+            }
+
+            if (method is MethodInfo info)
+            {
+                VisitType(info.ReturnType);
+            }
+
+            if (bindings.TryGetValue(method, out var bodyMethod))
+            {
+                pending.Enqueue(bodyMethod);
+            }
+
+            if (Path.GetDirectoryName(method.Module.Assembly.Location) == framework || method.GetMethodBody() is not { } body)
+            {
+                continue;
+            }
+
+            foreach (var local in body.LocalVariables)
+            {
+                VisitType(local.LocalType);
+            }
+
             foreach (var clause in body.ExceptionHandlingClauses)
-                if (clause.Flags == ExceptionHandlingClauseOptions.Clause && clause.CatchType is { } caught) VisitType(caught);
+            {
+                if (clause.Flags == ExceptionHandlingClauseOptions.Clause && clause.CatchType is { } caught)
+                {
+                    VisitType(caught);
+                }
+            }
+
             foreach (var instruction in IlReader.Read(body.GetILAsByteArray()!).Instructions)
             {
                 if (instruction.Op.OperandType is not (OperandType.InlineMethod or OperandType.InlineType
-                    or OperandType.InlineField or OperandType.InlineTok)) continue;
+                    or OperandType.InlineField or OperandType.InlineTok))
+                {
+                    continue;
+                }
+
                 var member = method.Module.ResolveMember(instruction.Operand.Token, method.DeclaringType?.GetGenericArguments(),
                     method.IsGenericMethod ? method.GetGenericArguments() : null);
                 switch (member)
@@ -48,28 +96,56 @@ internal static class NativeActivationGraph
                     case Type type: VisitType(type); break;
                     case MethodBase callee: pending.Enqueue(callee); break;
                     case FieldInfo field:
-                        if (field.DeclaringType is { } owner) VisitType(owner);
+                        if (field.DeclaringType is { } owner)
+                        {
+                            VisitType(owner);
+                        }
+
                         VisitType(field.FieldType);
                         break;
                 }
             }
         }
+
         return assemblies;
 
         void VisitType(Type type)
         {
-            if (!types.Add(type) || type.IsGenericParameter) return;
-            if (type.HasElementType) { VisitType(type.GetElementType()!); return; }
+            if (!types.Add(type) || type.IsGenericParameter)
+            {
+                return;
+            }
+
+            if (type.HasElementType)
+            {
+                VisitType(type.GetElementType()!);
+                return;
+            }
+
             if (type.IsFunctionPointer)
             {
                 VisitType(type.GetFunctionPointerReturnType());
-                foreach (var parameter in type.GetFunctionPointerParameterTypes()) VisitType(parameter);
+                foreach (var parameter in type.GetFunctionPointerParameterTypes())
+                {
+                    VisitType(parameter);
+                }
+
                 return;
             }
+
             assemblies.Add(type.Assembly.FullName!);
-            if (type.BaseType is { } parent) VisitType(parent);
+            if (type.BaseType is { } parent)
+            {
+                VisitType(parent);
+            }
+
             if (type.IsConstructedGenericType)
-                foreach (var argument in type.GetGenericArguments()) VisitType(argument);
+            {
+                foreach (var argument in type.GetGenericArguments())
+                {
+                    VisitType(argument);
+                }
+            }
         }
     }
 }

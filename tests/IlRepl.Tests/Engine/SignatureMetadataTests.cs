@@ -45,7 +45,8 @@ public sealed class SignatureMetadataTests
         var session = Load(
             ".class public Mods {",
             ".field public static int32 modreq([System.Runtime]System.Runtime.CompilerServices.IsVolatile) V",
-            ".method public static string modreq([System.Runtime]System.Runtime.CompilerServices.IsVolatile) M(int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsVolatile) x) { ldstr \"m\"; ret }",
+            ".method public static string modreq([System.Runtime]System.Runtime.CompilerServices.IsVolatile) M(int32 " +
+            "modopt([System.Runtime]System.Runtime.CompilerServices.IsVolatile) x) { ldstr \"m\"; ret }",
             "}");
         var mods = session.Types[0].RuntimeType!;
         Assert.AreEqual(typeof(IsVolatile), mods.GetField("V")!.GetRequiredCustomModifiers()[0]);
@@ -62,7 +63,8 @@ public sealed class SignatureMetadataTests
     {
         var session = Load(
             ".class public Params {",
-            ".method public static int32 M([in] int32 a, [out] int32& b, int32 c) { .param [3] = int32(7); ldarg b; ldc.i4 0; stind.i4; ldarg a; ret }",
+            ".method public static int32 M([in] int32 a, [out] int32& b, int32 c) { .param [3] = int32(7); ldarg b; ldc.i4 0; stind.i4; " +
+            "ldarg a; ret }",
             "}");
         var parameters = session.Types[0].RuntimeType!.GetMethod("M")!.GetParameters();
         Assert.IsTrue(parameters[0].IsIn);
@@ -79,7 +81,8 @@ public sealed class SignatureMetadataTests
     [TestMethod]
     public void VarArgMember_FollowsTheRuntime()
     {
-        var lines = IlLines.Expand(".class public Va {", ".method public static vararg int32 Count(int32 first) { ldarg first; ret }").ToList();
+        var lines = IlLines.Expand(".class public Va {", ".method public static vararg int32 Count(int32 first) { ldarg first; ret }")
+            .ToList();
         if (OperatingSystem.IsWindows())
         {
             var session = new Session();
@@ -99,7 +102,8 @@ public sealed class SignatureMetadataTests
                 session.AddLine(line);
             }
 
-            Assert.Contains("only supports the vararg calling convention on Windows", Assert.ThrowsExactly<ReplException>(() => session.AddLine("}")).Message);
+            Assert.Contains("only supports the vararg calling convention on Windows",
+                Assert.ThrowsExactly<ReplException>(() => session.AddLine("}")).Message);
         }
     }
 }

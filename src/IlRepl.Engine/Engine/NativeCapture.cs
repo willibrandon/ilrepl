@@ -2,8 +2,8 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
-using System.Runtime.Loader;
 using System.Runtime.InteropServices;
+using System.Runtime.Loader;
 using System.Security.Cryptography;
 using System.Text;
 using IlRepl.Protocol;
@@ -25,17 +25,31 @@ public static class NativeCapture
     public static MethodBase Resolve(Session session, string selector, bool original = false)
     {
         var edit = session.Edits.FirstOrDefault(item => item.Name == selector);
-        if (original && edit is null) throw new ReplException("--original requires an edit name");
-        if (edit is not null) return original ? edit.Original.Requested
+        if (original && edit is null)
+        {
+            throw new ReplException("--original requires an edit name");
+        }
+
+        if (edit is not null)
+        {
+            return original ? edit.Original.Requested
             : edit.Method ?? throw new ReplException($"edit '{selector}' has no committed implementation");
+        }
+
         var resolved = MemberResolver.ResolveMethod(selector, session.InspectionContext,
             wantConstructor: selector.Contains("::.ctor", StringComparison.Ordinal));
         if (resolved.Definition is { } definition)
+        {
             return session.Methods.First(method => method.Signature.Name == definition.Name &&
                 SignatureIdentity.Same(method.Signature, definition)).Version.Body;
+        }
+
         var method = resolved.Method;
         if (method is null || method.DeclaringType is TypeBuilder || resolved.Declared is not null)
+        {
             throw new ReplException("close the declaration before inspecting its native code");
+        }
+
         return method;
     }
 
@@ -48,7 +62,11 @@ public static class NativeCapture
     /// <returns>The immutable worker input.</returns>
     public static NativeTarget Create(Session session, string selector, NativeOptions options)
     {
-        if (session.OpenDepth != 0) throw new ReplException("close the declaration before native inspection");
+        if (session.OpenDepth != 0)
+        {
+            throw new ReplException("close the declaration before native inspection");
+        }
+
         var images = new Dictionary<string, NativeAssembly>(StringComparer.Ordinal);
         var visited = new HashSet<Assembly>();
         var methods = new HashSet<MethodBase>();
@@ -64,33 +82,87 @@ public static class NativeCapture
 
         void CaptureType(Type type)
         {
-            if (type.HasElementType) { CaptureType(type.GetElementType()!); return; }
-            if (type.IsGenericParameter || !capturedTypes.Add(type)) return;
+            if (type.HasElementType)
+            {
+                CaptureType(type.GetElementType()!);
+                return;
+            }
+
+            if (type.IsGenericParameter || !capturedTypes.Add(type))
+            {
+                return;
+            }
+
             Visit(type.Assembly);
-            if (type.BaseType is { } parent) CaptureType(parent);
+            if (type.BaseType is { } parent)
+            {
+                CaptureType(parent);
+            }
+
             if (type.IsConstructedGenericType)
-                foreach (var argument in type.GetGenericArguments()) CaptureType(argument);
+            {
+                foreach (var argument in type.GetGenericArguments())
+                {
+                    CaptureType(argument);
+                }
+            }
         }
 
         NativeMethodIdentity CaptureMethod(MethodBase method)
         {
-            if (methods.Count > 4096) throw new ReplException("native inspection cannot establish a finite method dependency closure");
+            if (methods.Count > 4096)
+            {
+                throw new ReplException("native inspection cannot establish a finite method dependency closure");
+            }
+
             Visit(method.Module.Assembly);
-            if (method.DeclaringType is { } declaring) CaptureType(declaring);
+            if (method.DeclaringType is { } declaring)
+            {
+                CaptureType(declaring);
+            }
+
             if (method.IsGenericMethod)
-                foreach (var argument in method.GetGenericArguments()) CaptureType(argument);
-            foreach (var parameter in method.GetParameters()) CaptureType(parameter.ParameterType);
-            if (method is MethodInfo info) CaptureType(info.ReturnType);
+            {
+                foreach (var argument in method.GetGenericArguments())
+                {
+                    CaptureType(argument);
+                }
+            }
+
+            foreach (var parameter in method.GetParameters())
+            {
+                CaptureType(parameter.ParameterType);
+            }
+
+            if (method is MethodInfo info)
+            {
+                CaptureType(info.ReturnType);
+            }
+
             if (methods.Add(method) && Path.GetDirectoryName(method.Module.Assembly.Location) != framework
                 && method.GetMethodBody() is { } body)
             {
-                foreach (var local in body.LocalVariables) CaptureType(local.LocalType);
+                foreach (var local in body.LocalVariables)
+                {
+                    CaptureType(local.LocalType);
+                }
+
                 foreach (var clause in body.ExceptionHandlingClauses)
-                    if (clause.Flags == ExceptionHandlingClauseOptions.Clause && clause.CatchType is { } caught) CaptureType(caught);
+                {
+                    if (clause.Flags == ExceptionHandlingClauseOptions.Clause && clause.CatchType is { } caught)
+                    {
+                        CaptureType(caught);
+                    }
+                }
+
                 foreach (var instruction in IlReader.Read(body.GetILAsByteArray()!).Instructions)
                 {
                     if (instruction.Op.OperandType is not (OperandType.InlineMethod or OperandType.InlineType
-                        or OperandType.InlineField or OperandType.InlineTok)) continue;
+                        or OperandType.InlineField or OperandType.InlineTok))
+                    {
+                        continue;
+                    }
+
                     var member = method.Module.ResolveMember(instruction.Operand.Token, method.DeclaringType?.GetGenericArguments(),
                         method.IsGenericMethod ? method.GetGenericArguments() : null);
                     switch (member)
@@ -101,35 +173,66 @@ public static class NativeCapture
                     }
                 }
             }
+
             return Identify(method);
         }
 
         void Visit(Assembly assembly)
         {
-            if (!visited.Add(assembly)) return;
+            if (!visited.Add(assembly))
+            {
+                return;
+            }
+
             var location = assembly.IsDynamic ? "" : assembly.Location;
-            if (location.Length != 0 && Path.GetDirectoryName(location) == framework) return;
+            if (location.Length != 0 && Path.GetDirectoryName(location) == framework)
+            {
+                return;
+            }
+
             byte[] image;
             var role = "reference";
             if (SessionAssemblies.TryGetDefinition(assembly, out var definition))
             {
                 image = definition.Image ?? throw new ReplException("a referenced dynamic cell requires retained source");
                 role = definition.Kind.ToString().ToLowerInvariant();
-                foreach (var dependency in definition.Dependencies) Visit(dependency.Assembly);
+                foreach (var dependency in definition.Dependencies)
+                {
+                    Visit(dependency.Assembly);
+                }
             }
-            else if (sourceResolver.TryGetImage(assembly, out var captured)) image = captured;
-            else if (ReferenceLoadContext.TryGetMappedImage(assembly, out var mapped)) image = mapped;
-            else if (location.Length != 0) image = File.ReadAllBytes(location);
-            else throw new ReplException($"no immutable image is available for '{assembly.FullName}'");
+            else if (sourceResolver.TryGetImage(assembly, out var captured))
+            {
+                image = captured;
+            }
+            else if (ReferenceLoadContext.TryGetMappedImage(assembly, out var mapped))
+            {
+                image = mapped;
+            }
+            else if (location.Length != 0)
+            {
+                image = File.ReadAllBytes(location);
+            }
+            else
+            {
+                throw new ReplException($"no immutable image is available for '{assembly.FullName}'");
+            }
+
             using (var pe = new PEReader(new MemoryStream(image, writable: false)))
             {
                 var reader = pe.GetMetadataReader();
                 if (reader.GetGuid(reader.GetModuleDefinition().Mvid) != assembly.ManifestModule.ModuleVersionId)
+                {
                     throw new ReplException($"dependency image '{assembly.FullName}' no longer matches the loaded module");
+                }
             }
+
             var name = assembly.FullName!;
             if (images.TryGetValue(name, out var previous) && !previous.Image.AsSpan().SequenceEqual(image))
+            {
                 throw new ReplException($"conflicting captured images for '{name}'");
+            }
+
             images[name] = new NativeAssembly { Name = name, Image = image, Role = role };
             if (knownBindings.TryGetValue(assembly, out var method))
             {
@@ -144,7 +247,11 @@ public static class NativeCapture
                 var owner = assembly.GetType("IlRepl.Cell")!;
                 foreach (var field in owner.GetFields(BindingFlags.Static | BindingFlags.NonPublic))
                 {
-                    if (field.GetValue(null) is not Delegate implementation) continue;
+                    if (field.GetValue(null) is not Delegate implementation)
+                    {
+                        continue;
+                    }
+
                     var callable = owner.GetMethod(field.Name[..^4], BindingFlags.Static | BindingFlags.Public)!;
                     bindings[name] = new NativeBinding
                     {
@@ -153,10 +260,14 @@ public static class NativeCapture
                     };
                 }
             }
+
             var context = AssemblyLoadContext.GetLoadContext(assembly);
             foreach (var reference in assembly.GetReferencedAssemblies())
             {
-                try { Visit(context?.LoadFromAssemblyName(reference) ?? Assembly.Load(reference)); }
+                try
+                {
+                    Visit(context?.LoadFromAssemblyName(reference) ?? Assembly.Load(reference));
+                }
                 catch (FileNotFoundException)
                 {
                     // Metadata can retain unused optional references; reached IL operands are resolved separately and must succeed.
@@ -169,14 +280,25 @@ public static class NativeCapture
         if (selected is not null)
         {
             if (selected.ContainsGenericParameters)
+            {
                 throw new ReplException("native inspection requires closed declaring-type and method generic arguments");
-            if (selected.GetMethodBody() is null) throw new ReplException("the selected method has no managed IL body");
+            }
+
+            if (selected.GetMethodBody() is null)
+            {
+                throw new ReplException("the selected method has no managed IL body");
+            }
         }
         else
         {
-            if (session.Cell.IsEmpty) throw new ReplException("there is no executable cell to inspect");
+            if (session.Cell.IsEmpty)
+            {
+                throw new ReplException("there is no executable cell to inspect");
+            }
+
             CellCompiler.RequireComplete(session);
         }
+
         var identity = selected is null ? null : CaptureMethod(selected);
         NativeMethodIdentity? scenario = null;
         if (options.Scenario is { } scenarioName)
@@ -184,16 +306,23 @@ public static class NativeCapture
             var workload = session.Methods.FirstOrDefault(method => method.Signature.Name == scenarioName)
                 ?? throw new ReplException($"no session scenario '{scenarioName}'");
             if (workload.Signature.Parameters.Count != 0)
+            {
                 throw new ReplException("a native scenario must be parameterless");
+            }
+
             scenario = CaptureMethod(workload.Version.Body);
             if (selected is not null)
             {
                 var rebound = NativeScenarioCapture.Create(session, workload.Version.Body, selected,
                     options with { Selector = options.Selector.Length == 0 ? selector : options.Selector }, CaptureMethod);
                 scenario = rebound.Scenario;
-                foreach (var image in rebound.Images) images.Add(image.Name, image);
+                foreach (var image in rebound.Images)
+                {
+                    images.Add(image.Name, image);
+                }
             }
         }
+
         if (cell || scenario is not null)
         {
             if (cell)
@@ -207,35 +336,70 @@ public static class NativeCapture
                         case ResolvedMethod { Method: { } method }: CaptureMethod(method); break;
                     }
                 }
-                foreach (var argument in session.Cell.Arguments) CaptureType(argument.Type);
-                foreach (var local in session.Cell.Locals) CaptureType(local.Type);
+
+                foreach (var argument in session.Cell.Arguments)
+                {
+                    CaptureType(argument.Type);
+                }
+
+                foreach (var local in session.Cell.Locals)
+                {
+                    CaptureType(local.Type);
+                }
             }
+
             foreach (var (name, type) in session.TypeTable.Entries)
             {
                 CaptureType(type);
                 types[name] = type.AssemblyQualifiedName!;
             }
-            foreach (var method in session.Methods) Visit(method.Trampoline.Definition.Assembly);
-            foreach (var (name, method) in session.TypeTable.MethodAliases) aliases[name] = CaptureMethod(method);
+
+            foreach (var method in session.Methods)
+            {
+                Visit(method.Trampoline.Definition.Assembly);
+            }
+
+            foreach (var (name, method) in session.TypeTable.MethodAliases)
+            {
+                aliases[name] = CaptureMethod(method);
+            }
         }
-        foreach (var type in session.TypeArguments ?? []) CaptureType(type);
+
+        foreach (var type in session.TypeArguments ?? [])
+        {
+            CaptureType(type);
+        }
+
         if (options.Run && scenario is null && selected is not null)
         {
-            if (!selected.IsStatic) throw new ReplException("instance execution requires using Scenario to construct the receiver");
+            if (!selected.IsStatic)
+            {
+                throw new ReplException("instance execution requires using Scenario to construct the receiver");
+            }
+
             var parameters = selected.GetParameters();
             if ((options.Arguments?.Length ?? 0) != parameters.Length)
+            {
                 throw new ReplException($"{selector} requires {parameters.Length} literal arguments or using Scenario");
+            }
+
             for (var index = 0; index < parameters.Length; index++)
+            {
                 _ = ValueLiteralParser.Parse(options.Arguments![index], parameters[index].ParameterType.IsByRef
                     ? parameters[index].ParameterType.GetElementType()! : parameters[index].ParameterType);
+            }
         }
+
         var resources = images.Values.ToDictionary(image => image.Name, image => new ComparisonAssembly(image.Name, image.Image)
         {
             OriginalLocation = visited.FirstOrDefault(assembly => assembly.FullName == image.Name && !assembly.IsDynamic)?.Location,
         }, StringComparer.OrdinalIgnoreCase);
         ComparisonCapture.CaptureSatellites(session, resources, sourceResolver);
         foreach (var resource in resources.Values)
+        {
             images.TryAdd(resource.Name, new NativeAssembly { Name = resource.Name, Image = resource.Image, Role = "reference" });
+        }
+
         var fingerprint = selected is null
             ? SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', session.DeclarationLines.Concat(session.BodyLines))))
             : SHA256.HashData(selected.GetMethodBody()!.GetILAsByteArray()!);

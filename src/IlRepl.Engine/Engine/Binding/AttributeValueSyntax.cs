@@ -100,5 +100,4 @@ internal static class AttributeValueSyntax
 
         return merged;
     }
-
 }

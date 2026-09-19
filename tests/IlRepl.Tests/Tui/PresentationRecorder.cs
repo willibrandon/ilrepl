@@ -43,10 +43,14 @@ internal sealed class PresentationRecorder : IHex1bTerminalPresentationFilter
     }
 
     /// <inheritdoc />
-    public ValueTask OnSessionStartAsync(int width, int height, DateTimeOffset timestamp, CancellationToken ct = default) => ValueTask.CompletedTask;
+    public ValueTask OnSessionStartAsync(int width, int height, DateTimeOffset timestamp, CancellationToken ct = default) =>
+        ValueTask.CompletedTask;
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlyList<AnsiToken>> OnOutputAsync(IReadOnlyList<AppliedToken> appliedTokens, TimeSpan elapsed, CancellationToken ct = default)
+    public ValueTask<IReadOnlyList<AnsiToken>> OnOutputAsync(
+        IReadOnlyList<AppliedToken> appliedTokens,
+        TimeSpan elapsed,
+        CancellationToken ct = default)
     {
         var tokens = appliedTokens.Select(t => t.Token).ToList();
         lock (_lock)
@@ -59,7 +63,8 @@ internal sealed class PresentationRecorder : IHex1bTerminalPresentationFilter
     }
 
     /// <inheritdoc />
-    public ValueTask OnInputAsync(IReadOnlyList<AnsiToken> tokens, TimeSpan elapsed, CancellationToken ct = default) => ValueTask.CompletedTask;
+    public ValueTask OnInputAsync(IReadOnlyList<AnsiToken> tokens, TimeSpan elapsed, CancellationToken ct = default) =>
+        ValueTask.CompletedTask;
 
     /// <inheritdoc />
     public ValueTask OnResizeAsync(int width, int height, TimeSpan elapsed, CancellationToken ct = default) => ValueTask.CompletedTask;

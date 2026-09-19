@@ -17,7 +17,11 @@ internal sealed class SessionCheckpointDeliveries
     internal string Register()
     {
         var identity = Guid.NewGuid().ToString("N");
-        lock (_gate) _documents.Add(identity, null);
+        lock (_gate)
+        {
+            _documents.Add(identity, null);
+        }
+
         return identity;
     }
 
@@ -27,10 +31,17 @@ internal sealed class SessionCheckpointDeliveries
     /// <param name="checkpoint">The expanded checkpoint received before acknowledging the host.</param>
     internal void Remember(SessionReply checkpoint)
     {
-        if (checkpoint.CheckpointDelivery is not { } identity) return;
+        if (checkpoint.CheckpointDelivery is not { } identity)
+        {
+            return;
+        }
+
         lock (_gate)
         {
-            if (_documents.ContainsKey(identity)) _documents[identity] = checkpoint.Document;
+            if (_documents.ContainsKey(identity))
+            {
+                _documents[identity] = checkpoint.Document;
+            }
         }
     }
 
@@ -42,11 +53,18 @@ internal sealed class SessionCheckpointDeliveries
     /// <returns>The complete public reply with transport correlation removed.</returns>
     internal SessionReply Resolve(SessionReply reply, string identity)
     {
-        if (reply.CheckpointDelivery is null) return reply;
+        if (reply.CheckpointDelivery is null)
+        {
+            return reply;
+        }
+
         lock (_gate)
         {
             if (reply.CheckpointDelivery != identity || !_documents.TryGetValue(identity, out var document) || document is null)
+            {
                 throw new HostProtocolException("the host returned an unacknowledged workspace document");
+            }
+
             return reply with { Document = document, CheckpointDelivery = null };
         }
     }
@@ -57,6 +75,9 @@ internal sealed class SessionCheckpointDeliveries
     /// <param name="identity">The completed request's registered identity.</param>
     internal void Forget(string identity)
     {
-        lock (_gate) _documents.Remove(identity);
+        lock (_gate)
+        {
+            _documents.Remove(identity);
+        }
     }
 }

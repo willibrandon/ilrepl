@@ -47,7 +47,12 @@ public sealed class DiagnosticExplanationTests
     [TestMethod]
     [DynamicData(nameof(TypedCases))]
     public async Task TypedOperand_ReportsExactConflictAndProducer(
-        string source, string role, int index, string expected, string givenType, int producer)
+        string source,
+        string role,
+        int index,
+        string expected,
+        string givenType,
+        int producer)
     {
         await using var engine = new InProcessEngine();
         var lines = source.Split('\n');
@@ -201,6 +206,7 @@ public sealed class DiagnosticExplanationTests
                 TestContext.CancellationToken);
             Assert.IsTrue(accepted.Succeeded, string.Join('\n', accepted.Lines.Select(line => line.PlainText)));
         }
+
         var refused = await engine.HandleSourceAsync(lines[failedLine], new("document", failedLine, 0, lines[failedLine].Length),
             TestContext.CancellationToken);
         Assert.IsFalse(refused.Succeeded);

@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
-using ILVerify;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
+using ILVerify;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
@@ -120,6 +120,7 @@ public sealed class NativeByRefCallTests
                 Assert.Contains(VerifierError.UnmanagedPointer, verifierErrors);
             }
         }
+
         Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error, diagnostics);
         Assert.Contains(diagnostic => diagnostic.Code == "FLOW007" && diagnostic.Kind == AnalysisDiagnosticKind.Unverifiable
             && diagnostic.Location.Offset == call.Offset, diagnostics);

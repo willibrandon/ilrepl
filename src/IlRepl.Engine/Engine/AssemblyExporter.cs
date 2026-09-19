@@ -84,12 +84,22 @@ public static class AssemblyExporter
     /// <param name="instrument">Adds invocation observation to the selected method before the image is written.</param>
     /// <param name="complete">Completes call-site instrumentation after all method bodies have been emitted.</param>
     /// <returns>The frozen comparison assembly.</returns>
-    internal static byte[] WriteComparison(Session session, MethodEdit edit, bool original,
-        Action<CecilWriter, MethodDefinition> instrument, Action<CecilWriter>? complete = null)
+    internal static byte[] WriteComparison(
+        Session session,
+        MethodEdit edit,
+        bool original,
+        Action<CecilWriter, MethodDefinition> instrument,
+        Action<CecilWriter>? complete = null)
         => WriteCore(session, "IlReplComparison", edit, original, instrument, complete: complete);
 
-    private static byte[] WriteCore(Session session, string assemblyName, MethodEdit? comparison, bool original,
-        Action<CecilWriter, MethodDefinition>? instrument, bool includeCell = true, Action<CecilWriter>? complete = null,
+    private static byte[] WriteCore(
+        Session session,
+        string assemblyName,
+        MethodEdit? comparison,
+        bool original,
+        Action<CecilWriter, MethodDefinition>? instrument,
+        bool includeCell = true,
+        Action<CecilWriter>? complete = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -99,6 +109,7 @@ public static class AssemblyExporter
         {
             CellCompiler.RequireComplete(session);
         }
+
         var writer = new CecilWriter(assemblyName);
         var trampolines = session.Methods.ToDictionary(m => m.Signature.Name, m => m.Trampoline, StringComparer.Ordinal);
         try

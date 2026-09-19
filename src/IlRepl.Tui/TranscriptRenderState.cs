@@ -23,7 +23,10 @@ internal sealed class TranscriptRenderState
     {
         var colors = (context.RenderContext.Theme.GetGlobalForeground(), context.RenderContext.Theme.GetGlobalBackground(),
             context.RenderContext.AmbientBackground, _paint);
-        if (_cached is { } cached && cached.Equals(colors)) return true;
+        if (_cached is { } cached && cached.Equals(colors))
+        {
+            return true;
+        }
 
         // A rejected hit paints the uncached observer and its whole styled subtree exactly once.
         _cached = (colors.Item1, colors.Item2, colors.Item3, _paint + 1);
@@ -36,7 +39,10 @@ internal sealed class TranscriptRenderState
     internal Hex1bWidget Build(CompositionContext context, TranscriptLineWidget source)
     {
         if (_content is { } existing && ReferenceEquals(existing.Line, source.Line)
-            && existing.Width == source.Width && existing.Flash == source.Flash) return existing.Widget;
+            && existing.Width == source.Width && existing.Flash == source.Flash)
+        {
+            return existing.Widget;
+        }
 
         var rows = source.Rows;
         var content = rows.Count == 1
@@ -56,7 +62,11 @@ internal sealed class TranscriptRenderState
     private static Hex1bWidget Row<TParent>(WidgetContext<TParent> context, IReadOnlyList<TranscriptSpan> spans)
         where TParent : Hex1bWidget
     {
-        if (spans.Count == 0) return context.Text("").Cached(static _ => false);
+        if (spans.Count == 0)
+        {
+            return context.Text("").Cached(static _ => false);
+        }
+
         if (spans.Count == 1 && spans[0].Style == SpanStyle.Default)
         {
             return context.Text(spans[0].Text).Cached(static _ => false);

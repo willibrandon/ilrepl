@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 
 namespace IlRepl.Engine;
@@ -193,7 +194,8 @@ public static class TypeNameFormatter
             // parameters: ilasm encodes the keyword form as a TypeSpec, which the runtime refuses for
             // a definition, and the bare form as the TypeRef the C# compiler writes.
             var definitionText = IlAsmDefinition(type);
-            return definitionText.StartsWith("class ", StringComparison.Ordinal) ? definitionText[6..] : definitionText.StartsWith("valuetype ", StringComparison.Ordinal) ? definitionText[10..] : definitionText;
+            return definitionText.StartsWith("class ", StringComparison.Ordinal) ? definitionText[6..]
+                : definitionText.StartsWith("valuetype ", StringComparison.Ordinal) ? definitionText[10..] : definitionText;
         }
 
         var full = IlAsmDefinition(type);
@@ -225,7 +227,7 @@ public static class TypeNameFormatter
     }
 
     /// <summary>
-    /// The ILAsm spelling of a type's definition, without generic arguments: <c>class [System.Collections]System.Collections.Generic.List`1</c>.
+    /// A type definition's ILAsm spelling without generic arguments: <c>class [System.Collections]System.Collections.Generic.List`1</c>
     /// </summary>
     /// <param name="type">The type, or an instantiation of it.</param>
     /// <returns>The reference text with its <c>class</c>/<c>valuetype</c> word.</returns>
@@ -276,7 +278,8 @@ public static class TypeNameFormatter
 
         // Reflection escapes the simple name but reports the namespace as the metadata has it.
         var name = IlAsmTypeName(Unescape(definition.Name));
-        return string.IsNullOrEmpty(definition.Namespace) ? name : string.Join(".", definition.Namespace.Split('.').Select(IlAsmIdentifier)) + "." + name;
+        return string.IsNullOrEmpty(definition.Namespace) ? name
+            : string.Join(".", definition.Namespace.Split('.').Select(IlAsmIdentifier)) + "." + name;
     }
 
     /// <summary>
@@ -329,7 +332,7 @@ public static class TypeNameFormatter
         return text.StartsWith("valuetype ", StringComparison.Ordinal) ? text[10..] : text;
     }
 
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, string> FacadeNames = new();
+    private static readonly ConcurrentDictionary<Type, string> FacadeNames = new();
 
     /// <summary>
     /// The assembly name ILAsm should reference for a type. A type that lives in

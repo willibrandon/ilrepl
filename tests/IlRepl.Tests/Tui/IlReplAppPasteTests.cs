@@ -85,7 +85,9 @@ public sealed class IlReplAppPasteTests
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(".method int32 Twice(int32 n) {\n  ldarg n\n  ldc.i4 2\n  mul\n  ret\n}\n");
         await auto.WaitUntilTextAsync("Enter sends 6 lines");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 5) == "  ...> }" && AppTest.CaretAt(s, 8, 5), description: "the block is in the editor with the caret at its end");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {"
+            && AppTest.PromptRow(s, 5) == "  ...> }" && AppTest.CaretAt(s, 8, 5),
+            description: "the block is in the editor with the caret at its end");
         Assert.IsEmpty(AppTest.Echoes(transcript), "nothing is sent by the paste itself");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("end of method Twice");
@@ -139,7 +141,8 @@ public sealed class IlReplAppPasteTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync("ldc.i4.1\n");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4.1" && !s.ContainsText("editing"), description: "one line, no blank line after it");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4.1" && !s.ContainsText("editing"),
+            description: "one line, no blank line after it");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("stack [int32]");
         Assert.DoesNotContain(l => l.Kind == LineKind.Result, transcript.Lines);
@@ -192,7 +195,8 @@ public sealed class IlReplAppPasteTests
         await auto.WaitUntilTextAsync("Enter sends 5 lines");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("end of method F");
-        Assert.AreSequenceEqual(["il[1]> .method int32 F() {", "il[1]>   ldc.i4 1", "il[1]>   ret", "il[1]> }"], AppTest.Echoes(transcript));
+        Assert.AreSequenceEqual(["il[1]> .method int32 F() {", "il[1]>   ldc.i4 1", "il[1]>   ret", "il[1]> }"],
+            AppTest.Echoes(transcript));
         Assert.DoesNotContain(l => l.Kind == LineKind.Error, transcript.Lines);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -293,7 +297,8 @@ public sealed class IlReplAppPasteTests
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(".method void F() {\n      nop\n\tret\n}\n");
         await auto.WaitUntilTextAsync("Enter sends 4 lines");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 1) == "  ...>       nop" && AppTest.PromptRow(s, 3) == "  ...> }", description: "six spaces stay six spaces");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 1) == "  ...>       nop" && AppTest.PromptRow(s, 3) == "  ...> }",
+            description: "six spaces stay six spaces");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("end of method F");
         Assert.AreSequenceEqual(["il[1]> .method void F() {", "il[1]>       nop", "il[1]> \tret", "il[1]> }"], AppTest.Echoes(transcript));
@@ -323,7 +328,8 @@ public sealed class IlReplAppPasteTests
         await auto.WaitUntilTextAsync("il[2]>");
         Assert.HasCount(1, transcript.Lines.Where(l => l.Kind == LineKind.Result).ToList());
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 0) == "il[2]> ldc.i4.1" && AppTest.PromptRow(s, 1) == "  ...>", description: "the entry comes back with its run line");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 0) == "il[2]> ldc.i4.1"
+            && AppTest.PromptRow(s, 1) == "  ...>", description: "the entry comes back with its run line");
         await auto.WaitUntilTextAsync("Enter sends 2 lines");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("il[3]>");

@@ -50,7 +50,8 @@ public sealed class PropertyEventTests
         var item = sized.GetProperty("Item")!;
         Assert.HasCount(1, item.GetIndexParameters());
         Assert.IsNull(item.SetMethod);
-        var instance = Run(session, "newobj instance void Sized::.ctor()", "dup", "ldc.i4 4", "call instance void Sized::set_Length(int32)")!;
+        var instance = Run(session, "newobj instance void Sized::.ctor()", "dup", "ldc.i4 4",
+            "call instance void Sized::set_Length(int32)")!;
         Assert.AreEqual(4, length.GetValue(instance));
         Assert.AreEqual(6, item.GetValue(instance, [3]));
     }
@@ -64,8 +65,14 @@ public sealed class PropertyEventTests
         var session = Load(
             ".class public Button {",
             ".field private class [System.Runtime]System.EventHandler _click",
-            ".method public specialname instance void add_Click(class [System.Runtime]System.EventHandler h) { ldarg.0; ldarg.0; ldfld class [System.Runtime]System.EventHandler Button::_click; ldarg h; call class [System.Runtime]System.Delegate [System.Runtime]System.Delegate::Combine(class [System.Runtime]System.Delegate, class [System.Runtime]System.Delegate); castclass [System.Runtime]System.EventHandler; stfld class [System.Runtime]System.EventHandler Button::_click; ret }",
-            ".method public specialname instance void remove_Click(class [System.Runtime]System.EventHandler h) { ldarg.0; ldarg.0; ldfld class [System.Runtime]System.EventHandler Button::_click; ldarg h; call class [System.Runtime]System.Delegate [System.Runtime]System.Delegate::Remove(class [System.Runtime]System.Delegate, class [System.Runtime]System.Delegate); castclass [System.Runtime]System.EventHandler; stfld class [System.Runtime]System.EventHandler Button::_click; ret }",
+            ".method public specialname instance void add_Click(class [System.Runtime]System.EventHandler h) { ldarg.0; ldarg.0; ldfld " +
+            "class [System.Runtime]System.EventHandler Button::_click; ldarg h; call class [System.Runtime]System.Delegate " +
+            "[System.Runtime]System.Delegate::Combine(class [System.Runtime]System.Delegate, class [System.Runtime]System.Delegate); " +
+            "castclass [System.Runtime]System.EventHandler; stfld class [System.Runtime]System.EventHandler Button::_click; ret }",
+            ".method public specialname instance void remove_Click(class [System.Runtime]System.EventHandler h) { ldarg.0; ldarg.0; " +
+            "ldfld class [System.Runtime]System.EventHandler Button::_click; ldarg h; call class [System.Runtime]System.Delegate " +
+            "[System.Runtime]System.Delegate::Remove(class [System.Runtime]System.Delegate, class [System.Runtime]System.Delegate); " +
+            "castclass [System.Runtime]System.EventHandler; stfld class [System.Runtime]System.EventHandler Button::_click; ret }",
             ".method public specialname instance void raise_Click(object s, class [System.Runtime]System.EventArgs e) { ret }",
             ".event [System.Runtime]System.EventHandler Click {",
             ".addon instance void Button::add_Click(class [System.Runtime]System.EventHandler)",

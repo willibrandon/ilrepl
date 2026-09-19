@@ -64,7 +64,11 @@ public sealed partial record PromptWidget
     }
 
     private static BorderWidget BuildPalette(
-        WidgetContext<VStackWidget> context, IReadOnlyList<CompletionItem> candidates, PromptState state, PromptFit fit, int width)
+        WidgetContext<VStackWidget> context,
+        IReadOnlyList<CompletionItem> candidates,
+        PromptState state,
+        PromptFit fit,
+        int width)
     {
         var rows = Math.Max(1, fit.PaletteRows);
         var first = Math.Clamp(state.SelectedIndex - (rows / 2), 0, Math.Max(0, candidates.Count - rows));

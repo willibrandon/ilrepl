@@ -27,7 +27,11 @@ public static partial class SessionSnapshotStore
     /// <param name="cacheDirectory">The local asset cache used for later recovery.</param>
     /// <param name="cancellationToken">Cancels preparation and writing before atomic replacement.</param>
     /// <returns>The absolute associated session path.</returns>
-    public static async Task<string> WriteAsync(string path, SessionDocument document, bool embed, string cacheDirectory,
+    public static async Task<string> WriteAsync(
+        string path,
+        SessionDocument document,
+        bool embed,
+        string cacheDirectory,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -47,6 +51,7 @@ public static partial class SessionSnapshotStore
         {
             await RememberLocatorsAsync(cacheDirectory, reference, cancellationToken).ConfigureAwait(false);
         }
+
         foreach (var asset in document.Assets)
         {
             await AtomicWriteAsync(Path.Combine(cacheDirectory, asset.Hash), asset.Image, cancellationToken).ConfigureAwait(false);
@@ -61,6 +66,7 @@ public static partial class SessionSnapshotStore
         {
             throw new IOException($"could not save session '{fullPath}': {exception.Message}", exception);
         }
+
         return fullPath;
     }
 

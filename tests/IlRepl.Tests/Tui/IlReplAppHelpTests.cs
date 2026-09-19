@@ -58,6 +58,7 @@ public sealed class IlReplAppHelpTests
                             .WaitAsync(AppTest.Timeout, ct).GetAwaiter().GetResult();
                         Assert.IsGreaterThan(previous, engine.AssemblyVersion);
                     }
+
                     Volatile.Write(ref publishedSequence, sequence);
                     if (active && sequence >= 3)
                     {
@@ -81,6 +82,7 @@ public sealed class IlReplAppHelpTests
                 await auto.WaitUntilAsync(snapshot => snapshot.Height == 8 && snapshot.ContainsText("il[1]> constr"),
                     description: "the compact viewport will require Tab to scroll to the documentation link");
             }
+
             var text = prompt.Text;
             var caret = prompt.Editor.Cursor.Position;
             var version = prompt.Editor.Document.Version;
@@ -119,8 +121,10 @@ public sealed class IlReplAppHelpTests
             catch (OperationCanceledException) when (terminalCancellation.IsCancellationRequested)
             {
             }
+
             await IlReplApp.SettleAsync(prompt);
         }
+
         Assert.IsEmpty(AppTest.Echoes(transcript));
     }
 
@@ -158,7 +162,10 @@ public sealed class IlReplAppHelpTests
             await auto.WaitUntilAsync(snapshot => snapshot.GetLine(0).StartsWith("help ·", StringComparison.Ordinal)
                 || snapshot.ContainsText("APPLICATION ERROR"));
             if (IlReplApp.FindNode<RescueNode>(app) is { HasError: true } rescue)
+            {
                 Assert.Fail(rescue.ErrorPhase + ": " + rescue.Exception);
+            }
+
             var undo = prompt.Editor.History.UndoCount;
             Assert.IsGreaterThan(0, undo);
 
@@ -184,8 +191,10 @@ public sealed class IlReplAppHelpTests
             catch (OperationCanceledException) when (terminalCancellation.IsCancellationRequested)
             {
             }
+
             await IlReplApp.SettleAsync(prompt);
         }
+
         Assert.IsEmpty(AppTest.Echoes(transcript));
     }
 
@@ -273,6 +282,7 @@ public sealed class IlReplAppHelpTests
         {
             await auto.WaitUntilAsync(_ => prompt.Help is { Scroll: > 0 }, description: "the help page scrolls");
         }
+
         await auto.TabAsync(ct: ct);
         await auto.WaitUntilAsync(snapshot => string.Concat(Enumerable.Range(0, snapshot.Height)
                 .Select(row => snapshot.GetLine(row).Trim())).Contains(

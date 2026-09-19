@@ -41,8 +41,11 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
         await auto.WaitUntilTextAsync("method F abandoned; the block is back in the editor");
         await auto.WaitUntilTextAsync("editing 6 lines");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...>   lcd.i4 2" && AppTest.CaretLine(s) == 2 && s.GetCell(9, AppTest.PromptTop(s) + 2).Background is not null && s.GetCell(9, AppTest.PromptTop(s) + 1).Background is null, description: "the refused line is selected and the caret is on it");
-        Assert.AreSequenceEqual(["il[1]> .method int32 F() {", "il[1]>   ldc.i4 1", "il[1]>   lcd.i4 2"], AppTest.Echoes(transcript), "nothing after the refused line was sent");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...>   lcd.i4 2" && AppTest.CaretLine(s) == 2
+            && s.GetCell(9, AppTest.PromptTop(s) + 2).Background is not null && s.GetCell(9, AppTest.PromptTop(s) + 1).Background is null,
+            description: "the refused line is selected and the caret is on it");
+        Assert.AreSequenceEqual(["il[1]> .method int32 F() {", "il[1]>   ldc.i4 1", "il[1]>   lcd.i4 2"], AppTest.Echoes(transcript),
+            "nothing after the refused line was sent");
         Assert.IsFalse(terminal.CreateSnapshot().ContainsText("method F │"), "the engine has no open method");
         Assert.AreEqual(0, engine.Status.OpenDepth);
 
@@ -77,13 +80,16 @@ public sealed class IlReplAppRecoveryTests
         await AppTest.TypeLinesAsync(auto, [".method int32 F() {", "ldstr \"wrong\"", "ret", "}"], ct);
         await auto.WaitUntilTextAsync("ret needs int32 on the stack but found string");
         await auto.WaitUntilTextAsync("method F abandoned; the block is back in the editor");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 4 lines") && AppTest.PromptRow(s, 2) == "  ...>   ret" && AppTest.PromptRow(s, 3) == "  ...> }" && AppTest.CaretLine(s) == 2 && !s.ContainsText("opcodes"), description: "the whole declaration is back with the refused line selected and no palette");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 4 lines") && AppTest.PromptRow(s, 2) == "  ...>   ret"
+            && AppTest.PromptRow(s, 3) == "  ...> }" && AppTest.CaretLine(s) == 2 && !s.ContainsText("opcodes"),
+            description: "the whole declaration is back with the refused line selected and no palette");
         var first = transcript.Lines.Where(l => l.Kind == LineKind.Error).Select(l => l.PlainText).ToList();
         Assert.HasCount(1, first);
         Assert.AreEqual(0, engine.Status.OpenDepth, "the refused method is gone from the engine");
 
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.Kind == LineKind.Error) == 2, description: "the resubmission is refused again");
+        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.Kind == LineKind.Error) == 2,
+            description: "the resubmission is refused again");
         var second = transcript.Lines.Where(l => l.Kind == LineKind.Error).Select(l => l.PlainText).ToList();
         Assert.AreEqual(first[0], second[1], "the same close error, from a clean state");
         Assert.HasCount(2, transcript.Lines.Where(l => l.PlainText.Contains("method F abandoned", StringComparison.Ordinal)).ToList());
@@ -110,7 +116,9 @@ public sealed class IlReplAppRecoveryTests
         await AppTest.TypeLinesAsync(auto, [".class C {", ".method public static int32 M() {", "lcd.i4 1", "ret", "}", "}"], ct);
         await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
         await auto.WaitUntilTextAsync("class C abandoned");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 0) == "il[1]> .class C {" && AppTest.PromptRow(s, 2) == "  ...>     lcd.i4 1" && AppTest.CaretLine(s) == 2, description: "the whole class is back with the refused line selected");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 0) == "il[1]> .class C {"
+            && AppTest.PromptRow(s, 2) == "  ...>     lcd.i4 1" && AppTest.CaretLine(s) == 2,
+            description: "the whole class is back with the refused line selected");
         Assert.IsFalse(terminal.CreateSnapshot().ContainsText("class C │"), "the engine has no open class");
         Assert.AreEqual(0, engine.Status.OpenDepth);
 
@@ -143,8 +151,10 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.CaretLine(s) == 2, description: "first refusal");
         await auto.TypeAsync("  ldc.i4 x", ct: ct);
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.PlainText.Contains("method F abandoned", StringComparison.Ordinal)) == 2, description: "second refusal");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 2) == "  ...>   ldc.i4 x" && AppTest.CaretLine(s) == 2, description: "the block is back again with the new bad line selected");
+        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.PlainText.Contains("method F abandoned",
+            StringComparison.Ordinal)) == 2, description: "second refusal");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 2) == "  ...>   ldc.i4 x"
+            && AppTest.CaretLine(s) == 2, description: "the block is back again with the new bad line selected");
         Assert.AreEqual(0, engine.Status.OpenDepth);
         await auto.TypeAsync("  ldc.i4 2", ct: ct);
         await auto.EnterAsync(ct: ct);
@@ -174,7 +184,8 @@ public sealed class IlReplAppRecoveryTests
         await AppTest.TypeLinesAsync(auto, s_typo, ct);
         await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.CaretLine(s) == 2, description: "the block is back");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && !s.ContainsText("editing"), description: "one Ctrl+C clears the returned block");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && !s.ContainsText("editing"),
+            description: "one Ctrl+C clears the returned block");
         Assert.IsFalse(run.IsCompleted);
         Assert.AreEqual(0, engine.Status.OpenDepth);
         await AppTest.TypeLinesAsync(auto, s_twice, ct);
@@ -205,14 +216,16 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilTextAsync("end of method F");
         await auto.WaitUntilNoTextAsync("editing");
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 2) == "  ...>   ldc.i4 2" && AppTest.PromptRow(s, 5) == "  ...> }", description: "the corrected block is the newest entry");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 2) == "  ...>   ldc.i4 2"
+            && AppTest.PromptRow(s, 5) == "  ...> }", description: "the corrected block is the newest entry");
         await auto.UpAsync(ct: ct);
         await auto.UpAsync(ct: ct);
         await auto.UpAsync(ct: ct);
         await auto.UpAsync(ct: ct);
         await auto.UpAsync(ct: ct);
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 2) == "  ...>   lcd.i4 2", description: "the refused block is the entry before it");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 2) == "  ...>   lcd.i4 2",
+            description: "the refused block is the entry before it");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -235,7 +248,8 @@ public sealed class IlReplAppRecoveryTests
         await AppTest.TypeLinesAsync(auto, ["ldc.i4 7"], ct);
         await auto.WaitUntilTextAsync("stack [int32]");
         await AppTest.TypeLinesAsync(auto, s_typo, ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && s.ContainsText("stack [int32]"), description: "the block is back and the value is still on the stack");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && s.ContainsText("stack [int32]"),
+            description: "the block is back and the value is still on the stack");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await AppTest.TypeLinesAsync(auto, ["ret"], ct);
         await auto.WaitUntilTextAsync("= 7 : int32");
@@ -263,9 +277,12 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilTextAsync("Enter sends 5 lines");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("threw System.DivideByZeroException");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]> nop" && !s.ContainsText("sending"), description: "the unsent line is back in the editor of the next cell");
-        Assert.AreSequenceEqual(["il[1]> ldc.i4 1", "il[1]> ldc.i4 0", "il[1]> div", "il[1]> ret"], AppTest.Echoes(transcript), "the cell ran; nothing after it was sent");
-        Assert.DoesNotContain(l => l.PlainText.Contains("withdrawn", StringComparison.Ordinal) || l.PlainText.Contains("abandoned", StringComparison.Ordinal), transcript.Lines, "a run cannot be withdrawn");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]> nop" && !s.ContainsText("sending"),
+            description: "the unsent line is back in the editor of the next cell");
+        Assert.AreSequenceEqual(["il[1]> ldc.i4 1", "il[1]> ldc.i4 0", "il[1]> div", "il[1]> ret"], AppTest.Echoes(transcript),
+            "the cell ran; nothing after it was sent");
+        Assert.DoesNotContain(l => l.PlainText.Contains("withdrawn", StringComparison.Ordinal)
+            || l.PlainText.Contains("abandoned", StringComparison.Ordinal), transcript.Lines, "a run cannot be withdrawn");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -292,7 +309,9 @@ public sealed class IlReplAppRecoveryTests
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
         await auto.WaitUntilTextAsync("the lines before '.undo' stayed applied");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 3 lines") && AppTest.PromptRow(s, 0) == "il[1]> lcd.i4 2" && AppTest.PromptRow(s, 2) == "  ...> }" && AppTest.CaretLine(s) == 0, description: "only the lines after .undo are back, the refused one selected");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 3 lines") && AppTest.PromptRow(s, 0) == "il[1]> lcd.i4 2"
+            && AppTest.PromptRow(s, 2) == "  ...> }" && AppTest.CaretLine(s) == 0,
+            description: "only the lines after .undo are back, the refused one selected");
         Assert.IsTrue(terminal.CreateSnapshot().ContainsText("method F │"), "the method is still open in the engine");
         Assert.AreEqual(1, engine.Status.OpenDepth);
 
@@ -330,7 +349,8 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilTextAsync("cancelling 5/6");
         engine.ReleaseReply();
         await auto.WaitUntilTextAsync("end of method Twice");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]>" && !s.ContainsText("cancelling"), description: "the block is done and the buffer is empty");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]>" && !s.ContainsText("cancelling"),
+            description: "the block is done and the buffer is empty");
         Assert.DoesNotContain(l => l.PlainText.Contains("abandoned", StringComparison.Ordinal), transcript.Lines);
         engine.Allow(3);
         await AppTest.TypeLinesAsync(auto, ["ldc.i4 4", "call int32 Twice(int32)", "ret"], ct);
@@ -359,7 +379,9 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilTextAsync("sending 3/6");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await auto.WaitUntilTextAsync("method Twice abandoned; the block is back in the editor");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 5) == "  ...> }", description: "the whole block is back");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines")
+            && AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 5) == "  ...> }",
+            description: "the whole block is back");
         Assert.AreEqual(0, engine.Status.OpenDepth);
         Assert.HasCount(3, engine.Handled);
 
@@ -385,14 +407,18 @@ public sealed class IlReplAppRecoveryTests
         await AppTest.TypeLinesAsync(auto, s_tryTypo, ct);
         await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
         await auto.WaitUntilTextAsync("lines withdrawn; the block is back in the editor");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 2) == "  ...>   lcd.i4 1" && AppTest.CaretLine(s) == 2 && !s.ContainsText("open block"), description: "the whole region is back and no region is open");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 2) == "  ...>   lcd.i4 1"
+            && AppTest.CaretLine(s) == 2 && !s.ContainsText("open block"), description: "the whole region is back and no region is open");
         Assert.AreEqual(0, engine.Status.OpenDepth);
         await auto.TypeAsync("  ldc.i4 1", ct: ct);
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Count == 9, description: "the corrected region is sent whole");
         await AppTest.TypeLinesAsync(auto, [".show"], ct);
-        await auto.WaitUntilAsync(_ => transcript.Lines.Any(l => l.Kind != LineKind.Input && l.PlainText.Contains(".try {", StringComparison.Ordinal)), description: ".show lists the region");
-        Assert.HasCount(1, transcript.Lines.Where(l => l.Kind != LineKind.Input && l.PlainText.Contains(".try {", StringComparison.Ordinal)).ToList(), "the region was accepted once");
+        await auto.WaitUntilAsync(_ => transcript.Lines.Any(l => l.Kind != LineKind.Input
+            && l.PlainText.Contains(".try {", StringComparison.Ordinal)), description: ".show lists the region");
+        Assert.HasCount(1,
+            transcript.Lines.Where(l => l.Kind != LineKind.Input && l.PlainText.Contains(".try {", StringComparison.Ordinal)).ToList(),
+            "the region was accepted once");
         Assert.AreEqual(0, engine.Status.OpenDepth);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -417,15 +443,19 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.CaretLine(s) == 2, description: "first refusal");
         await auto.TypeAsync("  ldc.i4 x", ct: ct);
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.PlainText.Contains("lines withdrawn", StringComparison.Ordinal)) == 2, description: "second refusal");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 2) == "  ...>   ldc.i4 x" && AppTest.CaretLine(s) == 2, description: "the region is back again");
+        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.PlainText.Contains("lines withdrawn", StringComparison.Ordinal)) == 2,
+            description: "second refusal");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 2) == "  ...>   ldc.i4 x"
+            && AppTest.CaretLine(s) == 2, description: "the region is back again");
         Assert.AreEqual(0, engine.Status.OpenDepth);
         await auto.TypeAsync("  ldc.i4 1", ct: ct);
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Count == 12, description: "the third attempt is sent whole");
         await AppTest.TypeLinesAsync(auto, [".show"], ct);
-        await auto.WaitUntilAsync(_ => transcript.Lines.Any(l => l.Kind != LineKind.Input && l.PlainText.Contains(".try {", StringComparison.Ordinal)), description: ".show lists the region");
-        Assert.HasCount(1, transcript.Lines.Where(l => l.Kind != LineKind.Input && l.PlainText.Contains(".try {", StringComparison.Ordinal)).ToList());
+        await auto.WaitUntilAsync(_ => transcript.Lines.Any(l => l.Kind != LineKind.Input
+            && l.PlainText.Contains(".try {", StringComparison.Ordinal)), description: ".show lists the region");
+        Assert.HasCount(1,
+            transcript.Lines.Where(l => l.Kind != LineKind.Input && l.PlainText.Contains(".try {", StringComparison.Ordinal)).ToList());
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -451,7 +481,8 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilTextAsync("1 open block");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await auto.WaitUntilTextAsync("lines withdrawn; the block is back in the editor");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && !s.ContainsText("open block"), description: "the region is back in the editor and gone from the cell");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && !s.ContainsText("open block"),
+            description: "the region is back in the editor and gone from the cell");
         Assert.AreEqual(0, engine.Status.OpenDepth);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -475,7 +506,9 @@ public sealed class IlReplAppRecoveryTests
         await AppTest.TypeLinesAsync(auto, [".locals init (int32 i)", "ldc.i4 5", "stloc i"], ct);
         await auto.WaitUntilTextAsync("1 local");
         await auto.WaitUntilTextAsync("stack []");
-        await AppTest.TypeLinesAsync(auto, [".try {", ".try {", "nop", "lcd.i4 1", "} finally {", "nop", "}", "} catch [System.Runtime]System.Exception {", "pop", "}"], ct);
+        await AppTest.TypeLinesAsync(auto,
+            [".try {", ".try {", "nop", "lcd.i4 1", "} finally {", "nop", "}", "} catch [System.Runtime]System.Exception {", "pop", "}"],
+            ct);
         await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
         await auto.WaitUntilAsync(s => s.ContainsText("editing 10 lines") && AppTest.PromptRow(s, 3) == "  ...>     lcd.i4 1"
             && AppTest.CaretLine(s) == 3 && s.ContainsText("1 local") && s.ContainsText("stack []") && !s.ContainsText("open block"),
@@ -485,7 +518,8 @@ public sealed class IlReplAppRecoveryTests
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Count == 17, description: "the corrected regions are sent whole");
         await AppTest.TypeLinesAsync(auto, [".show"], ct);
-        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.Kind != LineKind.Input && l.PlainText.Contains(".try {", StringComparison.Ordinal)) == 2, description: ".show lists both regions once");
+        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.Kind != LineKind.Input
+            && l.PlainText.Contains(".try {", StringComparison.Ordinal)) == 2, description: ".show lists both regions once");
         Assert.AreEqual(0, engine.Status.OpenDepth);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -518,14 +552,18 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilTextAsync("Enter sends 4 lines");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 4 lines") && AppTest.PromptRow(s, 0) == "il[1]> lcd.i4 1" && AppTest.CaretLine(s) == 0 && s.ContainsText("1 open block"), description: "the lines are back and the script's region is still open");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 4 lines") && AppTest.PromptRow(s, 0) == "il[1]> lcd.i4 1"
+            && AppTest.CaretLine(s) == 0 && s.ContainsText("1 open block"),
+            description: "the lines are back and the script's region is still open");
         Assert.AreEqual(1, engine.Status.OpenDepth);
         await auto.TypeAsync("ldc.i4 1", ct: ct);
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.Echoes(transcript).Count == 5 && !s.ContainsText("open block"), description: "the region closes");
+        await auto.WaitUntilAsync(s => AppTest.Echoes(transcript).Count == 5 && !s.ContainsText("open block"),
+            description: "the region closes");
         Assert.AreEqual(0, engine.Status.OpenDepth);
         await AppTest.TypeLinesAsync(auto, [".show"], ct);
-        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.Kind != LineKind.Input && l.PlainText.Contains(".try {", StringComparison.Ordinal)) == 1, description: ".show lists one region");
+        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.Kind != LineKind.Input
+            && l.PlainText.Contains(".try {", StringComparison.Ordinal)) == 1, description: ".show lists one region");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -551,12 +589,14 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilAsync(_ => engine.ReplyWaiting, description: "the closing brace has committed before its reply arrives");
         await auto.WaitUntilTextAsync("sending 5/6");
         await AppTest.TypeLinesAsync(auto, ["nop"], ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && s.ContainsText("sending 5/6"), description: "the line is queued behind the block");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && s.ContainsText("sending 5/6"),
+            description: "the line is queued behind the block");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await auto.WaitUntilTextAsync("cancelling 5/6");
         engine.ReleaseReply();
         await auto.WaitUntilTextAsync("end of method Twice");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]> nop" && !s.ContainsText("cancelling"), description: "the block stays and the queued line is back in the editor");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]> nop" && !s.ContainsText("cancelling"),
+            description: "the block stays and the queued line is back in the editor");
         Assert.HasCount(6, engine.Handled, "the queued line did not run");
         engine.Allow(1);
         await auto.EnterAsync(ct: ct);
@@ -586,8 +626,11 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilTextAsync("Enter sends 7 lines");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("threw System.NullReferenceException");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 0).EndsWith("> ldc.i4 42", StringComparison.Ordinal) && AppTest.PromptRow(s, 1) == "  ...> }", description: "the lines after the failed run are back");
-        Assert.DoesNotContain(l => l.PlainText.Contains("ldc.i4 42", StringComparison.Ordinal), transcript.Lines, "the lines after the run were never sent");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines")
+            && AppTest.PromptRow(s, 0).EndsWith("> ldc.i4 42", StringComparison.Ordinal) && AppTest.PromptRow(s, 1) == "  ...> }",
+            description: "the lines after the failed run are back");
+        Assert.DoesNotContain(l => l.PlainText.Contains("ldc.i4 42", StringComparison.Ordinal), transcript.Lines,
+            "the lines after the run were never sent");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -613,9 +656,11 @@ public sealed class IlReplAppRecoveryTests
         await auto.TypeAsync("  ldc.i4 2", ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...>   ldc.i4 2", description: "the correction replaced the line");
         await auto.Shift().KeyAsync(Hex1bKey.Home, ct: ct);
-        await auto.WaitUntilAsync(s => s.GetCell(9, AppTest.PromptTop(s) + 2).Background is not null && AppTest.CaretAt(s, 7, 2), description: "the corrected line is selected");
+        await auto.WaitUntilAsync(s => s.GetCell(9, AppTest.PromptTop(s) + 2).Background is not null && AppTest.CaretAt(s, 7, 2),
+            description: "the corrected line is selected");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
-        await auto.WaitUntilAsync(_ => recorder.Output.Contains("\x1b]52;c;", StringComparison.Ordinal), description: "the terminal is asked to copy");
+        await auto.WaitUntilAsync(_ => recorder.Output.Contains("\x1b]52;c;", StringComparison.Ordinal),
+            description: "the terminal is asked to copy");
         var payload = recorder.Output[(recorder.Output.LastIndexOf("\x1b]52;c;", StringComparison.Ordinal) + 7)..];
         payload = payload[..payload.IndexOfAny(['\x07', '\x1b'])];
         Assert.AreEqual("  ldc.i4 2", System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload)));
@@ -680,18 +725,21 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilTextAsync("sending 5/6");
         await auto.EnterAsync(ct: ct);
         await auto.TypeAsync("q", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q" && s.ContainsText("sending 5/6"), description: "the blank run is queued behind the block");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q" && s.ContainsText("sending 5/6"),
+            description: "the blank run is queued behind the block");
         await auto.BackspaceAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "the buffer is empty again");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await auto.WaitUntilTextAsync("cancelling 5/6");
         engine.ReleaseReply();
         await auto.WaitUntilTextAsync("end of method Twice");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]>" && !s.ContainsText("cancelling") && !s.ContainsText("editing"), description: "the block stays and the queued run is the empty buffer");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]>" && !s.ContainsText("cancelling") && !s.ContainsText("editing"),
+            description: "the block stays and the queued run is the empty buffer");
         Assert.HasCount(7, engine.Handled, "the queued run did not run behind the cancel");
         engine.Allow(1);
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilAsync(_ => transcript.Lines.Any(l => l.Kind == LineKind.Result), description: "Enter runs the cell that was waiting");
+        await auto.WaitUntilAsync(_ => transcript.Lines.Any(l => l.Kind == LineKind.Result),
+            description: "Enter runs the cell that was waiting");
         Assert.AreEqual("", engine.Handled[^1]);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -718,7 +766,8 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilTextAsync("Enter sends 8 lines");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 8 lines") && AppTest.PromptRow(s, 3) == "  ...>   lcd.i4 1" && AppTest.CaretLine(s) == 3 && !s.ContainsText("open block"), description: "the whole region is back and no region is open");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 8 lines") && AppTest.PromptRow(s, 3) == "  ...>   lcd.i4 1"
+            && AppTest.CaretLine(s) == 3 && !s.ContainsText("open block"), description: "the whole region is back and no region is open");
         Assert.AreEqual(0, engine.Status.OpenDepth);
         await auto.TypeAsync("  ldc.i4 1", ct: ct);
         await auto.WaitUntilTextAsync("Enter sends 8 lines");
@@ -726,7 +775,8 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Count == 12, description: "the corrected region is sent whole");
         Assert.HasCount(1, transcript.Lines.Where(l => l.Kind == LineKind.Error).ToList(), "only the first attempt was refused");
         await AppTest.TypeLinesAsync(auto, [".show"], ct);
-        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.Kind != LineKind.Input && l.PlainText.Contains(".try", StringComparison.Ordinal)) == 1, description: ".show lists the region once");
+        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.Kind != LineKind.Input
+            && l.PlainText.Contains(".try", StringComparison.Ordinal)) == 1, description: ".show lists the region once");
         Assert.AreEqual(0, engine.Status.OpenDepth);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -746,14 +796,16 @@ public sealed class IlReplAppRecoveryTests
         var transcript = new Transcript();
         var adapter = new ScriptedPresentationAdapter(100, 30);
         PromptState? prompt = null;
-        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, onPrompt: p => prompt = p).WithPresentation(adapter).Build();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, onPrompt: p => prompt = p)
+            .WithPresentation(adapter).Build();
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, ["lcd.i4 1"], ct);
         await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && prompt is { Busy: false, Text.Length: 0 }, description: "the prompt is empty");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && prompt is { Busy: false, Text.Length: 0 },
+            description: "the prompt is empty");
         await auto.UpAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> lcd.i4 1", description: "Up recalls the refused line");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
@@ -792,7 +844,8 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilTextAsync("Enter sends 6 lines");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 4) == "  ...>   lcd.i4 1" && AppTest.CaretLine(s) == 4 && !s.ContainsText("open block"), description: "the whole region is back and no region is open");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 4) == "  ...>   lcd.i4 1"
+            && AppTest.CaretLine(s) == 4 && !s.ContainsText("open block"), description: "the whole region is back and no region is open");
         Assert.AreEqual(0, engine.Status.OpenDepth);
         await auto.TypeAsync("  ldc.i4 1", ct: ct);
         await auto.WaitUntilTextAsync("Enter sends 6 lines");
@@ -800,7 +853,8 @@ public sealed class IlReplAppRecoveryTests
         await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Count == 11, description: "the corrected region is sent whole");
         Assert.HasCount(1, transcript.Lines.Where(l => l.Kind == LineKind.Error).ToList(), "only the first attempt was refused");
         await AppTest.TypeLinesAsync(auto, [".show"], ct);
-        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.Kind != LineKind.Input && l.PlainText.Contains(".try", StringComparison.Ordinal)) == 1, description: ".show lists the region once");
+        await auto.WaitUntilAsync(_ => transcript.Lines.Count(l => l.Kind != LineKind.Input
+            && l.PlainText.Contains(".try", StringComparison.Ordinal)) == 1, description: ".show lists the region once");
         Assert.AreEqual(0, engine.Status.OpenDepth);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -829,7 +883,8 @@ public sealed class IlReplAppRecoveryTests
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("method F abandoned");
         await auto.WaitUntilTextAsync("= 7 : int32");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]>" && transcript.Lines.Any(l => l.Kind == LineKind.Error), description: "the stray brace was refused on its own and the prompt is empty");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[2]>" && transcript.Lines.Any(l => l.Kind == LineKind.Error),
+            description: "the stray brace was refused on its own and the prompt is empty");
         Assert.AreEqual(0, engine.Status.OpenDepth);
         Assert.HasCount(1, transcript.Lines.Where(l => l.Kind == LineKind.Error).ToList(), "only the brace was refused");
 

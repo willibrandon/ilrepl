@@ -10,7 +10,11 @@ namespace IlRepl.Engine;
 /// </summary>
 public sealed class DefinitionAssembly
 {
-    internal DefinitionAssembly(Assembly assembly, SessionAssemblyKind kind, IReadOnlyList<DefinitionAssembly> dependencies, DefinitionLoadContext? context)
+    internal DefinitionAssembly(
+        Assembly assembly,
+        SessionAssemblyKind kind,
+        IReadOnlyList<DefinitionAssembly> dependencies,
+        DefinitionLoadContext? context)
     {
         Assembly = assembly;
         Kind = kind;

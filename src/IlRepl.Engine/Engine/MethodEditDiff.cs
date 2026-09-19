@@ -187,7 +187,11 @@ public static class MethodEditDiff
         return op + " " + operand;
     }
 
-    private static List<DiffInstruction> Metadata(DisassembledMethod listing, ImportedMethodFamily family, bool raw, bool originalSide,
+    private static List<DiffInstruction> Metadata(
+        DisassembledMethod listing,
+        ImportedMethodFamily family,
+        bool raw,
+        bool originalSide,
         string[]? anchors)
     {
         string Text(string text) => raw || originalSide ? text : family.NormalizeNames(text);

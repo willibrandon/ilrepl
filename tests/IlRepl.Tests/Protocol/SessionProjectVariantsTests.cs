@@ -62,7 +62,10 @@ public sealed class SessionProjectVariantsTests
             var sdk = (await RunSdkAsync(directory, ["msbuild", project, "-nologo", "-getProperty:MSBuildToolsPath"])).Trim();
             var packages = Directory.GetFiles(Path.Combine(sdk, "FSharp", "library-packs"), "FSharp.Core.*.nupkg");
             Assert.IsNotEmpty(packages, "The installed SDK must supply its compiler's matching FSharp.Core package.");
-            foreach (var package in packages) File.Copy(package, Path.Combine(fixture.FeedPath, Path.GetFileName(package)));
+            foreach (var package in packages)
+            {
+                File.Copy(package, Path.Combine(fixture.FeedPath, Path.GetFileName(package)));
+            }
         }
 
         await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
@@ -217,7 +220,10 @@ public sealed class SessionProjectVariantsTests
         {
             try
             {
-                if (int.TryParse(File.ReadAllText(marker), CultureInfo.InvariantCulture, out var pid)) started.TrySetResult(pid);
+                if (int.TryParse(File.ReadAllText(marker), CultureInfo.InvariantCulture, out var pid))
+                {
+                    started.TrySetResult(pid);
+                }
             }
             catch (IOException)
             {
@@ -250,8 +256,13 @@ public sealed class SessionProjectVariantsTests
         {
             File.WriteAllText(release, "release");
             await cancelled.CancelAsync();
-            try { await loading; }
-            catch (OperationCanceledException) { }
+            try
+            {
+                await loading;
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
     }
 
@@ -334,7 +345,11 @@ public sealed class SessionProjectVariantsTests
     {
         using var process = new Process { StartInfo = new ProcessStartInfo("dotnet") { WorkingDirectory = directory,
             RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false } };
-        foreach (var argument in arguments) process.StartInfo.ArgumentList.Add(argument);
+        foreach (var argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
         process.Start();
         var output = process.StandardOutput.ReadToEndAsync(TestContext.CancellationToken);
         var error = process.StandardError.ReadToEndAsync(TestContext.CancellationToken);

@@ -82,8 +82,13 @@ public sealed class NativeNormalizerTests
     [DataRow("Arm64", "x0", 0UL, true, false, false)]
     [DataRow("X64", "rax", 0x12345678UL, true, true, false)]
     [DataRow("X64", "rax", 0x12345678UL, null, false, false)]
-    public void Normalize_PointerReturnDistinguishesUnknownAddressFromNumericEvidence(string architecture, string register,
-        ulong value, bool? pointerReturn, bool literal, bool expectProblem)
+    public void Normalize_PointerReturnDistinguishesUnknownAddressFromNumericEvidence(
+        string architecture,
+        string register,
+        ulong value,
+        bool? pointerReturn,
+        bool literal,
+        bool expectProblem)
     {
         var move = $"    mov {register}, 0x{value:X}";
         var listing = Listing("Owner:Value", move + "\n    ret");
@@ -92,8 +97,14 @@ public sealed class NativeNormalizerTests
 
         Assert.Contains(move, normal.Lines);
         Assert.DoesNotContain(line => line.Contains('<'), normal.Lines);
-        if (expectProblem) Assert.AreEqual("unproven pointer use through " + register, Assert.ContainsSingle(normal.Problems));
-        else Assert.IsEmpty(normal.Problems);
+        if (expectProblem)
+        {
+            Assert.AreEqual("unproven pointer use through " + register, Assert.ContainsSingle(normal.Problems));
+        }
+        else
+        {
+            Assert.IsEmpty(normal.Problems);
+        }
     }
 
     /// <summary>

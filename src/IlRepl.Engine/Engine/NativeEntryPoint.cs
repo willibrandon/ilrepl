@@ -14,9 +14,17 @@ internal static class NativeEntryPoint
     /// <returns>The target cell address when the entry instructions establish it.</returns>
     internal static nint IndirectionCell(nint entry)
     {
-        if (entry == 0 || RuntimeInformation.ProcessArchitecture != Architecture.Arm64) return 0;
+        if (entry == 0 || RuntimeInformation.ProcessArchitecture != Architecture.Arm64)
+        {
+            return 0;
+        }
+
         var first = unchecked((uint)Marshal.ReadInt32(entry));
-        if ((first & 0xFF00001F) is not (0x5800000A or 0x5800000B)) return 0;
+        if ((first & 0xFF00001F) is not (0x5800000A or 0x5800000B))
+        {
+            return 0;
+        }
+
         var second = unchecked((uint)Marshal.ReadInt32(entry, 4));
         var third = (first & 31) == 10 ? unchecked((uint)Marshal.ReadInt32(entry, 8)) : 0;
         var offset = Arm64TargetOffset(first, second, third);

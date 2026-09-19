@@ -37,12 +37,14 @@ public static class ClauseLayout
             folded = false;
             foreach (var trailing in regions)
             {
-                if (trailing.Handlers.Count != 1 || trailing.Handlers[0].Kind is not (IlClauseKind.Finally or IlClauseKind.Fault) || trailing.Handlers[0].LexicalStart != trailing.TryEnd)
+                if (trailing.Handlers.Count != 1 || trailing.Handlers[0].Kind is not (IlClauseKind.Finally or IlClauseKind.Fault)
+                    || trailing.Handlers[0].LexicalStart != trailing.TryEnd)
                 {
                     continue;
                 }
 
-                var owner = regions.FirstOrDefault(r => !ReferenceEquals(r, trailing) && r.TryStart == trailing.TryStart && r.End == trailing.TryEnd);
+                var owner = regions.FirstOrDefault(r => !ReferenceEquals(r, trailing) && r.TryStart == trailing.TryStart
+                    && r.End == trailing.TryEnd);
                 if (owner is null)
                 {
                     continue;

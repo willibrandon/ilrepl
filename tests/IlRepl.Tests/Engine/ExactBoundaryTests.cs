@@ -37,7 +37,9 @@ public sealed class ExactBoundaryTests
     public async Task Edit_SameAssemblyExactSignaturesCopyOnlyRequiredMethodContext(string kind)
     {
         foreach (var copiedType in new[] { true, false })
+        {
             await CheckBoundary(kind, copiedType, separate: false);
+        }
     }
 
     /// <summary>
@@ -58,7 +60,9 @@ public sealed class ExactBoundaryTests
     public async Task Edit_ExactExternalBoundariesAreValidatedBeforeEmission(string kind)
     {
         foreach (var copiedType in new[] { true, false })
+        {
             await CheckBoundary(kind, copiedType, separate: true);
+        }
     }
 
     private async Task CheckBoundary(string kind, bool copiedType, bool separate)
@@ -76,7 +80,11 @@ public sealed class ExactBoundaryTests
             Assert.Contains(reference => reference.Name == helper.GetName().Name, assembly.GetReferencedAssemblies());
             Assert.Contains(reference => reference.Name == assembly.GetName().Name, helper.GetReferencedAssemblies());
         }
-        else Assert.AreSame(owner.Assembly, external.Assembly);
+        else
+        {
+            Assert.AreSame(owner.Assembly, external.Assembly);
+        }
+
         var original = owner.GetMethod("Read")!;
         Assert.AreEqual(42, original.Invoke(null, null));
         var edit = session.PrepareEdit("int32 [" + assembly.GetName().Name + "]Owner::Read()", "Copy");
@@ -111,9 +119,11 @@ public sealed class ExactBoundaryTests
                 Assert.AreSame(edit.Method.Module.Assembly, target.Module.Assembly);
                 Assert.AreNotSame(helper, target.Module.Assembly);
             }
+
             await AssertComparison(session, "42");
             AssertExports(session, edit, kind, copiedHelper, assembly, helper, 42);
         }
+
         var replacement = blocked ? ".method public static int32 Read() {\nldc.i4.s 43\nret\n}"
             : initialSource.Insert(initialSource.LastIndexOf("ret", StringComparison.Ordinal), "ldc.i4.1\nadd\n");
         session.CommitEdit(edit.Name, replacement);
@@ -132,6 +142,7 @@ public sealed class ExactBoundaryTests
             Assert.AreEqual(completion, session.CompletionRevision);
             Assert.AreEqual(43, edit.Method.Invoke(null, null));
         }
+
         await AssertComparison(session, "43");
         AssertExports(session, edit, kind, copiedHelper, assembly, helper, 43);
     }
@@ -160,15 +171,25 @@ public sealed class ExactBoundaryTests
         Assert.AreEqual(expected, returned.Value);
     }
 
-    private static void AssertExports(Session session, MethodEdit edit, string kind, bool copiedHelper,
-        Assembly source, Assembly helper, int expected)
+    private static void AssertExports(
+        Session session,
+        MethodEdit edit,
+        string kind,
+        bool copiedHelper,
+        Assembly source,
+        Assembly helper,
+        int expected)
     {
         session.AddLine("call Copy");
         var exports = new[] { AssemblyExporter.Write(session, "exact-boundary"), IlasmLocator.Assemble(session.ToIlAsm()) };
         session.ClearCell();
         foreach (var image in exports)
         {
-            if (copiedHelper) AssertCopiedSignature(image, edit.Method!.DeclaringType!.FullName!, kind);
+            if (copiedHelper)
+            {
+                AssertCopiedSignature(image, edit.Method!.DeclaringType!.FullName!, kind);
+            }
+
             var context = new AssemblyLoadContext("exact-boundary", isCollectible: true);
             context.Resolving += (_, name) => name.Name == source.GetName().Name ? source
                 : name.Name == helper.GetName().Name ? helper : null;

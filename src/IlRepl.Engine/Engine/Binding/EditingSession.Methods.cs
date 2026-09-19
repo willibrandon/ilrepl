@@ -26,6 +26,7 @@ public sealed partial class EditingSession
         {
             method = method.WithDefinition(prepared.Definition, null);
         }
+
         if (owner is not null)
         {
             var declaration = _state.Types.DeclarationOf(owner.Type)!;
@@ -175,5 +176,4 @@ public sealed partial class EditingSession
             throw new ReplException($"labels referenced but never defined: {string.Join(", ", pending)} (define with 'NAME:')");
         }
     }
-
 }

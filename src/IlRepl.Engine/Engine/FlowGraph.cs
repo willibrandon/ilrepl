@@ -74,8 +74,13 @@ internal sealed partial class FlowGraph<T> where T : class
     /// <param name="hasThis">Whether argument zero begins as the original receiver.</param>
     /// <param name="declaringType">The type that declares the analyzed method, or null.</param>
     /// <param name="tracksConstructorInitialization">Whether the method is a reference-type instance constructor.</param>
-    public FlowGraph(IReadOnlyList<FlowNode<T>> nodes, T objectType, bool complete = false, bool hasThis = false,
-        T? declaringType = null, bool tracksConstructorInitialization = false)
+    public FlowGraph(
+        IReadOnlyList<FlowNode<T>> nodes,
+        T objectType,
+        bool complete = false,
+        bool hasThis = false,
+        T? declaringType = null,
+        bool tracksConstructorInitialization = false)
     {
         Nodes = nodes;
         DeclaringType = declaringType;

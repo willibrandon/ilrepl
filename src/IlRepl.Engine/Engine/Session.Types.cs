@@ -25,7 +25,8 @@ public sealed partial class Session
     private OpenMemberBlock? _openMember;
     private PendingAccessorBlock? _openAccessor;
     private bool _rebuilding;
-    private readonly Dictionary<string, (TypeBuilder Prototype, OwnMembers Members, ModuleBuilder Module)> _predeclared = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (TypeBuilder Prototype, OwnMembers Members, ModuleBuilder Module)> _predeclared =
+        new(StringComparer.Ordinal);
     private readonly List<PendingFamily> _pendingFamilies = [];
     private readonly List<PendingMethod> _pendingMethods = [];
 
@@ -73,12 +74,15 @@ public sealed partial class Session
 
         foreach (var method in _openType.Methods)
         {
-            lines.Add("    .method " + method.Describe() + " { " + (method.Body is null ? "abstract" : method.Body.InstructionCount.ToString(CultureInfo.InvariantCulture) + " instructions") + " }");
+            lines.Add("    .method " + method.Describe() + " { "
+                + (method.Body is null ? "abstract" : method.Body.InstructionCount.ToString(CultureInfo.InvariantCulture)
+                + " instructions") + " }");
         }
 
         foreach (var accessor in _openType.Accessors)
         {
-            lines.Add("    ." + accessor.Word + " " + accessor.Name + " { " + string.Join(", ", accessor.Accessors.Select(a => a.Kind)) + " }");
+            lines.Add("    ." + accessor.Word + " " + accessor.Name + " { " + string.Join(", ", accessor.Accessors.Select(a => a.Kind))
+                + " }");
         }
 
         foreach (var nested in _openType.NestedTypes)
@@ -112,7 +116,8 @@ public sealed partial class Session
             words.Add("abstract");
         }
 
-        var name = block.Path + (block.TypeParameters.Count == 0 ? "" : "<" + string.Join(", ", block.TypeParameters.Select(p => p.Describe())) + ">");
+        var name = block.Path
+            + (block.TypeParameters.Count == 0 ? "" : "<" + string.Join(", ", block.TypeParameters.Select(p => p.Describe())) + ">");
         words.Add(name);
         if (block.BaseType is not null && block.BaseType != typeof(object))
         {
@@ -137,7 +142,8 @@ public sealed partial class Session
 
         var enclosing = _openType;
         var header = TypeHeaderParser.Parse(spec, nested: enclosing is not null);
-        if (enclosing is null && _types.Any(t => t.FullName == (header.Namespace.Length == 0 ? header.Name : header.Namespace + "." + header.Name)))
+        if (enclosing is null
+            && _types.Any(t => t.FullName == (header.Namespace.Length == 0 ? header.Name : header.Namespace + "." + header.Name)))
         {
             // A redefinition of an accepted family: allowed, validated at close (stage 5).
         }
@@ -147,7 +153,9 @@ public sealed partial class Session
         var names = header.GenericParameters.Select(p => p.Name).ToArray();
         if (enclosing is not null && names.Length < enclosingTotal && names.Length > 0)
         {
-            throw new ReplException($"a nested type redeclares its enclosing type's {enclosingTotal} generic parameter(s) first, then introduces its own (ECMA I.10.7.1)");
+            throw new ReplException(
+                $"a nested type redeclares its enclosing type's {enclosingTotal} generic parameter(s) first, then introduces its own " +
+                $"(ECMA I.10.7.1)");
         }
 
         // The arity suffix counts the parameters this type introduces; a nested type redeclares
@@ -161,22 +169,33 @@ public sealed partial class Session
         else if (names.Length > 0 && enclosing is not null)
         {
             var tick = header.Name.LastIndexOf('`');
-            if (header.ArityWritten && int.TryParse(header.Name[(tick + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var written) && written != introduced)
+            if (header.ArityWritten
+                && int.TryParse(header.Name[(tick + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var written)
+                && written != introduced)
             {
                 // The suffix counts introduced parameters; a nested type lists the enclosing ones first.
-                throw new ReplException($"{header.Name} declares {names.Length} generic parameter(s) but {enclosing.Path} already has {enclosingTotal}; a nested type redeclares the enclosing parameters first (ECMA I.10.7.1), so {header.Name} needs {enclosingTotal + written} parameters, or write {header.Name[..tick]}{(introduced == 0 ? "" : "`" + introduced.ToString(CultureInfo.InvariantCulture))} for the {introduced} it introduces");
+                throw new ReplException(
+                    $"{header.Name} declares {names.Length} generic parameter(s) but {enclosing.Path} already has {enclosingTotal}; a " +
+                    $"nested type redeclares the enclosing parameters first (ECMA I.10.7.1), so {header.Name} needs " +
+                    $"{enclosingTotal + written} parameters, or write " +
+                    $"{header.Name[..tick]}{(introduced == 0 ? "" : "`" + introduced.ToString(CultureInfo.InvariantCulture))} for the " +
+                    $"{introduced} it introduces");
             }
 
             name = introduced == 0 ? header.Name[..tick] : header.Name[..tick] + "`" + introduced.ToString(CultureInfo.InvariantCulture);
         }
 
-        if (enclosing is not null && (enclosing.NestedTypes.Any(n => n.Name == name) || enclosing.Placeholders.TryGetValue(name, out var placeholder) && placeholder.Builder.IsCreated()))
+        if (enclosing is not null
+            && (enclosing.NestedTypes.Any(n => n.Name == name) || enclosing.Placeholders.TryGetValue(name, out var placeholder)
+            && placeholder.Builder.IsCreated()))
         {
             throw new ReplException($"{enclosing.Path} already declares a nested type {name}");
         }
 
-        var predeclaredPath = enclosing is null ? (header.Namespace.Length == 0 ? name : header.Namespace + "." + name) : enclosing.Path + "/" + name;
-        (TypeBuilder Prototype, OwnMembers Members, ModuleBuilder Module)? predeclared = _predeclared.TryGetValue(predeclaredPath, out var declaredAhead) ? declaredAhead : null;
+        var predeclaredPath = enclosing is null ? (header.Namespace.Length == 0 ? name : header.Namespace + "." + name) : enclosing.Path
+            + "/" + name;
+        (TypeBuilder Prototype, OwnMembers Members, ModuleBuilder Module)? predeclared = _predeclared.TryGetValue(predeclaredPath,
+            out var declaredAhead) ? declaredAhead : null;
         TypeBuilder builder;
         if (predeclared is not null)
         {
@@ -186,10 +205,13 @@ public sealed partial class Session
         }
         else if (enclosing is not null && enclosing.Placeholders.Remove(name, out var forward))
         {
-            var declaredValue = header.Kind is TypeKind.Struct or TypeKind.Enum || header.BaseTypeText is not null && IsValueBase(header.BaseTypeText);
+            var declaredValue = header.Kind is TypeKind.Struct or TypeKind.Enum || header.BaseTypeText is not null
+                && IsValueBase(header.BaseTypeText);
             if (forward.IsValueType != declaredValue)
             {
-                throw new ReplException($"{enclosing.Path}/{name} was referenced as a {(forward.IsValueType ? "valuetype" : "class")} before its declaration but is declared as a {(declaredValue ? "struct" : "class")}; declare it first, or match the reference");
+                throw new ReplException(
+                    $"{enclosing.Path}/{name} was referenced as a {(forward.IsValueType ? "valuetype" : "class")} before its declaration " +
+                    $"but is declared as a {(declaredValue ? "struct" : "class")}; declare it first, or match the reference");
             }
 
             builder = forward.Builder;
@@ -242,7 +264,9 @@ public sealed partial class Session
             }
             else if (header.KindFromWord && kind is TypeKind.Struct or TypeKind.Enum)
             {
-                throw new ReplException($"a {(kind == TypeKind.Struct ? "value" : "enum")} type extends System.{(kind == TypeKind.Struct ? "ValueType" : "Enum")}, not {TypeNameFormatter.Pretty(baseType)}");
+                throw new ReplException(
+                    $"a {(kind == TypeKind.Struct ? "value" : "enum")} type extends " +
+                    $"System.{(kind == TypeKind.Struct ? "ValueType" : "Enum")}, not {TypeNameFormatter.Pretty(baseType)}");
             }
             else if (baseType.IsSealed && baseType is not TypeBuilder)
             {
@@ -254,7 +278,9 @@ public sealed partial class Session
             }
             else if (baseType.IsValueType && baseType is not TypeBuilder)
             {
-                throw new ReplException($"cannot extend {TypeNameFormatter.Pretty(baseType)}; a struct extends System.ValueType and an enum extends System.Enum");
+                throw new ReplException(
+                    $"cannot extend {TypeNameFormatter.Pretty(baseType)}; " +
+                    $"a struct extends System.ValueType and an enum extends System.Enum");
             }
         }
         else if (kind != TypeKind.Interface)
@@ -291,7 +317,9 @@ public sealed partial class Session
             throw new ReplException("an enum cannot implement interfaces");
         }
 
-        var scope = new AccessScope(builder, (kind == TypeKind.Struct ? "struct " : kind == TypeKind.Interface ? "interface " : kind == TypeKind.Enum ? "enum " : "class ") + path);
+        var scope = new AccessScope(builder,
+            (kind == TypeKind.Struct ? "struct " : kind == TypeKind.Interface ? "interface " : kind == TypeKind.Enum ? "enum " : "class ")
+            + path);
         if (baseType is not null)
         {
             MemberAccess.CheckType(baseType, scope, table);
@@ -375,7 +403,8 @@ public sealed partial class Session
     private static bool IsValueBase(string text)
     {
         var trimmed = text.Trim();
-        return trimmed.EndsWith("System.ValueType", StringComparison.Ordinal) || trimmed.EndsWith("System.Enum", StringComparison.Ordinal) || trimmed is "ValueType" or "Enum";
+        return trimmed.EndsWith("System.ValueType", StringComparison.Ordinal) || trimmed.EndsWith("System.Enum", StringComparison.Ordinal)
+            || trimmed is "ValueType" or "Enum";
     }
 
     private static string DisplayName(OpenTypeBlock block) =>
@@ -384,7 +413,9 @@ public sealed partial class Session
     private static ModuleBuilder NewPrototypeModule()
     {
         var id = Interlocked.Increment(ref s_prototypeCounter);
-        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("ilrepl.prototype.types" + id.ToString(CultureInfo.InvariantCulture)), OperatingSystem.IsBrowser() ? AssemblyBuilderAccess.Run : AssemblyBuilderAccess.RunAndCollect);
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("ilrepl.prototype.types"
+            + id.ToString(CultureInfo.InvariantCulture)),
+            OperatingSystem.IsBrowser() ? AssemblyBuilderAccess.Run : AssemblyBuilderAccess.RunAndCollect);
         return assembly.DefineDynamicModule("prototype");
     }
 
@@ -491,7 +522,9 @@ public sealed partial class Session
             return existing.Builder;
         }
 
-        var builder = target.Prototype.DefineNestedType(nested, TypeAttributes.NestedPublic | (valueType ? TypeAttributes.Sealed : TypeAttributes.Class), valueType ? typeof(ValueType) : typeof(object));
+        var builder = target.Prototype.DefineNestedType(nested,
+            TypeAttributes.NestedPublic | (valueType ? TypeAttributes.Sealed : TypeAttributes.Class),
+            valueType ? typeof(ValueType) : typeof(object));
         target.Placeholders[nested] = (builder, valueType);
         return builder;
     }
@@ -631,7 +664,8 @@ public sealed partial class Session
             case ".typeparams":
             case ".typeargs":
             case ".param":
-                throw new ReplException($"{directive} belongs in a method body; open one with .method inside {block.KindWord} {block.Path}");
+                throw new ReplException(
+                    $"{directive} belongs in a method body; open one with .method inside {block.KindWord} {block.Path}");
             case ".get":
             case ".set":
             case ".other":
@@ -644,10 +678,13 @@ public sealed partial class Session
             default:
                 if (directive.StartsWith('.'))
                 {
-                    throw new ReplException($"unknown directive '{directive}' inside a .class block; expected .field, .method, .property, .event, .class, .override, .pack, .size, or .custom");
+                    throw new ReplException(
+                        $"unknown directive '{directive}' inside a .class block; expected .field, .method, .property, .event, .class, " +
+                        $".override, .pack, .size, or .custom");
                 }
 
-                throw new ReplException($"instructions belong in a method body; {block.KindWord} {block.Path} is open (define a .method, or close it with }})");
+                throw new ReplException(
+                    $"instructions belong in a method body; {block.KindWord} {block.Path} is open (define a .method, or close it with }})");
         }
 
         block.Outermost.Lines.Add(line);
@@ -661,6 +698,7 @@ public sealed partial class Session
         {
             MemberAccess.CheckType(type, block.Scope, _typeTable);
         }
+
         if (block.Fields.Any(f => f.Name == field.Name))
         {
             throw new ReplException($"field {field.Name} is already declared on {block.Path}");
@@ -682,21 +720,24 @@ public sealed partial class Session
             {
                 if (field.IsStatic || !IsIntegral(field.Type))
                 {
-                    throw new ReplException("value__ must be an instance field of an integer type: .field public specialname rtspecialname int32 value__");
+                    throw new ReplException(
+                        "value__ must be an instance field of an integer type: .field public specialname rtspecialname int32 value__");
                 }
 
                 field = field with { Attributes = field.Attributes | FieldAttributes.SpecialName | FieldAttributes.RTSpecialName };
             }
             else if (!field.IsLiteral || field.Type != block.Prototype)
             {
-                throw new ReplException($"enum field {field.Name} must be 'public static literal valuetype {block.Path} {field.Name} = int32(N)'");
+                throw new ReplException(
+                    $"enum field {field.Name} must be 'public static literal valuetype {block.Path} {field.Name} = int32(N)'");
             }
         }
 
         var claimed = block.Members.Claim(field);
         if (claimed is null)
         {
-            var builder = block.Prototype.DefineField(field.Name, field.Type, [.. field.RequiredModifiers], [.. field.OptionalModifiers], field.Attributes);
+            var builder = block.Prototype.DefineField(field.Name, field.Type, [.. field.RequiredModifiers], [.. field.OptionalModifiers],
+                field.Attributes);
             if (field.Offset is { } offset)
             {
                 builder.SetOffset(offset);
@@ -748,7 +789,8 @@ public sealed partial class Session
     {
         if (!rest.Contains(" with ", StringComparison.Ordinal))
         {
-            throw new ReplException(".override T::M belongs inside the method that implements it (or use .override T::M with method ... at class level)");
+            throw new ReplException(
+                ".override T::M belongs inside the method that implements it (or use .override T::M with method ... at class level)");
         }
 
         var declaration = OverrideParser.ParseAtClassLevel(rest, TypeContext(block), line);
@@ -778,7 +820,8 @@ public sealed partial class Session
         }
 
         // A forward reference with this signature already has a builder; the header claims it.
-        var forward = block.Members.FindMethods(signature.Name).FirstOrDefault(m => !m.Declared && SameSignature(m.Signature, signature) && m.Signature.IsStatic == signature.IsStatic);
+        var forward = block.Members.FindMethods(signature.Name)
+            .FirstOrDefault(m => !m.Declared && SameSignature(m.Signature, signature) && m.Signature.IsStatic == signature.IsStatic);
         MethodBase builder;
         Type[] methodGenerics = [];
         if (forward.Builder is not null)
@@ -799,7 +842,9 @@ public sealed partial class Session
                 PrototypeAttributes(block.Prototype, signature), signature.CallingConvention);
             methodGenerics = generic.DefineGenericParameters([.. signature.TypeParameters.Select(p => p.Name)]);
             signature = MethodHeaderParser.ParseMember(rest, context, owner, out _, out _, out _, _ => methodGenerics);
-            generic.SetSignature(signature.ReturnType, [.. signature.ReturnRequiredModifiers], [.. signature.ReturnOptionalModifiers], signature.ParameterTypes, [.. signature.Parameters.Select(p => p.RequiredModifiers.ToArray())], [.. signature.Parameters.Select(p => p.OptionalModifiers.ToArray())]);
+            generic.SetSignature(signature.ReturnType, [.. signature.ReturnRequiredModifiers], [.. signature.ReturnOptionalModifiers],
+                signature.ParameterTypes, [.. signature.Parameters.Select(p => p.RequiredModifiers.ToArray())],
+                [.. signature.Parameters.Select(p => p.OptionalModifiers.ToArray())]);
             for (var i = 0; i < methodGenerics.Length; i++)
             {
                 var gp = (GenericTypeParameterBuilder)methodGenerics[i];
@@ -829,8 +874,10 @@ public sealed partial class Session
 
         block.Members.Add(signature, builder, declared: true);
         var isAbstract = signature.Attributes.HasFlag(MethodAttributes.Abstract);
-        var member = new MemberContext(block.Prototype, block.Header, signature.IsStatic ? null : block.ThisType, isAbstract, block.Path, block.KindWord);
-        var state = new CellState(Resolver, new GenericContext(block.GenericParameters, methodGenerics), Signatures(), signature, braceOpen, context.Types, member);
+        var member = new MemberContext(block.Prototype, block.Header, signature.IsStatic ? null : block.ThisType, isAbstract, block.Path,
+            block.KindWord);
+        var state = new CellState(Resolver, new GenericContext(block.GenericParameters, methodGenerics), Signatures(), signature, braceOpen,
+            context.Types, member);
         _openMember = new OpenMemberBlock { Signature = signature, Builder = builder, HeaderLine = line, State = state };
         var result = new LineResult(LineOutcome.MethodStart, null, "method " + signature.DescribeMember());
         if (closes)
@@ -899,13 +946,15 @@ public sealed partial class Session
         {
             if (entry.Kind == EntryKind.Param && entry.ParamIndex is > 0 and var index && entry.ParamHasDefault)
             {
-                parameters[index - 1] = parameters[index - 1] with { DefaultValue = entry.ParamDefault, HasDefault = true, Attributes = parameters[index - 1].Attributes | ParameterAttributes.HasDefault };
+                parameters[index - 1] = parameters[index - 1] with { DefaultValue = entry.ParamDefault, HasDefault = true,
+                    Attributes = parameters[index - 1].Attributes | ParameterAttributes.HasDefault };
             }
             else if (entry.Kind == EntryKind.Custom && entry.Custom is { } custom)
             {
                 if (entry.ParamIndex is > 0 and var target)
                 {
-                    parameters[target - 1] = parameters[target - 1] with { CustomAttributes = [.. parameters[target - 1].CustomAttributes, custom] };
+                    parameters[target - 1] = parameters[target - 1] with { CustomAttributes = [.. parameters[target - 1].CustomAttributes,
+                        custom] };
                 }
                 else if (entry.ParamIndex == 0)
                 {
@@ -918,8 +967,10 @@ public sealed partial class Session
             }
         }
 
-        var kept = signature with { Parameters = parameters, CustomAttributes = methodAttributes, ReturnCustomAttributes = returnAttributes };
-        var declaration = new MethodDeclaration(kept, [.. state.Overrides], member.HeaderLine, [.. member.BodyLines], state.Member is { IsAbstract: true } ? null : state);
+        var kept = signature with { Parameters = parameters, CustomAttributes = methodAttributes,
+            ReturnCustomAttributes = returnAttributes };
+        var declaration = new MethodDeclaration(kept, [.. state.Overrides], member.HeaderLine, [.. member.BodyLines],
+            state.Member is { IsAbstract: true } ? null : state);
         block.Methods.Add(declaration);
         block.Members.Add(kept, member.Builder, declared: true);
         _openMember = null;
@@ -999,7 +1050,9 @@ public sealed partial class Session
 
         if (!AccessorWords.Contains(directive))
         {
-            throw new ReplException($"only .get, .set, .other, .addon, .removeon, .fire, and .custom belong inside a {pending.Word} block; close it with }} first");
+            throw new ReplException(
+                $"only .get, .set, .other, .addon, .removeon, .fire, and .custom belong inside a {pending.Word} block; close it with }} " +
+                $"first");
         }
 
         var isProperty = pending.Property is not null;
@@ -1031,13 +1084,16 @@ public sealed partial class Session
         if (block.Placeholders.Count > 0)
         {
             var missing = block.Placeholders.Keys.First();
-            throw new ReplException($"{block.KindWord} {block.Path} closes but {block.Path}/{missing} was referenced and never declared (declare it before the closing brace)");
+            throw new ReplException(
+                $"{block.KindWord} {block.Path} closes but {block.Path}/{missing} was referenced and never declared (declare it before " +
+                $"the closing brace)");
         }
 
         var undeclared = block.Members.Undeclared.FirstOrDefault();
         if (undeclared is not null)
         {
-            throw new ReplException($"{block.KindWord} {block.Path} closes but {undeclared.DescribeMember()} was referenced and never declared");
+            throw new ReplException(
+                $"{block.KindWord} {block.Path} closes but {undeclared.DescribeMember()} was referenced and never declared");
         }
 
         var declaration = BuildDeclaration(block);
@@ -1068,7 +1124,11 @@ public sealed partial class Session
                     && m.Signature.Parameters.Select((parameter, index) => (parameter, index)).All(item => PropertyTypeEqual(
                         item.parameter.Type, item.parameter.ExactType, reference.ParameterTypes[item.index],
                         reference.ExactParameterTypes.ElementAtOrDefault(item.index))));
-                return match ?? throw new ReplException($"{pending.Word} {pending.Name} names .{reference.Kind} {reference.Name}({string.Join(", ", reference.ParameterTypes.Select(TypeNameFormatter.Pretty))}), which {block.Path} does not declare");
+                var named = string.Join(", ", reference.ParameterTypes.Select(TypeNameFormatter.Pretty));
+                return match
+                    ?? throw new ReplException(
+                        $"{pending.Word} {pending.Name} names .{reference.Kind} {reference.Name}({named}), " +
+                        $"which {block.Path} does not declare");
             }
 
             if (pending.Property is { } property)
@@ -1087,8 +1147,10 @@ public sealed partial class Session
             else
             {
                 var evt = pending.Event!;
-                var add = pending.Accessors.FirstOrDefault(a => a.Kind == "addon") ?? throw new ReplException($"event {evt.Name} needs .addon and .removeon");
-                var remove = pending.Accessors.FirstOrDefault(a => a.Kind == "removeon") ?? throw new ReplException($"event {evt.Name} needs .addon and .removeon");
+                var add = pending.Accessors.FirstOrDefault(a => a.Kind == "addon")
+                    ?? throw new ReplException($"event {evt.Name} needs .addon and .removeon");
+                var remove = pending.Accessors.FirstOrDefault(a => a.Kind == "removeon")
+                    ?? throw new ReplException($"event {evt.Name} needs .addon and .removeon");
                 var fire = pending.Accessors.FirstOrDefault(a => a.Kind == "fire");
                 events.Add(new EventDeclaration(evt.Name, evt.HandlerType, evt.Attributes, Find(add), Find(remove),
                     fire is null ? null : Find(fire), [.. pending.CustomAttributes], pending.HeaderLine, [.. pending.Lines])
@@ -1192,7 +1254,8 @@ public sealed partial class Session
         if (_rebuilding)
         {
             // The family is written with the rest of the group once every member has replayed.
-            _pendingFamilies.Add(new PendingFamily(declaration, block.FamilyTypes.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal), previous));
+            _pendingFamilies.Add(new PendingFamily(declaration,
+                block.FamilyTypes.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal), previous));
             _openType = null;
             return new LineResult(LineOutcome.TypeEnd, null, $"end of {block.KindWord} {block.Path}");
         }
@@ -1208,7 +1271,9 @@ public sealed partial class Session
 
         var compiled = CompileFamily(block, declaration, previous);
         PublishFamily(declaration, previous, compiled);
-        return new LineResult(LineOutcome.TypeEnd, null, previous is null ? $"end of {block.KindWord} {block.Path}" : $"replaced {block.KindWord} {block.Path} (existing instances keep the previous definition)");
+        return new LineResult(LineOutcome.TypeEnd, null,
+            previous is null ? $"end of {block.KindWord} {block.Path}"
+            : $"replaced {block.KindWord} {block.Path} (existing instances keep the previous definition)");
     }
 
     /// <summary>
@@ -1216,7 +1281,12 @@ public sealed partial class Session
     /// prepared as new identities, and the cell is rebuilt against them; nothing the session
     /// holds changes.
     /// </summary>
-    private (CompiledFamily Family, TypeTable Table, CellState Cell, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> Prototypes) CompileFamily(OpenTypeBlock block, TypeDeclaration declaration, SessionType? previous)
+    private (
+        CompiledFamily Family, TypeTable Table, CellState Cell, IReadOnlyDictionary<string, (
+            TypeBuilder Prototype, OwnMembers Members)> Prototypes) CompileFamily(
+        OpenTypeBlock block,
+        TypeDeclaration declaration,
+        SessionType? previous)
     {
         var prototypes = block.FamilyTypes.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
         var trampolines = _methods.ToDictionary(m => m.Signature.Name, m => m.Trampoline, StringComparer.Ordinal);
@@ -1244,7 +1314,9 @@ public sealed partial class Session
         catch (ReplException ex)
         {
             SessionAssemblies.Release(compiled.Definition);
-            throw new ReplException($"cannot {(previous is null ? "define" : "redefine")} {block.KindWord} {block.Path}: the cell body would no longer compile: {ex.Message}  (.clear the cell first)", ex);
+            throw new ReplException(
+                $"cannot {(previous is null ? "define" : "redefine")} {block.KindWord} {block.Path}: the cell body would no longer " +
+                $"compile: {ex.Message}  (.clear the cell first)", ex);
         }
 
         return (compiled, table, cell, prototypes);
@@ -1253,12 +1325,17 @@ public sealed partial class Session
     /// <summary>
     /// Phase B of a family commit: record swaps only.
     /// </summary>
-    private void PublishFamily(TypeDeclaration declaration, SessionType? previous, (CompiledFamily Family, TypeTable Table, CellState Cell, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> Prototypes) compiled)
+    private void PublishFamily(
+        TypeDeclaration declaration,
+        SessionType? previous,
+        (CompiledFamily Family, TypeTable Table, CellState Cell, IReadOnlyDictionary<string, (
+            TypeBuilder Prototype, OwnMembers Members)> Prototypes) compiled)
     {
         Submissions++;
         Generation++;
         CompletionRevision++;
-        var accepted = new SessionType(declaration, compiled.Family.Types, compiled.Family.Types[declaration.FullName], compiled.Family.Definition, compiled.Prototypes) { Order = Submissions };
+        var accepted = new SessionType(declaration, compiled.Family.Types, compiled.Family.Types[declaration.FullName],
+            compiled.Family.Definition, compiled.Prototypes) { Order = Submissions };
         var index = previous is null ? -1 : _types.IndexOf(previous);
         if (index < 0)
         {
@@ -1367,7 +1444,8 @@ public sealed partial class Session
         foreach (var attribute in attributes)
         {
             yield return attribute.AttributeType;
-            var values = attribute.FixedArguments.Concat(attribute.NamedFields.Select(f => f.Value)).Concat(attribute.NamedProperties.Select(p => p.Value));
+            var values = attribute.FixedArguments.Concat(attribute.NamedFields.Select(f => f.Value))
+                .Concat(attribute.NamedProperties.Select(p => p.Value));
             foreach (var value in values)
             {
                 if (value is Type type)
@@ -1395,7 +1473,8 @@ public sealed partial class Session
             return true;
         }
 
-        return body.Entries.Any(e => e.Instruction?.Operand is ResolvedMethod { Definition: { } definition } && methods.Contains(definition.Name));
+        return body.Entries.Any(e => e.Instruction?.Operand is ResolvedMethod { Definition: { } definition }
+            && methods.Contains(definition.Name));
     }
 
     private static bool Mentions(Type? type, IReadOnlySet<Type> types)

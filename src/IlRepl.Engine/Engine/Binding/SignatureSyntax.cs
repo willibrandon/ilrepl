@@ -12,5 +12,8 @@ namespace IlRepl.Engine.Binding;
 /// <param name="ReturnType">The return type.</param>
 /// <param name="Parameters">The parameter types, the vararg sentinel excluded.</param>
 /// <param name="SentinelIndex">The index in <paramref name="Parameters"/> before which <c>...</c> was written, or null.</param>
-public sealed record SignatureSyntax(IReadOnlyList<string> ConventionWords, TypeSyntax ReturnType, IReadOnlyList<TypeSyntax> Parameters,
+public sealed record SignatureSyntax(
+    IReadOnlyList<string> ConventionWords,
+    TypeSyntax ReturnType,
+    IReadOnlyList<TypeSyntax> Parameters,
     int? SentinelIndex);

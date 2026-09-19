@@ -35,8 +35,12 @@ internal static partial class PackageResolver
     /// <param name="cancellationToken">Cancels restore and asset reads.</param>
     /// <param name="diagnostics">Receives successful restore warnings for display by the caller.</param>
     /// <returns>A candidate source document containing the successful verified graph.</returns>
-    internal static async Task<SessionDocument> ResolveAsync(SessionDocument document, string? request, string directory,
-        ICollection<string>? diagnostics, CancellationToken cancellationToken)
+    internal static async Task<SessionDocument> ResolveAsync(
+        SessionDocument document,
+        string? request,
+        string directory,
+        ICollection<string>? diagnostics,
+        CancellationToken cancellationToken)
     {
         _ = Credentials.Value;
         var roots = document.References.Where(reference => reference.Origin == "package" && reference.RequestedVersion is not null)
@@ -112,6 +116,7 @@ internal static partial class PackageResolver
             {
                 await graphStream.CopyToAsync(graphFile, cancellationToken).ConfigureAwait(false);
             }
+
             var info = new TargetFrameworkInformation
             {
                 FrameworkName = framework, RuntimeIdentifierGraphPath = graphPath,
@@ -221,13 +226,21 @@ internal static partial class PackageResolver
                 });
             }
 
-            if (recordedLock is not null) ValidateLockedPackages(recordedLock, result.LockFile, framework);
+            if (recordedLock is not null)
+            {
+                ValidateLockedPackages(recordedLock, result.LockFile, framework);
+            }
+
             await result.CommitAsync(logger, cancellationToken).ConfigureAwait(false);
             if (recordedLock is not null)
             {
                 MergeLockedTargets(lockPath, recordedLock, roots, framework, runtime, platformChange);
-                if (platformChange) diagnostics?.Add("restored locked package versions for " + runtime);
+                if (platformChange)
+                {
+                    diagnostics?.Add("restored locked package versions for " + runtime);
+                }
             }
+
             if (omittedVersion && requestedId is not null)
             {
                 var selectedVersion = references.Single(reference => reference.Request.Equals(requestedId,
@@ -243,7 +256,11 @@ internal static partial class PackageResolver
                 PackagesLockFileFormat.Write(lockPath, pinnedLock);
             }
 
-            foreach (var message in logger.Messages.Distinct(StringComparer.Ordinal)) diagnostics?.Add(message);
+            foreach (var message in logger.Messages.Distinct(StringComparer.Ordinal))
+            {
+                diagnostics?.Add(message);
+            }
+
             var packageLock = await File.ReadAllTextAsync(lockPath, cancellationToken).ConfigureAwait(false);
             var entries = document.Entries.ToList();
             if (requestedId is not null && !entries.Any(entry => entry.Kind == SessionEntryKind.Reference

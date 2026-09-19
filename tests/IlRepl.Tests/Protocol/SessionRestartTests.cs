@@ -28,6 +28,7 @@ public sealed class SessionRestartTests
             var reply = await controller.HandleAsync(line, token);
             Assert.IsTrue(reply.Succeeded, string.Join('\n', reply.Lines.Select(item => item.PlainText)));
         }
+
         Assert.IsTrue((await controller.HandleAsync(".quiet on", token)).Succeeded);
         Assert.IsTrue((await controller.HandleAsync(".time on", token)).Succeeded);
         controller.Editor = new SessionEditor { Lines = ["// retained draft"], Caret = 5, Anchor = 2 };
@@ -66,6 +67,7 @@ public sealed class SessionRestartTests
                 entered.SetResult();
                 await permit.Task.WaitAsync(ct);
             }
+
             return new InProcessEngine();
         });
         controller.Editor = new SessionEditor { Lines = [".class KeepThis {"], Caret = 3, Anchor = 3 };

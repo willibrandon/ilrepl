@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
@@ -59,7 +61,7 @@ internal static class OverrideBinding
             {
                 ExactType = reference.ExactParameterTypes.ElementAtOrDefault(index),
             })],
-            Attributes = reference.IsStatic ? System.Reflection.MethodAttributes.Static : System.Reflection.MethodAttributes.PrivateScope,
+            Attributes = reference.IsStatic ? MethodAttributes.Static : MethodAttributes.PrivateScope,
         };
         var target = Resolve(text[..separator].Trim(), scope, body);
         if (!SignatureSymbolIdentity.Equal(target.Method, body))

@@ -14,14 +14,22 @@ public sealed partial class HostServer
 
     private void PublishCheckpoint(bool executing)
     {
-        if (_client is not { } client) return;
+        if (_client is not { } client)
+        {
+            return;
+        }
+
         var document = _core.CaptureSession(new SessionEditor());
         if (_lastCheckpoint is { } previous)
         {
             _checkpointDirty |= !previous.Entries.SequenceEqual(document.Entries)
                 || !previous.Cells.SequenceEqual(document.Cells) || !previous.References.SequenceEqual(document.References);
         }
-        else _checkpointDirty = document.Entries.Length != 0;
+        else
+        {
+            _checkpointDirty = document.Entries.Length != 0;
+        }
+
         var checkpoint = new SessionReply
         {
             Document = document, Path = _checkpointPath, Dirty = _checkpointDirty,
@@ -36,7 +44,11 @@ public sealed partial class HostServer
 
     private async Task PublishWorkspaceAsync(SessionReply workspace, CancellationToken cancellationToken)
     {
-        if (_client is not { } client) return;
+        if (_client is not { } client)
+        {
+            return;
+        }
+
         _checkpointPath = workspace.Path;
         _checkpointDirty = workspace.Dirty;
         _lastCheckpoint = workspace.Document;

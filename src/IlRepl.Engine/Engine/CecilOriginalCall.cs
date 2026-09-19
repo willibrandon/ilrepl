@@ -30,7 +30,11 @@ internal static class CecilOriginalCall
         {
             var copy = new ParameterDefinition(parameter.Name, (ParameterAttributes)parameter.Attributes,
                 writer.Import(parameter.ParameterType));
-            if (parameter.HasDefaultValue) copy.Constant = parameter.RawDefaultValue;
+            if (parameter.HasDefaultValue)
+            {
+                copy.Constant = parameter.RawDefaultValue;
+            }
+
             target.Parameters.Add(copy);
         }
 

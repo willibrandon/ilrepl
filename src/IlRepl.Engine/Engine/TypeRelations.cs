@@ -281,7 +281,8 @@ public static class TypeRelations
 
             var element = from.GetElementType()!;
             var wanted = to.GetGenericArguments()[0];
-            return TypeIdentity.Equal(element, wanted) || (!element.IsValueType && !wanted.IsValueType && IsAssignable(element, wanted, types));
+            return TypeIdentity.Equal(element, wanted)
+                || (!element.IsValueType && !wanted.IsValueType && IsAssignable(element, wanted, types));
         }
 
         if (from.HasElementType || to.HasElementType)

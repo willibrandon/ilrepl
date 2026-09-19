@@ -60,6 +60,7 @@ public static class ExactBoundaryFixture
                 default, default, 0, default);
             external = metadata.AddTypeReference(other, default, metadata.GetOrAddString(helperOnly ? "Owner" : "External"));
         }
+
         var nominal = otherName is null ? copiedType ? (byte)8 : (byte)12
             : copiedType != helperOnly ? (byte)8 : (byte)9;
         byte[] signature = kind switch
@@ -94,7 +95,10 @@ public static class ExactBoundaryFixture
             if (parameter)
             {
                 read.LoadConstantI4(kind == "parameter-modifier" ? 42 : 0);
-                if (kind != "parameter-modifier") read.OpCode(ILOpCode.Conv_u);
+                if (kind != "parameter-modifier")
+                {
+                    read.OpCode(ILOpCode.Conv_u);
+                }
             }
 
             read.Call(otherName is null || helperOnly ? MetadataTokens.MethodDefinitionHandle(helperOnly ? 1 : 2)
@@ -112,9 +116,14 @@ public static class ExactBoundaryFixture
             metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.Static, MethodImplAttributes.IL,
                 metadata.GetOrAddString("Read"), Blob([0, 0, 8]), bodies.AddMethodBody(read), MetadataTokens.ParameterHandle(1));
         }
+
         var helper = new InstructionEncoder(new BlobBuilder());
         helper.LoadConstantI4(functionReturn ? 0 : 42);
-        if (functionReturn) helper.OpCode(ILOpCode.Conv_u);
+        if (functionReturn)
+        {
+            helper.OpCode(ILOpCode.Conv_u);
+        }
+
         helper.OpCode(ILOpCode.Ret);
         if (otherName is null || helperOnly)
         {
@@ -122,6 +131,7 @@ public static class ExactBoundaryFixture
                 metadata.GetOrAddString("Transfer"), Blob(helperSignature), bodies.AddMethodBody(helper),
                 MetadataTokens.ParameterHandle(1));
         }
+
         var pe = new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
             new MetadataRootBuilder(metadata), bodies.Builder, flags: CorFlags.ILOnly);
         var image = new BlobBuilder();

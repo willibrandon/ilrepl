@@ -12,9 +12,14 @@ namespace IlRepl.Protocol;
 /// <param name="DeclarationLines">How many declaration lines the cell held.</param>
 /// <param name="OpenMethodLines">How many body lines the open <c>.method</c> block held, or null when none was open.</param>
 /// <param name="OpenTypeLines">How many lines the open <c>.class</c> family held, or null when none was open.</param>
-/// <param name="EchoStack">Whether the stack was echoed after each line when the mark was taken; a toggle inside a withdrawn block is undone with it.</param>
+/// <param name="EchoStack">
+/// Whether the stack was echoed after each line when the mark was taken; a toggle inside a withdrawn block is undone with it.
+/// </param>
 /// <param name="ShowTiming">Whether run timings were shown when the mark was taken.</param>
-/// <param name="BraceSeen">For an open method, whether its opening brace had been seen when the mark was taken; a header still waiting for its brace is put back to waiting.</param>
+/// <param name="BraceSeen">
+/// For an open method, whether its opening brace had been seen when the mark was taken; a header still waiting for its brace is put back to
+/// waiting.
+/// </param>
 /// <param name="InBlockComment">Whether a <c>/*</c> comment was open.</param>
 public sealed record SessionMark(
     long Generation,

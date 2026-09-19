@@ -26,7 +26,8 @@ public sealed class FileHistoryStoreTests
     [TestMethod]
     public void Format_Parse_RoundTripsMultiLineEntry()
     {
-        var record = FileHistoryStore.Format(".method int32 F() {\n  ldc.i4 1\n  ret\n}", new DateTimeOffset(2026, 9, 7, 10, 30, 15, TimeSpan.Zero));
+        var record = FileHistoryStore.Format(".method int32 F() {\n  ldc.i4 1\n  ret\n}",
+            new DateTimeOffset(2026, 9, 7, 10, 30, 15, TimeSpan.Zero));
         Assert.AreEqual("\n# 2026-09-07 10:30:15.000000\n+.method int32 F() {\n+  ldc.i4 1\n+  ret\n+}\n", record);
         Assert.AreSequenceEqual([".method int32 F() {\n  ldc.i4 1\n  ret\n}"], FileHistoryStore.Parse(record));
     }
@@ -37,7 +38,9 @@ public sealed class FileHistoryStoreTests
     [TestMethod]
     public void Parse_PgcliFile()
     {
-        const string content = "\n# 2025-01-01 09:00:00.000000\n+select 1;\n\n# 2025-01-01 09:00:05.123456\n+select *\n+from t\n+where x = 1;\n\n# 2025-01-01 09:01:00.000000\n+\\d t\n";
+        const string content =
+            "\n# 2025-01-01 09:00:00.000000\n+select 1;\n\n# 2025-01-01 09:00:05.123456\n+select *\n+from t\n+where x = 1;\n\n# " +
+            "2025-01-01 09:01:00.000000\n+\\d t\n";
         Assert.AreSequenceEqual(["select 1;", "select *\nfrom t\nwhere x = 1;", "\\d t"], FileHistoryStore.Parse(content));
         Assert.IsEmpty(FileHistoryStore.Parse(""));
     }
@@ -48,7 +51,8 @@ public sealed class FileHistoryStoreTests
     [TestMethod]
     public void Parse_TruncatedLastRecord_KeepsTheRest()
     {
-        var content = FileHistoryStore.Format("one", DateTimeOffset.Now) + FileHistoryStore.Format("two\nlines", DateTimeOffset.Now) + "\n# 2026-09-07 10:30:15.000000\n+thr";
+        var content = FileHistoryStore.Format("one", DateTimeOffset.Now) + FileHistoryStore.Format("two\nlines", DateTimeOffset.Now)
+            + "\n# 2026-09-07 10:30:15.000000\n+thr";
         Assert.AreSequenceEqual(["one", "two\nlines"], FileHistoryStore.Parse(content));
     }
 
@@ -58,7 +62,8 @@ public sealed class FileHistoryStoreTests
     [TestMethod]
     public void Parse_DamagedLine_Skipped()
     {
-        var content = FileHistoryStore.Format("one", DateTimeOffset.Now) + "garbage\x00here\n" + FileHistoryStore.Format("two", DateTimeOffset.Now);
+        var content = FileHistoryStore.Format("one", DateTimeOffset.Now) + "garbage\x00here\n"
+            + FileHistoryStore.Format("two", DateTimeOffset.Now);
         Assert.AreSequenceEqual(["one", "two"], FileHistoryStore.Parse(content));
     }
 
@@ -225,7 +230,8 @@ public sealed class FileHistoryStoreTests
             // The output is read only on failure: reading it earlier would wait for the child to exit.
             if (child.HasExited)
             {
-                Assert.Fail("the child exited before taking the lock: " + await child.StandardOutput.ReadToEndAsync(TestContext.CancellationToken));
+                Assert.Fail("the child exited before taking the lock: "
+                    + await child.StandardOutput.ReadToEndAsync(TestContext.CancellationToken));
             }
 
             Assert.IsLessThan(60_000, waited.ElapsedMilliseconds, "the child never took the lock");
@@ -239,7 +245,8 @@ public sealed class FileHistoryStoreTests
         Assert.IsGreaterThanOrEqualTo(500, append.ElapsedMilliseconds, "the parent's append must wait for the child's lock");
         await child.WaitForExitAsync(TestContext.CancellationToken);
         Assert.AreEqual(0, child.ExitCode, await child.StandardOutput.ReadToEndAsync(TestContext.CancellationToken));
-        Assert.AreSequenceEqual(["held by the child", "appended by the parent"], FileHistoryStore.Parse(await File.ReadAllTextAsync(path, TestContext.CancellationToken)));
+        Assert.AreSequenceEqual(["held by the child", "appended by the parent"],
+            FileHistoryStore.Parse(await File.ReadAllTextAsync(path, TestContext.CancellationToken)));
     }
 
     /// <summary>
@@ -320,7 +327,8 @@ public sealed class FileHistoryStoreTests
             try
             {
                 Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", null);
-                Assert.AreEqual(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ilrepl", "history"), FileHistoryStore.DefaultPath());
+                Assert.AreEqual(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ilrepl",
+                    "history"), FileHistoryStore.DefaultPath());
             }
             finally
             {
@@ -342,7 +350,8 @@ public sealed class FileHistoryStoreTests
             try
             {
                 Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", null);
-                Assert.AreEqual(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "ilrepl", "history"), FileHistoryStore.DefaultPath());
+                Assert.AreEqual(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "ilrepl",
+                    "history"), FileHistoryStore.DefaultPath());
             }
             finally
             {
@@ -383,7 +392,8 @@ public sealed class FileHistoryStoreTests
         await store.AppendAsync("ldstr \"secret\"", CancellationToken.None);
         Assert.IsNull(store.Problem);
         Assert.AreEqual(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
-        Assert.AreEqual(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(Path.GetDirectoryName(path)!));
+        Assert.AreEqual(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+            File.GetUnixFileMode(Path.GetDirectoryName(path)!));
     }
 
     /// <summary>
@@ -433,7 +443,8 @@ public sealed class FileHistoryStoreTests
         Assert.AreSequenceEqual(["nop"], (await store.LoadAsync(TestContext.CancellationToken)).Entries, "reading drops the cut record");
         await store.AppendAsync("ldc.i4 1", TestContext.CancellationToken);
         Assert.IsNull(store.Problem);
-        Assert.AreSequenceEqual(["nop", "ldc.i4 1"], (await store.LoadAsync(TestContext.CancellationToken)).Entries, "and writing does not bring it back");
+        Assert.AreSequenceEqual(["nop", "ldc.i4 1"], (await store.LoadAsync(TestContext.CancellationToken)).Entries,
+            "and writing does not bring it back");
         Assert.DoesNotContain("thr", await File.ReadAllTextAsync(path, TestContext.CancellationToken));
 
         // A file whose only record is cut is emptied before the new one goes in.

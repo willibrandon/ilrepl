@@ -34,9 +34,13 @@ internal static class ResponsivenessFixtures
             if (expected.Length == 64 && expected.All(char.IsAsciiHexDigit))
             {
                 var cached = Path.Combine(directory, expected + ".dll");
-                if (File.Exists(cached) && SessionCodec.Hash(File.ReadAllBytes(cached)) == expected) return cached;
+                if (File.Exists(cached) && SessionCodec.Hash(File.ReadAllBytes(cached)) == expected)
+                {
+                    return cached;
+                }
             }
         }
+
         using var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition(name, new Version(1, 0)), name,
             ModuleKind.Dll);
         var module = assembly.MainModule;
@@ -55,6 +59,7 @@ internal static class ResponsivenessFixtures
                 method.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
             }
         }
+
         using var image = new MemoryStream();
         assembly.Write(image, new WriterParameters { Timestamp = 0 });
         var content = image.ToArray();
@@ -71,6 +76,7 @@ internal static class ResponsivenessFixtures
         {
             File.Delete(temporary);
         }
+
         return path;
     }
 
@@ -112,12 +118,14 @@ internal static class ResponsivenessFixtures
                     Identity = "run-" + number, Number = number, Kind = SessionEntryKind.Run, Source = ["ret"],
                 });
             }
+
             cells.Add(new SessionCell
             {
                 Identity = "cell-" + number, Number = number, Source = source, Kind = definition ? "definition" : "cell",
                 State = "succeeded", Output = [TranscriptLine.Of(LineKind.Result, "= 1 : int32", SpanStyle.Number)],
             });
         }
+
         return new SessionDocument { Entries = [.. entries], Cells = [.. cells] };
     }
 }

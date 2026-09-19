@@ -44,7 +44,8 @@ public sealed record IlMethodSignature(
     /// <summary>
     /// The parameters after the sentinel, or null when there is none.
     /// </summary>
-    public IReadOnlyList<IlSignature>? OptionalParameters => RequiredParameterCount < Parameters.Count ? Parameters.Skip(RequiredParameterCount).ToArray() : null;
+    public IReadOnlyList<IlSignature>? OptionalParameters =>
+        RequiredParameterCount < Parameters.Count ? Parameters.Skip(RequiredParameterCount).ToArray() : null;
 
     /// <summary>
     /// The signature the stack simulator works with: projected types, and <c>this</c> counted once
@@ -91,7 +92,8 @@ public sealed record IlMethodSignature(
     public static IlMethodSignature FromFunctionPointer(Type type)
     {
         ArgumentNullException.ThrowIfNull(type);
-        var returnType = IlSignature.FromType(type.GetFunctionPointerReturnType(), optionalModifiers: type.GetFunctionPointerCallingConventions());
+        var returnType = IlSignature.FromType(type.GetFunctionPointerReturnType(),
+            optionalModifiers: type.GetFunctionPointerCallingConventions());
         var parameters = type.GetFunctionPointerParameterTypes().Select(p => IlSignature.FromType(p)).ToArray();
         var convention = type.IsUnmanagedFunctionPointer ? SignatureCallingConvention.Unmanaged : SignatureCallingConvention.Default;
         return new IlMethodSignature(convention, false, false, 0, returnType, parameters, parameters.Length);

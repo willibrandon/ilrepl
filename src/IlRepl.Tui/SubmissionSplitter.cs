@@ -18,7 +18,11 @@ public static class SubmissionSplitter
     /// <param name="inBlockComment">Whether the engine has a <c>/*</c> open when the buffer starts.</param>
     /// <param name="commands">The dot-words that are commands, whose arguments hold no brace that counts; null to know none.</param>
     /// <returns>The units, in order.</returns>
-    public static IReadOnlyList<SubmissionUnit> Split(IReadOnlyList<string> lines, int openDepth = 0, bool inBlockComment = false, IReadOnlyCollection<string>? commands = null)
+    public static IReadOnlyList<SubmissionUnit> Split(
+        IReadOnlyList<string> lines,
+        int openDepth = 0,
+        bool inBlockComment = false,
+        IReadOnlyCollection<string>? commands = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
         var units = new List<SubmissionUnit>();

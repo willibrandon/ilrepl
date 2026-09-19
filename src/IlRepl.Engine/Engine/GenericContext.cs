@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace IlRepl.Engine;
 
 /// <summary>
@@ -43,7 +45,7 @@ public sealed record GenericContext(IReadOnlyList<Type> TypeArguments, IReadOnly
     {
         var list = isMethod ? MethodArguments : TypeArguments;
         var prefix = isMethod ? "!!" : "!";
-        if (int.TryParse(reference, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var index))
+        if (int.TryParse(reference, NumberStyles.None, CultureInfo.InvariantCulture, out var index))
         {
             if (index < list.Count)
             {

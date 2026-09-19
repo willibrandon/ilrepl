@@ -127,7 +127,9 @@ public sealed class ProtocolJsonTests
     [TestMethod]
     public void Vocabulary_AndNewStyles_RoundTrip()
     {
-        var line = new TranscriptLine(LineKind.Input, [new TranscriptSpan("Max", SpanStyle.Member), new TranscriptSpan("(", SpanStyle.Punctuation), new TranscriptSpan("// c", SpanStyle.Comment), new TranscriptSpan(".locals", SpanStyle.Directive)]);
+        var line = new TranscriptLine(LineKind.Input,
+            [new TranscriptSpan("Max", SpanStyle.Member), new TranscriptSpan("(", SpanStyle.Punctuation),
+            new TranscriptSpan("// c", SpanStyle.Comment), new TranscriptSpan(".locals", SpanStyle.Directive)]);
         var json = JsonSerializer.Serialize(line, ProtocolJsonContext.Default.TranscriptLine);
         Assert.Contains("\"style\":\"Member\"", json);
         Assert.Contains("\"style\":\"Punctuation\"", json);
@@ -135,7 +137,8 @@ public sealed class ProtocolJsonTests
         Assert.IsNotNull(backLine);
         Assert.AreSequenceEqual(line.Spans, backLine.Spans);
 
-        var vocabulary = new CilVocabulary(new Dictionary<string, CilOperandKind> { ["ldc.i4"] = CilOperandKind.Integer, ["no."] = CilOperandKind.Integer }, [".locals"], [".show", ".?"], ["instance"], ["int32"]);
+        var vocabulary = new CilVocabulary(new Dictionary<string, CilOperandKind> { ["ldc.i4"] = CilOperandKind.Integer,
+            ["no."] = CilOperandKind.Integer }, [".locals"], [".show", ".?"], ["instance"], ["int32"]);
         var vocabularyJson = JsonSerializer.Serialize(vocabulary, ProtocolJsonContext.Default.CilVocabulary);
         Assert.Contains("\"ldc.i4\":\"Integer\"", vocabularyJson);
         var back = JsonSerializer.Deserialize(vocabularyJson, ProtocolJsonContext.Default.CilVocabulary);

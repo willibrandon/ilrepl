@@ -3,11 +3,11 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using IlRepl.Engine.Binding;
+using IlRepl.Protocol;
 using Mono.Cecil;
 using GenericParameterAttributes = System.Reflection.GenericParameterAttributes;
 using MethodAttributes = System.Reflection.MethodAttributes;
 using MethodImplAttributes = System.Reflection.MethodImplAttributes;
-using IlRepl.Protocol;
 
 namespace IlRepl.Engine;
 
@@ -33,8 +33,13 @@ internal sealed partial class ImportedMethodFamily
     private readonly List<string> _problems = [];
     private MethodBase? _forwardingMethod;
 
-    private ImportedMethodFamily(string name, Session session, IReadOnlyList<MethodSignature> signatures,
-        Dictionary<string, MethodInfo> pinned, MethodEditBody selected, TypeTable sourceTypes)
+    private ImportedMethodFamily(
+        string name,
+        Session session,
+        IReadOnlyList<MethodSignature> signatures,
+        Dictionary<string, MethodInfo> pinned,
+        MethodEditBody selected,
+        TypeTable sourceTypes)
     {
         Name = name;
         _session = session;
@@ -121,8 +126,16 @@ internal sealed partial class ImportedMethodFamily
             }
 
             ScanReflection();
-            if (_pending.Count == 0) DiscoverSharedHelpers();
-            if (_pending.Count == 0) DiscoverTypeLookupTargets();
+            if (_pending.Count == 0)
+            {
+                DiscoverSharedHelpers();
+            }
+
+            if (_pending.Count == 0)
+            {
+                DiscoverTypeLookupTargets();
+            }
+
             var changedBases = RefreshExternalBases();
             if (_pending.Count == 0 && typeCount == _types.Count && !changedBases)
             {
@@ -293,8 +306,15 @@ internal sealed partial class ImportedMethodFamily
         ConsiderConstraints(type.GetGenericArguments(), type, TypeNameFormatter.Pretty(type));
         if (type.BaseType is { } baseType)
         {
-            if (ShouldCopyType(DefinitionOf(baseType), type)) ConsiderType(baseType, type);
-            if (!_types.ContainsKey(DefinitionOf(baseType))) PreserveExternalBase(baseType);
+            if (ShouldCopyType(DefinitionOf(baseType), type))
+            {
+                ConsiderType(baseType, type);
+            }
+
+            if (!_types.ContainsKey(DefinitionOf(baseType)))
+            {
+                PreserveExternalBase(baseType);
+            }
         }
 
         foreach (var contract in ImportedMetadata.Interfaces(type))
@@ -380,7 +400,11 @@ internal sealed partial class ImportedMethodFamily
 
         if (!_methods.TryAdd(method, null))
         {
-            if (discoveredInitialization) _pending.Enqueue(method);
+            if (discoveredInitialization)
+            {
+                _pending.Enqueue(method);
+            }
+
             return;
         }
 
@@ -397,6 +421,7 @@ internal sealed partial class ImportedMethodFamily
                 AddMethod(initializer, initialization: true);
             }
         }
+
         if (method.IsGenericMethodDefinition)
         {
             ConsiderConstraints(method.GetGenericArguments(), method.DeclaringType!, MemberResolver.Describe(method));
@@ -505,6 +530,7 @@ internal sealed partial class ImportedMethodFamily
                         {
                             throw new ReplException($"{location}: required {MemberResolver.Describe(target)}: {ex.Message}", ex);
                         }
+
                         if (instruction.Op == OpCodes.Newobj)
                         {
                             Instantiate(owner);

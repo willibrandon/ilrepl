@@ -12,8 +12,12 @@ namespace IlRepl.Engine;
 /// <param name="State">The validated body in its source declaring context.</param>
 internal sealed record MethodEditBody(MethodBase Method, DisassembledMethod Listing, string Source, CellState State)
 {
-    internal static MethodEditBody Read(MethodBase method, Session session, IReadOnlyList<MethodSignature> signatures,
-        TypeTable? types = null, Type? contextType = null)
+    internal static MethodEditBody Read(
+        MethodBase method,
+        Session session,
+        IReadOnlyList<MethodSignature> signatures,
+        TypeTable? types = null,
+        Type? contextType = null)
     {
         var listing = MethodDisassembler.Disassemble(method, session);
         if (listing.Problems.Count != 0 || listing.Entries.Any(e => e.EffectUnknown || e.Kind == DisassembledEntryKind.Raw))
@@ -46,8 +50,13 @@ internal sealed record MethodEditBody(MethodBase Method, DisassembledMethod List
         return Parse(listing, string.Join('\n', lines), session, signatures, types, contextType);
     }
 
-    internal static MethodEditBody Parse(DisassembledMethod listing, string source, Session session,
-        IReadOnlyList<MethodSignature> signatures, TypeTable? types = null, Type? contextType = null)
+    internal static MethodEditBody Parse(
+        DisassembledMethod listing,
+        string source,
+        Session session,
+        IReadOnlyList<MethodSignature> signatures,
+        TypeTable? types = null,
+        Type? contextType = null)
     {
         var method = listing.Method;
         var owner = contextType ?? method.DeclaringType ?? throw new ReplException("the method has no declaring type");

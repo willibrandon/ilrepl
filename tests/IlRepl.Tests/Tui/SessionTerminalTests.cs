@@ -159,19 +159,27 @@ public sealed class SessionTerminalTests
         prompt.Invalidate = () =>
         {
             invalidate();
-            if (prompt.Events.Any(item => item.Kind == SubmissionEventKind.SessionDocument)) posted.TrySetResult();
+            if (prompt.Events.Any(item => item.Kind == SubmissionEventKind.SessionDocument))
+            {
+                posted.TrySetResult();
+            }
         };
         var armed = 1;
         var frame = 0;
         prompt.DocumentationTargetChanged = (_, _, _) =>
         {
-            if (prompt.SessionDialog is not { Submitted: true } || Volatile.Read(ref armed) == 0) return;
+            if (prompt.SessionDialog is not { Submitted: true } || Volatile.Read(ref armed) == 0)
+            {
+                return;
+            }
+
             if (Interlocked.Increment(ref frame) == 1)
             {
                 // Move past the Enter frame so its pending wake-up cannot conceal a lost completion redraw.
                 invalidate();
                 return;
             }
+
             Interlocked.Exchange(ref armed, 0);
             release.TrySetResult();
             posted.Task.WaitAsync(AppTest.Timeout, token).GetAwaiter().GetResult();
@@ -353,7 +361,11 @@ public sealed class SessionTerminalTests
         var firstFrame = recorder.Count;
         try
         {
-            if (!save) await auto.KeyAsync(Hex1bKey.DownArrow, ct: token);
+            if (!save)
+            {
+                await auto.KeyAsync(Hex1bKey.DownArrow, ct: token);
+            }
+
             await auto.EnterAsync(ct: token);
             await reached.Task.WaitAsync(AppTest.Timeout, token);
             prompt.Invalidate!.Invoke();
@@ -486,7 +498,11 @@ public sealed class SessionTerminalTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
         await auto.WaitUntilAsync(_ => app?.FocusedNode is ButtonNode { Label: "Save" });
         await MoveAsync(Hex1bKey.DownArrow, "Discard");
-        if (save) await MoveAsync(Hex1bKey.UpArrow, "Save");
+        if (save)
+        {
+            await MoveAsync(Hex1bKey.UpArrow, "Save");
+        }
+
         await auto.EnterAsync(ct: token);
         await run.WaitAsync(AppTest.Timeout, token);
 

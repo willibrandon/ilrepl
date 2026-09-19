@@ -46,7 +46,10 @@ public sealed class HostProcessCleanupTests
             var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             engine.ProgressChanged += progress =>
             {
-                if (progress.IsRunning && progress.Phase == ExecutionPhase.UserCode) entered.TrySetResult();
+                if (progress.IsRunning && progress.Phase == ExecutionPhase.UserCode)
+                {
+                    entered.TrySetResult();
+                }
             };
             Assert.IsTrue((await engine.HandleAsync("LOOP: br LOOP", token)).Succeeded);
             var running = engine.HandleAsync(".run", token);
@@ -55,8 +58,13 @@ public sealed class HostProcessCleanupTests
             await Assert.ThrowsExactlyAsync<HostProtocolException>(() => running);
             Assert.IsTrue(running.IsCompleted, "Termination must settle the active raw-host request.");
         }
+
         await engine.DisposeAsync();
-        if (OperatingSystem.IsWindows()) Assert.IsTrue(process.WaitForExit(0), "The Windows process object must be signalled.");
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.IsTrue(process.WaitForExit(0), "The Windows process object must be signalled.");
+        }
+
         process.Dispose();
         Directory.Delete(directory, recursive: true);
         Assert.IsFalse(Directory.Exists(directory));

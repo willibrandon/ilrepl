@@ -95,7 +95,9 @@ internal static class CecilCellBody
     /// <param name="methods">The current session method entry points.</param>
     /// <returns>The owned body assembly and its entry point.</returns>
     public static (DefinitionAssembly Definition, MethodInfo Method) Compile(
-        CellState state, IReadOnlyList<string> names, IReadOnlyDictionary<string, MethodInfo> methods)
+        CellState state,
+        IReadOnlyList<string> names,
+        IReadOnlyDictionary<string, MethodInfo> methods)
     {
         var writer = new CecilWriter(SessionAssemblyKind.Cell);
         var type = writer.DefineType("IlRepl", "CellBody",

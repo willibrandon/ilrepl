@@ -26,7 +26,12 @@ public sealed record ParseContext(
     /// <param name="generics">The generic parameters in scope.</param>
     /// <param name="resolver">The type resolver.</param>
     /// <param name="methods">The session methods.</param>
-    public ParseContext(IReadOnlyList<LocalDeclaration> locals, IReadOnlyList<ArgumentDeclaration> arguments, GenericContext generics, TypeResolver resolver, IReadOnlyList<MethodSignature> methods)
+    public ParseContext(
+        IReadOnlyList<LocalDeclaration> locals,
+        IReadOnlyList<ArgumentDeclaration> arguments,
+        GenericContext generics,
+        TypeResolver resolver,
+        IReadOnlyList<MethodSignature> methods)
         : this(locals, arguments, generics, resolver, methods, TypeTable.Empty)
     {
     }

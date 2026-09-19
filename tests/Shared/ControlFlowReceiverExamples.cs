@@ -330,6 +330,7 @@ public static class ControlFlowReceiverExamples
                 lines.Add("ldarg other");
                 lines.Add("stloc saved");
             }
+
             lines.Add("ldnull");
             lines.Add("throw");
             lines.Add("} finally {");
@@ -343,9 +344,11 @@ public static class ControlFlowReceiverExamples
                 lines.Add("starg.s 0");
                 lines.Add("endfinally");
             }
+
             lines.Add("}");
             lines.Add($"NEXT_{index}: nop");
         }
+
         lines.Add("leave DONE");
         lines.Add("} filter {");
         lines.Add("pop");
@@ -387,6 +390,7 @@ public static class ControlFlowReceiverExamples
             lines.Add("ldarg.0");
             lines.Add($"starg {index}");
         }
+
         lines.Add(".try {");
         lines.Add("leave DONE");
         lines.Add("} finally {");
@@ -399,6 +403,7 @@ public static class ControlFlowReceiverExamples
             lines.Add("starg.s 0");
             lines.Add("br FINAL");
         }
+
         lines.Add("FINAL: endfinally");
         lines.Add("}");
         lines.Add("DONE: ldarg.0");
@@ -445,6 +450,7 @@ public static class ControlFlowReceiverExamples
             lines.Add("}");
             lines.Add($"NEXT_{index}: nop");
         }
+
         lines.Add("leave DONE");
         lines.Add("} filter {");
         lines.Add("pop");
@@ -494,6 +500,7 @@ public static class ControlFlowReceiverExamples
             lines.Add("ldarg.0");
             lines.Add($"starg p{index}");
         }
+
         lines.Add(".try {");
         for (var index = 0; index < Paths; index++)
         {
@@ -511,6 +518,7 @@ public static class ControlFlowReceiverExamples
             lines.Add("}");
             lines.Add($"NEXT_{index}: nop");
         }
+
         lines.Add("leave DONE");
         lines.Add("} filter {");
         lines.Add("pop");
@@ -559,6 +567,7 @@ public static class ControlFlowReceiverExamples
             lines.Add($"starg p{index + 1}");
             lines.Add("br BEFORE");
         }
+
         lines.Add("BEFORE: nop");
         lines.Add(".try {");
         lines.Add("leave DONE");
@@ -572,6 +581,7 @@ public static class ControlFlowReceiverExamples
             lines.Add("starg.s 0");
             lines.Add("br FINISH");
         }
+
         lines.Add("FINISH: endfinally");
         lines.Add("}");
         lines.Add("DONE: ldarg.0");
@@ -609,6 +619,7 @@ public static class ControlFlowReceiverExamples
         {
             lines.Add($"FILLER_{index}: br BEFORE");
         }
+
         lines.Add("CONDITIONS: ldarg a");
         lines.Add("brtrue A_TRUE");
         lines.Add("ldarg b");
@@ -664,7 +675,9 @@ public static class ControlFlowReceiverExamples
     /// <param name="constant">The integer compared with the selector.</param>
     /// <returns>The complete class declaration.</returns>
     public static string[] RepeatedConstantComparisonSource(
-        bool matching, bool directBranch, int constant = 5) =>
+        bool matching,
+        bool directBranch,
+        int constant = 5) =>
     [
         ".class public RepeatedConstantComparison {",
         ".field public initonly int32 Value",
@@ -1002,6 +1015,7 @@ public static class ControlFlowReceiverExamples
             lines.Add($"stloc {index}");
             lines.Add($"D{index}_DONE: nop");
         }
+
         lines.Add("ldarg.2");
         lines.Add("brtrue ACCEPT");
         lines.Add("ldarg.1");
@@ -1059,6 +1073,7 @@ public static class ControlFlowReceiverExamples
             lines.Add("starg.s 0");
             lines.Add($"br {prefix}END");
         }
+
         lines.Add($"{prefix}END: endfinally");
     }
 
@@ -1451,7 +1466,10 @@ public static class ControlFlowReceiverExamples
     /// <param name="filter">Whether the outer handler is selected by a filter.</param>
     /// <param name="completes">Whether the unwind handler reaches its implicit endfinally.</param>
     /// <returns>The complete class declaration.</returns>
-    public static string[] ExceptionUnwindSource(bool originalReceiver, bool fault, bool filter,
+    public static string[] ExceptionUnwindSource(
+        bool originalReceiver,
+        bool fault,
+        bool filter,
         bool completes = true) =>
     [
         ".class public FlowExceptionUnwindArgument {",
@@ -2012,8 +2030,11 @@ public static class ControlFlowReceiverExamples
     /// <param name="invalidateAfterMerge">Whether every result path changes the receiver before returning.</param>
     /// <param name="resultConversion">An optional conversion applied after the result paths merge.</param>
     /// <returns>The complete class declaration.</returns>
-    public static string[] SelectiveFilterSource(string zero = "ldc.i4.0", string one = "ldc.i4.1",
-        bool invalidateAfterMerge = false, string? resultConversion = null) =>
+    public static string[] SelectiveFilterSource(
+        string zero = "ldc.i4.0",
+        string one = "ldc.i4.1",
+        bool invalidateAfterMerge = false,
+        string? resultConversion = null) =>
     [
         ".class public SelectiveFilterArgument {",
         ".field public initonly int32 Value",

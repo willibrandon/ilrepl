@@ -1,3 +1,4 @@
+using System.Reflection;
 using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
@@ -33,7 +34,7 @@ public sealed record ArgumentDeclaration(Type Type, string? Name, object? Value,
     /// The parameter attributes written before the type: <c>[in]</c>, <c>[out]</c>, <c>[opt]</c>, and
     /// a default set with <c>.param</c>.
     /// </summary>
-    public System.Reflection.ParameterAttributes Attributes { get; init; }
+    public ParameterAttributes Attributes { get; init; }
 
     /// <summary>
     /// The <c>modreq</c> types on the parameter type.

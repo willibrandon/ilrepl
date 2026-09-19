@@ -30,7 +30,8 @@ public sealed class TranscriptTests
             var result = core.Handle(line);
             if (!result.Succeeded)
             {
-                failures.Add(line + " => " + string.Join(" | ", core.Transcript.Lines.Where(l => l.Kind == LineKind.Error).Select(l => l.PlainText)));
+                failures.Add(line + " => "
+                    + string.Join(" | ", core.Transcript.Lines.Where(l => l.Kind == LineKind.Error).Select(l => l.PlainText)));
             }
         }
 
@@ -128,7 +129,8 @@ public sealed class TranscriptTests
         Assert.Contains(l => l.Trim() == "} handler {", listing);
         Assert.Contains(l => l.Contains("ldfld int32 Point::X", StringComparison.Ordinal), listing);
         Assert.Contains(l => l.Contains("calli int32(int32, int32)", StringComparison.Ordinal), listing);
-        Assert.Contains(l => l.Contains(".method public hidebysig instance string Trim() cil managed {", StringComparison.Ordinal), listing);
+        Assert.Contains(l => l.Contains(".method public hidebysig instance string Trim() cil managed {", StringComparison.Ordinal),
+            listing);
         Assert.Contains(l => l.Contains("!0", StringComparison.Ordinal), listing);
         var results = core.Transcript.Lines.Where(l => l.Kind == LineKind.Result).Select(l => l.PlainText).ToList();
         Assert.HasCount(1, results);

@@ -141,7 +141,8 @@ public sealed class MethodVersionTests
     [TestMethod]
     public void Methods_LiveInSessionAssemblies()
     {
-        var session = Load(".method int32 One() {", "ldc.i4 1", "ret", "}", ".method int32 Two() {", "call int32 One()", "dup", "add", "ret", "}");
+        var session = Load(".method int32 One() {", "ldc.i4 1", "ret", "}", ".method int32 Two() {", "call int32 One()", "dup", "add",
+            "ret", "}");
         var one = session.Methods[0];
         var two = session.Methods[1];
         Assert.IsTrue(SessionAssemblies.IsSessionAssembly(one.Version.Body.DeclaringType!.Assembly));

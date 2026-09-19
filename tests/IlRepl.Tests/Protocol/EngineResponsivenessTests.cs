@@ -1,7 +1,7 @@
-using IlRepl.Protocol;
 using IlRepl.Engine;
-using IlRepl.Tests.Shared;
+using IlRepl.Protocol;
 using IlRepl.Repl;
+using IlRepl.Tests.Shared;
 
 namespace IlRepl.Tests.Protocol;
 
@@ -56,7 +56,11 @@ public sealed class EngineResponsivenessTests
         finally
         {
             permit.Release();
-            if (running is not null) await running;
+            if (running is not null)
+            {
+                await running;
+            }
+
             ExecutionThreadFixture.Unregister(name);
         }
     }
@@ -99,7 +103,11 @@ public sealed class EngineResponsivenessTests
         finally
         {
             permit.Release();
-            if (running is not null) await running;
+            if (running is not null)
+            {
+                await running;
+            }
+
             ExecutionThreadFixture.Unregister(name);
         }
     }
@@ -113,7 +121,13 @@ public sealed class EngineResponsivenessTests
         await using var engine = new InProcessEngine();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var progress = new List<ExecutionProgress>();
-        engine.ProgressChanged += item => { lock (progress) { progress.Add(item); } };
+        engine.ProgressChanged += item =>
+        {
+            lock (progress)
+            {
+                progress.Add(item);
+            }
+        };
         var running = engine.RunOperationAsync("restore", async cancellationToken =>
         {
             var reply = await engine.HandleAsync("nop", cancellationToken);
@@ -139,6 +153,7 @@ public sealed class EngineResponsivenessTests
             Assert.HasCount(1, progress.Select(item => item.Identity).Distinct().ToArray());
             Assert.AreSequenceEqual(progress.Select(item => item.Sequence).Order(), progress.Select(item => item.Sequence));
         }
+
         var stillUsable = await engine.HandleAsync("ldc.i4.s 42", TestContext.CancellationToken);
         Assert.IsTrue(stillUsable.Succeeded);
         Assert.AreEqual("[int32]", stillUsable.Status.Stack);
@@ -159,8 +174,12 @@ public sealed class EngineResponsivenessTests
         using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
         void Cancel(ExecutionProgress progress)
         {
-            if (progress.Phase == ExecutionPhase.UserCode && progress.IsRunning) cancelled.Cancel();
+            if (progress.Phase == ExecutionPhase.UserCode && progress.IsRunning)
+            {
+                cancelled.Cancel();
+            }
         }
+
         engine.ProgressChanged += Cancel;
         await Assert.ThrowsAsync<OperationCanceledException>(() => engine.HandleAsync("ret", cancelled.Token));
         engine.ProgressChanged -= Cancel;
@@ -205,7 +224,11 @@ public sealed class EngineResponsivenessTests
         finally
         {
             permit.Release();
-            if (running is not null) await running;
+            if (running is not null)
+            {
+                await running;
+            }
+
             ExecutionThreadFixture.Unregister(name);
         }
     }
@@ -223,8 +246,12 @@ public sealed class EngineResponsivenessTests
         var generation = engine.Status.Mark.Generation;
         void Stop(ExecutionProgress progress)
         {
-            if (progress.Phase == ExecutionPhase.UserCode) cancellation.Cancel();
+            if (progress.Phase == ExecutionPhase.UserCode)
+            {
+                cancellation.Cancel();
+            }
         }
+
         engine.ProgressChanged += Stop;
         await Assert.ThrowsAsync<OperationCanceledException>(() => engine.HandleAsync("ret", cancellation.Token));
         engine.ProgressChanged -= Stop;
@@ -260,13 +287,18 @@ public sealed class EngineResponsivenessTests
             {
                 Assert.IsTrue((await engine.HandleAsync(line, TestContext.CancellationToken)).Succeeded);
             }
+
             Assert.IsFalse(File.Exists(marker));
             var checkpoint = false;
             var entered = false;
             core.BeforeExecution = () => checkpoint = true;
             engine.ProgressChanged += progress =>
             {
-                if (progress.Phase != ExecutionPhase.UserCode) return;
+                if (progress.Phase != ExecutionPhase.UserCode)
+                {
+                    return;
+                }
+
                 Assert.IsTrue(checkpoint);
                 Assert.IsFalse(File.Exists(marker), "Module initialization must not happen during cooperative compilation.");
                 entered = true;
@@ -282,5 +314,4 @@ public sealed class EngineResponsivenessTests
             Directory.Delete(directory, recursive: true);
         }
     }
-
 }

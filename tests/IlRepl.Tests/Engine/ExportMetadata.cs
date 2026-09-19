@@ -27,11 +27,16 @@ internal static class ExportMetadata
                 + Convert.ToHexString(reader.GetBlobBytes(reference.PublicKeyOrToken)) + " "
                 + reader.GetString(reference.Culture) + " " + reference.Flags);
         }
+
         foreach (var handle in reader.TypeDefinitions)
         {
             var definition = reader.GetTypeDefinition(handle);
             var name = provider.GetTypeFromDefinition(reader, handle, 0);
-            if (name == "<Module>") continue;
+            if (name == "<Module>")
+            {
+                continue;
+            }
+
             var layout = definition.GetLayout();
             records.Add($"type {name} {definition.Attributes} {provider.Type(reader, definition.BaseType)}"
                 + $" layout {layout.Size},{layout.PackingSize}");
@@ -41,11 +46,13 @@ internal static class ExportMetadata
             {
                 records.Add(name + " implements " + provider.Type(reader, reader.GetInterfaceImplementation(implementation).Interface));
             }
+
             foreach (var implementationHandle in definition.GetMethodImplementations())
             {
                 var implementation = reader.GetMethodImplementation(implementationHandle);
                 records.Add(name + " override " + Method(implementation.MethodDeclaration) + " -> " + Method(implementation.MethodBody));
             }
+
             foreach (var propertyHandle in definition.GetProperties())
             {
                 var property = reader.GetPropertyDefinition(propertyHandle);
@@ -57,6 +64,7 @@ internal static class ExportMetadata
                 Constant(propertyName, property.GetDefaultValue());
                 Attributes(propertyName, property.GetCustomAttributes());
             }
+
             foreach (var eventHandle in definition.GetEvents())
             {
                 var value = reader.GetEventDefinition(eventHandle);
@@ -67,6 +75,7 @@ internal static class ExportMetadata
                     + " raise " + Method(accessors.Raiser));
                 Attributes(eventName, value.GetCustomAttributes());
             }
+
             foreach (var fieldHandle in definition.GetFields())
             {
                 var field = reader.GetFieldDefinition(fieldHandle);
@@ -75,6 +84,7 @@ internal static class ExportMetadata
                 Constant(fieldName, field.GetDefaultValue());
                 Attributes(fieldName, field.GetCustomAttributes());
             }
+
             foreach (var methodHandle in definition.GetMethods())
             {
                 var method = reader.GetMethodDefinition(methodHandle);
@@ -90,7 +100,12 @@ internal static class ExportMetadata
                     records.Add(parameterName + " " + parameter.Attributes + " " + reader.GetString(parameter.Name));
                     Constant(parameterName, parameter.GetDefaultValue());
                 }
-                if (method.RelativeVirtualAddress == 0) continue;
+
+                if (method.RelativeVirtualAddress == 0)
+                {
+                    continue;
+                }
+
                 var body = pe.GetMethodBody(method.RelativeVirtualAddress);
                 var locals = body.LocalSignature.IsNil ? []
                     : reader.GetStandaloneSignature(body.LocalSignature).DecodeLocalSignature(provider, null).ToArray();
@@ -105,6 +120,7 @@ internal static class ExportMetadata
                 }
             }
         }
+
         return records.Order(StringComparer.Ordinal).ToArray();
 
         string Token(int token)
@@ -148,13 +164,18 @@ internal static class ExportMetadata
 
         string Method(EntityHandle handle)
         {
-            if (handle.IsNil) return "";
+            if (handle.IsNil)
+            {
+                return "";
+            }
+
             if (handle.Kind == HandleKind.MethodDefinition)
             {
                 var method = reader.GetMethodDefinition((MethodDefinitionHandle)handle);
                 return provider.Type(reader, method.GetDeclaringType()) + "::" + reader.GetString(method.Name)
                     + " " + ExportSignatureProvider.Method(method.DecodeSignature(provider, null));
             }
+
             var reference = reader.GetMemberReference((MemberReferenceHandle)handle);
             return Parent(reference.Parent) + "::" + reader.GetString(reference.Name)
                 + " " + ExportSignatureProvider.Method(reference.DecodeMethodSignature(provider, null));
@@ -182,7 +203,11 @@ internal static class ExportMetadata
 
         void Constant(string owner, ConstantHandle handle)
         {
-            if (handle.IsNil) return;
+            if (handle.IsNil)
+            {
+                return;
+            }
+
             var constant = reader.GetConstant(handle);
             records.Add(owner + " constant " + constant.TypeCode + " " + Convert.ToHexString(reader.GetBlobBytes(constant.Value)));
         }

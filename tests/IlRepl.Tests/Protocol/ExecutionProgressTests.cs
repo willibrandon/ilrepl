@@ -32,7 +32,11 @@ public sealed class ExecutionProgressTests
         engine.ProgressChanged += observed.Enqueue;
         engine.ProgressPublisher = progress =>
         {
-            if (!progress.IsRunning) return Task.CompletedTask;
+            if (!progress.IsRunning)
+            {
+                return Task.CompletedTask;
+            }
+
             entered.TrySetResult();
             return release.Task;
         };
@@ -68,7 +72,10 @@ public sealed class ExecutionProgressTests
         {
             release.TrySetResult();
             await caller;
-            if (pending is not null) await pending;
+            if (pending is not null)
+            {
+                await pending;
+            }
         }
     }
 
@@ -86,11 +93,18 @@ public sealed class ExecutionProgressTests
         var secondStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         engine.ProgressChanged += progress =>
         {
-            if (progress.Name == "second" && progress.IsRunning) secondStarted.TrySetResult();
+            if (progress.Name == "second" && progress.IsRunning)
+            {
+                secondStarted.TrySetResult();
+            }
         };
         engine.ProgressPublisher = progress =>
         {
-            if (progress.Name != "first" || progress.IsRunning) return Task.CompletedTask;
+            if (progress.Name != "first" || progress.IsRunning)
+            {
+                return Task.CompletedTask;
+            }
+
             entered.TrySetResult();
             return release.Task;
         };
@@ -119,7 +133,10 @@ public sealed class ExecutionProgressTests
         {
             release.TrySetResult();
             await first;
-            if (second is not null) await second;
+            if (second is not null)
+            {
+                await second;
+            }
         }
     }
 
@@ -141,7 +158,11 @@ public sealed class ExecutionProgressTests
         engine.ProgressChanged += observed.Enqueue;
         engine.ProgressPublisher = progress =>
         {
-            if (!progress.IsRunning || !progress.CancellationRequested) return Task.CompletedTask;
+            if (!progress.IsRunning || !progress.CancellationRequested)
+            {
+                return Task.CompletedTask;
+            }
+
             interruptEntered.TrySetResult();
             return releaseInterrupt.Task;
         };
@@ -149,12 +170,16 @@ public sealed class ExecutionProgressTests
         {
             Assert.IsTrue((await engine.HandleAsync("ldc.i4.s 42", cancellation)).Succeeded);
             entered.TrySetResult();
-            try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellation); }
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellation);
+            }
             finally
             {
                 cleanupEntered.TrySetResult();
                 await releaseCleanup.Task;
             }
+
             return true;
         }, token);
         Task<bool>? interrupt = null;
@@ -193,11 +218,28 @@ public sealed class ExecutionProgressTests
         {
             releaseInterrupt.TrySetResult();
             releaseCleanup.TrySetResult();
-            if (caller is not null) await caller;
-            if (interrupt is not null) await interrupt;
-            if (!pending.IsCompleted) await engine.InterruptAsync(engine.Progress.Identity, CancellationToken.None);
-            try { await pending; }
-            catch (OperationCanceledException) when (pending.IsCanceled) { }
+            if (caller is not null)
+            {
+                await caller;
+            }
+
+            if (interrupt is not null)
+            {
+                await interrupt;
+            }
+
+            if (!pending.IsCompleted)
+            {
+                await engine.InterruptAsync(engine.Progress.Identity, CancellationToken.None);
+            }
+
+            try
+            {
+                await pending;
+            }
+            catch (OperationCanceledException) when (pending.IsCanceled)
+            {
+            }
         }
     }
 
@@ -213,7 +255,11 @@ public sealed class ExecutionProgressTests
         await using var host = await HostPaths.StartEngineAsync(token);
         string[] source = ["ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"executed\"",
             "call void File::WriteAllText(string, string)", "ldc.i4.s 42"];
-        foreach (var line in source) Assert.IsTrue((await host.HandleAsync(line, token)).Succeeded);
+        foreach (var line in source)
+        {
+            Assert.IsTrue((await host.HandleAsync(line, token)).Succeeded);
+        }
+
         var checkpointEntered = new TaskCompletionSource<SessionReply>(TaskCreationOptions.RunContinuationsAsynchronously);
         var invocationEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var finishedEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -223,7 +269,11 @@ public sealed class ExecutionProgressTests
         var observed = new ConcurrentQueue<ExecutionProgress>();
         host.CheckpointReceived += checkpoint =>
         {
-            if (checkpoint.PendingSubmission is null) return;
+            if (checkpoint.PendingSubmission is null)
+            {
+                return;
+            }
+
             checkpointEntered.TrySetResult(checkpoint);
             releaseCheckpoint.Wait(token);
         };

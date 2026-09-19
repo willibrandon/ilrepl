@@ -10,7 +10,10 @@ namespace IlRepl.Engine.Binding;
 /// <param name="BaseOf">The base type of a type, or null.</param>
 /// <param name="IsSessionType">True for a type the session declared.</param>
 /// <param name="Pretty">Spells a type for a message.</param>
-public sealed record AccessFacts(Func<TypeSymbol, TypeSymbol?> BaseOf, Func<TypeSymbol, bool> IsSessionType, Func<TypeSymbol?,
+public sealed record AccessFacts(
+    Func<TypeSymbol, TypeSymbol?> BaseOf,
+    Func<TypeSymbol, bool> IsSessionType,
+    Func<TypeSymbol?,
     string> Pretty)
 {
     /// <summary>

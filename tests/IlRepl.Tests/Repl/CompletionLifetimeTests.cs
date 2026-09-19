@@ -182,7 +182,9 @@ public sealed class CompletionLifetimeTests
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static async Task<WeakReference> CompleteAndResetAsync(
-        Session session, OperandCompleter completer, CancellationToken cancellationToken)
+        Session session,
+        OperandCompleter completer,
+        CancellationToken cancellationToken)
     {
         session.AddLine(".class public Kept { }");
         var weak = new WeakReference(session.Types.Single().Definition!.Assembly);

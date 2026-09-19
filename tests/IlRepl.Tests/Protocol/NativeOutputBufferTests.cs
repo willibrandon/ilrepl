@@ -26,7 +26,9 @@ public sealed class NativeOutputBufferTests
         var capture = new NativeOutputBuffer(4096, marker);
 
         for (var offset = 0; offset < bytes.Length; offset += fragment)
+        {
             capture.Append(bytes.AsSpan(offset, Math.Min(fragment, bytes.Length - offset)));
+        }
 
         Assert.AreEqual(user, capture.Text);
         Assert.IsFalse(capture.Overflowed);

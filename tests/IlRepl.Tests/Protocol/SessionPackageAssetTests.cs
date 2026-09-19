@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
+using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
-using System.Reflection.PortableExecutable;
 using System.Xml.Linq;
 using IlRepl.Protocol;
 using IlRepl.Tests.Shared;
@@ -53,7 +53,11 @@ public sealed class SessionPackageAssetTests
         {
             var edit = await SubmitAsync(controller, ".edit " + target + " as NativeRead");
             Assert.IsNotNull(edit.EditDocument);
-            foreach (var line in edit.EditDocument.Source.Split('\n')) await SubmitAsync(controller, line);
+            foreach (var line in edit.EditDocument.Source.Split('\n'))
+            {
+                await SubmitAsync(controller, line);
+            }
+
             target = "int32 NativeRead()";
         }
 
@@ -265,6 +269,7 @@ public sealed class SessionPackageAssetTests
         {
             Assert.AreEqual(RuntimeInformation.RuntimeIdentifier, assets.Single(asset => asset.Kind == "native").Rid);
         }
+
         Assert.AreEqual(SessionCodec.Hash(satellite), assets.Single(asset => asset.Kind == "satellite").Hash);
         await SubmitAsync(controller, "call int32 [" + name + "]SatelliteInspection.Owner::Read()");
         AssertResult(await SubmitAsync(controller, "ret"), 42);

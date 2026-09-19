@@ -108,7 +108,11 @@ public sealed class AssemblyActivationEditTests
             })
             {
                 var sourceArguments = arguments.ToArray();
-                if (sourceArguments[0] is Assembly) sourceArguments[0] = original.Module.Assembly;
+                if (sourceArguments[0] is Assembly)
+                {
+                    sourceArguments[0] = original.Module.Assembly;
+                }
+
                 var expected = Assert.ThrowsExactly<TargetInvocationException>(() => original.Invoke(null, sourceArguments));
                 var actual = Assert.ThrowsExactly<TargetInvocationException>(() => method.Invoke(null, arguments));
                 Assert.AreEqual(expected.InnerException!.GetType(), actual.InnerException!.GetType());

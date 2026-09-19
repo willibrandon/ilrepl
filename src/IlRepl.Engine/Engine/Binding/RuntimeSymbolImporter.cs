@@ -320,7 +320,11 @@ public static class RuntimeSymbolImporter
     /// <param name="source">Where the member comes from.</param>
     /// <param name="declared">True when the member's header has been seen.</param>
     /// <returns>The symbol.</returns>
-    public static MethodSymbol Import(MethodSignature signature, TypeSymbol? declaring, DefinitionId id, MethodSymbolSource source,
+    public static MethodSymbol Import(
+        MethodSignature signature,
+        TypeSymbol? declaring,
+        DefinitionId id,
+        MethodSymbolSource source,
         bool declared)
     {
         ArgumentNullException.ThrowIfNull(signature);

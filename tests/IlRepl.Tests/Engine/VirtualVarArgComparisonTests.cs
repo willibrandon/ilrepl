@@ -48,7 +48,11 @@ public sealed class VirtualVarArgComparisonTests
         il.Emit(OpCodes.Ldc_I4_7);
         il.Emit(OpCodes.Ldc_I4, 42);
         il.Emit(OpCodes.Ldstr, "optional");
-        if (constrained) il.Emit(OpCodes.Constrained, owner);
+        if (constrained)
+        {
+            il.Emit(OpCodes.Constrained, owner);
+        }
+
         var reference = new MethodReference(entry.Name, entry.ReturnType, owner)
         {
             HasThis = true,
@@ -85,7 +89,11 @@ public sealed class VirtualVarArgComparisonTests
             var edit = session.PrepareEdit("instance vararg int32 [" + assembly.GetName().Name + "]N.Fixture::Read(int32)", "Copy");
             session.CommitEdit(edit.Name, edit.Source.Replace("ret", "ldc.i4.1\nadd\nret", StringComparison.Ordinal));
             var copiedOwner = TypeNameFormatter.IlAsmDeclaring(edit.Method!.DeclaringType!);
-            foreach (var line in Scenario(constrained, behavior, copiedOwner).Split('\n')) session.AddLine(line);
+            foreach (var line in Scenario(constrained, behavior, copiedOwner).Split('\n'))
+            {
+                session.AddLine(line);
+            }
+
             var result = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy using Scenario"),
                 TestContext.CancellationToken);
             var invoked = behavior != "override";

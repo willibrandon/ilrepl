@@ -83,7 +83,11 @@ internal static class IsolatedTestProcess
         start.ArgumentList.Add("--filter");
         start.ArgumentList.Add(filter);
         start.Environment[SelectedTest] = name;
-        if (directory is not null) start.Environment[Workspace] = directory;
+        if (directory is not null)
+        {
+            start.Environment[Workspace] = directory;
+        }
+
         using var child = Process.Start(start) ?? throw new InvalidOperationException("The isolated test did not start.");
         using var standardOutput = child.StandardOutput;
         using var standardError = child.StandardError;

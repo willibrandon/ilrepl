@@ -179,5 +179,4 @@ public sealed class MemberSpeller
             return false;
         }
     }
-
 }

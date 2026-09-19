@@ -13,6 +13,7 @@ public static class ReplDirectives
     public static IReadOnlyList<string> Names { get; } =
     [
         ".locals", ".args", ".typeparams", ".typeargs", ".vararg", ".method", ".try", ".maxstack",
-        ".class", ".field", ".property", ".event", ".get", ".set", ".other", ".addon", ".removeon", ".fire", ".override", ".pack", ".size", ".param", ".custom",
+        ".class", ".field", ".property", ".event", ".get", ".set", ".other", ".addon", ".removeon", ".fire", ".override", ".pack", ".size",
+        ".param", ".custom",
     ];
 }

@@ -7,7 +7,8 @@ namespace IlRepl.Protocol;
 /// </summary>
 internal sealed class CilLineReader
 {
-    private static readonly string[] CallingConventions = ["instance", "explicit", "vararg", "unmanaged", "cdecl", "stdcall", "thiscall", "fastcall", "default", "winapi", "platformapi"];
+    private static readonly string[] CallingConventions = ["instance", "explicit", "vararg", "unmanaged", "cdecl", "stdcall", "thiscall",
+        "fastcall", "default", "winapi", "platformapi"];
     private static readonly string[] ParameterAttributes = ["[in]", "[out]", "[opt]"];
 
     private readonly CilTokenizer _tokenizer;
@@ -170,7 +171,8 @@ internal sealed class CilLineReader
         // pieces around it and no two tokens overlap.
         var start = _lexemes[from].Start;
         var end = _lexemes[to].End;
-        var comments = _tokens.Where(t => t.Style == SpanStyle.Comment && t.Start < end && t.Start + t.Length > start).OrderBy(t => t.Start).ToList();
+        var comments = _tokens.Where(t => t.Style == SpanStyle.Comment && t.Start < end && t.Start + t.Length > start).OrderBy(t => t.Start)
+            .ToList();
         foreach (var comment in comments)
         {
             if (comment.Start > start)
@@ -272,7 +274,8 @@ internal sealed class CilLineReader
 
         if (KindAt(i) == CilLexemeKind.Word)
         {
-            while ((IsWord(i, "native") || IsWord(i, "unsigned")) && (IsWord(i + 1, "native") || IsWord(i + 1, "unsigned") || IsPrimitive(i + 1)))
+            while ((IsWord(i, "native") || IsWord(i, "unsigned"))
+                && (IsWord(i + 1, "native") || IsWord(i + 1, "unsigned") || IsPrimitive(i + 1)))
             {
                 Emit(i, SpanStyle.Type);
                 i++;
@@ -628,7 +631,8 @@ internal sealed class CilLineReader
                 continue;
             }
 
-            if (IsKeyword(i) && !IsName(i + 1) && !IsPunct(i + 1, ',') && !IsPunct(i + 1, '>') || IsWord(i, "class") || IsWord(i, "valuetype") || IsWord(i, "byreflike") || IsWord(i, ".ctor"))
+            if (IsKeyword(i) && !IsName(i + 1) && !IsPunct(i + 1, ',') && !IsPunct(i + 1, '>') || IsWord(i, "class")
+                || IsWord(i, "valuetype") || IsWord(i, "byreflike") || IsWord(i, ".ctor"))
             {
                 Emit(i, SpanStyle.Keyword);
                 i++;

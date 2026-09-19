@@ -107,6 +107,7 @@ public sealed class SessionPackageTests
             unique.Write(bytes);
             fixture.PackageAsset(removed, "1.0.0", "lib/net10.0/" + removed + ".dll", bytes.ToArray());
         }
+
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 42, (removed, "[1.0.0]"));
         fixture.WritePackage(fixture.AssemblyName, "2.0.0", 84);
         await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
@@ -444,7 +445,11 @@ public sealed class SessionPackageTests
         {
             ["type"] = "Transitive", ["resolved"] = "1.0.0", ["contentHash"] = Convert.ToBase64String(new byte[64]),
         };
-        if (corruptHash) portable[fixture.AssemblyName]!["contentHash"] = Convert.ToBase64String(new byte[64]);
+        if (corruptHash)
+        {
+            portable[fixture.AssemblyName]!["contentHash"] = Convert.ToBase64String(new byte[64]);
+        }
+
         if (changedRequest)
         {
             document = document with { References = [.. document.References.Select(reference => reference.Request == fixture.AssemblyName
@@ -525,6 +530,7 @@ public sealed class SessionPackageTests
             using var archive = ZipFile.Open(Path.Combine(fixture.FeedPath, runtimePackage + ".2.0.0.nupkg"), ZipArchiveMode.Update);
             archive.GetEntry("lib/net10.0/" + runtimePackage + ".dll")!.Delete();
         }
+
         Directory.Delete(fixture.PackageCachePath, recursive: true);
 
         var restored = await controller.HandleAsync(".session restore", TestContext.CancellationToken);

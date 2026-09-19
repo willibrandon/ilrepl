@@ -11,9 +11,21 @@ internal sealed partial class StructuralObservation
 {
     private ObservedValue? CaptureCollection(object value, int depth, int identity)
     {
-        if (CaptureFrozenCollection(value, depth, identity) is { } frozen) return frozen;
-        if (CaptureHashtable(value, depth, identity) is { } hashtable) return hashtable;
-        if (CaptureConcurrentCollection(value, depth, identity) is { } concurrent) return concurrent;
+        if (CaptureFrozenCollection(value, depth, identity) is { } frozen)
+        {
+            return frozen;
+        }
+
+        if (CaptureHashtable(value, depth, identity) is { } hashtable)
+        {
+            return hashtable;
+        }
+
+        if (CaptureConcurrentCollection(value, depth, identity) is { } concurrent)
+        {
+            return concurrent;
+        }
+
         var type = value.GetType();
         var collection = type;
         while (collection is not null && (!collection.IsConstructedGenericType
@@ -23,7 +35,11 @@ internal sealed partial class StructuralObservation
             collection = collection.BaseType;
         }
 
-        if (collection is null) return null;
+        if (collection is null)
+        {
+            return null;
+        }
+
         var dictionary = collection.GetGenericTypeDefinition() == typeof(Dictionary<,>);
         var name = TypeName(type);
         var members = Fields(value, depth, exceptionDetails: false, stopBefore: collection);
@@ -51,7 +67,10 @@ internal sealed partial class StructuralObservation
                         [new ObservedMember("key", Capture(entry.Key, depth + 2)),
                             new ObservedMember("value", Capture(entry.Value, depth + 2))]);
                 }
-                else item = Capture(iterator.Current, depth + 1);
+                else
+                {
+                    item = Capture(iterator.Current, depth + 1);
+                }
 
                 members.Add(new ObservedMember((index++).ToString(CultureInfo.InvariantCulture), item));
             }
@@ -70,7 +89,11 @@ internal sealed partial class StructuralObservation
 
     private static ObservedValue? CaptureStringComparer(object value, string name, int identity)
     {
-        if (value.GetType().Assembly != typeof(StringComparer).Assembly || value is not IEqualityComparer<string?> comparer) return null;
+        if (value.GetType().Assembly != typeof(StringComparer).Assembly || value is not IEqualityComparer<string?> comparer)
+        {
+            return null;
+        }
+
         if (StringComparer.IsWellKnownOrdinalComparer(comparer, out var ignoreCase))
         {
             return new ObservedValue("comparer", name, ignoreCase ? "ordinal-ignore-case" : "ordinal", identity, []);

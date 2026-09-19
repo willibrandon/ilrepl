@@ -23,8 +23,16 @@ public sealed class LookupComparisonTests
     public async Task Compare_LookupContentsIgnoreRandomizedStorage()
     {
         var session = new Session();
-        foreach (var line in LookupComparisonExamples.KeyMethod.Split('\n')) session.AddLine(line);
-        foreach (var line in LookupComparisonExamples.Method(edited: false).Split('\n')) session.AddLine(line);
+        foreach (var line in LookupComparisonExamples.KeyMethod.Split('\n'))
+        {
+            session.AddLine(line);
+        }
+
+        foreach (var line in LookupComparisonExamples.Method(edited: false).Split('\n'))
+        {
+            session.AddLine(line);
+        }
+
         var edit = session.PrepareEdit("Read", "Copy");
         session.CommitEdit(edit.Name, edit.Source);
         var same = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy ()"),

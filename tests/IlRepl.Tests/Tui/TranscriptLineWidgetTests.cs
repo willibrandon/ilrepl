@@ -41,7 +41,11 @@ public sealed class TranscriptLineWidgetTests
                 app = instance;
                 return ctx =>
                 {
-                    while (changes.TryDequeue(out var change)) change();
+                    while (changes.TryDequeue(out var change))
+                    {
+                        change();
+                    }
+
                     return ctx.ThemePanel(theme => theme.Set(GlobalTheme.ForegroundColor, foreground)
                         .Set(GlobalTheme.BackgroundColor, background),
                         ctx.VStack(v => [widget, neighbor, v.Text("phase " + phase)]));
@@ -89,6 +93,7 @@ public sealed class TranscriptLineWidgetTests
                 AssertCell(snapshot, "red", SpanPalette.Color(SpanStyle.Error), Hex1bColor.FromRgb(46, 92, 60));
                 AssertCell(snapshot, "neighbor", foreground, background);
             }
+
             await ChangeAsync(() => widget = widget with { Flash = false, Width = 40 });
             using (var snapshot = auto.CreateSnapshot())
             {
@@ -110,14 +115,23 @@ public sealed class TranscriptLineWidgetTests
         finally
         {
             await cancellation.CancelAsync();
-            try { await run; }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            try
+            {
+                await run;
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+            }
         }
 
         async Task ChangeAsync(Action change)
         {
             var expected = phase + 1;
-            changes.Enqueue(() => { change(); phase = expected; });
+            changes.Enqueue(() =>
+            {
+                change();
+                phase = expected;
+            });
             app.Invalidate();
             await auto.WaitUntilTextAsync("phase " + expected);
         }
@@ -150,8 +164,12 @@ public sealed class TranscriptLineWidgetTests
                     while (phases.TryDequeue(out var requested))
                     {
                         phase = requested;
-                        if (phase == 3) widget = widget with { Line = TranscriptLine.Of(LineKind.Output, "changed") };
+                        if (phase == 3)
+                        {
+                            widget = widget with { Line = TranscriptLine.Of(LineKind.Output, "changed") };
+                        }
                     }
+
                     var originalColors = phase is 0 or 1 or 3 or 5;
                     return ctx.VStack(v =>
                     [
@@ -174,6 +192,7 @@ public sealed class TranscriptLineWidgetTests
                 {
                     Volatile.Write(ref theme, new Hex1bTheme("replacement").Set(GlobalTheme.BackgroundColor, changedBackground));
                 }
+
                 phases.Enqueue(requested);
                 app.Invalidate();
                 await auto.WaitUntilTextAsync("bottom " + requested);
@@ -193,8 +212,13 @@ public sealed class TranscriptLineWidgetTests
         finally
         {
             await cancellation.CancelAsync();
-            try { await run; }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            try
+            {
+                await run;
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+            }
         }
     }
 

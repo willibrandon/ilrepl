@@ -408,7 +408,8 @@ public sealed class ReplCoreMethodTests
         }
 
         Assert.IsFalse(close.Succeeded);
-        Assert.Contains("error: the runtime only supports the vararg calling convention on Windows; method Pointer cannot be prepared here", Plain(core));
+        Assert.Contains("error: the runtime only supports the vararg calling convention on Windows; method Pointer cannot be prepared here",
+            Plain(core));
         Assert.AreEqual("Pointer", core.Status.OpenMethod);
     }
 }

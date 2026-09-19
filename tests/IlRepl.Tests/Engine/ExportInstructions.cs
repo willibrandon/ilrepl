@@ -40,6 +40,7 @@ internal static class ExportInstructions
             };
             yield return "instruction " + offsets[offset] + " " + code.Name + " " + value;
         }
+
         foreach (var region in body.ExceptionRegions)
         {
             yield return "region " + region.Kind + " " + offsets[region.TryOffset] + ":"
@@ -85,6 +86,7 @@ internal static class ExportInstructions
             result.Add((start, code, operand));
             offset = end;
         }
+
         return result;
     }
 }

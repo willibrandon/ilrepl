@@ -59,7 +59,8 @@ public sealed class SessionTests
     [TestMethod]
     public void Run_LoopWithLocals_Counts()
     {
-        var value = RunCell(".locals init (int32 i)", "ldc.i4.0", "stloc i", "LOOP: ldloc i", "ldc.i4.1", "add", "dup", "stloc i", "ldc.i4 10", "blt LOOP", "ldloc i");
+        var value = RunCell(".locals init (int32 i)", "ldc.i4.0", "stloc i", "LOOP: ldloc i", "ldc.i4.1", "add", "dup", "stloc i",
+            "ldc.i4 10", "blt LOOP", "ldloc i");
         Assert.AreEqual(10, value);
     }
 
@@ -82,7 +83,8 @@ public sealed class SessionTests
     [TestMethod]
     public void Run_SwitchWithInlineRet_TakesSelectedPath()
     {
-        var value = RunCell(".locals init (int32 x)", "ldc.i4 1", "stloc x", "ldloc x", "switch (A, B)", "ldstr \"default\"", "ret", "A: ldstr \"a\"", "ret", "B: ldstr \"b\"");
+        var value = RunCell(".locals init (int32 x)", "ldc.i4 1", "stloc x", "ldloc x", "switch (A, B)", "ldstr \"default\"", "ret",
+            "A: ldstr \"a\"", "ret", "B: ldstr \"b\"");
         Assert.AreEqual("b", value);
     }
 
@@ -178,7 +180,8 @@ public sealed class SessionTests
     {
         Assert.Contains("no protected region", Assert.ThrowsExactly<ReplException>(() => Load("}")).Message);
         Assert.Contains("needs a handler", Assert.ThrowsExactly<ReplException>(() => Load(".try {", "nop", "}")).Message);
-        Assert.Contains("endfilter", Assert.ThrowsExactly<ReplException>(() => Load(".try {", "nop", "} filter {", "pop", "} handler {")).Message);
+        Assert.Contains("endfilter",
+            Assert.ThrowsExactly<ReplException>(() => Load(".try {", "nop", "} filter {", "pop", "} handler {")).Message);
         Assert.Contains("leave", Assert.ThrowsExactly<ReplException>(() => Load(".try {", "ldc.i4 1", "ret")).Message);
         Assert.Contains("still open", Assert.ThrowsExactly<ReplException>(() => Load(".try {", "nop", "} finally {", "nop").Run()).Message);
     }
@@ -247,7 +250,9 @@ public sealed class SessionTests
     public void Run_LocallocAndByref_Work()
     {
         Assert.AreEqual(9, RunCell("ldc.i4 16", "localloc", "dup", "ldc.i4 9", "stind.i4", "ldind.i4"));
-        Assert.AreEqual(8, RunCell(".locals init (int32 v, int32& r)", "ldc.i4 7", "stloc v", "ldloca v", "stloc r", "ldloc r", "ldc.i4 8", "stind.i4", "ldloc v"));
+        Assert.AreEqual(8,
+            RunCell(".locals init (int32 v, int32& r)", "ldc.i4 7", "stloc v", "ldloca v", "stloc r", "ldloc r", "ldc.i4 8", "stind.i4",
+            "ldloc v"));
     }
 
     /// <summary>
@@ -258,7 +263,8 @@ public sealed class SessionTests
     {
         var value = RunCell(
             "ldc.i4 2", "newarr string", "dup", "ldc.i4 0", "ldstr \"x\"", "stelem.ref",
-            "call !!0 [System.Linq]System.Linq.Enumerable::First<string>(class [System.Runtime]System.Collections.Generic.IEnumerable`1<!!0>)");
+            "call !!0 [System.Linq]System.Linq.Enumerable::First<string>(class " +
+            "[System.Runtime]System.Collections.Generic.IEnumerable`1<!!0>)");
         Assert.AreEqual("x", value);
     }
 
@@ -346,7 +352,8 @@ public sealed class SessionTests
     [TestMethod]
     public void Normalize_NestedTypeAndMethod_KeepsState()
     {
-        var session = Load(".class public C {", "/* about C", "*/ .method public static int32 One() {", "ldc.i4 1 /* one", "*/ ret", "}", "}", "call int32 C::One()");
+        var session = Load(".class public C {", "/* about C", "*/ .method public static int32 One() {", "ldc.i4 1 /* one", "*/ ret", "}",
+            "}", "call int32 C::One()");
         Assert.AreEqual(1, session.Run().Value);
     }
 

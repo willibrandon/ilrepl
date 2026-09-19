@@ -7,4 +7,7 @@ namespace IlRepl.Engine;
 /// <param name="Boundaries">The block lines, sorted by offset then order.</param>
 /// <param name="Fallback">The clauses printed in offset form.</param>
 /// <param name="ReferencedOffsets">Every boundary a fallback clause names, the code size included.</param>
-public sealed record ClauseLayoutResult(IReadOnlyList<BlockBoundary> Boundaries, IReadOnlyList<IlExceptionClause> Fallback, IReadOnlySet<int> ReferencedOffsets);
+public sealed record ClauseLayoutResult(
+    IReadOnlyList<BlockBoundary> Boundaries,
+    IReadOnlyList<IlExceptionClause> Fallback,
+    IReadOnlySet<int> ReferencedOffsets);

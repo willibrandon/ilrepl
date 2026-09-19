@@ -47,12 +47,25 @@ public static class ManifestResourceFixture
         new BlobEncoder(signature).MethodSignature(isInstanceMethod: true).Parameters(api == "names" ? 0 : api == "typed stream" ? 2 : 1,
             result =>
             {
-                if (api == "names") result.Type().SZArray().String();
-                else result.Type().Type(stream ? streamType : resourceInfo, isValueType: false);
+                if (api == "names")
+                {
+                    result.Type().SZArray().String();
+                }
+                else
+                {
+                    result.Type().Type(stream ? streamType : resourceInfo, isValueType: false);
+                }
             }, parameters =>
             {
-                if (api == "typed stream") parameters.AddParameter().Type().Type(reflectedType, isValueType: false);
-                if (api != "names") parameters.AddParameter().Type().String();
+                if (api == "typed stream")
+                {
+                    parameters.AddParameter().Type().Type(reflectedType, isValueType: false);
+                }
+
+                if (api != "names")
+                {
+                    parameters.AddParameter().Type().String();
+                }
             });
         var inspection = metadata.AddMemberReference(assemblyType, metadata.GetOrAddString(method), metadata.GetOrAddBlob(signature));
         var instructions = new InstructionEncoder(new BlobBuilder());
@@ -73,6 +86,7 @@ public static class ManifestResourceFixture
         {
             instructions.LoadString(metadata.GetOrAddUserString(api == "typed stream" ? "payload" : "Resources.payload"));
         }
+
         instructions.OpCode(ILOpCode.Callvirt);
         instructions.Token(inspection);
         if (stream)

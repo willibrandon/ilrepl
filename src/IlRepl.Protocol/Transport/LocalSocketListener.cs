@@ -27,7 +27,11 @@ public sealed class LocalSocketListener : IDisposable
         try
         {
             _listener.Bind(new UnixDomainSocketEndPoint(SocketPath));
-            if (OperatingSystem.IsWindows()) SocketDirectory.SecureWindowsSocket(SocketPath);
+            if (OperatingSystem.IsWindows())
+            {
+                SocketDirectory.SecureWindowsSocket(SocketPath);
+            }
+
             _listener.Listen(4);
         }
         catch
@@ -83,6 +87,7 @@ public sealed class LocalSocketListener : IDisposable
                 await stream.DisposeAsync().ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
             }
+
             await stream.DisposeAsync().ConfigureAwait(false);
         }
     }
@@ -105,9 +110,16 @@ public sealed class LocalSocketListener : IDisposable
             var bootstrap = new byte[60];
             var parts = secret.Split('.');
             if (parts.Length != 2 || !Guid.TryParseExact(parts[1], "N", out var generation))
+            {
                 throw new ArgumentException("invalid host bootstrap identity", nameof(secret));
+            }
+
             var credential = Convert.FromHexString(parts[0]);
-            if (credential.Length != 32) throw new ArgumentException("invalid host bootstrap secret", nameof(secret));
+            if (credential.Length != 32)
+            {
+                throw new ArgumentException("invalid host bootstrap secret", nameof(secret));
+            }
+
             "ILRP"u8.CopyTo(bootstrap);
             BinaryPrimitives.WriteInt32LittleEndian(bootstrap.AsSpan(4), ProtocolVersion);
             credential.CopyTo(bootstrap, 8);
@@ -116,13 +128,24 @@ public sealed class LocalSocketListener : IDisposable
             await stream.WriteAsync(bootstrap, cancellationToken).ConfigureAwait(false);
             var acknowledgement = new byte[1];
             await stream.ReadExactlyAsync(acknowledgement, cancellationToken).ConfigureAwait(false);
-            if (acknowledgement[0] != 1) throw new IOException("the frontend rejected the host connection");
+            if (acknowledgement[0] != 1)
+            {
+                throw new IOException("the frontend rejected the host connection");
+            }
+
             return stream;
         }
         catch
         {
-            if (stream is not null) await stream.DisposeAsync().ConfigureAwait(false);
-            else socket.Dispose();
+            if (stream is not null)
+            {
+                await stream.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                socket.Dispose();
+            }
+
             throw;
         }
     }
@@ -132,7 +155,11 @@ public sealed class LocalSocketListener : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
         _listener.Dispose();
         try
         {

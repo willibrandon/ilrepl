@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using IlRepl.Engine.Binding;
 
@@ -57,7 +58,7 @@ public sealed record FieldDeclaration(
         var words = new List<string>();
         if (Offset is { } offset)
         {
-            words.Add("[" + offset.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]");
+            words.Add("[" + offset.ToString(CultureInfo.InvariantCulture) + "]");
         }
 
         words.Add(MemberAccess.AccessWord(Attributes));

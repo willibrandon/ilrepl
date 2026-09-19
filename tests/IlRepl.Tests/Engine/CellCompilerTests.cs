@@ -104,7 +104,9 @@ public sealed class CellCompilerTests
     public void Save_WithMethods_WritesCallableMethods()
     {
         var session = new Session();
-        foreach (var line in new[] { ".method int32 Fib(int32 n) {", "ldarg n", "ldc.i4 2", "blt BASE", "ldarg n", "ldc.i4 1", "sub", "call int32 Fib(int32)", "ldarg n", "ldc.i4 2", "sub", "call int32 Fib(int32)", "add", "ret", "BASE: ldarg n", "ret", "}", "ldc.i4 1" })
+        foreach (var line in new[] { ".method int32 Fib(int32 n) {", "ldarg n", "ldc.i4 2", "blt BASE", "ldarg n", "ldc.i4 1", "sub",
+            "call int32 Fib(int32)", "ldarg n", "ldc.i4 2", "sub", "call int32 Fib(int32)", "add", "ret", "BASE: ldarg n", "ret", "}",
+            "ldc.i4 1" })
         {
             session.AddLine(line);
         }

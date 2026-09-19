@@ -76,7 +76,11 @@ public sealed class YankFeedback
         }
 
         var remaining = NotificationDuration - Stopwatch.GetElapsedTime(started);
-        if (remaining > TimeSpan.Zero) await Task.Delay(remaining).ConfigureAwait(false);
+        if (remaining > TimeSpan.Zero)
+        {
+            await Task.Delay(remaining).ConfigureAwait(false);
+        }
+
         if (Interlocked.Read(ref _generation) == generation)
         {
             Notification = null;

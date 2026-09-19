@@ -34,13 +34,20 @@ public sealed class HostOutputTests
             "WAIT: ldstr " + LiteralParser.Escape(files.MarkerPath), "call bool File::Exists(string)", "brfalse WAIT",
             "ldstr \" suffix\\n\"", "call void Console::Write(string)", "ldc.i4 42", "ret", "}", "call int32 Work()",
         ];
-        foreach (var line in source) Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded, line);
+        foreach (var line in source)
+        {
+            Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded, line);
+        }
+
         var transcript = new Transcript();
         var received = new TaskCompletionSource<TranscriptLine[]>(TaskCreationOptions.RunContinuationsAsynchronously);
         controller.OutputReceived += output =>
         {
             transcript.AppendOutput(output);
-            if (output.Text == "partial") received.TrySetResult(transcript.Lines.ToArray());
+            if (output.Text == "partial")
+            {
+                received.TrySetResult(transcript.Lines.ToArray());
+            }
         };
         try
         {
@@ -71,7 +78,11 @@ public sealed class HostOutputTests
             await File.WriteAllTextAsync(files.MarkerPath, "release", token);
             var reply = await pending.WaitAsync(TimeSpan.FromSeconds(20), token);
             Assert.IsTrue(reply.Succeeded, string.Join('\n', reply.Lines.Select(line => line.PlainText)));
-            foreach (var line in reply.Lines) transcript.Add(line);
+            foreach (var line in reply.Lines)
+            {
+                transcript.Add(line);
+            }
+
             Assert.ContainsSingle(transcript.Lines.Where(line => line.Kind == LineKind.Input
                 && line.PlainText.EndsWith("> " + command, StringComparison.Ordinal)));
             var completeOutput = Assert.ContainsSingle(transcript.Lines.Where(line => line.Kind == LineKind.Output));

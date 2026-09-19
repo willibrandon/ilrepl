@@ -1,7 +1,7 @@
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
-using IlRepl.Protocol;
 using IlRepl.Processes;
+using IlRepl.Protocol;
 using IlRepl.Repl;
 
 namespace IlRepl.Tests.Responsiveness;

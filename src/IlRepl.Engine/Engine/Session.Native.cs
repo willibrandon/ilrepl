@@ -14,7 +14,10 @@ public sealed partial class Session
     /// </summary>
     internal void ActivateNativeBindings()
     {
-        foreach (var method in _hiddenNativeBindings) method.Trampoline.Bind(method.Version.Implementation);
+        foreach (var method in _hiddenNativeBindings)
+        {
+            method.Trampoline.Bind(method.Version.Implementation);
+        }
     }
 
     /// <summary>
@@ -25,8 +28,16 @@ public sealed partial class Session
     internal void RestoreNative(NativeTarget target, NativeLoadContext context)
     {
         DeferActivation = true;
-        foreach (var (name, type) in target.Types) _typeTable.Add(name, context.ResolveType(type));
-        foreach (var (name, method) in target.Aliases) _typeTable.MethodAliases.Add(name, context.ResolveMethod(method));
+        foreach (var (name, type) in target.Types)
+        {
+            _typeTable.Add(name, context.ResolveType(type));
+        }
+
+        foreach (var (name, method) in target.Aliases)
+        {
+            _typeTable.MethodAliases.Add(name, context.ResolveMethod(method));
+        }
+
         foreach (var binding in target.Bindings)
         {
             var trampolineMethod = (MethodInfo)context.ResolveMethod(binding.Trampoline);
@@ -44,7 +55,10 @@ public sealed partial class Session
             };
             var trampoline = MethodTrampoline.Restore(signature, trampolineMethod);
             if (!SessionAssemblies.TryGetDefinition(body.Module.Assembly, out var definition))
+            {
                 throw new ReplException("captured implementation has no retained image");
+            }
+
             var restored = new SessionMethod(signature, "", [], new CellState(Resolver, GenericContext.Empty), trampoline,
                 new CompiledMethodVersion(definition, body, trampoline.DelegateType));
             if (binding.Visible)
@@ -52,11 +66,26 @@ public sealed partial class Session
                 _methods.Add(restored);
                 InvalidateSignatures();
             }
-            else _hiddenNativeBindings.Add(restored);
+            else
+            {
+                _hiddenNativeBindings.Add(restored);
+            }
         }
+
         Rebuild();
-        if (target.Cell is not { } cell) return;
-        foreach (var line in cell.Declarations.Concat(cell.Body)) AddLine(line);
-        if (cell.TypeArguments.Length != 0) TypeArguments = [.. cell.TypeArguments.Select(context.ResolveType)];
+        if (target.Cell is not { } cell)
+        {
+            return;
+        }
+
+        foreach (var line in cell.Declarations.Concat(cell.Body))
+        {
+            AddLine(line);
+        }
+
+        if (cell.TypeArguments.Length != 0)
+        {
+            TypeArguments = [.. cell.TypeArguments.Select(context.ResolveType)];
+        }
     }
 }

@@ -183,7 +183,8 @@ public sealed class IlAsmRendererTests
             var source = Path.Combine(directory, "cell.il");
             File.WriteAllText(source, session.ToIlAsm());
             // Options take a dash: a slash is a path on Unix.
-            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ilasm, ["-DLL", "-QUIET", "-OUTPUT=" + Path.Combine(directory, "cell.dll"), source])
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ilasm,
+                ["-DLL", "-QUIET", "-OUTPUT=" + Path.Combine(directory, "cell.dll"), source])
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -245,7 +246,8 @@ public sealed class IlAsmRendererTests
         Assert.Contains(".class public auto ansi Box`1<class T> extends [System.Runtime]System.Object", text);
         Assert.Contains("    .field public !T V", text);
         Assert.Contains("        box valuetype Point", text);
-        Assert.IsLessThan(text.IndexOf("IlRepl.Cell extends", StringComparison.Ordinal), text.IndexOf(".class public sequential", StringComparison.Ordinal));
+        Assert.IsLessThan(text.IndexOf("IlRepl.Cell extends", StringComparison.Ordinal),
+            text.IndexOf(".class public sequential", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -266,7 +268,8 @@ public sealed class IlAsmRendererTests
             "}",
             ".class public Box`1<T> {",
             ".field public !0 V",
-            ".method public instance void .ctor(!0 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg v; stfld !0 class Box`1<!0>::V; ret }",
+            ".method public instance void .ctor(!0 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; " +
+            "ldarg v; stfld !0 class Box`1<!0>::V; ret }",
             ".class nested public Inner {",
             ".method public static int32 Three() { ldc.i4 3; ret }",
             "}",
@@ -296,7 +299,8 @@ public sealed class IlAsmRendererTests
     public void Render_OwnCalls_NamespacesAndStaticOverrides()
     {
         var session = IlLines.Load(
-            ".class public N.A {", ".method public static int32 F() { ldc.i4 1; ret }", ".method public static int32 G() { call int32 N.A::F(); ret }", "}",
+            ".class public N.A {", ".method public static int32 F() { ldc.i4 1; ret }",
+            ".method public static int32 G() { call int32 N.A::F(); ret }", "}",
             ".class interface public abstract IZero {", ".method public static abstract virtual int32 Zero() { }", "}",
             ".class public Num implements IZero {", ".method public static int32 Zero() { ldc.i4 0; ret }", "}",
             "call int32 N.A::G()", "constrained. Num", "call int32 IZero::Zero()", "add");
@@ -308,7 +312,8 @@ public sealed class IlAsmRendererTests
         var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-review", isCollectible: true);
         try
         {
-            Assert.AreEqual(1, context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+            Assert.AreEqual(1,
+                context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally
         {
@@ -323,7 +328,8 @@ public sealed class IlAsmRendererTests
     public void Render_CatchAndFinally_NestsTheRegions()
     {
         var session = IlLines.Load(
-            ".method int32 Both() {", ".locals init (int32 v)", ".try {", "ldstr \"x\"", "newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)", "throw",
+            ".method int32 Both() {", ".locals init (int32 v)", ".try {", "ldstr \"x\"",
+            "newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)", "throw",
             "} catch [System.Runtime]System.InvalidOperationException {", "pop", "ldc.i4 1", "stloc v", "leave DONE",
             "} finally {", "ldloc v", "ldc.i4 10", "add", "stloc v", "endfinally", "}",
             "DONE: ldloc v", "ret", "}",
@@ -334,7 +340,8 @@ public sealed class IlAsmRendererTests
         var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-regions", isCollectible: true);
         try
         {
-            Assert.AreEqual(11, context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+            Assert.AreEqual(11,
+                context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally
         {
@@ -352,13 +359,18 @@ public sealed class IlAsmRendererTests
         var session = IlLines.Load(
             ".class public Outer {",
             ".class nested public Box`1<T> {", ".field public !0 V",
-            ".method public instance void .ctor(!0 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg v; stfld !0 class Outer/Box`1<!0>::V; ret }",
+            ".method public instance void .ctor(!0 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; " +
+            "ldarg v; stfld !0 class Outer/Box`1<!0>::V; ret }",
             ".method public instance !0 Id() { ldarg.0; ldfld !0 class Outer/Box`1<!0>::V; ret }", "}",
-            ".method public static int32 Use() { ldc.i4 7; newobj instance void class Outer/Box`1<int32>::.ctor(!0); call instance !0 class Outer/Box`1<int32>::Id(); ret }",
+            ".method public static int32 Use() { ldc.i4 7; newobj instance void class Outer/Box`1<int32>::.ctor(!0); call instance !0 " +
+            "class Outer/Box`1<int32>::Id(); ret }",
             "}",
             ".class interface public abstract IFoo {", ".method public abstract virtual instance !!0 Id<T>(!!0 v) { }", "}",
-            ".class public Foo implements IFoo {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", ".method public virtual instance !!0 Id<T>(!!0 v) { ldarg v; ret }", "}",
-            "call int32 Outer::Use()", "newobj instance void Foo::.ctor()", "ldc.i4 2", "callvirt instance !!0 IFoo::Id<int32>(!!0)", "add");
+            ".class public Foo implements IFoo {",
+            ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }",
+            ".method public virtual instance !!0 Id<T>(!!0 v) { ldarg v; ret }", "}",
+            "call int32 Outer::Use()", "newobj instance void Foo::.ctor()", "ldc.i4 2", "callvirt instance !!0 IFoo::Id<int32>(!!0)",
+            "add");
         var text = session.ToIlAsm();
         Assert.AreEqual(9, session.Run().Value);
         Assert.Contains("call instance !0 class Outer/Box`1<int32>::Id()", text);
@@ -368,7 +380,8 @@ public sealed class IlAsmRendererTests
         var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-generic-refs", isCollectible: true);
         try
         {
-            Assert.AreEqual(9, context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+            Assert.AreEqual(9,
+                context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally
         {
@@ -384,7 +397,8 @@ public sealed class IlAsmRendererTests
     public void Render_ImplicitBlockTransitions_AreWritten()
     {
         var session = IlLines.Load(
-            ".method int32 BothImplicit() {", ".locals init (int32 v)", ".try {", "ldc.i4 1", "stloc v", "ldstr \"x\"", "newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)", "throw",
+            ".method int32 BothImplicit() {", ".locals init (int32 v)", ".try {", "ldc.i4 1", "stloc v", "ldstr \"x\"",
+            "newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)", "throw",
             "} catch [System.Runtime]System.InvalidOperationException {", "pop", "ldc.i4 2", "stloc v",
             "} finally {", "ldloc v", "ldc.i4 10", "add", "stloc v", "}",
             "ldloc v", "ret", "}",
@@ -398,7 +412,8 @@ public sealed class IlAsmRendererTests
         var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-implicit", isCollectible: true);
         try
         {
-            Assert.AreEqual(12, context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
+            Assert.AreEqual(12,
+                context.LoadFromStream(new MemoryStream(image)).GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
         }
         finally
         {
@@ -414,26 +429,33 @@ public sealed class IlAsmRendererTests
     {
         var (_, _, fixture) = CecilFixture.Build((module, type) =>
         {
-            var add = new Mono.Cecil.MethodDefinition("add", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Int32);
+            var add = new Mono.Cecil.MethodDefinition("add", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Int32);
             add.Parameters.Add(new Mono.Cecil.ParameterDefinition(module.TypeSystem.Int32));
             add.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ldarg_0);
             add.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ret);
             type.Methods.Add(add);
             type.Fields.Add(new Mono.Cecil.FieldDefinition("Data", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static,
-                new Mono.Cecil.RequiredModifierType(module.ImportReference(typeof(System.Runtime.CompilerServices.IsVolatile)), module.TypeSystem.Int32)));
-            var closure = new Mono.Cecil.TypeDefinition("", "<>c", Mono.Cecil.TypeAttributes.NestedPublic | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
-            var lambda = new Mono.Cecil.MethodDefinition("<Main>b__0_0", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+                new Mono.Cecil.RequiredModifierType(module.ImportReference(typeof(System.Runtime.CompilerServices.IsVolatile)),
+                module.TypeSystem.Int32)));
+            var closure = new Mono.Cecil.TypeDefinition("", "<>c", Mono.Cecil.TypeAttributes.NestedPublic | Mono.Cecil.TypeAttributes.Class,
+                module.TypeSystem.Object);
+            var lambda = new Mono.Cecil.MethodDefinition("<Main>b__0_0",
+                Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
             lambda.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ret);
             closure.Methods.Add(lambda);
             type.NestedTypes.Add(closure);
         });
         var assembly = fixture.Assembly.GetName().Name;
-        var add = new Instruction { Op = OpCodes.Call, Text = "call", Kind = OperandKind.Method, Operand = new ResolvedMethod(fixture.GetMethod("add")!, null) };
+        var add = new Instruction { Op = OpCodes.Call, Text = "call", Kind = OperandKind.Method,
+            Operand = new ResolvedMethod(fixture.GetMethod("add")!, null) };
         Assert.AreEqual($"call int32 [{assembly}]N.Fixture::'add'(int32)", IlAsmRenderer.RenderInstruction(add));
         var data = new Instruction { Op = OpCodes.Ldsfld, Text = "ldsfld", Kind = OperandKind.Field, Operand = fixture.GetField("Data")! };
-        Assert.AreEqual($"ldsfld int32 modreq([System.Runtime]System.Runtime.CompilerServices.IsVolatile) [{assembly}]N.Fixture::Data", IlAsmRenderer.RenderInstruction(data));
+        Assert.AreEqual($"ldsfld int32 modreq([System.Runtime]System.Runtime.CompilerServices.IsVolatile) [{assembly}]N.Fixture::Data",
+            IlAsmRenderer.RenderInstruction(data));
         var lambda = fixture.GetNestedType("<>c")!.GetMethod("<Main>b__0_0")!;
-        var ldftn = new Instruction { Op = OpCodes.Ldftn, Text = "ldftn", Kind = OperandKind.Method, Operand = new ResolvedMethod(lambda, null) };
+        var ldftn = new Instruction { Op = OpCodes.Ldftn, Text = "ldftn", Kind = OperandKind.Method,
+            Operand = new ResolvedMethod(lambda, null) };
         Assert.AreEqual($"ldftn void [{assembly}]N.Fixture/'<>c'::'<Main>b__0_0'()", IlAsmRenderer.RenderInstruction(ldftn));
     }
 

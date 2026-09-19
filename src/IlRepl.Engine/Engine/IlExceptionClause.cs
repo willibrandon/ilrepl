@@ -41,7 +41,9 @@ public sealed record IlExceptionClause(
         var handler = $"handler {IlReader.LabelFor(HandlerStart)} to {IlReader.LabelFor(HandlerEnd)}";
         return Kind switch
         {
-            IlClauseKind.Catch => head + "catch " + (CatchSignature is null ? (CatchType is null ? $"0x{CatchToken:x8}" : TypeNameFormatter.IlAsmDeclaring(CatchType)) : CatchText()) + " " + handler,
+            IlClauseKind.Catch => head + "catch "
+                + (CatchSignature is null ? (CatchType is null ? $"0x{CatchToken:x8}" : TypeNameFormatter.IlAsmDeclaring(CatchType))
+                : CatchText()) + " " + handler,
             IlClauseKind.Filter => head + "filter " + IlReader.LabelFor(FilterStart ?? HandlerStart) + " " + handler,
             IlClauseKind.Finally => head + "finally " + handler,
             _ => head + "fault " + handler,
@@ -51,6 +53,7 @@ public sealed record IlExceptionClause(
     private string CatchText()
     {
         var text = IlSignatureRenderer.IlAsm(CatchSignature!);
-        return text.StartsWith("class ", StringComparison.Ordinal) ? text[6..] : text.StartsWith("valuetype ", StringComparison.Ordinal) ? text[10..] : text;
+        return text.StartsWith("class ", StringComparison.Ordinal) ? text[6..] : text.StartsWith("valuetype ", StringComparison.Ordinal)
+            ? text[10..] : text;
     }
 }

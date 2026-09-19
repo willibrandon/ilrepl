@@ -20,14 +20,22 @@ internal static class PackagedSmoke
     /// <returns>Whether packaged validation was requested.</returns>
     internal static async Task<bool> TryRunAsync(string[] args)
     {
-        if (args is not ["--packaged-smoke", var executable]) return false;
+        if (args is not ["--packaged-smoke", var executable])
+        {
+            return false;
+        }
+
         executable = Path.GetFullPath(executable);
         var directory = Directory.CreateTempSubdirectory("ilrepl-packaged-smoke-").FullName;
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         try
         {
             await InterruptAndRestartAsync(executable, directory, timeout.Token);
-            if (!OperatingSystem.IsWindows()) await SupervisorAdoptionAsync(executable, directory, timeout.Token);
+            if (!OperatingSystem.IsWindows())
+            {
+                await SupervisorAdoptionAsync(executable, directory, timeout.Token);
+            }
+
             await OfflineSaveAsync(executable, directory, timeout.Token);
             Console.WriteLine("packaged interruption, restart, retained source, supervision, and offline save passed");
             return true;
@@ -144,7 +152,11 @@ internal static class PackagedSmoke
             "call void File::WriteAllText(string, string)", "WAIT: ldstr " + LiteralParser.Escape(release),
             "call bool File::Exists(string)", "brfalse WAIT", "ldsfld int32 Keeper::Value", "ret",
         ];
-        foreach (var line in source) await SubmitAsync(auto, line, cancellationToken);
+        foreach (var line in source)
+        {
+            await SubmitAsync(auto, line, cancellationToken);
+        }
+
         await auto.WaitUntilAsync(_ => File.Exists(identity) && new FileInfo(identity).Length > 0);
         var hostId = int.Parse(await File.ReadAllTextAsync(identity, cancellationToken));
         using var host = Process.GetProcessById(hostId);
@@ -161,7 +173,11 @@ internal static class PackagedSmoke
             "callvirt instance string Object::ToString()", "call void File::WriteAllText(string, string)",
             "ldsfld int32 Keeper::Value", "ldc.i4.1", "add", "ret",
         ];
-        foreach (var line in continued) await SubmitAsync(auto, line, cancellationToken);
+        foreach (var line in continued)
+        {
+            await SubmitAsync(auto, line, cancellationToken);
+        }
+
         await auto.WaitUntilTextAsync("= 74 : int32");
         Assert.AreEqual(hostId, int.Parse(await File.ReadAllTextAsync(adoptedIdentity, cancellationToken)));
         Assert.IsFalse(host.HasExited);
@@ -176,14 +192,22 @@ internal static class PackagedSmoke
             var status = await File.ReadAllTextAsync("/proc/" + processId + "/stat", cancellationToken);
             return int.Parse(status[(status.LastIndexOf(')') + 2)..].Split(' ')[1]);
         }
+
         var start = new ProcessStartInfo("/bin/ps");
-        foreach (var argument in new[] { "-o", "ppid=", "-p", processId.ToString() }) start.ArgumentList.Add(argument);
+        foreach (var argument in new[] { "-o", "ppid=", "-p", processId.ToString() })
+        {
+            start.ArgumentList.Add(argument);
+        }
+
         var result = await ToolProcess.RunAsync(start, cancellationToken);
         Assert.AreEqual(0, result.ExitCode, result.StandardError);
         return int.Parse(result.StandardOutput.Trim());
     }
 
-    private static Hex1bTerminal CreateTerminal(string executable, string directory, out string diagnosticsPath,
+    private static Hex1bTerminal CreateTerminal(
+        string executable,
+        string directory,
+        out string diagnosticsPath,
         IReadOnlyDictionary<string, string>? environment = null)
     {
         var stderr = Path.Combine(directory, "frontend-" + Guid.NewGuid().ToString("N") + ".stderr");
@@ -198,8 +222,12 @@ internal static class PackagedSmoke
                 options.Environment = new Dictionary<string, string> { ["TERM"] = "xterm-256color", ["NO_COLOR"] = "" };
                 if (environment is not null)
                 {
-                    foreach (var (name, value) in environment) options.Environment[name] = value;
+                    foreach (var (name, value) in environment)
+                    {
+                        options.Environment[name] = value;
+                    }
                 }
+
                 if (!OperatingSystem.IsWindows())
                 {
                     // Retain startup exceptions independently of the PTY pump, which can stop before final output is applied.
@@ -214,32 +242,43 @@ internal static class PackagedSmoke
             .Build();
     }
 
-    private static async Task WaitForStartupAsync(Hex1bTerminalAutomator auto, Task<int> run, string expected,
-        string diagnosticsPath, CancellationToken cancellationToken)
+    private static async Task WaitForStartupAsync(
+        Hex1bTerminalAutomator auto,
+        Task<int> run,
+        string expected,
+        string diagnosticsPath,
+        CancellationToken cancellationToken)
     {
         if (OperatingSystem.IsWindows())
         {
             await auto.WaitUntilTextAsync(expected);
             return;
         }
+
         try
         {
             await auto.WaitUntilAsync(snapshot => run.IsCompleted || snapshot.ContainsText(expected),
                 description: "the frontend displays " + expected + " or exits");
             if (run.IsCompleted)
+            {
                 throw new InvalidOperationException($"The frontend exited with code {await run} before displaying {expected}.");
+            }
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             var error = "No stderr file was created.";
             try
             {
-                if (File.Exists(diagnosticsPath)) error = await File.ReadAllTextAsync(diagnosticsPath, cancellationToken);
+                if (File.Exists(diagnosticsPath))
+                {
+                    error = await File.ReadAllTextAsync(diagnosticsPath, cancellationToken);
+                }
             }
             catch (Exception diagnosticError) when (diagnosticError is IOException or UnauthorizedAccessException)
             {
                 error = "Could not read startup stderr: " + diagnosticError.Message;
             }
+
             throw new InvalidOperationException("Packaged frontend startup failed. Standard error:\n" + error, exception);
         }
     }

@@ -149,7 +149,9 @@ public sealed class FrontEndProcessTests
     {
         var path = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllLinesAsync(path, [".method int32 F() {", "/* open", ".reset", "still */ ldc.i4.1", "ret", "}", "call int32 F()", "ret"], TestContext.CancellationToken);
+        await File.WriteAllLinesAsync(path,
+            [".method int32 F() {", "/* open", ".reset", "still */ ldc.i4.1", "ret", "}", "call int32 F()", "ret"],
+            TestContext.CancellationToken);
         try
         {
             var (code, stdout, stderr) = await RunAsync(["--no-color", path]);
@@ -174,7 +176,9 @@ public sealed class FrontEndProcessTests
     {
         var path = Path.Combine(Path.GetTempPath(), "ilrepl-tests", Guid.NewGuid().ToString("N") + ".il");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllLinesAsync(path, ["ldc.i4 1", "// one", "/* two", "", "*/", "ldc.i4 2", "add", "", "ldc.i4 3", "// three", "ret"], TestContext.CancellationToken);
+        await File.WriteAllLinesAsync(path,
+            ["ldc.i4 1", "// one", "/* two", "", "*/", "ldc.i4 2", "add", "", "ldc.i4 3", "// three", "ret"],
+            TestContext.CancellationToken);
         try
         {
             var (code, stdout, stderr) = await RunAsync(["--no-color", path]);
@@ -347,7 +351,8 @@ public sealed class FrontEndProcessTests
 
             var file = Path.Combine(config, "ilrepl", "history");
             var content = await File.ReadAllTextAsync(file, ct);
-            Assert.HasCount(1, content.Split('\n').Where(l => l.StartsWith("# ", StringComparison.Ordinal)).ToList(), "one entry:\n" + content);
+            Assert.HasCount(1, content.Split('\n').Where(l => l.StartsWith("# ", StringComparison.Ordinal)).ToList(),
+                "one entry:\n" + content);
             Assert.Contains("+.method int32 Twice(int32 n) {\n+  ldarg n\n+  ldc.i4 2\n+  mul\n+  ret\n+}\n", content);
 
             await using (var second = Builder().Build())

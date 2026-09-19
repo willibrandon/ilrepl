@@ -9,5 +9,10 @@ namespace IlRepl.Protocol;
 /// <param name="Explanation">The immediate explanation of the instruction.</param>
 /// <param name="Notes">Relevant distinctions and requirements.</param>
 /// <param name="DocumentationUrl">The fuller opcode reference.</param>
-public sealed record InstructionHelp(string Mnemonic, string Syntax, string StackEffect, string Explanation,
-    IReadOnlyList<string> Notes, string DocumentationUrl);
+public sealed record InstructionHelp(
+    string Mnemonic,
+    string Syntax,
+    string StackEffect,
+    string Explanation,
+    IReadOnlyList<string> Notes,
+    string DocumentationUrl);

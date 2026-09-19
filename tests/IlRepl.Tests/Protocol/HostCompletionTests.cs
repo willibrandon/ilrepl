@@ -67,7 +67,11 @@ public sealed class HostCompletionTests
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.AcknowledgeProgress = progress =>
         {
-            if (progress.IsRunning) return Task.CompletedTask;
+            if (progress.IsRunning)
+            {
+                return Task.CompletedTask;
+            }
+
             entered.TrySetResult();
             return release.Task;
         };
@@ -92,8 +96,13 @@ public sealed class HostCompletionTests
         {
             release.TrySetResult();
             core.SourceCheckpoint = checkpoint;
-            try { await pending; }
-            catch (RemoteInvocationException) { }
+            try
+            {
+                await pending;
+            }
+            catch (RemoteInvocationException)
+            {
+            }
         }
     }
 
@@ -120,11 +129,13 @@ public sealed class HostCompletionTests
                 finished.TrySetResult(progress);
                 return releaseFinish.Task;
             }
+
             if (!progress.CancellationRequested)
             {
                 started.TrySetResult(progress);
                 return releaseStart.Task;
             }
+
             return Task.CompletedTask;
         };
         var pending = retained
@@ -157,8 +168,13 @@ public sealed class HostCompletionTests
         {
             releaseStart.TrySetResult();
             releaseFinish.TrySetResult();
-            try { await pending; }
-            catch (OperationCanceledException) { }
+            try
+            {
+                await pending;
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
     }
 
@@ -177,7 +193,11 @@ public sealed class HostCompletionTests
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.AcknowledgeProgress = progress =>
         {
-            if (progress.Name != "submission" || progress.IsRunning) return Task.CompletedTask;
+            if (progress.Name != "submission" || progress.IsRunning)
+            {
+                return Task.CompletedTask;
+            }
+
             entered.TrySetResult();
             return release.Task;
         };
@@ -203,7 +223,10 @@ public sealed class HostCompletionTests
             Assert.AreSequenceEqual(connection.Progress.Select(progress => progress.Sequence).Order(),
                 connection.Progress.Select(progress => progress.Sequence));
             foreach (var line in new[] { "ldc.i4.s 20", "ldc.i4.s 22", "call int32 [Greeter]Greeter.Hello::Add(int32, int32)" })
+            {
                 Assert.IsTrue((await connection.Proxy.HandleAsync(line, token)).Succeeded);
+            }
+
             var result = await connection.Proxy.HandleAsync("ret", token);
             Assert.Contains(line => line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal), result.Lines);
         }
@@ -272,7 +295,10 @@ public sealed class HostCompletionTests
         {
             release.Set();
             await first;
-            if (second is not null) await second;
+            if (second is not null)
+            {
+                await second;
+            }
         }
     }
 }

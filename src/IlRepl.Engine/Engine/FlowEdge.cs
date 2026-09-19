@@ -7,5 +7,8 @@ namespace IlRepl.Engine;
 /// <param name="ClearsStack">Whether the edge supplies an empty stack.</param>
 /// <param name="IsExplicit">Whether an instruction names the target.</param>
 /// <param name="SwitchCases">The switch case indexes carried by this edge.</param>
-internal sealed record FlowEdge(int Target, bool ClearsStack = false, bool IsExplicit = false,
+internal sealed record FlowEdge(
+    int Target,
+    bool ClearsStack = false,
+    bool IsExplicit = false,
     IReadOnlyList<int>? SwitchCases = null);

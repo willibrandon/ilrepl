@@ -40,7 +40,11 @@ public sealed partial class ReplCore
             _cancellationToken.ThrowIfCancellationRequested();
             _ = CilLexer.Classify(line, ref comment, out var text);
             var directive = text.Split([' ', '\t', '('], 2)[0];
-            if (directive is ".method" or ".class" or ".edit") break;
+            if (directive is ".method" or ".class" or ".edit")
+            {
+                break;
+            }
+
             if (directive is ".args" or ".locals" or ".typeparams" or ".vararg" or ".typeargs")
             {
                 supplied[text] = supplied.GetValueOrDefault(text) + 1;
@@ -52,8 +56,14 @@ public sealed partial class ReplCore
         foreach (var line in cell.Inputs.Reverse().Select(line => NormalizeDeclaration(line)!))
         {
             _cancellationToken.ThrowIfCancellationRequested();
-            if (supplied.GetValueOrDefault(line) is > 0 and var count) supplied[line] = count - 1;
-            else missing.Add(line);
+            if (supplied.GetValueOrDefault(line) is > 0 and var count)
+            {
+                supplied[line] = count - 1;
+            }
+            else
+            {
+                missing.Add(line);
+            }
         }
 
         missing.Reverse();
@@ -74,16 +84,25 @@ public sealed partial class ReplCore
                 {
                     var declaration = MissingDeclaration(directive, text);
                     var recalled = declaration == text ? line : PreserveComments(line, declaration, previousComment);
-                    if (recalled is not null) result.Add(recalled);
+                    if (recalled is not null)
+                    {
+                        result.Add(recalled);
+                    }
+
                     continue;
                 }
                 else if (directive == ".typeargs")
                 {
                     if (text == typeArguments)
                     {
-                        if (PreserveComments(line, null, previousComment) is { } recalled) result.Add(recalled);
+                        if (PreserveComments(line, null, previousComment) is { } recalled)
+                        {
+                            result.Add(recalled);
+                        }
+
                         continue;
                     }
+
                     typeArguments = text;
                 }
             }
@@ -106,7 +125,10 @@ public sealed partial class ReplCore
                     rewritten.Append(part);
                     retainedComment = true;
                 }
-                else if (string.IsNullOrWhiteSpace(part)) rewritten.Append(part);
+                else if (string.IsNullOrWhiteSpace(part))
+                {
+                    rewritten.Append(part);
+                }
                 else if (!inserted)
                 {
                     rewritten.Append(replacement);
@@ -121,7 +143,11 @@ public sealed partial class ReplCore
         {
             if (directive == ".vararg")
             {
-                if (vararg) return null;
+                if (vararg)
+                {
+                    return null;
+                }
+
                 vararg = true;
                 return text;
             }
@@ -139,7 +165,11 @@ public sealed partial class ReplCore
             var position = 0;
             var init = local && TypeParser.TryKeyword(spec, ref position, "init");
             spec = spec[position..].Trim();
-            if (spec.StartsWith('(') && spec.EndsWith(')')) spec = spec[1..^1].Trim();
+            if (spec.StartsWith('(') && spec.EndsWith(')'))
+            {
+                spec = spec[1..^1].Trim();
+            }
+
             var parts = CilSyntaxParser.SplitTopLevel(spec);
             var retained = new List<string>();
             foreach (var part in parts)
@@ -162,10 +192,20 @@ public sealed partial class ReplCore
                 var slot = local ? historicalLocals++ : historicalArguments++;
                 var added = name.Length == 0 ? slot >= (local ? locals : arguments)
                     : (local ? localNames : argumentNames).Add(name);
-                if (!added) continue;
+                if (!added)
+                {
+                    continue;
+                }
+
                 retained.Add(part);
-                if (local) locals++;
-                else arguments++;
+                if (local)
+                {
+                    locals++;
+                }
+                else
+                {
+                    arguments++;
+                }
             }
 
             return retained.Count == 0 ? null : retained.Count == parts.Count ? text
@@ -174,7 +214,11 @@ public sealed partial class ReplCore
 
         static string? NormalizeDeclaration(string? line)
         {
-            if (line is null) return null;
+            if (line is null)
+            {
+                return null;
+            }
+
             var inComment = false;
             _ = CilLexer.Classify(line, ref inComment, out var text);
             return text;

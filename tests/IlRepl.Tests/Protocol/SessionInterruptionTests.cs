@@ -54,8 +54,12 @@ public sealed class SessionInterruptionTests
         var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         void Observe(ExecutionProgress progress)
         {
-            if (progress.IsRunning) observed.TrySetResult(progress.Identity);
+            if (progress.IsRunning)
+            {
+                observed.TrySetResult(progress.Identity);
+            }
         }
+
         controller.ProgressChanged += Observe;
         string previous;
         try
@@ -63,14 +67,21 @@ public sealed class SessionInterruptionTests
             Assert.IsTrue((await controller.HandleAsync(".help", token)).Succeeded);
             previous = await observed.Task.WaitAsync(TimeSpan.FromSeconds(20), token);
         }
-        finally { controller.ProgressChanged -= Observe; }
+        finally
+        {
+            controller.ProgressChanged -= Observe;
+        }
 
         var replay = controller.SessionAsync(new SessionRequest { Action = new SessionAction { Operation = SessionOperation.Run } }, token);
         try
         {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
             deadline.CancelAfter(TimeSpan.FromSeconds(20));
-            while (!File.Exists(files.MarkerPath)) await Task.Delay(10, deadline.Token);
+            while (!File.Exists(files.MarkerPath))
+            {
+                await Task.Delay(10, deadline.Token);
+            }
+
             var active = controller.Progress;
             Assert.IsTrue(active.IsRunning);
             Assert.AreNotEqual(previous, active.Identity);

@@ -14,7 +14,8 @@ public sealed record TranscriptLine(LineKind Kind, IReadOnlyList<TranscriptSpan>
     /// <param name="text">The text.</param>
     /// <param name="style">The style.</param>
     /// <returns>The line.</returns>
-    public static TranscriptLine Of(LineKind kind, string text, SpanStyle style = SpanStyle.Default) => new(kind, [new TranscriptSpan(text, style)]);
+    public static TranscriptLine Of(LineKind kind, string text, SpanStyle style = SpanStyle.Default) =>
+        new(kind, [new TranscriptSpan(text, style)]);
 
     /// <summary>
     /// The text of the line without styling.

@@ -109,6 +109,7 @@ foreach (var file in files)
             {
                 blocks[Key(body)] = (where, language, editor, spans);
             }
+
             i = end;
         }
     }
@@ -314,6 +315,7 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
     {
         return StyledLines(body, SpanStyle.Input);
     }
+
     var directory = Directory.GetCurrentDirectory();
     var normalized = produced.Select(line => TrimEndSpans(line.Kind == LineKind.Info
         ? line.Spans.Select(span => span with { Text = NormalizeSavePath(span.Text, directory, Path.DirectorySeparatorChar) }).ToArray()

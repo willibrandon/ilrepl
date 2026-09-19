@@ -89,7 +89,9 @@ public sealed class NativeProcessTests
         Assert.DoesNotContain("DOTNET_JitDisasm=", output);
         Assert.DoesNotContain(report.Left.Authorization, output);
         foreach (var header in NativeDisassembly.Headers(compilation))
+        {
             Assert.Contains("  " + header, core.Transcript.Lines.Select(line => line.PlainText));
+        }
     }
 
     /// <summary>
@@ -358,6 +360,9 @@ public sealed class NativeProcessTests
 
     private static void Submit(ReplCore core, params string[] source)
     {
-        foreach (var line in IlLines.Expand(source)) Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + Plain(core));
+        foreach (var line in IlLines.Expand(source))
+        {
+            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + Plain(core));
+        }
     }
 }

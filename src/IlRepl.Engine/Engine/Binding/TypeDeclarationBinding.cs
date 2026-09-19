@@ -138,7 +138,10 @@ internal static class TypeDeclarationBinding
     }
 
     private static void CheckAbstractMembers(
-        TypeValidationState declaration, List<TypeSymbol> bases, MethodSymbol[] own, IBindingScope scope)
+        TypeValidationState declaration,
+        List<TypeSymbol> bases,
+        MethodSymbol[] own,
+        IBindingScope scope)
     {
         if (declaration.Type.Attributes.HasFlag(TypeAttributes.Abstract))
         {
@@ -169,8 +172,11 @@ internal static class TypeDeclarationBinding
     }
 
     private static List<OverrideSymbol> CheckInterfaces(
-        TypeValidationState declaration, List<TypeSymbol> bases, List<TypeSymbol> interfaces,
-        MethodSymbol[] own, IBindingScope scope)
+        TypeValidationState declaration,
+        List<TypeSymbol> bases,
+        List<TypeSymbol> interfaces,
+        MethodSymbol[] own,
+        IBindingScope scope)
     {
         var implied = new List<OverrideSymbol>();
         var baseInterfaces = bases.Count == 0 ? [] : Interfaces(bases[0], scope);

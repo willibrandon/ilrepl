@@ -204,8 +204,10 @@ public static partial class BrowserWorkspace
                         {
                             barrier.TrySetResult(prompt.CaptureSessionEditor());
                         }
+
                         break;
                 }
+
                 return true;
             }
 
@@ -258,11 +260,13 @@ public static partial class BrowserWorkspace
                 barrier.TrySetCanceled();
                 throw new InvalidOperationException("the editor did not respond; wait for the current operation or restart the session");
             }
+
             if (s_prompt?.Submission is { } submission)
             {
                 await submission.Completion.ConfigureAwait(false);
             }
         }
+
         if (operation == "validate")
         {
             if (!value.StartsWith('#') && Encoding.UTF8.GetByteCount(value) > BrowserFileLimit)
@@ -360,9 +364,19 @@ public static partial class BrowserWorkspace
 
     [JSImport("checkpoint", "main.js")]
     [return: JSMarshalAs<JSType.Promise<JSType.Void>>]
-    private static partial Task Checkpoint(string document, string? path, bool dirty, bool echoStack, bool showTiming,
-        int pendingSubmission, string pendingSource, int entryPrefix, string cellNumbers, string assetHashes,
-        string pendingInput, string editor);
+    private static partial Task Checkpoint(
+        string document,
+        string? path,
+        bool dirty,
+        bool echoStack,
+        bool showTiming,
+        int pendingSubmission,
+        string pendingSource,
+        int entryPrefix,
+        string cellNumbers,
+        string assetHashes,
+        string pendingInput,
+        string editor);
 
     [JSImport("editorChanged", "main.js")]
     private static partial void EditorChanged(string editor);

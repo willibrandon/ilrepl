@@ -344,8 +344,12 @@ public sealed class EditableBodyTests
     [DataRow("HANDLER", "TRY", "HANDLER", "DONE", "TRY")]
     [DataRow("TRY", "HANDLER", "HANDLER", "HANDLER", "HANDLER")]
     [DataRow("TRY", "HANDLER", "DONE", "HANDLER", "HANDLER")]
-    public void RangeClause_InvalidBoundariesRejectCommit(string tryStart, string tryEnd, string handlerStart,
-        string handlerEnd, string diagnosticLabel)
+    public void RangeClause_InvalidBoundariesRejectCommit(
+        string tryStart,
+        string tryEnd,
+        string handlerStart,
+        string handlerEnd,
+        string diagnosticLabel)
     {
         var session = IlLines.Load(".method int32 M() { ldc.i4.s 42; ret }");
         var original = session.Methods.Single().Version.Body;

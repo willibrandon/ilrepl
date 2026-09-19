@@ -80,7 +80,13 @@ public static class TypeParser
     /// <param name="optionalModifiers">The <c>modopt</c> types, in order.</param>
     /// <returns>The parsed type.</returns>
     /// <exception cref="ReplException">The text is not a valid type or the type cannot be found.</exception>
-    public static Type ParseAt(string s, ref int pos, ParseContext context, out bool pinned, out List<Type> requiredModifiers, out List<Type> optionalModifiers)
+    public static Type ParseAt(
+        string s,
+        ref int pos,
+        ParseContext context,
+        out bool pinned,
+        out List<Type> requiredModifiers,
+        out List<Type> optionalModifiers)
     {
         ArgumentNullException.ThrowIfNull(s);
         ArgumentNullException.ThrowIfNull(context);
@@ -88,7 +94,11 @@ public static class TypeParser
         return Bind(syntax, context, out pinned, out requiredModifiers, out optionalModifiers);
     }
 
-    private static Type Bind(TypeSyntax syntax, ParseContext context, out bool pinned, out List<Type> requiredModifiers,
+    private static Type Bind(
+        TypeSyntax syntax,
+        ParseContext context,
+        out bool pinned,
+        out List<Type> requiredModifiers,
         out List<Type> optionalModifiers)
     {
         var scope = new RuntimeBindingScope(context);

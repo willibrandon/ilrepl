@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reflection.Emit;
 
 namespace IlRepl.Engine;
 
@@ -36,7 +37,7 @@ public static class ConstantParser
         }
 
         var expected = Nullable.GetUnderlyingType(target) ?? target;
-        if (expected is System.Reflection.Emit.TypeBuilder builder && builder.BaseType == typeof(Enum))
+        if (expected is TypeBuilder builder && builder.BaseType == typeof(Enum))
         {
             // An enum still being written cannot report its underlying type; the literal's own
             // wrapper (int32(1), int64(2)) says what it is, and the value__ field is checked at close.
@@ -61,7 +62,9 @@ public static class ConstantParser
         {
             if (expected != typeof(string) && expected != typeof(object))
             {
-                throw new ReplException($"{what} is a {TypeNameFormatter.Pretty(target)}; write {TypeParser.PrimitiveKeyword(expected) ?? TypeNameFormatter.Pretty(expected)}(...)");
+                throw new ReplException(
+                    $"{what} is a {TypeNameFormatter.Pretty(target)}; write " +
+                    $"{TypeParser.PrimitiveKeyword(expected) ?? TypeNameFormatter.Pretty(expected)}(...)");
             }
 
             return LiteralParser.ParseString(s);

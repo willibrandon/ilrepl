@@ -140,6 +140,7 @@ public sealed class ContextualInstructionRegressionTests
         {
             Assert.StartsWith("ldtoken method ", item.InstructionHelp.Syntax);
         }
+
         Assert.AreEqual(InstructionReference.For(opcode).Explanation, item.InstructionHelp.Explanation);
         Assert.AreEqual(InstructionReference.For(opcode).DocumentationUrl, item.InstructionHelp.DocumentationUrl);
         Assert.Contains(note => note.Contains("type arguments", StringComparison.OrdinalIgnoreCase)

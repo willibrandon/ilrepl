@@ -28,10 +28,12 @@ public sealed class AssemblyLifetimeScopeTests
             {
                 AssertGeneratedLifetime(collectible: true);
             }
+
             AssertGeneratedLifetime(collectible: false);
             Assert.ThrowsExactly<InvalidOperationException>(LeaveNestedScope);
             AssertGeneratedLifetime(collectible: false);
         }
+
         AssertGeneratedLifetime(collectible: true);
     }
 
@@ -49,12 +51,17 @@ public sealed class AssemblyLifetimeScopeTests
             await Task.WhenAll(CompileAsync(true), CompileAsync(false));
             AssertGeneratedLifetime(collectible: false);
         }
+
         AssertGeneratedLifetime(collectible: true);
 
         async Task CompileAsync(bool collectible)
         {
             using var scope = new AssemblyLifetimeScope(collectible);
-            if (Interlocked.Increment(ref entered) == 2) bothEntered.SetResult();
+            if (Interlocked.Increment(ref entered) == 2)
+            {
+                bothEntered.SetResult();
+            }
+
             await bothEntered.Task.WaitAsync(cancellationToken);
             await Task.Yield();
             AssertGeneratedLifetime(collectible);
@@ -73,6 +80,7 @@ public sealed class AssemblyLifetimeScopeTests
             {
                 session.AddLine(line);
             }
+
             cell = CellCompiler.CompileForInspection(session);
             var method = Assert.ContainsSingle(session.Methods);
             var type = Assert.ContainsSingle(session.Types).RuntimeType!;

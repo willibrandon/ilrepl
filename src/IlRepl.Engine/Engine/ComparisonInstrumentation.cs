@@ -1,8 +1,8 @@
 using Mono.Cecil;
 using Mono.Cecil.Cil;
-using CilInstruction = Mono.Cecil.Cil.Instruction;
 using Assembly = System.Reflection.Assembly;
 using AssemblyName = System.Reflection.AssemblyName;
+using CilInstruction = Mono.Cecil.Cil.Instruction;
 using RuntimeGenericAttributes = System.Reflection.GenericParameterAttributes;
 
 namespace IlRepl.Engine;
@@ -15,8 +15,13 @@ internal static partial class ComparisonInstrumentation
     internal static MethodDefinition Wrap(CecilWriter writer, MethodDefinition target, MethodReference? externalVarArg = null)
         => Wrap(writer, target, [], "__ilrepl_observe_" + target.Name, externalVarArg);
 
-    private static MethodDefinition Wrap(CecilWriter writer, MethodDefinition target, TypeReference[] optionalParameters, string name,
-        MethodReference? externalVarArg = null, GenericParameter[]? callerParameters = null)
+    private static MethodDefinition Wrap(
+        CecilWriter writer,
+        MethodDefinition target,
+        TypeReference[] optionalParameters,
+        string name,
+        MethodReference? externalVarArg = null,
+        GenericParameter[]? callerParameters = null)
     {
         var owner = target.DeclaringType;
         while (owner.Methods.Any(method => method.Name == name))
@@ -62,7 +67,11 @@ internal static partial class ComparisonInstrumentation
         foreach (var parameter in target.Parameters)
         {
             var copy = new ParameterDefinition(parameter.Name, parameter.Attributes, parameter.ParameterType);
-            if (parameter.HasConstant) copy.Constant = parameter.Constant;
+            if (parameter.HasConstant)
+            {
+                copy.Constant = parameter.Constant;
+            }
+
             wrapper.Parameters.Add(copy);
         }
 
@@ -70,6 +79,7 @@ internal static partial class ComparisonInstrumentation
         {
             wrapper.Parameters.Add(new ParameterDefinition(parameter));
         }
+
         CecilCustomAttributes.CopyMethod(target, wrapper);
 
         for (var index = 0; index < target.GenericParameters.Count; index++)

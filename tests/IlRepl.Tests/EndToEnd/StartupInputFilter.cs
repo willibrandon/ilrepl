@@ -26,7 +26,9 @@ internal sealed class StartupInputFilter(byte[] input, bool atTuiEntry) : IHex1b
 
     /// <inheritdoc />
     public async ValueTask<IReadOnlyList<AnsiToken>> OnOutputAsync(
-        IReadOnlyList<AppliedToken> appliedTokens, TimeSpan elapsed, CancellationToken ct = default)
+        IReadOnlyList<AppliedToken> appliedTokens,
+        TimeSpan elapsed,
+        CancellationToken ct = default)
     {
         var tokens = appliedTokens.Select(item => item.Token).ToArray();
         if (!_sent && tokens.Any(token => atTuiEntry ? token is PrivateModeToken { Mode: 1049, Enable: true } : token is KgpToken))
@@ -35,6 +37,7 @@ internal sealed class StartupInputFilter(byte[] input, bool atTuiEntry) : IHex1b
             await Terminal.SendInputAsync(input, ct);
             Written.TrySetResult();
         }
+
         return tokens;
     }
 

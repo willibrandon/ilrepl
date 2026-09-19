@@ -19,7 +19,8 @@ public static class MemberResolver
     /// <summary>
     /// Resolves a method reference such as <c>void [System.Console]System.Console::WriteLine(string)</c>,
     /// <c>instance string Object::ToString()</c>, <c>Console::WriteLine(string)</c>, <c>instance void StringBuilder::.ctor()</c>,
-    /// <c>!!0 Enumerable::First&lt;int32&gt;(class IEnumerable`1&lt;!!0&gt;)</c>, or <c>vararg int32 Hello::CountArgs(..., int32, int32)</c>.
+    /// <c>!!0 Enumerable::First&lt;int32&gt;(class IEnumerable`1&lt;!!0&gt;)</c>,
+    /// or <c>vararg int32 Hello::CountArgs(..., int32, int32)</c>.
     /// </summary>
     /// <param name="spec">The reference text.</param>
     /// <param name="context">The parse context.</param>

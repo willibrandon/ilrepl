@@ -26,6 +26,7 @@ internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source, Func<H
             item = null;
             return false;
         }
+
         if (_pendingText is not null)
         {
             item = Filter(TakeTextOrControl());
@@ -69,6 +70,7 @@ internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source, Func<H
         {
             await frame.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
+
         if (_pendingText is not null)
         {
             return true;

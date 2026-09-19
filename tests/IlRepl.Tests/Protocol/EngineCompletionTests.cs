@@ -40,6 +40,7 @@ public sealed class EngineCompletionTests
             Assert.AreEqual(localItem.InstructionHelp with { Notes = remoteItem.InstructionHelp.Notes }, remoteItem.InstructionHelp);
             Assert.AreSequenceEqual(localItem.InstructionHelp.Notes, remoteItem.InstructionHelp.Notes);
         }
+
         Assert.AreEqual(left.ReplaceStart, right.ReplaceStart);
         Assert.AreEqual(left.ReplaceLength, right.ReplaceLength);
         Assert.AreEqual(beforeLocal, local.Status);
@@ -57,7 +58,11 @@ public sealed class EngineCompletionTests
     [DataRow(true)]
     public async Task Paging_RejectsMutationAndPreservesOrder(bool useHost)
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = useHost
             ? (IReplEngine)await HostPaths.StartEngineAsync(TestContext.CancellationToken) : new InProcessEngine();
         const string line = "call string::";

@@ -33,17 +33,19 @@
     <AssemblyMetadata Include="IldasmPackagePath" Value="$(NuGetPackageRoot)runtime.$(IlasmRid.ToLowerInvariant()).microsoft.netcore.ildasm/$(IlasmPackageVersion)/runtimes/$(IlasmRid)/native/" />
   </ItemGroup>
 
+  <!--
+    The tests publish a host of their own, so the frontend skips publishing one when it is built only for them. A solution
+    build already builds the frontend with its host, and asking for a second variant there would build it twice into one
+    folder. The frontend removes the property from its own references, so no library is ever built in two variants.
+  -->
   <ItemGroup>
-    <ProjectReference Include="../../src/IlRepl/IlRepl.csproj"
+    <ProjectReference Include="../../src/IlRepl/IlRepl.csproj" Condition="'$(BuildingSolutionFile)' == 'true'" />
+    <ProjectReference Include="../../src/IlRepl/IlRepl.csproj" Condition="'$(BuildingSolutionFile)' != 'true'"
                       AdditionalProperties="IncludeIlReplHostInOutput=false" />
-    <ProjectReference Include="../../src/IlRepl.Engine/IlRepl.Engine.csproj"
-                      AdditionalProperties="IncludeIlReplHostInOutput=false" />
-    <ProjectReference Include="../../src/IlRepl.Host/IlRepl.Host.csproj"
-                      AdditionalProperties="IncludeIlReplHostInOutput=false" />
-    <ProjectReference Include="../../src/IlRepl.Protocol/IlRepl.Protocol.csproj"
-                      AdditionalProperties="IncludeIlReplHostInOutput=false" />
-    <ProjectReference Include="../../src/IlRepl.Tui/IlRepl.Tui.csproj"
-                      AdditionalProperties="IncludeIlReplHostInOutput=false" />
+    <ProjectReference Include="../../src/IlRepl.Engine/IlRepl.Engine.csproj" />
+    <ProjectReference Include="../../src/IlRepl.Host/IlRepl.Host.csproj" />
+    <ProjectReference Include="../../src/IlRepl.Protocol/IlRepl.Protocol.csproj" />
+    <ProjectReference Include="../../src/IlRepl.Tui/IlRepl.Tui.csproj" />
     <ProjectReference Include="../../samples/Greeter/Greeter.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../samples/Fixtures/Fixtures.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>

@@ -49,8 +49,14 @@ internal sealed class ConstructorReflectionBinder : Binder
     /// <param name="names">The argument names.</param>
     /// <param name="state">The binding state.</param>
     /// <returns>No value; this operation is unsupported.</returns>
-    public override MethodBase BindToMethod(BindingFlags bindingAttr, MethodBase[] match, ref object?[] args,
-        ParameterModifier[]? modifiers, CultureInfo? culture, string[]? names, out object? state)
+    public override MethodBase BindToMethod(
+        BindingFlags bindingAttr,
+        MethodBase[] match,
+        ref object?[] args,
+        ParameterModifier[]? modifiers,
+        CultureInfo? culture,
+        string[]? names,
+        out object? state)
         => throw new NotSupportedException("unexpected invocation binding");
 
     /// <summary>
@@ -80,6 +86,10 @@ internal sealed class ConstructorReflectionBinder : Binder
     /// <param name="indexes">The index argument types.</param>
     /// <param name="modifiers">The parameter modifiers.</param>
     /// <returns>No value; this operation is unsupported.</returns>
-    public override PropertyInfo? SelectProperty(BindingFlags bindingAttr, PropertyInfo[] match, Type? returnType,
-        Type[]? indexes, ParameterModifier[]? modifiers) => throw new NotSupportedException("unexpected property binding");
+    public override PropertyInfo? SelectProperty(
+        BindingFlags bindingAttr,
+        PropertyInfo[] match,
+        Type? returnType,
+        Type[]? indexes,
+        ParameterModifier[]? modifiers) => throw new NotSupportedException("unexpected property binding");
 }

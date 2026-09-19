@@ -16,7 +16,8 @@ namespace IlRepl.Tests.Engine;
 [TestClass]
 public sealed partial class DisassemblyFidelityTests
 {
-    private const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+    private const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance
+        | BindingFlags.DeclaredOnly;
 
     private static (Session Session, Assembly Assembly, ModuleDefinition Module) Fixtures()
     {
@@ -65,13 +66,16 @@ public sealed partial class DisassemblyFidelityTests
         var session = new Session();
         var (assembly, image, fixture) = CecilFixture.Build((module, type) =>
         {
-            type.Fields.Add(new Mono.Cecil.FieldDefinition("F", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static, module.TypeSystem.Int32));
-            var target = new MethodDefinition("Target", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Int32);
+            type.Fields.Add(new Mono.Cecil.FieldDefinition("F", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static,
+                module.TypeSystem.Int32));
+            var target = new MethodDefinition("Target", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Int32);
             target.Parameters.Add(new ParameterDefinition(module.TypeSystem.Int32));
             target.Body.GetILProcessor().Emit(OpCodes.Ldarg_0);
             target.Body.GetILProcessor().Emit(OpCodes.Ret);
             type.Methods.Add(target);
-            var m = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            var m = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Void);
             m.Parameters.Add(new ParameterDefinition("x", Mono.Cecil.ParameterAttributes.None, module.TypeSystem.Int32));
             type.Methods.Add(m);
             var il = m.Body.GetILProcessor();
@@ -125,8 +129,10 @@ public sealed partial class DisassemblyFidelityTests
         var compared = 0;
         foreach (var (cecil, runtime) in Bodies(assembly, module))
         {
-            var key = cecil.DeclaringType.FullName + "::" + cecil.Name + "/" + cecil.Parameters.Count.ToString(CultureInfo.InvariantCulture);
-            Assert.IsTrue(expected.TryGetValue(key, out var ildasm), "ildasm output lacks " + key + "\n" + string.Join("\n", expected.Keys));
+            var key = cecil.DeclaringType.FullName + "::" + cecil.Name + "/"
+                + cecil.Parameters.Count.ToString(CultureInfo.InvariantCulture);
+            Assert.IsTrue(expected.TryGetValue(key, out var ildasm),
+                "ildasm output lacks " + key + "\n" + string.Join("\n", expected.Keys));
             var ours = MethodDisassembler.Disassemble(runtime, session);
             var instructions = ours.Entries.Where(e => e.Raw is not null).ToList();
             Assert.HasCount(ildasm.Instructions.Count, instructions, key + ": instruction count");
@@ -137,19 +143,22 @@ public sealed partial class DisassemblyFidelityTests
                 Assert.AreEqual(opcode, instructions[i].Raw!.Op.Name, key + $" at IL_{offset:x4}: opcode");
                 if (instructions[i].Raw!.BranchTarget is int target)
                 {
-                    Assert.AreEqual(IlReader.LabelFor(target).ToUpperInvariant(), operand.ToUpperInvariant(), key + $" at IL_{offset:x4}: target");
+                    Assert.AreEqual(IlReader.LabelFor(target).ToUpperInvariant(), operand.ToUpperInvariant(),
+                        key + $" at IL_{offset:x4}: target");
                 }
 
                 if (instructions[i].Raw!.Operand.SwitchTargets.Length > 0)
                 {
                     var targets = TargetList().Matches(operand).Select(m => m.Value.ToUpperInvariant()).ToList();
-                    Assert.AreSequenceEqual(instructions[i].Raw!.Operand.SwitchTargets.Select(t => IlReader.LabelFor(t).ToUpperInvariant()).ToList(), targets, key + $" at IL_{offset:x4}: switch targets");
+                    Assert.AreSequenceEqual(instructions[i].Raw!.Operand.SwitchTargets.Select(t => IlReader.LabelFor(t).ToUpperInvariant())
+                        .ToList(), targets, key + $" at IL_{offset:x4}: switch targets");
                 }
             }
 
             Assert.AreEqual(ildasm.MaxStack, ours.MaxStack, key + ": maxstack");
             Assert.AreEqual(ildasm.InitLocals, ours.InitLocals, key + ": init locals");
-            var native = IlAsmClauseWriter.Write(ours).Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).SelectMany(ClauseWords).ToList();
+            var native = IlAsmClauseWriter.Write(ours).Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).SelectMany(ClauseWords)
+                .ToList();
             Assert.AreSequenceEqual(ildasm.ClauseWords, native, key + ": clause structure");
             compared++;
         }
@@ -222,9 +231,12 @@ public sealed partial class DisassemblyFidelityTests
         Assert.AreEqual(2, fixture.GetMethod("M")!.Invoke(null, null), "the original dispatches to the Exception handler first");
         var listing = MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
         var reassembled = IlasmLocator.Assemble(Scaffold(listing));
-        var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture").Methods.First(m => m.Name == "M");
-        var method = ModuleDefinition.ReadModule(new MemoryStream(reassembled)).Types.First(t => t.Name == "T").Methods.Single(m => m.HasBody);
-        CecilOracle.AssertSameMeaning(original, method, fixture.Assembly.GetName().FullName, fixture.Assembly.GetName().FullName, image, reassembled);
+        var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture")
+            .Methods.First(m => m.Name == "M");
+        var method = ModuleDefinition.ReadModule(new MemoryStream(reassembled)).Types.First(t => t.Name == "T")
+            .Methods.Single(m => m.HasBody);
+        CecilOracle.AssertSameMeaning(original, method, fixture.Assembly.GetName().FullName, fixture.Assembly.GetName().FullName, image,
+            reassembled);
         var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-order", isCollectible: true);
         var loaded = context.LoadFromStream(new MemoryStream(reassembled));
         Assert.AreEqual(2, loaded.GetType("N.T")!.GetMethod("M")!.Invoke(null, null), "the reassembled body dispatches the same way");
@@ -239,8 +251,10 @@ public sealed partial class DisassemblyFidelityTests
     {
         var session = new Session();
         var (assembly, image, _) = CecilFixture.Build(MethodDisassemblerTests.AddOutOfOrderHandlers, session.Resolver);
-        var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture").Methods.First(m => m.Name == "M");
-        var changed = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture").Methods.First(m => m.Name == "M");
+        var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture")
+            .Methods.First(m => m.Name == "M");
+        var changed = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture")
+            .Methods.First(m => m.Name == "M");
         var handlers = changed.Body.ExceptionHandlers.ToList();
         changed.Body.ExceptionHandlers.Clear();
         foreach (var handler in Enumerable.Reverse(handlers))
@@ -261,14 +275,17 @@ public sealed partial class DisassemblyFidelityTests
     {
         static MethodDefinition Referencing(Version version)
         {
-            var definition = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("Referrer", new Version(1, 0, 0, 0)), "Referrer", ModuleKind.Dll);
+            var definition = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("Referrer", new Version(1, 0, 0, 0)), "Referrer",
+                ModuleKind.Dll);
             var module = definition.MainModule;
             var scope = new AssemblyNameReference("ReviewUnloadedLibrary", version);
             module.AssemblyReferences.Add(scope);
             var target = new Mono.Cecil.TypeReference("N", "Target", module, scope);
-            var type = new TypeDefinition("N", "Fixture", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            var type = new TypeDefinition("N", "Fixture", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class,
+                module.TypeSystem.Object);
             module.Types.Add(type);
-            var m = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            var m = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Void);
             var il = m.Body.GetILProcessor();
             il.Emit(Mono.Cecil.Cil.OpCodes.Ldtoken, target);
             il.Emit(Mono.Cecil.Cil.OpCodes.Pop);
@@ -288,17 +305,20 @@ public sealed partial class DisassemblyFidelityTests
         var identity = method.Method.Module.Assembly.GetName();
         var self = identity.Name!;
         var body = IlAsmClauseWriter.Write(method);
+        var declared = method.Locals.Select((l, i) => IlSignatureRenderer.IlAsmNamed(l) + " V_" + i.ToString(CultureInfo.InvariantCulture));
         var locals = method.Locals.Count == 0
             ? ""
-            : $"    {(method.InitLocals ? ".locals init (" : ".locals (")}{string.Join(", ", method.Locals.Select((l, i) => IlSignatureRenderer.IlAsmNamed(l) + " V_" + i.ToString(CultureInfo.InvariantCulture)))})\n";
+            : $"    {(method.InitLocals ? ".locals init (" : ".locals (")}{string.Join(", ", declared)})\n";
         var sb = new StringBuilder();
-        var externs = AssemblyHint().Matches(method.Header + body + locals).Select(m => m.Groups[1].Value).Where(n => char.IsLetter(n[0])).Distinct(StringComparer.Ordinal).ToList();
+        var externs = AssemblyHint().Matches(method.Header + body + locals).Select(m => m.Groups[1].Value).Where(n => char.IsLetter(n[0]))
+            .Distinct(StringComparer.Ordinal).ToList();
         foreach (var name in externs)
         {
             // Every extern names the assembly identity the listing means: the fixture's own version
             // for a self reference, and the loaded assembly's version and key for the rest, so the
             // reassembled references resolve to the same assemblies as the original's.
-            var known = name == self ? identity : AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetName()).FirstOrDefault(n => n.Name == name);
+            var known = name == self ? identity
+                : AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetName()).FirstOrDefault(n => n.Name == name);
             sb.Append(".assembly extern ").Append(name);
             if (known is null)
             {
@@ -311,7 +331,8 @@ public sealed partial class DisassemblyFidelityTests
             sb.Append(" { .ver ").Append(v.Major).Append(':').Append(v.Minor).Append(':').Append(v.Build).Append(':').Append(v.Revision);
             if (token is { Length: > 0 })
             {
-                sb.Append(" .publickeytoken = (").Append(string.Join(" ", token.Select(b => b.ToString("X2", CultureInfo.InvariantCulture)))).Append(')');
+                sb.Append(" .publickeytoken = (")
+                    .Append(string.Join(" ", token.Select(b => b.ToString("X2", CultureInfo.InvariantCulture)))).Append(')');
             }
 
             sb.AppendLine(" }");
@@ -325,7 +346,8 @@ public sealed partial class DisassemblyFidelityTests
         var typeParameters = owner is { IsGenericTypeDefinition: true }
             ? "<" + string.Join(", ", owner.GetGenericArguments().Select(p => TypeNameFormatter.IlAsmIdentifier(p.Name))) + ">"
             : "";
-        sb.Append(".class public auto ansi beforefieldinit N.T").Append(typeParameters).AppendLine(" extends [System.Runtime]System.Object");
+        sb.Append(".class public auto ansi beforefieldinit N.T").Append(typeParameters)
+            .AppendLine(" extends [System.Runtime]System.Object");
         sb.AppendLine("{");
         sb.Append("  ").Append(method.Header).AppendLine();
         sb.AppendLine("  {");
@@ -343,7 +365,11 @@ public sealed partial class DisassemblyFidelityTests
         return word is ".try" or "catch" or "filter" or "finally" or "fault" ? [word] : [];
     }
 
-    private sealed record IldasmMethod(List<(int Offset, string Opcode, string Operand)> Instructions, int MaxStack, bool InitLocals, List<string> ClauseWords);
+    private sealed record IldasmMethod(
+        List<(int Offset, string Opcode, string Operand)> Instructions,
+        int MaxStack,
+        bool InitLocals,
+        List<string> ClauseWords);
 
     private static Dictionary<string, IldasmMethod> ParseIldasm(string text)
     {
@@ -388,7 +414,8 @@ public sealed partial class DisassemblyFidelityTests
                 if (line.StartsWith('{'))
                 {
                     var joined = header.ToString();
-                    var key = string.Join("/", classes.Reverse().Select(c => c.Name)) + "::" + MethodName(joined) + "/" + ParameterCount(joined).ToString(CultureInfo.InvariantCulture);
+                    var key = string.Join("/", classes.Reverse().Select(c => c.Name)) + "::" + MethodName(joined) + "/"
+                        + ParameterCount(joined).ToString(CultureInfo.InvariantCulture);
                     current = new IldasmMethod([], 0, false, []);
                     methods[key] = current;
                     header = null;
@@ -422,7 +449,8 @@ public sealed partial class DisassemblyFidelityTests
                 if (instruction.Success)
                 {
                     var operand = instruction.Groups[3].Value.Trim();
-                    current.Instructions.Add((int.Parse(instruction.Groups[1].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture), instruction.Groups[2].Value, operand));
+                    current.Instructions.Add((int.Parse(instruction.Groups[1].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture),
+                        instruction.Groups[2].Value, operand));
                     switchOpen = instruction.Groups[2].Value == "switch" && !operand.Contains(')', StringComparison.Ordinal);
                     continue;
                 }
@@ -598,8 +626,10 @@ public sealed partial class DisassemblyFidelityTests
         var (assembly, image, fixture) = CecilFixture.Build(MethodDisassemblerTests.AddBackslashTypes, session.Resolver);
         var listing = MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
         var reassembled = IlasmLocator.Assemble(Scaffold(listing));
-        var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture").Methods.First(m => m.Name == "M");
-        var method = ModuleDefinition.ReadModule(new MemoryStream(reassembled)).Types.First(t => t.Name == "T").Methods.Single(m => m.HasBody);
+        var original = ModuleDefinition.ReadModule(new MemoryStream(image)).Types.First(t => t.Name == "Fixture")
+            .Methods.First(m => m.Name == "M");
+        var method = ModuleDefinition.ReadModule(new MemoryStream(reassembled)).Types.First(t => t.Name == "T")
+            .Methods.Single(m => m.HasBody);
         CecilOracle.AssertSameMeaning(original, method, assembly.GetName().FullName, assembly.GetName().FullName, image, reassembled);
         var context = new AssemblyLoadContext("ilasm-backslash", isCollectible: true);
         try
@@ -624,9 +654,14 @@ public sealed partial class DisassemblyFidelityTests
         var marvin = typeof(string).Assembly.GetType("System.Marvin")!;
         var identity = marvin.Assembly.GetName();
         var token = string.Join(" ", identity.GetPublicKeyToken()!.Select(b => b.ToString("X2", CultureInfo.InvariantCulture)));
-        var source = $".assembly extern System.Runtime {{}}\n.assembly extern {identity.Name} {{ .ver {identity.Version!.Major}:{identity.Version.Minor}:{identity.Version.Build}:{identity.Version.Revision} .publickeytoken = ({token}) }}\n.assembly Wrapper {{}}\n"
-            + ".class public auto ansi N.T extends [System.Runtime]System.Object\n{\n  .method public static class [System.Runtime]System.Type M() cil managed\n  {\n    .maxstack 8\n"
-            + $"    ldtoken {TypeNameFormatter.IlAsm(marvin)}\n    call class [System.Runtime]System.Type [System.Runtime]System.Type::GetTypeFromHandle(valuetype [System.Runtime]System.RuntimeTypeHandle)\n    ret\n  }}\n}}\n";
+        var source =
+            $".assembly extern System.Runtime {{}}\n.assembly extern {identity.Name} {{ .ver " +
+            $"{identity.Version!.Major}:{identity.Version.Minor}:{identity.Version.Build}:{identity.Version.Revision} .publickeytoken = " +
+            $"({token}) }}\n.assembly Wrapper {{}}\n"
+            + ".class public auto ansi N.T extends [System.Runtime]System.Object\n{\n  .method public static class " +
+            "[System.Runtime]System.Type M() cil managed\n  {\n    .maxstack 8\n"
+            + $"    ldtoken {TypeNameFormatter.IlAsm(marvin)}\n    call class [System.Runtime]System.Type " +
+            $"[System.Runtime]System.Type::GetTypeFromHandle(valuetype [System.Runtime]System.RuntimeTypeHandle)\n    ret\n  }}\n}}\n";
         var image = IlasmLocator.Assemble(source);
         var context = new System.Runtime.Loader.AssemblyLoadContext("ilasm-marvin", isCollectible: true);
         var loaded = context.LoadFromStream(new MemoryStream(image));

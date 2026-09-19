@@ -42,7 +42,12 @@ public static partial class ComparisonProbe
     /// <param name="result">The return value or awaitable.</param>
     /// <param name="exception">The selected method's synchronous exception, or null.</param>
     /// <param name="aliases">Canonical alias groups after the call, including its managed reference return.</param>
-    public static void Leave(int identity, object? receiver, object?[] arguments, object? result, Exception? exception,
+    public static void Leave(
+        int identity,
+        object? receiver,
+        object?[] arguments,
+        object? result,
+        Exception? exception,
         int[]? aliases = null)
     {
         lock (Gate)

@@ -304,7 +304,8 @@ public sealed partial class PromptState
     /// <summary>
     /// True while the current selection is the one a refusal made, untouched since.
     /// </summary>
-    public bool SelectionIsReturned =>ReturnedSelection is { } returned && Editor.Document.Version == ReturnedVersion && Editor.Cursor.HasSelection && Editor.Cursor.SelectionRange == returned;
+    public bool SelectionIsReturned =>ReturnedSelection is { } returned && Editor.Document.Version == ReturnedVersion
+        && Editor.Cursor.HasSelection && Editor.Cursor.SelectionRange == returned;
 
     /// <summary>
     /// The depth and comment state the next submission will start from: the engine's own while

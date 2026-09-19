@@ -87,7 +87,11 @@ public static class ArrayReferenceFixture
         var types = new Dictionary<Type, TypeReferenceHandle>();
         TypeReferenceHandle TypeReference(Type type)
         {
-            if (types.TryGetValue(type, out var handle)) return handle;
+            if (types.TryGetValue(type, out var handle))
+            {
+                return handle;
+            }
+
             if (!references.TryGetValue(type.Assembly, out var reference))
             {
                 var identity = type.Assembly.GetName();
@@ -104,25 +108,55 @@ public static class ArrayReferenceFixture
 
         void EncodeType(SignatureTypeEncoder encoder, Type type)
         {
-            if (type == typeof(bool)) encoder.Boolean();
-            else if (type == typeof(int)) encoder.Int32();
-            else if (type == typeof(string)) encoder.String();
-            else if (type == typeof(object)) encoder.Object();
-            else if (type == typeof(nint)) encoder.IntPtr();
-            else if (type.IsArray) EncodeType(encoder.SZArray(), type.GetElementType()!);
+            if (type == typeof(bool))
+            {
+                encoder.Boolean();
+            }
+            else if (type == typeof(int))
+            {
+                encoder.Int32();
+            }
+            else if (type == typeof(string))
+            {
+                encoder.String();
+            }
+            else if (type == typeof(object))
+            {
+                encoder.Object();
+            }
+            else if (type == typeof(nint))
+            {
+                encoder.IntPtr();
+            }
+            else if (type.IsArray)
+            {
+                EncodeType(encoder.SZArray(), type.GetElementType()!);
+            }
             else if (type.IsGenericParameter)
             {
-                if (type.DeclaringMethod is null) encoder.GenericTypeParameter(type.GenericParameterPosition);
-                else encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+                if (type.DeclaringMethod is null)
+                {
+                    encoder.GenericTypeParameter(type.GenericParameterPosition);
+                }
+                else
+                {
+                    encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+                }
             }
             else if (type.IsGenericType)
             {
                 var arguments = type.GetGenericArguments();
                 var parameters = encoder.GenericInstantiation(TypeReference(type.GetGenericTypeDefinition()), arguments.Length,
                     type.IsValueType);
-                foreach (var argument in arguments) EncodeType(parameters.AddArgument(), argument);
+                foreach (var argument in arguments)
+                {
+                    EncodeType(parameters.AddArgument(), argument);
+                }
             }
-            else encoder.Type(TypeReference(type), type.IsValueType);
+            else
+            {
+                encoder.Type(TypeReference(type), type.IsValueType);
+            }
         }
 
         EntityHandle MethodReference(MethodBase method)
@@ -130,33 +164,57 @@ public static class ArrayReferenceFixture
             var definition = method is MethodInfo { IsGenericMethod: true } generic ? generic.GetGenericMethodDefinition() : method;
             var declaring = method.DeclaringType!;
             if (declaring.IsConstructedGenericType)
+            {
                 definition = declaring.GetGenericTypeDefinition().GetMethods().Cast<MethodBase>()
                     .Concat(declaring.GetGenericTypeDefinition().GetConstructors())
                     .Single(candidate => candidate.MetadataToken == definition.MetadataToken);
+            }
+
             var signature = new BlobBuilder();
             var parameters = definition.GetParameters();
             new BlobEncoder(signature).MethodSignature(genericParameterCount: definition.IsGenericMethod
                 ? definition.GetGenericArguments().Length : 0, isInstanceMethod: !definition.IsStatic).Parameters(parameters.Length,
                 result =>
                 {
-                    if (definition is not MethodInfo info || info.ReturnType == typeof(void)) result.Void();
-                    else EncodeType(result.Type(), info.ReturnType);
+                    if (definition is not MethodInfo info || info.ReturnType == typeof(void))
+                    {
+                        result.Void();
+                    }
+                    else
+                    {
+                        EncodeType(result.Type(), info.ReturnType);
+                    }
                 }, arguments =>
                 {
-                    foreach (var parameter in parameters) EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    foreach (var parameter in parameters)
+                    {
+                        EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    }
                 });
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
-            if (method is not MethodInfo { IsGenericMethod: true } closed) return member;
+            if (method is not MethodInfo { IsGenericMethod: true } closed)
+            {
+                return member;
+            }
+
             var specification = new BlobBuilder();
             var encoded = new BlobEncoder(specification).MethodSpecificationSignature(closed.GetGenericArguments().Length);
-            foreach (var argument in closed.GetGenericArguments()) EncodeType(encoded.AddArgument(), argument);
+            foreach (var argument in closed.GetGenericArguments())
+            {
+                EncodeType(encoded.AddArgument(), argument);
+            }
+
             return metadata.AddMethodSpecification(member, metadata.GetOrAddBlob(specification));
         }
 
         EntityHandle SignatureType(Type type)
         {
-            if (!type.IsArray && !type.IsGenericType) return TypeReference(type);
+            if (!type.IsArray && !type.IsGenericType)
+            {
+                return TypeReference(type);
+            }
+
             var signature = new BlobBuilder();
             EncodeType(new BlobEncoder(signature).TypeSpecificationSignature(), type);
             return metadata.AddTypeSpecification(metadata.GetOrAddBlob(signature));
@@ -177,6 +235,7 @@ public static class ArrayReferenceFixture
             metadata.AddFieldDefinition(FieldAttributes.Public | FieldAttributes.Static, metadata.GetOrAddString("Items"),
                 metadata.GetOrAddBlob(fieldSignature));
         }
+
         var receiver = target switch { "Assembly" => typeof(Assembly), "Module" => typeof(Module),
             "ModuleHandle" => typeof(ModuleHandle), "String" => typeof(string), _ => typeof(object) };
         var method = operation switch
@@ -208,10 +267,16 @@ public static class ArrayReferenceFixture
 
         void LoadOriginal(bool first)
         {
-            if (!first && flow is "null-slot" or "empty-null-slot") instructions.OpCode(ILOpCode.Ldnull);
+            if (!first && flow is "null-slot" or "empty-null-slot")
+            {
+                instructions.OpCode(ILOpCode.Ldnull);
+            }
             else if (target == "Object")
             {
-                if (!first && flow != "distinct") instructions.LoadLocal(0);
+                if (!first && flow != "distinct")
+                {
+                    instructions.LoadLocal(0);
+                }
                 else
                 {
                     instructions.OpCode(ILOpCode.Newobj);
@@ -233,15 +298,24 @@ public static class ArrayReferenceFixture
             {
                 Call(typeof(Assembly).GetMethod(nameof(Assembly.GetExecutingAssembly))!);
                 if (target is "Module" or "ModuleHandle")
+                {
                     Call(typeof(Assembly).GetProperty(nameof(Assembly.ManifestModule))!.GetMethod!);
-                if (target == "ModuleHandle") Call(typeof(Module).GetProperty(nameof(Module.ModuleHandle))!.GetMethod!);
+                }
+
+                if (target == "ModuleHandle")
+                {
+                    Call(typeof(Module).GetProperty(nameof(Module.ModuleHandle))!.GetMethod!);
+                }
             }
             else
             {
                 LoadType(sibling);
                 Call(target == "Assembly" ? typeof(Type).GetProperty(nameof(Type.Assembly))!.GetMethod!
                     : typeof(MemberInfo).GetProperty(nameof(MemberInfo.Module))!.GetMethod!);
-                if (target == "ModuleHandle") Call(typeof(Module).GetProperty(nameof(Module.ModuleHandle))!.GetMethod!);
+                if (target == "ModuleHandle")
+                {
+                    Call(typeof(Module).GetProperty(nameof(Module.ModuleHandle))!.GetMethod!);
+                }
             }
         }
 
@@ -252,8 +326,16 @@ public static class ArrayReferenceFixture
                 instructions.OpCode(ILOpCode.Ldsfld);
                 instructions.Token(MetadataTokens.FieldDefinitionHandle(1));
             }
-            else instructions.LoadLocal(flow is "alias" or "merged" ? 2 : 1);
-            if (flow == "helper-return") instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
+            else
+            {
+                instructions.LoadLocal(flow is "alias" or "merged" ? 2 : 1);
+            }
+
+            if (flow == "helper-return")
+            {
+                instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
+            }
+
             if (flow is "unknown-index" or "budget")
             {
                 Call(typeof(Environment).GetProperty(nameof(Environment.TickCount))!.GetMethod!);
@@ -262,9 +344,19 @@ public static class ArrayReferenceFixture
                 instructions.LoadConstantI4(first ? 0 : 1);
                 instructions.OpCode(ILOpCode.Add);
             }
-            else instructions.LoadConstantI4(first ? 0 : 1);
-            if (flow == "helper-read") instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
-            else if (flow == "get-value") Call(typeof(Array).GetMethod(nameof(Array.GetValue), [typeof(int)])!);
+            else
+            {
+                instructions.LoadConstantI4(first ? 0 : 1);
+            }
+
+            if (flow == "helper-read")
+            {
+                instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
+            }
+            else if (flow == "get-value")
+            {
+                Call(typeof(Array).GetMethod(nameof(Array.GetValue), [typeof(int)])!);
+            }
             else if (flow == "get-value-indices")
             {
                 instructions.OpCode(ILOpCode.Pop);
@@ -277,7 +369,10 @@ public static class ArrayReferenceFixture
                 instructions.OpCode(ILOpCode.Stelem_i4);
                 Call(typeof(Array).GetMethod(nameof(Array.GetValue), [typeof(int[])])!);
             }
-            else instructions.OpCode(ILOpCode.Ldelem_ref);
+            else
+            {
+                instructions.OpCode(ILOpCode.Ldelem_ref);
+            }
         }
 
         void LoadMethod()
@@ -310,10 +405,15 @@ public static class ArrayReferenceFixture
                 instructions.OpCode(ILOpCode.Newarr);
                 instructions.Token(TypeReference(target == "String" && flow == "get-value" ? typeof(string) : typeof(object)));
             }
+
             instructions.StoreLocal(1);
             for (var index = 0; index < 2; index++)
             {
-                if (index == 1 && flow == "empty-null-slot") continue;
+                if (index == 1 && flow == "empty-null-slot")
+                {
+                    continue;
+                }
+
                 instructions.LoadLocal(1);
                 if (flow == "external-write")
                 {
@@ -329,11 +429,19 @@ public static class ArrayReferenceFixture
                         instructions.OpCode(ILOpCode.Ldelema);
                         instructions.Token(TypeReference(typeof(object)));
                     }
+
                     LoadOriginal(first: index == 0);
-                    if (flow == "helper-write") instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
-                    else instructions.OpCode(flow == "address" ? ILOpCode.Stind_ref : ILOpCode.Stelem_ref);
+                    if (flow == "helper-write")
+                    {
+                        instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
+                    }
+                    else
+                    {
+                        instructions.OpCode(flow == "address" ? ILOpCode.Stind_ref : ILOpCode.Stelem_ref);
+                    }
                 }
             }
+
             if (flow == "budget")
             {
                 for (var index = 2; index < 260; index++)
@@ -344,6 +452,7 @@ public static class ArrayReferenceFixture
                     instructions.OpCode(ILOpCode.Stelem_ref);
                 }
             }
+
             if (flow == "safe-slot")
             {
                 instructions.LoadLocal(1);
@@ -351,12 +460,14 @@ public static class ArrayReferenceFixture
                 Call(typeof(Assembly).GetMethod(nameof(Assembly.GetExecutingAssembly))!);
                 instructions.OpCode(ILOpCode.Stelem_ref);
             }
+
             if (flow == "field")
             {
                 instructions.LoadLocal(1);
                 instructions.OpCode(ILOpCode.Stsfld);
                 instructions.Token(MetadataTokens.FieldDefinitionHandle(1));
             }
+
             if (flow is "alias" or "merged")
             {
                 instructions.LoadLocal(1);
@@ -377,11 +488,19 @@ public static class ArrayReferenceFixture
                     instructions.MarkLabel(ready);
                 }
             }
+
             if (flow == "invoke")
             {
                 LoadMethod();
-                if (method!.IsStatic) instructions.OpCode(ILOpCode.Ldnull);
-                else LoadOperand(first: true);
+                if (method!.IsStatic)
+                {
+                    instructions.OpCode(ILOpCode.Ldnull);
+                }
+                else
+                {
+                    LoadOperand(first: true);
+                }
+
                 instructions.LoadConstantI4(method.IsStatic ? 2 : 1);
                 instructions.OpCode(ILOpCode.Newarr);
                 instructions.Token(TypeReference(typeof(object)));
@@ -392,6 +511,7 @@ public static class ArrayReferenceFixture
                     LoadOperand(first: method.IsStatic && index == 0);
                     instructions.OpCode(ILOpCode.Stelem_ref);
                 }
+
                 Call(typeof(MethodBase).GetMethod(nameof(MethodBase.Invoke), [typeof(object), typeof(object[])])!);
                 instructions.OpCode(ILOpCode.Unbox_any);
                 instructions.Token(TypeReference(typeof(bool)));
@@ -404,6 +524,7 @@ public static class ArrayReferenceFixture
                     instructions.OpCode(ILOpCode.Castclass);
                     instructions.Token(TypeReference(typeof(MethodInfo)));
                 }
+
                 LoadType(SignatureType(typeof(Func<object, bool>)));
                 LoadOperand(first: true);
                 if (flow == "named-delegate")
@@ -411,7 +532,11 @@ public static class ArrayReferenceFixture
                     instructions.LoadString(metadata.GetOrAddUserString(method!.Name));
                     Call(typeof(Delegate).GetMethod(nameof(Delegate.CreateDelegate), [typeof(Type), typeof(object), typeof(string)])!);
                 }
-                else Call(typeof(MethodInfo).GetMethod(nameof(MethodInfo.CreateDelegate), [typeof(Type), typeof(object)])!);
+                else
+                {
+                    Call(typeof(MethodInfo).GetMethod(nameof(MethodInfo.CreateDelegate), [typeof(Type), typeof(object)])!);
+                }
+
                 instructions.OpCode(ILOpCode.Castclass);
                 instructions.Token(SignatureType(typeof(Func<object, bool>)));
                 LoadOperand(first: false);
@@ -420,14 +545,21 @@ public static class ArrayReferenceFixture
             else
             {
                 LoadOperand(first: true);
-                if (operation is "hash" or "virtual-hash" or "runtime-hash") Call(method!);
+                if (operation is "hash" or "virtual-hash" or "runtime-hash")
+                {
+                    Call(method!);
+                }
+
                 LoadOperand(first: false);
                 if (operation is "hash" or "virtual-hash" or "runtime-hash")
                 {
                     Call(method!);
                     instructions.OpCode(ILOpCode.Ceq);
                 }
-                else if (operation == "ceq") instructions.OpCode(ILOpCode.Ceq);
+                else if (operation == "ceq")
+                {
+                    instructions.OpCode(ILOpCode.Ceq);
+                }
                 else if (operation is "beq" or "bne.un")
                 {
                     var matched = instructions.DefineLabel();
@@ -439,18 +571,28 @@ public static class ArrayReferenceFixture
                     instructions.LoadConstantI4(1);
                     instructions.MarkLabel(done);
                 }
-                else Call(method!);
+                else
+                {
+                    Call(method!);
+                }
             }
+
             var expected = flow is not ("null-slot" or "empty-null-slot" or "distinct");
-            if (operation is "inequality" or "bne.un") expected = !expected;
+            if (operation is "inequality" or "bne.un")
+            {
+                expected = !expected;
+            }
+
             if (!expected)
             {
                 instructions.LoadConstantI4(0);
                 instructions.OpCode(ILOpCode.Ceq);
             }
+
             instructions.LoadConstantI4(42);
             instructions.OpCode(ILOpCode.Mul);
         }
+
         instructions.OpCode(ILOpCode.Ret);
         var locals = new BlobBuilder();
         var variables = new BlobEncoder(locals).LocalVariableSignature(3);
@@ -476,8 +618,12 @@ public static class ArrayReferenceFixture
                     instructions.LoadArgument(2);
                     instructions.OpCode(ILOpCode.Stelem_ref);
                 }
-                else instructions.OpCode(ILOpCode.Ldelem_ref);
+                else
+                {
+                    instructions.OpCode(ILOpCode.Ldelem_ref);
+                }
             }
+
             instructions.OpCode(ILOpCode.Ret);
             byte[] helperSignature = flow switch
             {
@@ -489,6 +635,7 @@ public static class ArrayReferenceFixture
                 metadata.GetOrAddString("ObserveArray"), metadata.GetOrAddBlob(helperSignature), encoder.AddMethodBody(instructions),
                 MetadataTokens.ParameterHandle(1));
         }
+
         var image = new BlobBuilder();
         new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
             new MetadataRootBuilder(metadata), bodies, flags: CorFlags.ILOnly).Serialize(image);

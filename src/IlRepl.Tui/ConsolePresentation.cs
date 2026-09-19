@@ -65,7 +65,11 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
     {
         lock (_sync)
         {
-            if (_rawMode is null || _disposed || ct.IsCancellationRequested) return ValueTask.FromResult(ReadOnlyMemory<byte>.Empty);
+            if (_rawMode is null || _disposed || ct.IsCancellationRequested)
+            {
+                return ValueTask.FromResult(ReadOnlyMemory<byte>.Empty);
+            }
+
             var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct, _rawMode.Token);
             _reads.RemoveAll(static read => read.IsCompleted);
             var read = ReadCoreAsync(cancellation);
@@ -86,7 +90,11 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
                     while (true)
                     {
                         var buffered = _input.ReadBuffered();
-                        if (!buffered.IsEmpty) return buffered;
+                        if (!buffered.IsEmpty)
+                        {
+                            return buffered;
+                        }
+
                         using var escape = _input.NeedsEscapeTimeout
                             ? CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token) : null;
                         escape?.CancelAfter(TimeSpan.FromMilliseconds(50));
@@ -100,6 +108,7 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
                         {
                             return _input.FlushEscape();
                         }
+
                         if (bytes.IsEmpty)
                         {
                             // The native driver polls at most every 100 ms. Join that read before returning Escape,
@@ -107,12 +116,19 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
                             return escape is { IsCancellationRequested: true } && !cancellation.IsCancellationRequested
                                 ? _input.FlushEscape() : ReadOnlyMemory<byte>.Empty;
                         }
+
                         InputObserved?.Invoke(bytes);
                         var framed = _input.Append(bytes);
-                        if (!framed.IsEmpty) return framed;
+                        if (!framed.IsEmpty)
+                        {
+                            return framed;
+                        }
                     }
                 }
-                finally { _reader.Release(); }
+                finally
+                {
+                    _reader.Release();
+                }
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
@@ -133,8 +149,12 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
             lock (_sync)
             {
                 ObjectDisposedException.ThrowIf(_disposed, this);
-                if (_rawMode is not null) return;
+                if (_rawMode is not null)
+                {
+                    return;
+                }
             }
+
             using var probe = CancellationTokenSource.CreateLinkedTokenSource(ct);
             probe.CancelAfter(TimeSpan.FromMilliseconds(25));
             try
@@ -158,15 +178,24 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
             await ExitCoreAsync().ConfigureAwait(false);
             throw;
         }
-        finally { _lifecycle.Release(); }
+        finally
+        {
+            _lifecycle.Release();
+        }
     }
 
     /// <inheritdoc />
     public async ValueTask ExitRawModeAsync(CancellationToken ct = default)
     {
         await _lifecycle.WaitAsync(ct).ConfigureAwait(false);
-        try { await ExitCoreAsync().ConfigureAwait(false); }
-        finally { _lifecycle.Release(); }
+        try
+        {
+            await ExitCoreAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _lifecycle.Release();
+        }
     }
 
     private async Task ExitCoreAsync()
@@ -185,11 +214,20 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
         {
             if (rawMode is not null)
             {
-                try { await rawMode.CancelAsync().ConfigureAwait(false); }
+                try
+                {
+                    await rawMode.CancelAsync().ConfigureAwait(false);
+                }
                 finally
                 {
-                    try { await Task.WhenAll(reads).ConfigureAwait(false); }
-                    finally { rawMode.Dispose(); }
+                    try
+                    {
+                        await Task.WhenAll(reads).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        rawMode.Dispose();
+                    }
                 }
             }
         }
@@ -223,9 +261,18 @@ internal sealed class ConsolePresentation : IHex1bTerminalPresentationAdapter, I
         await _lifecycle.WaitAsync().ConfigureAwait(false);
         try
         {
-            try { await ExitCoreAsync().ConfigureAwait(false); }
-            finally { await _inner.DisposeAsync().ConfigureAwait(false); }
+            try
+            {
+                await ExitCoreAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                await _inner.DisposeAsync().ConfigureAwait(false);
+            }
         }
-        finally { _lifecycle.Release(); }
+        finally
+        {
+            _lifecycle.Release();
+        }
     }
 }

@@ -6,15 +6,15 @@ using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 using IlRepl.Engine;
 using Mono.Cecil;
-using CecilFieldDefinition = Mono.Cecil.FieldDefinition;
-using CecilTypeDefinition = Mono.Cecil.TypeDefinition;
 using CecilFieldAttributes = Mono.Cecil.FieldAttributes;
+using CecilFieldDefinition = Mono.Cecil.FieldDefinition;
 using CecilMethodAttributes = Mono.Cecil.MethodAttributes;
 using CecilMethodDefinition = Mono.Cecil.MethodDefinition;
 using CecilModule = Mono.Cecil.ModuleDefinition;
 using CecilOpCodes = Mono.Cecil.Cil.OpCodes;
 using CecilParameterAttributes = Mono.Cecil.ParameterAttributes;
 using CecilTypeAttributes = Mono.Cecil.TypeAttributes;
+using CecilTypeDefinition = Mono.Cecil.TypeDefinition;
 
 namespace IlRepl.Tests.Engine;
 

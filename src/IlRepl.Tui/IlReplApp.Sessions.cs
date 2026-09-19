@@ -76,13 +76,18 @@ public static partial class IlReplApp
     {
         void Finish(SessionDecision choice, string? path = null)
         {
-            if (dialog.Submitted) return;
+            if (dialog.Submitted)
+            {
+                return;
+            }
+
             dialog.Submitted = true;
             if (choice == SessionDecision.Cancel)
             {
                 prompt.SessionDialog = null;
                 app.RequestFocus(node => node is EditorNode);
             }
+
             dialog.PathResult.TrySetResult(path);
             dialog.Decision.TrySetResult(choice);
             app.Invalidate();
@@ -93,6 +98,7 @@ public static partial class IlReplApp
             dialog.Focused = true;
             app.RequestFocus(node => dialog.IsPath ? node is TextBoxNode : node is ButtonNode);
         }
+
         return context.VStack(v => dialog.IsPath
             ? [
                 v.Text(dialog.Opening ? "Open session" : "Save session"),

@@ -11,7 +11,11 @@ public static partial class ComparisonWorker
 {
     private static Assembly LoadDependency(AssemblyLoadContext context, ComparisonAssembly dependency, bool preserveContext)
     {
-        if (preserveContext && !dependency.IsCollectible) context = AssemblyLoadContext.Default;
+        if (preserveContext && !dependency.IsCollectible)
+        {
+            context = AssemblyLoadContext.Default;
+        }
+
         if (preserveContext && dependency.OriginalLocation is { } location)
         {
             VerifyOriginalFile(dependency, location);
@@ -19,7 +23,10 @@ public static partial class ComparisonWorker
             VerifyOriginalFile(dependency, location);
             if (!string.Equals(assembly.Location, location, OperatingSystem.IsWindows()
                 ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            {
                 throw new ReplException("the original assembly file context could not be restored: " + location);
+            }
+
             return assembly;
         }
 
@@ -31,7 +38,10 @@ public static partial class ComparisonWorker
     {
         try
         {
-            if (File.ReadAllBytes(location).AsSpan().SequenceEqual(dependency.Image)) return;
+            if (File.ReadAllBytes(location).AsSpan().SequenceEqual(dependency.Image))
+            {
+                return;
+            }
         }
         catch (IOException exception)
         {
@@ -41,6 +51,7 @@ public static partial class ComparisonWorker
         {
             throw new ReplException("the original assembly file is unavailable: " + location, exception);
         }
+
         throw new ReplException("the original assembly file changed after comparison capture: " + location);
     }
 }

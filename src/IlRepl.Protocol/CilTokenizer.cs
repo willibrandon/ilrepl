@@ -591,7 +591,8 @@ public sealed class CilTokenizer
         i++;
         while (i < r.Count && !r.IsPunct(i, '}'))
         {
-            if (r.KindAt(i) == CilLexemeKind.Word && (IsPrimitive(r.TextAt(i)) || r.IsWord(i, "type") || r.IsWord(i, "object")) && r.IsPunct(i + 1, '('))
+            if (r.KindAt(i) == CilLexemeKind.Word && (IsPrimitive(r.TextAt(i)) || r.IsWord(i, "type") || r.IsWord(i, "object"))
+                && r.IsPunct(i + 1, '('))
             {
                 r.Emit(i, r.IsWord(i, "type") || r.IsWord(i, "object") ? SpanStyle.Keyword : SpanStyle.Type);
                 r.Emit(i + 1, SpanStyle.Punctuation);

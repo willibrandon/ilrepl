@@ -32,7 +32,11 @@ public sealed record ObservedValue(string Kind, string Type, string? Value, int?
         hash.Add(Type, StringComparer.Ordinal);
         hash.Add(Value, StringComparer.Ordinal);
         hash.Add(Identity);
-        foreach (var member in Members) hash.Add(member);
+        foreach (var member in Members)
+        {
+            hash.Add(member);
+        }
+
         return hash.ToHashCode();
     }
 }

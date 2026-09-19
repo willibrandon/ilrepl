@@ -60,6 +60,7 @@ public sealed class ConsoleStartupTests
             await auto.TypeAsync("ret", ct: token);
             await auto.EnterAsync(ct: token);
         }
+
         await auto.WaitUntilTextAsync("= 42 : int32");
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
         await auto.WaitUntilTextAsync("Save changes to ");
@@ -75,7 +76,11 @@ public sealed class ConsoleStartupTests
     {
         for (var paste = 0; paste < 2; paste++)
         {
-            if (!OperatingSystem.IsWindows()) yield return (paste != 0, false);
+            if (!OperatingSystem.IsWindows())
+            {
+                yield return (paste != 0, false);
+            }
+
             yield return (paste != 0, true);
         }
     }
@@ -121,7 +126,10 @@ public sealed class ConsoleStartupTests
         {
             // ConPTY retains incomplete terminal responses before making console input records available.
             // Unix exposes each fragment; Windows exposes the completed response after both ordered writes.
-            if (OperatingSystem.IsWindows()) await SendObservedAsync(prefix + suffix, fragments: [prefix, suffix]);
+            if (OperatingSystem.IsWindows())
+            {
+                await SendObservedAsync(prefix + suffix, fragments: [prefix, suffix]);
+            }
             else
             {
                 await SendObservedAsync(prefix);
@@ -133,7 +141,11 @@ public sealed class ConsoleStartupTests
         {
             var previous = Directory.EnumerateFiles(files.DirectoryPath, "*.read").ToHashSet(StringComparer.Ordinal);
             var bytes = Encoding.UTF8.GetBytes(text);
-            foreach (var fragment in fragments ?? [text]) await terminal.SendInputAsync(Encoding.UTF8.GetBytes(fragment), token);
+            foreach (var fragment in fragments ?? [text])
+            {
+                await terminal.SendInputAsync(Encoding.UTF8.GetBytes(fragment), token);
+            }
+
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
             timeout.CancelAfter(TimeSpan.FromSeconds(10));
             while (true)
@@ -145,9 +157,14 @@ public sealed class ConsoleStartupTests
                 if (received.Length >= bytes.Length)
                 {
                     Assert.AreSequenceEqual(bytes, received, "The actual console reader must preserve every protocol byte in order.");
-                    if (requireMultipleReads) Assert.IsGreaterThan(1, paths.Length, "The long reply must span real console reads.");
+                    if (requireMultipleReads)
+                    {
+                        Assert.IsGreaterThan(1, paths.Length, "The long reply must span real console reads.");
+                    }
+
                     break;
                 }
+
                 Assert.AreSequenceEqual(bytes[..received.Length], received, "Observed raw chunks must match the sent prefix.");
                 await Task.Delay(1, timeout.Token);
             }
@@ -203,6 +220,7 @@ public sealed class ConsoleStartupTests
             await auto.WaitUntilTextAsync("repeated-reader-ready");
             await auto.TypeAsync("again 日本", ct: token);
         }
+
         await auto.WaitUntilTextAsync("console-mode-restored");
         await auto.TypeAsync("restored λ", ct: token);
         await auto.EnterAsync(ct: token);
@@ -210,7 +228,10 @@ public sealed class ConsoleStartupTests
     }
 
     private async Task AssertCookedLineAsync(
-        Hex1bTerminalAutomator auto, SessionWorkspaceFixture files, Task<int> run, CancellationToken token)
+        Hex1bTerminalAutomator auto,
+        SessionWorkspaceFixture files,
+        Task<int> run,
+        CancellationToken token)
     {
         var path = Path.Combine(files.DirectoryPath, "cooked-line.txt");
         try
@@ -224,7 +245,9 @@ public sealed class ConsoleStartupTests
         finally
         {
             if (File.Exists(path))
+            {
                 TestContext.WriteLine("Actual cooked input: " + await File.ReadAllTextAsync(path, CancellationToken.None));
+            }
         }
     }
 

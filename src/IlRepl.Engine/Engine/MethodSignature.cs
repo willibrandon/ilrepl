@@ -1,3 +1,4 @@
+using System.Reflection;
 using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
@@ -25,17 +26,18 @@ public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList
     /// The method attributes as declared: access, <c>static</c>, <c>virtual</c>, and the rest. A
     /// session method is public and static.
     /// </summary>
-    public System.Reflection.MethodAttributes Attributes { get; init; } = System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static;
+    public MethodAttributes Attributes { get; init; } = MethodAttributes.Public
+        | MethodAttributes.Static;
 
     /// <summary>
     /// The implementation attributes: <c>noinlining</c>, <c>synchronized</c>, and the rest.
     /// </summary>
-    public System.Reflection.MethodImplAttributes ImplAttributes { get; init; }
+    public MethodImplAttributes ImplAttributes { get; init; }
 
     /// <summary>
     /// The calling convention; <c>vararg</c> for a vararg member.
     /// </summary>
-    public System.Reflection.CallingConventions CallingConvention { get; init; } = System.Reflection.CallingConventions.Standard;
+    public CallingConventions CallingConvention { get; init; } = CallingConventions.Standard;
 
     /// <summary>
     /// The <c>modreq</c> types on the return type.
@@ -65,7 +67,7 @@ public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList
     /// <summary>
     /// True for a static method.
     /// </summary>
-    public bool IsStatic => Attributes.HasFlag(System.Reflection.MethodAttributes.Static);
+    public bool IsStatic => Attributes.HasFlag(MethodAttributes.Static);
 
     /// <summary>
     /// Renders a member the way a listing shows it: <c>instance int32 Sum()</c>, <c>static int32 Make(int32)</c>.

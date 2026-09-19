@@ -47,7 +47,8 @@ public sealed class SubmissionSplitterTests
     [TestMethod]
     public void Split_TryChain_IsOneBlock()
     {
-        var lines = new[] { ".try {", "nop", "leave END", "} catch [System.Runtime]System.Exception {", "pop", "leave END", "} finally {", "nop", "}", "END: nop" };
+        var lines = new[] { ".try {", "nop", "leave END", "} catch [System.Runtime]System.Exception {", "pop", "leave END", "} finally {",
+            "nop", "}", "END: nop" };
         var units = SubmissionSplitter.Split(lines);
         Assert.HasCount(2, units);
         Assert.AreEqual(Unit(0, 9, SubmissionUnitKind.Block, 0, 1, 2, 3, 4, 5, 6, 7, 8), units[0]);
@@ -71,7 +72,8 @@ public sealed class SubmissionSplitterTests
     [TestMethod]
     public void Split_NestedClass_IsOneBlock()
     {
-        var units = SubmissionSplitter.Split([".class public C {", "  .method public static int32 One() {", "    ldc.i4 1", "    ret", "  }", "}", "call int32 C::One()"]);
+        var units = SubmissionSplitter.Split([".class public C {", "  .method public static int32 One() {", "    ldc.i4 1", "    ret",
+            "  }", "}", "call int32 C::One()"]);
         Assert.HasCount(2, units);
         Assert.AreEqual(Unit(0, 6, SubmissionUnitKind.Block, 0, 1, 2, 3, 4, 5), units[0]);
     }
@@ -171,7 +173,8 @@ public sealed class SubmissionSplitterTests
     {
         var units = SubmissionSplitter.Split([".try", "{", "  nop", "} catch [System.Runtime]System.Exception", "{", "  pop", "}", "nop"]);
         Assert.AreSequenceEqual(
-            [new SubmissionUnit(0, 7, [0, 1, 2, 3, 4, 5, 6], SubmissionUnitKind.Block), new SubmissionUnit(7, 8, [7], SubmissionUnitKind.Line)],
+            [new SubmissionUnit(0, 7, [0, 1, 2, 3, 4, 5, 6], SubmissionUnitKind.Block),
+            new SubmissionUnit(7, 8, [7], SubmissionUnitKind.Line)],
             units);
         var keywords = SubmissionSplitter.Split([".try {", "  nop", "catch [System.Runtime]System.Exception {", "  pop", "}"]);
         Assert.HasCount(1, keywords);
@@ -196,7 +199,8 @@ public sealed class SubmissionSplitterTests
     [TestMethod]
     public void Split_HandlerPartedByAComment_IsOneBlock()
     {
-        var units = SubmissionSplitter.Split([".try {", "  nop", "} /* note */ catch [System.Runtime]System.Exception {", "  pop", "}", "nop"]);
+        var units = SubmissionSplitter.Split([".try {", "  nop", "} /* note */ catch [System.Runtime]System.Exception {", "  pop", "}",
+            "nop"]);
         Assert.AreSequenceEqual(
             [new SubmissionUnit(0, 5, [0, 1, 2, 3, 4], SubmissionUnitKind.Block), new SubmissionUnit(5, 6, [5], SubmissionUnitKind.Line)],
             units);

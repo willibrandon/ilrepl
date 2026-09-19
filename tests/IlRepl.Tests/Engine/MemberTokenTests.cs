@@ -106,6 +106,7 @@ public sealed class MemberTokenTests
             Assert.AreNotEqual(0x06000022, copied.GetMethod("Probe")!.MetadataToken);
             Assert.AreNotEqual(0x04000009, copied.GetField("Data")!.MetadataToken);
         }
+
         await AssertComparisonAsync(session, "Copy ()", 42);
         session.AddLine("call Copy");
         AssertExports(session, 42);
@@ -142,6 +143,7 @@ public sealed class MemberTokenTests
             Assert.AreEqual(MetadataTokens.TypeDefinitionHandle(12), (TypeDefinitionHandle)rawParameter.Parent);
             Assert.AreEqual(0, rawParameter.Index);
         }
+
         Assert.HasCount(9, metadata.FieldDefinitions);
         Assert.HasCount(9, metadata.PropertyDefinitions);
         Assert.HasCount(9, metadata.EventDefinitions);
@@ -167,6 +169,7 @@ public sealed class MemberTokenTests
             paddingMethod = paddingMethod.MakeGenericMethod(typeof(int));
             ownerMethod = ownerMethod.MakeGenericMethod(typeof(int));
         }
+
         Assert.AreEqual(0x02000000, owner.MakeArrayType().MetadataToken);
         Assert.AreEqual(0x02000000, owner.MakeByRefType().MetadataToken);
         Assert.AreEqual(typeof(List<>).MetadataToken, typeof(List<int>).MetadataToken);

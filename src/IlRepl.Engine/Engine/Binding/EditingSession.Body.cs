@@ -120,7 +120,6 @@ public sealed partial class EditingSession
                 {
                     throw new ReplException("ret is not allowed inside a protected region; use leave to a label after it");
                 }
-
             }
 
             CheckInstruction(instruction, body, scope);
@@ -169,6 +168,7 @@ public sealed partial class EditingSession
         {
             body.MetadataTypes.Add(caught);
         }
+
         if (transition.Kind == BlockKind.End)
         {
             body.Frames.RemoveAt(body.Frames.Count - 1);

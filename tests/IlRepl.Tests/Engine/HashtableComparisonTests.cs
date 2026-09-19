@@ -40,7 +40,10 @@ public sealed class HashtableComparisonTests
         Assert.IsEmpty(edit.Problems);
         session.CommitEdit(edit.Name, HashtableComparisonExamples.Method(count, wrappers, comparer, reverse: true));
         foreach (var method in new[] { edit.Original.Requested, edit.OriginalMethod, edit.Method! })
+        {
             AssertActual(method.Invoke(null, null), count, false, wrappers);
+        }
+
         var same = await CompareAsync(session);
         Assert.AreEqual("match", same.Outcome, Details(same));
         AssertContents(same.Original.Result!, count, false, wrappers);
@@ -82,8 +85,16 @@ public sealed class HashtableComparisonTests
     {
         var first = new Hashtable(1, StringComparer.OrdinalIgnoreCase);
         var second = new Hashtable(1000, StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in HashtableComparisonExamples.Contents(8)) first.Add(entry.Key, entry.Value);
-        foreach (var entry in HashtableComparisonExamples.Contents(8).Reverse()) second.Add(entry.Key, entry.Value);
+        foreach (var entry in HashtableComparisonExamples.Contents(8))
+        {
+            first.Add(entry.Key, entry.Value);
+        }
+
+        foreach (var entry in HashtableComparisonExamples.Contents(8).Reverse())
+        {
+            second.Add(entry.Key, entry.Value);
+        }
+
         second.Add("removed", 99);
         second.Remove("removed");
         _ = second.Keys;
@@ -175,6 +186,7 @@ public sealed class HashtableComparisonTests
             Assert.AreEqual("reference", entry.Kind);
             Assert.AreEqual(captured.Identity, entry.Identity);
         }
+
         comparer.Salt = 19;
         Assert.AreNotEqual(observed, Observe(table));
         Assert.AreEqual(0, comparer.Calls);
@@ -205,6 +217,7 @@ public sealed class HashtableComparisonTests
             Assert.AreEqual("en-US:" + options.ToString(CultureInfo.InvariantCulture), member.Value.Value);
             Assert.IsEmpty(member.Value.Members);
         }
+
         Assert.ContainsSingle(comparer.Members.Where(member => member.Name.EndsWith("::_comparer", StringComparison.Ordinal)));
         Assert.ContainsSingle(comparer.Members.Where(member => member.Name.EndsWith("::_hcp", StringComparison.Ordinal)));
         Assert.AreEqual("42", Entries(observed)["value"].Value);
@@ -259,10 +272,13 @@ public sealed class HashtableComparisonTests
                 : new string((char)('a' + index), 65_500);
             table.Add(key, index);
         }
+
         var observed = Observe(table);
         if (limited)
+        {
             AssertUnavailable(observed, kind == "entries" ? "collection exceeds the observation limit"
                 : "collection keys cannot be ordered within the observation limit");
+        }
         else
         {
             Assert.HasCount(count + 1, observed.Members);
@@ -277,9 +293,13 @@ public sealed class HashtableComparisonTests
                     Assert.HasCount(8, pair[0].Value.Members);
                     Assert.AreEqual(pair[1].Value.Value, pair[0].Value.Members[0].Value.Value);
                 }
-                else Assert.AreEqual(kind == "text" ? new string((char)('a' + number), 65_500) : pair[1].Value.Value,
-                    pair[0].Value.Value);
+                else
+                {
+                    Assert.AreEqual(kind == "text" ? new string((char)('a' + number), 65_500) : pair[1].Value.Value,
+                        pair[0].Value.Value);
+                }
             }
+
             var actual = entries.Select(pair => int.Parse(pair[1].Value.Value!, CultureInfo.InvariantCulture));
             Assert.AreSequenceEqual(Enumerable.Range(0, count), actual.Order());
         }
@@ -293,7 +313,11 @@ public sealed class HashtableComparisonTests
     public async Task Capture_HashtableDuringRealWritesNeverInventsEntries()
     {
         var table = new Hashtable();
-        for (var index = 0; index < 32; index++) table.Add(index, index * 2);
+        for (var index = 0; index < 32; index++)
+        {
+            table.Add(index, index * 2);
+        }
+
         AssertIntegerPairs(Observe(table));
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
         using var started = new ManualResetEventSlim();
@@ -301,11 +325,13 @@ public sealed class HashtableComparisonTests
         {
             started.Set();
             while (!cancellation.IsCancellationRequested)
+            {
                 for (var index = 0; index < 32; index++)
                 {
                     table[index] = index * 2;
                     table.Remove((index + 16) % 32);
                 }
+            }
         }, TestContext.CancellationToken);
         try
         {
@@ -314,8 +340,13 @@ public sealed class HashtableComparisonTests
             {
                 var observed = Observe(table);
                 if (observed.Members[^1].Name == "remaining")
+                {
                     AssertUnavailable(observed, "collection changed during observation");
-                else AssertIntegerPairs(observed);
+                }
+                else
+                {
+                    AssertIntegerPairs(observed);
+                }
             }
         }
         finally
@@ -323,6 +354,7 @@ public sealed class HashtableComparisonTests
             await cancellation.CancelAsync();
             await writer;
         }
+
         var stable = Observe(table);
         AssertIntegerPairs(stable);
         Assert.AreEqual(table.Count, stable.Members.Count - 1);
@@ -343,11 +375,13 @@ public sealed class HashtableComparisonTests
             first.Add(pair.Key, pair.Value.ToString(CultureInfo.InvariantCulture));
             left.Add(pair.Key, pair.Value);
         }
+
         foreach (var pair in HashtableComparisonExamples.Contents(8).Reverse())
         {
             second.Add(pair.Key, pair.Value.ToString(CultureInfo.InvariantCulture));
             right.Add(pair.Key, pair.Value);
         }
+
         foreach (var (original, reordered) in new[] { ((object)first, (object)second), (left, right) })
         {
             var observed = Observe(original);
@@ -395,6 +429,7 @@ public sealed class HashtableComparisonTests
             Assert.IsNull(invocation.Exception);
             Assert.AreEqual(side.Result, invocation.Outputs.Single(member => member.Name == "return").Value);
         }
+
         return result;
     }
 
@@ -404,7 +439,10 @@ public sealed class HashtableComparisonTests
         Assert.AreEqual(wrappers > 0, table.IsSynchronized);
         var expected = HashtableComparisonExamples.Contents(count, edited);
         Assert.HasCount(expected.Count, table);
-        foreach (var pair in expected) Assert.AreEqual(pair.Value, table[pair.Key]);
+        foreach (var pair in expected)
+        {
+            Assert.AreEqual(pair.Value, table[pair.Key]);
+        }
     }
 
     private static void AssertContents(ObservedValue value, int count, bool edited, int wrappers)
@@ -417,7 +455,10 @@ public sealed class HashtableComparisonTests
         Assert.AreEqual("comparer", table.Members[0].Name);
         var actual = Entries(table);
         Assert.HasCount(expected.Count, actual);
-        foreach (var pair in expected) Assert.AreEqual(pair.Value.ToString(CultureInfo.InvariantCulture), actual[pair.Key].Value);
+        foreach (var pair in expected)
+        {
+            Assert.AreEqual(pair.Value.ToString(CultureInfo.InvariantCulture), actual[pair.Key].Value);
+        }
     }
 
     private static ObservedValue Unwrap(ObservedValue value, int wrappers)
@@ -430,6 +471,7 @@ public sealed class HashtableComparisonTests
             Assert.AreEqual("table", table.Name);
             value = table.Value;
         }
+
         return value;
     }
 

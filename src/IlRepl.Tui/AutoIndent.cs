@@ -40,7 +40,8 @@ public static class AutoIndent
     public static bool ShouldDedent(string textBeforeCaret, bool inBlockComment = false)
     {
         ArgumentNullException.ThrowIfNull(textBeforeCaret);
-        return !inBlockComment && textBeforeCaret.Trim().Length == 0 && (textBeforeCaret.Length >= Unit.Length || textBeforeCaret.Contains('\t', StringComparison.Ordinal));
+        return !inBlockComment && textBeforeCaret.Trim().Length == 0
+            && (textBeforeCaret.Length >= Unit.Length || textBeforeCaret.Contains('\t', StringComparison.Ordinal));
     }
 
     /// <summary>

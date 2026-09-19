@@ -58,6 +58,9 @@ internal sealed class HashtableObservationComparer : IEqualityComparer
     private void Record()
     {
         Calls++;
-        if (Reject) throw new InvalidOperationException("observation invoked the user's comparer");
+        if (Reject)
+        {
+            throw new InvalidOperationException("observation invoked the user's comparer");
+        }
     }
 }

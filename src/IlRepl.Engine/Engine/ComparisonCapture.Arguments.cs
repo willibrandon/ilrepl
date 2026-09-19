@@ -8,7 +8,10 @@ namespace IlRepl.Engine;
 /// </summary>
 public static partial class ComparisonCapture
 {
-    private static void CaptureOriginalArgument(Type type, Session session, Dictionary<string, ComparisonAssembly> dependencies,
+    private static void CaptureOriginalArgument(
+        Type type,
+        Session session,
+        Dictionary<string, ComparisonAssembly> dependencies,
         TypeResolver source)
     {
         if (type.HasElementType)

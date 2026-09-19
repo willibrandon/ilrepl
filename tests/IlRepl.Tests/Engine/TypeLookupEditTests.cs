@@ -220,7 +220,11 @@ public sealed class TypeLookupEditTests
         Assert.AreEqual("true", changed.Original.Result!.Value);
         Assert.AreEqual("false", changed.Edited.Result!.Value);
         Assert.AreEqual(name + Environment.NewLine, changed.Edited.StandardOutput);
-        if (!literal) session.AddLine("ldstr " + LiteralParser.Escape(name));
+        if (!literal)
+        {
+            session.AddLine("ldstr " + LiteralParser.Escape(name));
+        }
+
         session.AddLine("call Copy");
         foreach (var image in new[] { AssemblyExporter.Write(session, "type-lookups"), IlasmLocator.Assemble(session.ToIlAsm()) })
         {

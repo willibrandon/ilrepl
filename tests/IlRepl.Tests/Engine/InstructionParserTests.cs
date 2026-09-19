@@ -76,7 +76,8 @@ public sealed class InstructionParserTests
     [TestMethod]
     public void Parse_Locals_ResolveByNameAndIndex()
     {
-        var context = Empty with { Locals = [new LocalDeclaration(typeof(int), "i", false), new LocalDeclaration(typeof(string), "s", false)] };
+        var context = Empty with { Locals = [new LocalDeclaration(typeof(int), "i", false),
+            new LocalDeclaration(typeof(string), "s", false)] };
         Assert.AreEqual(1, InstructionParser.Parse("ldloc s", context).LocalIndex);
         Assert.AreEqual(0, InstructionParser.Parse("stloc 0", context).LocalIndex);
         Assert.AreEqual(1, InstructionParser.Parse("ldloc.1", context).LocalIndex);

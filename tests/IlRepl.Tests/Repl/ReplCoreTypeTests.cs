@@ -135,7 +135,8 @@ public sealed class ReplCoreTypeTests
         core.Handle("}");
         core.Handle(".types");
         var listing = core.Transcript.Lines.Where(l => l.Kind == LineKind.Listing).Select(l => l.PlainText).ToList();
-        Assert.AreSequenceEqual(["  struct Point", "      public int32 X", "      public int32 Y", "      instance int32 Sum()", "  class Outer", "      class Outer/Inner"], listing);
+        Assert.AreSequenceEqual(["  struct Point", "      public int32 X", "      public int32 Y", "      instance int32 Sum()",
+            "  class Outer", "      class Outer/Inner"], listing);
     }
 
     /// <summary>

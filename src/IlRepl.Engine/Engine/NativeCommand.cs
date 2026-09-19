@@ -34,7 +34,11 @@ public static class NativeCommand
             var word = words[index];
             string Value()
             {
-                if (++index >= words.Count) throw new ReplException($"{word} requires a value");
+                if (++index >= words.Count)
+                {
+                    throw new ReplException($"{word} requires a value");
+                }
+
                 return words[index];
             }
 
@@ -42,7 +46,11 @@ public static class NativeCommand
             {
                 case "--native": break;
                 case "--against":
-                    if (right) throw new ReplException("--against may appear only once");
+                    if (right)
+                    {
+                        throw new ReplException("--against may appear only once");
+                    }
+
                     right = true;
                     break;
                 case "--original": options = options with { Original = true }; break;
@@ -54,20 +62,34 @@ public static class NativeCommand
                 case "--allow-initializers": options = options with { AllowInitializers = true }; break;
                 case "--tier":
                     var tier = Value().ToLowerInvariant();
-                    if (tier == "optimized") tier = "fullopts";
+                    if (tier == "optimized")
+                    {
+                        tier = "fullopts";
+                    }
+
                     if (tier is not ("fullopts" or "tier0" or "tier1"))
+                    {
                         throw new ReplException("--tier requires fullopts, tier0, or tier1");
+                    }
+
                     options = options with { Tier = tier };
                     break;
                 case "--pgo":
                     var profile = Value();
-                    if (profile is not ("on" or "off")) throw new ReplException("--pgo requires on or off");
+                    if (profile is not ("on" or "off"))
+                    {
+                        throw new ReplException("--pgo requires on or off");
+                    }
+
                     options = options with { Pgo = profile == "on" };
                     pgo = true;
                     break;
                 case "--iterations":
                     if (!int.TryParse(Value(), NumberStyles.None, CultureInfo.InvariantCulture, out var count) || count < 1)
+                    {
                         throw new ReplException("--iterations requires a positive integer");
+                    }
+
                     options = options with { Iterations = count };
                     iterations = true;
                     break;
@@ -77,44 +99,86 @@ public static class NativeCommand
                 case "--env":
                     var assignment = Unquote(Value());
                     var separator = assignment.IndexOf('=');
-                    if (separator < 1 || assignment.Contains('\0')) throw new ReplException("--env requires NAME=VALUE");
+                    if (separator < 1 || assignment.Contains('\0'))
+                    {
+                        throw new ReplException("--env requires NAME=VALUE");
+                    }
+
                     var key = assignment[..separator];
                     if (!options.Environment.TryAdd(key, assignment[(separator + 1)..]))
+                    {
                         throw new ReplException($"environment override '{key}' was supplied more than once");
+                    }
+
                     break;
                 case "using":
                     if (options.Scenario is not null || options.Arguments is not null)
+                    {
                         throw new ReplException("supply one literal workload or one scenario");
+                    }
+
                     options = options with { Scenario = InstructionParser.Unquote(Value()), Run = true };
                     break;
                 default:
-                    if (word.StartsWith("--", StringComparison.Ordinal)) throw new ReplException($"unknown native option '{word}'");
+                    if (word.StartsWith("--", StringComparison.Ordinal))
+                    {
+                        throw new ReplException($"unknown native option '{word}'");
+                    }
+
                     if (word.StartsWith('('))
                     {
                         if (options.Scenario is not null || options.Arguments is not null)
+                        {
                             throw new ReplException("supply one literal workload or one scenario");
+                        }
+
                         var call = ComparisonCommand.Parse("native " + word);
                         options = options with { Arguments = [.. call.Arguments], Run = true };
                     }
-                    else (right ? against : selector).Add(word);
+                    else
+                    {
+                        (right ? against : selector).Add(word);
+                    }
+
                     break;
             }
         }
 
-        if (right && against.Count == 0) throw new ReplException("--against requires a selector");
+        if (right && against.Count == 0)
+        {
+            throw new ReplException("--against requires a selector");
+        }
+
         options = options with
         {
             Selector = string.Join(' ', selector), Against = right ? string.Join(' ', against) : null,
             Iterations = iterations ? options.Iterations : options.Tier == "tier1" ? 1000 : 1,
         };
         if (options.Collectible && options.Tier != "fullopts")
+        {
             throw new ReplException("collectible methods cannot be tiered; remove --collectible or use --tier fullopts");
+        }
+
         if (options.Tier == "tier1" && !options.Run)
+        {
             throw new ReplException("Tier1 requires explicit execution: supply (literals), using Scenario, or --run");
-        if (iterations && !options.Run) throw new ReplException("--iterations requires an explicit workload");
-        if (pgo && options.Tier == "fullopts") throw new ReplException("--pgo applies to tier0 and tier1");
+        }
+
+        if (iterations && !options.Run)
+        {
+            throw new ReplException("--iterations requires an explicit workload");
+        }
+
+        if (pgo && options.Tier == "fullopts")
+        {
+            throw new ReplException("--pgo applies to tier0 and tier1");
+        }
+
         if (options.Info && (options.Selector.Length != 0 || options.Against is not null || options.Run))
+        {
             throw new ReplException("--info cannot be combined with a target or workload");
+        }
+
         return options;
     }
 
@@ -132,21 +196,51 @@ public static class NativeCommand
             var current = index == text.Length ? ' ' : text[index];
             if (quote != '\0')
             {
-                if (current == '\\') index++;
-                else if (current == quote) quote = '\0';
+                if (current == '\\')
+                {
+                    index++;
+                }
+                else if (current == quote)
+                {
+                    quote = '\0';
+                }
+
                 continue;
             }
-            if (current is '\'' or '"') quote = current;
-            else if (current is '(' or '[' or '<') depth++;
-            else if (current is ')' or ']' or '>') depth--;
+
+            if (current is '\'' or '"')
+            {
+                quote = current;
+            }
+            else if (current is '(' or '[' or '<')
+            {
+                depth++;
+            }
+            else if (current is ')' or ']' or '>')
+            {
+                depth--;
+            }
             else if (char.IsWhiteSpace(current) && depth == 0)
             {
-                if (index > start) words.Add(text[start..index]);
+                if (index > start)
+                {
+                    words.Add(text[start..index]);
+                }
+
                 start = index + 1;
             }
-            if (depth < 0) throw new ReplException("unbalanced native selector or literal arguments");
+
+            if (depth < 0)
+            {
+                throw new ReplException("unbalanced native selector or literal arguments");
+            }
         }
-        if (quote != '\0' || depth != 0) throw new ReplException("unterminated native selector or literal arguments");
+
+        if (quote != '\0' || depth != 0)
+        {
+            throw new ReplException("unterminated native selector or literal arguments");
+        }
+
         return words;
     }
 }

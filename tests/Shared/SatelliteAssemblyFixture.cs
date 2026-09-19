@@ -42,7 +42,11 @@ public static class SatelliteAssemblyFixture
         var types = new Dictionary<Type, TypeReferenceHandle>();
         TypeReferenceHandle TypeReference(Type type)
         {
-            if (types.TryGetValue(type, out var existing)) return existing;
+            if (types.TryGetValue(type, out var existing))
+            {
+                return existing;
+            }
+
             if (!references.TryGetValue(type.Assembly, out var assembly))
             {
                 var identity = type.Assembly.GetName();
@@ -50,6 +54,7 @@ public static class SatelliteAssemblyFixture
                     metadata.GetOrAddBlob(identity.GetPublicKeyToken()!), 0, default);
                 references.Add(type.Assembly, assembly);
             }
+
             var result = metadata.AddTypeReference(assembly, metadata.GetOrAddString(type.Namespace ?? ""),
                 metadata.GetOrAddString(type.Name));
             types.Add(type, result);
@@ -58,22 +63,44 @@ public static class SatelliteAssemblyFixture
 
         void EncodeType(SignatureTypeEncoder encoder, Type type)
         {
-            if (type == typeof(int)) encoder.Int32();
-            else if (type == typeof(string)) encoder.String();
-            else if (type == typeof(object)) encoder.Object();
-            else if (type.IsArray) EncodeType(encoder.SZArray(), type.GetElementType()!);
+            if (type == typeof(int))
+            {
+                encoder.Int32();
+            }
+            else if (type == typeof(string))
+            {
+                encoder.String();
+            }
+            else if (type == typeof(object))
+            {
+                encoder.Object();
+            }
+            else if (type.IsArray)
+            {
+                EncodeType(encoder.SZArray(), type.GetElementType()!);
+            }
             else if (type.IsConstructedGenericType)
             {
                 var arguments = type.GetGenericArguments();
                 var signature = encoder.GenericInstantiation(TypeReference(type.GetGenericTypeDefinition()), arguments.Length, false);
-                foreach (var argument in arguments) EncodeType(signature.AddArgument(), argument);
+                foreach (var argument in arguments)
+                {
+                    EncodeType(signature.AddArgument(), argument);
+                }
             }
-            else encoder.Type(TypeReference(type), type.IsValueType);
+            else
+            {
+                encoder.Type(TypeReference(type), type.IsValueType);
+            }
         }
 
         EntityHandle SignatureType(Type type)
         {
-            if (!type.IsConstructedGenericType) return TypeReference(type);
+            if (!type.IsConstructedGenericType)
+            {
+                return TypeReference(type);
+            }
+
             var signature = new BlobBuilder();
             EncodeType(new BlobEncoder(signature).TypeSpecificationSignature(), type);
             return metadata.AddTypeSpecification(metadata.GetOrAddBlob(signature));
@@ -86,11 +113,20 @@ public static class SatelliteAssemblyFixture
             new BlobEncoder(signature).MethodSignature(isInstanceMethod: !method.IsStatic).Parameters(parameters.Length,
                 result =>
                 {
-                    if (method is not MethodInfo info || info.ReturnType == typeof(void)) result.Void();
-                    else EncodeType(result.Type(), info.ReturnType);
+                    if (method is not MethodInfo info || info.ReturnType == typeof(void))
+                    {
+                        result.Void();
+                    }
+                    else
+                    {
+                        EncodeType(result.Type(), info.ReturnType);
+                    }
                 }, arguments =>
                 {
-                    foreach (var parameter in parameters) EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    foreach (var parameter in parameters)
+                    {
+                        EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    }
                 });
             return metadata.AddMemberReference(TypeReference(method.DeclaringType!), metadata.GetOrAddString(method.Name),
                 metadata.GetOrAddBlob(signature));
@@ -121,7 +157,10 @@ public static class SatelliteAssemblyFixture
             else
             {
                 foreach (var part in new[] { Version.Major, Version.Minor, Version.Build, Version.Revision })
+                {
                     instructions.LoadConstantI4(part);
+                }
+
                 instructions.OpCode(ILOpCode.Newobj);
                 instructions.Token(MethodReference(typeof(Version).GetConstructor([typeof(int), typeof(int), typeof(int), typeof(int)])!));
             }
@@ -177,16 +216,32 @@ public static class SatelliteAssemblyFixture
             }
             else
             {
-                if (dispatch != "lookalike") Receiver();
-                for (var index = 0; index < parameters.Length; index++) Argument(index);
-                if (dispatch == "lookalike") instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
-                else Call(inspection);
+                if (dispatch != "lookalike")
+                {
+                    Receiver();
+                }
+
+                for (var index = 0; index < parameters.Length; index++)
+                {
+                    Argument(index);
+                }
+
+                if (dispatch == "lookalike")
+                {
+                    instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
+                }
+                else
+                {
+                    Call(inspection);
+                }
             }
+
             instructions.OpCode(ILOpCode.Ldnull);
             instructions.OpCode(ILOpCode.Cgt_un);
             instructions.LoadConstantI4(42);
             instructions.OpCode(ILOpCode.Mul);
         }
+
         instructions.OpCode(ILOpCode.Ret);
         var bodies = new BlobBuilder();
         var encoder = new MethodBodyStreamEncoder(bodies);
@@ -204,12 +259,16 @@ public static class SatelliteAssemblyFixture
             new BlobEncoder(signature).MethodSignature().Parameters(parameters.Length,
                 result => result.Type().Type(TypeReference(typeof(Assembly)), false), arguments =>
                 {
-                    foreach (var parameter in parameters) EncodeType(arguments.AddParameter().Type(), parameter);
+                    foreach (var parameter in parameters)
+                    {
+                        EncodeType(arguments.AddParameter().Type(), parameter);
+                    }
                 });
             metadata.AddMethodDefinition(MethodAttributes.Private | MethodAttributes.Static, MethodImplAttributes.IL,
                 metadata.GetOrAddString(inspection.Name), metadata.GetOrAddBlob(signature), helperOffset,
                 MetadataTokens.ParameterHandle(1));
         }
+
         var image = new BlobBuilder();
         new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
             new MetadataRootBuilder(metadata), bodies, flags: CorFlags.ILOnly).Serialize(image);

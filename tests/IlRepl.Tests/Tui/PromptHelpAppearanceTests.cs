@@ -66,6 +66,7 @@ public sealed class PromptHelpAppearanceTests
             {
                 AssertFrame(snapshot, resizedWidth, resizedHeight, "nop");
             }
+
             await auto.EscapeAsync(ct: ct);
             await auto.WaitUntilTextAsync("il[1]> nop");
             Assert.AreEqual("nop", prompt.Text);
@@ -75,8 +76,14 @@ public sealed class PromptHelpAppearanceTests
         finally
         {
             await cancellation.CancelAsync();
-            try { await run; }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            try
+            {
+                await run;
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+            }
+
             await IlReplApp.SettleAsync(prompt);
         }
     }
@@ -143,6 +150,7 @@ public sealed class PromptHelpAppearanceTests
                 AssertColor(snapshot, "Go to", SpanStyle.Member);
                 AssertFrame(snapshot, width, height, "call");
             }
+
             adapter.Resize(32, height);
             await auto.WaitUntilAsync(snapshot => snapshot.Width == 32 && snapshot.GetCell(31, height - 1).Character == "…",
                 description: "help has rendered its footer at the narrower width");
@@ -154,6 +162,7 @@ public sealed class PromptHelpAppearanceTests
             {
                 AssertLinks(snapshot, InstructionReference.For("call").DocumentationUrl, SpanStyle.TopType);
             }
+
             adapter.Resize(width, height);
             await auto.WaitUntilAsync(snapshot => snapshot.Width == width && snapshot.ContainsText("https://ilrepl.dev"),
                 description: "the selected target survives resizing");
@@ -169,6 +178,7 @@ public sealed class PromptHelpAppearanceTests
                 AssertColor(snapshot, "❯ Go to", SpanStyle.TopType);
                 AssertLinks(snapshot, InstructionReference.For("call").DocumentationUrl, SpanStyle.Member);
             }
+
             await auto.EnterAsync(ct: ct);
             await auto.WaitUntilAsync(_ => prompt.Help is null && prompt.CaretLine == 3,
                 description: "the source action returns to its producer");
@@ -179,8 +189,14 @@ public sealed class PromptHelpAppearanceTests
         finally
         {
             await cancellation.CancelAsync();
-            try { await run; }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            try
+            {
+                await run;
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+            }
+
             await IlReplApp.SettleAsync(prompt);
         }
     }

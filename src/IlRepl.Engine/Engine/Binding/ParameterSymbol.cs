@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
@@ -19,7 +21,7 @@ public sealed record ParameterSymbol(TypeSymbol Type, string? Name)
     /// <summary>
     /// The parameter's in, out and optional metadata attributes.
     /// </summary>
-    public System.Reflection.ParameterAttributes Attributes { get; init; }
+    public ParameterAttributes Attributes { get; init; }
 
     /// <summary>
     /// The <c>modreq</c> types, in order.

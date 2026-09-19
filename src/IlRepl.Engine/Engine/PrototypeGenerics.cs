@@ -25,7 +25,8 @@ public static class PrototypeGenerics
         }
 
         var id = Interlocked.Increment(ref s_counter);
-        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("ilrepl.prototype" + id), OperatingSystem.IsBrowser() ? AssemblyBuilderAccess.Run : AssemblyBuilderAccess.RunAndCollect);
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("ilrepl.prototype" + id),
+            OperatingSystem.IsBrowser() ? AssemblyBuilderAccess.Run : AssemblyBuilderAccess.RunAndCollect);
         var module = assembly.DefineDynamicModule("prototype");
         var type = module.DefineType("Prototype", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
         var method = type.DefineMethod("Run", MethodAttributes.Public | MethodAttributes.Static);

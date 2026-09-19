@@ -195,7 +195,11 @@ public sealed class IlReplAppCompletionTests
     [TestMethod]
     public async Task Operand_LongSignature_ScrollsThroughTheWholeDetail()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var ct = TestContext.CancellationToken;
         await using var engine = new CompletionEngine { HoldCompletion = false };
         CompletionEngine.LoadLongSignature();
@@ -210,11 +214,19 @@ public sealed class IlReplAppCompletionTests
         const string source = "call LongSignatureFixture.Methods::Us";
         await adapter.PasteAsync(source);
         await auto.WaitUntilTextAsync("SignaturePart00");
-        for (var index = 0; index < 80; index++) await auto.KeyAsync(Hex1bKey.PageDown, ct: ct);
+        for (var index = 0; index < 80; index++)
+        {
+            await auto.KeyAsync(Hex1bKey.PageDown, ct: ct);
+        }
+
         await auto.WaitUntilTextAsync("SignaturePart79");
         Assert.AreEqual(source, prompt.Text);
         Assert.AreEqual(0, prompt.SelectedIndex);
-        for (var index = 0; index < 80; index++) await auto.KeyAsync(Hex1bKey.PageUp, ct: ct);
+        for (var index = 0; index < 80; index++)
+        {
+            await auto.KeyAsync(Hex1bKey.PageUp, ct: ct);
+        }
+
         await auto.WaitUntilTextAsync("SignaturePart00");
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -227,7 +239,11 @@ public sealed class IlReplAppCompletionTests
     [TestMethod]
     public async Task Operand_ReplacementPages_KeepPaletteVisible()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var ct = TestContext.CancellationToken;
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(ct);
@@ -252,7 +268,10 @@ public sealed class IlReplAppCompletionTests
         await auto.WaitUntilAsync(_ =>
         {
             foreach (var call in engine.Calls.Where(call => call.Cancellation.IsCancellationRequested))
+            {
                 call.Release.TrySetResult();
+            }
+
             return engine.Calls[^1].Request.Lines[0] == "call string::";
         });
         await auto.WaitUntilTextAsync("updating members");
@@ -281,7 +300,11 @@ public sealed class IlReplAppCompletionTests
     [TestMethod]
     public async Task Operand_AssemblyRefresh_KeepsPaletteVisible()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var ct = TestContext.CancellationToken;
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(ct);
@@ -326,7 +349,11 @@ public sealed class IlReplAppCompletionTests
     [DataRow("click")]
     public async Task Operand_AcceptDuringAssemblyRefresh_AcceptsFreshBinding(string acceptance)
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var ct = TestContext.CancellationToken;
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(ct);
@@ -347,6 +374,7 @@ public sealed class IlReplAppCompletionTests
             await auto.DownAsync(ct: ct);
             await auto.WaitUntilTextAsync("Enter accepts");
         }
+
         var selected = prompt.Completions!.Reply.Items.Single();
         var firstCall = engine.Calls.Count;
         CompletionEngine.ChangeAssemblies();
@@ -363,9 +391,11 @@ public sealed class IlReplAppCompletionTests
                         .Contains("get_CurrentManagedThreadId()", StringComparison.Ordinal));
                     await auto.ClickAtAsync(5, row, ct: ct);
                 }
+
                 break;
             default: await auto.TabAsync(ct: ct); break;
         }
+
         await auto.WaitUntilAsync(_ => prompt.Requester!.HasPendingAcceptance);
         Assert.AreEqual(prefix, prompt.Text);
         Assert.IsNull(CompletionEdit.For(prompt, selected));
@@ -375,7 +405,11 @@ public sealed class IlReplAppCompletionTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Z, ct: ct);
         await auto.WaitUntilAsync(_ => prompt.Text == prefix);
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
-        foreach (var call in engine.Calls) call.Release.TrySetResult();
+        foreach (var call in engine.Calls)
+        {
+            call.Release.TrySetResult();
+        }
+
         await run;
         await IlReplApp.SettleAsync(prompt);
     }

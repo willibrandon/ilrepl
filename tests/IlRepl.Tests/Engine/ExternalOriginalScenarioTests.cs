@@ -92,6 +92,7 @@ public sealed class ExternalOriginalScenarioTests
         {
             method.GenericParameters.Add(methodParameter);
         }
+
         var il = method.Body.GetILProcessor();
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldftn, module.ImportReference(typeof(Math).GetMethod(nameof(Math.Abs), [typeof(int)])!));

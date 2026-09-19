@@ -35,7 +35,11 @@ public sealed class SessionEditSnapshotTests
         string[] declaration = genericOwner
             ? [".class public Choice`1<T> {", ".method public static !0 Pick(!0 first, !0 second) {", "ldarg.0", "ret", "}", "}"]
             : [".class public Choice {", ".method public static !!0 Pick<T>(!!0 first, !!0 second) {", "ldarg.0", "ret", "}", "}"];
-        foreach (var line in declaration) Assert.IsTrue(initial.Handle(line).Succeeded, Transcript(initial));
+        foreach (var line in declaration)
+        {
+            Assert.IsTrue(initial.Handle(line).Succeeded, Transcript(initial));
+        }
+
         var reference = genericOwner ? "!0 Choice`1<int32>::Pick(!0, !0)" : "!!0 Choice::Pick<int32>(!!0, !!0)";
         var prepared = initial.Handle(".edit " + reference + " as Changed");
         Assert.IsNotNull(prepared.EditDocument, Transcript(initial));
@@ -65,7 +69,11 @@ public sealed class SessionEditSnapshotTests
         using var initial = new ReplCore();
         string[] definitions = [".method int32 Helper() {", "ldc.i4 21", "ret", "}",
             ".method int32 Read() {", "call Helper", "ret", "}"];
-        foreach (var line in definitions) Assert.IsTrue(initial.Handle(line).Succeeded, Transcript(initial));
+        foreach (var line in definitions)
+        {
+            Assert.IsTrue(initial.Handle(line).Succeeded, Transcript(initial));
+        }
+
         var prepared = initial.Handle(".edit Read as Changed");
         Assert.IsNotNull(prepared.EditDocument, Transcript(initial));
         foreach (var line in prepared.EditDocument.Source.Replace("ret", "ldc.i4.1\nadd\nret", StringComparison.Ordinal).Split('\n'))
@@ -104,10 +112,18 @@ public sealed class SessionEditSnapshotTests
         var dependencyPath = Path.Combine(fixture.DirectoryPath, dependencyName + ".dll");
         var savedPath = Path.Combine(fixture.DirectoryPath, "comparison.ilrepl.json");
         File.WriteAllBytes(path, CreateImage(fixture.AssemblyName, 21, externalHelper ? dependencyName : null));
-        if (externalHelper) File.WriteAllBytes(dependencyPath, CreateImage(dependencyName, 21));
+        if (externalHelper)
+        {
+            File.WriteAllBytes(dependencyPath, CreateImage(dependencyName, 21));
+        }
+
         await using (var controller = await fixture.StartAsync(token))
         {
-            if (externalHelper) Assert.IsTrue((await controller.HandleAsync(".load " + dependencyPath, token)).Succeeded);
+            if (externalHelper)
+            {
+                Assert.IsTrue((await controller.HandleAsync(".load " + dependencyPath, token)).Succeeded);
+            }
+
             var loaded = await controller.HandleAsync(".load " + path, token);
             Assert.IsTrue(loaded.Succeeded, string.Join('\n', loaded.Lines.Select(line => line.PlainText)));
             var reference = ".edit int32 [" + fixture.AssemblyName + "]SnapshotValues::Read() as Changed";

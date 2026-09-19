@@ -13,7 +13,8 @@ public sealed class TypeReplacementTests
     [
         ".class public Point {",
         ".field public int32 X",
-        ".method public instance void .ctor(int32 x) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg x; stfld int32 Point::X; ret }",
+        ".method public instance void .ctor(int32 x) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; " +
+        "ldarg x; stfld int32 Point::X; ret }",
         ".method public instance int32 Get() { ldarg.0; ldfld int32 Point::X; ret }",
         "}",
     ];
@@ -61,9 +62,12 @@ public sealed class TypeReplacementTests
         Assert.AreEqual(5, Run(session, "call int32 Proxy()"));
         var oldMake = session.Methods.First(m => m.Signature.Name == "Make").Trampoline;
         var message = Add(session, ".class public Point {", ".field public int32 X",
-            ".method public instance void .ctor(int32 x) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg x; ldc.i4 2; mul; stfld int32 Point::X; ret }",
+            ".method public instance void .ctor(int32 x) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; " +
+            "ldarg x; ldc.i4 2; mul; stfld int32 Point::X; ret }",
             ".method public instance int32 Get() { ldarg.0; ldfld int32 Point::X; ret }", "}");
-        Assert.AreEqual("replaced class Point; rebuilt method Make, class Line and method Proxy (existing instances and delegates keep the previous definitions)", message);
+        Assert.AreEqual(
+            "replaced class Point; rebuilt method Make, class Line and method Proxy (existing instances and delegates keep the previous " +
+            "definitions)", message);
         Assert.AreEqual(10, Run(session, "call int32 Proxy()"));
         Assert.AreNotSame(oldMake, session.Methods.First(m => m.Signature.Name == "Make").Trampoline, "a rebuilt method is a new identity");
         Assert.AreEqual(2, session.TypeCount);
@@ -79,7 +83,8 @@ public sealed class TypeReplacementTests
     {
         var session = Load([.. Point, .. Dependents]);
         var before = session.Types.Select(t => t.RuntimeType).ToList();
-        var message = Assert.ThrowsExactly<ReplException>(() => Add(session, ".class public Point {", ".field public int32 X", "}")).Message;
+        var message = Assert.ThrowsExactly<ReplException>(() => Add(session, ".class public Point {", ".field public int32 X", "}"))
+            .Message;
         Assert.StartsWith("cannot redefine class Point: method Make: ", message);
         Assert.Contains("declares no constructor", message);
         Assert.EndsWith("(redefine method Make first without it, or .reset)", message);
@@ -95,8 +100,10 @@ public sealed class TypeReplacementTests
     [TestMethod]
     public void Redefine_NarrowedAccess_IsRefused()
     {
-        var session = Load([.. Point, ".class public Reader {", ".method public static int32 Read(class Point p) { ldarg p; ldfld int32 Point::X; ret }", "}"]);
-        var message = Assert.ThrowsExactly<ReplException>(() => Add(session, ".class public Point {", ".field private int32 X", "}")).Message;
+        var session = Load([.. Point, ".class public Reader {",
+            ".method public static int32 Read(class Point p) { ldarg p; ldfld int32 Point::X; ret }", "}"]);
+        var message = Assert.ThrowsExactly<ReplException>(() => Add(session, ".class public Point {", ".field private int32 X", "}"))
+            .Message;
         Assert.Contains("cannot redefine class Point: class Reader: int32 Point::X is private", message);
         Assert.AreEqual(2, session.TypeCount);
     }
@@ -114,7 +121,8 @@ public sealed class TypeReplacementTests
         Add(session, ".class public Point {", ".field public int32 X",
             ".method public instance void .ctor(int32 x) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", "}");
         Assert.AreEqual("[Point]", session.State.Stack.Render());
-        var message = Assert.ThrowsExactly<ReplException>(() => Add(session, ".class public Point {", ".field public int32 X", "}")).Message;
+        var message = Assert.ThrowsExactly<ReplException>(() => Add(session, ".class public Point {", ".field public int32 X", "}"))
+            .Message;
         Assert.Contains("the cell body would no longer compile", message);
         Assert.Contains("(.clear the cell first)", message);
     }
@@ -144,7 +152,8 @@ public sealed class TypeReplacementTests
         var session = Load(
             ".class public A {", ".method public static int32 Value() { ldc.i4 1; ret }", "}",
             ".class public B {", ".method public static int32 Twice() { call int32 A::Value(); ldc.i4 2; mul; ret }", "}");
-        var message = Add(session, ".class public A {", ".method public static int32 Value() { ldc.i4 1; ret }", ".method public static int32 Four() { call int32 B::Twice(); ldc.i4 2; mul; ret }", "}");
+        var message = Add(session, ".class public A {", ".method public static int32 Value() { ldc.i4 1; ret }",
+            ".method public static int32 Four() { call int32 B::Twice(); ldc.i4 2; mul; ret }", "}");
         Assert.AreEqual("replaced class A; rebuilt class B (existing instances and delegates keep the previous definitions)", message);
         Assert.AreEqual(4, Run(session, "call int32 A::Four()"));
     }
@@ -159,7 +168,8 @@ public sealed class TypeReplacementTests
         var session = Load(
             ".class public A {", ".method public static int32 Value() { ldc.i4 1; ret }", "}",
             ".class public B {", ".method public static int32 Twice() { call int32 A::Value(); ldc.i4 2; mul; ret }", "}");
-        var message = Add(session, ".class public A {", ".method public static int32 Value() { ldc.i4 10; ret }", ".method public static int32 Four() { call int32 B::Twice(); ldc.i4 2; mul; ret }", "}");
+        var message = Add(session, ".class public A {", ".method public static int32 Value() { ldc.i4 10; ret }",
+            ".method public static int32 Four() { call int32 B::Twice(); ldc.i4 2; mul; ret }", "}");
         Assert.AreEqual("replaced class A; rebuilt class B (existing instances and delegates keep the previous definitions)", message);
         Assert.AreEqual(20, Run(session, "call int32 B::Twice()"));
         Assert.AreEqual(40, Run(session, "call int32 A::Four()"), "A.Four calls the rebuilt B, which calls the new A");
@@ -191,11 +201,13 @@ public sealed class TypeReplacementTests
     public void Redefine_WithCellCallingAMethodOverTheType_RebuildsTheCellLast()
     {
         var session = Load(
-            ".class public A {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", "}",
+            ".class public A {",
+            ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", "}",
             ".method class A Id(class A a) { ldarg a; ret }");
         session.AddLine("newobj instance void A::.ctor()");
         session.AddLine("call class A Id(class A)");
-        var message = Add(session, ".class public A {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", "}");
+        var message = Add(session, ".class public A {",
+            ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", "}");
         Assert.Contains("rebuilt method Id", message);
         Assert.AreEqual("[A]", session.State.Stack.Render());
         Assert.IsNotNull(session.Run().Value);
@@ -208,7 +220,8 @@ public sealed class TypeReplacementTests
     [TestMethod]
     public void Redefine_DroppingANestedType_RemovesItFromLookup()
     {
-        var session = Load(".class public Outer {", ".class nested public Inner {", ".method public static int32 One() { ldc.i4 1; ret }", "}", "}");
+        var session = Load(".class public Outer {", ".class nested public Inner {", ".method public static int32 One() { ldc.i4 1; ret }",
+            "}", "}");
         Assert.AreEqual(1, Run(session, "call int32 Outer/Inner::One()"));
         Add(session, ".class public Outer {", "}");
         Assert.Contains("not found", Assert.ThrowsExactly<ReplException>(() => session.AddLine("call int32 Outer/Inner::One()")).Message);
@@ -226,7 +239,8 @@ public sealed class TypeReplacementTests
         var session = Load(
             ".class public Point { }",
             ".class public Line {",
-            ".custom instance void [System.Runtime]System.Diagnostics.DebuggerTypeProxyAttribute::.ctor(class [System.Runtime]System.Type) = { type(Point) }",
+            ".custom instance void [System.Runtime]System.Diagnostics.DebuggerTypeProxyAttribute::.ctor(class " +
+            "[System.Runtime]System.Type) = { type(Point) }",
             "}");
         var message = Add(session, ".class public Point {", ".field public int32 X", "}");
         Assert.Contains("rebuilt class Line", message);
@@ -259,7 +273,8 @@ public sealed class TypeReplacementTests
             ".class public A {", ".method public static !!0 Id<T>(!!0 v) { ldarg v; ret }", "}",
             ".class public B {", ".method public static int32 Use() { ldc.i4 7; call !!0 A::Id<int32>(!!0); ret }", "}");
         Assert.AreEqual(7, Run(session, "call int32 B::Use()"));
-        Assert.Contains("rebuilt class B", Add(session, ".class public A {", ".method public static !!0 Id<T>(!!0 v) { ldarg v; ret }", "}"));
+        Assert.Contains("rebuilt class B",
+            Add(session, ".class public A {", ".method public static !!0 Id<T>(!!0 v) { ldarg v; ret }", "}"));
         Assert.AreEqual(7, Run(session, "call int32 B::Use()"));
         Assert.AreEqual(7, session.Types[1].RuntimeType!.GetMethod("Use")!.Invoke(null, null));
     }
@@ -271,9 +286,16 @@ public sealed class TypeReplacementTests
     public void Redefine_Base_WithADerivedCallerOfAnInheritedMember()
     {
         var session = Load(
-            ".class public Base {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", ".method public instance int32 F() { ldc.i4 1; ret }", "}",
-            ".class public Derived extends Base {", ".method public instance void .ctor() { ldarg.0; call instance void Base::.ctor(); ret }", ".method public instance int32 G() { ldarg.0; call instance int32 Derived::F(); ret }", "}");
-        Assert.Contains("rebuilt class Derived", Add(session, ".class public Base {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", ".method public instance int32 F() { ldc.i4 2; ret }", "}"));
+            ".class public Base {",
+            ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }",
+            ".method public instance int32 F() { ldc.i4 1; ret }", "}",
+            ".class public Derived extends Base {",
+            ".method public instance void .ctor() { ldarg.0; call instance void Base::.ctor(); ret }",
+            ".method public instance int32 G() { ldarg.0; call instance int32 Derived::F(); ret }", "}");
+        Assert.Contains("rebuilt class Derived",
+            Add(session, ".class public Base {",
+            ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }",
+            ".method public instance int32 F() { ldc.i4 2; ret }", "}"));
         Assert.AreEqual(2, Run(session, "newobj instance void Derived::.ctor()", "call instance int32 Derived::G()"));
     }
 
@@ -297,8 +319,10 @@ public sealed class TypeReplacementTests
     {
         var session = Load(".class public Point { }",
             ".class public Host {",
-            ".method public static class [System.Runtime]System.Type TypeOf<T>() { ldtoken !!0; call class [System.Runtime]System.Type [System.Runtime]System.Type::GetTypeFromHandle(valuetype [System.Runtime]System.RuntimeTypeHandle); ret }",
-            ".method public static class [System.Runtime]System.Type Get() { call class [System.Runtime]System.Type Host::TypeOf<class Point>(); ret }",
+            ".method public static class [System.Runtime]System.Type TypeOf<T>() { ldtoken !!0; call class [System.Runtime]System.Type " +
+            "[System.Runtime]System.Type::GetTypeFromHandle(valuetype [System.Runtime]System.RuntimeTypeHandle); ret }",
+            ".method public static class [System.Runtime]System.Type Get() { call class [System.Runtime]System.Type Host::TypeOf<class " +
+            "Point>(); ret }",
             "}");
         var message = Add(session, ".class public Point {", ".field public int32 X", "}");
         Assert.Contains("rebuilt class Host", message);

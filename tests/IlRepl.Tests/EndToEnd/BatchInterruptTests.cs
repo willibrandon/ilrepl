@@ -96,13 +96,18 @@ public sealed class BatchInterruptTests
         if (mode == "run")
         {
             await using var engine = new InProcessEngine();
-            foreach (var line in source[..^1]) Assert.IsTrue((await engine.HandleAsync(line, token)).Succeeded);
+            foreach (var line in source[..^1])
+            {
+                Assert.IsTrue((await engine.HandleAsync(line, token)).Succeeded);
+            }
+
             var captured = await engine.SessionAsync(new SessionRequest
             {
                 Action = new SessionAction { Operation = SessionOperation.Capture },
             }, token);
             await File.WriteAllBytesAsync(files.SessionPath, SessionCodec.Write(captured.Document), token);
         }
+
         string[] arguments = mode switch
         {
             "eval" => ["--no-color", "--eval", string.Join(';', source)],
@@ -126,6 +131,7 @@ public sealed class BatchInterruptTests
                 await auto.EnterAsync(ct: token);
             }
         }
+
         await auto.WaitUntilAsync(_ => File.Exists(marker) && new FileInfo(marker).Length != 0);
         var hostId = int.Parse(await File.ReadAllTextAsync(marker, token));
         using var host = Process.GetProcessById(hostId);

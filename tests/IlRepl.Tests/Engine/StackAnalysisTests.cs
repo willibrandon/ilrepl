@@ -12,12 +12,15 @@ namespace IlRepl.Tests.Engine;
 [TestClass]
 public sealed class StackAnalysisTests
 {
-    private static DisassembledMethod Body(Action<ModuleDefinition, TypeDefinition, ILProcessor, MethodDefinition> emit, Mono.Cecil.TypeReference? returnType = null)
+    private static DisassembledMethod Body(
+        Action<ModuleDefinition, TypeDefinition, ILProcessor, MethodDefinition> emit,
+        Mono.Cecil.TypeReference? returnType = null)
     {
         var session = new Session();
         var (_, _, fixture) = CecilFixture.Build((module, type) =>
         {
-            var m = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, returnType ?? module.TypeSystem.Void);
+            var m = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, returnType
+                ?? module.TypeSystem.Void);
             type.Methods.Add(m);
             emit(module, type, m.Body.GetILProcessor(), m);
         }, session.Resolver);
@@ -56,7 +59,8 @@ public sealed class StackAnalysisTests
         var text = string.Join("\n", lines);
         Assert.Contains("ldc.i4.1\t[int32]", text);
         Assert.Contains("ldarg.1\t[uint8]", text);
-        var join = method.Clauses.Count == 0 ? method.Entries.First(e => e.Instruction?.Op.Name == "pop") : throw new AssertFailedException("no clauses expected");
+        var join = method.Clauses.Count == 0 ? method.Entries.First(e => e.Instruction?.Op.Name == "pop")
+            : throw new AssertFailedException("no clauses expected");
         Assert.AreEqual("[]", DisassemblyText.StackAt(method, join.Offset));
         // The merged state at the join is what the pop consumed: int32 on both paths.
         var pops = method.Entries.Where(e => e.Instruction?.Op.Name == "pop").ToList();
@@ -138,7 +142,8 @@ public sealed class StackAnalysisTests
             il.Append(handler);
             il.Emit(OpCodes.Leave, end);
             il.Append(end);
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = handler, HandlerStart = handler, HandlerEnd = end, CatchType = module.ImportReference(typeof(Exception)) });
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = handler,
+                HandlerStart = handler, HandlerEnd = end, CatchType = module.ImportReference(typeof(Exception)) });
         });
         var lines = DisassemblyText.LinesWithStack(method);
         var text = string.Join("\n", lines);

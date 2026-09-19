@@ -143,7 +143,9 @@ internal static class SymbolFlowAnalysis
     /// <summary>
     /// Analyzes a captured body with cancellation points within the fixed-point worklist.
     /// </summary>
-    public static ValueTask<FlowResult<TypeSymbol>> RunAsync(EditingBody body, IBindingScope scope,
+    public static ValueTask<FlowResult<TypeSymbol>> RunAsync(
+        EditingBody body,
+        IBindingScope scope,
         CancellationToken cancellationToken = default)
     {
         var returnType = body.Signature?.ReturnType;

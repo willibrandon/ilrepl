@@ -38,7 +38,10 @@ public sealed partial class ProcessLifetimeTests
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         engine.ProgressChanged += progress =>
         {
-            if (progress.Phase == ExecutionPhase.UserCode) entered.TrySetResult();
+            if (progress.Phase == ExecutionPhase.UserCode)
+            {
+                entered.TrySetResult();
+            }
         };
         await SubmitAsync(engine, token, "WAIT: ldstr " + LiteralParser.Escape(release),
             "call bool File::Exists(string)", "brfalse WAIT", "ldsfld int32 Keeper::Value");
@@ -53,8 +56,12 @@ public sealed partial class ProcessLifetimeTests
                 var restored = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 void Observe(ProcessSupervisionState state)
                 {
-                    if (state.Epoch > previous && !state.Restoring && !state.Degraded) restored.TrySetResult();
+                    if (state.Epoch > previous && !state.Restoring && !state.Degraded)
+                    {
+                        restored.TrySetResult();
+                    }
                 }
+
                 lifetime.SupervisionChanged += Observe;
                 try
                 {
@@ -62,11 +69,16 @@ public sealed partial class ProcessLifetimeTests
                     supervisor.Kill();
                     await restored.Task.WaitAsync(TimeSpan.FromSeconds(15), token);
                 }
-                finally { lifetime.SupervisionChanged -= Observe; }
+                finally
+                {
+                    lifetime.SupervisionChanged -= Observe;
+                }
+
                 Assert.AreEqual(runtime, engine.ProcessId);
                 Assert.IsFalse(pending.IsCompleted, "Adoption must not abort or replay the active invocation.");
                 Assert.IsFalse(lifetime.Supervision.Degraded);
             }
+
             await File.WriteAllTextAsync(release, "release", token);
             var result = await pending.WaitAsync(TimeSpan.FromSeconds(15), token);
             Assert.IsTrue(result.Succeeded, Text(result));
@@ -112,7 +124,10 @@ public sealed partial class ProcessLifetimeTests
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
         foreach (var file in Directory.EnumerateFiles(AppContext.BaseDirectory))
+        {
             File.CreateSymbolicLink(Path.Combine(files.DirectoryPath, Path.GetFileName(file)), file);
+        }
+
         var assembly = Path.Combine(files.DirectoryPath, "ilrepl.dll");
         await using var lifetime = new HostProcessLifetime(assembly);
         await using var engine = await lifetime.StartAsync(HostPaths.HostAssembly, cancellationToken: token);
@@ -120,9 +135,19 @@ public sealed partial class ProcessLifetimeTests
             "ldc.i4 73", "stsfld int32 Keeper::Value", "ret");
         var runtime = engine.ProcessId;
         var degraded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        lifetime.SupervisionChanged += state => { if (state.Degraded) degraded.TrySetResult(); };
+        lifetime.SupervisionChanged += state =>
+        {
+            if (state.Degraded)
+            {
+                degraded.TrySetResult();
+            }
+        };
         File.Move(assembly, assembly + ".unavailable");
-        using (var supervisor = Process.GetProcessById(lifetime.SupervisorProcessId!.Value)) supervisor.Kill();
+        using (var supervisor = Process.GetProcessById(lifetime.SupervisorProcessId!.Value))
+        {
+            supervisor.Kill();
+        }
+
         await degraded.Task.WaitAsync(TimeSpan.FromSeconds(15), token);
         Assert.AreEqual(runtime, engine.ProcessId);
         Assert.IsTrue(lifetime.Supervision.Degraded);
@@ -188,7 +213,11 @@ public sealed partial class ProcessLifetimeTests
                 "ldstr " + LiteralParser.Escape(descendantsReady), "call void File::Move(string, string)",
                 "LOOP: br LOOP", "ret",
             ];
-            foreach (var line in source) await frontend.StandardInput.WriteLineAsync(line.AsMemory(), token);
+            foreach (var line in source)
+            {
+                await frontend.StandardInput.WriteLineAsync(line.AsMemory(), token);
+            }
+
             await frontend.StandardInput.FlushAsync(token);
             await WaitUntilAsync(() => File.Exists(hostRecord), token);
             host = Process.GetProcessById(int.Parse(await File.ReadAllTextAsync(hostRecord, token), CultureInfo.InvariantCulture));
@@ -207,35 +236,61 @@ public sealed partial class ProcessLifetimeTests
                 supervisor.Kill();
                 await WaitUntilAsync(() => !IsExecuting(identity), token);
             }
+
             frontend.Kill();
             await OwnedProcessGroup.WaitForExitAsync(frontend, token);
             await WaitUntilAsync(() => !OwnedProcessGroup.IsRunning(hostScope), token);
             await WaitUntilAsync(() => records.All(record => !IsExecuting(record)), token);
             Assert.IsFalse(OwnedProcessGroup.IsRunning(hostScope));
             foreach (var descendant in records)
+            {
                 Assert.IsFalse(IsExecuting(descendant), descendant);
+            }
         }
         finally
         {
-            if (!frontend.HasExited) frontend.Kill(entireProcessTree: true);
+            if (!frontend.HasExited)
+            {
+                frontend.Kill(entireProcessTree: true);
+            }
+
             await OwnedProcessGroup.WaitForExitAsync(frontend, CancellationToken.None);
             if (host is not null)
             {
-                if (!host.HasExited) host.Kill(entireProcessTree: true);
+                if (!host.HasExited)
+                {
+                    host.Kill(entireProcessTree: true);
+                }
+
                 if (hostScope is not null)
+                {
                     await OwnedProcessGroup.WaitForExitAsync(host, hostScope, CancellationToken.None);
+                }
                 else
+                {
                     await OwnedProcessGroup.WaitForExitAsync(host, CancellationToken.None);
+                }
+
                 host.Dispose();
             }
+
             records ??= File.Exists(descendants) ? await File.ReadAllLinesAsync(descendants, CancellationToken.None) : [];
             foreach (var record in records)
             {
                 using var process = ComparisonDescendantSource.Open(record);
-                if (process is null) continue;
-                if (!process.HasExited) process.Kill(entireProcessTree: true);
+                if (process is null)
+                {
+                    continue;
+                }
+
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+
                 await OwnedProcessGroup.WaitForExitAsync(process, ReadIdentity(record), CancellationToken.None);
             }
+
             await Task.WhenAll(stdout, stderr);
         }
     }
@@ -247,8 +302,13 @@ public sealed partial class ProcessLifetimeTests
             var status = await File.ReadAllTextAsync("/proc/" + process + "/stat", cancellationToken);
             return int.Parse(status[(status.LastIndexOf(')') + 2)..].Split(' ')[1]);
         }
+
         var start = new ProcessStartInfo("/bin/ps");
-        foreach (var argument in new[] { "-o", "ppid=", "-p", process.ToString() }) start.ArgumentList.Add(argument);
+        foreach (var argument in new[] { "-o", "ppid=", "-p", process.ToString() })
+        {
+            start.ArgumentList.Add(argument);
+        }
+
         var result = await ToolProcess.RunAsync(start, cancellationToken);
         Assert.AreEqual(0, result.ExitCode, result.StandardError);
         return int.Parse(result.StandardOutput.Trim());
@@ -281,6 +341,9 @@ public sealed partial class ProcessLifetimeTests
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(15));
-        while (!condition()) await Task.Delay(10, timeout.Token);
+        while (!condition())
+        {
+            await Task.Delay(10, timeout.Token);
+        }
     }
 }

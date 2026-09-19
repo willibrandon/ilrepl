@@ -113,7 +113,10 @@ public sealed class SessionRecallTests
             : body;
         Assert.AreSequenceEqual(expected, recalled.SessionEditor.Lines);
         HandleReply? result = null;
-        if (runAll) result = await engine.HandleAsync(".session run", token);
+        if (runAll)
+        {
+            result = await engine.HandleAsync(".session run", token);
+        }
         else
         {
             foreach (var line in recalled.SessionEditor.Lines)
@@ -143,14 +146,20 @@ public sealed class SessionRecallTests
             _ => Task.FromResult<IReplEngine>(new InProcessEngine()));
         string[] source = [".args (int32 = 20)", "ldarg.0", "ret", ".args (int32 = 20)", "ldarg.0", "ldarg.1", "add", "ret", ".reset",
             ".args (int32 = 7)"];
-        foreach (var line in source) Assert.IsTrue((await engine.HandleAsync(line, token)).Succeeded, line);
+        foreach (var line in source)
+        {
+            Assert.IsTrue((await engine.HandleAsync(line, token)).Succeeded, line);
+        }
 
         var recalled = await engine.HandleAsync(".session cell 2", token);
 
         Assert.IsNotNull(recalled.SessionEditor);
         Assert.AreSequenceEqual([".args (int32 = 20)", "ldarg.0", "ldarg.1", "add", "ret"], recalled.SessionEditor.Lines);
         HandleReply? result = null;
-        if (runAll) result = await engine.HandleAsync(".session run", token);
+        if (runAll)
+        {
+            result = await engine.HandleAsync(".session run", token);
+        }
         else
         {
             foreach (var line in recalled.SessionEditor.Lines)
@@ -258,7 +267,10 @@ public sealed class SessionRecallTests
             Assert.IsTrue(reply.Succeeded, string.Join('\n', reply.Lines.Select(item => item.PlainText)));
         }
 
-        if (reset) Assert.IsTrue((await engine.HandleAsync(".reset", token)).Succeeded);
+        if (reset)
+        {
+            Assert.IsTrue((await engine.HandleAsync(".reset", token)).Succeeded);
+        }
 
         var recalled = await engine.HandleAsync(".session cell 1", token);
 
@@ -366,7 +378,10 @@ public sealed class SessionRecallTests
     {
         var token = TestContext.CancellationToken;
         await using var engine = new InProcessEngine();
-        if (unfinished) Assert.IsTrue((await engine.HandleAsync(".method int32 Pending() {", token)).Succeeded);
+        if (unfinished)
+        {
+            Assert.IsTrue((await engine.HandleAsync(".method int32 Pending() {", token)).Succeeded);
+        }
 
         var listed = await engine.SessionAsync(new SessionRequest
         {

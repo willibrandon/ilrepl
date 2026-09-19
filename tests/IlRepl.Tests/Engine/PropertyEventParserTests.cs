@@ -29,8 +29,10 @@ public sealed class PropertyEventParserTests
         Assert.IsFalse(indexer.OpensBlock);
         var statics = PropertyEventParser.ParseProperty("int32 Count() {", Context);
         Assert.IsTrue(statics.IsStatic);
-        Assert.Contains("usage: .property", Assert.ThrowsExactly<ReplException>(() => PropertyEventParser.ParseProperty("int32 Count {", Context)).Message);
-        Assert.Contains("bad property name", Assert.ThrowsExactly<ReplException>(() => PropertyEventParser.ParseProperty("int32 1st() {", Context)).Message);
+        Assert.Contains("usage: .property",
+            Assert.ThrowsExactly<ReplException>(() => PropertyEventParser.ParseProperty("int32 Count {", Context)).Message);
+        Assert.Contains("bad property name",
+            Assert.ThrowsExactly<ReplException>(() => PropertyEventParser.ParseProperty("int32 1st() {", Context)).Message);
     }
 
     /// <summary>
@@ -43,8 +45,11 @@ public sealed class PropertyEventParserTests
         Assert.AreEqual("Changed", header.Name);
         Assert.AreEqual(typeof(EventHandler), header.HandlerType);
         Assert.IsTrue(header.OpensBlock);
-        Assert.Contains("is not a delegate type", Assert.ThrowsExactly<ReplException>(() => PropertyEventParser.ParseEvent("int32 Changed {", Context)).Message);
-        Assert.Contains("usage: .event", Assert.ThrowsExactly<ReplException>(() => PropertyEventParser.ParseEvent("class [System.Runtime]System.EventHandler {", Context)).Message);
+        Assert.Contains("is not a delegate type",
+            Assert.ThrowsExactly<ReplException>(() => PropertyEventParser.ParseEvent("int32 Changed {", Context)).Message);
+        Assert.Contains("usage: .event",
+            Assert.ThrowsExactly<ReplException>(() => PropertyEventParser.ParseEvent("class [System.Runtime]System.EventHandler {",
+            Context)).Message);
     }
 
     /// <summary>
@@ -61,7 +66,10 @@ public sealed class PropertyEventParserTests
         var setter = PropertyEventParser.ParseAccessor("set", "void Point::set_Length(int32)", Context);
         Assert.IsTrue(setter.IsStatic);
         Assert.AreSequenceEqual([typeof(int)], setter.ParameterTypes);
-        Assert.AreEqual("get_Length", PropertyEventParser.ParseAccessor("get", "instance int32 get_Length()", Context).Name, "the type qualifier is optional");
-        Assert.Contains("usage: .get", Assert.ThrowsExactly<ReplException>(() => PropertyEventParser.ParseAccessor("get", "instance int32 get_Length", Context)).Message);
+        Assert.AreEqual("get_Length", PropertyEventParser.ParseAccessor("get", "instance int32 get_Length()", Context).Name,
+            "the type qualifier is optional");
+        Assert.Contains("usage: .get",
+            Assert.ThrowsExactly<ReplException>(() => PropertyEventParser.ParseAccessor("get", "instance int32 get_Length", Context))
+            .Message);
     }
 }

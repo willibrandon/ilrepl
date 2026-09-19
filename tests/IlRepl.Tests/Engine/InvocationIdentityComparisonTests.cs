@@ -48,7 +48,11 @@ public sealed class InvocationIdentityComparisonTests
         await AssertActualReference(edit.Original.Requested, shape, replaced: false);
         await AssertActualReference(edit.OriginalMethod, shape, replaced: false);
         await AssertActualReference(edit.Method!, shape, replace);
-        foreach (var line in InvocationIdentityExamples.Scenarios(shape).Split('\n')) session.AddLine(line);
+        foreach (var line in InvocationIdentityExamples.Scenarios(shape).Split('\n'))
+        {
+            session.AddLine(line);
+        }
+
         var witness = session.Methods.Single(method => method.Signature.Name == "Witness").Version.Body;
         Assert.AreEqual(replace || shape == "out" ? 0 : 1, witness.Invoke(null, null));
         var result = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy using Scenario"),
@@ -86,9 +90,19 @@ public sealed class InvocationIdentityComparisonTests
             owner.GetField("Value")!.SetValue(receiver, before);
             arguments = [];
         }
-        else if (shape == "array") arguments = [new object?[] { new[] { before } }];
-        else if (shape == "dictionary") arguments = [new Dictionary<string, object?> { ["item"] = before }];
-        else arguments = [before];
+        else if (shape == "array")
+        {
+            arguments = [new object?[] { new[] { before } }];
+        }
+        else if (shape == "dictionary")
+        {
+            arguments = [new Dictionary<string, object?> { ["item"] = before }];
+        }
+        else
+        {
+            arguments = [before];
+        }
+
         object? returned;
         if (shape == "throw")
         {
@@ -97,7 +111,11 @@ public sealed class InvocationIdentityComparisonTests
             Assert.IsInstanceOfType<Exception>(returned);
             Assert.AreEqual("same exception", ((Exception)returned).Message);
         }
-        else returned = method.Invoke(receiver, arguments);
+        else
+        {
+            returned = method.Invoke(receiver, arguments);
+        }
+
         if (shape is "task" or "valuetask")
         {
             var task = shape == "task" ? Assert.IsInstanceOfType<Task<object>>(returned)
@@ -106,6 +124,7 @@ public sealed class InvocationIdentityComparisonTests
             owner.GetMethod("Complete")!.Invoke(null, null);
             returned = await task;
         }
+
         var after = shape switch
         {
             "receiver" => owner.GetField("Value")!.GetValue(receiver),
@@ -114,12 +133,31 @@ public sealed class InvocationIdentityComparisonTests
             "return" or "task" or "valuetask" or "throw" => returned,
             _ => arguments[0],
         };
-        if (replaced || shape == "out") Assert.AreNotSame(before, after);
-        else Assert.AreSame(before, after);
-        if (shape == "ref-string") Assert.AreEqual("x", after);
-        else if (shape == "ref-box") Assert.AreEqual(42, after);
-        else if (shape == "null") Assert.IsNull(after);
-        else if (shape != "throw") Assert.AreEqual(shape == "mutate" ? 43 : 42, after!.GetType().GetField("Number")!.GetValue(after));
+        if (replaced || shape == "out")
+        {
+            Assert.AreNotSame(before, after);
+        }
+        else
+        {
+            Assert.AreSame(before, after);
+        }
+
+        if (shape == "ref-string")
+        {
+            Assert.AreEqual("x", after);
+        }
+        else if (shape == "ref-box")
+        {
+            Assert.AreEqual(42, after);
+        }
+        else if (shape == "null")
+        {
+            Assert.IsNull(after);
+        }
+        else if (shape != "throw")
+        {
+            Assert.AreEqual(shape == "mutate" ? 43 : 42, after!.GetType().GetField("Number")!.GetValue(after));
+        }
     }
 
     private static void AssertBoundary(ComparisonSide side, string shape, bool replaced)
@@ -140,6 +178,7 @@ public sealed class InvocationIdentityComparisonTests
             Assert.IsNull(output.Identity);
             return;
         }
+
         if (shape == "out")
         {
             Assert.AreEqual("null", input.Kind);
@@ -149,6 +188,7 @@ public sealed class InvocationIdentityComparisonTests
             Assert.AreEqual("42", Field(output, "Number").Value);
             return;
         }
+
         if (shape is "receiver" or "array" or "dictionary")
         {
             Assert.AreEqual(input.Identity, output.Identity);
@@ -156,6 +196,7 @@ public sealed class InvocationIdentityComparisonTests
             input = Nested(input, shape);
             output = Nested(output, shape);
         }
+
         if (shape is "return" or "task" or "valuetask")
         {
             Assert.AreEqual(input.Identity, output.Identity);
@@ -163,19 +204,35 @@ public sealed class InvocationIdentityComparisonTests
             Assert.AreEqual("42", Field(output, "Number").Value);
             output = Root(invocation.Outputs, "return");
         }
+
         if (shape == "throw")
         {
             Assert.AreEqual(input.Identity, output.Identity);
             Assert.IsNotNull(invocation.Exception);
             Assert.AreEqual("same exception", invocation.Exception.Message);
             Assert.EndsWith("System.Exception", invocation.Exception.Type);
-            if (replaced) Assert.AreNotEqual(input.Identity, invocation.Exception.Identity);
-            else Assert.AreEqual(input.Identity, invocation.Exception.Identity);
+            if (replaced)
+            {
+                Assert.AreNotEqual(input.Identity, invocation.Exception.Identity);
+            }
+            else
+            {
+                Assert.AreEqual(input.Identity, invocation.Exception.Identity);
+            }
+
             return;
         }
+
         Assert.IsNull(invocation.Exception);
-        if (replaced) Assert.AreNotEqual(input.Identity, output.Identity);
-        else Assert.AreEqual(input.Identity, output.Identity);
+        if (replaced)
+        {
+            Assert.AreNotEqual(input.Identity, output.Identity);
+        }
+        else
+        {
+            Assert.AreEqual(input.Identity, output.Identity);
+        }
+
         if (shape is "ref-string" or "ref-box")
         {
             Assert.AreEqual("scalar", input.Kind);

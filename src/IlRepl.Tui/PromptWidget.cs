@@ -27,7 +27,12 @@ namespace IlRepl.Tui;
 /// <param name="OpenDepth">How many closing braces the engine is already waiting for.</param>
 /// <param name="CommentOpen">Whether the engine has a <c>/*</c> open when the buffer starts.</param>
 public sealed partial record PromptWidget(
-    string Label, IReadOnlyList<CompletionItem> Catalog, PromptState State, PromptFit Fit, int OpenDepth, bool CommentOpen) : Hex1bWidget
+    string Label,
+    IReadOnlyList<CompletionItem> Catalog,
+    PromptState State,
+    PromptFit Fit,
+    int OpenDepth,
+    bool CommentOpen) : Hex1bWidget
 {
     internal Action<string>? SubmitHandler { get; init; }
 
@@ -201,6 +206,7 @@ public sealed partial record PromptWidget(
             PromptHelpWidget.Bind(b, state, Catalog, Width, Math.Max(1, Fit.EditorRows + Fit.TranscriptRows));
             return;
         }
+
         b.Key(Hex1bKey.F1).Action(_ => PromptHelpWidget.Process(state,
             () => PromptHelp.Open(state, Catalog)), "Instruction help");
         b.Key(Hex1bKey.F8).Action(_ => PromptDiagnostics.Move(state, false), "Next diagnostic");
@@ -346,7 +352,10 @@ public sealed partial record PromptWidget(
         }
 
         var item = candidates[Math.Clamp(state.SelectedIndex, 0, candidates.Count - 1)];
-        if (!CompletionEdit.Accept(state, item)) state.Requester?.QueueAcceptance(state, item);
+        if (!CompletionEdit.Accept(state, item))
+        {
+            state.Requester?.QueueAcceptance(state, item);
+        }
     }
 
     private void CtrlC(PromptState state)
@@ -358,7 +367,10 @@ public sealed partial record PromptWidget(
             return;
         }
 
-        if (state.Interrupt?.Invoke() == true) return;
+        if (state.Interrupt?.Invoke() == true)
+        {
+            return;
+        }
 
         if (state.Busy)
         {
@@ -377,7 +389,6 @@ public sealed partial record PromptWidget(
             state.Prediction.Hide();
             return;
         }
-
     }
 
     // Ctrl+U as readline and prompt_toolkit have it: the line is cut from the caret back to
@@ -467,5 +478,4 @@ public sealed partial record PromptWidget(
         editor.SetCursorPosition(new DocumentOffset(range.Start.Value + replacement.Length));
         editor.History.CommitGroup(editor.Cursors, document.Version);
     }
-
 }

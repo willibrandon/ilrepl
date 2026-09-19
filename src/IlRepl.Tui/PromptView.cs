@@ -42,7 +42,14 @@ public sealed class PromptView : IEditorViewRenderer
     /// <param name="caret">The caret's character index on the line.</param>
     /// <param name="lineCount">How many lines the document has.</param>
     /// <returns>The offsets with the caret in view.</returns>
-    public static ViewportOffsets RevealCaret(ViewportOffsets offsets, int rows, int columns, string line, int caretLine, int caret, int lineCount)
+    public static ViewportOffsets RevealCaret(
+        ViewportOffsets offsets,
+        int rows,
+        int columns,
+        string line,
+        int caretLine,
+        int caret,
+        int lineCount)
     {
         ArgumentNullException.ThrowIfNull(line);
         var end = Math.Clamp(caret, 0, line.Length);
@@ -117,7 +124,18 @@ public sealed class PromptView : IEditorViewRenderer
     public int GutterWidth => DisplayWidth.GetStringWidth(Label);
 
     /// <inheritdoc />
-    public void Render(Hex1bRenderContext context, EditorState state, Rect viewport, int scrollOffset, int horizontalScrollOffset, bool isFocused, char? pendingNibble = null, IReadOnlyList<ITextDecorationProvider>? decorationProviders = null, IReadOnlyList<InlineHint>? inlineHints = null, bool wordWrap = false, IReadOnlyList<FoldingRegion>? foldingRegions = null)
+    public void Render(
+        Hex1bRenderContext context,
+        EditorState state,
+        Rect viewport,
+        int scrollOffset,
+        int horizontalScrollOffset,
+        bool isFocused,
+        char? pendingNibble = null,
+        IReadOnlyList<ITextDecorationProvider>? decorationProviders = null,
+        IReadOnlyList<InlineHint>? inlineHints = null,
+        bool wordWrap = false,
+        IReadOnlyList<FoldingRegion>? foldingRegions = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(state);
@@ -153,8 +171,10 @@ public sealed class PromptView : IEditorViewRenderer
             }
 
             var left = RowLeft(document, line);
-            var decorations = decorationProviders is { Count: > 0 } && left > 0 ? [new ScrolledDecorations(decorationProviders, left)] : decorationProviders;
-            _inner.Render(context, state, new Rect(viewport.X + gutter, viewport.Y + row, columns, 1), line, left, isFocused, pendingNibble, decorations, inlineHints, wordWrap: false, foldingRegions: null);
+            var decorations = decorationProviders is { Count: > 0 }
+                && left > 0 ? [new ScrolledDecorations(decorationProviders, left)] : decorationProviders;
+            _inner.Render(context, state, new Rect(viewport.X + gutter, viewport.Y + row, columns, 1), line, left, isFocused, pendingNibble,
+                decorations, inlineHints, wordWrap: false, foldingRegions: null);
         }
 
         DrawPrediction(context, viewport, gutter, columns, rows, document, caret);
@@ -175,7 +195,14 @@ public sealed class PromptView : IEditorViewRenderer
 
     // The suggestion starts in the caret's cell, which keeps the caret's colours, and runs on in
     // the dim colour: the caret stays on what was typed and the suggestion follows it.
-    private void DrawPrediction(Hex1bRenderContext context, Rect viewport, int gutter, int columns, int rows, IHex1bDocument document, DocumentPosition caret)
+    private void DrawPrediction(
+        Hex1bRenderContext context,
+        Rect viewport,
+        int gutter,
+        int columns,
+        int rows,
+        IHex1bDocument document,
+        DocumentPosition caret)
     {
         if (Prediction is not { Suffix: { Length: > 0 } suffix, At: var at } || at != caret)
         {
@@ -211,7 +238,14 @@ public sealed class PromptView : IEditorViewRenderer
     }
 
     /// <inheritdoc />
-    public DocumentOffset? HitTest(int localX, int localY, EditorState state, int viewportColumns, int viewportLines, int scrollOffset, int horizontalScrollOffset)
+    public DocumentOffset? HitTest(
+        int localX,
+        int localY,
+        EditorState state,
+        int viewportColumns,
+        int viewportLines,
+        int scrollOffset,
+        int horizontalScrollOffset)
     {
         ArgumentNullException.ThrowIfNull(state);
         var gutter = GutterWidth;
@@ -219,7 +253,8 @@ public sealed class PromptView : IEditorViewRenderer
         if (localX < gutter)
         {
             var line = Offsets.Top + localY;
-            return line > document.LineCount ? new DocumentOffset(document.Length) : document.PositionToOffset(new DocumentPosition(Math.Max(1, line), 1));
+            return line > document.LineCount ? new DocumentOffset(document.Length)
+                : document.PositionToOffset(new DocumentPosition(Math.Max(1, line), 1));
         }
 
         var hit = Math.Clamp(Offsets.Top + localY, 1, Math.Max(1, document.LineCount));

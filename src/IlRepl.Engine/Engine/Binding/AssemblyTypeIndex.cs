@@ -46,7 +46,9 @@ public sealed class AssemblyTypeIndex
     /// <param name="cancellationToken">Cancels construction between metadata rows.</param>
     /// <returns>The complete immutable index.</returns>
     internal static async ValueTask<AssemblyTypeIndex> CreateAsync(
-        AssemblySymbolSource source, MetadataReader reader, CancellationToken cancellationToken)
+        AssemblySymbolSource source,
+        MetadataReader reader,
+        CancellationToken cancellationToken)
     {
         var index = new AssemblyTypeIndex(source);
         var processed = 0;
@@ -138,7 +140,6 @@ public sealed class AssemblyTypeIndex
                     default:
                         break;
                 }
-
             }
             catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
             {
@@ -190,6 +191,7 @@ public sealed class AssemblyTypeIndex
             {
                 entries.Add(entry);
             }
+
             if (++processed % 128 == 0 && Stopwatch.GetElapsedTime(slice) >= TimeSpan.FromMilliseconds(4))
             {
                 await Task.Yield();

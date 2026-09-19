@@ -113,7 +113,8 @@ public sealed class PromptHistoryTests
         Assert.IsTrue(await history.AddAsync("ldc.i4 1", CancellationToken.None));
         Assert.IsFalse(await history.AddAsync("ldc.i4 1", CancellationToken.None));
         Assert.IsFalse(await history.AddAsync("  ", CancellationToken.None));
-        Assert.IsTrue(await history.AddAsync("ldc.i4 1\n", CancellationToken.None), "a trailing blank line is a run, so this is another entry");
+        Assert.IsTrue(await history.AddAsync("ldc.i4 1\n", CancellationToken.None),
+            "a trailing blank line is a run, so this is another entry");
         Assert.AreSequenceEqual(["ldc.i4 1", "ldc.i4 1\n"], store.Appended);
     }
 

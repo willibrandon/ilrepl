@@ -28,7 +28,8 @@ public sealed class FieldInitTests
     [TestMethod]
     public void FieldConstant_IsMetadataNotStorage()
     {
-        var session = Load(".class public Consts {", ".field public static int32 Answer = int32(42)", ".field public static literal string Name = \"consts\"", "}");
+        var session = Load(".class public Consts {", ".field public static int32 Answer = int32(42)",
+            ".field public static literal string Name = \"consts\"", "}");
         var type = session.Types[0].RuntimeType!;
         var answer = type.GetField("Answer")!;
         Assert.IsTrue(answer.Attributes.HasFlag(FieldAttributes.HasDefault));
@@ -51,12 +52,14 @@ public sealed class FieldInitTests
             ".field public static initonly int32 S",
             ".field public initonly int32 V",
             ".method static void .cctor() { ldc.i4 7; stsfld int32 Fixed::S; ret }",
-            ".method public instance void .ctor(int32 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg v; stfld int32 Fixed::V; ret }",
+            ".method public instance void .ctor(int32 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; " +
+            "ldarg v; stfld int32 Fixed::V; ret }",
             "}");
         Assert.AreEqual(7, Run(session, "ldsfld int32 Fixed::S"));
         Assert.AreEqual(3, Run(session, "ldc.i4 3", "newobj instance void Fixed::.ctor(int32)", "ldfld int32 Fixed::V"));
         Assert.IsTrue(session.Types[0].RuntimeType!.GetField("S")!.IsInitOnly);
-        Assert.Contains("static initonly", Assert.ThrowsExactly<ReplException>(() => Run(session, "ldc.i4 1", "stsfld int32 Fixed::S")).Message);
+        Assert.Contains("static initonly",
+            Assert.ThrowsExactly<ReplException>(() => Run(session, "ldc.i4 1", "stsfld int32 Fixed::S")).Message);
     }
 
     /// <summary>
@@ -80,8 +83,12 @@ public sealed class FieldInitTests
     {
         var session = Load(
             ".class public sequential sealed Inner extends [System.Runtime]System.ValueType {", ".field public int32 V", "}",
-            ".class public Box {", ".field public valuetype Inner In", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", "}");
+            ".class public Box {", ".field public valuetype Inner In",
+            ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", "}");
         Assert.AreEqual(0, Run(session, "newobj instance void Box::.ctor()", "ldflda valuetype Inner Box::In", "ldfld int32 Inner::V"));
-        Assert.AreEqual(9, Run(session, ".locals init (class Box b)", "newobj instance void Box::.ctor()", "stloc b", "ldloc b", "ldflda valuetype Inner Box::In", "ldc.i4 9", "stfld int32 Inner::V", "ldloc b", "ldflda valuetype Inner Box::In", "ldfld int32 Inner::V"));
+        Assert.AreEqual(9,
+            Run(session, ".locals init (class Box b)", "newobj instance void Box::.ctor()", "stloc b", "ldloc b",
+            "ldflda valuetype Inner Box::In", "ldc.i4 9", "stfld int32 Inner::V", "ldloc b", "ldflda valuetype Inner Box::In",
+            "ldfld int32 Inner::V"));
     }
 }

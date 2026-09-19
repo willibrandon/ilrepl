@@ -96,7 +96,12 @@ public sealed class CellState
     /// <param name="methods">The session methods a call can name without a type.</param>
     /// <param name="signature">The method's signature, or null for the cell.</param>
     /// <param name="braceOpen">For a method body: true when the header line already carried the opening brace.</param>
-    public CellState(TypeResolver resolver, GenericContext generics, IReadOnlyList<MethodSignature> methods, MethodSignature? signature, bool braceOpen)
+    public CellState(
+        TypeResolver resolver,
+        GenericContext generics,
+        IReadOnlyList<MethodSignature> methods,
+        MethodSignature? signature,
+        bool braceOpen)
         : this(resolver, generics, methods, signature, braceOpen, TypeTable.Empty, null)
     {
     }
@@ -112,7 +117,14 @@ public sealed class CellState
     /// <param name="braceOpen">For a method body: true when the header line already carried the opening brace.</param>
     /// <param name="types">The session types a name can resolve to.</param>
     /// <param name="member">The type this body belongs to, or null for the cell and session methods.</param>
-    public CellState(TypeResolver resolver, GenericContext generics, IReadOnlyList<MethodSignature> methods, MethodSignature? signature, bool braceOpen, TypeTable types, MemberContext? member)
+    public CellState(
+        TypeResolver resolver,
+        GenericContext generics,
+        IReadOnlyList<MethodSignature> methods,
+        MethodSignature? signature,
+        bool braceOpen,
+        TypeTable types,
+        MemberContext? member)
     {
         ArgumentNullException.ThrowIfNull(resolver);
         ArgumentNullException.ThrowIfNull(generics);
@@ -578,7 +590,8 @@ public sealed class CellState
                 case ".vararg":
                     throw new ReplException("a member is made vararg on its header: .method public vararg ...");
                 case ".typeparams":
-                    throw new ReplException(".typeparams is not allowed inside a method; declare generic parameters on the header: Name<T>(...)");
+                    throw new ReplException(
+                        ".typeparams is not allowed inside a method; declare generic parameters on the header: Name<T>(...)");
                 default:
                     break;
             }
@@ -686,7 +699,9 @@ public sealed class CellState
                 return new LineResult(LineOutcome.Empty, null, null);
 
             default:
-                throw new ReplException($"unknown directive '{directive}'; expected .locals, .args, .typeparams, .typeargs, .vararg, .method, .class, .field, .try, or .maxstack");
+                throw new ReplException(
+                    $"unknown directive '{directive}'; expected .locals, .args, .typeparams, .typeargs, .vararg, .method, .class, " +
+                    $".field, .try, or .maxstack");
         }
     }
 
@@ -715,7 +730,8 @@ public sealed class CellState
         var parameters = Signature!.Parameters;
         if (index < 0 || index > parameters.Count)
         {
-            throw new ReplException($"{Signature.Name} has {parameters.Count} parameter(s); .param takes 0 (the return value) to {parameters.Count}");
+            throw new ReplException(
+                $"{Signature.Name} has {parameters.Count} parameter(s); .param takes 0 (the return value) to {parameters.Count}");
         }
 
         var after = s[(close + 1)..].Trim();
@@ -737,7 +753,8 @@ public sealed class CellState
             hasDefault = true;
         }
 
-        _entries.Add(new CellEntry { Kind = EntryKind.Param, Source = source, ParamIndex = index, ParamDefault = value, ParamHasDefault = hasDefault });
+        _entries.Add(new CellEntry { Kind = EntryKind.Param, Source = source, ParamIndex = index, ParamDefault = value,
+            ParamHasDefault = hasDefault });
         return new LineResult(LineOutcome.Param, null, hasDefault ? $"param {index} = {ConstantText.Describe(value)}" : $"param {index}");
     }
 
@@ -793,7 +810,9 @@ public sealed class CellState
             case FieldInfo field:
                 if (field.IsLiteral && instruction.Op.Name is "ldsfld" or "ldsflda" or "stsfld")
                 {
-                    throw new ReplException($"{field.Name} is a literal; it has no storage, so {instruction.Op.Name} would fail with MissingFieldException at run time. Load its value instead{LiteralHint(field)}");
+                    throw new ReplException(
+                        $"{field.Name} is a literal; it has no storage, so {instruction.Op.Name} would fail with MissingFieldException " +
+                        $"at run time. Load its value instead{LiteralHint(field)}");
                 }
 
                 MemberAccess.CheckType(field.FieldType, scope, Types);
@@ -805,6 +824,7 @@ public sealed class CellState
                 {
                     CheckExactAccess(method.ExactDeclaringType, scope);
                 }
+
                 foreach (var optional in method.ExactOptionalParameterTypes ?? [])
                 {
                     CheckExactAccess(optional, scope);

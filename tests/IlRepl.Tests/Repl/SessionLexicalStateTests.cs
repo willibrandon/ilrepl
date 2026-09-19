@@ -146,7 +146,10 @@ public sealed class SessionLexicalStateTests
 
     private static void Submit(ReplCore core, params string[] lines)
     {
-        foreach (var line in lines) Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + Transcript(core));
+        foreach (var line in lines)
+        {
+            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + Transcript(core));
+        }
     }
 
     private static string[] Results(ReplCore core) => core.Transcript.Lines.Where(line => line.Kind == LineKind.Result)

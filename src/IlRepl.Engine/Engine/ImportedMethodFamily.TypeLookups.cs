@@ -26,7 +26,11 @@ internal sealed partial class ImportedMethodFamily
         var wrappers = new Dictionary<(Assembly Context, string Signature, Code Call), MethodDefinition>();
         foreach (var (source, body) in _methods)
         {
-            if (body is null) continue;
+            if (body is null)
+            {
+                continue;
+            }
+
             var method = (MethodDefinition)definitions[source];
             foreach (var instruction in method.Body.Instructions.ToArray())
             {
@@ -62,7 +66,11 @@ internal sealed partial class ImportedMethodFamily
                     wrappers.Add(key, wrapper);
                 }
 
-                if (target.HasThis) LoadConstrainedLookupReceiver(method, instruction, target);
+                if (target.HasThis)
+                {
+                    LoadConstrainedLookupReceiver(method, instruction, target);
+                }
+
                 instruction.OpCode = OpCodes.Call;
                 instruction.Operand = wrapper;
             }
@@ -78,8 +86,12 @@ internal sealed partial class ImportedMethodFamily
         return owner;
     }
 
-    private MethodDefinition WriteTypeLookup(CecilWriter writer, TypeDefinition owner, Assembly context,
-        MethodReference target, int index)
+    private MethodDefinition WriteTypeLookup(
+        CecilWriter writer,
+        TypeDefinition owner,
+        Assembly context,
+        MethodReference target,
+        int index)
     {
         var wrapper = new MethodDefinition("GetType" + index, CecilMethodAttributes.Assembly | CecilMethodAttributes.Static,
             writer.Import(typeof(Type)));
@@ -101,8 +113,15 @@ internal sealed partial class ImportedMethodFamily
 
         il.Emit(OpCodes.Ldarg_0);
         var ignoreCase = resolvers ? 4 : 2;
-        if (target.Parameters.Count > ignoreCase) il.Emit(OpCodes.Ldarg, wrapper.Parameters[ignoreCase]);
-        else il.Emit(OpCodes.Ldc_I4_0);
+        if (target.Parameters.Count > ignoreCase)
+        {
+            il.Emit(OpCodes.Ldarg, wrapper.Parameters[ignoreCase]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+        }
+
         il.Emit(OpCodes.Ldstr, context.FullName!);
         WriteTypeLookupNames(writer, il);
 
@@ -112,7 +131,10 @@ internal sealed partial class ImportedMethodFamily
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Cgt_Un);
         }
-        else il.Emit(OpCodes.Ldc_I4_0);
+        else
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+        }
 
         il.Emit(OpCodes.Call, writer.Import(typeof(CopiedTypeNames).GetMethod(nameof(CopiedTypeNames.Translate),
             BindingFlags.Static | BindingFlags.NonPublic)!));

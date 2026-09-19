@@ -23,7 +23,13 @@ internal sealed class CompletionEngine : IReplEngine
     /// </summary>
     public IReadOnlyList<HeldCompletion> Calls
     {
-        get { lock (_callsLock) { return _calls.ToArray(); } }
+        get
+        {
+            lock (_callsLock)
+            {
+                return _calls.ToArray();
+            }
+        }
     }
 
     /// <summary>
@@ -105,6 +111,7 @@ internal sealed class CompletionEngine : IReplEngine
             module.Types.Add(type);
             method.Parameters.Add(new ParameterDefinition("argument" + index, ParameterAttributes.None, type));
         }
+
         method.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
         using var image = new MemoryStream();
         assembly.Write(image);
@@ -119,7 +126,11 @@ internal sealed class CompletionEngine : IReplEngine
         var prepared = _inner.AnalyzeAsync(request, _lifetime.Token);
         var call = new HeldAnalysis(request, prepared, cancellationToken);
         Analyses.Enqueue(call);
-        if (!HoldAnalysis) call.Release.TrySetResult();
+        if (!HoldAnalysis)
+        {
+            call.Release.TrySetResult();
+        }
+
         return DeliverAsync(prepared, call.Release.Task);
     }
 
@@ -128,8 +139,16 @@ internal sealed class CompletionEngine : IReplEngine
     {
         var prepared = _inner.CompleteAsync(request, _lifetime.Token);
         var call = new HeldCompletion(request, prepared, cancellationToken);
-        lock (_callsLock) { _calls.Add(call); }
-        if (!HoldCompletion) call.Release.TrySetResult();
+        lock (_callsLock)
+        {
+            _calls.Add(call);
+        }
+
+        if (!HoldCompletion)
+        {
+            call.Release.TrySetResult();
+        }
+
         return DeliverAsync(prepared, call.Release.Task);
     }
 
@@ -151,11 +170,23 @@ internal sealed class CompletionEngine : IReplEngine
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         await _lifetime.CancelAsync();
-        foreach (var call in Calls) call.Release.TrySetCanceled();
-        foreach (var call in Analyses) call.Release.TrySetCanceled();
+        foreach (var call in Calls)
+        {
+            call.Release.TrySetCanceled();
+        }
+
+        foreach (var call in Analyses)
+        {
+            call.Release.TrySetCanceled();
+        }
+
         await _inner.DisposeAsync();
         _lifetime.Dispose();
     }

@@ -27,22 +27,35 @@ internal sealed class LifetimeSupervisorService(long epoch) : ISupervisorService
         try
         {
             Validate(snapshot.Epoch);
-            if (snapshot.Revision < _revision) throw new InvalidOperationException("obsolete process ownership revision");
+            if (snapshot.Revision < _revision)
+            {
+                throw new InvalidOperationException("obsolete process ownership revision");
+            }
+
             foreach (var identity in _scopes.Keys.Where(identity => !OwnedProcessGroup.IsCurrent(_scopes[identity])).ToArray())
             {
                 _scopes.Remove(identity);
                 _acknowledged.Remove(identity);
             }
+
             foreach (var scope in snapshot.Scopes)
             {
-                if (!OwnedProcessGroup.IsCurrent(scope)) continue;
+                if (!OwnedProcessGroup.IsCurrent(scope))
+                {
+                    continue;
+                }
+
                 _scopes[scope.Identity] = scope;
                 _acknowledged.Add(scope.Identity);
             }
+
             _revision = snapshot.Revision;
             return [.. _scopes.Keys];
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     /// <inheritdoc />
@@ -58,9 +71,17 @@ internal sealed class LifetimeSupervisorService(long epoch) : ISupervisorService
                 UseShellExecute = false,
                 RedirectStandardInput = true,
             };
-            foreach (var argument in request.Arguments) start.ArgumentList.Add(argument);
+            foreach (var argument in request.Arguments)
+            {
+                start.ArgumentList.Add(argument);
+            }
+
             start.Environment.Clear();
-            foreach (var pair in request.Environment) start.Environment[pair.Key] = pair.Value;
+            foreach (var pair in request.Environment)
+            {
+                start.Environment[pair.Key] = pair.Value;
+            }
+
             var process = Process.Start(start) ?? throw new IOException("the execution host did not start");
             process.StandardInput.Close();
             var scope = OwnedProcessGroup.Describe(process, request.Identity);
@@ -72,18 +93,30 @@ internal sealed class LifetimeSupervisorService(long epoch) : ISupervisorService
             {
                 while (!OwnedProcessGroup.IsCurrent(scope))
                 {
-                    if (process.HasExited) throw new IOException("the host exited before creating its process group");
+                    if (process.HasExited)
+                    {
+                        throw new IOException("the host exited before creating its process group");
+                    }
+
                     await Task.Delay(10, timeout.Token).ConfigureAwait(false);
                 }
             }
             catch
             {
-                if (!process.HasExited) process.Kill(entireProcessTree: true);
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+
                 throw;
             }
+
             return scope;
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     /// <inheritdoc />
@@ -95,7 +128,10 @@ internal sealed class LifetimeSupervisorService(long epoch) : ISupervisorService
             Validate(requestedEpoch);
             await StopCoreAsync(identity).ConfigureAwait(false);
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     /// <inheritdoc />
@@ -105,14 +141,21 @@ internal sealed class LifetimeSupervisorService(long epoch) : ISupervisorService
         try
         {
             Validate(requestedEpoch);
-            if (!_children.TryGetValue(identity, out var process)) return null;
+            if (!_children.TryGetValue(identity, out var process))
+            {
+                return null;
+            }
+
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
             var code = process.ExitCode;
             _children.Remove(identity);
             process.Dispose();
             return code;
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     /// <inheritdoc />
@@ -128,7 +171,10 @@ internal sealed class LifetimeSupervisorService(long epoch) : ISupervisorService
     private void Validate(long requestedEpoch)
     {
         _lifetime.Token.ThrowIfCancellationRequested();
-        if (requestedEpoch != epoch) throw new InvalidOperationException("obsolete lifetime supervisor generation");
+        if (requestedEpoch != epoch)
+        {
+            throw new InvalidOperationException("obsolete lifetime supervisor generation");
+        }
     }
 
     private async Task StopCoreAsync(string identity)
@@ -141,8 +187,12 @@ internal sealed class LifetimeSupervisorService(long epoch) : ISupervisorService
                 group.Adopt(scope.ProcessId);
                 await group.StopAsync().ConfigureAwait(false);
             }
+
             if (_children.TryGetValue(scope.Identity, out var process))
+            {
                 await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+
             _scopes.Remove(scope.Identity);
             _acknowledged.Remove(scope.Identity);
         }
@@ -156,8 +206,14 @@ internal sealed class LifetimeSupervisorService(long epoch) : ISupervisorService
         try
         {
             foreach (var identity in _scopes.Keys.Where(identity => !PreserveOnDispose || !_acknowledged.Contains(identity)).ToArray())
+            {
                 await StopCoreAsync(identity).ConfigureAwait(false);
-            foreach (var process in _children.Values) process.Dispose();
+            }
+
+            foreach (var process in _children.Values)
+            {
+                process.Dispose();
+            }
         }
         finally
         {

@@ -43,7 +43,11 @@ public static class VirtualComparisonExamples
     public static string Scenario(string kind, string behavior, bool generic)
     {
         var interfaceType = behavior.StartsWith("interface-", StringComparison.Ordinal);
-        if (interfaceType) behavior = behavior[10..];
+        if (interfaceType)
+        {
+            behavior = behavior[10..];
+        }
+
         var owner = "IlRepl.Edits.Copy.Owner" + (generic ? "`1<int32>" : "");
         var read = "instance int32 " + owner + "::Read" + (generic ? "<string>" : "") + "(int32)";
         var body = behavior == "inherit" ? "" : ".method public virtual " + (behavior == "newslot" ? "newslot " : "")

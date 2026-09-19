@@ -61,37 +61,70 @@ public static class PublicHelperFixture
             metadata.GetOrAddBlob(fieldSignature));
         var bodies = new BlobBuilder();
         var stream = new MethodBodyStreamEncoder(bodies);
-        BlobHandle Signature(bool returnsVoid = false, bool parameter = false, bool generic = false, bool ownerParameter = false,
-            bool callback = false, bool text = false)
+        BlobHandle Signature(
+            bool returnsVoid = false,
+            bool parameter = false,
+            bool generic = false,
+            bool ownerParameter = false,
+            bool callback = false,
+            bool text = false)
         {
             var blob = new BlobBuilder();
             new BlobEncoder(blob).MethodSignature(genericParameterCount: generic ? 1 : 0).Parameters(parameter ? 1 : 0,
                 result =>
                 {
-                    if (returnsVoid) result.Void();
-                    else if (text) result.Type().String();
-                    else if (callback) result.Type().GenericInstantiation(func, 1, isValueType: false).AddArgument().Int32();
-                    else result.Type().Int32();
+                    if (returnsVoid)
+                    {
+                        result.Void();
+                    }
+                    else if (text)
+                    {
+                        result.Type().String();
+                    }
+                    else if (callback)
+                    {
+                        result.Type().GenericInstantiation(func, 1, isValueType: false).AddArgument().Int32();
+                    }
+                    else
+                    {
+                        result.Type().Int32();
+                    }
                 }, parameters =>
                 {
-                    if (!parameter) return;
+                    if (!parameter)
+                    {
+                        return;
+                    }
+
                     var type = parameters.AddParameter().Type();
-                    if (generic) type.GenericMethodTypeParameter(0);
-                    else if (ownerParameter) type.Type(owner, isValueType: false);
-                    else type.Int32();
+                    if (generic)
+                    {
+                        type.GenericMethodTypeParameter(0);
+                    }
+                    else if (ownerParameter)
+                    {
+                        type.Type(owner, isValueType: false);
+                    }
+                    else
+                    {
+                        type.Int32();
+                    }
                 });
             return metadata.GetOrAddBlob(blob);
         }
+
         void Field(InstructionEncoder il, ILOpCode operation, FieldDefinitionHandle field)
         {
             il.OpCode(operation);
             il.Token(field);
         }
+
         void Add(string methodName, InstructionEncoder il, BlobHandle signature, MethodAttributes attributes)
         {
             metadata.AddMethodDefinition(attributes, MethodImplAttributes.IL, metadata.GetOrAddString(methodName), signature,
                 stream.AddMethodBody(il, maxStack: 8), MetadataTokens.ParameterHandle(1));
         }
+
         const MethodAttributes publicStatic = MethodAttributes.Public | MethodAttributes.Static;
         const MethodAttributes privateStatic = MethodAttributes.Private | MethodAttributes.Static;
         var selected = new InstructionEncoder(new BlobBuilder());
@@ -103,6 +136,7 @@ public static class PublicHelperFixture
             selected.OpCode(ILOpCode.Pop);
             selected.Call(bridgePublish);
         }
+
         if (shape == "external")
         {
             var maximum = new BlobBuilder();
@@ -126,10 +160,23 @@ public static class PublicHelperFixture
                 target = metadata.AddMethodSpecification(fetch, metadata.GetOrAddBlob(arguments));
                 selected.OpCode(ILOpCode.Ldnull);
             }
-            if (shape == "signature") selected.OpCode(ILOpCode.Ldnull);
-            if (shape == "cycle") selected.LoadConstantI4(1);
+
+            if (shape == "signature")
+            {
+                selected.OpCode(ILOpCode.Ldnull);
+            }
+
+            if (shape == "cycle")
+            {
+                selected.LoadConstantI4(1);
+            }
+
             selected.Call(target);
-            if (shape == "write") Field(selected, ILOpCode.Ldsfld, state);
+            if (shape == "write")
+            {
+                Field(selected, ILOpCode.Ldsfld, state);
+            }
+
             if (shape == "identity")
             {
                 var equalSignature = new BlobBuilder();
@@ -144,11 +191,13 @@ public static class PublicHelperFixture
                 Field(selected, ILOpCode.Ldsfld, state);
                 selected.OpCode(ILOpCode.Mul);
             }
+
             if (shape == "stateless")
             {
                 Field(selected, ILOpCode.Ldsfld, state);
                 selected.OpCode(ILOpCode.Add);
             }
+
             if (shape == "callback")
             {
                 var invoke = new BlobBuilder();
@@ -159,6 +208,7 @@ public static class PublicHelperFixture
                     metadata.GetOrAddBlob(invoke)));
             }
         }
+
         selected.OpCode(ILOpCode.Ret);
         Add("Read", selected, Signature(), publicStatic);
         var reader = new InstructionEncoder(new BlobBuilder());
@@ -255,20 +305,35 @@ public static class PublicHelperFixture
             body.OpCode(ILOpCode.Add);
             Field(body, ILOpCode.Stsfld, state);
         }
-        else if (shape == "transitive") body.Call(otherFetch);
-        else if (shape == "stateless" || shape == "external") body.LoadConstantI4(0);
-        else Field(body, ILOpCode.Ldsfld, shape == "cctor" ? cached : shape == "revisit" ? otherState : state);
+        else if (shape == "transitive")
+        {
+            body.Call(otherFetch);
+        }
+        else if (shape == "stateless" || shape == "external")
+        {
+            body.LoadConstantI4(0);
+        }
+        else
+        {
+            Field(body, ILOpCode.Ldsfld, shape == "cctor" ? cached : shape == "revisit" ? otherState : state);
+        }
+
         body.OpCode(ILOpCode.Ret);
         Add("Fetch", body, Signature(returnsVoid: shape == "write", parameter: shape is "generic" or "signature" or "cycle",
             generic: shape == "generic", ownerParameter: shape == "signature", callback: shape == "callback",
             text: shape == "identity"), publicStatic);
-        if (shape == "generic") metadata.AddGenericParameter(fetch, GenericParameterAttributes.None, metadata.GetOrAddString("T"), 0);
+        if (shape == "generic")
+        {
+            metadata.AddGenericParameter(fetch, GenericParameterAttributes.None, metadata.GetOrAddString("T"), 0);
+        }
+
         var initializer = new InstructionEncoder(new BlobBuilder());
         if (shape == "cctor")
         {
             Field(initializer, ILOpCode.Ldsfld, state);
             Field(initializer, ILOpCode.Stsfld, cached);
         }
+
         initializer.OpCode(ILOpCode.Ret);
         Add(shape == "cctor" ? ".cctor" : "Unused", initializer, Signature(returnsVoid: true), shape == "cctor"
             ? privateStatic | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName : privateStatic);
@@ -278,7 +343,11 @@ public static class PublicHelperFixture
             transit.LoadArgument(0);
             transit.Call(fetch);
         }
-        else Field(transit, ILOpCode.Ldsfld, state);
+        else
+        {
+            Field(transit, ILOpCode.Ldsfld, state);
+        }
+
         transit.OpCode(ILOpCode.Ret);
         Add("Fetch", transit, Signature(parameter: shape == "cycle"), publicStatic);
         var bridge = new InstructionEncoder(new BlobBuilder());

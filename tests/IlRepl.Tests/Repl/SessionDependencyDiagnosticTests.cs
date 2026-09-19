@@ -111,8 +111,14 @@ public sealed class SessionDependencyDiagnosticTests
             Assert.Contains("terminal ilrepl", diagnostic);
             Assert.DoesNotContain("use .session restore", diagnostic);
             Assert.DoesNotContain("use .load", diagnostic);
-            if (kind == "native") Assert.Contains("run this experiment in terminal ilrepl", diagnostic);
-            else Assert.Contains("save with .session save --embed, then open that file in this demo", diagnostic);
+            if (kind == "native")
+            {
+                Assert.Contains("run this experiment in terminal ilrepl", diagnostic);
+            }
+            else
+            {
+                Assert.Contains("save with .session save --embed, then open that file in this demo", diagnostic);
+            }
         }
 
         Assert.Contains(line => line.Kind == LineKind.Error && line.PlainText == "  " + diagnostic, opened.Reply.Lines);

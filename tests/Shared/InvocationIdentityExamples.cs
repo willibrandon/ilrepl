@@ -85,7 +85,11 @@ public static class InvocationIdentityExamples
             _ => replace ? "ldarg.0\n" + fresh + "stind.ref\n" : "",
         };
         var retained = "ldtoken method instance void Owner::.ctor()\npop\n";
-        if (shape is "task" or "valuetask") retained += "ldtoken method void Owner::Complete()\npop\n";
+        if (shape is "task" or "valuetask")
+        {
+            retained += "ldtoken method void Owner::Complete()\npop\n";
+        }
+
         return header + " {\n" + retained + body + "ret\n}";
     }
 

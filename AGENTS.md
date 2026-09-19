@@ -12,8 +12,13 @@ These instructions apply to the entire repository.
 ## Code
 
 - Keep one type per file.
-- Keep changed lines at 140 characters or fewer.
+- Keep lines at 140 characters or fewer.
+- Give every body braces, with each brace on its own line. This includes single statements, `try`, `catch`, `finally`, `else`, and `lock`.
+- Leave a blank line after a closing brace before the next statement.
+- When a parameter list does not fit on one line, put every parameter on its own line.
 - Prefer `using` directives and short type names over repeated fully qualified `System.*` names.
+- The build enforces these rules through `.editorconfig` and the analyzers in `src/IlRepl.SourceGen`. Fix what they report.
+- Do not suppress a rule.
 - Add triple slash XML documentation to every changed public or internal type and member.
 - Write every `<summary>` as exactly three physical lines: the opening tag, one text line, and the closing tag.
 - Add no dependency unless Microsoft or the .NET Foundation owns it. Prefer a small local implementation when practical.

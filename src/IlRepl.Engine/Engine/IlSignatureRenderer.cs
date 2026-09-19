@@ -55,7 +55,11 @@ public static class IlSignatureRenderer
     /// <param name="name">The member name, already quoted where needed.</param>
     /// <param name="instantiation">The generic arguments of a method instance, or null.</param>
     /// <returns>The text.</returns>
-    public static string MemberReference(IlMethodSignature signature, string declaringType, string name, IReadOnlyList<IlSignature>? instantiation)
+    public static string MemberReference(
+        IlMethodSignature signature,
+        string declaringType,
+        string name,
+        IReadOnlyList<IlSignature>? instantiation)
     {
         ArgumentNullException.ThrowIfNull(signature);
 
@@ -63,8 +67,10 @@ public static class IlSignatureRenderer
         // reference to the definition; without it the reference would name a non-generic overload.
         var arguments = instantiation is { Count: > 0 }
             ? "<" + string.Join(", ", instantiation.Select(IlAsm)) + ">"
-            : signature.GenericParameterCount > 0 ? "<[" + signature.GenericParameterCount.ToString(CultureInfo.InvariantCulture) + "]>" : "";
-        return Convention(signature) + Render(signature.ReturnType, false, false) + " " + declaringType + "::" + name + arguments + "(" + Parameters(signature, false, false) + ")";
+            : signature.GenericParameterCount > 0 ? "<[" + signature.GenericParameterCount.ToString(CultureInfo.InvariantCulture) + "]>"
+            : "";
+        return Convention(signature) + Render(signature.ReturnType, false, false) + " " + declaringType + "::" + name + arguments + "("
+            + Parameters(signature, false, false) + ")";
     }
 
     /// <summary>
@@ -97,7 +103,8 @@ public static class IlSignatureRenderer
             return text;
         }
 
-        return text.StartsWith("class ", StringComparison.Ordinal) ? text[6..] : text.StartsWith("valuetype ", StringComparison.Ordinal) ? text[10..] : text;
+        return text.StartsWith("class ", StringComparison.Ordinal) ? text[6..] : text.StartsWith("valuetype ", StringComparison.Ordinal)
+            ? text[10..] : text;
     }
 
     private static string Convention(IlMethodSignature signature)
@@ -175,7 +182,8 @@ public static class IlSignatureRenderer
                     return pretty ? TypeNameFormatter.Pretty(type) : TypeNameFormatter.IlAsm(type);
                 }
 
-                return pretty ? Unqualified(signature.UnresolvedName!) : (signature.IsValueType ? "valuetype " : "class ") + signature.UnresolvedName;
+                return pretty ? Unqualified(signature.UnresolvedName!) : (signature.IsValueType ? "valuetype " : "class ")
+                    + signature.UnresolvedName;
             case IlSignatureKind.GenericInstance:
             {
                 var definition = signature.Element!;
@@ -190,7 +198,8 @@ public static class IlSignatureRenderer
                     return (tick > 0 ? name[..tick] : name) + "<" + arguments + ">";
                 }
 
-                var head = definition.Resolved is { } dt ? TypeNameFormatter.IlAsmDefinition(dt) : (definition.IsValueType ? "valuetype " : "class ") + definition.UnresolvedName;
+                var head = definition.Resolved is { } dt ? TypeNameFormatter.IlAsmDefinition(dt)
+                    : (definition.IsValueType ? "valuetype " : "class ") + definition.UnresolvedName;
                 return head + "<" + arguments + ">";
             }
 
@@ -205,11 +214,13 @@ public static class IlSignatureRenderer
             case IlSignatureKind.FunctionPointer:
             {
                 var method = signature.Method!;
-                return "method " + Convention(method) + Render(method.ReturnType, pretty, namedParameters) + " *(" + Parameters(method, pretty, namedParameters) + ")";
+                return "method " + Convention(method) + Render(method.ReturnType, pretty, namedParameters) + " *("
+                    + Parameters(method, pretty, namedParameters) + ")";
             }
 
             case IlSignatureKind.Modified:
-                return Render(signature.Element!, pretty, namedParameters) + (signature.IsRequired ? " modreq(" : " modopt(") + Modifier(signature.Modifier!, pretty) + ")";
+                return Render(signature.Element!, pretty, namedParameters) + (signature.IsRequired ? " modreq(" : " modopt(")
+                    + Modifier(signature.Modifier!, pretty) + ")";
             case IlSignatureKind.Pinned:
                 return Render(signature.Element!, pretty, namedParameters) + " pinned";
             case IlSignatureKind.TypeParameter:

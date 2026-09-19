@@ -40,7 +40,11 @@ public sealed class HostInteractionTests
             "WAIT: ldstr " + LiteralParser.Escape(release), "call bool File::Exists(string)", "brfalse WAIT", "ret", "}",
             "call void WaitForRelease()",
         ];
-        foreach (var line in source) Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded, line);
+        foreach (var line in source)
+        {
+            Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded, line);
+        }
+
         PromptState? prompt = null;
         var transcript = new Transcript();
         var adapter = new ScriptedPresentationAdapter(100, 30);
@@ -64,7 +68,11 @@ public sealed class HostInteractionTests
                 await auto.WaitUntilTextAsync("Enter accepts");
                 await auto.EnterAsync(ct: token);
             }
-            else await auto.TabAsync(ct: token);
+            else
+            {
+                await auto.TabAsync(ct: token);
+            }
+
             await auto.WaitUntilAsync(snapshot => prompt!.Text == expected && !snapshot.ContainsText("members"));
             Assert.IsTrue(prompt!.Submission is { IsRunning: true });
             Assert.IsEmpty(prompt.Pending);
@@ -183,6 +191,7 @@ public sealed class HostInteractionTests
             await auto.EnterAsync(ct: token);
             await auto.WaitUntilAsync(_ => prompt!.Pending.Count == 1);
         }
+
         await auto.TypeAsync("// keep this draft", ct: token);
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
         await auto.WaitUntilTextAsync("Press Ctrl+C again to restart");
@@ -218,7 +227,10 @@ public sealed class HostInteractionTests
         await using var controller = await SessionWorkspaceFixture.StartAsync(token);
         foreach (var line in new[] { "ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"running\"",
             "call void System.IO.File::WriteAllText(string, string)", "LOOP: br LOOP" })
+        {
             Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded);
+        }
+
         PromptState? prompt = null;
         await using var terminal = AppTest.Build(controller, new Transcript(), width: 12, height: 30,
             onPrompt: value => prompt = value);

@@ -202,7 +202,11 @@ public static class SessionCommand
     /// <returns>The path without enclosing quotes.</returns>
     public static string UnquotePath(string text)
     {
-        if (!text.StartsWith('"')) return text;
+        if (!text.StartsWith('"'))
+        {
+            return text;
+        }
+
         var words = SessionWords(text);
         return words.Count == 1 ? words[0] : throw new ArgumentException("specify one quoted path");
     }

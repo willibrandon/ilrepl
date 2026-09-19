@@ -16,7 +16,8 @@ public sealed class ClassHeaderParserTests
     [TestMethod]
     public void Parse_Header_ReturnsNameAttributesAndBrace()
     {
-        var header = TypeHeaderParser.Parse(" public sequential ansi sealed Point extends [System.Runtime]System.ValueType {", nested: false);
+        var header = TypeHeaderParser.Parse(" public sequential ansi sealed Point extends [System.Runtime]System.ValueType {",
+            nested: false);
         Assert.AreEqual("Point", header.Name);
         Assert.AreEqual("", header.Namespace);
         Assert.AreEqual(TypeLayoutKind.Sequential, header.Layout);
@@ -69,7 +70,8 @@ public sealed class ClassHeaderParserTests
     [TestMethod]
     public void Parse_Implements_ListsInterfaces()
     {
-        var header = TypeHeaderParser.Parse("public Square extends Shape implements IArea, [System.Runtime]System.IDisposable {", nested: false);
+        var header = TypeHeaderParser.Parse("public Square extends Shape implements IArea, [System.Runtime]System.IDisposable {",
+            nested: false);
         Assert.AreEqual("Shape", header.BaseTypeText);
         Assert.AreSequenceEqual(["IArea", "[System.Runtime]System.IDisposable"], header.InterfaceTexts);
     }
@@ -80,10 +82,14 @@ public sealed class ClassHeaderParserTests
     [TestMethod]
     public void Parse_NestedVisibility()
     {
-        Assert.AreEqual(TypeAttributes.NestedFamily, TypeHeaderParser.Parse("nested family Inner", nested: true).Attributes & TypeAttributes.VisibilityMask);
-        Assert.AreEqual(TypeAttributes.NestedPublic, TypeHeaderParser.Parse("public Inner", nested: true).Attributes & TypeAttributes.VisibilityMask);
-        Assert.AreEqual(TypeAttributes.NestedPrivate, TypeHeaderParser.Parse("Inner", nested: true).Attributes & TypeAttributes.VisibilityMask);
-        Assert.AreEqual(TypeAttributes.Public, TypeHeaderParser.Parse("nested public Top", nested: false).Attributes & TypeAttributes.VisibilityMask);
+        Assert.AreEqual(TypeAttributes.NestedFamily,
+            TypeHeaderParser.Parse("nested family Inner", nested: true).Attributes & TypeAttributes.VisibilityMask);
+        Assert.AreEqual(TypeAttributes.NestedPublic,
+            TypeHeaderParser.Parse("public Inner", nested: true).Attributes & TypeAttributes.VisibilityMask);
+        Assert.AreEqual(TypeAttributes.NestedPrivate,
+            TypeHeaderParser.Parse("Inner", nested: true).Attributes & TypeAttributes.VisibilityMask);
+        Assert.AreEqual(TypeAttributes.Public,
+            TypeHeaderParser.Parse("nested public Top", nested: false).Attributes & TypeAttributes.VisibilityMask);
         Assert.AreEqual(TypeAttributes.NotPublic, TypeHeaderParser.Parse("Top", nested: false).Attributes & TypeAttributes.VisibilityMask);
     }
 
@@ -113,9 +119,12 @@ public sealed class ClassHeaderParserTests
     [TestMethod]
     public void Parse_GenericParameterRules()
     {
-        Assert.Contains("only allowed on interface", Assert.ThrowsExactly<ReplException>(() => TypeHeaderParser.Parse("public Box<+T>", nested: false)).Message);
-        Assert.Contains("both class and valuetype", Assert.ThrowsExactly<ReplException>(() => TypeHeaderParser.Parse("public Box<class valuetype T>", nested: false)).Message);
-        Assert.Contains("declared twice", Assert.ThrowsExactly<ReplException>(() => TypeHeaderParser.Parse("public Box<T, T>", nested: false)).Message);
+        Assert.Contains("only allowed on interface",
+            Assert.ThrowsExactly<ReplException>(() => TypeHeaderParser.Parse("public Box<+T>", nested: false)).Message);
+        Assert.Contains("both class and valuetype",
+            Assert.ThrowsExactly<ReplException>(() => TypeHeaderParser.Parse("public Box<class valuetype T>", nested: false)).Message);
+        Assert.Contains("declared twice",
+            Assert.ThrowsExactly<ReplException>(() => TypeHeaderParser.Parse("public Box<T, T>", nested: false)).Message);
     }
 
     /// <summary>
@@ -127,8 +136,10 @@ public sealed class ClassHeaderParserTests
         var empty = TypeHeaderParser.Parse("public Empty { }", nested: false);
         Assert.IsTrue(empty.OpensBlock);
         Assert.IsTrue(empty.ClosesBlock);
-        Assert.Contains("not supported", Assert.ThrowsExactly<ReplException>(() => TypeHeaderParser.Parse("public import Foo", nested: false)).Message);
-        Assert.Contains("reserved", Assert.ThrowsExactly<ReplException>(() => TypeHeaderParser.Parse("public IlRepl.Cell", nested: false)).Message);
+        Assert.Contains("not supported",
+            Assert.ThrowsExactly<ReplException>(() => TypeHeaderParser.Parse("public import Foo", nested: false)).Message);
+        Assert.Contains("reserved",
+            Assert.ThrowsExactly<ReplException>(() => TypeHeaderParser.Parse("public IlRepl.Cell", nested: false)).Message);
         Assert.Contains("usage", Assert.ThrowsExactly<ReplException>(() => TypeHeaderParser.Parse("public {", nested: false)).Message);
     }
 }

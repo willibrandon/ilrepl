@@ -21,7 +21,13 @@ public sealed partial class InProcessEngine
     /// </summary>
     public ExecutionProgress Progress
     {
-        get { lock (_operationLock) { return _progress; } }
+        get
+        {
+            lock (_operationLock)
+            {
+                return _progress;
+            }
+        }
     }
 
     /// <summary>
@@ -65,7 +71,9 @@ public sealed partial class InProcessEngine
     /// <param name="action">The engine-owned asynchronous work.</param>
     /// <param name="cancellationToken">Cancels this operation and its nested engine work.</param>
     /// <returns>The actual terminal result of the operation.</returns>
-    public async Task<T> RunOperationAsync<T>(string name, Func<CancellationToken, Task<T>> action,
+    public async Task<T> RunOperationAsync<T>(
+        string name,
+        Func<CancellationToken, Task<T>> action,
         CancellationToken cancellationToken)
     {
         if (_ambientOperation.Value is { } parent)
@@ -115,7 +123,9 @@ public sealed partial class InProcessEngine
         }
     }
 
-    private Task<T> ExecuteOperationAsync<T>(string name, Func<CancellationToken, T> action,
+    private Task<T> ExecuteOperationAsync<T>(
+        string name,
+        Func<CancellationToken, T> action,
         CancellationToken cancellationToken) => RunOperationAsync(name,
             token => ExecuteAsync(() => action(token), token), cancellationToken);
 

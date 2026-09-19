@@ -37,9 +37,16 @@ public sealed partial class SatelliteAssemblyTests
         if (directory is not null)
         {
             foreach (var versioned in new[] { false, true })
-                foreach (var dispatch in Dispatches) await AssertFileCaseAsync(directory, versioned, dispatch);
+            {
+                foreach (var dispatch in Dispatches)
+                {
+                    await AssertFileCaseAsync(directory, versioned, dispatch);
+                }
+            }
+
             return;
         }
+
         directory = Path.Combine(Path.GetTempPath(), "satellite-probe-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
@@ -74,6 +81,7 @@ public sealed partial class SatelliteAssemblyTests
         {
             Directory.Delete(directory, recursive: true);
         }
+
         Assert.IsFalse(Directory.Exists(directory));
     }
 
@@ -88,7 +96,11 @@ public sealed partial class SatelliteAssemblyTests
         File.WriteAllBytes(satellitePath, changed);
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            if (attempt == 1) File.Delete(satellitePath);
+            if (attempt == 1)
+            {
+                File.Delete(satellitePath);
+            }
+
             var result = await ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken);
             Assert.AreEqual("incomplete", result.Outcome);
             Assert.AreEqual("setup-failed", result.Original.Outcome, result.Original.Detail);
@@ -100,8 +112,14 @@ public sealed partial class SatelliteAssemblyTests
             Assert.Contains(satellitePath, result.Original.Detail!);
             AssertSide(result.Edited, 43);
             Assert.AreSequenceEqual(source, File.ReadAllBytes(sourcePath));
-            if (attempt == 0) Assert.AreSequenceEqual(changed, File.ReadAllBytes(satellitePath));
-            else Assert.IsFalse(File.Exists(satellitePath));
+            if (attempt == 0)
+            {
+                Assert.AreSequenceEqual(changed, File.ReadAllBytes(satellitePath));
+            }
+            else
+            {
+                Assert.IsFalse(File.Exists(satellitePath));
+            }
         }
     }
 
@@ -186,6 +204,7 @@ public sealed partial class SatelliteAssemblyTests
             Assert.AreEqual(1, edit.Revision);
             Assert.AreEqual(completion, session.CompletionRevision);
         }
+
         Assert.AreEqual(42, edit.Method!.Invoke(null, null));
         var package = ComparisonCapture.Create(session, "Copy ()");
         if (!supported)
@@ -194,6 +213,7 @@ public sealed partial class SatelliteAssemblyTests
             Assert.AreEqual(sourcePath, dependency.OriginalLocation);
             Assert.AreSequenceEqual(fixture.Source, dependency.Image);
         }
+
         AssertComparison(await ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken), "match", 42);
         var expected = supported ? 42 : 43;
         if (!supported)
@@ -213,6 +233,7 @@ public sealed partial class SatelliteAssemblyTests
                 File.WriteAllText(Path.Combine(directory, "satellite-source.path"), sourcePath);
             }
         }
+
         Assert.AreEqual(42, original.Invoke(null, null));
         session.AddLine("call Copy");
         foreach (var image in new[] { AssemblyExporter.Write(session, "satellite-copy"), IlasmLocator.Assemble(session.ToIlAsm()) })
@@ -228,6 +249,7 @@ public sealed partial class SatelliteAssemblyTests
                 context.Unload();
             }
         }
+
         Assert.AreSequenceEqual(fixture.Source, File.ReadAllBytes(sourcePath));
         Assert.AreSequenceEqual(fixture.Satellite, File.ReadAllBytes(satellitePath));
     }

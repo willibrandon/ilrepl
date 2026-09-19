@@ -17,7 +17,11 @@ public static class MetadataSignatures
     /// <param name="provider">The provider.</param>
     /// <param name="context">The generic context.</param>
     /// <returns>The signature.</returns>
-    public static IlMethodSignature MethodDefinition(MetadataReader reader, int token, MetadataSignatureProvider provider, GenericContext context)
+    public static IlMethodSignature MethodDefinition(
+        MetadataReader reader,
+        int token,
+        MetadataSignatureProvider provider,
+        GenericContext context)
     {
         ArgumentNullException.ThrowIfNull(reader);
         var handle = (MethodDefinitionHandle)MetadataTokens.EntityHandle(token);
@@ -34,7 +38,12 @@ public static class MetadataSignatures
     /// <param name="context">The generic context.</param>
     /// <param name="instantiation">The generic arguments of a MethodSpec, or null.</param>
     /// <returns>The signature, or null when the token is not a method.</returns>
-    public static IlMethodSignature? MethodOperand(MetadataReader reader, int token, MetadataSignatureProvider provider, GenericContext context, out IReadOnlyList<IlSignature>? instantiation)
+    public static IlMethodSignature? MethodOperand(
+        MetadataReader reader,
+        int token,
+        MetadataSignatureProvider provider,
+        GenericContext context,
+        out IReadOnlyList<IlSignature>? instantiation)
     {
         ArgumentNullException.ThrowIfNull(reader);
         instantiation = null;
@@ -46,7 +55,8 @@ public static class MetadataSignatures
             case HandleKind.MemberReference:
             {
                 var reference = reader.GetMemberReference((MemberReferenceHandle)handle);
-                return reference.GetKind() == MemberReferenceKind.Method ? Convert(reference.DecodeMethodSignature(provider, context)) : null;
+                return reference.GetKind() == MemberReferenceKind.Method ? Convert(reference.DecodeMethodSignature(provider, context))
+                    : null;
             }
 
             case HandleKind.MethodSpecification:
@@ -118,7 +128,11 @@ public static class MetadataSignatures
     /// <param name="provider">The provider.</param>
     /// <param name="context">The generic context.</param>
     /// <returns>The signature, or null when the token is not a method signature.</returns>
-    public static IlMethodSignature? StandaloneMethod(MetadataReader reader, int token, MetadataSignatureProvider provider, GenericContext context)
+    public static IlMethodSignature? StandaloneMethod(
+        MetadataReader reader,
+        int token,
+        MetadataSignatureProvider provider,
+        GenericContext context)
     {
         ArgumentNullException.ThrowIfNull(reader);
         var handle = MetadataTokens.EntityHandle(token);
@@ -139,7 +153,11 @@ public static class MetadataSignatures
     /// <param name="provider">The provider.</param>
     /// <param name="context">The generic context.</param>
     /// <returns>The local types in slot order, or null when the token is not a local signature.</returns>
-    public static IReadOnlyList<IlSignature>? Locals(MetadataReader reader, int token, MetadataSignatureProvider provider, GenericContext context)
+    public static IReadOnlyList<IlSignature>? Locals(
+        MetadataReader reader,
+        int token,
+        MetadataSignatureProvider provider,
+        GenericContext context)
     {
         ArgumentNullException.ThrowIfNull(reader);
         if (token == 0)

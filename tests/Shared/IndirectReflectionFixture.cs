@@ -25,18 +25,32 @@ public static class IndirectReflectionFixture
                     "delegate options", "open delegate", "open delegate options", "open method delegate", "generic method delegate",
                     "open generic method delegate", "named delegate", "named delegate ignore case", "named delegate options",
                     "invoke member", "invoke member culture", "invoke member options", "ireflect" })
+                {
                     yield return (target, "GetTypes", dispatch);
+                }
+
                 foreach (var api in new[] { "GetCustomAttributes", "GetCustomAttributesData", "IsDefined" })
+                {
                     yield return (target, api, "invoke");
+                }
+
                 foreach (var dispatch in new[] { "property", "property index", "property options" })
+                {
                     yield return (target, "CustomAttributes", dispatch);
+                }
             }
 
             foreach (var api in new[] { "GetExportedTypes", "GetManifestResourceNames", "GetManifestResourceInfo",
                 "GetManifestResourceStream", "typed resource", "typed attributes" })
+            {
                 yield return ("Assembly", api, "invoke");
+            }
+
             foreach (var api in new[] { "DefinedTypes", "ExportedTypes" })
+            {
                 yield return ("Assembly", api, "property");
+            }
+
             yield return ("Assembly", "GetManifestResourceNames", "handle");
             yield return ("Assembly", "GetManifestResourceNames", "invoker");
             yield return ("Assembly", "GetManifestResourceNames", "delegate");
@@ -44,8 +58,15 @@ public static class IndirectReflectionFixture
             yield return ("Assembly", "GetCustomAttributesData", "invoke member");
             yield return ("Assembly", "GetTypes", "starg");
             yield return ("Assembly", "GetTypes", "function pointer");
-            foreach (var target in new[] { "Type", "Assembly", "Module" }) yield return (target, "GetType", "invoke");
-            foreach (var target in new[] { "Assembly", "Activator" }) yield return (target, "CreateInstance", "invoke");
+            foreach (var target in new[] { "Type", "Assembly", "Module" })
+            {
+                yield return (target, "GetType", "invoke");
+            }
+
+            foreach (var target in new[] { "Assembly", "Activator" })
+            {
+                yield return (target, "CreateInstance", "invoke");
+            }
         }
     }
 
@@ -69,7 +90,9 @@ public static class IndirectReflectionFixture
     /// <returns>The complete source with a private target returning 42.</returns>
     public static string SupportedSource(string dispatch)
     {
-        if (dispatch == "runtime delegate") return """
+        if (dispatch == "runtime delegate")
+        {
+            return """
             .class public Owner {
               .method public instance void .ctor() {
                 ldarg.0
@@ -93,6 +116,8 @@ public static class IndirectReflectionFixture
               }
             }
             """;
+        }
+
         if (dispatch.StartsWith("property", StringComparison.Ordinal))
         {
             var arguments = dispatch == "property index" ? "ldnull\n" : "ldc.i4.0\nldnull\nldnull\nldnull\n";
@@ -141,7 +166,11 @@ public static class IndirectReflectionFixture
         var types = new Dictionary<Type, TypeReferenceHandle>();
         TypeReferenceHandle TypeReference(Type type)
         {
-            if (types.TryGetValue(type, out var handle)) return handle;
+            if (types.TryGetValue(type, out var handle))
+            {
+                return handle;
+            }
+
             if (!references.TryGetValue(type.Assembly, out var reference))
             {
                 var identity = type.Assembly.GetName();
@@ -158,25 +187,55 @@ public static class IndirectReflectionFixture
 
         void EncodeType(SignatureTypeEncoder encoder, Type type)
         {
-            if (type == typeof(bool)) encoder.Boolean();
-            else if (type == typeof(int)) encoder.Int32();
-            else if (type == typeof(string)) encoder.String();
-            else if (type == typeof(object)) encoder.Object();
-            else if (type == typeof(nint)) encoder.IntPtr();
-            else if (type.IsArray) EncodeType(encoder.SZArray(), type.GetElementType()!);
+            if (type == typeof(bool))
+            {
+                encoder.Boolean();
+            }
+            else if (type == typeof(int))
+            {
+                encoder.Int32();
+            }
+            else if (type == typeof(string))
+            {
+                encoder.String();
+            }
+            else if (type == typeof(object))
+            {
+                encoder.Object();
+            }
+            else if (type == typeof(nint))
+            {
+                encoder.IntPtr();
+            }
+            else if (type.IsArray)
+            {
+                EncodeType(encoder.SZArray(), type.GetElementType()!);
+            }
             else if (type.IsGenericParameter)
             {
-                if (type.DeclaringMethod is null) encoder.GenericTypeParameter(type.GenericParameterPosition);
-                else encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+                if (type.DeclaringMethod is null)
+                {
+                    encoder.GenericTypeParameter(type.GenericParameterPosition);
+                }
+                else
+                {
+                    encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+                }
             }
             else if (type.IsGenericType)
             {
                 var arguments = type.GetGenericArguments();
                 var parameters = encoder.GenericInstantiation(TypeReference(type.GetGenericTypeDefinition()), arguments.Length,
                     type.IsValueType);
-                foreach (var argument in arguments) EncodeType(parameters.AddArgument(), argument);
+                foreach (var argument in arguments)
+                {
+                    EncodeType(parameters.AddArgument(), argument);
+                }
             }
-            else encoder.Type(TypeReference(type), type.IsValueType);
+            else
+            {
+                encoder.Type(TypeReference(type), type.IsValueType);
+            }
         }
 
         EntityHandle MethodReference(MethodBase method)
@@ -188,25 +247,46 @@ public static class IndirectReflectionFixture
                 ? definition.GetGenericArguments().Length : 0, isInstanceMethod: !definition.IsStatic).Parameters(parameters.Length,
                 result =>
                 {
-                    if (definition is not MethodInfo info || info.ReturnType == typeof(void)) result.Void();
-                    else EncodeType(result.Type(), info.ReturnType);
+                    if (definition is not MethodInfo info || info.ReturnType == typeof(void))
+                    {
+                        result.Void();
+                    }
+                    else
+                    {
+                        EncodeType(result.Type(), info.ReturnType);
+                    }
                 }, arguments =>
                 {
-                    foreach (var parameter in parameters) EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    foreach (var parameter in parameters)
+                    {
+                        EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    }
                 });
             var declaring = definition.DeclaringType!;
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
-            if (method is not MethodInfo { IsGenericMethod: true } closed) return member;
+            if (method is not MethodInfo { IsGenericMethod: true } closed)
+            {
+                return member;
+            }
+
             var specification = new BlobBuilder();
             var encoded = new BlobEncoder(specification).MethodSpecificationSignature(closed.GetGenericArguments().Length);
-            foreach (var argument in closed.GetGenericArguments()) EncodeType(encoded.AddArgument(), argument);
+            foreach (var argument in closed.GetGenericArguments())
+            {
+                EncodeType(encoded.AddArgument(), argument);
+            }
+
             return metadata.AddMethodSpecification(member, metadata.GetOrAddBlob(specification));
         }
 
         EntityHandle SignatureType(Type type)
         {
-            if (!type.IsArray && !type.IsGenericType) return TypeReference(type);
+            if (!type.IsArray && !type.IsGenericType)
+            {
+                return TypeReference(type);
+            }
+
             var signature = new BlobBuilder();
             EncodeType(new BlobEncoder(signature).TypeSpecificationSignature(), type);
             return metadata.AddTypeSpecification(metadata.GetOrAddBlob(signature));
@@ -261,14 +341,26 @@ public static class IndirectReflectionFixture
             }
 
             Call(typeof(Assembly).GetMethod(nameof(Assembly.GetExecutingAssembly))!);
-            if (target == "Module") Call(typeof(Assembly).GetProperty(nameof(Assembly.ManifestModule))!.GetMethod!);
+            if (target == "Module")
+            {
+                Call(typeof(Assembly).GetProperty(nameof(Assembly.ManifestModule))!.GetMethod!);
+            }
         }
 
         void LoadName(string? value = null)
         {
-            if (value is not null) instructions.LoadString(metadata.GetOrAddUserString(value));
-            else if (dispatch == "unknown") instructions.LoadArgument(0);
-            else instructions.LoadString(metadata.GetOrAddUserString(dispatch == "starg" ? "ToString" : apiName));
+            if (value is not null)
+            {
+                instructions.LoadString(metadata.GetOrAddUserString(value));
+            }
+            else if (dispatch == "unknown")
+            {
+                instructions.LoadArgument(0);
+            }
+            else
+            {
+                instructions.LoadString(metadata.GetOrAddUserString(dispatch == "starg" ? "ToString" : apiName));
+            }
         }
 
         void LoadMethod(string? nameOverride = null)
@@ -293,11 +385,20 @@ public static class IndirectReflectionFixture
                 Call(typeof(Type).GetMethod(nameof(Type.GetType),
                     [typeof(string), typeof(Func<AssemblyName, Assembly>), typeof(Func<Assembly, string, bool, Type>)])!);
             }
-            else LoadType(TypeReference(receiver));
+            else
+            {
+                LoadType(TypeReference(receiver));
+            }
+
             LoadName(nameOverride);
-            if (dispatch is "helper" or "starg") instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
+            if (dispatch is "helper" or "starg")
+            {
+                instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
+            }
             else if (parameterTypes.Length == 0)
+            {
                 Call(typeof(Type).GetMethod(nameof(Type.GetMethod), [typeof(string)])!);
+            }
             else
             {
                 instructions.LoadConstantI4(parameterTypes.Length);
@@ -331,7 +432,10 @@ public static class IndirectReflectionFixture
                 instructions.OpCode(ILOpCode.Dup);
                 instructions.LoadConstantI4(index);
                 var parameter = parameterTypes[index];
-                if (parameter == typeof(Type)) LoadType(api == "typed resource" ? owner : TypeReference(typeof(CLSCompliantAttribute)));
+                if (parameter == typeof(Type))
+                {
+                    LoadType(api == "typed resource" ? owner : TypeReference(typeof(CLSCompliantAttribute)));
+                }
                 else if (parameter == typeof(string))
                 {
                     var value = api switch
@@ -369,8 +473,16 @@ public static class IndirectReflectionFixture
                 instructions.OpCode(ILOpCode.Ldnull);
             }
 
-            if (count > 1) instructions.OpCode(ILOpCode.Ldnull);
-            if (count == 5) instructions.OpCode(ILOpCode.Ldnull);
+            if (count > 1)
+            {
+                instructions.OpCode(ILOpCode.Ldnull);
+            }
+
+            if (count == 5)
+            {
+                instructions.OpCode(ILOpCode.Ldnull);
+            }
+
             Call(typeof(PropertyInfo).GetMethods().Single(method => method.Name == nameof(PropertyInfo.GetValue)
                 && method.GetParameters().Length == count));
         }
@@ -383,7 +495,11 @@ public static class IndirectReflectionFixture
             LoadReceiver();
             LoadArguments();
             var count = dispatch switch { "invoke member" => 5, "invoke member culture" => 6, _ => 8 };
-            for (var index = 5; index < count; index++) instructions.OpCode(ILOpCode.Ldnull);
+            for (var index = 5; index < count; index++)
+            {
+                instructions.OpCode(ILOpCode.Ldnull);
+            }
+
             Call((dispatch == "ireflect" ? typeof(IReflect) : typeof(Type)).GetMethods().Single(method =>
                 method.Name == nameof(Type.InvokeMember) && method.GetParameters().Length == count));
         }
@@ -397,7 +513,11 @@ public static class IndirectReflectionFixture
                 LoadMethod();
                 if (dispatch.Contains("generic", StringComparison.Ordinal))
                 {
-                    if (!open) LoadReceiver();
+                    if (!open)
+                    {
+                        LoadReceiver();
+                    }
+
                     var create = typeof(MethodInfo).GetMethods().Single(method => method.Name == nameof(MethodInfo.CreateDelegate)
                         && method.IsGenericMethodDefinition && method.GetParameters().Length == (open ? 0 : 1));
                     Call(create.MakeGenericMethod(delegateType));
@@ -405,7 +525,11 @@ public static class IndirectReflectionFixture
                 else
                 {
                     LoadType(SignatureType(delegateType));
-                    if (!open) LoadReceiver();
+                    if (!open)
+                    {
+                        LoadReceiver();
+                    }
+
                     Call(typeof(MethodInfo).GetMethod(nameof(MethodInfo.CreateDelegate),
                         open ? [typeof(Type)] : [typeof(Type), typeof(object)])!);
                 }
@@ -413,12 +537,27 @@ public static class IndirectReflectionFixture
             else
             {
                 LoadType(SignatureType(delegateType));
-                if (!open) LoadReceiver();
+                if (!open)
+                {
+                    LoadReceiver();
+                }
+
                 var named = dispatch.StartsWith("named", StringComparison.Ordinal);
-                if (named) LoadName();
-                else LoadMethod();
+                if (named)
+                {
+                    LoadName();
+                }
+                else
+                {
+                    LoadMethod();
+                }
+
                 var factoryParameters = new List<Type> { typeof(Type) };
-                if (!open) factoryParameters.Add(typeof(object));
+                if (!open)
+                {
+                    factoryParameters.Add(typeof(object));
+                }
+
                 factoryParameters.Add(named ? typeof(string) : typeof(MethodInfo));
                 var options = dispatch == "named delegate options" ? 2
                     : dispatch.EndsWith("options", StringComparison.Ordinal) || dispatch.EndsWith("ignore case", StringComparison.Ordinal)
@@ -442,7 +581,11 @@ public static class IndirectReflectionFixture
                 LoadReceiver();
                 instructions.OpCode(ILOpCode.Stelem_ref);
             }
-            else instructions.OpCode(ILOpCode.Ldnull);
+            else
+            {
+                instructions.OpCode(ILOpCode.Ldnull);
+            }
+
             Call(typeof(Delegate).GetMethod(nameof(Delegate.DynamicInvoke))!);
         }
         else if (dispatch == "function pointer")
@@ -481,7 +624,11 @@ public static class IndirectReflectionFixture
                 instructions.LoadConstantI4(0);
                 instructions.OpCode(ILOpCode.Ldelem_ref);
             }
-            else LoadMethod(dispatch == "address" ? "ToString" : null);
+            else
+            {
+                LoadMethod(dispatch == "address" ? "ToString" : null);
+            }
+
             if (dispatch == "address")
             {
                 instructions.StoreLocal(0);
@@ -505,7 +652,11 @@ public static class IndirectReflectionFixture
             }
 
             LoadArguments();
-            if (dispatch == "invoke options") instructions.OpCode(ILOpCode.Ldnull);
+            if (dispatch == "invoke options")
+            {
+                instructions.OpCode(ILOpCode.Ldnull);
+            }
+
             Call(typeof(MethodBase).GetMethod(nameof(MethodBase.Invoke), dispatch == "invoke options"
                 ? [typeof(object), typeof(BindingFlags), typeof(Binder), typeof(object[]), typeof(CultureInfo)]
                 : [typeof(object), typeof(object[])])!);
@@ -617,7 +768,10 @@ public static class IndirectReflectionFixture
         var constructor = MethodReference(typeof(CLSCompliantAttribute).GetConstructor([typeof(bool)])!);
         byte[] attribute = [1, 0, 1, 0, 0];
         foreach (var entity in new EntityHandle[] { assembly, module })
+        {
             metadata.AddCustomAttribute(entity, constructor, metadata.GetOrAddBlob(attribute));
+        }
+
         var resources = new BlobBuilder();
         resources.WriteInt32(3);
         byte[] payload = [42, 17, 255];

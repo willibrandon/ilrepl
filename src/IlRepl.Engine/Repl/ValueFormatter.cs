@@ -263,14 +263,18 @@ public static class ValueFormatter
         }
 
         var chain = new List<Type>();
-        for (var current = type; current is not null && current != typeof(object) && current != typeof(ValueType); current = current.BaseType)
+        for (var current = type; current is not null && current != typeof(object)
+            && current != typeof(ValueType); current = current.BaseType)
         {
             chain.Insert(0, current);
         }
 
-        var fields = chain.SelectMany(t => t.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly)).ToList();
-        var duplicated = fields.GroupBy(f => f.Name, StringComparer.Ordinal).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet(StringComparer.Ordinal);
-        var readers = fields.Select(f => new FieldReader(duplicated.Contains(f.Name) ? TypeNameFormatter.Pretty(f.DeclaringType!) + "." + f.Name : f.Name, MakeReader(type, f))).ToArray();
+        var fields = chain.SelectMany(t => t.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+            | BindingFlags.DeclaredOnly)).ToList();
+        var duplicated = fields.GroupBy(f => f.Name, StringComparer.Ordinal).Where(g => g.Count() > 1).Select(g => g.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        var readers = fields.Select(f => new FieldReader(duplicated.Contains(f.Name) ? TypeNameFormatter.Pretty(f.DeclaringType!) + "."
+            + f.Name : f.Name, MakeReader(type, f))).ToArray();
         Readers.AddOrUpdate(type, readers);
         return readers;
     }

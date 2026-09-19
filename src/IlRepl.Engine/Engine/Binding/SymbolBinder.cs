@@ -734,7 +734,11 @@ public static class SymbolBinder
     /// Each replacement is confirmed in a scope that loads nothing. Ambiguity is accepted for an
     /// abbreviated reference because the name fits and the user has not chosen an overload yet.
     /// </remarks>
-    private static string ConfirmedSuggestion(IBindingScope scope, MemberSyntax syntax, string name, IEnumerable<string> pool,
+    private static string ConfirmedSuggestion(
+        IBindingScope scope,
+        MemberSyntax syntax,
+        string name,
+        IEnumerable<string> pool,
         bool wantConstructor)
     {
         var pure = scope.ForSuggestions(out var lease);
@@ -913,9 +917,18 @@ public static class SymbolBinder
         return new BoundMethod(signature, null, null);
     }
 
-    private static BoundMethod BindOwnMethod(IDeclarationMembers own, TypeSymbol declaring, IBindingScope scope, MemberSyntax syntax,
-        IReadOnlyList<TypeSymbol>? parameterTypes, IReadOnlyList<BoundType>? boundParameterTypes, TypeSymbol? returnType,
-        BoundType? boundReturnType, bool explicitInstance, bool wantConstructor, IReadOnlyList<TypeSymbol>? methodArguments,
+    private static BoundMethod BindOwnMethod(
+        IDeclarationMembers own,
+        TypeSymbol declaring,
+        IBindingScope scope,
+        MemberSyntax syntax,
+        IReadOnlyList<TypeSymbol>? parameterTypes,
+        IReadOnlyList<BoundType>? boundParameterTypes,
+        TypeSymbol? returnType,
+        BoundType? boundReturnType,
+        bool explicitInstance,
+        bool wantConstructor,
+        IReadOnlyList<TypeSymbol>? methodArguments,
         IReadOnlyList<TypeSymbol>? optionalTypes)
     {
         var name = syntax.Name;
@@ -1039,10 +1052,16 @@ public static class SymbolBinder
     /// Finds a member a type being written inherits: from a base still being written through its
     /// declarations, from a loaded base through its members.
     /// </remarks>
-    private static BoundMethod? BindInherited(TypeSymbol baseType, IBindingScope scope, MemberSyntax syntax,
-        IReadOnlyList<TypeSymbol>? parameterTypes, IReadOnlyList<BoundType>? boundParameterTypes,
-        BoundType? boundReturnType, bool explicitInstance,
-        IReadOnlyList<TypeSymbol>? methodArguments, IReadOnlyList<TypeSymbol>? optionalTypes)
+    private static BoundMethod? BindInherited(
+        TypeSymbol baseType,
+        IBindingScope scope,
+        MemberSyntax syntax,
+        IReadOnlyList<TypeSymbol>? parameterTypes,
+        IReadOnlyList<BoundType>? boundParameterTypes,
+        BoundType? boundReturnType,
+        bool explicitInstance,
+        IReadOnlyList<TypeSymbol>? methodArguments,
+        IReadOnlyList<TypeSymbol>? optionalTypes)
     {
         var name = syntax.Name;
         var arity = methodArguments?.Count ?? 0;
@@ -1086,7 +1105,10 @@ public static class SymbolBinder
         return null;
     }
 
-    private static BoundMethod BindGenericDefinition(MemberSyntax syntax, TypeSymbol declaring, IReadOnlyList<TypeSymbol> typeArguments,
+    private static BoundMethod BindGenericDefinition(
+        MemberSyntax syntax,
+        TypeSymbol declaring,
+        IReadOnlyList<TypeSymbol> typeArguments,
         IBindingScope scope)
     {
         var name = syntax.Name;

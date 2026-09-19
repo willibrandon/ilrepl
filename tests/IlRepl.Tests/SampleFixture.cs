@@ -55,7 +55,8 @@ internal sealed class SampleFixture
         await process.WaitForExitAsync().ConfigureAwait(false);
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException($"building {project} failed:\n{await stdout.ConfigureAwait(false)}\n{await stderr.ConfigureAwait(false)}");
+            throw new InvalidOperationException(
+                $"building {project} failed:\n{await stdout.ConfigureAwait(false)}\n{await stderr.ConfigureAwait(false)}");
         }
 
         return File.Exists(output) ? output : throw new FileNotFoundException("sample output missing after build", output);

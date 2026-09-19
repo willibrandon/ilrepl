@@ -17,10 +17,21 @@ namespace IlRepl.Protocol;
 /// <param name="TimeoutMilliseconds">The per-side execution timeout after runtime startup.</param>
 /// <param name="OutputLimit">The maximum captured character count per output stream.</param>
 /// <param name="Assert">Whether any non-match must fail a batch submission.</param>
-public sealed record ComparisonPackage(string Name, string BaselineFingerprint, int Revision, ComparisonImage Original,
+public sealed record ComparisonPackage(
+    string Name,
+    string BaselineFingerprint,
+    int Revision,
+    ComparisonImage Original,
     ComparisonImage Edited,
-    IReadOnlyList<ComparisonAssembly> Dependencies, IReadOnlyDictionary<string, string> Environment, string Culture, string UICulture,
-    string StandardInput, IReadOnlyList<ComparisonFile> Files, int TimeoutMilliseconds, int OutputLimit, bool Assert)
+    IReadOnlyList<ComparisonAssembly> Dependencies,
+    IReadOnlyDictionary<string, string> Environment,
+    string Culture,
+    string UICulture,
+    string StandardInput,
+    IReadOnlyList<ComparisonFile> Files,
+    int TimeoutMilliseconds,
+    int OutputLimit,
+    bool Assert)
 {
     /// <summary>
     /// The starting-state description printed before either worker executes user code.

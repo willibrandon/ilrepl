@@ -75,7 +75,11 @@ public sealed class ReferenceInspectionTests
         Assert.AreEqual(42, edit.Original.Requested.Invoke(null, arguments));
         AssertSourceReference(assembly);
         await AssertComparisonAsync(session, runtime ? "Copy (\"GetReferencedAssemblies\")" : "Copy ()", 43);
-        if (runtime) session.AddLine("ldstr \"GetReferencedAssemblies\"");
+        if (runtime)
+        {
+            session.AddLine("ldstr \"GetReferencedAssemblies\"");
+        }
+
         session.AddLine("call Copy");
         AssertExports(session, 43);
     }

@@ -183,7 +183,8 @@ public sealed class FileHistoryStore : IHistoryStore
 
             // Every line typed ends up here, string literals included, so the file is the
             // owner's alone: created that way, and an older file tightened before it grows.
-            using var stream = new FileStream(Path, OwnerOnly(new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.Read }));
+            using var stream = new FileStream(Path,
+                OwnerOnly(new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.Read }));
             Tighten(Path);
             await RepairTailAsync(stream, cancellationToken).ConfigureAwait(false);
             stream.Seek(0, SeekOrigin.End);
@@ -260,7 +261,9 @@ public sealed class FileHistoryStore : IHistoryStore
         {
             try
             {
-                return new FileStream(LockPath, OwnerOnly(new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.None, BufferSize = 1 }));
+                return new FileStream(LockPath,
+                    OwnerOnly(new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.None,
+                    BufferSize = 1 }));
             }
             catch (IOException) when (Stopwatch.GetElapsedTime(started) < _lockTimeout)
             {

@@ -50,7 +50,9 @@ public sealed class TerminalSizeFilter : IHex1bTerminalPresentationFilter
 
     /// <inheritdoc />
     public ValueTask<IReadOnlyList<AnsiToken>> OnOutputAsync(
-        IReadOnlyList<AppliedToken> appliedTokens, TimeSpan elapsed, CancellationToken ct = default)
+        IReadOnlyList<AppliedToken> appliedTokens,
+        TimeSpan elapsed,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(appliedTokens);
         OutputObserved?.Invoke(appliedTokens);
@@ -58,8 +60,15 @@ public sealed class TerminalSizeFilter : IHex1bTerminalPresentationFilter
         {
             foreach (var applied in appliedTokens)
             {
-                if (applied.Token is not PrivateModeToken { Mode: 2026 } frame) continue;
-                if (frame.Enable) _frameStarted = true;
+                if (applied.Token is not PrivateModeToken { Mode: 2026 } frame)
+                {
+                    continue;
+                }
+
+                if (frame.Enable)
+                {
+                    _frameStarted = true;
+                }
                 else if (_frameStarted)
                 {
                     _firstFrameRendered = true;
@@ -68,6 +77,7 @@ public sealed class TerminalSizeFilter : IHex1bTerminalPresentationFilter
                 }
             }
         }
+
         return ValueTask.FromResult<IReadOnlyList<AnsiToken>>(appliedTokens.Select(t => t.Token)
             .Where(token => token is not OscToken { Command: "7777" } marker
                 || !marker.Payload.StartsWith("ilrepl-interrupt:", StringComparison.Ordinal)).ToList());
@@ -78,7 +88,11 @@ public sealed class TerminalSizeFilter : IHex1bTerminalPresentationFilter
     {
         // The console adapter returns this marker as its own read after joining the Escape ambiguity read.
         // Decline mixed token batches, where injection here could overtake preceding ordinary input.
-        if (tokens is [OscToken { Command: "7777", Payload: "ilrepl-escape" }]) EscapePressed?.Invoke();
+        if (tokens is [OscToken { Command: "7777", Payload: "ilrepl-escape" }])
+        {
+            EscapePressed?.Invoke();
+        }
+
         return ValueTask.CompletedTask;
     }
 

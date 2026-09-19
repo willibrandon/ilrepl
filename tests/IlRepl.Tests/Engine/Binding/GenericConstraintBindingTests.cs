@@ -197,5 +197,4 @@ public sealed class GenericConstraintBindingTests
             return true;
         }
     }
-
 }

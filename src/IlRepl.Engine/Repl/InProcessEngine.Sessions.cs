@@ -41,7 +41,11 @@ public sealed partial class InProcessEngine
     public async Task<SessionReply> SessionAsync(SessionRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (request.HistoryLineLimit is < 0) throw new ArgumentOutOfRangeException(nameof(request), "history limits cannot be negative");
+        if (request.HistoryLineLimit is < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(request), "history limits cannot be negative");
+        }
+
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (request.Action.Operation is SessionOperation.Save or SessionOperation.Open or SessionOperation.Restore or SessionOperation.Load)
         {
@@ -91,6 +95,7 @@ public sealed partial class InProcessEngine
             _sessionDiagnostics = [];
             return CaptureReply(request.Editor) with { Reply = Reply(new HandleResult(true, false)) };
         }
+
         if (action.Operation == SessionOperation.AcknowledgeSave)
         {
             MarkSessionSaved(action.Path ?? throw new ReplException("the saved path is missing"),

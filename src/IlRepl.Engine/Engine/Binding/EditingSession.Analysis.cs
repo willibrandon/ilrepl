@@ -26,7 +26,11 @@ public sealed partial class EditingSession
     /// <summary>
     /// Supplies completion with the stack that the whole document brings to its caret.
     /// </summary>
-    internal async ValueTask<EditingView> WithFlowAsync(EditingView view, IReadOnlyList<string> lines, int line, int caret,
+    internal async ValueTask<EditingView> WithFlowAsync(
+        EditingView view,
+        IReadOnlyList<string> lines,
+        int line,
+        int caret,
         CancellationToken cancellationToken)
     {
         var reply = await AnalyzeCoreAsync(new AnalysisRequest(lines, line, caret, 0), true, cancellationToken).ConfigureAwait(false);
@@ -98,6 +102,7 @@ public sealed partial class EditingSession
                         help = InstructionReference.Find(end < 0 ? remainder : remainder[..end]);
                     }
                 }
+
                 var bodyPosition = (Body: (object?)_state.Body.AnalysisIdentity, Node: _state.Body.FlowNodes.Count,
                     HasBody: !declaration && (_state.Method is not null || _state.OpenTypes.Count == 0), BindingsStale: false);
                 positions.Add(bodyPosition);
@@ -244,7 +249,6 @@ public sealed partial class EditingSession
         return s_declarationDirectives.Any(directive => IsDirective(text, directive));
     }
 
-
     private static (AnalysisDiagnosticKind Kind, string Message) RefusalDiagnostic(SkippedEditingLine refused)
     {
         var text = refused.Text.Trim();
@@ -264,5 +268,4 @@ public sealed partial class EditingSession
             ? AnalysisDiagnosticKind.Incomplete : AnalysisDiagnosticKind.Error;
         return (kind, refused.Message);
     }
-
 }

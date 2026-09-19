@@ -106,8 +106,14 @@ public sealed class SessionDocumentTests
 
         var exception = Assert.ThrowsExactly<ReplException>(() =>
         {
-            if (run) _ = core.RunSession(new SessionDocument(), [], CancellationToken.None);
-            else _ = core.ReopenSession(new SessionDocument());
+            if (run)
+            {
+                _ = core.RunSession(new SessionDocument(), [], CancellationToken.None);
+            }
+            else
+            {
+                _ = core.ReopenSession(new SessionDocument());
+            }
         });
 
         Assert.Contains("requires a fresh execution host", exception.Message);

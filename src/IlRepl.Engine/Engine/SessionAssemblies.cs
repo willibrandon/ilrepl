@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 
 namespace IlRepl.Engine;
 
@@ -58,7 +59,8 @@ public static class SessionAssemblies
     /// </summary>
     /// <param name="simpleName">The simple name.</param>
     /// <returns>True for <c>ilrepl.*</c>.</returns>
-    public static bool IsSessionName(string? simpleName) => simpleName is not null && simpleName.StartsWith(Prefix, StringComparison.Ordinal);
+    public static bool IsSessionName(string? simpleName) =>
+        simpleName is not null && simpleName.StartsWith(Prefix, StringComparison.Ordinal);
 
     /// <summary>
     /// Creates the load context for a cell built with Reflection.Emit. On CoreCLR the cell is
@@ -89,7 +91,11 @@ public static class SessionAssemblies
     /// <param name="kind">What the assembly holds.</param>
     /// <param name="dependencies">The session assemblies the image references.</param>
     /// <returns>The registered assembly.</returns>
-    public static DefinitionAssembly Load(byte[] image, string name, SessionAssemblyKind kind, IReadOnlyList<DefinitionAssembly> dependencies)
+    public static DefinitionAssembly Load(
+        byte[] image,
+        string name,
+        SessionAssemblyKind kind,
+        IReadOnlyList<DefinitionAssembly> dependencies)
     {
         ArgumentNullException.ThrowIfNull(image);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -108,9 +114,15 @@ public static class SessionAssemblies
     /// <param name="builder">The assembly builder.</param>
     /// <param name="created">A type created in it.</param>
     /// <param name="dependencies">The session assemblies the cell references.</param>
-    /// <param name="context">The context the cell was defined in, or null on the browser, where dynamic assemblies always land in the default context.</param>
+    /// <param name="context">
+    /// The context the cell was defined in, or null on the browser, where dynamic assemblies always land in the default context.
+    /// </param>
     /// <returns>The registered assembly.</returns>
-    public static DefinitionAssembly RegisterCell(AssemblyBuilder builder, Type created, IReadOnlyList<DefinitionAssembly> dependencies, DefinitionLoadContext? context)
+    public static DefinitionAssembly RegisterCell(
+        AssemblyBuilder builder,
+        Type created,
+        IReadOnlyList<DefinitionAssembly> dependencies,
+        DefinitionLoadContext? context)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(created);
@@ -152,7 +164,9 @@ public static class SessionAssemblies
     /// <param name="assembly">The assembly.</param>
     /// <param name="definition">The record.</param>
     /// <returns>True when the assembly is a session assembly.</returns>
-    public static bool TryGetDefinition(Assembly assembly, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out DefinitionAssembly? definition)
+    public static bool TryGetDefinition(
+        Assembly assembly,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out DefinitionAssembly? definition)
     {
         ArgumentNullException.ThrowIfNull(assembly);
         return Owners.TryGetValue(assembly, out definition);
@@ -220,7 +234,7 @@ public static class SessionAssemblies
             }
 
             s_browserResolving = true;
-            System.Runtime.Loader.AssemblyLoadContext.Default.Resolving += (_, name) => IsSessionName(name.Name) ? Resolve(name) : null;
+            AssemblyLoadContext.Default.Resolving += (_, name) => IsSessionName(name.Name) ? Resolve(name) : null;
         }
     }
 

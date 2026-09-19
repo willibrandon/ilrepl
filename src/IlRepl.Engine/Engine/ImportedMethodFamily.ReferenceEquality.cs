@@ -33,22 +33,36 @@ internal sealed partial class ImportedMethodFamily
         var count = 2;
         if (!comparison)
         {
-            if (instruction.Operand is not ResolvedMethod resolved || op == OpCodes.Ldtoken) return;
+            if (instruction.Operand is not ResolvedMethod resolved || op == OpCodes.Ldtoken)
+            {
+                return;
+            }
+
             target = resolved.Method ?? _pinned[resolved.Definition!.Name];
-            if (!IsObjectReferenceInspection(target)) return;
+            if (!IsObjectReferenceInspection(target))
+            {
+                return;
+            }
             // An unbound function pointer can receive metadata objects after it leaves the copied family.
             if (op == OpCodes.Ldftn)
             {
                 RejectReflection(body, instruction, target, "indirect reflection cannot prove a supported target");
                 return;
             }
+
             count = op == OpCodes.Ldvirtftn ? 1 : target.GetParameters().Length + (target.IsStatic ? 0 : 1);
         }
 
         // Null tests depend only on presence, so they remain valid for copied metadata objects.
         if (count == 2 && Enumerable.Range(1, count).Any(index => values.Stack(body, position, index) is { Length: > 0 } candidates
-            && candidates.All(candidate => candidate is null))) return;
+            && candidates.All(candidate => candidate is null)))
+        {
+            return;
+        }
+
         if (Enumerable.Range(1, count).Any(index => values.HasMetadataReference(body, position, index)))
+        {
             RejectReflection(body, instruction, target, MetadataReferenceReason);
+        }
     }
 }

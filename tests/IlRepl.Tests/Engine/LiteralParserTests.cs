@@ -78,7 +78,8 @@ public sealed class LiteralParserTests
     public void ParseFloat32_KeepsBits()
     {
         Assert.AreEqual(0x7F800001, BitConverter.SingleToInt32Bits(LiteralParser.ParseFloat32("float32(0x7f800001)", "ldc.r4")));
-        Assert.AreEqual(unchecked((int)0xFF800001), BitConverter.SingleToInt32Bits(LiteralParser.ParseFloat32("float32(0xff800001)", "ldc.r4")));
+        Assert.AreEqual(unchecked((int)0xFF800001),
+            BitConverter.SingleToInt32Bits(LiteralParser.ParseFloat32("float32(0xff800001)", "ldc.r4")));
         Assert.AreEqual(unchecked((int)0x80000000), BitConverter.SingleToInt32Bits(LiteralParser.ParseFloat32("-0", "ldc.r4")));
         Assert.AreEqual(1.5f, LiteralParser.ParseFloat32("1.5", "ldc.r4"));
         Assert.AreEqual(1.5f, LiteralParser.ParseFloat32("float32(1.5)", "ldc.r4"));
@@ -97,9 +98,11 @@ public sealed class LiteralParserTests
 
         // Reflection.Emit: the cell's path. The body is persisted and read back, because a JIT
         // folds float constants through double and would quiet the NaN before any bits were read.
-        var persisted = new System.Reflection.Emit.PersistedAssemblyBuilder(new System.Reflection.AssemblyName("IlReplFloatBits"), typeof(object).Assembly);
+        var persisted = new System.Reflection.Emit.PersistedAssemblyBuilder(new System.Reflection.AssemblyName("IlReplFloatBits"),
+            typeof(object).Assembly);
         var builder = persisted.DefineDynamicModule("IlReplFloatBits").DefineType("T", System.Reflection.TypeAttributes.Public);
-        var il = builder.DefineMethod("F", System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static, typeof(float), Type.EmptyTypes).GetILGenerator();
+        var il = builder.DefineMethod("F", System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
+            typeof(float), Type.EmptyTypes).GetILGenerator();
         il.Emit(System.Reflection.Emit.OpCodes.Ldc_R4, value);
         il.Emit(System.Reflection.Emit.OpCodes.Ret);
         builder.CreateType();

@@ -52,6 +52,8 @@ public sealed partial class SiblingTypeLookupTests
         session.AddLine("ldstr \"" + sibling + "\"");
         session.AddLine("call Copy");
         foreach (var image in new[] { AssemblyExporter.Write(session, "sibling-copy"), IlasmLocator.Assemble(session.ToIlAsm()) })
+        {
             AssertExport(image);
+        }
     }
 }

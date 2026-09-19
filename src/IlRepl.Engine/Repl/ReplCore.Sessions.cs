@@ -231,19 +231,30 @@ public sealed partial class ReplCore
         _groupedEntry = entry.Kind is SessionEntryKind.Source or SessionEntryKind.EditSource ? entry : null;
         _groupedEntryIndex = _sourceEntries.Count - 1;
         _groupedSource.Clear();
-        if (_groupedEntry is not null) _groupedSource.AddRange(entry.Source);
+        if (_groupedEntry is not null)
+        {
+            _groupedSource.AddRange(entry.Source);
+        }
     }
 
     private void FlushSourceEntry()
     {
-        if (_groupedEntry is not { } entry || entry.Source.Length == _groupedSource.Count) return;
+        if (_groupedEntry is not { } entry || entry.Source.Length == _groupedSource.Count)
+        {
+            return;
+        }
+
         _groupedEntry = entry with { Source = [.. _groupedSource] };
         _sourceEntries[_groupedEntryIndex] = _groupedEntry;
     }
 
     private void RestoreEntry(SessionEntry entry)
     {
-        if (entry.Kind is not (SessionEntryKind.Source or SessionEntryKind.EditSource)) RestoreEntryComments(entry);
+        if (entry.Kind is not (SessionEntryKind.Source or SessionEntryKind.EditSource))
+        {
+            RestoreEntryComments(entry);
+        }
+
         switch (entry.Kind)
         {
             case SessionEntryKind.Source:
@@ -327,7 +338,10 @@ public sealed partial class ReplCore
         {
             _cancellationToken.ThrowIfCancellationRequested();
             var normalized = Session.Normalize(line);
-            if (entry.Kind == SessionEntryKind.Rejected) Session.Forget(normalized);
+            if (entry.Kind == SessionEntryKind.Rejected)
+            {
+                Session.Forget(normalized);
+            }
         }
     }
 
@@ -382,6 +396,7 @@ public sealed partial class ReplCore
                 {
                     throw new ReplException(exception.Message + "; " + DependencyRecoveryHint(), exception);
                 }
+
                 Session.AdvanceGeneration();
                 return;
             }

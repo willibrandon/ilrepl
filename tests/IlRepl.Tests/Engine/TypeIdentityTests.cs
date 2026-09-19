@@ -17,7 +17,8 @@ public sealed class TypeIdentityTests
     {
         var listT = typeof(List<>).GetGenericArguments()[0];
         var enumerableT = typeof(IEnumerable<>).GetGenericArguments()[0];
-        var methodT = typeof(Enumerable).GetMethods().First(m => m.Name == "First" && m.GetParameters().Length == 1).GetGenericArguments()[0];
+        var methodT = typeof(Enumerable).GetMethods().First(m => m.Name == "First" && m.GetParameters().Length == 1)
+            .GetGenericArguments()[0];
         Assert.IsTrue(TypeIdentity.Equal(listT, listT));
         Assert.IsFalse(TypeIdentity.Equal(listT, enumerableT), "the T of one type is not the T of another");
         Assert.IsFalse(TypeIdentity.Equal(listT, methodT), "!0 is never !!0");

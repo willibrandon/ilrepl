@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text;
 
 namespace IlRepl.Engine;
 
@@ -141,7 +142,11 @@ public sealed partial class TypeResolver : IDisposable
     /// <param name="image">Its original image.</param>
     internal void AddCaptured(Assembly assembly, byte[] image)
     {
-        if (!_extra.Contains(assembly)) _extra.Insert(0, assembly);
+        if (!_extra.Contains(assembly))
+        {
+            _extra.Insert(0, assembly);
+        }
+
         _images.TryAdd(assembly, image);
         _context.RegisterCaptured(assembly);
     }
@@ -276,7 +281,7 @@ public sealed partial class TypeResolver : IDisposable
     public static string ReflectionName(string ilName)
     {
         ArgumentNullException.ThrowIfNull(ilName);
-        var sb = new System.Text.StringBuilder(ilName.Length);
+        var sb = new StringBuilder(ilName.Length);
         foreach (var c in ilName)
         {
             if (c == '/')

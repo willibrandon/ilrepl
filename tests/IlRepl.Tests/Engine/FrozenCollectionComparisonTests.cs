@@ -47,7 +47,10 @@ public sealed class FrozenCollectionComparisonTests
         Assert.IsEmpty(edit.Problems);
         session.CommitEdit(edit.Name, FrozenCollectionComparisonExamples.Method(set, count, comparer, reverse: true));
         foreach (var method in new[] { edit.Original.Requested, edit.OriginalMethod, edit.Method! })
+        {
             AssertActual(method.Invoke(null, null), set, count, false);
+        }
+
         var same = await CompareAsync(session);
         Assert.AreEqual("match", same.Outcome, Details(same));
         AssertContents(same.Original.Result!, set, count, false);
@@ -111,16 +114,22 @@ public sealed class FrozenCollectionComparisonTests
             {
                 var actual = observed.Members.Skip(1).Select(member => int.Parse(member.Value.Value!, CultureInfo.InvariantCulture));
                 Assert.AreSequenceEqual(numbers.Order(), actual.Order());
-                if (count == 64) Assert.IsFalse(first.GetType().IsGenericType);
+                if (count == 64)
+                {
+                    Assert.IsFalse(first.GetType().IsGenericType);
+                }
             }
             else
             {
                 var actual = Entries(observed);
                 foreach (var number in numbers)
+                {
                     Assert.AreEqual((number + 42).ToString(CultureInfo.InvariantCulture),
                         actual[number.ToString(CultureInfo.InvariantCulture)].Value);
+                }
             }
         }
+
         Assert.HasCount(3, implementations);
         var strings = FrozenCollectionComparisonExamples.Contents(set, 8);
         object words = set ? strings.Keys.ToFrozenSet(StringComparer.OrdinalIgnoreCase)
@@ -159,6 +168,7 @@ public sealed class FrozenCollectionComparisonTests
             Assert.AreEqual("reference", value.Kind);
             Assert.AreEqual(captured.Identity, value.Identity);
         }
+
         var observedSet = Observe(set);
         Assert.AreEqual("set", observedSet.Kind);
         Assert.HasCount(3, observedSet.Members);
@@ -262,7 +272,11 @@ public sealed class FrozenCollectionComparisonTests
             : entries.ToFrozenDictionary(ReferenceEqualityComparer.Instance));
         Assert.HasCount(2, singleton.Members);
         Assert.AreEqual(set ? "object" : "entry", singleton.Members[1].Value.Kind);
-        if (!set) Assert.AreEqual("42", singleton.Members[1].Value.Members[1].Value.Value);
+        if (!set)
+        {
+            Assert.AreEqual("42", singleton.Members[1].Value.Members[1].Value.Value);
+        }
+
         entries.Add(new object(), 43);
         AssertUnavailable(Observe(set ? (object)entries.Keys.ToFrozenSet(ReferenceEqualityComparer.Instance)
             : entries.ToFrozenDictionary(ReferenceEqualityComparer.Instance)),
@@ -298,6 +312,7 @@ public sealed class FrozenCollectionComparisonTests
             };
             entries.Add(key, index);
         }
+
         var observed = Observe(set ? (object)entries.Keys.ToFrozenSet() : entries.ToFrozenDictionary());
         if (limited)
         {
@@ -305,6 +320,7 @@ public sealed class FrozenCollectionComparisonTests
                 : "collection keys cannot be ordered within the observation limit");
             return;
         }
+
         Assert.AreEqual(set ? "set" : "dictionary", observed.Kind);
         Assert.HasCount(count + 1, observed.Members);
         var numbers = new List<int>();
@@ -318,14 +334,26 @@ public sealed class FrozenCollectionComparisonTests
                 _ => int.Parse(key.Value!, CultureInfo.InvariantCulture),
             };
             numbers.Add(number);
-            if (!set) Assert.AreEqual(number.ToString(CultureInfo.InvariantCulture), member.Value.Members[1].Value.Value);
+            if (!set)
+            {
+                Assert.AreEqual(number.ToString(CultureInfo.InvariantCulture), member.Value.Members[1].Value.Value);
+            }
+
             if (kind == "nodes")
             {
                 Assert.HasCount(8, key.Members);
-                foreach (var item in key.Members) Assert.AreEqual(number.ToString(CultureInfo.InvariantCulture), item.Value.Value);
+                foreach (var item in key.Members)
+                {
+                    Assert.AreEqual(number.ToString(CultureInfo.InvariantCulture), item.Value.Value);
+                }
             }
-            if (kind == "text") Assert.AreEqual(new string((char)('a' + number), 65500), key.Value);
+
+            if (kind == "text")
+            {
+                Assert.AreEqual(new string((char)('a' + number), 65500), key.Value);
+            }
         }
+
         Assert.AreSequenceEqual(Enumerable.Range(0, count), numbers.Order());
     }
 
@@ -341,6 +369,7 @@ public sealed class FrozenCollectionComparisonTests
             Assert.IsNull(invocation.Exception);
             Assert.AreEqual(side.Result, invocation.Outputs.Single(member => member.Name == "return").Value);
         }
+
         return result;
     }
 
@@ -357,7 +386,10 @@ public sealed class FrozenCollectionComparisonTests
         {
             var collection = Assert.IsInstanceOfType<FrozenDictionary<string, int>>(value);
             Assert.HasCount(entries.Count, collection);
-            foreach (var pair in entries) Assert.AreEqual(pair.Value, collection[pair.Key]);
+            foreach (var pair in entries)
+            {
+                Assert.AreEqual(pair.Value, collection[pair.Key]);
+            }
         }
     }
 
@@ -371,12 +403,17 @@ public sealed class FrozenCollectionComparisonTests
         Assert.AreEqual("comparer", value.Members[0].Name);
         Assert.AreEqual("comparer", value.Members[0].Value.Kind);
         if (set)
+        {
             Assert.AreSequenceEqual(entries.Keys.Order(StringComparer.Ordinal),
                 value.Members.Skip(1).Select(member => member.Value.Value).Order(StringComparer.Ordinal));
+        }
         else
         {
             var actual = Entries(value);
-            foreach (var pair in entries) Assert.AreEqual(pair.Value.ToString(CultureInfo.InvariantCulture), actual[pair.Key].Value);
+            foreach (var pair in entries)
+            {
+                Assert.AreEqual(pair.Value.ToString(CultureInfo.InvariantCulture), actual[pair.Key].Value);
+            }
         }
     }
 

@@ -40,7 +40,11 @@ public sealed class PromptInputFilterTests
             prompt = state;
             state.FilterInput = input =>
             {
-                if (input is not Hex1bKeyEvent { Key: Hex1bKey.Enter } || captured.Task.IsCompleted) return false;
+                if (input is not Hex1bKeyEvent { Key: Hex1bKey.Enter } || captured.Task.IsCompleted)
+                {
+                    return false;
+                }
+
                 captured.SetResult(state.CaptureSessionEditor());
                 return true;
             };

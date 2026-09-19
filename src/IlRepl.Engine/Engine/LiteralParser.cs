@@ -264,11 +264,13 @@ public static class LiteralParser
                 case '\'': sb.Append('\''); break;
                 case '?': sb.Append('?'); break;
                 case '\\': sb.Append('\\'); break;
-                case 'u' when i + 4 < s.Length && ushort.TryParse(s.AsSpan(i + 1, 4), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var code):
+                case 'u' when i + 4 < s.Length
+                    && ushort.TryParse(s.AsSpan(i + 1, 4), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var code):
                     sb.Append((char)code);
                     i += 4;
                     break;
-                case 'x' when i + 2 < s.Length && byte.TryParse(s.AsSpan(i + 1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexByte):
+                case 'x' when i + 2 < s.Length
+                    && byte.TryParse(s.AsSpan(i + 1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexByte):
                     sb.Append((char)hexByte);
                     i += 2;
                     break;

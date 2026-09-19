@@ -55,7 +55,9 @@ public sealed record SymbolGenericOwner(
     /// <param name="method">The method definition.</param>
     /// <param name="parameters">Its generic parameters.</param>
     /// <returns>The owner.</returns>
-    public SymbolGenericOwner WithMethod(DefinitionId method, IReadOnlyList<(string Name,
+    public SymbolGenericOwner WithMethod(
+        DefinitionId method,
+        IReadOnlyList<(string Name,
         GenericParameterAttributes Attributes)> parameters) =>
         this with { Method = method, MethodParameters = parameters };
 }

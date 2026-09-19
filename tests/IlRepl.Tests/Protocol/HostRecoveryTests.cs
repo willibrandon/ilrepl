@@ -32,6 +32,7 @@ public sealed class HostRecoveryTests
             var reply = await controller.HandleAsync(line, token);
             Assert.IsTrue(reply.Succeeded, string.Join('\n', reply.Lines.Select(item => item.PlainText)));
         }
+
         _ = await controller.HandleAsync("ret", token);
         var workspace = await recovered.Task.WaitAsync(TimeSpan.FromSeconds(30), token);
         Assert.AreEqual(SessionRuntimeState.Ready, controller.RuntimeState);
@@ -79,7 +80,10 @@ public sealed class HostRecoveryTests
         await using var controller = new SessionController(await HostPaths.StartEngineAsync(token), async ct =>
         {
             if (running && Interlocked.Increment(ref launches) == 2 && recoveryFails)
+            {
                 throw new IOException("replacement launch failed");
+            }
+
             return await HostPaths.StartEngineAsync(ct);
         });
         await controller.SessionAsync(new SessionRequest
@@ -110,7 +114,11 @@ public sealed class HostRecoveryTests
         var reopened = SessionCodec.Read(await File.ReadAllBytesAsync(files.SessionPath, token));
         Assert.AreEqual("interrupted", reopened.Cells[0].State);
         Assert.AreEqual(17, Assert.ContainsSingle(reopened.Interruptions).ExitCode);
-        if (recoveryFails) await controller.RestartAsync(token);
+        if (recoveryFails)
+        {
+            await controller.RestartAsync(token);
+        }
+
         var replayed = await controller.SessionAsync(new SessionRequest
         {
             Action = new SessionAction { Operation = SessionOperation.Run, Numbers = [2] }, Editor = controller.Editor,

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Reflection;
+using System.Text;
 
 namespace IlRepl.Engine;
 
@@ -221,7 +222,8 @@ public static class TypeHeaderParser
             throw new ReplException("an interface has no layout");
         }
 
-        if (generics.Any(g => g.Attributes.HasFlag(GenericParameterAttributes.Covariant) || g.Attributes.HasFlag(GenericParameterAttributes.Contravariant)) && kind != TypeKind.Interface)
+        if (generics.Any(g => g.Attributes.HasFlag(GenericParameterAttributes.Covariant)
+            || g.Attributes.HasFlag(GenericParameterAttributes.Contravariant)) && kind != TypeKind.Interface)
         {
             throw new ReplException("variance (+/-) is only allowed on interface type parameters");
         }
@@ -249,7 +251,8 @@ public static class TypeHeaderParser
             throw new ReplException("the IlRepl namespace is reserved for the cell type");
         }
 
-        return new TypeHeader(attributes, kind, kindFromWord, layout ?? TypeLayoutKind.Auto, ns, name, generics, baseText, interfaces, opens, closes) { ArityWritten = arityWritten };
+        return new TypeHeader(attributes, kind, kindFromWord, layout ?? TypeLayoutKind.Auto, ns, name, generics, baseText, interfaces,
+            opens, closes) { ArityWritten = arityWritten };
     }
 
     private static (string Namespace, string Name) SplitNamespace(string fullName)
@@ -271,7 +274,7 @@ public static class TypeHeaderParser
 
     private static string ReadName(string s, ref int pos)
     {
-        var name = new System.Text.StringBuilder();
+        var name = new StringBuilder();
         while (pos < s.Length)
         {
             if (s[pos] == '\'')

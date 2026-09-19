@@ -96,8 +96,15 @@ internal sealed class MeasuredTerminal : IAsyncDisposable
     {
         var current = _recorder.Since(Math.Max(0, _recorder.Count - 1));
         if (current.Count == 0 || !IsEmptyPrompt(current[^1]))
+        {
             await InputAsync("\x01\x7f", IsEmptyPrompt);
-        if (text.Length == 0) return;
+        }
+
+        if (text.Length == 0)
+        {
+            return;
+        }
+
         var tail = text.Split('\n')[^1];
         tail = tail[^Math.Min(20, tail.Length)..];
         await PasteAsync(text, frame => frame.CaretRow is { } row && row.Contains(tail, StringComparison.Ordinal));
@@ -125,16 +132,27 @@ internal sealed class MeasuredTerminal : IAsyncDisposable
         var completion = new TaskCompletionSource<Frame>(TaskCreationOptions.RunContinuationsAsynchronously);
         void OnFrame(Frame frame)
         {
-            if (frame.Index >= first && condition(frame)) completion.TrySetResult(frame);
+            if (frame.Index >= first && condition(frame))
+            {
+                completion.TrySetResult(frame);
+            }
         }
+
         _recorder.FrameAdded += OnFrame;
         try
         {
-            foreach (var frame in _recorder.Since(first)) OnFrame(frame);
+            foreach (var frame in _recorder.Since(first))
+            {
+                OnFrame(frame);
+            }
+
             var painted = completion.Task.WaitAsync(TimeSpan.FromMinutes(2), _cancellationToken);
             var completed = await Task.WhenAny(painted, _run);
             if (completed != painted)
+            {
                 throw new InvalidOperationException("The measured frontend exited before painting the expected frame.");
+            }
+
             return await painted;
         }
         catch (TimeoutException exception)
@@ -162,6 +180,7 @@ internal sealed class MeasuredTerminal : IAsyncDisposable
                     await CurrentAsync(frame => frame.Contains("Save changes to "));
                     await _terminal.SendInputAsync("\x1b[B\r"u8.ToArray(), CancellationToken.None);
                 }
+
                 await _run.WaitAsync(TimeSpan.FromSeconds(15), CancellationToken.None);
             }
         }

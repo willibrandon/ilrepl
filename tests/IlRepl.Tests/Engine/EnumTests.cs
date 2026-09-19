@@ -45,8 +45,10 @@ public sealed class EnumTests
         Assert.AreEqual(1, (int)color.GetField("Green")!.GetRawConstantValue()!);
         Assert.AreEqual("Green", Run(session, "ldc.i4 1", "box Color")!.ToString());
         Assert.AreEqual("Blue", Run(session, "ldc.i4 2", "box Color")!.ToString());
-        Assert.Contains("Blue is a literal; it has no storage", Assert.ThrowsExactly<ReplException>(() => session.AddLine("ldsfld valuetype Color Color::Blue")).Message);
-        Assert.Contains(": ldc.i4 2", Assert.ThrowsExactly<ReplException>(() => session.AddLine("ldsfld valuetype Color Color::Blue")).Message);
+        Assert.Contains("Blue is a literal; it has no storage",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine("ldsfld valuetype Color Color::Blue")).Message);
+        Assert.Contains(": ldc.i4 2",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine("ldsfld valuetype Color Color::Blue")).Message);
     }
 
     /// <summary>

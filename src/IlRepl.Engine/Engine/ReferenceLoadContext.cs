@@ -35,14 +35,23 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     /// <param name="assembly">The already loaded assembly.</param>
     /// <param name="image">The exact image, when retained.</param>
     /// <returns>Whether the image is available.</returns>
-    internal static bool TryGetMappedImage(Assembly assembly,
+    internal static bool TryGetMappedImage(
+        Assembly assembly,
         [NotNullWhen(true)] out byte[]? image)
     {
-        if (MappedImages.TryGetValue(assembly, out image)) return true;
+        if (MappedImages.TryGetValue(assembly, out image))
+        {
+            return true;
+        }
+
         if (GetLoadContext(assembly) is ReferenceLoadContext context)
         {
-            lock (context._gate) return context._images.TryGetValue(Key(assembly.GetName()), out image);
+            lock (context._gate)
+            {
+                return context._images.TryGetValue(Key(assembly.GetName()), out image);
+            }
         }
+
         return false;
     }
 
@@ -52,7 +61,9 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     /// <param name="previous">The previous context supplying unchanged assembly identities.</param>
     /// <param name="reusePreviousImages">Whether unchanged images may retain their previous dependency bindings.</param>
     /// <param name="removed">Obsolete identities excluded from inherited bindings and sibling probing.</param>
-    public ReferenceLoadContext(ReferenceLoadContext? previous = null, bool reusePreviousImages = true,
+    public ReferenceLoadContext(
+        ReferenceLoadContext? previous = null,
+        bool reusePreviousImages = true,
         IEnumerable<AssemblyName>? removed = null)
         : base("ilrepl.references." + Guid.NewGuid().ToString("N"), AssemblyLifetimeScope.Collectible)
     {
@@ -120,7 +131,10 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
 
             _images[key] = image;
             _removed.Remove(key);
-            if (path is not null) _paths[key] = Path.GetFullPath(path);
+            if (path is not null)
+            {
+                _paths[key] = Path.GetFullPath(path);
+            }
         }
     }
 
@@ -130,7 +144,10 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     /// <param name="assembly">The isolated captured assembly.</param>
     internal void RegisterCaptured(Assembly assembly)
     {
-        lock (_gate) _captured[Key(assembly.GetName())] = assembly;
+        lock (_gate)
+        {
+            _captured[Key(assembly.GetName())] = assembly;
+        }
     }
 
     /// <summary>
@@ -157,7 +174,11 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
             {
                 var libraries = _previous?.NativeLibraries.ToDictionary(pair => pair.Key, pair => pair.Value,
                     StringComparer.OrdinalIgnoreCase) ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var (name, path) in _native) libraries[name] = path;
+                foreach (var (name, path) in _native)
+                {
+                    libraries[name] = path;
+                }
+
                 return libraries;
             }
         }
@@ -217,11 +238,23 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     {
         lock (_gate)
         {
-            if (_captured.TryGetValue(Key(assemblyName), out var captured)) return captured;
+            if (_captured.TryGetValue(Key(assemblyName), out var captured))
+            {
+                return captured;
+            }
+
             if (!_images.TryGetValue(Key(assemblyName), out var image))
             {
-                if (IsRemoved(assemblyName)) return null;
-                if (_previous?.Resolve(assemblyName) is { } previous) return previous;
+                if (IsRemoved(assemblyName))
+                {
+                    return null;
+                }
+
+                if (_previous?.Resolve(assemblyName) is { } previous)
+                {
+                    return previous;
+                }
+
                 foreach (var directory in _paths.Values.Select(Path.GetDirectoryName).Distinct().ToArray())
                 {
                     var candidate = Path.Combine(directory!, assemblyName.CultureName ?? "", assemblyName.Name + ".dll");
@@ -292,7 +325,10 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
                     "lib" + unmanagedDllName, "lib" + unmanagedDllName + ".so", "lib" + unmanagedDllName + ".dylib" })
                 {
                     var candidate = Path.Combine(directory!, name);
-                    if (File.Exists(candidate)) return LoadUnmanagedDllFromPath(candidate);
+                    if (File.Exists(candidate))
+                    {
+                        return LoadUnmanagedDllFromPath(candidate);
+                    }
                 }
             }
 

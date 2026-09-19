@@ -10,5 +10,11 @@ namespace IlRepl.Protocol;
 /// <param name="StandardOutput">The captured standard output.</param>
 /// <param name="StandardError">The captured standard error.</param>
 /// <param name="Detail">A failure explanation, or null.</param>
-public sealed record ComparisonSide(string Outcome, IReadOnlyList<InvocationObservation> Invocations, ObservedValue? Result,
-    ObservedException? Exception, string StandardOutput, string StandardError, string? Detail);
+public sealed record ComparisonSide(
+    string Outcome,
+    IReadOnlyList<InvocationObservation> Invocations,
+    ObservedValue? Result,
+    ObservedException? Exception,
+    string StandardOutput,
+    string StandardError,
+    string? Detail);

@@ -38,7 +38,10 @@ public sealed class ProcessDisposalTests
         engine.Exited += _ =>
         {
             entered.TrySetResult();
-            if (!lifetimeFirst) release.Task.GetAwaiter().GetResult();
+            if (!lifetimeFirst)
+            {
+                release.Task.GetAwaiter().GetResult();
+            }
         };
         Task? first = null;
         Task? second = null;
@@ -55,6 +58,7 @@ public sealed class ProcessDisposalTests
                 await lifetime.DisposeAsync();
                 await lifetime.TerminateAsync(token);
             }
+
             first = engine.DisposeAsync().AsTask();
             await entered.Task.WaitAsync(token);
             if (!lifetimeFirst)
@@ -62,6 +66,7 @@ public sealed class ProcessDisposalTests
                 lifetimeDisposal = lifetime.DisposeAsync().AsTask();
                 concurrentLifetimeDisposal = lifetime.DisposeAsync().AsTask();
             }
+
             second = engine.DisposeAsync().AsTask();
             terminated = engine.TerminateAsync(token);
             if (!lifetimeFirst)
@@ -70,20 +75,32 @@ public sealed class ProcessDisposalTests
                 Assert.IsFalse(second.IsCompleted, "A concurrent disposer must join the same cleanup.");
                 Assert.IsFalse(terminated.IsCompleted, "Termination during disposal must join the remaining cleanup.");
             }
+
             Assert.IsFalse(OwnedProcessGroup.IsRunning(scope), "The notification must describe an exited host.");
         }
         finally
         {
             release.TrySetResult();
             await engine.DisposeAsync();
-            if (lifetimeDisposal is not null) await lifetimeDisposal;
-            if (concurrentLifetimeDisposal is not null) await concurrentLifetimeDisposal;
+            if (lifetimeDisposal is not null)
+            {
+                await lifetimeDisposal;
+            }
+
+            if (concurrentLifetimeDisposal is not null)
+            {
+                await concurrentLifetimeDisposal;
+            }
         }
+
         await Task.WhenAll(first!, second!, terminated!).WaitAsync(token);
         await engine.DisposeAsync();
         await engine.TerminateAsync(token);
         Assert.IsFalse(OwnedProcessGroup.IsRunning(scope));
-        if (supervisorScope is not null) Assert.IsFalse(OwnedProcessGroup.IsRunning(supervisorScope));
+        if (supervisorScope is not null)
+        {
+            Assert.IsFalse(OwnedProcessGroup.IsRunning(supervisorScope));
+        }
     }
 
     /// <summary>
@@ -97,7 +114,11 @@ public sealed class ProcessDisposalTests
     [Timeout(60_000, CooperativeCancellation = true)]
     public async Task Dispose_ConcurrentAndLaterCallersObserveCleanupFailure(bool hostEndpoint)
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var token = TestContext.CancellationToken;
         var directory = Path.Combine("/tmp", "ilr-dispose-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(directory);
@@ -116,6 +137,7 @@ public sealed class ProcessDisposalTests
                 var result = await engine.HandleAsync("ret", token);
                 Assert.IsTrue(result.Succeeded);
             }
+
             var endpoints = Directory.GetDirectories(directory, "ilr-*");
             Assert.HasCount(1, endpoints, "Only the real supervisor endpoint should remain after host disposal.");
             var endpoint = endpoints[0];
@@ -133,18 +155,27 @@ public sealed class ProcessDisposalTests
                 var adopted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 void Observe(ProcessSupervisionState state)
                 {
-                    if (state.Epoch > epoch && !state.Restoring && !state.Degraded) adopted.TrySetResult();
+                    if (state.Epoch > epoch && !state.Restoring && !state.Degraded)
+                    {
+                        adopted.TrySetResult();
+                    }
                 }
+
                 lifetime.SupervisionChanged += Observe;
                 try
                 {
                     supervisor.Kill();
                     await adopted.Task.WaitAsync(token);
                 }
-                finally { lifetime.SupervisionChanged -= Observe; }
+                finally
+                {
+                    lifetime.SupervisionChanged -= Observe;
+                }
+
                 adoptedSupervisor = Process.GetProcessById(lifetime.SupervisorProcessId!.Value);
                 scope = OwnedProcessGroup.Describe(adoptedSupervisor, "later-supervisor-disposal");
             }
+
             Task DisposeTarget() => failedEngine is null ? lifetime.DisposeAsync().AsTask() : failedEngine.DisposeAsync().AsTask();
             var blocker = Path.Combine(endpoint, "prevent-directory-removal");
             await File.WriteAllTextAsync(blocker, "owned test file", token);
@@ -166,17 +197,34 @@ public sealed class ProcessDisposalTests
             Environment.SetEnvironmentVariable("TMPDIR", originalTemp);
             if (failedEngine is not null)
             {
-                try { await failedEngine.DisposeAsync(); }
-                catch (IOException) { }
+                try
+                {
+                    await failedEngine.DisposeAsync();
+                }
+                catch (IOException)
+                {
+                }
             }
-            try { await lifetime.DisposeAsync(); }
-            catch (IOException) { }
+
+            try
+            {
+                await lifetime.DisposeAsync();
+            }
+            catch (IOException)
+            {
+            }
+
             foreach (var child in new[] { supervisor, adoptedSupervisor }.OfType<Process>())
             {
-                if (!child.HasExited) child.Kill();
+                if (!child.HasExited)
+                {
+                    child.Kill();
+                }
+
                 await child.WaitForExitAsync(CancellationToken.None);
                 child.Dispose();
             }
+
             Directory.Delete(directory, recursive: true);
         }
     }

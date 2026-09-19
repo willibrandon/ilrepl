@@ -73,7 +73,8 @@ public sealed partial class BrowserHistoryStore : IHistoryStore
     }
 
     // A rejection reaches .NET as the error's string form, "Error: reason"; the reason is enough.
-    private static string Reason(JSException ex) => ex.Message.StartsWith("Error: ", StringComparison.Ordinal) ? ex.Message["Error: ".Length..] : ex.Message;
+    private static string Reason(JSException ex) =>
+        ex.Message.StartsWith("Error: ", StringComparison.Ordinal) ? ex.Message["Error: ".Length..] : ex.Message;
 
     [JSImport("loadHistory", "main.js")]
     [return: JSMarshalAs<JSType.Promise<JSType.String>>]

@@ -6,8 +6,12 @@ namespace IlRepl.Repl;
 
 public sealed partial class OperandCompleter
 {
-    private static bool ConfirmEnclosingType(string line, CompletionSite site, EditingView view,
-        SnapshotBindingScope scope, out bool complete)
+    private static bool ConfirmEnclosingType(
+        string line,
+        CompletionSite site,
+        EditingView view,
+        SnapshotBindingScope scope,
+        out bool complete)
     {
         complete = false;
         var comment = false;

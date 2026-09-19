@@ -93,6 +93,7 @@ public sealed class EventTypeCompletionTests
             session.AddLine("ret");
             session.AddLine("}");
         }
+
         using var completer = new OperandCompleter(session);
         var caret = text.IndexOf('|', StringComparison.Ordinal);
         var line = text.Remove(caret, 1);

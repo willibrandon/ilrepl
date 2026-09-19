@@ -5,7 +5,10 @@ using IlRepl.Processes;
 using IlRepl.Protocol;
 using IlRepl.Tui;
 
-if (args is ["--lifetime-supervisor", ..]) return await LifetimeSupervisorProgram.RunAsync(args).ConfigureAwait(false);
+if (args is ["--lifetime-supervisor", ..])
+{
+    return await LifetimeSupervisorProgram.RunAsync(args).ConfigureAwait(false);
+}
 
 using var measurements = new ProcessMeasurements("frontend");
 await using var lifetime = new HostProcessLifetime();
@@ -64,6 +67,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
             Console.Error.WriteLine("--run requires one session file and cannot be combined with a script or --eval");
             return 2;
         }
+
         var quiet = parseResult.GetValue(quietOption);
         var noHistory = parseResult.GetValue(noHistoryOption);
         var batch = runSession || parseResult.GetValue(batchOption) || Console.IsInputRedirected || eval.Length > 0 || script is not null;
@@ -88,7 +92,11 @@ root.SetAction(async (parseResult, cancellationToken) =>
                 measurements.Mark("host-ready");
                 try
                 {
-                    if (quiet) await host.HandleAsync(".quiet on", token).ConfigureAwait(false);
+                    if (quiet)
+                    {
+                        await host.HandleAsync(".quiet on", token).ConfigureAwait(false);
+                    }
+
                     return host;
                 }
                 catch
@@ -97,6 +105,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
                     throw;
                 }
             }
+
             var initialRequest = sessionFile is null ? null : new SessionRequest
             {
                 Action = new SessionAction { Operation = SessionOperation.Open, Path = sessionFile.FullName },
@@ -140,8 +149,12 @@ root.SetAction(async (parseResult, cancellationToken) =>
             {
                 foreach (var line in output.LeadingLines)
                 {
-                    if (line.Kind != LineKind.Input || eval.Length == 0) AnsiWriter.Write(Console.Out, line, color);
+                    if (line.Kind != LineKind.Input || eval.Length == 0)
+                    {
+                        AnsiWriter.Write(Console.Out, line, color);
+                    }
                 }
+
                 Console.Out.Write(output.Text);
                 Console.Out.Flush();
             };
@@ -165,7 +178,9 @@ root.SetAction(async (parseResult, cancellationToken) =>
                         {
                             if (result.Reply.OutputSequence == 0
                                 || line.Kind != LineKind.Output && !result.Reply.StreamedLineIndexes.Contains(index))
+                            {
                                 AnsiWriter.Write(Console.Out, line, color);
+                            }
                         }
 
                         await engine.DisposeAsync().ConfigureAwait(false);
@@ -231,6 +246,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
             await Console.Error.FlushAsync(CancellationToken.None).ConfigureAwait(false);
             return 130;
         }
+
         Console.Error.WriteLine("ilrepl: " + exception.Message);
         return exception.ExitCode;
     }

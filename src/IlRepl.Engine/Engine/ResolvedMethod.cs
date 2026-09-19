@@ -62,7 +62,7 @@ public sealed record ResolvedMethod
     public MethodSignature? Declared { get; }
 
     /// <summary>
-    /// The declaration as written, before the declaring type's and the method's own arguments were substituted; null outside a type being written.
+    /// The declaration as written, before type and method arguments were substituted; null outside a type being written.
     /// </summary>
     public MethodSignature? DeclaredDefinition { get; init; }
 
@@ -86,7 +86,9 @@ public sealed record ResolvedMethod
     /// builder of a type being written or a loaded generic method instance; empty otherwise.
     /// </summary>
     public IReadOnlyList<Type> InstantiationArguments =>
-        GenericArguments ?? (Method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } instance ? instance.GetGenericArguments() : []);
+        GenericArguments
+        ?? (Method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } instance ? instance.GetGenericArguments()
+        : []);
 
     private Type? DeclaredType { get; }
 
@@ -135,12 +137,14 @@ public sealed record ResolvedMethod
     /// <summary>
     /// True when the method uses the vararg calling convention.
     /// </summary>
-    public bool IsVarArg => Declared is not null ? Declared.CallingConvention.HasFlag(CallingConventions.VarArgs) : Method is not null && Method.CallingConvention.HasFlag(CallingConventions.VarArgs);
+    public bool IsVarArg => Declared is not null ? Declared.CallingConvention.HasFlag(CallingConventions.VarArgs) : Method is not null
+        && Method.CallingConvention.HasFlag(CallingConventions.VarArgs);
 
     /// <summary>
     /// The method name; <c>.ctor</c> or <c>.cctor</c> for constructors.
     /// </summary>
-    public string Name => Definition?.Name ?? Declared?.Name ?? (Method is ConstructorInfo ? (Method.IsStatic ? ".cctor" : ".ctor") : Method!.Name);
+    public string Name =>
+        Definition?.Name ?? Declared?.Name ?? (Method is ConstructorInfo ? (Method.IsStatic ? ".cctor" : ".ctor") : Method!.Name);
 
     /// <summary>
     /// The return type; <c>void</c> for constructors.
@@ -150,7 +154,8 @@ public sealed record ResolvedMethod
     /// <summary>
     /// The fixed parameter types in order.
     /// </summary>
-    public IReadOnlyList<Type> ParameterTypes => Definition?.ParameterTypes ?? Declared?.ParameterTypes ?? Method!.GetParameters().Select(p => p.ParameterType).ToArray();
+    public IReadOnlyList<Type> ParameterTypes =>
+        Definition?.ParameterTypes ?? Declared?.ParameterTypes ?? Method!.GetParameters().Select(p => p.ParameterType).ToArray();
 
     /// <summary>
     /// The declaring type of a framework method, or null for a session method.

@@ -181,8 +181,13 @@ internal static class RuntimeFlowAnalysis
         return true;
     }
 
-    private static FlowResult<Type> Append(FlowResult<Type> previous, FlowState<Type>? beforeCurrent,
-        FlowState<Type>? afterCurrent, FlowState<Type>? end, IReadOnlyList<AnalysisDiagnostic> diagnostics, int maxStack)
+    private static FlowResult<Type> Append(
+        FlowResult<Type> previous,
+        FlowState<Type>? beforeCurrent,
+        FlowState<Type>? afterCurrent,
+        FlowState<Type>? end,
+        IReadOnlyList<AnalysisDiagnostic> diagnostics,
+        int maxStack)
     {
         var position = previous.Before.Length - 1;
         var before = new FlowState<Type>?[previous.Before.Length + 1];

@@ -25,20 +25,33 @@ public static partial class ComparisonCapture
             var name = assembly.GetName();
             if (string.IsNullOrEmpty(name.CultureName) || !names.Any(parent =>
                 string.Equals(name.Name, parent.Name + ".resources", StringComparison.OrdinalIgnoreCase)
-                && name.GetPublicKeyToken().AsSpan().SequenceEqual(parent.GetPublicKeyToken()))) continue;
+                && name.GetPublicKeyToken().AsSpan().SequenceEqual(parent.GetPublicKeyToken())))
+            {
+                continue;
+            }
+
             CaptureDependency(name.FullName, session, dependencies, source: source);
         }
 
         foreach (var parent in parents)
         {
-            if (parent.OriginalLocation is null) continue;
+            if (parent.OriginalLocation is null)
+            {
+                continue;
+            }
+
             var paths = ComparisonSatelliteFiles.Paths(parent);
             dependencies[parent.Name] = parent with { OriginalSatelliteFiles = paths };
-            foreach (var path in paths) CaptureSatelliteFile(parent, path, dependencies);
+            foreach (var path in paths)
+            {
+                CaptureSatelliteFile(parent, path, dependencies);
+            }
         }
     }
 
-    private static void CaptureSatelliteFile(ComparisonAssembly parent, string path,
+    private static void CaptureSatelliteFile(
+        ComparisonAssembly parent,
+        string path,
         Dictionary<string, ComparisonAssembly> dependencies)
     {
         try
@@ -53,7 +66,10 @@ public static partial class ComparisonCapture
                 || !identity.GetPublicKeyToken().AsSpan().SequenceEqual(owner.GetPublicKeyToken())
                 || string.IsNullOrEmpty(identity.CultureName)
                 || !string.Equals(CultureInfo.GetCultureInfo(identity.CultureName).Name, culture, StringComparison.OrdinalIgnoreCase))
+            {
                 throw new BadImageFormatException("the satellite identity does not match its parent and culture directory");
+            }
+
             dependencies.TryAdd(identity.FullName, new ComparisonAssembly(identity.FullName, image)
             {
                 OriginalLocation = path,

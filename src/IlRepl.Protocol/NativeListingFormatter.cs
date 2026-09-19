@@ -20,7 +20,11 @@ public static partial class NativeListingFormatter
         var instruction = false;
         foreach (Match match in Tokens().Matches(line))
         {
-            if (match.Index > position) spans.Add(new TranscriptSpan(line[position..match.Index]));
+            if (match.Index > position)
+            {
+                spans.Add(new TranscriptSpan(line[position..match.Index]));
+            }
+
             var word = match.Value;
             var style = word.StartsWith(';') ? SpanStyle.Comment
                 : word.StartsWith('"') ? SpanStyle.String
@@ -29,11 +33,20 @@ public static partial class NativeListingFormatter
                 : word.StartsWith('#') || char.IsDigit(word[0]) ? SpanStyle.Number
                 : Register().IsMatch(word) ? SpanStyle.Type
                 : !instruction && char.IsLetter(word[0]) ? SpanStyle.Opcode : SpanStyle.Default;
-            if (style == SpanStyle.Opcode) instruction = true;
+            if (style == SpanStyle.Opcode)
+            {
+                instruction = true;
+            }
+
             spans.Add(new TranscriptSpan(word, style));
             position = match.Index + match.Length;
         }
-        if (position < line.Length) spans.Add(new TranscriptSpan(line[position..]));
+
+        if (position < line.Length)
+        {
+            spans.Add(new TranscriptSpan(line[position..]));
+        }
+
         return spans;
     }
 

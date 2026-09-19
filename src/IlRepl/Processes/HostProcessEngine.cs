@@ -28,7 +28,10 @@ public sealed partial class HostProcessEngine : IReplEngine
                     var response = await _host.SessionAsync(request with { CheckpointDelivery = identity }, token).ConfigureAwait(false);
                     return _deliveries.Resolve(response, identity);
                 }
-                finally { _deliveries.Forget(identity); }
+                finally
+                {
+                    _deliveries.Forget(identity);
+                }
             }, cancellationToken).ConfigureAwait(false);
             if (reply.FailureExitCode is { } exitCode)
             {
@@ -68,8 +71,18 @@ public sealed partial class HostProcessEngine : IReplEngine
     private bool _disposed;
     private long _assemblyVersion;
 
-    private HostProcessEngine(Process process, JsonRpc rpc, IReplHost host, DiagnosticTail stderr, Task drained, HostHello hello,
-        LocalSocketListener listener, Stream connection, HostProcessLifetime lifetime, OwnedProcessScope scope, bool ownsLifetime)
+    private HostProcessEngine(
+        Process process,
+        JsonRpc rpc,
+        IReplHost host,
+        DiagnosticTail stderr,
+        Task drained,
+        HostHello hello,
+        LocalSocketListener listener,
+        Stream connection,
+        HostProcessLifetime lifetime,
+        OwnedProcessScope scope,
+        bool ownsLifetime)
     {
         _process = process;
         _lifetime = lifetime;
@@ -130,7 +143,9 @@ public sealed partial class HostProcessEngine : IReplEngine
     /// <param name="cancellationToken">Cancels the start.</param>
     /// <returns>The running engine.</returns>
     /// <exception cref="HostProtocolException">The host could not be started or did not answer.</exception>
-    public static Task<HostProcessEngine> StartAsync(string? hostAssemblyPath = null, string? workingDirectory = null,
+    public static Task<HostProcessEngine> StartAsync(
+        string? hostAssemblyPath = null,
+        string? workingDirectory = null,
         CancellationToken cancellationToken = default) => StartAsync(hostAssemblyPath, workingDirectory, null, cancellationToken);
 
     /// <summary>
@@ -141,8 +156,11 @@ public sealed partial class HostProcessEngine : IReplEngine
     /// <param name="environment">Environment overrides applied only to the child host.</param>
     /// <param name="cancellationToken">Cancels startup.</param>
     /// <returns>The running engine.</returns>
-    public static async Task<HostProcessEngine> StartAsync(string? hostAssemblyPath, string? workingDirectory,
-        IReadOnlyDictionary<string, string?>? environment, CancellationToken cancellationToken = default)
+    public static async Task<HostProcessEngine> StartAsync(
+        string? hostAssemblyPath,
+        string? workingDirectory,
+        IReadOnlyDictionary<string, string?>? environment,
+        CancellationToken cancellationToken = default)
     {
         var lifetime = new HostProcessLifetime();
         try
@@ -167,8 +185,12 @@ public sealed partial class HostProcessEngine : IReplEngine
     /// <param name="ownsLifetime">Whether this engine disposes the lifetime.</param>
     /// <param name="cancellationToken">Cancels startup.</param>
     /// <returns>The connected engine.</returns>
-    internal static async Task<HostProcessEngine> StartCoreAsync(string? hostAssemblyPath, string? workingDirectory,
-        IReadOnlyDictionary<string, string?>? environment, HostProcessLifetime lifetime, bool ownsLifetime,
+    internal static async Task<HostProcessEngine> StartCoreAsync(
+        string? hostAssemblyPath,
+        string? workingDirectory,
+        IReadOnlyDictionary<string, string?>? environment,
+        HostProcessLifetime lifetime,
+        bool ownsLifetime,
         CancellationToken cancellationToken)
     {
         var hostPath = hostAssemblyPath ?? HostLocator.FindHost();
@@ -190,12 +212,18 @@ public sealed partial class HostProcessEngine : IReplEngine
         startInfo.Environment["DOTNET_NOLOGO"] = "1";
         if (environment is not null)
         {
-            foreach (var (name, value) in environment) startInfo.Environment[name] = value;
+            foreach (var (name, value) in environment)
+            {
+                startInfo.Environment[name] = value;
+            }
         }
 
         startInfo.Environment["ILREPL_HOST_HANDSHAKE"] = listener.Secret;
         using (var frontend = Process.GetCurrentProcess())
+        {
             startInfo.Environment["ILREPL_FRONTEND_OWNER"] = frontend.Id + ":" + OwnedProcessGroup.GetStartIdentity(frontend);
+        }
+
         OwnedHostProcess owned;
         try
         {
@@ -224,10 +252,17 @@ public sealed partial class HostProcessEngine : IReplEngine
             if (await Task.WhenAny(accepted, exited).ConfigureAwait(false) == exited)
             {
                 await timeout.CancelAsync().ConfigureAwait(false);
-                try { await accepted.ConfigureAwait(false); }
-                catch (OperationCanceledException) { }
+                try
+                {
+                    await accepted.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+
                 throw new IOException("the host exited before connecting");
             }
+
             connection = await accepted.ConfigureAwait(false);
             rpc = new JsonRpc(RpcTransport.CreateHandler(connection, connection));
             var receiver = new HostEventReceiver();
@@ -236,8 +271,14 @@ public sealed partial class HostProcessEngine : IReplEngine
             rpc.StartListening();
             var hello = await host.HelloAsync(timeout.Token).ConfigureAwait(false);
             await timeout.CancelAsync().ConfigureAwait(false);
-            try { await exited.ConfigureAwait(false); }
-            catch (OperationCanceledException) when (timeout.IsCancellationRequested) { }
+            try
+            {
+                await exited.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+            {
+            }
+
             var engine = new HostProcessEngine(process, rpc, host, stderr, owned.Drained, hello, listener, connection,
                 lifetime, owned.Scope, ownsLifetime);
             receiver.Client = engine;
@@ -249,9 +290,15 @@ public sealed partial class HostProcessEngine : IReplEngine
             await timeout.CancelAsync().ConfigureAwait(false);
             if (exited is not null)
             {
-                try { await exited.ConfigureAwait(false); }
-                catch (OperationCanceledException) when (timeout.IsCancellationRequested) { }
+                try
+                {
+                    await exited.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+                {
+                }
             }
+
             string detail;
             lock (stderr)
             {
@@ -259,7 +306,11 @@ public sealed partial class HostProcessEngine : IReplEngine
             }
 
             rpc?.Dispose();
-            if (connection is not null) await connection.DisposeAsync().ConfigureAwait(false);
+            if (connection is not null)
+            {
+                await connection.DisposeAsync().ConfigureAwait(false);
+            }
+
             listener.Dispose();
             try
             {
@@ -267,6 +318,7 @@ public sealed partial class HostProcessEngine : IReplEngine
                 {
                     await lifetime.StopAsync(owned.Scope.Identity, CancellationToken.None).ConfigureAwait(false);
                 }
+
                 await OwnedProcessGroup.WaitForExitAsync(process, owned.Scope, CancellationToken.None).ConfigureAwait(false);
             }
             catch (InvalidOperationException)
@@ -295,7 +347,9 @@ public sealed partial class HostProcessEngine : IReplEngine
     }
 
     /// <inheritdoc />
-    public async Task<HandleReply[]> HandleRetainedSourceRunAsync(string[] lines, AnalysisLocation[] locations,
+    public async Task<HandleReply[]> HandleRetainedSourceRunAsync(
+        string[] lines,
+        AnalysisLocation[] locations,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(lines);
@@ -372,8 +426,10 @@ public sealed partial class HostProcessEngine : IReplEngine
         }
     }
 
-    private async Task<HandleReply> CallAsync(Func<CancellationToken, Task<HandleReply>> call,
-        CancellationToken cancellationToken, bool mutation = true)
+    private async Task<HandleReply> CallAsync(
+        Func<CancellationToken, Task<HandleReply>> call,
+        CancellationToken cancellationToken,
+        bool mutation = true)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         try
@@ -381,7 +437,11 @@ public sealed partial class HostProcessEngine : IReplEngine
             async Task<HandleReply> InvokeAndObserveAsync(CancellationToken token)
             {
                 var response = await call(token).ConfigureAwait(false);
-                if (response.CompletionProgress is { } progress) ObserveProgress(progress);
+                if (response.CompletionProgress is { } progress)
+                {
+                    ObserveProgress(progress);
+                }
+
                 return response;
             }
 
@@ -423,7 +483,10 @@ public sealed partial class HostProcessEngine : IReplEngine
     /// <returns>A task that completes when the host is gone.</returns>
     public ValueTask DisposeAsync()
     {
-        lock (_disposeLock) return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+        lock (_disposeLock)
+        {
+            return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+        }
     }
 
     private async Task DisposeCoreAsync()
@@ -437,15 +500,24 @@ public sealed partial class HostProcessEngine : IReplEngine
                 _rpc.Dispose();
                 await _connection.DisposeAsync().ConfigureAwait(false);
             }
-            finally { _listener.Dispose(); }
+            finally
+            {
+                _listener.Dispose();
+            }
         }
         finally
         {
             try
             {
                 using var grace = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-                try { await OwnedProcessGroup.WaitForExitAsync(_process, _scope, grace.Token).ConfigureAwait(false); }
-                catch (OperationCanceledException) { }
+                try
+                {
+                    await OwnedProcessGroup.WaitForExitAsync(_process, _scope, grace.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+
                 await _lifetime.StopAsync(_scope.Identity, CancellationToken.None).ConfigureAwait(false);
                 await OwnedProcessGroup.WaitForExitAsync(_process, _scope, CancellationToken.None).ConfigureAwait(false);
                 await _exit.Task.ConfigureAwait(false);
@@ -453,7 +525,10 @@ public sealed partial class HostProcessEngine : IReplEngine
             finally
             {
                 _process.Dispose();
-                if (_ownsLifetime) await _lifetime.DisposeAsync().ConfigureAwait(false);
+                if (_ownsLifetime)
+                {
+                    await _lifetime.DisposeAsync().ConfigureAwait(false);
+                }
             }
         }
     }

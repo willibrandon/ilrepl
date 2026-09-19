@@ -30,20 +30,35 @@ internal sealed partial class ImportedMethodFamily
         var values = ReflectionValues();
         foreach (var body in _methods.Values.OfType<MethodEditBody>().ToArray())
         {
-            if (_runtimeHelperTypes.Contains(body.Method.DeclaringType!)) continue;
+            if (_runtimeHelperTypes.Contains(body.Method.DeclaringType!))
+            {
+                continue;
+            }
+
             for (var position = 0; position < body.State.Entries.Count; position++)
             {
                 var instruction = body.State.Entries[position].Instruction;
                 if (instruction?.Operand is not ResolvedMethod resolved || instruction.Op != OpCodes.Call
-                    && instruction.Op != OpCodes.Callvirt) continue;
+                    && instruction.Op != OpCodes.Callvirt)
+                {
+                    continue;
+                }
+
                 var target = resolved.Method ?? _pinned[resolved.Definition!.Name];
                 var activation = IsActivation(target);
-                if (!activation && !IsAssemblyActivation(target) && !IsTypeLookup(target)) continue;
+                if (!activation && !IsAssemblyActivation(target) && !IsTypeLookup(target))
+                {
+                    continue;
+                }
+
                 var context = body.Method.Module.Assembly;
                 if (target.DeclaringType == typeof(Type) && target.GetParameters().Length >= 3
                     && target.GetParameters()[1].ParameterType != typeof(bool)
                     && values.Argument(body, position, 2) is { Length: > 0 } resolvers && resolvers.All(value => value is not null))
+                {
                     continue;
+                }
+
                 var sources = _types.Keys.Where(type => !_runtimeHelperTypes.Contains(type))
                     .Select(type => type.Assembly).Append(context).ToHashSet();
                 var contexts = new[] { context };
@@ -60,8 +75,12 @@ internal sealed partial class ImportedMethodFamily
                             ? ReflectionValueResolver.ActivationAssembly((string?)assembly, context,
                                 target.Name == nameof(Activator.CreateInstanceFrom)) : null)
                         .OfType<Assembly>().Where(sources.Contains).Distinct().ToArray();
-                    if (contexts.Length == 0) contexts = sources.ToArray();
+                    if (contexts.Length == 0)
+                    {
+                        contexts = sources.ToArray();
+                    }
                 }
+
                 var location = MemberResolver.Describe(body.Method) + ": " + instruction.Text;
                 var names = values.Argument(body, position, activation ? 1 : 0);
                 foreach (var source in contexts)
@@ -79,15 +98,23 @@ internal sealed partial class ImportedMethodFamily
                                 exception);
                         }
 
-                        foreach (var type in types) AddLookupType(type, sources, location);
+                        foreach (var type in types)
+                        {
+                            AddLookupType(type, sources, location);
+                        }
                     }
                     else
                     {
                         foreach (var name in names.OfType<string>())
-                        foreach (var ignoreCase in values.LookupCasing(body, position, target))
+                        {
+                            foreach (var ignoreCase in values.LookupCasing(body, position, target))
                         {
                             var type = ReflectionValueResolver.NamedType(name, source, ignoreCase);
-                            if (type is not null) AddLookupType(type, sources, location);
+                            if (type is not null)
+                                {
+                                    AddLookupType(type, sources, location);
+                                }
+                            }
                         }
                     }
                 }
@@ -103,14 +130,28 @@ internal sealed partial class ImportedMethodFamily
             return;
         }
 
-        if (type.IsGenericParameter) return;
+        if (type.IsGenericParameter)
+        {
+            return;
+        }
+
         foreach (var argument in type.IsConstructedGenericType ? type.GetGenericArguments() : Type.EmptyTypes)
+        {
             AddLookupType(argument, sources, location);
+        }
+
         type = DefinitionOf(type);
-        if (!sources.Contains(type.Assembly) && !TypeRelations.IsSessionType(type) || _runtimeHelperTypes.Contains(type)) return;
+        if (!sources.Contains(type.Assembly) && !TypeRelations.IsSessionType(type) || _runtimeHelperTypes.Contains(type))
+        {
+            return;
+        }
+
         if (_externalTypes.Contains(type))
+        {
             throw new ReplException(location + ": string lookup requires copying the externally retained type "
                 + TypeNameFormatter.Pretty(type));
+        }
+
         AddType(type);
         _dependencies.Add(new EditDependency(TypeNameFormatter.Pretty(type), type.Assembly.FullName!,
             location + ": string type lookup", "copied"));
@@ -119,7 +160,11 @@ internal sealed partial class ImportedMethodFamily
     private static bool IsIndirectReflection(MethodBase method)
     {
         var type = method.DeclaringType;
-        if (type?.Assembly != typeof(Type).Assembly) return false;
+        if (type?.Assembly != typeof(Type).Assembly)
+        {
+            return false;
+        }
+
         return typeof(MethodBase).IsAssignableFrom(type) && method.Name is nameof(MethodBase.Invoke) or nameof(MethodInfo.CreateDelegate)
             || typeof(PropertyInfo).IsAssignableFrom(type) && method.Name == nameof(PropertyInfo.GetValue)
             || (typeof(Type).IsAssignableFrom(type) || type == typeof(IReflect)) && method.Name == nameof(Type.InvokeMember)
@@ -134,14 +179,34 @@ internal sealed partial class ImportedMethodFamily
         var values = ReflectionValues();
         foreach (var body in _methods.Values.OfType<MethodEditBody>())
         {
-            if (_runtimeHelperTypes.Contains(body.Method.DeclaringType!)) continue;
+            if (_runtimeHelperTypes.Contains(body.Method.DeclaringType!))
+            {
+                continue;
+            }
+
             for (var position = 0; position < body.State.Entries.Count; position++)
             {
                 var instruction = body.State.Entries[position].Instruction;
-                if (instruction is not null) ValidateMetadataReference(values, body, position, instruction);
-                if (instruction is not null) ValidateMemberTokenReference(values, body, position, instruction);
-                if (instruction is not null) ValidateTypeNameReference(values, body, position, instruction);
-                if (instruction?.Operand is not ResolvedMethod resolved || instruction.Op == OpCodes.Ldtoken) continue;
+                if (instruction is not null)
+                {
+                    ValidateMetadataReference(values, body, position, instruction);
+                }
+
+                if (instruction is not null)
+                {
+                    ValidateMemberTokenReference(values, body, position, instruction);
+                }
+
+                if (instruction is not null)
+                {
+                    ValidateTypeNameReference(values, body, position, instruction);
+                }
+
+                if (instruction?.Operand is not ResolvedMethod resolved || instruction.Op == OpCodes.Ldtoken)
+                {
+                    continue;
+                }
+
                 var target = resolved.Method ?? _pinned[resolved.Definition!.Name];
                 if (target.DeclaringType == typeof(object) && target.Name is nameof(ToString) or nameof(Equals) or nameof(GetHashCode)
                     && (instruction.Op == OpCodes.Callvirt || instruction.Op == OpCodes.Ldvirtftn))
@@ -149,9 +214,16 @@ internal sealed partial class ImportedMethodFamily
                     var dispatched = MetadataIdentityOverride(target, values.Argument(body, position, -1));
                     if (dispatched != target && AssemblyInspectionProblem(dispatched,
                             values.Argument(body, position, -1)) is { } identityProblem)
+                    {
                         RejectReflection(body, instruction, dispatched, identityProblem);
+                    }
                 }
-                if (!IsIndirectReflection(target)) continue;
+
+                if (!IsIndirectReflection(target))
+                {
+                    continue;
+                }
+
                 var candidates = target.Name == nameof(Type.InvokeMember) ? values.NamedMembers(body, position, -1, 0)
                     : target.DeclaringType == typeof(Delegate) && target.Name == nameof(Delegate.CreateDelegate)
                         ? values.DelegateTargets(body, position, target)
@@ -160,7 +232,11 @@ internal sealed partial class ImportedMethodFamily
                 var selected = target;
                 foreach (var candidate in candidates ?? [])
                 {
-                    if (candidate is ReflectedDelegateName name && !IndirectReflectionNames.Contains(name.Name)) continue;
+                    if (candidate is ReflectedDelegateName name && !IndirectReflectionNames.Contains(name.Name))
+                    {
+                        continue;
+                    }
+
                     var member = candidate is PropertyInfo property ? property.GetMethod : candidate as MethodBase;
                     // A delegate's bound receiver was validated when its binding or method pointer was created.
                     if (member?.DeclaringType == typeof(object) && !member.IsStatic
@@ -170,16 +246,36 @@ internal sealed partial class ImportedMethodFamily
                         var receivers = InvocationReceiver(values, body, position, target);
                         if (receivers is null || target.Name == nameof(Delegate.CreateDelegate)
                             && receivers.Any(receiver => receiver is null))
+                        {
                             reason = "indirect reflection cannot prove a supported target";
+                        }
+
                         member = MetadataIdentityOverride(member, receivers);
                     }
+
                     if (member is not null && member.IsStatic && IsObjectReferenceInspection(member))
+                    {
                         reason = "indirect reflection cannot prove a supported target";
-                    if (candidate is null) continue;
-                    if (candidate is FieldInfo) continue;
+                    }
+
+                    if (candidate is null)
+                    {
+                        continue;
+                    }
+
+                    if (candidate is FieldInfo)
+                    {
+                        continue;
+                    }
+
                     if (member is null || IsIndirectReflection(member))
+                    {
                         reason = "indirect reflection cannot prove a supported target";
-                    else if (IsMemberTokenInspection(member) && target.Name == nameof(Delegate.DynamicInvoke)) continue;
+                    }
+                    else if (IsMemberTokenInspection(member) && target.Name == nameof(Delegate.DynamicInvoke))
+                    {
+                        continue;
+                    }
                     else if (AssemblyInspectionProblem(member, MemberTokenReceiver(values, body, position, target)) is { } problem)
                     {
                         reason = problem;
@@ -194,7 +290,11 @@ internal sealed partial class ImportedMethodFamily
                     }
                 }
 
-                if (reason is null) continue;
+                if (reason is null)
+                {
+                    continue;
+                }
+
                 RejectReflection(body, instruction, selected, reason);
             }
         }
@@ -203,13 +303,20 @@ internal sealed partial class ImportedMethodFamily
     private static MethodBase MetadataIdentityOverride(MethodBase method, object?[]? receivers)
     {
         if (method.DeclaringType != typeof(object) || method.IsStatic
-            || method.Name is not (nameof(ToString) or nameof(Equals) or nameof(GetHashCode))) return method;
+            || method.Name is not (nameof(ToString) or nameof(Equals) or nameof(GetHashCode)))
+        {
+            return method;
+        }
+
         foreach (var type in new[] { typeof(Assembly), typeof(Module), typeof(ModuleHandle), typeof(Type) })
         {
             if (receivers?.Any(receiver => type.IsInstanceOfType(receiver)
                 || receiver is ReflectedInstance instance && type.IsAssignableFrom(instance.Type)) == true)
+            {
                 return type.GetMethod(method.Name, method.GetParameters().Select(parameter => parameter.ParameterType).ToArray())!;
+            }
         }
+
         return method;
     }
 
@@ -217,14 +324,21 @@ internal sealed partial class ImportedMethodFamily
     {
         if (target.Name == nameof(MethodBase.Invoke)
             && (target.DeclaringType == typeof(MethodInvoker) || typeof(MethodBase).IsAssignableFrom(target.DeclaringType!)))
+        {
             return values.Argument(body, position, 0);
+        }
+
         if (target.Name == nameof(Delegate.CreateDelegate)
             && (target.DeclaringType == typeof(Delegate) || typeof(MethodInfo).IsAssignableFrom(target.DeclaringType!)))
         {
             var parameters = target.GetParameters();
             var index = Array.FindIndex(parameters, parameter => parameter.ParameterType == typeof(object));
-            if (index >= 0) return values.Argument(body, position, index);
+            if (index >= 0)
+            {
+                return values.Argument(body, position, index);
+            }
         }
+
         return null;
     }
 

@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Reflection.Emit;
+
 namespace IlRepl.Engine;
 
 /// <summary>
@@ -20,7 +23,8 @@ public static class TypeIdentity
     {
         ArgumentNullException.ThrowIfNull(a);
         ArgumentNullException.ThrowIfNull(b);
-        if (ReferenceEquals(a, b) || (a is System.Reflection.Emit.TypeBuilder == false && b is System.Reflection.Emit.TypeBuilder == false && a == b))
+        if (ReferenceEquals(a, b)
+            || (a is TypeBuilder == false && b is TypeBuilder == false && a == b))
         {
             return true;
         }
@@ -43,7 +47,8 @@ public static class TypeIdentity
         if (a.IsArray && b.IsArray)
         {
             // int32[] is a vector and int32[0...] is a rank-1 array; they are different types.
-            return a.IsSZArray == b.IsSZArray && a.GetArrayRank() == b.GetArrayRank() && Equal(a.GetElementType()!, b.GetElementType()!, map);
+            return a.IsSZArray == b.IsSZArray && a.GetArrayRank() == b.GetArrayRank()
+                && Equal(a.GetElementType()!, b.GetElementType()!, map);
         }
 
         if (a.IsGenericType && b.IsGenericType && !a.IsGenericTypeDefinition && !b.IsGenericTypeDefinition)
@@ -78,7 +83,7 @@ public static class TypeIdentity
         return SameOwner(a.DeclaringType, b.DeclaringType, map);
     }
 
-    private static bool SameOwner(System.Reflection.MethodBase? a, System.Reflection.MethodBase? b, EmitMap? map)
+    private static bool SameOwner(MethodBase? a, MethodBase? b, EmitMap? map)
     {
         if (a is null || b is null)
         {
@@ -100,7 +105,7 @@ public static class TypeIdentity
             return false;
         }
 
-        if (ReferenceEquals(a, b) || (a is not System.Reflection.Emit.TypeBuilder && b is not System.Reflection.Emit.TypeBuilder && a == b))
+        if (ReferenceEquals(a, b) || (a is not TypeBuilder && b is not TypeBuilder && a == b))
         {
             return true;
         }

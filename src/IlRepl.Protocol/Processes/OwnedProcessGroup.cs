@@ -39,7 +39,11 @@ public sealed partial class OwnedProcessGroup : IDisposable
         }
 
         _job = CreateJobObjectW(0, 0);
-        if (_job.IsInvalid) throw new Win32Exception(Marshal.GetLastPInvokeError());
+        if (_job.IsInvalid)
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
+
         var limits = new OwnedJobExtendedLimits
         {
             Basic = new OwnedJobLimits { Flags = 0x2000 }, // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
@@ -57,7 +61,11 @@ public sealed partial class OwnedProcessGroup : IDisposable
     /// <param name="group">The acknowledged process group identifier.</param>
     public void Adopt(int group)
     {
-        if (OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
+        if (OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException();
+        }
+
         _group = group;
     }
 
@@ -78,7 +86,11 @@ public sealed partial class OwnedProcessGroup : IDisposable
     /// <returns>Linux clock ticks since boot, or the native creation timestamp on other platforms.</returns>
     public static long GetStartIdentity(Process process)
     {
-        if (!OperatingSystem.IsLinux()) return process.StartTime.ToUniversalTime().Ticks;
+        if (!OperatingSystem.IsLinux())
+        {
+            return process.StartTime.ToUniversalTime().Ticks;
+        }
+
         var status = File.ReadAllText("/proc/" + process.Id.ToString(CultureInfo.InvariantCulture) + "/stat");
         var fields = status[(status.LastIndexOf(')') + 2)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return long.Parse(fields[19], CultureInfo.InvariantCulture);
@@ -94,8 +106,16 @@ public sealed partial class OwnedProcessGroup : IDisposable
         try
         {
             using var process = Process.GetProcessById(scope.ProcessId);
-            if (GetStartIdentity(process) != scope.StartIdentity) return false;
-            if (!OperatingSystem.IsWindows() && GetProcessGroup(scope.ProcessId) != scope.ProcessId) return false;
+            if (GetStartIdentity(process) != scope.StartIdentity)
+            {
+                return false;
+            }
+
+            if (!OperatingSystem.IsWindows() && GetProcessGroup(scope.ProcessId) != scope.ProcessId)
+            {
+                return false;
+            }
+
             return !(OperatingSystem.IsWindows() ? process.WaitForExit(0) : process.HasExited) || GroupExists(scope.ProcessId);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException
@@ -117,10 +137,26 @@ public sealed partial class OwnedProcessGroup : IDisposable
         try
         {
             using var process = Process.GetProcessById(scope.ProcessId);
-            if (GetStartIdentity(process) != scope.StartIdentity) return false;
-            if (OperatingSystem.IsWindows()) return !process.WaitForExit(0);
-            if (process.HasExited) return false;
-            if (!OperatingSystem.IsLinux()) return true;
+            if (GetStartIdentity(process) != scope.StartIdentity)
+            {
+                return false;
+            }
+
+            if (OperatingSystem.IsWindows())
+            {
+                return !process.WaitForExit(0);
+            }
+
+            if (process.HasExited)
+            {
+                return false;
+            }
+
+            if (!OperatingSystem.IsLinux())
+            {
+                return true;
+            }
+
             var status = File.ReadAllText("/proc/" + scope.ProcessId.ToString(CultureInfo.InvariantCulture) + "/stat");
             var closing = status.LastIndexOf(')');
             return closing < 0 || closing + 2 >= status.Length || status[closing + 2] is not ('Z' or 'X');
@@ -142,7 +178,10 @@ public sealed partial class OwnedProcessGroup : IDisposable
     /// <returns>Completion once the process cannot execute.</returns>
     public static async Task WaitForExitAsync(OwnedProcessScope scope, CancellationToken cancellationToken)
     {
-        while (IsRunning(scope)) await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+        while (IsRunning(scope))
+        {
+            await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -158,7 +197,10 @@ public sealed partial class OwnedProcessGroup : IDisposable
         // WaitForExitAsync uses that shortcut too; a kernel wait is the resource-release boundary.
         if (OperatingSystem.IsWindows())
         {
-            while (!process.WaitForExit(0)) await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+            while (!process.WaitForExit(0))
+            {
+                await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 
@@ -174,8 +216,16 @@ public sealed partial class OwnedProcessGroup : IDisposable
 
     private static bool GroupExists(int group)
     {
-        if (OperatingSystem.IsWindows()) return false;
-        if (SignalGroup(-group, 0) != 0 && Marshal.GetLastPInvokeError() == 3) return false;
+        if (OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        if (SignalGroup(-group, 0) != 0 && Marshal.GetLastPInvokeError() == 3)
+        {
+            return false;
+        }
+
         return !OperatingSystem.IsLinux() || HasLiveLinuxMembers(group);
     }
 
@@ -188,10 +238,18 @@ public sealed partial class OwnedProcessGroup : IDisposable
     /// <returns>A task that completes when the owned process group or job has no executing processes.</returns>
     public async Task StopAsync()
     {
-        if (_stopped) return;
+        if (_stopped)
+        {
+            return;
+        }
+
         if (_job is { IsInvalid: false } job)
         {
-            if (TerminateJobObject(job, 1) == 0) throw new Win32Exception(Marshal.GetLastPInvokeError());
+            if (TerminateJobObject(job, 1) == 0)
+            {
+                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            }
+
             var wait = Stopwatch.StartNew();
             while (true)
             {
@@ -201,8 +259,16 @@ public sealed partial class OwnedProcessGroup : IDisposable
                     throw new Win32Exception(Marshal.GetLastPInvokeError());
                 }
 
-                if (accounting.ActiveProcesses == 0) break;
-                if (wait.Elapsed > TimeSpan.FromSeconds(10)) throw new IOException("owned process descendants did not terminate");
+                if (accounting.ActiveProcesses == 0)
+                {
+                    break;
+                }
+
+                if (wait.Elapsed > TimeSpan.FromSeconds(10))
+                {
+                    throw new IOException("owned process descendants did not terminate");
+                }
+
                 await Task.Delay(10, CancellationToken.None).ConfigureAwait(false);
             }
         }
@@ -220,11 +286,26 @@ public sealed partial class OwnedProcessGroup : IDisposable
             {
                 var exists = SignalGroup(-_group, 0);
                 error = exists == 0 ? 0 : Marshal.GetLastPInvokeError();
-                if (error == 3) break; // ESRCH confirms that the group is empty.
-                if (OperatingSystem.IsLinux() && !HasLiveLinuxMembers(_group)) break;
+                if (error == 3)
+                {
+                    break; // ESRCH confirms that the group is empty.
+                }
+
+                if (OperatingSystem.IsLinux() && !HasLiveLinuxMembers(_group))
+                {
+                    break;
+                }
                 // Darwin can return EPERM while an exited group's zombies await reaping.
-                if (error != 0 && !(OperatingSystem.IsMacOS() && error == 1)) throw new Win32Exception(error);
-                if (wait.Elapsed > TimeSpan.FromSeconds(10)) throw new IOException("owned process descendants did not terminate");
+                if (error != 0 && !(OperatingSystem.IsMacOS() && error == 1))
+                {
+                    throw new Win32Exception(error);
+                }
+
+                if (wait.Elapsed > TimeSpan.FromSeconds(10))
+                {
+                    throw new IOException("owned process descendants did not terminate");
+                }
+
                 await Task.Delay(10, CancellationToken.None).ConfigureAwait(false);
             }
         }
@@ -238,16 +319,31 @@ public sealed partial class OwnedProcessGroup : IDisposable
         // but kill(group, 0) still reports their group as existing; only their parent can reap them.
         foreach (var directory in Directory.EnumerateDirectories("/proc"))
         {
-            if (!int.TryParse(Path.GetFileName(directory), NumberStyles.None, CultureInfo.InvariantCulture, out _)) continue;
+            if (!int.TryParse(Path.GetFileName(directory), NumberStyles.None, CultureInfo.InvariantCulture, out _))
+            {
+                continue;
+            }
+
             try
             {
                 var status = File.ReadAllText(Path.Combine(directory, "stat"));
                 var closing = status.LastIndexOf(')');
-                if (closing < 0 || closing + 2 >= status.Length) return true;
+                if (closing < 0 || closing + 2 >= status.Length)
+                {
+                    return true;
+                }
+
                 var fields = status[(closing + 2)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (fields.Length < 3) return true;
+                if (fields.Length < 3)
+                {
+                    return true;
+                }
+
                 if (int.TryParse(fields[2], NumberStyles.None, CultureInfo.InvariantCulture, out var owner)
-                    && owner == group && fields[0] is not ("Z" or "X")) return true;
+                    && owner == group && fields[0] is not ("Z" or "X"))
+                {
+                    return true;
+                }
             }
             catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
             {
@@ -258,6 +354,7 @@ public sealed partial class OwnedProcessGroup : IDisposable
                 return true; // Missing evidence must not be mistaken for completed cleanup.
             }
         }
+
         return false;
     }
 
@@ -278,8 +375,11 @@ public sealed partial class OwnedProcessGroup : IDisposable
 
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true)]
-    private static partial int SetInformationJobObject(OwnedJobHandle job, int informationClass,
-        in OwnedJobExtendedLimits information, uint length);
+    private static partial int SetInformationJobObject(
+        OwnedJobHandle job,
+        int informationClass,
+        in OwnedJobExtendedLimits information,
+        uint length);
 
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true)]
@@ -291,6 +391,10 @@ public sealed partial class OwnedProcessGroup : IDisposable
 
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true)]
-    private static partial int QueryInformationJobObject(OwnedJobHandle job, int informationClass,
-        out OwnedJobAccounting information, uint length, nint returnedLength);
+    private static partial int QueryInformationJobObject(
+        OwnedJobHandle job,
+        int informationClass,
+        out OwnedJobAccounting information,
+        uint length,
+        nint returnedLength);
 }

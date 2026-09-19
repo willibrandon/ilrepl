@@ -82,7 +82,11 @@ public static partial class ComparisonCapture
         var moduleId = Guid.NewGuid();
         var original = CaptureImage(session, edit, options, original: true, dependencies, moduleId);
         var edited = CaptureImage(session, edit, options, original: false, dependencies, moduleId);
-        if (original.OriginalAssembly is not null) CaptureSatellites(session, dependencies, edit.Baseline.SourceResolver);
+        if (original.OriginalAssembly is not null)
+        {
+            CaptureSatellites(session, dependencies, edit.Baseline.SourceResolver);
+        }
+
         var environment = Environment.GetEnvironmentVariables().Cast<DictionaryEntry>()
             .ToDictionary(pair => (string)pair.Key, pair => (string)pair.Value!, StringComparer.Ordinal);
         return new ComparisonPackage(edit.Name, edit.Fingerprint, edit.Revision, original, edited, dependencies.Values.ToArray(),
@@ -107,8 +111,13 @@ public static partial class ComparisonCapture
         }
     }
 
-    private static ComparisonImage CaptureImage(Session session, MethodEdit edit, ComparisonOptions options, bool original,
-        Dictionary<string, ComparisonAssembly> dependencies, Guid moduleId)
+    private static ComparisonImage CaptureImage(
+        Session session,
+        MethodEdit edit,
+        ComparisonOptions options,
+        bool original,
+        Dictionary<string, ComparisonAssembly> dependencies,
+        Guid moduleId)
     {
         if (original && edit.Baseline.Problems.Count != 0 && options.Scenario is null
             && !SessionAssemblies.TryGetDefinition(edit.Original.Method.Module.Assembly, out _))
@@ -178,8 +187,12 @@ public static partial class ComparisonCapture
         };
     }
 
-    private static ComparisonImage CaptureExternalOriginal(Session session, MethodEdit edit, ComparisonOptions options,
-        Dictionary<string, ComparisonAssembly> dependencies, Guid moduleId)
+    private static ComparisonImage CaptureExternalOriginal(
+        Session session,
+        MethodEdit edit,
+        ComparisonOptions options,
+        Dictionary<string, ComparisonAssembly> dependencies,
+        Guid moduleId)
     {
         var method = edit.Original.Requested;
         var owner = method.DeclaringType!;
@@ -227,8 +240,12 @@ public static partial class ComparisonCapture
             return new ComparisonNativeLibrary(pair.Key, SessionCodec.Hash(image), image);
         })];
 
-    private static void CaptureDependency(string identity, Session session, Dictionary<string, ComparisonAssembly> captured,
-        bool required = true, TypeResolver? source = null)
+    private static void CaptureDependency(
+        string identity,
+        Session session,
+        Dictionary<string, ComparisonAssembly> captured,
+        bool required = true,
+        TypeResolver? source = null)
     {
         if (captured.ContainsKey(identity))
         {

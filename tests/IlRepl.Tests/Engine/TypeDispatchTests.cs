@@ -74,7 +74,8 @@ public sealed class TypeDispatchTests
             ".class interface public abstract IArea {",
             ".method public abstract virtual instance int32 Area() { }",
             ".method public abstract virtual instance int32 Perimeter() { }",
-            ".method public virtual instance int32 Both() { ldarg.0; callvirt instance int32 IArea::Area(); ldarg.0; callvirt instance int32 IArea::Perimeter(); add; ret }",
+            ".method public virtual instance int32 Both() { ldarg.0; callvirt instance int32 IArea::Area(); ldarg.0; callvirt instance " +
+            "int32 IArea::Perimeter(); add; ret }",
             "}",
             ".class public Square implements IArea {",
             $".method public instance void .ctor() {{ ldarg.0; {ObjectCtor}; ret }}",
@@ -83,7 +84,8 @@ public sealed class TypeDispatchTests
             "}");
         Assert.AreEqual(9, Run(session, "newobj instance void Square::.ctor()", "callvirt instance int32 IArea::Area()"));
         Assert.AreEqual(12, Run(session, "newobj instance void Square::.ctor()", "callvirt instance int32 IArea::Perimeter()"));
-        Assert.AreEqual(21, Run(session, "newobj instance void Square::.ctor()", "callvirt instance int32 IArea::Both()"), "a default interface body dispatches on the implementation");
+        Assert.AreEqual(21, Run(session, "newobj instance void Square::.ctor()", "callvirt instance int32 IArea::Both()"),
+            "a default interface body dispatches on the implementation");
         var square = session.Types[1].RuntimeType!;
         var map = square.GetInterfaceMap(session.Types[0].RuntimeType!);
         var perimeter = Array.IndexOf(map.InterfaceMethods, map.InterfaceMethods.First(m => m.Name == "Perimeter"));
@@ -106,7 +108,8 @@ public sealed class TypeDispatchTests
             "}");
         var num = session.Types[1].RuntimeType!;
         var map = num.GetInterfaceMap(session.Types[0].RuntimeType!);
-        Assert.AreEqual("Zero", map.TargetMethods[Array.IndexOf(map.InterfaceMethods, map.InterfaceMethods.First(m => m.Name == "Zero"))].Name);
+        Assert.AreEqual("Zero",
+            map.TargetMethods[Array.IndexOf(map.InterfaceMethods, map.InterfaceMethods.First(m => m.Name == "Zero"))].Name);
         Assert.AreEqual(0, Run(session, "constrained. Num", "call int32 IZero::Zero()"));
         Assert.AreEqual(1, Run(session, "constrained. Num", "call int32 IZero::One()"), "a static virtual default body");
     }
@@ -141,9 +144,12 @@ public sealed class TypeDispatchTests
             ".field public int32 V",
             ".method public virtual instance string ToString() { ldstr \"tag\"; ret }",
             "}");
-        Assert.AreEqual("tag", Run(session, ".locals init (valuetype Tag t)", "ldloc t", "box Tag", "callvirt instance string [System.Runtime]System.Object::ToString()"));
+        Assert.AreEqual("tag",
+            Run(session, ".locals init (valuetype Tag t)", "ldloc t", "box Tag",
+            "callvirt instance string [System.Runtime]System.Object::ToString()"));
         Assert.AreEqual("tag", Run(session, "ldloc t", "box Tag")!.ToString());
-        Assert.AreEqual(typeof(object).GetMethod("ToString")!.Name, session.Types[0].RuntimeType!.GetMethod("ToString")!.GetBaseDefinition().Name);
+        Assert.AreEqual(typeof(object).GetMethod("ToString")!.Name,
+            session.Types[0].RuntimeType!.GetMethod("ToString")!.GetBaseDefinition().Name);
         Assert.AreEqual(typeof(object), session.Types[0].RuntimeType!.GetMethod("ToString")!.GetBaseDefinition().DeclaringType);
     }
 }

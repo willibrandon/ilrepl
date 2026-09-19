@@ -18,8 +18,11 @@ internal static class DependencyAsset
     /// <param name="assets">The destination content-addressed image table.</param>
     /// <param name="cancellationToken">Cancels reading the asset.</param>
     /// <returns>The immutable asset descriptor.</returns>
-    internal static async Task<SessionReferenceAsset> ReadAsync(string path, string kind,
-        Dictionary<string, SessionAsset> assets, CancellationToken cancellationToken)
+    internal static async Task<SessionReferenceAsset> ReadAsync(
+        string path,
+        string kind,
+        Dictionary<string, SessionAsset> assets,
+        CancellationToken cancellationToken)
     {
         path = Path.GetFullPath(path);
         await using var stream = File.OpenRead(path);

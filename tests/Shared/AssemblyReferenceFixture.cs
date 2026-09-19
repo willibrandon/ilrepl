@@ -89,7 +89,11 @@ public static class AssemblyReferenceFixture
         var types = new Dictionary<Type, TypeReferenceHandle>();
         TypeReferenceHandle TypeReference(Type type)
         {
-            if (types.TryGetValue(type, out var handle)) return handle;
+            if (types.TryGetValue(type, out var handle))
+            {
+                return handle;
+            }
+
             if (!references.TryGetValue(type.Assembly, out var reference))
             {
                 var identity = type.Assembly.GetName();
@@ -106,25 +110,55 @@ public static class AssemblyReferenceFixture
 
         void EncodeType(SignatureTypeEncoder encoder, Type type)
         {
-            if (type == typeof(bool)) encoder.Boolean();
-            else if (type == typeof(int)) encoder.Int32();
-            else if (type == typeof(string)) encoder.String();
-            else if (type == typeof(object)) encoder.Object();
-            else if (type == typeof(nint)) encoder.IntPtr();
-            else if (type.IsArray) EncodeType(encoder.SZArray(), type.GetElementType()!);
+            if (type == typeof(bool))
+            {
+                encoder.Boolean();
+            }
+            else if (type == typeof(int))
+            {
+                encoder.Int32();
+            }
+            else if (type == typeof(string))
+            {
+                encoder.String();
+            }
+            else if (type == typeof(object))
+            {
+                encoder.Object();
+            }
+            else if (type == typeof(nint))
+            {
+                encoder.IntPtr();
+            }
+            else if (type.IsArray)
+            {
+                EncodeType(encoder.SZArray(), type.GetElementType()!);
+            }
             else if (type.IsGenericParameter)
             {
-                if (type.DeclaringMethod is null) encoder.GenericTypeParameter(type.GenericParameterPosition);
-                else encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+                if (type.DeclaringMethod is null)
+                {
+                    encoder.GenericTypeParameter(type.GenericParameterPosition);
+                }
+                else
+                {
+                    encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+                }
             }
             else if (type.IsGenericType)
             {
                 var arguments = type.GetGenericArguments();
                 var parameters = encoder.GenericInstantiation(TypeReference(type.GetGenericTypeDefinition()), arguments.Length,
                     type.IsValueType);
-                foreach (var argument in arguments) EncodeType(parameters.AddArgument(), argument);
+                foreach (var argument in arguments)
+                {
+                    EncodeType(parameters.AddArgument(), argument);
+                }
             }
-            else encoder.Type(TypeReference(type), type.IsValueType);
+            else
+            {
+                encoder.Type(TypeReference(type), type.IsValueType);
+            }
         }
 
         EntityHandle MethodReference(MethodBase method)
@@ -132,33 +166,57 @@ public static class AssemblyReferenceFixture
             var definition = method is MethodInfo { IsGenericMethod: true } generic ? generic.GetGenericMethodDefinition() : method;
             var declaring = method.DeclaringType!;
             if (declaring.IsConstructedGenericType)
+            {
                 definition = declaring.GetGenericTypeDefinition().GetMethods().Cast<MethodBase>()
                     .Concat(declaring.GetGenericTypeDefinition().GetConstructors())
                     .Single(candidate => candidate.MetadataToken == definition.MetadataToken);
+            }
+
             var signature = new BlobBuilder();
             var parameters = definition.GetParameters();
             new BlobEncoder(signature).MethodSignature(genericParameterCount: definition.IsGenericMethod
                 ? definition.GetGenericArguments().Length : 0, isInstanceMethod: !definition.IsStatic).Parameters(parameters.Length,
                 result =>
                 {
-                    if (definition is not MethodInfo info || info.ReturnType == typeof(void)) result.Void();
-                    else EncodeType(result.Type(), info.ReturnType);
+                    if (definition is not MethodInfo info || info.ReturnType == typeof(void))
+                    {
+                        result.Void();
+                    }
+                    else
+                    {
+                        EncodeType(result.Type(), info.ReturnType);
+                    }
                 }, arguments =>
                 {
-                    foreach (var parameter in parameters) EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    foreach (var parameter in parameters)
+                    {
+                        EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    }
                 });
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
-            if (method is not MethodInfo { IsGenericMethod: true } closed) return member;
+            if (method is not MethodInfo { IsGenericMethod: true } closed)
+            {
+                return member;
+            }
+
             var specification = new BlobBuilder();
             var encoded = new BlobEncoder(specification).MethodSpecificationSignature(closed.GetGenericArguments().Length);
-            foreach (var argument in closed.GetGenericArguments()) EncodeType(encoded.AddArgument(), argument);
+            foreach (var argument in closed.GetGenericArguments())
+            {
+                EncodeType(encoded.AddArgument(), argument);
+            }
+
             return metadata.AddMethodSpecification(member, metadata.GetOrAddBlob(specification));
         }
 
         EntityHandle SignatureType(Type type)
         {
-            if (!type.IsArray && !type.IsGenericType) return TypeReference(type);
+            if (!type.IsArray && !type.IsGenericType)
+            {
+                return TypeReference(type);
+            }
+
             var signature = new BlobBuilder();
             EncodeType(new BlobEncoder(signature).TypeSpecificationSignature(), type);
             return metadata.AddTypeSpecification(metadata.GetOrAddBlob(signature));
@@ -177,9 +235,12 @@ public static class AssemblyReferenceFixture
         {
             byte[] fieldSignature = [6, 28];
             foreach (var fieldName in new[] { "First", "Second" })
+            {
                 metadata.AddFieldDefinition(FieldAttributes.Public | FieldAttributes.Static, metadata.GetOrAddString(fieldName),
                     metadata.GetOrAddBlob(fieldSignature));
+            }
         }
+
         var receiver = target switch { "Assembly" => typeof(Assembly), "Module" => typeof(Module),
             "ModuleHandle" => typeof(ModuleHandle), "String" => typeof(string), _ => typeof(object) };
         var method = operation switch
@@ -211,10 +272,16 @@ public static class AssemblyReferenceFixture
 
         void LoadOriginal(bool first)
         {
-            if (!first && flow == "null") instructions.OpCode(ILOpCode.Ldnull);
+            if (!first && flow == "null")
+            {
+                instructions.OpCode(ILOpCode.Ldnull);
+            }
             else if (target == "Object")
             {
-                if (!first && flow != "distinct") instructions.LoadLocal(0);
+                if (!first && flow != "distinct")
+                {
+                    instructions.LoadLocal(0);
+                }
                 else
                 {
                     instructions.OpCode(ILOpCode.Newobj);
@@ -236,28 +303,47 @@ public static class AssemblyReferenceFixture
             {
                 Call(typeof(Assembly).GetMethod(nameof(Assembly.GetExecutingAssembly))!);
                 if (target is "Module" or "ModuleHandle")
+                {
                     Call(typeof(Assembly).GetProperty(nameof(Assembly.ManifestModule))!.GetMethod!);
-                if (target == "ModuleHandle") Call(typeof(Module).GetProperty(nameof(Module.ModuleHandle))!.GetMethod!);
+                }
+
+                if (target == "ModuleHandle")
+                {
+                    Call(typeof(Module).GetProperty(nameof(Module.ModuleHandle))!.GetMethod!);
+                }
             }
             else
             {
                 LoadType(sibling);
                 Call(target == "Assembly" ? typeof(Type).GetProperty(nameof(Type.Assembly))!.GetMethod!
                     : typeof(MemberInfo).GetProperty(nameof(MemberInfo.Module))!.GetMethod!);
-                if (target == "ModuleHandle") Call(typeof(Module).GetProperty(nameof(Module.ModuleHandle))!.GetMethod!);
+                if (target == "ModuleHandle")
+                {
+                    Call(typeof(Module).GetProperty(nameof(Module.ModuleHandle))!.GetMethod!);
+                }
             }
         }
 
         void LoadOperand(bool first)
         {
-            if (flow == "local") instructions.LoadLocal(first ? 0 : 1);
+            if (flow == "local")
+            {
+                instructions.LoadLocal(first ? 0 : 1);
+            }
             else if (flow == "field")
             {
                 instructions.OpCode(ILOpCode.Ldsfld);
                 instructions.Token(MetadataTokens.FieldDefinitionHandle(first ? 1 : 2));
             }
-            else if (!first && flow == "helper-return") instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
-            else LoadOriginal(first);
+            else if (!first && flow == "helper-return")
+            {
+                instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
+            }
+            else
+            {
+                LoadOriginal(first);
+            }
+
             if (method?.DeclaringType is { } owner && (owner == typeof(Assembly) || owner == typeof(Module)))
             {
                 instructions.OpCode(ILOpCode.Castclass);
@@ -288,6 +374,7 @@ public static class AssemblyReferenceFixture
                 LoadOriginal(first: false);
                 instructions.StoreLocal(1);
             }
+
             if (flow == "field")
             {
                 LoadOriginal(first: true);
@@ -297,11 +384,19 @@ public static class AssemblyReferenceFixture
                 instructions.OpCode(ILOpCode.Stsfld);
                 instructions.Token(MetadataTokens.FieldDefinitionHandle(2));
             }
+
             if (flow == "invoke")
             {
                 LoadMethod();
-                if (method!.IsStatic) instructions.OpCode(ILOpCode.Ldnull);
-                else LoadOperand(first: true);
+                if (method!.IsStatic)
+                {
+                    instructions.OpCode(ILOpCode.Ldnull);
+                }
+                else
+                {
+                    LoadOperand(first: true);
+                }
+
                 instructions.LoadConstantI4(method.IsStatic ? 2 : 1);
                 instructions.OpCode(ILOpCode.Newarr);
                 instructions.Token(TypeReference(typeof(object)));
@@ -312,6 +407,7 @@ public static class AssemblyReferenceFixture
                     LoadOperand(first: method.IsStatic && index == 0);
                     instructions.OpCode(ILOpCode.Stelem_ref);
                 }
+
                 Call(typeof(MethodBase).GetMethod(nameof(MethodBase.Invoke), [typeof(object), typeof(object[])])!);
                 instructions.OpCode(ILOpCode.Unbox_any);
                 instructions.Token(TypeReference(typeof(bool)));
@@ -324,6 +420,7 @@ public static class AssemblyReferenceFixture
                     instructions.OpCode(ILOpCode.Castclass);
                     instructions.Token(TypeReference(typeof(MethodInfo)));
                 }
+
                 LoadType(SignatureType(typeof(Func<object, bool>)));
                 LoadOperand(first: true);
                 if (flow == "named-delegate")
@@ -331,7 +428,11 @@ public static class AssemblyReferenceFixture
                     instructions.LoadString(metadata.GetOrAddUserString(method!.Name));
                     Call(typeof(Delegate).GetMethod(nameof(Delegate.CreateDelegate), [typeof(Type), typeof(object), typeof(string)])!);
                 }
-                else Call(typeof(MethodInfo).GetMethod(nameof(MethodInfo.CreateDelegate), [typeof(Type), typeof(object)])!);
+                else
+                {
+                    Call(typeof(MethodInfo).GetMethod(nameof(MethodInfo.CreateDelegate), [typeof(Type), typeof(object)])!);
+                }
+
                 instructions.OpCode(ILOpCode.Castclass);
                 instructions.Token(SignatureType(typeof(Func<object, bool>)));
                 LoadOperand(first: false);
@@ -340,15 +441,25 @@ public static class AssemblyReferenceFixture
             else
             {
                 LoadOperand(first: true);
-                if (operation is "hash" or "virtual-hash" or "runtime-hash") Call(method!);
+                if (operation is "hash" or "virtual-hash" or "runtime-hash")
+                {
+                    Call(method!);
+                }
+
                 LoadOperand(first: false);
-                if (flow == "helper-arguments") instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
+                if (flow == "helper-arguments")
+                {
+                    instructions.Call(MetadataTokens.MethodDefinitionHandle(2));
+                }
                 else if (operation is "hash" or "virtual-hash" or "runtime-hash")
                 {
                     Call(method!);
                     instructions.OpCode(ILOpCode.Ceq);
                 }
-                else if (operation == "ceq") instructions.OpCode(ILOpCode.Ceq);
+                else if (operation == "ceq")
+                {
+                    instructions.OpCode(ILOpCode.Ceq);
+                }
                 else if (operation is "beq" or "bne.un")
                 {
                     var matched = instructions.DefineLabel();
@@ -360,18 +471,28 @@ public static class AssemblyReferenceFixture
                     instructions.LoadConstantI4(1);
                     instructions.MarkLabel(done);
                 }
-                else Call(method!);
+                else
+                {
+                    Call(method!);
+                }
             }
+
             var expected = flow is not ("null" or "distinct");
-            if (operation is "inequality" or "bne.un") expected = !expected;
+            if (operation is "inequality" or "bne.un")
+            {
+                expected = !expected;
+            }
+
             if (!expected)
             {
                 instructions.LoadConstantI4(0);
                 instructions.OpCode(ILOpCode.Ceq);
             }
+
             instructions.LoadConstantI4(42);
             instructions.OpCode(ILOpCode.Mul);
         }
+
         instructions.OpCode(ILOpCode.Ret);
         var locals = new BlobBuilder();
         var variables = new BlobEncoder(locals).LocalVariableSignature(2);
@@ -387,19 +508,24 @@ public static class AssemblyReferenceFixture
         if (hasHelper)
         {
             instructions = new InstructionEncoder(new BlobBuilder());
-            if (flow == "helper-return") LoadOriginal(first: false);
+            if (flow == "helper-return")
+            {
+                LoadOriginal(first: false);
+            }
             else
             {
                 instructions.LoadArgument(0);
                 instructions.LoadArgument(1);
                 Call(method!);
             }
+
             instructions.OpCode(ILOpCode.Ret);
             byte[] helperSignature = flow == "helper-return" ? [0, 0, 28] : [0, 2, 2, 28, 28];
             metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.Static, MethodImplAttributes.IL,
                 metadata.GetOrAddString("ObserveSibling"), metadata.GetOrAddBlob(helperSignature), encoder.AddMethodBody(instructions),
                 MetadataTokens.ParameterHandle(1));
         }
+
         var image = new BlobBuilder();
         new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
             new MetadataRootBuilder(metadata), bodies, flags: CorFlags.ILOnly).Serialize(image);

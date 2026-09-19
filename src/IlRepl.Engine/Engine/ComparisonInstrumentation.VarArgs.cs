@@ -7,7 +7,10 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static partial class ComparisonInstrumentation
 {
-    internal static void Complete(CecilWriter writer, MethodDefinition target, MethodDefinition entry,
+    internal static void Complete(
+        CecilWriter writer,
+        MethodDefinition target,
+        MethodDefinition entry,
         MethodReference? externalVarArg = null)
     {
         RestoreVirtualReferences(writer, target, entry);

@@ -40,7 +40,11 @@ public sealed class DelegateReflectionTests
         Assert.Contains(dependency => dependency.Symbol.Contains("Hidden", StringComparison.Ordinal)
             && dependency.Location.Contains("reflective access", StringComparison.Ordinal), edit.Dependencies);
         session.CommitEdit(edit.Name, DelegateReflectionExamples.Method(staticTarget, options, true));
-        foreach (var line in DelegateReflectionExamples.Scenario(staticTarget).Split('\n')) session.AddLine(line);
+        foreach (var line in DelegateReflectionExamples.Scenario(staticTarget).Split('\n'))
+        {
+            session.AddLine(line);
+        }
+
         var result = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy using Scenario"),
             TestContext.CancellationToken);
         Assert.AreEqual("different", result.Outcome, result.Original.Detail + "; " + result.Edited.Detail);

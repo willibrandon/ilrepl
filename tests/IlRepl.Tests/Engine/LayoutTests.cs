@@ -59,7 +59,9 @@ public sealed class LayoutTests
             ".field [4] public int32 Tail",
             "}");
         Assert.AreEqual(8, Convert.ToInt32(Run(session, "sizeof Bits"), System.Globalization.CultureInfo.InvariantCulture));
-        Assert.AreEqual(0x3F800000, Run(session, ".locals init (valuetype Bits b)", "ldloca b", "ldc.r4 1.0", "stfld float32 Bits::F", "ldloca b", "ldfld int32 Bits::I"));
+        Assert.AreEqual(0x3F800000,
+            Run(session, ".locals init (valuetype Bits b)", "ldloca b", "ldc.r4 1.0", "stfld float32 Bits::F", "ldloca b",
+            "ldfld int32 Bits::I"));
         var bits = session.Types[0].RuntimeType!;
         Assert.AreEqual(LayoutKind.Explicit, bits.StructLayoutAttribute!.Value);
         Assert.AreEqual(4, (int)Marshal.OffsetOf(bits, "Tail"));

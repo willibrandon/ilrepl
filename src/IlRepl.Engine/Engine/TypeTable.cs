@@ -109,6 +109,7 @@ public sealed class TypeTable
         {
             copy.MethodAliases.Add(pair.Key, pair.Value);
         }
+
         foreach (var pair in _members)
         {
             copy._members[pair.Key] = pair.Value;
@@ -152,7 +153,8 @@ public sealed class TypeTable
             return type is not null;
         }
 
-        var matches = _entries.Where(e => e.ShortName == name || (withArguments && StripArity(e.ShortName) == name)).Select(e => e.Type).Distinct().ToList();
+        var matches = _entries.Where(e => e.ShortName == name || (withArguments && StripArity(e.ShortName) == name)).Select(e => e.Type)
+            .Distinct().ToList();
         if (matches.Count == 1)
         {
             type = matches[0];
@@ -161,7 +163,9 @@ public sealed class TypeTable
 
         if (matches.Count > 1)
         {
-            throw new ReplException($"'{name}' is ambiguous: {string.Join(", ", _entries.Where(e => matches.Contains(e.Type)).Select(e => e.FullName))} (write the full name)");
+            throw new ReplException(
+                $"'{name}' is ambiguous: " +
+                $"{string.Join(", ", _entries.Where(e => matches.Contains(e.Type)).Select(e => e.FullName))} (write the full name)");
         }
 
         return false;

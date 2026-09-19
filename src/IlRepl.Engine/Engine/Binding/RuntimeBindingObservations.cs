@@ -161,8 +161,12 @@ internal static class RuntimeBindingObservations
         });
     }
 
-    private static void PairFromRuntimeList(Type owner, EntityHandle reference, TypeSymbol signature,
-        IReadOnlyList<TypeSymbol> candidates, Dictionary<int, TypeSymbol> found)
+    private static void PairFromRuntimeList(
+        Type owner,
+        EntityHandle reference,
+        TypeSymbol signature,
+        IReadOnlyList<TypeSymbol> candidates,
+        Dictionary<int, TypeSymbol> found)
     {
         var path = SymbolRenderer.IlPath(signature.DefinitionOrSelf);
         var matches = candidates.Where(candidate => SymbolRenderer.IlPath(candidate.DefinitionOrSelf) == path).ToArray();
@@ -197,7 +201,8 @@ internal static class RuntimeBindingObservations
             _ => throw new BadImageFormatException("invalid type in runtime binding observation"),
         };
 
-    private static void Record(Assembly assembly,
+    private static void Record(
+        Assembly assembly,
         Action<AssemblySymbolSource, SymbolSignatureProvider, Dictionary<int, TypeSymbol>> read)
     {
         try
@@ -232,8 +237,12 @@ internal static class RuntimeBindingObservations
             TypeAttributes.Public, kind == (byte)SignatureTypeKind.ValueType, []);
     }
 
-    private static void PairAnnotated(TypeSymbol metadata, TypeSymbol actual, IReadOnlyList<TypeSymbol> required,
-        IReadOnlyList<TypeSymbol> optional, Dictionary<int, TypeSymbol> found)
+    private static void PairAnnotated(
+        TypeSymbol metadata,
+        TypeSymbol actual,
+        IReadOnlyList<TypeSymbol> required,
+        IReadOnlyList<TypeSymbol> optional,
+        Dictionary<int, TypeSymbol> found)
     {
         if (actual.Kind == TypeSymbolKind.Modified)
         {

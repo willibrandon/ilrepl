@@ -13,7 +13,11 @@ public static partial class SessionSnapshotStore
         var root = RepositoryRoot(directory) ?? directory;
         string? Portable(string? path)
         {
-            if (path is null) return null;
+            if (path is null)
+            {
+                return null;
+            }
+
             var full = Path.GetFullPath(path);
             var relative = Path.GetRelativePath(root, full);
             return relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
@@ -37,7 +41,10 @@ public static partial class SessionSnapshotStore
         for (var current = new DirectoryInfo(directory); current is not null; current = current.Parent)
         {
             var git = Path.Combine(current.FullName, ".git");
-            if (Directory.Exists(git) || File.Exists(git)) return current.FullName;
+            if (Directory.Exists(git) || File.Exists(git))
+            {
+                return current.FullName;
+            }
         }
 
         return null;
@@ -52,7 +59,11 @@ public static partial class SessionSnapshotStore
     public static Dictionary<string, string> ReadLocators(string cacheDirectory, SessionReference reference)
     {
         var path = LocatorPath(cacheDirectory, reference);
-        if (!File.Exists(path)) return [];
+        if (!File.Exists(path))
+        {
+            return [];
+        }
+
         try
         {
             return JsonSerializer.Deserialize(File.ReadAllText(path), ProtocolJsonContext.Default.DictionaryStringString) ?? [];
@@ -63,12 +74,22 @@ public static partial class SessionSnapshotStore
         }
     }
 
-    private static async Task RememberLocatorsAsync(string cacheDirectory, SessionReference reference,
+    private static async Task RememberLocatorsAsync(
+        string cacheDirectory,
+        SessionReference reference,
         CancellationToken cancellationToken)
     {
-        if (reference.Assets.Length == 0 && reference.Origin != "project") return;
+        if (reference.Assets.Length == 0 && reference.Origin != "project")
+        {
+            return;
+        }
+
         var paths = new Dictionary<string, string> { ["request"] = Path.GetFullPath(reference.Request) };
-        foreach (var asset in reference.Assets.Where(asset => asset.Path is not null)) paths[asset.Hash] = Path.GetFullPath(asset.Path!);
+        foreach (var asset in reference.Assets.Where(asset => asset.Path is not null))
+        {
+            paths[asset.Hash] = Path.GetFullPath(asset.Path!);
+        }
+
         var path = LocatorPath(cacheDirectory, reference);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await AtomicWriteAsync(path, JsonSerializer.SerializeToUtf8Bytes(paths, ProtocolJsonContext.Default.DictionaryStringString),

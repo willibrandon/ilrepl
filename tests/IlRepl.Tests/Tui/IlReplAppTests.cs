@@ -138,7 +138,8 @@ public sealed class IlReplAppTests
 
         Assert.IsGreaterThanOrEqualTo(0, row, "the palette should list ldc.i4.2");
         await auto.ClickAtAsync(4, row, ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4.2" && !s.ContainsText("opcodes"), description: "the clicked row is in the prompt and the palette is closed");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4.2" && !s.ContainsText("opcodes"),
+            description: "the clicked row is in the prompt and the palette is closed");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("[int32]");
 
@@ -254,7 +255,8 @@ public sealed class IlReplAppTests
 
             foreach (var item in commands)
             {
-                var row = Array.Find(lines, line => line.Contains(' ' + item.Name + ' ', StringComparison.Ordinal) && line.Contains(item.Description, StringComparison.Ordinal));
+                var row = Array.Find(lines, line => line.Contains(' ' + item.Name + ' ', StringComparison.Ordinal)
+                    && line.Contains(item.Description, StringComparison.Ordinal));
                 if (row is not null)
                 {
                     descriptionColumns.Add(row.IndexOf(item.Description, StringComparison.Ordinal));
@@ -302,14 +304,17 @@ public sealed class IlReplAppTests
 
         // Folded rows read back as one paragraph once the line breaks are folded away.
         var text = string.Join(' ', rows.Select(r => r.Trim()).Where(r => r.Length > 0));
-        Assert.Contains("ret or an empty line compiles the cell, runs it, and prints the value left on the stack.", text, "the paragraph should be readable in full");
+        Assert.Contains("ret or an empty line compiles the cell, runs it, and prints the value left on the stack.", text,
+            "the paragraph should be readable in full");
         Assert.Contains("cell arguments and the values passed each run", text, "a description should be readable in full");
 
         // Rows fill the width beside the scrollbar; they are not folded early.
-        Assert.Contains("Type one IL instruction per line. The simulated stack is", rows.Select(r => r.TrimEnd()), "the first row of the paragraph should use the full width");
+        Assert.Contains("Type one IL instruction per line. The simulated stack is", rows.Select(r => r.TrimEnd()),
+            "the first row of the paragraph should use the full width");
         Assert.Contains("shown after each one.", rows.Select(r => r.TrimEnd()));
         Assert.Contains(r => r == "  ldc.i4 6", rows, "an indented example should keep its indentation");
-        Assert.Contains(r => r.StartsWith("  .args (T name = literal, ...)", StringComparison.Ordinal), rows, "an entry should keep its indentation and label");
+        Assert.Contains(r => r.StartsWith("  .args (T name = literal, ...)", StringComparison.Ordinal), rows,
+            "an entry should keep its indentation and label");
         var argsRow = Array.FindIndex(rows, r => r.StartsWith("  .args (", StringComparison.Ordinal));
         Assert.AreEqual("    cell arguments and the values passed each run", rows[argsRow + 1]);
         var separator = Array.FindIndex(rows, r => r.StartsWith("──", StringComparison.Ordinal));
@@ -409,7 +414,8 @@ public sealed class IlReplAppTests
         await auto.DragAsync(0, 1, 14, 1, ct: ct);
         await auto.Shift().KeyAsync(Hex1bKey.UpArrow, ct: ct);
         await auto.TypeAsync("nop", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop" && !s.ContainsText("y yank"), description: "nothing selects; typing goes to the prompt");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop" && !s.ContainsText("y yank"),
+            description: "nothing selects; typing goes to the prompt");
         await auto.Shift().KeyAsync(Hex1bKey.LeftArrow, ct: ct);
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "Ctrl+C on a selection clears the buffer");
@@ -643,7 +649,8 @@ public sealed class IlReplAppTests
         await auto.WaitUntilTextAsync("  ...> ");
         await auto.WaitUntilTextAsync("editing 2 lines");
         await auto.WaitUntilTextAsync("Enter continues");
-        Assert.DoesNotContain(l => l.PlainText.Contains("Twice", StringComparison.Ordinal), transcript.Lines, "nothing goes to the engine before the block closes");
+        Assert.DoesNotContain(l => l.PlainText.Contains("Twice", StringComparison.Ordinal), transcript.Lines,
+            "nothing goes to the engine before the block closes");
 
         foreach (var line in new[] { "ldarg n", "ldc.i4 2", "mul", "ret" })
         {
@@ -662,7 +669,8 @@ public sealed class IlReplAppTests
 
         // Every line went by in order, each with its echo and its stack line.
         var echoes = transcript.Lines.Where(l => l.Kind == LineKind.Input).Select(l => l.PlainText).ToList();
-        Assert.AreSequenceEqual(["il[1]> .method int32 Twice(int32 n) {", "il[1]>   ldarg n", "il[1]>   ldc.i4 2", "il[1]>   mul", "il[1]>   ret", "il[1]> }"], echoes);
+        Assert.AreSequenceEqual(["il[1]> .method int32 Twice(int32 n) {", "il[1]>   ldarg n", "il[1]>   ldc.i4 2", "il[1]>   mul",
+            "il[1]>   ret", "il[1]> }"], echoes);
         var afterLdarg = transcript.Lines.SkipWhile(l => l.PlainText != "il[1]>   ldarg n").Skip(1).First();
         Assert.AreEqual(LineKind.Stack, afterLdarg.Kind);
         Assert.Contains("[int32]", afterLdarg.PlainText);
@@ -708,7 +716,8 @@ public sealed class IlReplAppTests
         await auto.TypeAsync(".method public static int32 Next() {", ct: ct);
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("editing 4 lines");
-        Assert.IsEmpty(transcript.Lines.Where(l => l.PlainText.Contains("Counter", StringComparison.Ordinal)), "nothing goes to the engine before the block closes");
+        Assert.IsEmpty(transcript.Lines.Where(l => l.PlainText.Contains("Counter", StringComparison.Ordinal)),
+            "nothing goes to the engine before the block closes");
         foreach (var line in new[] { "ldsfld int32 Counter::Count", "ret", "}" })
         {
             await auto.TypeAsync(line, ct: ct);
@@ -726,7 +735,9 @@ public sealed class IlReplAppTests
         await auto.WaitUntilNoTextAsync("class Counter │");
 
         var echoes = transcript.Lines.Where(l => l.Kind == LineKind.Input).Select(l => l.PlainText).ToList();
-        Assert.AreSequenceEqual(["il[1]> .class public Counter {", "il[1]>   .field public static int32 Count", "il[1]>   .method public static int32 Next() {", "il[1]>     ldsfld int32 Counter::Count", "il[1]>     ret", "il[1]>   }", "il[1]> }"], echoes);
+        Assert.AreSequenceEqual(["il[1]> .class public Counter {", "il[1]>   .field public static int32 Count",
+            "il[1]>   .method public static int32 Next() {", "il[1]>     ldsfld int32 Counter::Count", "il[1]>     ret", "il[1]>   }",
+            "il[1]> }"], echoes);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;

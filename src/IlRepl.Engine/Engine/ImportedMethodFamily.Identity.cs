@@ -63,7 +63,10 @@ internal sealed partial class ImportedMethodFamily
     /// <param name="writer">The comparison assembly writer.</param>
     /// <param name="revision">The revision whose identities callers currently reference.</param>
     /// <param name="definitions">The source-to-definition map written for this family.</param>
-    internal static void DefineRevisionReferences(CecilWriter writer, ImportedMethodFamily revision, Dictionary<MemberInfo,
+    internal static void DefineRevisionReferences(
+        CecilWriter writer,
+        ImportedMethodFamily revision,
+        Dictionary<MemberInfo,
         IMemberDefinition> definitions)
     {
         if (revision._forwardingMethod is { } forwarding)

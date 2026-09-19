@@ -60,9 +60,15 @@ public sealed class NativeAddressEvidence : IDisposable
         context.RequireActivationPermission();
         Scan(context.Method, 0);
         if (listings is { Count: > 0 } && listings.All(listing => NativeNormalizer.Normalize(listing, _facts, [], listings,
-            architecture, Constants, NativeCapture.Identify(context.Method).ReturnsPointer).Problems.Length == 0)) return;
+            architecture, Constants, NativeCapture.Identify(context.Method).ReturnsPointer).Problems.Length == 0))
+        {
+            return;
+        }
         // Only relevant IL operands are candidates; buffered runtimes may not expose their selected listing until shutdown.
-        foreach (var (kind, symbol, emit) in _pending) CompileProbe(kind, symbol, emit);
+        foreach (var (kind, symbol, emit) in _pending)
+        {
+            CompileProbe(kind, symbol, emit);
+        }
     }
 
     /// <summary>
@@ -70,19 +76,35 @@ public sealed class NativeAddressEvidence : IDisposable
     /// </summary>
     public void Dispose()
     {
-        foreach (var pin in _pins) pin.Free();
+        foreach (var pin in _pins)
+        {
+            pin.Free();
+        }
+
         _pins.Clear();
     }
 
     private void Scan(MethodBase method, int depth)
     {
-        if (!_seen.Add(method) || method.ContainsGenericParameters) return;
+        if (!_seen.Add(method) || method.ContainsGenericParameters)
+        {
+            return;
+        }
+
         var symbol = MethodSymbol(method);
         Add((ulong)method.MethodHandle.Value, "method-handle", symbol, "RuntimeMethodHandle.Value", MemberResolver.Describe(method));
         ObserveEntryPoint(method, symbol);
-        if (method.DeclaringType is { } owner) ObserveType(owner);
+        if (method.DeclaringType is { } owner)
+        {
+            ObserveType(owner);
+        }
+
         var bytes = method.GetMethodBody()?.GetILAsByteArray();
-        if (bytes is null || depth > 16) return;
+        if (bytes is null || depth > 16)
+        {
+            return;
+        }
+
         var typeArguments = method.DeclaringType?.GetGenericArguments();
         var methodArguments = method.IsGenericMethod ? method.GetGenericArguments() : null;
         foreach (var instruction in IlReader.Read(bytes).Instructions)
@@ -94,6 +116,7 @@ public sealed class NativeAddressEvidence : IDisposable
                 _constants.Add(instruction.Operand.Bits32);
                 _constants.Add(instruction.Operand.Bits64);
             }
+
             if (instruction.Op.OperandType == OperandType.InlineString)
             {
                 var value = method.Module.ResolveString(token);
@@ -110,15 +133,24 @@ public sealed class NativeAddressEvidence : IDisposable
                 Probe("string-object", identity, il => il.Emit(OpCodes.Ldstr, value));
                 continue;
             }
+
             if (instruction.Op.OperandType is not (OperandType.InlineField or OperandType.InlineMethod
-                or OperandType.InlineType or OperandType.InlineTok)) continue;
+                or OperandType.InlineType or OperandType.InlineTok))
+            {
+                continue;
+            }
+
             var member = method.Module.ResolveMember(token, typeArguments, methodArguments);
             switch (member)
             {
                 case Type type: ObserveType(type); break;
                 case FieldInfo field:
                     ObserveType(field.DeclaringType!);
-                    if (!_seen.Add(field)) break;
+                    if (!_seen.Add(field))
+                    {
+                        break;
+                    }
+
                     var fieldSymbol = field.DeclaringType!.AssemblyQualifiedName + "::" + field.Name + ":" + field.FieldType;
                     var fieldDisplay = TypeNameFormatter.Pretty(field.FieldType) + " " + TypeNameFormatter.Pretty(field.DeclaringType)
                         + "::" + TypeNameFormatter.IlAsmIdentifier(field.Name);
@@ -128,14 +160,23 @@ public sealed class NativeAddressEvidence : IDisposable
                         Grant(field.Module.Assembly);
                         Probe("static-field", fieldSymbol, il => il.Emit(OpCodes.Ldsflda, field), fieldDisplay);
                     }
+
                     break;
                 case MethodBase callee when !callee.ContainsGenericParameters:
-                    if (callee.DeclaringType is { } declaring) ObserveType(declaring);
+                    if (callee.DeclaringType is { } declaring)
+                    {
+                        ObserveType(declaring);
+                    }
+
                     Add((ulong)callee.MethodHandle.Value, "method-handle", MethodSymbol(callee), "RuntimeMethodHandle.Value",
                         MemberResolver.Describe(callee));
                     ObserveEntryPoint(callee, MethodSymbol(callee));
                     // Follow captured user callees for operands introduced through inlining; framework code remains event-attributed.
-                    if (SessionAssemblies.IsSessionAssembly(callee.Module.Assembly)) Scan(callee, depth + 1);
+                    if (SessionAssemblies.IsSessionAssembly(callee.Module.Assembly))
+                    {
+                        Scan(callee, depth + 1);
+                    }
+
                     break;
             }
         }
@@ -153,7 +194,11 @@ public sealed class NativeAddressEvidence : IDisposable
 
     private void ObserveType(Type type)
     {
-        if (type.ContainsGenericParameters || !_seen.Add(type)) return;
+        if (type.ContainsGenericParameters || !_seen.Add(type))
+        {
+            return;
+        }
+
         Add((ulong)type.TypeHandle.Value, "type-handle", type.AssemblyQualifiedName!, "RuntimeTypeHandle.Value",
             TypeNameFormatter.Pretty(type));
         Grant(type.Assembly);
@@ -189,7 +234,10 @@ public sealed class NativeAddressEvidence : IDisposable
 
     private void Grant(Assembly assembly)
     {
-        if (!_granted.Add(assembly)) return;
+        if (!_granted.Add(assembly))
+        {
+            return;
+        }
         // One attribute definition per probe assembly; subsequent grants reuse its constructor.
         var attributeName = "System.Runtime.CompilerServices.IgnoresAccessChecksToAttribute";
         var attribute = _assembly.GetType(attributeName);
@@ -203,13 +251,17 @@ public sealed class NativeAddressEvidence : IDisposable
             il.Emit(OpCodes.Ret);
             attribute = builder.CreateType();
         }
+
         _assembly.SetCustomAttribute(new CustomAttributeBuilder(attribute!.GetConstructor([typeof(string)])!, [assembly.GetName().Name]));
     }
 
     private void Add(ulong address, string kind, string symbol, string evidence, string display = "")
     {
-        if (address != 0) _facts.Add(new NativeAddressFact
+        if (address != 0)
+        {
+            _facts.Add(new NativeAddressFact
             { Address = address, Kind = kind, Symbol = symbol, DisplaySymbol = display, Evidence = evidence });
+        }
     }
 
     private static string MethodSymbol(MethodBase method) => method.Module.Assembly.FullName + "!" + MemberResolver.Describe(method);

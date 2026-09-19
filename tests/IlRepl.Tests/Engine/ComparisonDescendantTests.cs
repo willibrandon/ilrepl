@@ -45,7 +45,11 @@ public sealed class ComparisonDescendantTests
         using var child = ComparisonDescendantSource.Start(Environment.ProcessPath!, record, ready, false, false);
         try
         {
-            while (!File.Exists(ready)) await Task.Delay(10, token);
+            while (!File.Exists(ready))
+            {
+                await Task.Delay(10, token);
+            }
+
             var identity = Assert.ContainsSingle(await File.ReadAllLinesAsync(record, token));
             var expected = child.Id.ToString(CultureInfo.InvariantCulture) + " "
                 + OwnedProcessGroup.GetStartIdentity(child).ToString(CultureInfo.InvariantCulture);
@@ -62,7 +66,11 @@ public sealed class ComparisonDescendantTests
         }
         finally
         {
-            if (!child.HasExited) child.Kill();
+            if (!child.HasExited)
+            {
+                child.Kill();
+            }
+
             await OwnedProcessGroup.WaitForExitAsync(child, CancellationToken.None);
         }
     }
@@ -123,6 +131,7 @@ public sealed class ComparisonDescendantTests
                 {
                     await Task.Delay(10, TestContext.CancellationToken);
                 }
+
                 await cancel.CancelAsync();
             }
 
@@ -131,8 +140,15 @@ public sealed class ComparisonDescendantTests
             foreach (var side in new[] { result.Original, result.Edited })
             {
                 Assert.AreEqual(expected, side.Outcome, side.Detail);
-                if (mode == "return") Assert.AreEqual("42", side.Result!.Value, "an earlier descendant contaminated the edited side");
-                if (mode == "throw") Assert.AreEqual("worker failure", side.Invocations.Single().Exception!.Message);
+                if (mode == "return")
+                {
+                    Assert.AreEqual("42", side.Result!.Value, "an earlier descendant contaminated the edited side");
+                }
+
+                if (mode == "throw")
+                {
+                    Assert.AreEqual("worker failure", side.Invocations.Single().Exception!.Message);
+                }
             }
 
             var descendants = File.ReadAllLines(record);
@@ -145,7 +161,11 @@ public sealed class ComparisonDescendantTests
         finally
         {
             await cancel.CancelAsync();
-            if (running is not null) await running;
+            if (running is not null)
+            {
+                await running;
+            }
+
             if (File.Exists(record))
             {
                 foreach (var line in File.ReadAllLines(record))
@@ -153,8 +173,16 @@ public sealed class ComparisonDescendantTests
                     try
                     {
                         using var process = ComparisonDescendantSource.Open(line);
-                        if (process is null) continue;
-                        if (!process.HasExited) process.Kill(entireProcessTree: true);
+                        if (process is null)
+                        {
+                            continue;
+                        }
+
+                        if (!process.HasExited)
+                        {
+                            process.Kill(entireProcessTree: true);
+                        }
+
                         await process.WaitForExitAsync(CancellationToken.None);
                     }
                     catch (ArgumentException)
@@ -182,7 +210,11 @@ public sealed class ComparisonDescendantTests
 
         var ready = Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_READY")!;
         var escape = bool.Parse(Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_ESCAPE")!);
-        if (escape) ComparisonDescendantSource.EscapeProcessGroup();
+        if (escape)
+        {
+            ComparisonDescendantSource.EscapeProcessGroup();
+        }
+
         using var process = Process.GetCurrentProcess();
         File.AppendAllText(record, Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + " "
             + OwnedProcessGroup.GetStartIdentity(process).ToString(CultureInfo.InvariantCulture) + Environment.NewLine);
@@ -190,7 +222,11 @@ public sealed class ComparisonDescendantTests
         {
             using var leaf = ComparisonDescendantSource.Start(Environment.ProcessPath!, record, ready, false,
                 escape && OperatingSystem.IsWindows());
-            while (!File.Exists(ready)) await Task.Delay(10);
+            while (!File.Exists(ready))
+            {
+                await Task.Delay(10);
+            }
+
             Environment.Exit(0);
         }
 

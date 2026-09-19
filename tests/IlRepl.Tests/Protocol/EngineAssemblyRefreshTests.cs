@@ -56,7 +56,11 @@ public sealed class EngineAssemblyRefreshTests
                 running = engine.HandleAsync("ret", ct);
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeout.CancelAfter(TimeSpan.FromSeconds(15));
-                while (!File.Exists(marker)) await Task.Delay(5, timeout.Token);
+                while (!File.Exists(marker))
+                {
+                    await Task.Delay(5, timeout.Token);
+                }
+
                 Assert.IsFalse(running.IsCompleted);
                 Assert.IsGreaterThan(version, await engine.WaitForAssembliesAsync(version, timeout.Token));
 

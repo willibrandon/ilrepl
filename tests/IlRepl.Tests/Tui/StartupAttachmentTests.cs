@@ -43,13 +43,20 @@ public sealed class StartupAttachmentTests
         controller.RecoveryCompleted += _ =>
         {
             published.TrySetResult();
-            if (holdNotification) release.Task.GetAwaiter().GetResult();
+            if (holdNotification)
+            {
+                release.Task.GetAwaiter().GetResult();
+            }
         };
         try
         {
             launch.TrySetResult();
             await published.Task.WaitAsync(token);
-            if (!holdNotification) await controller.Initialization.WaitAsync(token);
+            if (!holdNotification)
+            {
+                await controller.Initialization.WaitAsync(token);
+            }
+
             PromptState? prompt = null;
             var transcript = new Transcript();
             await using var terminal = AppTest.Build(controller, transcript, onPrompt: value => prompt = value);

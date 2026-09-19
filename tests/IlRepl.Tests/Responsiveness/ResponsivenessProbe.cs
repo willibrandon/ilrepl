@@ -1,11 +1,11 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
-using IlRepl.Protocol;
 using IlRepl.Processes;
+using IlRepl.Protocol;
 
 namespace IlRepl.Tests.Responsiveness;
 
@@ -19,12 +19,23 @@ internal static class ResponsivenessProbe
     /// </summary>
     public static async Task<bool> TryRunAsync(string[] args)
     {
-        if (args.Length == 0 || args[0] != "--responsiveness-measure") return false;
+        if (args.Length == 0 || args[0] != "--responsiveness-measure")
+        {
+            return false;
+        }
+
         if (args.Length is < 3 or > 6)
+        {
             throw new ArgumentException("Use --responsiveness-measure <packaged-frontend> <artifact-directory> "
                 + "[scenario] [--quick] [--prepare].");
+        }
+
         var frontend = Path.GetFullPath(args[1]);
-        if (!File.Exists(frontend)) throw new FileNotFoundException("The packaged frontend does not exist.", frontend);
+        if (!File.Exists(frontend))
+        {
+            throw new FileNotFoundException("The packaged frontend does not exist.", frontend);
+        }
+
         var output = Path.GetFullPath(args[2]);
         var quick = args.Contains("--quick", StringComparer.Ordinal);
         var prepare = args.Contains("--prepare", StringComparer.Ordinal);
@@ -53,10 +64,15 @@ internal static class ResponsivenessProbe
             Console.WriteLine("Prepared " + fixture);
             return true;
         }
+
         var sdk = await DescribeAsync("dotnet", ["--version"], token);
         var commit = await DescribeAsync("git", ["rev-parse", "HEAD"], token);
         var dirty = await DescribeAsync("git", ["status", "--porcelain", "--untracked-files=no"], token);
-        if (dirty.Length > 0) commit += "+dirty";
+        if (dirty.Length > 0)
+        {
+            commit += "+dirty";
+        }
+
         var cpu = await CpuAsync(token);
         var failures = new List<string>();
         foreach (var scenario in scenarios)
@@ -68,9 +84,14 @@ internal static class ResponsivenessProbe
             var stage = "launch";
             void Record(string name, double sample)
             {
-                if (!metrics.TryGetValue(name, out var values)) metrics.Add(name, values = []);
+                if (!metrics.TryGetValue(name, out var values))
+                {
+                    metrics.Add(name, values = []);
+                }
+
                 values.Add(sample);
             }
+
             var artifacts = Path.Combine(output, scenario, "processes");
             Directory.CreateDirectory(artifacts);
             var retained = scenario is "session" or "combined" ? session : null;
@@ -86,9 +107,12 @@ internal static class ResponsivenessProbe
                     {
                         stage = phase;
                         if (sample == 0)
+                        {
                             Console.WriteLine($"Measuring {scenario}: {phase} at "
                                 + $"{Stopwatch.GetElapsedTime(terminal.Started).TotalMilliseconds:F1} ms after launch.");
+                        }
                     }
+
                     stage = "first focused prompt";
                     var prompt = await terminal.PromptAsync();
                     launches[sample] = launches[sample] with { Prompt = prompt.Timestamp };
@@ -116,7 +140,12 @@ internal static class ResponsivenessProbe
                         Record("cold-completion", await terminal.PasteAsync("call Responsiveness.CatalogType00000::Meth",
                             frame => frame.Contains("members") && !frame.Contains("updating members") && frame.Contains("Method00")));
                     }
-                    if (sample != 0) continue;
+
+                    if (sample != 0)
+                    {
+                        continue;
+                    }
+
                     var draft = scenario switch
                     {
                         "draft-200" => ResponsivenessFixtures.Draft(200),
@@ -148,6 +177,7 @@ internal static class ResponsivenessProbe
                             Record("caret-painted", moved);
                         }
                     }
+
                     var completionSource = scenario.StartsWith("draft-", StringComparison.Ordinal) || scenario == "combined"
                         ? string.Join('\n', draft.Split('\n')[..^2]) + "\ncall Console::Wr"
                         : scenario.StartsWith("generic-", StringComparison.Ordinal)
@@ -165,8 +195,12 @@ internal static class ResponsivenessProbe
                         var completed = await terminal.InputAsync(append ? "i" : "\x7f",
                             frame => frame.Caret?.X == column && frame.Contains("members") && !frame.Contains("updating members")
                                 && frame.Contains("Write("));
-                        if (index >= (quick ? 5 : 25)) Record("warm-completion", completed);
+                        if (index >= (quick ? 5 : 25))
+                        {
+                            Record("warm-completion", completed);
+                        }
                     }
+
                     Console.WriteLine($"Measured {scenario}: {metrics["input-painted"].Count} interaction samples.");
                 }
             }
@@ -175,6 +209,7 @@ internal static class ResponsivenessProbe
                 failure = exception;
                 failureStage = stage;
             }
+
             var artifactToken = failure is null ? token : CancellationToken.None;
             var processes = new List<ProcessMeasurement>();
             foreach (var path in Directory.EnumerateFiles(artifacts, "*.json"))
@@ -183,7 +218,10 @@ internal static class ResponsivenessProbe
                 {
                     var measured = JsonSerializer.Deserialize(await File.ReadAllTextAsync(path, artifactToken),
                         MeasurementJsonContext.Default.ProcessMeasurement);
-                    if (measured is not null) processes.Add(measured);
+                    if (measured is not null)
+                    {
+                        processes.Add(measured);
+                    }
                 }
                 catch (Exception exception) when (exception is IOException or JsonException or OperationCanceledException)
                 {
@@ -192,6 +230,7 @@ internal static class ResponsivenessProbe
                     artifactToken = CancellationToken.None;
                 }
             }
+
             var startups = new List<StartupSample>();
             for (var index = 0; index < launches.Count; index++)
             {
@@ -206,14 +245,18 @@ internal static class ResponsivenessProbe
                     startups.Add(launch);
                     continue;
                 }
+
                 string[] roles = OperatingSystem.IsWindows() ? ["host"] : ["host", "supervisor"];
                 foreach (var role in roles)
+                {
                     if (!processes.Any(item => item.Role == role && item.Stages["entry"] >= launch.Launched
                         && item.Stages["entry"] < next))
                     {
                         failure ??= new InvalidOperationException($"A {role} did not retain its measurement artifact.");
                         failureStage ??= "process artifacts";
                     }
+                }
+
                 var entry = process.Stages["entry"];
                 var ready = process.Stages.TryGetValue("host-ready", out var acknowledged) ? acknowledged : (long?)null;
                 if (ready is null)
@@ -221,6 +264,7 @@ internal static class ResponsivenessProbe
                     failure ??= new InvalidOperationException("A frontend did not record host readiness.");
                     failureStage ??= "process artifacts";
                 }
+
                 startups.Add(launch with { HostReady = ready });
                 Record("launch-to-entry", Stopwatch.GetElapsedTime(launch.Launched, entry).TotalMilliseconds);
                 if (launch.Prompt is { } prompt)
@@ -233,9 +277,13 @@ internal static class ResponsivenessProbe
                         Record("prepared-to-prompt", Stopwatch.GetElapsedTime(prepared, prompt).TotalMilliseconds);
                     }
                 }
+
                 if (launch.FirstEdit is { } edited)
+                {
                     Record("entry-to-first-edit", Stopwatch.GetElapsedTime(entry, edited).TotalMilliseconds);
+                }
             }
+
             var record = new ResponsivenessRecord(1, commit, fixture, scenario, sdk, RuntimeInformation.FrameworkDescription,
                 RuntimeInformation.OSDescription, RuntimeInformation.RuntimeIdentifier, cpu, Environment.MachineName,
                 failure is not null ? "Release NativeAOT; incomplete observation, not a reference baseline"
@@ -249,11 +297,22 @@ internal static class ResponsivenessProbe
             await File.WriteAllTextAsync(Path.Combine(output, scenario + ".json"),
                 JsonSerializer.Serialize(record, ResponsivenessJsonContext.Default.ResponsivenessRecord),
                 failure is null ? token : CancellationToken.None);
-            if (failure is not null) ExceptionDispatchInfo.Capture(failure).Throw();
-            if (!quick) failures.AddRange(CheckBudgets(record));
+            if (failure is not null)
+            {
+                ExceptionDispatchInfo.Capture(failure).Throw();
+            }
+
+            if (!quick)
+            {
+                failures.AddRange(CheckBudgets(record));
+            }
         }
+
         if (failures.Count > 0)
+        {
             throw new InvalidOperationException("Reference budgets exceeded; retained raw measurements:\n" + string.Join('\n', failures));
+        }
+
         return true;
     }
 
@@ -262,28 +321,45 @@ internal static class ResponsivenessProbe
         using var budgets = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepoPaths.Root, "tests", "responsiveness-baselines.json")));
         foreach (var target in budgets.RootElement.GetProperty("targetsMilliseconds").EnumerateObject())
         {
-            if (!record.Metrics.TryGetValue(target.Name, out var measured)) continue;
+            if (!record.Metrics.TryGetValue(target.Name, out var measured))
+            {
+                continue;
+            }
+
             foreach (var percentile in target.Value.EnumerateObject())
             {
                 var actual = percentile.Name == "p99" ? measured.P99 : measured.P95;
                 var maximum = percentile.Value.GetDouble();
                 if (actual > maximum)
+                {
                     yield return $"{record.Scenario}: {target.Name} {percentile.Name} {actual:F2} ms exceeds {maximum:F2} ms";
+                }
             }
         }
     }
 
-    private static async Task<byte[]> RetainedSessionAsync(string frontend, string cache, int submissions, int definitions,
+    private static async Task<byte[]> RetainedSessionAsync(
+        string frontend,
+        string cache,
+        int submissions,
+        int definitions,
         CancellationToken cancellationToken)
     {
         var distribution = Path.Combine(Path.GetDirectoryName(frontend)!, "host");
         var host = Path.Combine(distribution, "ilrepl-host.dll");
         var hashes = new List<string>();
         foreach (var assembly in new[] { "ilrepl-host.dll", "IlRepl.Engine.dll", "IlRepl.Protocol.dll" })
+        {
             hashes.Add(SessionCodec.Hash(await File.ReadAllBytesAsync(Path.Combine(distribution, assembly), cancellationToken)));
+        }
+
         var package = SessionCodec.Hash(Encoding.UTF8.GetBytes(string.Join(':', hashes)));
         var path = Path.Combine(cache, ResponsivenessFixtures.Version, $"session-{submissions}-{definitions}-{package}.ilrepl.json");
-        if (File.Exists(path)) return await File.ReadAllBytesAsync(path, cancellationToken);
+        if (File.Exists(path))
+        {
+            return await File.ReadAllBytesAsync(path, cancellationToken);
+        }
+
         await using var engine = await HostProcessEngine.StartAsync(host, RepoPaths.Root, cancellationToken);
         for (var index = 0; index < submissions; index++)
         {
@@ -293,17 +369,27 @@ internal static class ResponsivenessProbe
             {
                 var reply = await engine.HandleAsync(line, cancellationToken);
                 if (!reply.Succeeded)
+                {
                     throw new InvalidOperationException(string.Join('\n', reply.Lines.Select(item => item.PlainText)));
+                }
             }
-            if ((index + 1) % 1000 == 0) Console.WriteLine($"Prepared {index + 1} of {submissions} retained submissions.");
+
+            if ((index + 1) % 1000 == 0)
+            {
+                Console.WriteLine($"Prepared {index + 1} of {submissions} retained submissions.");
+            }
         }
+
         var snapshot = await engine.SessionAsync(new SessionRequest
         {
             Action = new SessionAction { Operation = SessionOperation.Capture },
         }, cancellationToken);
         var document = snapshot.Document ?? throw new InvalidOperationException("The fixture host did not return its source.");
         if (document.Cells.Length != submissions)
+        {
             throw new InvalidOperationException("The fixture host did not retain every actual submission.");
+        }
+
         var bytes = SessionCodec.Write(document);
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
@@ -315,6 +401,7 @@ internal static class ResponsivenessProbe
         {
             File.Delete(temporary);
         }
+
         return bytes;
     }
 
@@ -329,9 +416,17 @@ internal static class ResponsivenessProbe
     private static async Task<string> DescribeAsync(string executable, string[] arguments, CancellationToken cancellationToken)
     {
         var start = new ProcessStartInfo(executable) { WorkingDirectory = RepoPaths.Root };
-        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
         var result = await ToolProcess.RunAsync(start, cancellationToken);
-        if (result.ExitCode != 0) throw new InvalidOperationException(result.StandardError);
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(result.StandardError);
+        }
+
         return result.StandardOutput.Trim();
     }
 
@@ -343,7 +438,12 @@ internal static class ResponsivenessProbe
             return lines.FirstOrDefault(line => line.StartsWith("model name", StringComparison.Ordinal))
                 ?? RuntimeInformation.ProcessArchitecture.ToString();
         }
-        if (OperatingSystem.IsMacOS()) return await DescribeAsync("sysctl", ["-n", "machdep.cpu.brand_string"], cancellationToken);
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return await DescribeAsync("sysctl", ["-n", "machdep.cpu.brand_string"], cancellationToken);
+        }
+
         return Environment.GetEnvironmentVariable("PROCESSOR_IDENTIFIER") ?? RuntimeInformation.ProcessArchitecture.ToString();
     }
 }

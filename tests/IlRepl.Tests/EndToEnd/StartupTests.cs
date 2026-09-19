@@ -68,6 +68,7 @@ public sealed class StartupTests
             Assert.IsNotNull(record);
             records.Add(record);
         }
+
         var frontend = records.Single(record => record.Role == "frontend");
         var rendered = frontend.Stages["prompt-rendered"];
         Assert.IsGreaterThanOrEqualTo(rendered, frontend.Stages["host-starting"]);

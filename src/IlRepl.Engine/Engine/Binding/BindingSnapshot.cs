@@ -16,8 +16,13 @@ public sealed class BindingSnapshot : IDisposable
 {
     private readonly List<MetadataLease> _leases = [];
 
-    private BindingSnapshot(LoadedBindingCatalog catalog, IReadOnlyList<AssemblySymbolSource> searchOrder, AssemblySymbolSource? engine,
-        AssemblySymbolSource? coreLib, HashSet<long> sessionAssemblies, SnapshotTypeTable types)
+    private BindingSnapshot(
+        LoadedBindingCatalog catalog,
+        IReadOnlyList<AssemblySymbolSource> searchOrder,
+        AssemblySymbolSource? engine,
+        AssemblySymbolSource? coreLib,
+        HashSet<long> sessionAssemblies,
+        SnapshotTypeTable types)
     {
         Catalog = catalog;
         SearchOrder = searchOrder;
@@ -165,7 +170,11 @@ public sealed class BindingSnapshot : IDisposable
         var leases = new List<MetadataLease>();
         try
         {
-            foreach (var source in Catalog.Sources) leases.Add(source.Lease());
+            foreach (var source in Catalog.Sources)
+            {
+                leases.Add(source.Lease());
+            }
+
             var added = new List<(Assembly Assembly, AssemblySymbolSource Source)>();
             var searchOrder = SearchOrder.ToList();
             var searched = SearchOrder.Select(source => source.Instance).ToHashSet();
@@ -176,8 +185,16 @@ public sealed class BindingSnapshot : IDisposable
                     continue;
                 }
 
-                if (searched.Add(source.Instance)) searchOrder.Add(source);
-                if (Catalog.Source(source.Instance) is not null) continue;
+                if (searched.Add(source.Instance))
+                {
+                    searchOrder.Add(source);
+                }
+
+                if (Catalog.Source(source.Instance) is not null)
+                {
+                    continue;
+                }
+
                 leases.Add(source.Lease());
                 added.Add((assembly, source));
             }
@@ -199,7 +216,11 @@ public sealed class BindingSnapshot : IDisposable
         }
         catch
         {
-            foreach (var lease in leases) lease.Dispose();
+            foreach (var lease in leases)
+            {
+                lease.Dispose();
+            }
+
             throw;
         }
     }
@@ -237,7 +258,9 @@ public sealed class BindingSnapshot : IDisposable
     /// <param name="sessionAssemblies">The session's own loaded assemblies, whose types the table names.</param>
     /// <param name="editNames">The edit names available for command operands.</param>
     /// <returns>The snapshot.</returns>
-    public static BindingSnapshot Capture(ParseContext context, IEnumerable<Assembly>? sessionAssemblies = null,
+    public static BindingSnapshot Capture(
+        ParseContext context,
+        IEnumerable<Assembly>? sessionAssemblies = null,
         IEnumerable<string>? editNames = null)
     {
         ArgumentNullException.ThrowIfNull(context);
