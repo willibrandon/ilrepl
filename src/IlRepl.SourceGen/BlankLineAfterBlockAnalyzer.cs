@@ -57,7 +57,15 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
                     break;
                 }
 
+                // A comment beside that punctuation has no blank line above it either.
                 last = LastOnLine(next);
+                foreach (var trivia in last.TrailingTrivia)
+                {
+                    if (!IsLayout(trivia))
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlankLineAfterBrace, trivia.GetLocation()));
+                    }
+                }
             }
         }
     }

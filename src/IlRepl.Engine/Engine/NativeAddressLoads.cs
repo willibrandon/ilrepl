@@ -41,7 +41,8 @@ public static partial class NativeAddressLoads
         return [.. result];
     }
 
-    [GeneratedRegex(@"^(?<indent>\s*)mov[zkn]\s+(?<register>[xw]\d+),\s+~?bits\d+:\d+\((?<label>.*)\)(?:\s+LSL\s+#\d+)?\s*$",
-        RegexOptions.CultureInvariant)]
+    // The shift is read as the normalizer reads it: in either case, with or without a comma before it or a "#" in it.
+    [GeneratedRegex(@"^(?<indent>\s*)mov[zkn]\s+(?<register>[xw]\d+),\s+~?bits\d+:\d+\((?<label>.*)\)(?:\s*,?\s*lsl\s+#?\d+)?\s*$",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex Part();
 }

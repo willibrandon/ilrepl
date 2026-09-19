@@ -44,6 +44,21 @@ public sealed class NativeAddressLoadsTests
     }
 
     /// <summary>
+    /// The shift is recognised in every spelling the normalizer accepts.
+    /// </summary>
+    /// <param name="shift">The text after the address part.</param>
+    [TestMethod]
+    [DataRow(" LSL #16")]
+    [DataRow(", lsl #16")]
+    [DataRow(", LSL 16")]
+    public void Fold_ReadsEverySpellingOfTheShift(string shift)
+    {
+        string[] lines = ["    movz    x0, bits0:15(<type:A>)", "    movk    x0, bits16:31(<type:A>)" + shift];
+
+        Assert.AreSequenceEqual(["    mov     x0, <type:A>"], NativeAddressLoads.Fold(lines));
+    }
+
+    /// <summary>
     /// Loads of different addresses, or into different registers, stay apart, and other instructions pass through.
     /// </summary>
     [TestMethod]
