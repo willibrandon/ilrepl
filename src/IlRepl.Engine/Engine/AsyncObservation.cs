@@ -7,6 +7,11 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static class AsyncObservation
 {
+    /// <summary>
+    /// Waits for a returned task or value task and reads its result, passing any other value through.
+    /// </summary>
+    /// <param name="value">The value a method returned.</param>
+    /// <returns>The awaited result, null for a task with no result, or the value itself when it is not a task.</returns>
     internal static async Task<object?> AwaitAsync(object? value)
     {
         if (value is ValueTask voidValueTask)
@@ -33,7 +38,10 @@ internal static class AsyncObservation
             {
                 var resultType = type.GetGenericArguments()[0];
                 if (resultType.Assembly == typeof(Task).Assembly && resultType.FullName == "System.Threading.Tasks.VoidTaskResult")
+                {
                     return null;
+                }
+
                 return type.GetProperty(nameof(Task<int>.Result),
                     BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)!.GetValue(task);
             }

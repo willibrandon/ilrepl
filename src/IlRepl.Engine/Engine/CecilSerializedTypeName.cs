@@ -31,6 +31,7 @@ internal static class CecilSerializedTypeName
             ModuleDefinition module => module.Assembly.Name.FullName,
             _ => type.Module.Assembly.Name.FullName,
         };
+
         return Name(type) + ", " + assembly;
     }
 

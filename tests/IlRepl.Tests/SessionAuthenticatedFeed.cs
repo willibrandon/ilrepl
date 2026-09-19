@@ -43,6 +43,7 @@ internal sealed class SessionAuthenticatedFeed : IAsyncDisposable
             ["/flat/" + package + "/index.json"] = JsonSerializer.SerializeToUtf8Bytes(new { versions = new[] { version } }),
             ["/flat/" + package + "/" + version + "/" + package + "." + version + ".nupkg"] = File.ReadAllBytes(packagePath),
         };
+
         _server = ServeAsync();
     }
 
@@ -118,8 +119,15 @@ internal sealed class SessionAuthenticatedFeed : IAsyncDisposable
 
                 var expected = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(Username + ":" + Password));
                 var authenticated = authorization == expected;
-                if (authenticated) Interlocked.Increment(ref _authorized);
-                else Interlocked.Increment(ref _unauthorized);
+                if (authenticated)
+                {
+                    Interlocked.Increment(ref _authorized);
+                }
+                else
+                {
+                    Interlocked.Increment(ref _unauthorized);
+                }
+
                 var target = request.Split(' ')[1];
                 var found = _resources.TryGetValue(target, out var resource);
                 if (authenticated && target.EndsWith(".nupkg", StringComparison.Ordinal) && HoldPackage)
@@ -127,6 +135,7 @@ internal sealed class SessionAuthenticatedFeed : IAsyncDisposable
                     _packageRequested.TrySetResult();
                     await _packagePermit.Task.WaitAsync(_stop.Token);
                 }
+
                 var status = !authenticated ? "401 Unauthorized" : found ? "200 OK" : "404 Not Found";
                 var body = authenticated && found ? resource! : [];
                 var headerText = "HTTP/1.1 " + status + "\r\nContent-Length: " + body.Length + "\r\nConnection: close\r\n"

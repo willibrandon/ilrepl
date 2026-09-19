@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
-using ILVerify;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
+using ILVerify;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
@@ -103,6 +103,7 @@ public sealed class NativeByRefCallTests
             il.Emit(OpCodes.Ldind_I4);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var original = fixture.GetMethod("Read")!;
         var listing = MethodDisassembler.Disassemble(original, session);
         var call = listing.Entries.Last(entry => entry.Instruction?.Op.Name == operation);
@@ -120,6 +121,7 @@ public sealed class NativeByRefCallTests
                 Assert.Contains(VerifierError.UnmanagedPointer, verifierErrors);
             }
         }
+
         Assert.DoesNotContain(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error, diagnostics);
         Assert.Contains(diagnostic => diagnostic.Code == "FLOW007" && diagnostic.Kind == AnalysisDiagnosticKind.Unverifiable
             && diagnostic.Location.Offset == call.Offset, diagnostics);

@@ -53,7 +53,9 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
     /// <param name="core">The live REPL core.</param>
     /// <param name="comparisonRunner">The isolated execution coordinator, or null when comparisons are unavailable.</param>
     /// <param name="nativeRunner">The isolated native compilation coordinator.</param>
-    public InProcessEngine(ReplCore core, Func<ComparisonPackage, CancellationToken, Task<ComparisonReply>>? comparisonRunner,
+    public InProcessEngine(
+        ReplCore core,
+        Func<ComparisonPackage, CancellationToken, Task<ComparisonReply>>? comparisonRunner,
         Func<NativePackage, CancellationToken, Task<NativeReply>>? nativeRunner = null)
     {
         ArgumentNullException.ThrowIfNull(core);
@@ -170,7 +172,9 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
     /// <param name="locations">Their locations in the submitting document.</param>
     /// <param name="cancellationToken">Cancels the operation.</param>
     /// <returns>One reply for each line handled, which can be fewer than were sent.</returns>
-    public async Task<HandleReply[]> HandleRetainedSourceRunAsync(string[] lines, AnalysisLocation[] locations,
+    public async Task<HandleReply[]> HandleRetainedSourceRunAsync(
+        string[] lines,
+        AnalysisLocation[] locations,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(lines);
@@ -210,7 +214,10 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
         }, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<HandleReply> HandleLineAsync(string line, AnalysisLocation? location, CancellationToken cancellationToken,
+    private async Task<HandleReply> HandleLineAsync(
+        string line,
+        AnalysisLocation? location,
+        CancellationToken cancellationToken,
         bool deferCheckpoint = false)
     {
         ArgumentNullException.ThrowIfNull(line);
@@ -235,6 +242,7 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
                 _preparedNative = (ticket, native, _core.Status.Revision);
                 reply = reply with { PendingNative = ticket };
             }
+
             return reply;
         }, cancellationToken).ConfigureAwait(false);
 
@@ -248,6 +256,7 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
                     WorkspaceCheckpoint?.Invoke(workspace);
                     return workspace;
                 }, cancellationToken).ConfigureAwait(false);
+
                 return loaded.Reply with { Lines = [.. reply.Lines, .. loaded.Reply.Lines] };
             }
             catch (Exception exception) when (exception is ReplException or IOException or InvalidDataException or ArgumentException)
@@ -363,7 +372,10 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
     /// <returns>The shared cleanup operation.</returns>
     public ValueTask DisposeAsync()
     {
-        lock (_analysisLock) return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+        lock (_analysisLock)
+        {
+            return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+        }
     }
 
     private async Task DisposeCoreAsync()
@@ -375,6 +387,7 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
             _analysisCache = null;
             analyses = [.. _analyses];
         }
+
         _core.Session.CompletionChanged -= CancelWarmup;
         await _shutdown.CancelAsync().ConfigureAwait(false);
         try
@@ -388,6 +401,7 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
         {
             // The request already observes its failure; shutdown must still release snapshots and the execution thread.
         }
+
         await _warmupCancellation.CancelAsync().ConfigureAwait(false);
         await _warmup.ConfigureAwait(false);
         await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
@@ -399,8 +413,13 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
             }
             else
             {
-                await _execution.RunAsync(() => { _core.Dispose(); return true; }, CancellationToken.None).ConfigureAwait(false);
+                await _execution.RunAsync(() =>
+                {
+                    _core.Dispose();
+                    return true;
+                }, CancellationToken.None).ConfigureAwait(false);
             }
+
             _completion.Dispose();
             lock (_snapshotLock)
             {

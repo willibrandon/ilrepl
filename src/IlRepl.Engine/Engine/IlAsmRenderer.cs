@@ -7,10 +7,12 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Renders a session as ILAsm source: assembly references, a static class, one method per
-/// <c>.method</c> definition, and a <c>Run</c> method with the cell's locals, arguments, blocks,
-/// and instructions.
+/// Renders a session as ILAsm source.
 /// </summary>
+/// <remarks>
+/// The source has assembly references, a static class, one method per <c>.method</c> definition, and a <c>Run</c> method with the cell's
+/// locals, arguments, blocks, and instructions.
+/// </remarks>
 public static class IlAsmRenderer
 {
     /// <summary>
@@ -409,7 +411,8 @@ public static class IlAsmRenderer
                             open.Push((open.Pop().EndLabel, BlockKind.Catch));
                             indent--;
                             sb.Append(Pad(indent)).AppendLine("}");
-                            sb.Append(Pad(indent)).Append("catch ").AppendLine(TypeNameFormatter.IlAsmDeclaring(e.CatchType ?? typeof(object)));
+                            sb.Append(Pad(indent)).Append("catch ")
+                                .AppendLine(TypeNameFormatter.IlAsmDeclaring(e.CatchType ?? typeof(object)));
                             sb.Append(Pad(indent)).AppendLine("{");
                             indent++;
                             break;
@@ -468,6 +471,7 @@ public static class IlAsmRenderer
                             sb.Append(Pad(indent - 1)).Append(endLabel).AppendLine(":");
                             break;
                         }
+
                         default:
                             break;
                     }
@@ -682,9 +686,11 @@ public static class IlAsmRenderer
     }
 
     /// <summary>
-    /// The method on the generic type definition, or the generic method definition, behind a
-    /// member reached through an instantiation; the member itself otherwise.
+    /// The method on the generic type definition, or the generic method definition, behind a member reached through an instantiation.
     /// </summary>
+    /// <remarks>
+    /// It is the member itself otherwise.
+    /// </remarks>
     internal static MethodBase DefinitionOf(MethodBase method)
     {
         var definition = method;
@@ -828,7 +834,8 @@ public static class IlAsmRenderer
         if (type.IsGenericType && !type.IsGenericTypeDefinition)
         {
             var prefix = type.IsValueType ? "valuetype " : "class ";
-            return prefix + TypeNameFormatter.IlAsmDeclaring(type.GetGenericTypeDefinition()) + "<" + string.Join(", ", type.GetGenericArguments().Select(SignatureType)) + ">";
+            return prefix + TypeNameFormatter.IlAsmDeclaring(type.GetGenericTypeDefinition()) + "<"
+                + string.Join(", ", type.GetGenericArguments().Select(SignatureType)) + ">";
         }
 
         return TypeNameFormatter.IlAsm(type);
@@ -1040,7 +1047,10 @@ public static class IlAsmRenderer
         var inner = Pad(level + 1);
         var header = new StringBuilder();
         header.Append(pad).Append(".class ").Append(IlAsmWords.Type(declaration.Attributes, declaration.Kind, declaration.IsNested));
-        header.Append(level == 0 && declaration.Namespace.Length > 0 ? string.Join(".", declaration.Namespace.Split('.').Select(TypeNameFormatter.IlAsmIdentifier)) + "." + TypeName(declaration.Name) : TypeName(declaration.Name));
+        header.Append(level == 0
+            && declaration.Namespace.Length > 0
+            ? string.Join(".", declaration.Namespace.Split('.').Select(TypeNameFormatter.IlAsmIdentifier)) + "."
+            + TypeName(declaration.Name) : TypeName(declaration.Name));
         if (declaration.TypeParameters.Count > 0)
         {
             header.Append('<').Append(string.Join(", ", declaration.TypeParameters.Select(GenericParameterIlAsm))).Append('>');
@@ -1164,6 +1174,11 @@ public static class IlAsmRenderer
         sb.Append(pad).AppendLine("}");
     }
 
+    /// <summary>
+    /// Renders one generic parameter as ILAsm declares it: variance, constraint flags, constraint types, then the name.
+    /// </summary>
+    /// <param name="parameter">The generic parameter of a type or method declaration.</param>
+    /// <returns>The text that goes between the angle brackets of the declaration.</returns>
     internal static string GenericParameterIlAsm(GenericParameterDeclaration parameter)
     {
         var words = new List<string>();
@@ -1242,11 +1257,14 @@ public static class IlAsmRenderer
         var pad = Pad(level);
         var signature = method.Signature;
         var parameters = string.Join(", ", signature.Parameters.Select((parameter, index) => ParameterIlAsm(parameter, index)));
-        var generic = signature.TypeParameters.Count == 0 ? "" : "<" + string.Join(", ", signature.TypeParameters.Select(GenericParameterIlAsm)) + ">";
-        var convention = (signature.IsStatic ? "" : "instance ") + (signature.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "");
+        var generic = signature.TypeParameters.Count == 0 ? "" : "<"
+            + string.Join(", ", signature.TypeParameters.Select(GenericParameterIlAsm)) + ">";
+        var convention = (signature.IsStatic ? "" : "instance ")
+            + (signature.CallingConvention.HasFlag(CallingConventions.VarArgs) ? "vararg " : "");
         var returnType = DeclarationReturnType(signature);
         sb.Append(pad).Append(".method ").Append(IlAsmWords.Method(signature.Attributes)).Append(convention).Append(returnType).Append(' ')
-            .Append(MemberName(signature.Name)).Append(generic).Append('(').Append(parameters).Append(") ").AppendLine(IlAsmWords.Implementation(signature.ImplAttributes));
+            .Append(MemberName(signature.Name)).Append(generic).Append('(').Append(parameters).Append(") ")
+            .AppendLine(IlAsmWords.Implementation(signature.ImplAttributes));
         sb.Append(pad).AppendLine("{");
         var inner = Pad(level + 1);
         foreach (var attribute in signature.CustomAttributes)
@@ -1364,7 +1382,8 @@ public static class IlAsmRenderer
     /// <summary>
     /// A base or interface reference: the framework types are spelled out, as ildasm does.
     /// </summary>
-    private static string TypeSpec(Type type) => type == typeof(object) ? "[System.Runtime]System.Object" : TypeNameFormatter.IlAsmDeclaring(type);
+    private static string TypeSpec(Type type) =>
+        type == typeof(object) ? "[System.Runtime]System.Object" : TypeNameFormatter.IlAsmDeclaring(type);
 
     private static string CustomAttributeIlAsm(CustomAttributeDeclaration attribute)
     {

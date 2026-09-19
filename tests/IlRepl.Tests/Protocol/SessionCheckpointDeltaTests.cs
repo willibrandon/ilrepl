@@ -144,6 +144,7 @@ public sealed class SessionCheckpointDeltaTests
             TypeArguments = ["System.String", null], MethodArguments = ["System.Int32"],
             Extensions = new() { ["future"] = JsonSerializer.SerializeToElement(1) },
         };
+
         var edit = new SessionEditSnapshot
         {
             Name = "Example", Reference = "int32 Fixture::Method()", Fingerprint = "original", Source = ["ldc.i4.s 42", "ret"],
@@ -151,18 +152,32 @@ public sealed class SessionCheckpointDeltaTests
             MethodAliases = new() { ["Alias"] = method }, TypeAliases = new() { ["Type"] = "System.String" },
             SignatureHeaders = new() { ["Method"] = "int32 Method()" },
         };
+
         var image = Encoding.UTF8.GetBytes("verified asset");
         return new SessionDocument
         {
             Entries =
             [
                 new SessionEntry { Identity = "source", Source = ["// retained source"] },
-                new SessionEntry { Identity = "edit", Kind = SessionEntryKind.Edit, Source = [".edit Example {"],
-                    Edit = edit, Mark = SessionMark.Initial, Extensions = new() { ["future"] = JsonSerializer.SerializeToElement(1) } },
+                new SessionEntry
+                {
+                    Identity = "edit",
+                    Kind = SessionEntryKind.Edit,
+                    Source = [".edit Example {"],
+                    Edit = edit,
+                    Mark = SessionMark.Initial,
+                    Extensions = new() { ["future"] = JsonSerializer.SerializeToElement(1) },
+                },
             ],
-            Cells = [new SessionCell { Identity = "cell", Source = ["ldc.i4.s 42", "ret"], State = "succeeded",
-                Inputs = [".args (int32 n = 42)"], Output = [TranscriptLine.Of(LineKind.Result, "= 42", SpanStyle.Number)],
-                Extensions = new() { ["future"] = JsonSerializer.SerializeToElement(1) } }],
+            Cells = [new SessionCell
+            {
+                Identity = "cell",
+                Source = ["ldc.i4.s 42", "ret"],
+                State = "succeeded",
+                Inputs = [".args (int32 n = 42)"],
+                Output = [TranscriptLine.Of(LineKind.Result, "= 42", SpanStyle.Number)],
+                Extensions = new() { ["future"] = JsonSerializer.SerializeToElement(1) },
+            }],
             Assets = [new SessionAsset { Hash = SessionCodec.Hash(image), Image = image }],
             Editor = new SessionEditor { Lines = ["// draft"], Caret = 2, Anchor = 1 },
         };

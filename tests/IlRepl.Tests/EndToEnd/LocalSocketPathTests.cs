@@ -35,7 +35,11 @@ public sealed class LocalSocketPathTests
         {
             if (kind == "utf8")
             {
-                if (!OperatingSystem.IsWindows()) Assert.IsLessThanOrEqualTo(55, temporary.Length);
+                if (!OperatingSystem.IsWindows())
+                {
+                    Assert.IsLessThanOrEqualTo(55, temporary.Length);
+                }
+
                 Assert.IsGreaterThan(108, Encoding.UTF8.GetByteCount(Path.Combine(temporary, "ilr-0123456789abcdef", "host.sock")));
             }
 
@@ -46,7 +50,10 @@ public sealed class LocalSocketPathTests
             var source = "call string Path::GetTempPath(); ldstr " + LiteralParser.Escape(temporary + Path.DirectorySeparatorChar)
                 + "; call bool string::op_Equality(string, string); call void Console::WriteLine(bool); ldc.i4.s 42; ret";
             foreach (var argument in new[] { RepoPaths.FrontEndAssembly, "--no-color", "-e", source })
+            {
                 start.ArgumentList.Add(argument);
+            }
+
             var result = await ToolProcess.RunAsync(start, TestContext.CancellationToken);
             Assert.AreEqual(0, result.ExitCode, result.StandardError + result.StandardOutput);
             Assert.Contains("= 42 : int32", result.StandardOutput);

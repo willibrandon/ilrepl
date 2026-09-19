@@ -1,3 +1,4 @@
+using System.Text;
 using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
@@ -8,9 +9,11 @@ using IlRepl.Tui;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// A bracketed paste lands in the buffer and waits for Enter; only the clipboard's own last
-/// newline is dropped, so the buffer shows exactly the lines that will be sent.
+/// A bracketed paste lands in the buffer and waits for Enter.
 /// </summary>
+/// <remarks>
+/// Only the clipboard's own last newline is dropped, so the buffer shows exactly the lines that will be sent.
+/// </remarks>
 [TestClass]
 public sealed class IlReplAppPasteTests
 {
@@ -34,7 +37,7 @@ public sealed class IlReplAppPasteTests
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");
-        await adapter.SendAsync(System.Text.Encoding.UTF8.GetBytes("\x1b[200~ldc.i4.s 42\nret\x1b[201~\r"));
+        await adapter.SendAsync(Encoding.UTF8.GetBytes("\x1b[200~ldc.i4.s 42\nret\x1b[201~\r"));
         await auto.WaitUntilTextAsync("= 42 : int32");
         Assert.AreSequenceEqual(["il[1]> ldc.i4.s 42", "il[1]> ret"], AppTest.Echoes(transcript));
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -69,6 +72,40 @@ public sealed class IlReplAppPasteTests
     }
 
     /// <summary>
+    /// A paste meant for the prompt reaches the editor while focus is elsewhere, and the keys typed after it still follow it.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task Paste_WhileFocusIsElsewhere_StillReachesTheEditor()
+    {
+        var ct = TestContext.CancellationToken;
+        await using var engine = new InProcessEngine();
+        Hex1bApp? app = null;
+        PromptState? prompt = null;
+        var transcript = new Transcript();
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript,
+            onApp: value => app = value, onPrompt: value => prompt = value).WithPresentation(adapter).Build();
+        var run = terminal.RunAsync(ct);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.WaitUntilAsync(_ => app?.FocusedNode is EditorNode);
+
+        // Focus delivery walks to the focused node, so with focus off the editor it has no way to reach the prompt.
+        Assert.IsTrue(app!.FocusWhere(node => node is not EditorNode), "The view needs a second focusable node for this test.");
+        await auto.WaitUntilAsync(_ => app.FocusedNode is not EditorNode);
+        await adapter.PasteAsync("ldc.i4.s 42");
+        await auto.WaitUntilAsync(_ => prompt!.Text == "ldc.i4.s 42");
+
+        app.FocusWhere(node => node is EditorNode);
+        await auto.WaitUntilAsync(_ => app.FocusedNode is EditorNode);
+        await auto.EnterAsync(ct: ct);
+        await auto.WaitUntilTextAsync("stack [int32]");
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
+        await run;
+    }
+
+    /// <summary>
     /// A pasted block sits in the editor until Enter sends it.
     /// </summary>
     [TestMethod]
@@ -85,7 +122,9 @@ public sealed class IlReplAppPasteTests
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(".method int32 Twice(int32 n) {\n  ldarg n\n  ldc.i4 2\n  mul\n  ret\n}\n");
         await auto.WaitUntilTextAsync("Enter sends 6 lines");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 5) == "  ...> }" && AppTest.CaretAt(s, 8, 5), description: "the block is in the editor with the caret at its end");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {"
+            && AppTest.PromptRow(s, 5) == "  ...> }" && AppTest.CaretAt(s, 8, 5),
+            description: "the block is in the editor with the caret at its end");
         Assert.IsEmpty(AppTest.Echoes(transcript), "nothing is sent by the paste itself");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("end of method Twice");
@@ -139,7 +178,8 @@ public sealed class IlReplAppPasteTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync("ldc.i4.1\n");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4.1" && !s.ContainsText("editing"), description: "one line, no blank line after it");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4.1" && !s.ContainsText("editing"),
+            description: "one line, no blank line after it");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("stack [int32]");
         Assert.DoesNotContain(l => l.Kind == LineKind.Result, transcript.Lines);
@@ -192,7 +232,8 @@ public sealed class IlReplAppPasteTests
         await auto.WaitUntilTextAsync("Enter sends 5 lines");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("end of method F");
-        Assert.AreSequenceEqual(["il[1]> .method int32 F() {", "il[1]>   ldc.i4 1", "il[1]>   ret", "il[1]> }"], AppTest.Echoes(transcript));
+        Assert.AreSequenceEqual(["il[1]> .method int32 F() {", "il[1]>   ldc.i4 1", "il[1]>   ret", "il[1]> }"],
+            AppTest.Echoes(transcript));
         Assert.DoesNotContain(l => l.Kind == LineKind.Error, transcript.Lines);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -293,7 +334,8 @@ public sealed class IlReplAppPasteTests
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(".method void F() {\n      nop\n\tret\n}\n");
         await auto.WaitUntilTextAsync("Enter sends 4 lines");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 1) == "  ...>       nop" && AppTest.PromptRow(s, 3) == "  ...> }", description: "six spaces stay six spaces");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 1) == "  ...>       nop" && AppTest.PromptRow(s, 3) == "  ...> }",
+            description: "six spaces stay six spaces");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("end of method F");
         Assert.AreSequenceEqual(["il[1]> .method void F() {", "il[1]>       nop", "il[1]> \tret", "il[1]> }"], AppTest.Echoes(transcript));
@@ -323,7 +365,8 @@ public sealed class IlReplAppPasteTests
         await auto.WaitUntilTextAsync("il[2]>");
         Assert.HasCount(1, transcript.Lines.Where(l => l.Kind == LineKind.Result).ToList());
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 0) == "il[2]> ldc.i4.1" && AppTest.PromptRow(s, 1) == "  ...>", description: "the entry comes back with its run line");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 0) == "il[2]> ldc.i4.1"
+            && AppTest.PromptRow(s, 1) == "  ...>", description: "the entry comes back with its run line");
         await auto.WaitUntilTextAsync("Enter sends 2 lines");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("il[3]>");

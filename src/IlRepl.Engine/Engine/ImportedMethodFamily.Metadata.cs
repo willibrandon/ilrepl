@@ -20,6 +20,11 @@ namespace IlRepl.Engine;
 /// </summary>
 internal sealed partial class ImportedMethodFamily
 {
+    /// <summary>
+    /// Writes the family's types, methods, and fields into an assembly and binds their runtime members to the new definitions.
+    /// </summary>
+    /// <param name="writer">The writer for the assembly that receives the family.</param>
+    /// <returns>The definition written for each original type, method, and field.</returns>
     internal Dictionary<MemberInfo, IMemberDefinition> Write(CecilWriter writer)
     {
         RequireValid();
@@ -76,6 +81,7 @@ internal sealed partial class ImportedMethodFamily
                 CallingConvention = original.CallingConvention.HasFlag(CallingConventions.VarArgs) ? MethodCallingConvention.VarArg
                     : MethodCallingConvention.Default,
             };
+
             var owner = IsModuleInitializer(original) ? moduleOwners[original.Module]
                 : (TypeDefinition)definitions[DefinitionOf(original.DeclaringType!)];
             owner.Methods.Add(definition);
@@ -135,7 +141,9 @@ internal sealed partial class ImportedMethodFamily
 
             CopyAttributes(source.GetCustomAttributesData(), definition, writer);
             if (source is MethodBase edited && _methods[edited] is { } body)
+            {
                 WriteEditedAttributes(body, (MethodDefinition)definition, writer);
+            }
         }
 
         // Constructed override references copy method signatures, so those signatures must be complete first.
@@ -200,12 +208,16 @@ internal sealed partial class ImportedMethodFamily
             {
                 Attributes = (CecilGenericAttributes)parameter.GenericParameterAttributes,
             };
+
             owner.GenericParameters.Add(definition);
             writer.Define(parameter, definition);
         }
     }
 
-    private static void FillGenerics(Type[] parameters, IGenericParameterProvider owner, CecilWriter writer,
+    private static void FillGenerics(
+        Type[] parameters,
+        IGenericParameterProvider owner,
+        CecilWriter writer,
         IReadOnlyList<GenericParameterDeclaration>? declarations = null)
     {
         for (var index = 0; index < parameters.Length; index++)
@@ -230,7 +242,10 @@ internal sealed partial class ImportedMethodFamily
         }
     }
 
-    private void FillType(Type original, TypeDefinition definition, Dictionary<MemberInfo, IMemberDefinition> definitions,
+    private void FillType(
+        Type original,
+        TypeDefinition definition,
+        Dictionary<MemberInfo, IMemberDefinition> definitions,
         CecilWriter writer)
     {
         definition.BaseType = original.BaseType is { } parent ? writer.Import(parent) : null;
@@ -314,6 +329,7 @@ internal sealed partial class ImportedMethodFamily
                 RemoveMethod = copiedRemove,
                 InvokeMethod = copiedRaise,
             };
+
             foreach (var other in others)
             {
                 copy.OtherMethods.Add(other);
@@ -376,6 +392,7 @@ internal sealed partial class ImportedMethodFamily
                     | CecilParameterAttributes.Optional;
                 copy.Attributes |= (CecilParameterAttributes)parameter.Attributes & ~editable;
             }
+
             if (parameter.HasDefaultValue)
             {
                 copy.Constant = parameter.RawDefaultValue;
@@ -451,7 +468,9 @@ internal sealed partial class ImportedMethodFamily
         }
     }
 
-    private static void CopyAttributes(IList<CustomAttributeData> attributes, Mono.Cecil.ICustomAttributeProvider target,
+    private static void CopyAttributes(
+        IList<CustomAttributeData> attributes,
+        Mono.Cecil.ICustomAttributeProvider target,
         CecilWriter writer)
     {
         foreach (var attribute in attributes)
@@ -486,7 +505,9 @@ internal sealed partial class ImportedMethodFamily
         }
     }
 
-    private static CustomAttributeArgument AttributeArgument(CustomAttributeTypedArgument argument, CecilWriter writer,
+    private static CustomAttributeArgument AttributeArgument(
+        CustomAttributeTypedArgument argument,
+        CecilWriter writer,
         Type? declared = null)
     {
         var argumentType = argument.Value is Type ? typeof(Type) : argument.ArgumentType;
@@ -498,6 +519,7 @@ internal sealed partial class ImportedMethodFamily
             CustomAttributeTypedArgument nested => AttributeArgument(nested, writer),
             _ => argument.Value,
         });
+
         return declared == typeof(object) && argumentType != typeof(object)
             ? new CustomAttributeArgument(writer.Object, value) : value;
     }

@@ -41,23 +41,42 @@ public sealed partial class ReplCore
             + document.Entries.Sum(entry => (long)entry.Source.Length + (entry.Kind == SessionEntryKind.Rejected ? 1 : 0))
             + document.Cells.Sum(cell => (long)cell.Output.Length
                 + (lastEntries.ContainsKey(cell.Number) ? 0 : 1L + cell.Source.Length)) - maximumLines);
-        if (KeepRow()) lines.Add(TranscriptLine.Of(LineKind.Info, "  saved session history (no code executed)", SpanStyle.Dim));
+        if (KeepRow())
+        {
+            lines.Add(TranscriptLine.Of(LineKind.Info, "  saved session history (no code executed)", SpanStyle.Dim));
+        }
+
         var shown = new HashSet<int>();
         var commentOpen = false;
         for (var index = 0; index < document.Entries.Length; index++)
         {
             var entry = document.Entries[index];
             cells.TryGetValue(entry.Number, out var cell);
-            if (shown.Add(entry.Number)) Header(entry.Number, cell);
+            if (shown.Add(entry.Number))
+            {
+                Header(entry.Number, cell);
+            }
+
             if (entry.Kind == SessionEntryKind.Rejected && KeepRow())
             {
                 lines.Add(TranscriptLine.Of(LineKind.Info, "  rejected input (not applied)", SpanStyle.Dim));
             }
 
             Source(entry.Number, entry.Source);
-            if (entry.Kind is SessionEntryKind.Rejected or SessionEntryKind.Reset) commentOpen = false;
-            if (entry.Kind == SessionEntryKind.Rollback && entry.Mark is { } mark) commentOpen = mark.InBlockComment;
-            if (index == lastEntries[entry.Number] && cell is not null) Output(cell.Output);
+            if (entry.Kind is SessionEntryKind.Rejected or SessionEntryKind.Reset)
+            {
+                commentOpen = false;
+            }
+
+            if (entry.Kind == SessionEntryKind.Rollback && entry.Mark is { } mark)
+            {
+                commentOpen = mark.InBlockComment;
+            }
+
+            if (index == lastEntries[entry.Number] && cell is not null)
+            {
+                Output(cell.Output);
+            }
         }
 
         foreach (var cell in document.Cells.Where(cell => !shown.Contains(cell.Number)))
@@ -72,7 +91,11 @@ public sealed partial class ReplCore
 
         void Header(int number, SessionCell? cell)
         {
-            if (!KeepRow()) return;
+            if (!KeepRow())
+            {
+                return;
+            }
+
             var state = cell is null ? "saved input" : cell.Kind + ", " + cell.State;
             lines.Add(TranscriptLine.Of(LineKind.Info,
                 "  " + number.ToString(CultureInfo.InvariantCulture) + ": " + state + " (historical)", SpanStyle.Dim));
@@ -84,21 +107,35 @@ public sealed partial class ReplCore
             foreach (var line in source)
             {
                 if (KeepRow())
+                {
                     lines.Add(new TranscriptLine(LineKind.Input,
                         [new TranscriptSpan(prompt, SpanStyle.Prompt), .. Tokenizer.Spans(line, ref commentOpen, SpanStyle.Input)]));
-                else _ = CilLexer.Segments(line, ref commentOpen);
+                }
+                else
+                {
+                    _ = CilLexer.Segments(line, ref commentOpen);
+                }
             }
         }
 
         void Output(IEnumerable<TranscriptLine> output)
         {
             foreach (var line in output)
-                if (KeepRow()) lines.Add(line);
+            {
+                if (KeepRow())
+                {
+                    lines.Add(line);
+                }
+            }
         }
 
         bool KeepRow()
         {
-            if (remaining == 0) return true;
+            if (remaining == 0)
+            {
+                return true;
+            }
+
             remaining--;
             return false;
         }

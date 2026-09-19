@@ -117,6 +117,7 @@ internal sealed class EditingStack
                 && op.Name is "ldarg.0" or "ldarg" or "ldarg.s" or "ldarga" or "ldarga.s",
             WritesThisArgument = instruction.ArgumentIndex == 0 && scope.ThisIndex == 0 && op.Name is "starg" or "starg.s",
         };
+
         if (instruction.LocalIndex is int local && local < scope.Locals.Count)
         {
             view = view with { SlotType = scope.Locals[local].Type, SlotIsPinned = scope.Locals[local].IsPinned };
@@ -167,13 +168,15 @@ internal sealed class EditingStack
             };
         }
 
-        return operand.Signature is { } signature ? view with
-        {
-            ReturnType = SymbolIdentity.Equal(signature.ReturnType, TypeSymbol.Void) ? null : signature.ReturnType,
-            ArgumentPops = signature.ArgumentPopCount + 1,
-            ParameterTypes = signature.Parameters,
-            HasImplicitThis = signature.HasThis && !signature.ExplicitThis,
-        } : view;
+        return operand.Signature is { } signature
+            ? view with
+            {
+                ReturnType = SymbolIdentity.Equal(signature.ReturnType, TypeSymbol.Void) ? null : signature.ReturnType,
+                ArgumentPops = signature.ArgumentPopCount + 1,
+                ParameterTypes = signature.Parameters,
+                HasImplicitThis = signature.HasThis && !signature.ExplicitThis,
+            }
+            : view;
     }
 
     /// <summary>

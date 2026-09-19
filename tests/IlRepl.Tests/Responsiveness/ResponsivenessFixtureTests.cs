@@ -1,7 +1,7 @@
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
-using IlRepl.Protocol;
 using IlRepl.Processes;
+using IlRepl.Protocol;
 using IlRepl.Repl;
 
 namespace IlRepl.Tests.Responsiveness;
@@ -61,6 +61,7 @@ public sealed class ResponsivenessFixtureTests
         {
             Action = new SessionAction { Operation = SessionOperation.Hydrate }, Document = document,
         }, TestContext.CancellationToken);
+
         Assert.IsTrue(restored.Reply.Succeeded);
         Assert.IsTrue((await engine.HandleAsync("call int32 Retained3()", TestContext.CancellationToken)).Succeeded);
         var result = await engine.HandleAsync("ret", TestContext.CancellationToken);

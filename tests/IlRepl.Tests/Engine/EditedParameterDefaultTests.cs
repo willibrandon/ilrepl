@@ -34,8 +34,11 @@ public sealed class EditedParameterDefaultTests
     [DataRow(7, true, false, false)]
     [DataRow(null, false, false, false)]
     [DataRow(7, true, true, true)]
-    public async Task Commit_ExplicitParameterDefaultsReachEveryExecutable(int? originalDefault, bool isPrivate,
-        bool optional, bool duplicate)
+    public async Task Commit_ExplicitParameterDefaultsReachEveryExecutable(
+        int? originalDefault,
+        bool isPrivate,
+        bool optional,
+        bool duplicate)
     {
         var session = IlLines.Load(ParameterDefaultComparisonExamples.Source(originalDefault, isPrivate, optional: true).Split('\n'));
         var edit = session.PrepareEdit("int32 Owner::Read(int32)", "Copy");
@@ -46,15 +49,23 @@ public sealed class EditedParameterDefaultTests
         foreach (var method in new[] { edit.Original.Requested, edit.OriginalMethod })
         {
             AssertDefault(method, originalDefault, optional: true);
-            if (originalDefault is { } original) Assert.AreEqual(original, method.Invoke(null, [Type.Missing]));
-            else Assert.ThrowsExactly<ArgumentException>(() => method.Invoke(null, [Type.Missing]));
+            if (originalDefault is { } original)
+            {
+                Assert.AreEqual(original, method.Invoke(null, [Type.Missing]));
+            }
+            else
+            {
+                Assert.ThrowsExactly<ArgumentException>(() => method.Invoke(null, [Type.Missing]));
+            }
         }
+
         foreach (var method in new[] { edit.Method, alias })
         {
             AssertDefault(method, 8, optional);
             Assert.AreEqual(8, method.Invoke(null, [Type.Missing]));
             Assert.AreEqual(42, method.Invoke(null, [42]));
         }
+
         Assert.AreEqual(isPrivate, edit.Method.IsPrivate);
         Assert.IsTrue(alias.IsPublic);
         Add(session, ParameterDefaultComparisonExamples.Scenarios());
@@ -91,6 +102,7 @@ public sealed class EditedParameterDefaultTests
             Assert.AreEqual(ParameterAttributes.Optional | ParameterAttributes.HasDefault, parameter.Attributes);
             Assert.IsNull(method.Invoke(null, [Type.Missing]));
         }
+
         session.AddLine("ldnull");
         session.AddLine("call Copy");
         foreach (var image in Images(session))
@@ -133,8 +145,13 @@ public sealed class EditedParameterDefaultTests
             Assert.HasCount(1, method.GetParameters());
             Assert.AreEqual(42, method.Invoke(null, [42]));
         }
+
         var alias = session.TypeTable.MethodAliases[edit.Name];
-        foreach (var method in new[] { edit.Method!, alias }) AssertAddedDefault(method);
+        foreach (var method in new[] { edit.Method!, alias })
+        {
+            AssertAddedDefault(method);
+        }
+
         session.AddLine("ldc.i4.s 42");
         session.AddLine("ldc.i4.8");
         session.AddLine("call Copy");
@@ -144,7 +161,11 @@ public sealed class EditedParameterDefaultTests
             try
             {
                 var assembly = context.LoadFromStream(new MemoryStream(image));
-                foreach (var method in new[] { edit.Method!, alias }) AssertAddedDefault(ExportedMethod(assembly, method));
+                foreach (var method in new[] { edit.Method!, alias })
+                {
+                    AssertAddedDefault(ExportedMethod(assembly, method));
+                }
+
                 Assert.AreEqual(50, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally
@@ -194,8 +215,14 @@ public sealed class EditedParameterDefaultTests
         var flags = (optional ? ParameterAttributes.Optional : ParameterAttributes.None)
             | (value.HasValue ? ParameterAttributes.HasDefault : ParameterAttributes.None);
         Assert.AreEqual(flags, parameter.Attributes);
-        if (value is { } constant) Assert.AreEqual(constant, parameter.RawDefaultValue);
-        else Assert.AreSame(optional ? Missing.Value : DBNull.Value, parameter.RawDefaultValue);
+        if (value is { } constant)
+        {
+            Assert.AreEqual(constant, parameter.RawDefaultValue);
+        }
+        else
+        {
+            Assert.AreSame(optional ? Missing.Value : DBNull.Value, parameter.RawDefaultValue);
+        }
     }
 
     private static void AssertAddedDefault(MethodBase method)
@@ -227,6 +254,7 @@ public sealed class EditedParameterDefaultTests
                     AssertDefault(method, 8, optional);
                     Assert.AreEqual(8, method.Invoke(null, [Type.Missing]));
                 }
+
                 var cell = assembly.GetType("IlRepl.Cell")!;
                 Assert.AreEqual(8, cell.GetMethod("Run")!.Invoke(null, null));
                 Assert.AreEqual(8, cell.GetMethod("Scenario")!.Invoke(null, null));
@@ -264,7 +292,10 @@ public sealed class EditedParameterDefaultTests
 
     private static void Add(Session session, string source)
     {
-        foreach (var line in source.Split('\n')) session.AddLine(line);
+        foreach (var line in source.Split('\n'))
+        {
+            session.AddLine(line);
+        }
     }
 
     private Task<ComparisonReply> CompareAsync(Session session, string scenario) =>

@@ -41,6 +41,7 @@ internal static class ToolProcess
             {
                 process.Kill(entireProcessTree: true);
             }
+
             await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None);
 
             await deadline.CancelAsync();

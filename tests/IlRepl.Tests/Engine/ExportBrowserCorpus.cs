@@ -16,7 +16,11 @@ internal static class ExportBrowserCorpus
     /// <returns>Whether the requested mode was handled.</returns>
     internal static async Task<bool> TryRunAsync(string[] args)
     {
-        if (args.Length != 2 || args[0] != "--export-browser-corpus") return false;
+        if (args.Length != 2 || args[0] != "--export-browser-corpus")
+        {
+            return false;
+        }
+
         var path = Path.GetFullPath(args[1]);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await using var stream = File.Create(path);
@@ -33,9 +37,11 @@ internal static class ExportBrowserCorpus
                     {
                         session.AddLine(line);
                     }
+
                     var edit = session.PrepareEdit("ExportRendererWitness", "ExportRendererCopy");
                     session.CommitEdit(edit.Name, edit.Source);
                 }
+
                 session.AddLine("ldc.i4 " + example.Input);
                 session.AddLine(example.Call);
                 var saved = AssemblyExporter.Write(session, "FlowExport");
@@ -69,6 +75,7 @@ internal static class ExportBrowserCorpus
                 json.WriteEndObject();
             }
         }
+
         json.WriteEndArray();
         await json.FlushAsync();
         return true;

@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
@@ -57,8 +59,12 @@ public sealed class FunctionPointerCompletionTests
         VerifyMembers(vararg ? MethodCallingConvention.VarArg : MethodCallingConvention.Default,
             false, hasThis, explicitThis, generic);
 
-    private async Task VerifyMembers(MethodCallingConvention convention, bool useModifier,
-        bool hasThis, bool explicitThis, bool generic)
+    private async Task VerifyMembers(
+        MethodCallingConvention convention,
+        bool useModifier,
+        bool hasThis,
+        bool explicitThis,
+        bool generic)
     {
         var session = new Session();
         var (assembly, _, definition) = CecilFixture.Build((module, type) =>
@@ -75,15 +81,17 @@ public sealed class FunctionPointerCompletionTests
                 HasThis = hasThis,
                 ExplicitThis = explicitThis,
             };
+
             if (useModifier)
             {
                 var marker = convention switch
                 {
-                    MethodCallingConvention.C => typeof(System.Runtime.CompilerServices.CallConvCdecl),
-                    MethodCallingConvention.StdCall => typeof(System.Runtime.CompilerServices.CallConvStdcall),
-                    MethodCallingConvention.ThisCall => typeof(System.Runtime.CompilerServices.CallConvThiscall),
-                    _ => typeof(System.Runtime.CompilerServices.CallConvFastcall),
+                    MethodCallingConvention.C => typeof(CallConvCdecl),
+                    MethodCallingConvention.StdCall => typeof(CallConvStdcall),
+                    MethodCallingConvention.ThisCall => typeof(CallConvThiscall),
+                    _ => typeof(CallConvFastcall),
                 };
+
                 pointer.CallingConvention = MethodCallingConvention.Unmanaged;
                 pointer.ReturnType = new OptionalModifierType(module.ImportReference(marker), pointer.ReturnType);
             }
@@ -100,6 +108,7 @@ public sealed class FunctionPointerCompletionTests
             get.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
             type.Methods.Add(get);
         }, session.State.Resolver, "FunctionPointers" + Guid.NewGuid().ToString("N") + (generic ? "`1" : ""));
+
         var fixture = generic ? definition.MakeGenericType(typeof(int)) : definition;
         using var completer = new OperandCompleter(session);
         var owner = $"[{assembly.GetName().Name}]{definition.FullName}" + (generic ? "<int32>" : "");
@@ -140,7 +149,7 @@ public sealed class FunctionPointerCompletionTests
 
         session.AddLine("call Check");
         var image = IlasmLocator.Assemble(session.ToIlAsm());
-        var context = new System.Runtime.Loader.AssemblyLoadContext("pointer-roundtrip", isCollectible: true);
+        var context = new AssemblyLoadContext("pointer-roundtrip", isCollectible: true);
         context.Resolving += (_, name) => name.Name == assembly.GetName().Name ? assembly : null;
         try
         {
@@ -172,11 +181,13 @@ public sealed class FunctionPointerCompletionTests
                 HasThis = managed,
                 ExplicitThis = managed,
             };
+
             var outer = new FunctionPointerType { ReturnType = inner, CallingConvention = MethodCallingConvention.StdCall };
             outer.Parameters.Add(new ParameterDefinition(new PointerType(inner)));
             outer.Parameters.Add(new ParameterDefinition(new ByReferenceType(inner)));
             type.Fields.Add(new FieldDefinition("Nested", FieldAttributes.Public | FieldAttributes.Static, new ArrayType(outer)));
         }, session.State.Resolver, "NestedPointers" + Guid.NewGuid().ToString("N"));
+
         using var snapshot = BindingSnapshot.Capture(session.State.Context);
         var scope = new SnapshotBindingScope(snapshot);
         var syntax = CilSyntaxParser.ParseFieldReference($"[{assembly.GetName().Name}]{fixture.FullName}::Nested");

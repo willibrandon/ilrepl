@@ -127,7 +127,11 @@ public sealed class AggregateExceptionComparisonTests
             Assert.AreEqual("outer failure", exception.Message);
             Assert.AreEqual("first failure", exception.Inner!.Message);
             var last = exception.AdditionalInnerExceptions.Single();
-            while (last.Inner is { } inner) last = inner;
+            while (last.Inner is { } inner)
+            {
+                last = inner;
+            }
+
             Assert.AreEqual("exception chain is cyclic or exceeds the observation depth limit", last.Problem);
         }
     }

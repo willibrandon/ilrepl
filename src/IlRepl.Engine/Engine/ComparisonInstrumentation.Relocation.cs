@@ -42,6 +42,7 @@ internal static partial class ComparisonInstrumentation
             {
                 Attributes = parameter.Attributes & ~GenericParameterAttributes.VarianceMask,
             };
+
             holder.GenericParameters.Add(copy);
             foreach (var constraint in parameter.Constraints)
             {
@@ -112,7 +113,10 @@ internal static partial class ComparisonInstrumentation
         }
     }
 
-    private static MethodReference RelocatedReference(MethodDefinition target, TypeReference declaring, MethodReference original,
+    private static MethodReference RelocatedReference(
+        MethodDefinition target,
+        TypeReference declaring,
+        MethodReference original,
         TypeReference? constraint = null)
     {
         TypeReference owner = target.DeclaringType;
@@ -134,6 +138,7 @@ internal static partial class ComparisonInstrumentation
             ExplicitThis = target.ExplicitThis,
             CallingConvention = target.CallingConvention,
         };
+
         foreach (var parameter in target.Parameters)
         {
             reference.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, parameter.ParameterType));
@@ -187,11 +192,30 @@ internal static partial class ComparisonInstrumentation
 
         foreach (var handler in method.Body.ExceptionHandlers)
         {
-            if (handler.TryStart == previous) handler.TryStart = next;
-            if (handler.TryEnd == previous) handler.TryEnd = next;
-            if (handler.HandlerStart == previous) handler.HandlerStart = next;
-            if (handler.HandlerEnd == previous) handler.HandlerEnd = next;
-            if (handler.FilterStart == previous) handler.FilterStart = next;
+            if (handler.TryStart == previous)
+            {
+                handler.TryStart = next;
+            }
+
+            if (handler.TryEnd == previous)
+            {
+                handler.TryEnd = next;
+            }
+
+            if (handler.HandlerStart == previous)
+            {
+                handler.HandlerStart = next;
+            }
+
+            if (handler.HandlerEnd == previous)
+            {
+                handler.HandlerEnd = next;
+            }
+
+            if (handler.FilterStart == previous)
+            {
+                handler.FilterStart = next;
+            }
         }
     }
 }

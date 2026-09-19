@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.Loader;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
@@ -29,7 +30,7 @@ public sealed class CellCompilerTests
             Assert.IsTrue(File.Exists(path));
 
             // Loading from a stream keeps the file unmapped, so the directory can be deleted on Windows too.
-            var context = new System.Runtime.Loader.AssemblyLoadContext("saved-cell", isCollectible: true);
+            var context = new AssemblyLoadContext("saved-cell", isCollectible: true);
             try
             {
                 using var stream = new MemoryStream(File.ReadAllBytes(path));
@@ -104,7 +105,27 @@ public sealed class CellCompilerTests
     public void Save_WithMethods_WritesCallableMethods()
     {
         var session = new Session();
-        foreach (var line in new[] { ".method int32 Fib(int32 n) {", "ldarg n", "ldc.i4 2", "blt BASE", "ldarg n", "ldc.i4 1", "sub", "call int32 Fib(int32)", "ldarg n", "ldc.i4 2", "sub", "call int32 Fib(int32)", "add", "ret", "BASE: ldarg n", "ret", "}", "ldc.i4 1" })
+        foreach (var line in new[]
+        {
+            ".method int32 Fib(int32 n) {",
+            "ldarg n",
+            "ldc.i4 2",
+            "blt BASE",
+            "ldarg n",
+            "ldc.i4 1",
+            "sub",
+            "call int32 Fib(int32)",
+            "ldarg n",
+            "ldc.i4 2",
+            "sub",
+            "call int32 Fib(int32)",
+            "add",
+            "ret",
+            "BASE: ldarg n",
+            "ret",
+            "}",
+            "ldc.i4 1",
+        })
         {
             session.AddLine(line);
         }
@@ -114,7 +135,7 @@ public sealed class CellCompilerTests
         try
         {
             session.Save(path);
-            var context = new System.Runtime.Loader.AssemblyLoadContext("saved-methods", isCollectible: true);
+            var context = new AssemblyLoadContext("saved-methods", isCollectible: true);
             try
             {
                 using var stream = new MemoryStream(File.ReadAllBytes(path));

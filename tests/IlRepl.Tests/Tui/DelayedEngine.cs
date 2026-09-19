@@ -64,7 +64,6 @@ internal sealed class DelayedEngine : IReplEngine
     public Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken) =>
         _inner.WaitForAssembliesAsync(version, cancellationToken);
 
-
     /// <inheritdoc/>
     public Task<AnalysisReply> AnalyzeAsync(AnalysisRequest request, CancellationToken cancellationToken) =>
         _inner.AnalyzeAsync(request, cancellationToken);
@@ -121,12 +120,20 @@ internal sealed class DelayedEngine : IReplEngine
             _handled.Add(line);
             count = _handled.Count;
         }
+
         if (count == Volatile.Read(ref _holdReplyAt))
         {
             Volatile.Write(ref _replyWaiting, 1);
-            try { await _replyPermit.Task.ConfigureAwait(false); }
-            finally { Volatile.Write(ref _replyWaiting, 0); }
+            try
+            {
+                await _replyPermit.Task.ConfigureAwait(false);
+            }
+            finally
+            {
+                Volatile.Write(ref _replyWaiting, 0);
+            }
         }
+
         Volatile.Write(ref _status, reply.Status);
         return reply;
     }

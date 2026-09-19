@@ -1,3 +1,4 @@
+using System.Runtime.Loader;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
@@ -74,7 +75,7 @@ public sealed class SizeOnlyArrayCompletionTests
             }
 
             var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".dll");
-            var context = new System.Runtime.Loader.AssemblyLoadContext("size-only-export", isCollectible: true);
+            var context = new AssemblyLoadContext("size-only-export", isCollectible: true);
             context.Resolving += (_, requested) => requested.Name == assembly.GetName().Name ? assembly : null;
             try
             {

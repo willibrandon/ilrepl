@@ -3,12 +3,13 @@ using System.Text;
 namespace IlRepl.Protocol;
 
 /// <summary>
-/// The one reader of strings, quoted names, and comments in a line of IL. The engine strips
-/// comments with it before a line is routed anywhere, the editor decides whether a buffer's
-/// braces are balanced with it, and the tokenizer colours with it, so all three agree on where a
-/// string ends and where a comment begins. A <c>/* */</c> comment may span lines; the state
-/// between lines is one flag.
+/// The one reader of strings, quoted names, and comments in a line of IL.
 /// </summary>
+/// <remarks>
+/// The engine strips comments with it before a line is routed anywhere, the editor decides whether a buffer's braces are balanced with it,
+/// and the tokenizer colours with it, so all three agree on where a string ends and where a comment begins. A <c>/* */</c> comment may span
+/// lines; the state between lines is one flag.
+/// </remarks>
 public static class CilLexer
 {
     /// <summary>
@@ -96,10 +97,11 @@ public static class CilLexer
     }
 
     /// <summary>
-    /// Removes the comments from a line and keeps everything else where it was, strings and quoted
-    /// names untouched. A <c>/*</c> with no <c>*/</c> comments out the rest of the line and every
-    /// line after it until one closes it.
+    /// Removes the comments from a line and keeps everything else where it was, strings and quoted names untouched.
     /// </summary>
+    /// <remarks>
+    /// A <c>/*</c> with no <c>*/</c> comments out the rest of the line and every line after it until one closes it.
+    /// </remarks>
     /// <param name="line">The line.</param>
     /// <param name="inBlockComment">Whether a <c>/*</c> from an earlier line is still open; updated for the next line.</param>
     /// <returns>The line without its comments.</returns>
@@ -125,11 +127,13 @@ public static class CilLexer
     }
 
     /// <summary>
-    /// Removes the comments from a line and says what is left: text to parse, a blank line outside
-    /// any comment, or a comment and nothing else (a blank line inside an open <c>/* */</c> counts
-    /// as comment). The engine routes a line by this, and the editor splits a buffer by it, so the
-    /// two never disagree about which blank lines run the cell.
+    /// Removes the comments from a line and says what is left.
     /// </summary>
+    /// <remarks>
+    /// What is left is text to parse, a blank line outside any comment, or a comment and nothing else. A blank line inside an open <c>/*
+    /// */</c> counts as comment. The engine routes a line by this, and the editor splits a buffer by it, so the two never disagree about
+    /// which blank lines run the cell.
+    /// </remarks>
     /// <param name="raw">The line as typed.</param>
     /// <param name="inBlockComment">Whether a <c>/*</c> from an earlier line is still open; updated for the next line.</param>
     /// <param name="text">The line without its comments, trimmed.</param>
@@ -148,18 +152,22 @@ public static class CilLexer
     }
 
     /// <summary>
-    /// Finds where a double-quoted string ends: the offset just past its closing quote, or the end
-    /// of the line when it never closes. A backslash escapes the character after it.
+    /// Finds where a double-quoted string ends: the offset just past its closing quote, or the end of the line when it never closes.
     /// </summary>
+    /// <remarks>
+    /// A backslash escapes the character after it.
+    /// </remarks>
     /// <param name="line">The line.</param>
     /// <param name="open">The offset of the opening quote.</param>
     /// <returns>The offset just past the string.</returns>
     public static int EndOfString(string line, int open) => EndOfQuoted(line, open, '"');
 
     /// <summary>
-    /// Finds where a single-quoted name ends: the offset just past its closing quote, or the end
-    /// of the line when it never closes. A backslash escapes the character after it.
+    /// Finds where a single-quoted name ends: the offset just past its closing quote, or the end of the line when it never closes.
     /// </summary>
+    /// <remarks>
+    /// A backslash escapes the character after it.
+    /// </remarks>
     /// <param name="line">The line.</param>
     /// <param name="open">The offset of the opening quote.</param>
     /// <returns>The offset just past the name.</returns>

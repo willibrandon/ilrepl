@@ -52,7 +52,11 @@ public sealed class ConsoleCapture : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         Current.Value = _previous;
         _out.Dispose();
@@ -63,11 +67,21 @@ public sealed class ConsoleCapture : IDisposable
     {
         lock (InstallLock)
         {
-            if (s_installed) return;
+            if (s_installed)
+            {
+                return;
+            }
+
             Console.SetOut(new ConsoleRoutingWriter(Console.Out, false));
             Console.SetError(new ConsoleRoutingWriter(Console.Error, true));
-            try { Console.SetIn(new ConsoleRoutingReader(Console.In)); }
-            catch (PlatformNotSupportedException) { }
+            try
+            {
+                Console.SetIn(new ConsoleRoutingReader(Console.In));
+            }
+            catch (PlatformNotSupportedException)
+            {
+            }
+
             s_installed = true;
         }
     }

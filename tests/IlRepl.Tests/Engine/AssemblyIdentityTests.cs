@@ -83,7 +83,11 @@ public sealed class AssemblyIdentityTests
         Assert.AreEqual(42, edit.Original.Requested.Invoke(null, arguments));
         AssertSourceIdentity(image, assembly);
         await AssertComparisonAsync(session, runtime ? "Copy (\"ToString\")" : "Copy ()", 43);
-        if (runtime) session.AddLine("ldstr \"ToString\"");
+        if (runtime)
+        {
+            session.AddLine("ldstr \"ToString\"");
+        }
+
         session.AddLine("call Copy");
         AssertExports(session, 43);
     }

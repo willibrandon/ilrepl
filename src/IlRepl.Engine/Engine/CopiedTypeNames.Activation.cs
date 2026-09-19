@@ -19,10 +19,18 @@ internal static partial class CopiedTypeNames
     internal static string? TranslateActivation(string? assembly, string? name, bool ignoreCase, string context, string[] names)
     {
         if (!AssemblyNameInfo.TryParse((assembly ?? context).AsSpan(), out var identity)
-            || name is null || !TypeName.TryParse(name.AsSpan(), out var type) || type.AssemblyName is not null) return null;
+            || name is null || !TypeName.TryParse(name.AsSpan(), out var type) || type.AssemblyName is not null)
+        {
+            return null;
+        }
+
         var qualified = TypeName.Parse((type.FullName + ", " + identity.FullName).AsSpan());
         var translated = TranslateType(qualified, ignoreCase, context, names, false);
-        if (translated.AssemblyQualifiedName == qualified.AssemblyQualifiedName) return null;
+        if (translated.AssemblyQualifiedName == qualified.AssemblyQualifiedName)
+        {
+            return null;
+        }
+
         return translated.AssemblyQualifiedName;
     }
 }

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
 using IlRepl.Engine;
 using Mono.Cecil;
@@ -22,8 +24,11 @@ public sealed partial class DefinitionAssemblyTests
             var name = SessionAssemblies.NextName(SessionAssemblyKind.Types);
             var assembly = New(name);
             var module = assembly.MainModule;
-            var point = new TypeDefinition("", typeName, TypeAttributes.Public | TypeAttributes.Class, module.ImportReference(typeof(
-                object)));
+            var point = new TypeDefinition(
+                "",
+                typeName,
+                TypeAttributes.Public | TypeAttributes.Class,
+                module.ImportReference(typeof(object)));
             module.Types.Add(point);
             point.Methods.Add(Constructor(module));
             point.Methods.Add(Returning(module, "Value", MethodAttributes.Public | MethodAttributes.Static, 7));
@@ -43,8 +48,11 @@ public sealed partial class DefinitionAssemblyTests
             var reference = new AssemblyNameReference(point.Name, SessionAssemblies.Version);
             module.AssemblyReferences.Add(reference);
             var pointType = new TypeReference("", "Point", module, reference);
-            var holder = new TypeDefinition("", "Holder", TypeAttributes.Public | TypeAttributes.Class, module.ImportReference(typeof(
-                object)));
+            var holder = new TypeDefinition(
+                "",
+                "Holder",
+                TypeAttributes.Public | TypeAttributes.Class,
+                module.ImportReference(typeof(object)));
             module.Types.Add(holder);
             var read = new MethodDefinition("Read", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Int32);
             var il = read.Body.GetILProcessor();
@@ -53,7 +61,7 @@ public sealed partial class DefinitionAssemblyTests
             il.Emit(OpCodes.Add);
             il.Emit(OpCodes.Ret);
             holder.Methods.Add(read);
-            var attribute = new CustomAttribute(module.ImportReference(typeof(System.Diagnostics.DebuggerTypeProxyAttribute).GetConstructor(
+            var attribute = new CustomAttribute(module.ImportReference(typeof(DebuggerTypeProxyAttribute).GetConstructor(
                 [typeof(Type)])!));
             attribute.ConstructorArguments.Add(new CustomAttributeArgument(module.ImportReference(typeof(Type)), pointType));
             holder.CustomAttributes.Add(attribute);
@@ -68,7 +76,7 @@ public sealed partial class DefinitionAssemblyTests
             var name = SessionAssemblies.NextName(SessionAssemblyKind.Types);
             var assembly = New(name);
             var module = assembly.MainModule;
-            var type = new TypeDefinition("", "C" + index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            var type = new TypeDefinition("", "C" + index.ToString(CultureInfo.InvariantCulture),
                 TypeAttributes.Public | TypeAttributes.Class, module.ImportReference(typeof(object)));
             module.Types.Add(type);
             var sum = new MethodDefinition("Sum", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Int32);
@@ -97,8 +105,11 @@ public sealed partial class DefinitionAssemblyTests
             var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("IlReplForeign." + typeName, new Version(1, 0, 0,
                 0)), "M", ModuleKind.Dll);
             var module = assembly.MainModule;
-            var type = new TypeDefinition("", typeName, TypeAttributes.Public | TypeAttributes.Class, module.ImportReference(typeof(
-                object)));
+            var type = new TypeDefinition(
+                "",
+                typeName,
+                TypeAttributes.Public | TypeAttributes.Class,
+                module.ImportReference(typeof(object)));
             module.Types.Add(type);
             type.Methods.Add(Constructor(module));
             return Write(assembly);

@@ -1,9 +1,11 @@
 namespace IlRepl.Tui;
 
 /// <summary>
-/// What a paste puts in the buffer: the payload with its line endings folded and exactly one
-/// trailing newline, the clipboard's terminator, taken off. Every other blank line is the user's.
+/// What a paste puts in the buffer: the payload with its line endings folded and exactly one trailing newline taken off.
 /// </summary>
+/// <remarks>
+/// The trailing newline taken off is the clipboard's terminator. Every other blank line is the user's.
+/// </remarks>
 public static class PastePayload
 {
     /// <summary>

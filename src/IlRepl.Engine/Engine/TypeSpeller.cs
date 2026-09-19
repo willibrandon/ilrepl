@@ -165,6 +165,7 @@ public sealed class TypeSpeller
 
                 break;
             }
+
             case TypeSymbolKind.SzArray:
                 yield return Spell(type.Element!) + "[]";
                 break;

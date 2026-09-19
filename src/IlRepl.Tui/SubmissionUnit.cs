@@ -1,9 +1,11 @@
 namespace IlRepl.Tui;
 
 /// <summary>
-/// One unit of a submission: the buffer lines it spans, and which of them go to the engine. A
-/// unit is rolled back and returned to the editor whole when a line of it is refused.
+/// One unit of a submission: the buffer lines it spans, and which of them go to the engine.
 /// </summary>
+/// <remarks>
+/// A unit is rolled back and returned to the editor whole when a line of it is refused.
+/// </remarks>
 /// <param name="Start">The first buffer line of the unit.</param>
 /// <param name="End">The line after the unit's last.</param>
 /// <param name="Sends">The buffer lines sent to the engine, in order: blank lines inside a block are left out.</param>

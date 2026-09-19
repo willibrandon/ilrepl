@@ -4,8 +4,7 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Emits a parsed <see cref="Instruction"/> through an <see cref="ILGenerator"/>, picking the
-/// overload that matches the operand kind.
+/// Emits a parsed <see cref="Instruction"/> through an <see cref="ILGenerator"/>, picking the overload that matches the operand kind.
 /// </summary>
 public static class InstructionEmitter
 {
@@ -17,7 +16,12 @@ public static class InstructionEmitter
     /// <param name="locals">The declared locals, by index.</param>
     /// <param name="labels">The defined labels, by name.</param>
     /// <param name="methods">The session methods defined on the type being emitted, by name.</param>
-    public static void Emit(ILGenerator il, Instruction instruction, IReadOnlyList<LocalBuilder> locals, IReadOnlyDictionary<string, Label> labels, IReadOnlyDictionary<string, MethodInfo> methods)
+    public static void Emit(
+        ILGenerator il,
+        Instruction instruction,
+        IReadOnlyList<LocalBuilder> locals,
+        IReadOnlyDictionary<string, Label> labels,
+        IReadOnlyDictionary<string, MethodInfo> methods)
     {
         ArgumentNullException.ThrowIfNull(il);
         ArgumentNullException.ThrowIfNull(instruction);
@@ -184,7 +188,8 @@ public static class InstructionEmitter
         }
         else
         {
-            il.EmitCalli(OpCodes.Calli, signature.ManagedConvention, signature.ReturnType, signature.ParameterTypes, signature.OptionalParameterTypes);
+            il.EmitCalli(OpCodes.Calli, signature.ManagedConvention, signature.ReturnType, signature.ParameterTypes,
+                signature.OptionalParameterTypes);
         }
     }
 }

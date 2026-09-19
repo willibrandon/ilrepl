@@ -73,8 +73,12 @@ public sealed class NumericArgumentTests
         var magnitude = BigInteger.Abs(number);
         var sign = number.Sign < 0 ? "-" : "";
         var binary = magnitude.IsZero ? "0" : Convert.ToString(unchecked((long)(ulong)magnitude), 2);
-        foreach (var literal in new[] { expected, sign + "0x" + magnitude.ToString("x", CultureInfo.InvariantCulture),
-            sign + "0b" + binary })
+        foreach (var literal in new[]
+        {
+            expected,
+            sign + "0x" + magnitude.ToString("x", CultureInfo.InvariantCulture),
+            sign + "0b" + binary,
+        })
         {
             var cell = Echo(type, resultType, conversion);
             cell.AddLine(".args (" + type + " value = " + literal + ")");

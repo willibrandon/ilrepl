@@ -23,7 +23,11 @@ public sealed class DiagnosticRefreshTests
     [TestMethod]
     public async Task Typing_DoesNotMoveTheSeparatorThroughTheDiagnostic()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var ct = TestContext.CancellationToken;
         await using var engine = new CompletionEngine { HoldAnalysis = true };
         await engine.PrimeAsync(ct);
@@ -54,10 +58,14 @@ public sealed class DiagnosticRefreshTests
             await auto.WaitUntilAsync(_ =>
             {
                 foreach (var request in engine.Analyses.Where(request => request.Cancellation.IsCancellationRequested))
+                {
                     request.Release.TrySetResult();
+                }
+
                 return prompt.Text == expected && engine.Analyses.LastOrDefault()?.Request.Lines[0] == expected
                     && prompt.Analysis is null;
             });
+
             var caret = prompt.Editor.Cursor.Position;
             await auto.KeyAsync(Hex1bKey.F8, ct: ct);
             await auto.WaitUntilAsync(_ => recorder.Count > start);
@@ -101,7 +109,11 @@ public sealed class DiagnosticRefreshTests
     [DataRow("revision")]
     public async Task ContextChange_DiscardsPendingPresentation(string change)
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var ct = TestContext.CancellationToken;
         await using var engine = new CompletionEngine { HoldAnalysis = true };
         await engine.PrimeAsync(ct);
@@ -113,7 +125,12 @@ public sealed class DiagnosticRefreshTests
         var first = engine.Analyses.First();
         Assert.IsNotEmpty((await first.Prepared).Diagnostics);
         first.Release.SetResult();
-        await WaitAsync(() => { requester.Refresh(state); return state.Analysis is not null; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return state.Analysis is not null;
+        });
+
         var display = PromptDiagnostics.Display(state);
         state.Editor.InsertText("x");
         requester.Refresh(state);
@@ -142,8 +159,13 @@ public sealed class DiagnosticRefreshTests
         stale.Release.SetResult();
         if (change != "clear")
         {
-            await WaitAsync(() => { requester.Refresh(state); return engine.Analyses.Count == 3; });
+            await WaitAsync(() =>
+            {
+                requester.Refresh(state);
+                return engine.Analyses.Count == 3;
+            });
         }
+
         foreach (var request in engine.Analyses)
         {
             request.Release.TrySetCanceled(ct);

@@ -32,6 +32,7 @@ public static class ReflectionDependencyExamples
                 + "callvirt instance class Type Type::GetNestedType(string, valuetype BindingFlags)\nldstr \"Read\"\n"
                 + "callvirt instance class MethodInfo Type::GetMethod(string)\n" + invoke,
         };
+
         return """
             .class public Owner {
               .field private int32 _value

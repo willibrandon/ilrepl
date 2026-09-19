@@ -17,10 +17,13 @@ namespace IlRepl.Engine;
 public static class MemberResolver
 {
     /// <summary>
-    /// Resolves a method reference such as <c>void [System.Console]System.Console::WriteLine(string)</c>,
-    /// <c>instance string Object::ToString()</c>, <c>Console::WriteLine(string)</c>, <c>instance void StringBuilder::.ctor()</c>,
-    /// <c>!!0 Enumerable::First&lt;int32&gt;(class IEnumerable`1&lt;!!0&gt;)</c>, or <c>vararg int32 Hello::CountArgs(..., int32, int32)</c>.
+    /// Resolves a method reference such as <c>void [System.Console]System.Console::WriteLine(string)</c>.
     /// </summary>
+    /// <remarks>
+    /// Other examples are <c>instance string Object::ToString()</c>, <c>Console::WriteLine(string)</c>, <c>instance void
+    /// StringBuilder::.ctor()</c>, <c>!!0 Enumerable::First&lt;int32&gt;(class IEnumerable`1&lt;!!0&gt;)</c>, and <c>vararg int32
+    /// Hello::CountArgs(..., int32, int32)</c>.
+    /// </remarks>
     /// <param name="spec">The reference text.</param>
     /// <param name="context">The parse context.</param>
     /// <param name="wantConstructor">True when the call site is <c>newobj</c> and a constructor is required.</param>
@@ -54,8 +57,7 @@ public static class MemberResolver
     }
 
     /// <summary>
-    /// Renders a method in the same shape the resolver accepts, for candidate lists and
-    /// diagnostics.
+    /// Renders a method in the same shape the resolver accepts, for candidate lists and diagnostics.
     /// </summary>
     /// <param name="method">The method or constructor.</param>
     /// <returns>The IL-style signature.</returns>
@@ -89,5 +91,11 @@ public static class MemberResolver
         return $"{instance}{returnType} {TypeNameFormatter.Pretty(method.DeclaringType)}::{name}({parameters})";
     }
 
+    /// <summary>
+    /// Tells whether two types are the same under <see cref="TypeIdentity"/>, with no owner map.
+    /// </summary>
+    /// <param name="a">The first type.</param>
+    /// <param name="b">The second type.</param>
+    /// <returns>True when they match.</returns>
     internal static bool TypesEqual(Type a, Type b) => TypeIdentity.Equal(a, b);
 }

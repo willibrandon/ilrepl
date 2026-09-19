@@ -4,10 +4,12 @@ using System.Reflection.Metadata;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Opens a metadata reader over the metadata section of a loaded assembly. Both runtimes expose
-/// the section for any non-dynamic assembly; the reader is valid for as long as the assembly stays
-/// loaded, which a command's lifetime never outlives.
+/// Opens a metadata reader over the metadata section of a loaded assembly.
 /// </summary>
+/// <remarks>
+/// Both runtimes expose the section for any non-dynamic assembly; the reader is valid for as long as the assembly stays loaded, which a
+/// command's lifetime never outlives.
+/// </remarks>
 public static class ModuleMetadata
 {
     /// <summary>

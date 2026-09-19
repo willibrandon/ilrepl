@@ -50,6 +50,7 @@ internal static class CecilArrayShapes
 
                 return fixups.Array(element, signature.Rank, signature.Sizes, signature.LowerBounds);
             }
+
             case ByReferenceType byRef when signature.Kind == TypeSymbolKind.ByRef:
                 return new ByReferenceType(Restore(byRef.ElementType, signature.Element!, fixups));
             case PointerType pointer when signature.Kind == TypeSymbolKind.Pointer:
@@ -64,6 +65,7 @@ internal static class CecilArrayShapes
 
                 return restored;
             }
+
             case FunctionPointerType pointer when signature.Kind == TypeSymbolKind.FunctionPointer:
             {
                 var restored = new FunctionPointerType
@@ -73,6 +75,7 @@ internal static class CecilArrayShapes
                     ExplicitThis = pointer.ExplicitThis,
                     ReturnType = Restore(pointer.ReturnType, signature.Signature!.ReturnType, fixups),
                 };
+
                 for (var index = 0; index < pointer.Parameters.Count; index++)
                 {
                     restored.Parameters.Add(new ParameterDefinition(
@@ -81,6 +84,7 @@ internal static class CecilArrayShapes
 
                 return restored;
             }
+
             default:
                 return type;
         }

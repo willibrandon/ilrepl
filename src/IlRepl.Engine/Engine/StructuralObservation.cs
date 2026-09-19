@@ -8,7 +8,8 @@ namespace IlRepl.Engine;
 /// <summary>
 /// Observes instance fields without executing user getters, formatting, equality, or constructors.
 /// </summary>
-internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, string> typeNames,
+internal sealed partial class StructuralObservation(
+    IReadOnlyDictionary<string, string> typeNames,
     ObservationIdentityMap? identities = null)
 {
     private const int MaximumNodes = 4096;
@@ -34,7 +35,10 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
     private ObservedValue Capture(object? value, int depth)
     {
         if (_orderingOwner is { } ordering && ++ordering._orderingNodes > MaximumNodes)
+        {
             return Unavailable(value is null ? "" : TypeName(value.GetType()), "collection ordering exceeds the observation limit");
+        }
+
         if (++_nodes > MaximumNodes || depth > MaximumDepth)
         {
             return Unavailable(value is null ? "" : TypeName(value.GetType()), "structural observation exceeded its node or depth limit");
@@ -87,6 +91,7 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
             Type reflected => TypeName(reflected),
             _ => null,
         };
+
         if (scalar is not null)
         {
             return Scalar(value, name, scalar);
@@ -117,10 +122,25 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
         var identity = Identities.Get(value);
         _identities.Add(value, identity);
 
-        if (CaptureStringComparer(value, name, identity) is { } comparer) return comparer;
-        if (CaptureImmutableCollection(value, depth, identity) is { } immutable) return immutable;
-        if (CaptureLookup(value, depth, identity) is { } lookup) return lookup;
-        if (CaptureCollection(value, depth, identity) is { } collection) return collection;
+        if (CaptureStringComparer(value, name, identity) is { } comparer)
+        {
+            return comparer;
+        }
+
+        if (CaptureImmutableCollection(value, depth, identity) is { } immutable)
+        {
+            return immutable;
+        }
+
+        if (CaptureLookup(value, depth, identity) is { } lookup)
+        {
+            return lookup;
+        }
+
+        if (CaptureCollection(value, depth, identity) is { } collection)
+        {
+            return collection;
+        }
 
         var members = new List<ObservedMember>();
         if (value is Array array)
@@ -166,11 +186,18 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
                 {
                     var storedDetail = field.Name is "_data" or "_helpURL" or "_source";
                     var commonDetail = field.Name is "_message" or "_innerException" or "_HResult";
-                    if (!storedDetail && (exceptionDetails || !commonDetail)) continue;
+                    if (!storedDetail && (exceptionDetails || !commonDetail))
+                    {
+                        continue;
+                    }
                 }
 
                 if (parent == typeof(AggregateException)
-                    && (field.Name == "_rocView" || exceptionDetails && field.Name == "_innerExceptions")) continue;
+                    && (field.Name == "_rocView" || exceptionDetails && field.Name == "_innerExceptions"))
+                {
+                    continue;
+                }
+
                 var key = TypeName(parent) + "::" + field.Name;
                 if (_nodes >= MaximumNodes)
                 {
@@ -282,7 +309,10 @@ internal sealed partial class StructuralObservation(IReadOnlyDictionary<string, 
                 for (var index = 1; index < aggregate.InnerExceptions.Count; index++)
                 {
                     additional.Add(Exception(aggregate.InnerExceptions[index], seen, ref nodes));
-                    if (nodes > MaximumNodes) break;
+                    if (nodes > MaximumNodes)
+                    {
+                        break;
+                    }
                 }
             }
 

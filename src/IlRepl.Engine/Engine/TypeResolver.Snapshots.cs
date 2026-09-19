@@ -23,9 +23,17 @@ public sealed partial class TypeResolver
         var resolver = new TypeResolver();
         try
         {
-            if (resolver._context.IsCollectible) resolver._context.Unload();
+            if (resolver._context.IsCollectible)
+            {
+                resolver._context.Unload();
+            }
+
             resolver._context = new ReferenceLoadContext(_context, reusePreviousImages: false);
-            foreach (var (name, path) in nativeLibraries) resolver.RegisterNative(name, path);
+            foreach (var (name, path) in nativeLibraries)
+            {
+                resolver.RegisterNative(name, path);
+            }
+
             var frozen = images.ToArray();
             resolver.RegisterImages(frozen);
             foreach (var image in frozen)

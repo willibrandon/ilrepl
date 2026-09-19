@@ -67,6 +67,7 @@ internal static class IsolatedTestProcess
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+
         if (string.Equals(Path.GetFileNameWithoutExtension(start.FileName), "dotnet", StringComparison.OrdinalIgnoreCase))
         {
             start.ArgumentList.Add(typeof(IsolatedTestProcess).Assembly.Location);
@@ -83,7 +84,11 @@ internal static class IsolatedTestProcess
         start.ArgumentList.Add("--filter");
         start.ArgumentList.Add(filter);
         start.Environment[SelectedTest] = name;
-        if (directory is not null) start.Environment[Workspace] = directory;
+        if (directory is not null)
+        {
+            start.Environment[Workspace] = directory;
+        }
+
         using var child = Process.Start(start) ?? throw new InvalidOperationException("The isolated test did not start.");
         using var standardOutput = child.StandardOutput;
         using var standardError = child.StandardError;

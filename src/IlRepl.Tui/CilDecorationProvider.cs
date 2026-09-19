@@ -58,7 +58,11 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
         get => _commentOpenAtStart;
         set
         {
-            if (_commentOpenAtStart == value) return;
+            if (_commentOpenAtStart == value)
+            {
+                return;
+            }
+
             _commentOpenAtStart = value;
             _session?.Invalidate();
         }
@@ -75,10 +79,12 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
     public void Deactivate() => _session = null;
 
     /// <summary>
-    /// Where the caret is. A first word the caret is still at the end of is not marked wrong
-    /// while it can still become an opcode, a directive, or a command; it is marked once it
-    /// cannot, or once the caret has left it.
+    /// Where the caret is.
     /// </summary>
+    /// <remarks>
+    /// A first word the caret is still at the end of is not marked wrong while it can still become an opcode, a directive, or a command; it
+    /// is marked once it cannot, or once the caret has left it.
+    /// </remarks>
     public DocumentPosition? Caret { get; set; }
 
     /// <summary>
@@ -97,6 +103,7 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
             _commentStarts.Add(CommentOpenAtStart);
             _version = -1;
         }
+
         if (document.Version == _version && startLine == _start && endLine == _end && CommentOpenAtStart == _commentOpen && Caret == _caret)
         {
             return _cached;
@@ -111,6 +118,7 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
             _tokenizer.Tokenize(document.GetLineText(_commentStarts.Count), ref open);
             _commentStarts.Add(open);
         }
+
         var inComment = _commentStarts[first - 1];
 
         var spans = new List<TextDecorationSpan>();
@@ -128,7 +136,8 @@ public sealed class CilDecorationProvider : ITextDecorationProvider
                 var decoration = SpanPalette.Decoration(token.Style);
                 if (decoration is not null)
                 {
-                    spans.Add(new TextDecorationSpan(new DocumentPosition(line, token.Start + 1), new DocumentPosition(line, token.End + 1), decoration));
+                    spans.Add(new TextDecorationSpan(new DocumentPosition(line, token.Start + 1), new DocumentPosition(line, token.End + 1),
+                        decoration));
                 }
             }
         }

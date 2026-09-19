@@ -81,8 +81,16 @@ public sealed class ConcurrentCollectionComparisonTests
         var first = new ConcurrentDictionary<string, int>(1, 1, StringComparer.OrdinalIgnoreCase);
         var second = new ConcurrentDictionary<string, int>(4, 1000, StringComparer.OrdinalIgnoreCase);
         var entries = ConcurrentCollectionComparisonExamples.Contents(8);
-        foreach (var (key, value) in entries) Assert.IsTrue(first.TryAdd(key, value));
-        foreach (var (key, value) in entries.Reverse()) Assert.IsTrue(second.TryAdd(key, value));
+        foreach (var (key, value) in entries)
+        {
+            Assert.IsTrue(first.TryAdd(key, value));
+        }
+
+        foreach (var (key, value) in entries.Reverse())
+        {
+            Assert.IsTrue(second.TryAdd(key, value));
+        }
+
         Assert.IsTrue(second.TryAdd("removed", 99));
         Assert.IsTrue(second.TryRemove("removed", out var removed));
         Assert.AreEqual(99, removed);
@@ -113,6 +121,7 @@ public sealed class ConcurrentCollectionComparisonTests
             Assert.AreEqual("reference", entry.Value.Kind);
             Assert.AreEqual(captured.Identity, entry.Value.Identity);
         }
+
         comparer.Salt = 19;
         Assert.AreNotEqual(observed, Observe(dictionary));
         Assert.AreEqual(0, comparer.Callbacks);
@@ -233,9 +242,16 @@ public sealed class ConcurrentCollectionComparisonTests
     public void Capture_ConcurrentOrderingNodesRemainBounded(int count, bool limited)
     {
         var dictionary = new ConcurrentDictionary<object, int>(ReferenceEqualityComparer.Instance);
-        for (var index = 0; index < count; index++) Assert.IsTrue(dictionary.TryAdd(new[] { index, 0, 0, 0, 0, 0, 0, 0 }, index));
+        for (var index = 0; index < count; index++)
+        {
+            Assert.IsTrue(dictionary.TryAdd(new[] { index, 0, 0, 0, 0, 0, 0, 0 }, index));
+        }
+
         var observed = Observe(dictionary);
-        if (limited) AssertUnavailable(observed, "collection keys cannot be ordered within the observation limit");
+        if (limited)
+        {
+            AssertUnavailable(observed, "collection keys cannot be ordered within the observation limit");
+        }
         else
         {
             Assert.HasCount(count + 1, observed.Members);
@@ -247,6 +263,7 @@ public sealed class ConcurrentCollectionComparisonTests
                 Assert.AreEqual(entry[0].Value.Members[0].Value.Value, entry[1].Value.Value);
                 Assert.AreSequenceEqual(Enumerable.Repeat("0", 7), entry[0].Value.Members.Skip(1).Select(member => member.Value.Value));
             }
+
             var expected = Enumerable.Range(0, count).Select(index => index.ToString(CultureInfo.InvariantCulture));
             Assert.AreSequenceEqual(expected.Order(StringComparer.Ordinal),
                 entries.Select(entry => entry[1].Value.Value!).Order(StringComparer.Ordinal));
@@ -264,15 +281,24 @@ public sealed class ConcurrentCollectionComparisonTests
     public void Capture_ConcurrentOrderingTextRemainsBounded(int count, bool limited)
     {
         var dictionary = new ConcurrentDictionary<string, int>();
-        for (var index = 0; index < count; index++) Assert.IsTrue(dictionary.TryAdd(new string((char)('a' + index), 65_500), index));
+        for (var index = 0; index < count; index++)
+        {
+            Assert.IsTrue(dictionary.TryAdd(new string((char)('a' + index), 65_500), index));
+        }
+
         var observed = Observe(dictionary);
-        if (limited) AssertUnavailable(observed, "collection keys cannot be ordered within the observation limit");
+        if (limited)
+        {
+            AssertUnavailable(observed, "collection keys cannot be ordered within the observation limit");
+        }
         else
         {
             Assert.HasCount(count + 1, observed.Members);
             var entries = Entries(observed);
             for (var index = 0; index < count; index++)
+            {
                 Assert.AreEqual(index.ToString(CultureInfo.InvariantCulture), entries[new string((char)('a' + index), 65_500)].Value);
+            }
         }
     }
 
@@ -288,6 +314,7 @@ public sealed class ConcurrentCollectionComparisonTests
             Assert.IsNull(invocation.Exception);
             Assert.AreEqual(side.Result, invocation.Outputs.Single(member => member.Name == "return").Value);
         }
+
         return result;
     }
 
@@ -296,7 +323,10 @@ public sealed class ConcurrentCollectionComparisonTests
         var actual = Assert.IsInstanceOfType<ConcurrentDictionary<string, int>>(value);
         var expected = ConcurrentCollectionComparisonExamples.Contents(count, edited);
         Assert.HasCount(expected.Count, actual);
-        foreach (var entry in expected) Assert.AreEqual(entry.Value, actual[entry.Key]);
+        foreach (var entry in expected)
+        {
+            Assert.AreEqual(entry.Value, actual[entry.Key]);
+        }
     }
 
     private static void AssertContents(ObservedValue value, int count, bool edited)
@@ -310,7 +340,9 @@ public sealed class ConcurrentCollectionComparisonTests
         var entries = Entries(value);
         Assert.HasCount(expected.Count, entries);
         foreach (var entry in expected)
+        {
             Assert.AreEqual(entry.Value.ToString(CultureInfo.InvariantCulture), entries[entry.Key].Value);
+        }
     }
 
     private static Dictionary<string, ObservedValue> Entries(ObservedValue value) => value.Members

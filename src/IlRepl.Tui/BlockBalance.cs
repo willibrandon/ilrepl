@@ -4,10 +4,12 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Decides whether a buffer is complete: its closing braces, counted outside strings, quoted
-/// names, and comments, reach its opening braces, no comment is left open, and no string is left
-/// open on its last line. Enter submits a complete buffer and continues an incomplete one.
+/// Decides whether a buffer is complete.
 /// </summary>
+/// <remarks>
+/// A buffer is complete when its closing braces, counted outside strings, quoted names, and comments, reach its opening braces, no comment
+/// is left open, and no string is left open on its last line. Enter submits a complete buffer and continues an incomplete one.
+/// </remarks>
 public static class BlockBalance
 {
     /// <summary>
@@ -19,7 +21,12 @@ public static class BlockBalance
     /// <param name="awaitingBrace">True when the engine or the lines before hold a declaration header whose brace has not come yet.</param>
     /// <param name="commands">The dot-words that are commands, whose arguments hold no brace that counts; null to know none.</param>
     /// <returns>What the scan found.</returns>
-    public static BlockScan Scan(string text, int openDepth = 0, bool inBlockComment = false, bool awaitingBrace = false, IReadOnlyCollection<string>? commands = null)
+    public static BlockScan Scan(
+        string text,
+        int openDepth = 0,
+        bool inBlockComment = false,
+        bool awaitingBrace = false,
+        IReadOnlyCollection<string>? commands = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         var depth = openDepth;
@@ -104,7 +111,12 @@ public static class BlockBalance
     /// <param name="awaitingBrace">True when a declaration header before the text still waits for its brace.</param>
     /// <param name="commands">The dot-words that are commands, whose arguments hold no brace that counts; null to know none.</param>
     /// <returns>True when the braces balance and nothing is left open.</returns>
-    public static bool IsComplete(string text, int openDepth = 0, bool inBlockComment = false, bool awaitingBrace = false, IReadOnlyCollection<string>? commands = null)
+    public static bool IsComplete(
+        string text,
+        int openDepth = 0,
+        bool inBlockComment = false,
+        bool awaitingBrace = false,
+        IReadOnlyCollection<string>? commands = null)
     {
         var scan = Scan(text, openDepth, inBlockComment, awaitingBrace, commands);
         return scan.Depth <= 0 && !scan.InBlockComment && !scan.InString;
@@ -215,7 +227,8 @@ public static class BlockBalance
         }
 
         var word = text[..end];
-        var handler = word.SequenceEqual("catch") || word.SequenceEqual("filter") || word.SequenceEqual("finally") || word.SequenceEqual("fault") || word.SequenceEqual("handler");
+        var handler = word.SequenceEqual("catch") || word.SequenceEqual("filter") || word.SequenceEqual("finally")
+            || word.SequenceEqual("fault") || word.SequenceEqual("handler");
         return handler && (end == text.Length || !char.IsLetterOrDigit(text[end]));
     }
 

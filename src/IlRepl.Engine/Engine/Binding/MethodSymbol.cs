@@ -200,7 +200,10 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
     /// <param name="parameters">The substituted parameters.</param>
     /// <param name="genericArguments">The instantiation, or empty.</param>
     /// <returns>The copy.</returns>
-    public MethodSymbol With(TypeSymbol? declaringType, TypeSymbol returnType, IReadOnlyList<ParameterSymbol> parameters,
+    public MethodSymbol With(
+        TypeSymbol? declaringType,
+        TypeSymbol returnType,
+        IReadOnlyList<ParameterSymbol> parameters,
         IReadOnlyList<TypeSymbol> genericArguments)
     {
         ArgumentNullException.ThrowIfNull(returnType);
@@ -212,6 +215,7 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
                 ? RuntimeSymbolTypes.RebaseExact(Parameters[index].Type, Parameters[index].ExactType, parameter.Type)
                 : parameter.ExactType,
         }).ToArray();
+
         return WithExact(
             declaringType,
             returnType,

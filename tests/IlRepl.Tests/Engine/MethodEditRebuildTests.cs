@@ -104,8 +104,11 @@ public sealed class MethodEditRebuildTests
         Assert.AreSame(currentOwner, list.GetType().GetGenericArguments().Single());
         var originalReceiver = Activator.CreateInstance(edit.OriginalMethod.DeclaringType!, [40]);
         Assert.AreEqual(41, edit.OriginalMethod.Invoke(originalReceiver, null));
-        foreach (var image in new[] { AssemblyExporter.Write(session, "rebuilt-generic-signatures"),
-            IlasmLocator.Assemble(IlAsmRenderer.Render(session)) })
+        foreach (var image in new[]
+        {
+            AssemblyExporter.Write(session, "rebuilt-generic-signatures"),
+            IlasmLocator.Assemble(IlAsmRenderer.Render(session)),
+        })
         {
             var context = new AssemblyLoadContext("rebuilt-edit-" + Guid.NewGuid(), isCollectible: true);
             try

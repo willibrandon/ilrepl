@@ -28,8 +28,10 @@ public static class ProcessComparisonRunner
     /// <param name="register">The frontend ownership acknowledgement.</param>
     /// <param name="cancellationToken">Cancels execution and ownership registration.</param>
     /// <returns>The resulting worker observations.</returns>
-    internal static async Task<ComparisonReply> RunAsync(ComparisonPackage package,
-        Func<OwnedProcessScope, CancellationToken, Task>? register, CancellationToken cancellationToken)
+    internal static async Task<ComparisonReply> RunAsync(
+        ComparisonPackage package,
+        Func<OwnedProcessScope, CancellationToken, Task>? register,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(package);
         var path = Path.Combine(Path.GetTempPath(), "ilrepl-compare-" + Guid.NewGuid().ToString("N"));
@@ -38,8 +40,12 @@ public static class ProcessComparisonRunner
         return ComparisonResults.Compare(package, original, edited);
     }
 
-    private static async Task<ComparisonSide> RunSideAsync(ComparisonPackage package, bool original, string path,
-        Func<OwnedProcessScope, CancellationToken, Task>? register, CancellationToken cancellationToken)
+    private static async Task<ComparisonSide> RunSideAsync(
+        ComparisonPackage package,
+        bool original,
+        string path,
+        Func<OwnedProcessScope, CancellationToken, Task>? register,
+        CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
         {
@@ -85,6 +91,7 @@ public static class ProcessComparisonRunner
                 StandardErrorEncoding = Encoding.UTF8,
                 CreateNoWindow = true,
             };
+
             process.StartInfo.ArgumentList.Add(host);
             process.StartInfo.ArgumentList.Add("--comparison-worker");
             process.StartInfo.ArgumentList.Add(packagePath);
@@ -122,8 +129,11 @@ public static class ProcessComparisonRunner
             {
                 group.Attach(process);
                 if (register is not null)
+                {
                     await register(OwnedProcessGroup.Describe(process, Guid.NewGuid().ToString("N")), cancellationToken)
                         .ConfigureAwait(false);
+                }
+
                 await File.WriteAllTextAsync(startPath, "start", cancellationToken).ConfigureAwait(false);
             }
 
@@ -278,7 +288,10 @@ public static class ProcessComparisonRunner
         }
     }
 
-    private static async Task<string> ReadOutputAsync(StreamReader reader, int limit, TaskCompletionSource overflow,
+    private static async Task<string> ReadOutputAsync(
+        StreamReader reader,
+        int limit,
+        TaskCompletionSource overflow,
         CancellationToken cancellationToken)
     {
         using var capturedOutput = reader;

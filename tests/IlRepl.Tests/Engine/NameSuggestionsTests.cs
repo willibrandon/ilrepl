@@ -58,8 +58,24 @@ public sealed class NameSuggestionsTests
     [TestMethod]
     public void WithinBound_AgreesWithLevenshtein()
     {
-        var words = new[] { "Concat", "Concta", "Console", "Xonsole", "Cosnole", "WriteLine", "Write", "Trim", "Trmi", "ToString",
-            "tostring", "", "a", "ab" };
+        var words = new[]
+        {
+            "Concat",
+            "Concta",
+            "Console",
+            "Xonsole",
+            "Cosnole",
+            "WriteLine",
+            "Write",
+            "Trim",
+            "Trmi",
+            "ToString",
+            "tostring",
+            "",
+            "a",
+            "ab",
+        };
+
         foreach (var a in words)
         {
             foreach (var b in words)
@@ -179,13 +195,18 @@ public sealed class NameSuggestionsTests
         {
             type.NestedTypes.Add(new TypeDefinition("", "Inner", TypeAttributes.NestedPublic, module.TypeSystem.Object));
         }, resolver, "ForwardedType" + suffix);
+
         var (facade, _, own) = CecilFixture.Build((module, _) =>
         {
             var reference = AssemblyNameReference.Parse(targetAssembly.GetName().FullName!);
             module.AssemblyReferences.Add(reference);
             module.ExportedTypes.Add(new ExportedType("N", outer.Name, module, reference) { IsForwarder = true });
         }, resolver, "FacadeDefined" + suffix);
-        var (_, _, unrelated) = CecilFixture.Build((_, _) => { }, resolver, "NotForwarded" + suffix);
+
+        var (_, _, unrelated) = CecilFixture.Build((_, _) =>
+        {
+        }, resolver, "NotForwarded" + suffix);
+
         var target = nested ? outer.GetNestedType("Inner")! : outer;
         var path = outer.FullName + (nested ? "/Inner" : "");
         var hint = facade.GetName().Name!;

@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
@@ -53,24 +55,25 @@ public sealed class FunctionPointerModifierCompletionTests
                         : shape == 3 && index == 1 ? MethodCallingConvention.C : MethodCallingConvention.Unmanaged,
                     ReturnType = element,
                 };
+
                 if (shape is 0 or 3)
                 {
                     pointer.ReturnType = new OptionalModifierType(
-                        module.ImportReference(typeof(System.Runtime.CompilerServices.CallConvCdecl)), pointer.ReturnType);
+                        module.ImportReference(typeof(CallConvCdecl)), pointer.ReturnType);
                 }
 
                 if (index == 0 && shape != 3)
                 {
                     pointer.ReturnType = shape == 2
-                        ? new RequiredModifierType(module.ImportReference(typeof(System.Runtime.CompilerServices.IsVolatile)),
+                        ? new RequiredModifierType(module.ImportReference(typeof(IsVolatile)),
                             pointer.ReturnType)
                         : new OptionalModifierType(module.ImportReference(
-                            typeof(System.Runtime.CompilerServices.CallConvSuppressGCTransition)), pointer.ReturnType);
+                            typeof(CallConvSuppressGCTransition)), pointer.ReturnType);
                 }
 
                 pointer.Parameters.Add(new ParameterDefinition(index == 0 && shape != 3
                     ? new OptionalModifierType(module.ImportReference(
-                        typeof(System.Runtime.CompilerServices.IsReadOnlyAttribute)), element)
+                        typeof(IsReadOnlyAttribute)), element)
                     : element));
                 var field = new FieldDefinition("Data" + index, FieldAttributes.Public | FieldAttributes.Static, pointer);
                 type.Fields.Add(field);
@@ -85,6 +88,7 @@ public sealed class FunctionPointerModifierCompletionTests
                 type.Methods.Add(accept);
             }
         }, session.State.Resolver, "SupplementalPointers" + Guid.NewGuid().ToString("N") + (generic ? "`1" : ""));
+
         var fixture = generic ? definition.MakeGenericType(typeof(int)) : definition;
         var owner = $"[{assembly.GetName().Name}]{definition.FullName}" + (generic ? "<int32>" : "");
         using var snapshot = BindingSnapshot.Capture(session.State.Context);
@@ -92,9 +96,9 @@ public sealed class FunctionPointerModifierCompletionTests
         var first = SymbolBinder.BindFieldReference(CilSyntaxParser.ParseFieldReference(owner + "::Data0"), scope).FieldType;
         var signature = first.Signature!;
         SymbolSignatureProvider.StripModifiers(signature.ReturnType, out var required, out var optional);
-        var marker = RuntimeSymbolImporter.Import(shape == 2 ? typeof(System.Runtime.CompilerServices.IsVolatile)
-            : shape == 3 ? typeof(System.Runtime.CompilerServices.CallConvCdecl)
-            : typeof(System.Runtime.CompilerServices.CallConvSuppressGCTransition));
+        var marker = RuntimeSymbolImporter.Import(shape == 2 ? typeof(IsVolatile)
+            : shape == 3 ? typeof(CallConvCdecl)
+            : typeof(CallConvSuppressGCTransition));
         Assert.Contains(marker, shape == 2 ? required : optional);
         Assert.AreEqual(shape != 2, signature.IsExtensibleUnmanaged);
         Assert.AreEqual(shape == 3 ? TypeSymbolKind.Primitive : TypeSymbolKind.Modified, signature.Parameters.Single().Kind);
@@ -132,7 +136,7 @@ public sealed class FunctionPointerModifierCompletionTests
                 session.Save(path);
                 foreach (var image in new[] { File.ReadAllBytes(path), IlasmLocator.Assemble(session.ToIlAsm()) })
                 {
-                    var context = new System.Runtime.Loader.AssemblyLoadContext("pointer-modifier-export", isCollectible: true);
+                    var context = new AssemblyLoadContext("pointer-modifier-export", isCollectible: true);
                     context.Resolving += (_, name) => name.Name == assembly.GetName().Name ? assembly : null;
                     try
                     {

@@ -28,6 +28,7 @@ public static class NativeInstructionSets
                 Array.IndexOf(order, name) is var index && index >= 0 ? index : int.MaxValue).ThenBy(name => name, StringComparer.Ordinal);
             names.Add("AVX-512" + string.Join('/', extensions));
         }
+
         return string.Join(", ", names.OrderByDescending(name => name.StartsWith("AVX-512", StringComparison.Ordinal))
             .ThenBy(name => name, StringComparer.Ordinal));
     }

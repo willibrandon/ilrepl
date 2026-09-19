@@ -42,14 +42,19 @@ public sealed class AssemblyAttributeInspectionTests
             Assert.HasCount(5, instance);
             Assert.HasCount(2, instance.Where(api => api.Name == "GetCustomAttributes"));
             foreach (var name in new[] { "IsDefined", "GetCustomAttributesData", "get_CustomAttributes" })
+            {
                 Assert.Contains(api => api.Name == name, instance);
+            }
+
             Assert.HasCount(3, AssemblyAttributeFixture.Apis(target, "provider"));
             Assert.HasCount(1, AssemblyAttributeFixture.Apis(target, "data"));
             foreach (var dispatch in new[] { "attribute", "extensions" })
             {
                 var apis = AssemblyAttributeFixture.Apis(target, dispatch);
                 foreach (var name in new[] { "GetCustomAttribute", "GetCustomAttributes", "IsDefined" })
+                {
                     Assert.Contains(api => api.Name == name, apis);
+                }
             }
 
             var generic = AssemblyAttributeFixture.Apis(target, "extensions").Where(api => api.IsGenericMethod).ToArray();
@@ -117,7 +122,9 @@ public sealed class AssemblyAttributeInspectionTests
 
         session.AddLine("call Copy");
         foreach (var image in new[] { AssemblyExporter.Write(session, "attribute-copy"), IlasmLocator.Assemble(session.ToIlAsm()) })
+        {
             AssertExport(image);
+        }
     }
 
     /// <summary>

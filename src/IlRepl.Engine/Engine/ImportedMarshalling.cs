@@ -75,6 +75,16 @@ internal static class ImportedMarshalling
         return (null, false);
     }
 
+    /// <summary>
+    /// Reads a field's or parameter's native marshalling descriptor as Cecil marshal information.
+    /// </summary>
+    /// <param name="module">The source module.</param>
+    /// <param name="token">The field or parameter metadata token, which must carry a marshalling descriptor.</param>
+    /// <param name="writer">The writer that imports referenced types and reserves space for descriptors Cecil cannot model.</param>
+    /// <param name="resolver">The session's loaded assemblies.</param>
+    /// <param name="target">The copied field or parameter receiving the descriptor.</param>
+    /// <returns>The marshal information to assign to the target.</returns>
+    /// <exception cref="ReplException">The descriptor is malformed.</exception>
     internal static MarshalInfo Read(Module module, int token, CecilWriter writer, TypeResolver resolver, IMarshalInfoProvider target)
     {
         try
@@ -89,6 +99,7 @@ internal static class ImportedMarshalling
                 ParameterDefinition parameter => "parameter " + parameter.Name,
                 _ => "return parameter",
             };
+
             throw new ReplException($"invalid marshalling descriptor for {name} at token 0x{token:x8}: {exception.Message}", exception);
         }
     }
@@ -109,6 +120,7 @@ internal static class ImportedMarshalling
                     Size = OptionalInteger(ref reader),
                     SizeParameterMultiplier = OptionalInteger(ref reader),
                 };
+
                 break;
             case NativeType.FixedArray:
                 result = new FixedArrayMarshalInfo
@@ -116,6 +128,7 @@ internal static class ImportedMarshalling
                     Size = reader.ReadCompressedInteger(),
                     ElementType = reader.RemainingBytes == 0 ? NativeType.None : (NativeType)reader.ReadByte(),
                 };
+
                 break;
             case NativeType.FixedSysString:
                 result = new FixedSysStringMarshalInfo { Size = reader.ReadCompressedInteger() };
@@ -126,6 +139,7 @@ internal static class ImportedMarshalling
                 {
                     ElementType = reader.RemainingBytes == 0 ? VariantType.None : (VariantType)reader.ReadCompressedInteger(),
                 };
+
                 if (reader.RemainingBytes != 0)
                 {
                     var prefix = reader.Offset;
@@ -149,6 +163,7 @@ internal static class ImportedMarshalling
 
                 break;
             }
+
             case NativeType.CustomMarshaler:
             {
                 var guid = reader.ReadSerializedString();
@@ -163,8 +178,10 @@ internal static class ImportedMarshalling
                     ManagedType = writer.Import(type),
                     Cookie = cookie,
                 };
+
                 break;
             }
+
             default:
                 result = new MarshalInfo(native);
                 break;

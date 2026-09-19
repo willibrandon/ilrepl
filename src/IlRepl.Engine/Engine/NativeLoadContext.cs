@@ -29,10 +29,17 @@ internal sealed class NativeLoadContext : AssemblyLoadContext
         {
             if (string.IsNullOrWhiteSpace(library.Name) || library.Name is "." or ".."
                 || library.Name.IndexOfAny(['/', '\\', ':']) >= 0 || SessionCodec.Hash(library.Image) != library.Hash)
+            {
                 throw new ReplException("the native inspection contains an invalid native dependency image");
+            }
+
             Directory.CreateDirectory(nativeDirectory);
             var path = Path.Combine(nativeDirectory, library.Name);
-            if (!_native.TryAdd(library.Name, path)) throw new ReplException("duplicate native library: " + library.Name);
+            if (!_native.TryAdd(library.Name, path))
+            {
+                throw new ReplException("duplicate native library: " + library.Name);
+            }
+
             File.WriteAllBytes(path, library.Image);
         }
     }
@@ -44,9 +51,21 @@ internal sealed class NativeLoadContext : AssemblyLoadContext
     /// <returns>The captured native library handle or the platform fallback.</returns>
     protected override nint LoadUnmanagedDll(string unmanagedDllName)
     {
-        foreach (var name in new[] { unmanagedDllName, unmanagedDllName + ".dll", unmanagedDllName + ".so",
-            "lib" + unmanagedDllName + ".so", "lib" + unmanagedDllName + ".dylib" })
-            if (_native.TryGetValue(name, out var path)) return LoadUnmanagedDllFromPath(path);
+        foreach (var name in new[]
+        {
+            unmanagedDllName,
+            unmanagedDllName + ".dll",
+            unmanagedDllName + ".so",
+            "lib" + unmanagedDllName + ".so",
+            "lib" + unmanagedDllName + ".dylib",
+        })
+        {
+            if (_native.TryGetValue(name, out var path))
+            {
+                return LoadUnmanagedDllFromPath(path);
+            }
+        }
+
         return 0;
     }
 
@@ -63,16 +82,24 @@ internal sealed class NativeLoadContext : AssemblyLoadContext
             if (File.Exists(Path.Combine(framework, assemblyName.Name + ".dll")))
             {
                 var shared = Default.LoadFromAssemblyName(assemblyName);
-                if (Path.GetDirectoryName(shared.Location) == framework) return shared;
+                if (Path.GetDirectoryName(shared.Location) == framework)
+                {
+                    return shared;
+                }
             }
+
             throw new FileNotFoundException($"dependency '{assemblyName.FullName}' is outside the captured native graph; "
                 + "load its image and prepare the inspection again");
         }
+
         using var stream = new MemoryStream(captured.Image, writable: false);
         var assembly = LoadFromStream(stream);
         _resolver.AddCaptured(assembly, captured.Image);
         if (Enum.TryParse<SessionAssemblyKind>(captured.Role, true, out var role))
+        {
             SessionAssemblies.RegisterCaptured(assembly, captured.Image, role);
+        }
+
         return assembly;
     }
 
@@ -93,7 +120,11 @@ internal sealed class NativeLoadContext : AssemblyLoadContext
     {
         var assembly = LoadFromAssemblyName(new AssemblyName(identity.Assembly));
         var owner = assembly.GetType(identity.Type, throwOnError: true)!;
-        if (identity.TypeArguments.Length != 0) owner = owner.MakeGenericType([.. identity.TypeArguments.Select(ResolveType)]);
+        if (identity.TypeArguments.Length != 0)
+        {
+            owner = owner.MakeGenericType([.. identity.TypeArguments.Select(ResolveType)]);
+        }
+
         const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static
             | BindingFlags.DeclaredOnly;
         var method = owner.GetMethods(flags).Cast<MethodBase>().Concat(owner.GetConstructors(flags))

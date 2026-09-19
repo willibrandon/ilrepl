@@ -30,7 +30,11 @@ public sealed class PromptHelpTests
     [Timeout(30_000, CooperativeCancellation = true)]
     public async Task AssemblyLoad_DuringHelpSelectionPreservesEvidenceAndFreshness(string source, string mnemonic, bool hasProducer)
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var token = TestContext.CancellationToken;
         await using var engine = new CompletionEngine { HoldCompletion = false };
         await engine.PrimeAsync(token);
@@ -40,6 +44,7 @@ public sealed class PromptHelpTests
             Analyzer = new AnalysisRequester(engine), Invalidate = () => invalidated.Release(),
             CurrentHelpIdentity = () => (engine.Status.Revision, engine.AssemblyVersion),
         };
+
         state.SetText(source, source.Length);
         try
         {
@@ -75,13 +80,18 @@ public sealed class PromptHelpTests
             Assert.IsFalse(help.IsCurrent(state));
             var sources = help.Actions.Select((action, index) => (action, index)).Where(item => item.action.Source is not null).ToArray();
             Assert.AreEqual(hasProducer, sources.Length != 0);
-            foreach (var (_, index) in sources) Assert.IsFalse(help.IsActionCurrent(state, index));
+            foreach (var (_, index) in sources)
+            {
+                Assert.IsFalse(help.IsActionCurrent(state, index));
+            }
+
             if (hasProducer)
             {
                 help.Activate(state);
                 Assert.AreSame(help, state.Help);
                 Assert.AreEqual(caret, state.Editor.Cursor.Position);
             }
+
             string? opened = null;
             state.OpenDocumentation = url => opened = url;
             help.MoveAction(state, backwards: true, 80, 8);
@@ -117,7 +127,11 @@ public sealed class PromptHelpTests
             while (true)
             {
                 state.Analyzer.Refresh(state);
-                if (state.Analysis is { } current && current.AssemblyVersion == engine.AssemblyVersion) return;
+                if (state.Analysis is { } current && current.AssemblyVersion == engine.AssemblyVersion)
+                {
+                    return;
+                }
+
                 Assert.IsTrue(await invalidated.WaitAsync(TimeSpan.FromSeconds(5), token));
             }
         }
@@ -250,6 +264,7 @@ public sealed class PromptHelpTests
         {
             PromptHelp.Open(state, engine.Catalog);
         }
+
         var current = state.Help;
 
         Assert.IsFalse(retired.IsCurrent(state));
@@ -390,6 +405,7 @@ public sealed class PromptHelpTests
                 Assert.IsTrue(await invalidated.WaitAsync(TimeSpan.FromSeconds(5), TestContext.CancellationToken));
                 state.Analyzer.Refresh(state);
             }
+
             var previous = state.Analysis;
             var diagnostic = Assert.ContainsSingle(previous.Diagnostics.Where(item => item.Kind == AnalysisDiagnosticKind.Error));
             Assert.IsNotNull(diagnostic.Explanation);
@@ -461,6 +477,7 @@ public sealed class PromptHelpTests
             Location = location,
             Explanation = diagnostic.Explanation with { Source = new(location, "call int32 Math::Abs(int32)", kind) },
         };
+
         state.Analysis = state.Analysis with { Diagnostics = [diagnostic] };
         var caret = state.Editor.Cursor.Position;
         PromptDiagnostics.Move(state, backwards: false);

@@ -9,5 +9,10 @@ namespace IlRepl.Tests.Engine;
 /// <param name="StandardError">Text written by user code to standard error.</param>
 /// <param name="Runtime">The actual runtime version used by the child.</param>
 /// <param name="Profile">The compilation profile supplied before startup.</param>
-internal sealed record ExportObservation(ExportValue Result, string? ExceptionType, string StandardOutput,
-    string StandardError, string Runtime, string Profile);
+internal sealed record ExportObservation(
+    ExportValue Result,
+    string? ExceptionType,
+    string StandardOutput,
+    string StandardError,
+    string Runtime,
+    string Profile);

@@ -91,6 +91,7 @@ public sealed class SocketTransportTests
         Assert.IsTrue(server.CanRead);
         Assert.IsTrue(client.CanWrite);
     }
+
     /// <summary>
     /// Rejected bootstrap connections receive an explicit response and cannot consume the expected host connection.
     /// </summary>
@@ -127,6 +128,7 @@ public sealed class SocketTransportTests
             await stream.ReadExactlyAsync(acknowledgement, token);
             Assert.AreEqual((byte)0, acknowledgement[0], "Every refused connection must receive a rejection response.");
         }
+
         Assert.IsFalse(accepting.IsCompleted);
         await using var real = await LocalSocketListener.ConnectAsync(listener.SocketPath, listener.Secret, token);
         await using var accepted = await accepting;
@@ -157,7 +159,10 @@ public sealed class SocketTransportTests
             secret[0] ^= 1;
             credentials[0] = Convert.ToHexString(secret);
         }
-        else credentials[1] = Guid.Empty.ToString("N");
+        else
+        {
+            credentials[1] = Guid.Empty.ToString("N");
+        }
 
         var error = await Assert.ThrowsExactlyAsync<IOException>(() =>
             LocalSocketListener.ConnectAsync(listener.SocketPath, string.Join('.', credentials), token));

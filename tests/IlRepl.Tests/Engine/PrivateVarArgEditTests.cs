@@ -107,6 +107,7 @@ public sealed class PrivateVarArgEditTests
         {
             CallingConvention = MethodCallingConvention.VarArg,
         };
+
         call.Parameters.Add(new ParameterDefinition(writer.Module.TypeSystem.Int32));
         call.Parameters.Add(new ParameterDefinition(new SentinelType(writer.Module.TypeSystem.Int32)));
         call.Parameters.Add(new ParameterDefinition(writer.Module.TypeSystem.Int64));
@@ -220,6 +221,7 @@ public sealed class PrivateVarArgEditTests
             declaring.Methods.Single().Attributes = (isPublic ? MethodAttributes.Public : MethodAttributes.Private)
                 | MethodAttributes.Static;
         }, session.Resolver);
+
         return (nested ? owner.GetNestedType("Hidden", BindingFlags.NonPublic)! : owner)
             .GetMethod("Read", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!;
     }

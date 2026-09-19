@@ -16,8 +16,16 @@ internal sealed partial class StructuralObservation
         var type = value.GetType();
         var collection = type;
         while (collection is not null && (!collection.IsConstructedGenericType
-            || collection.GetGenericTypeDefinition() != typeof(ConcurrentDictionary<,>))) collection = collection.BaseType;
-        if (collection is null) return null;
+            || collection.GetGenericTypeDefinition() != typeof(ConcurrentDictionary<,>)))
+        {
+            collection = collection.BaseType;
+        }
+
+        if (collection is null)
+        {
+            return null;
+        }
+
         var name = TypeName(type);
         var members = Fields(value, depth, exceptionDetails: false, stopBefore: collection);
         members.Add(new ObservedMember("comparer", Capture(collection.GetProperty("Comparer")!.GetValue(value), depth + 1)));
@@ -29,7 +37,11 @@ internal sealed partial class StructuralObservation
         }
 
         var count = (int)collection.GetProperty("Count")!.GetValue(value)!;
-        if (count > MaximumNodes - _nodes) return Incomplete("collection exceeds the observation limit");
+        if (count > MaximumNodes - _nodes)
+        {
+            return Incomplete("collection exceeds the observation limit");
+        }
+
         var snapshot = new DictionaryEntry[count];
         var map = collection.GetInterfaceMap(typeof(ICollection));
         var copy = Array.FindIndex(map.InterfaceMethods, method => method.Name == nameof(ICollection.CopyTo));
@@ -47,32 +59,50 @@ internal sealed partial class StructuralObservation
         foreach (var entry in snapshot)
         {
             // A concurrent shrink leaves unused slots; ConcurrentDictionary never accepts a null key.
-            if (entry.Key is not null) entries.Add(("", entry.Key, entry.Value));
+            if (entry.Key is not null)
+            {
+                entries.Add(("", entry.Key, entry.Value));
+            }
         }
+
         if (entries.Count > 1)
         {
             for (var index = 0; index < entries.Count; index++)
             {
                 var entry = entries[index];
                 var order = CollectionOrder(entry.Key, depth + 1);
-                if (order is null) return Incomplete("collection keys cannot be ordered within the observation limit");
+                if (order is null)
+                {
+                    return Incomplete("collection keys cannot be ordered within the observation limit");
+                }
+
                 entries[index] = (order, entry.Key, entry.Value);
             }
+
             entries.Sort((left, right) => string.CompareOrdinal(left.Order, right.Order));
             for (var index = 1; index < entries.Count; index++)
+            {
                 if (entries[index - 1].Order == entries[index].Order)
+                {
                     return Incomplete("distinct collection keys have indistinguishable structural order");
+                }
+            }
         }
 
         foreach (var (entry, index) in entries.Select((entry, index) => (entry, index)))
         {
-            if (_nodes >= MaximumNodes) return Incomplete("collection exceeds the observation limit");
+            if (_nodes >= MaximumNodes)
+            {
+                return Incomplete("collection exceeds the observation limit");
+            }
+
             _nodes++;
             var item = new ObservedValue("entry", "", null, null,
                 [new ObservedMember("key", Capture(entry.Key, depth + 2)),
                     new ObservedMember("value", Capture(entry.Value, depth + 2))]);
             members.Add(new ObservedMember(index.ToString(CultureInfo.InvariantCulture), item));
         }
+
         return Result();
     }
 }

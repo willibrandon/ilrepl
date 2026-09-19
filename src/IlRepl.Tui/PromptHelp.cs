@@ -102,6 +102,7 @@ public sealed class PromptHelp
                 ?? (diagnostics.Count > 0 ? diagnostics[0] : null);
             help = diagnostic?.Explanation?.Instruction;
         }
+
         if (diagnostic is null && help is null && (state.Analyzer?.IsPending == true || state.Requester?.IsPending == true))
         {
             _ready = false;
@@ -150,10 +151,12 @@ public sealed class PromptHelp
             {
                 details.Add(TranscriptLine.Of(LineKind.Info, ""));
             }
+
             if (!ReferenceEquals(help, diagnostic?.Explanation?.Instruction))
             {
                 details.Add(new TranscriptLine(LineKind.Info, state.Tokenizer.Spans(help.Syntax)));
             }
+
             details.Add(PromptHelpContent.Effect(help.StackEffect));
             details.Add(TranscriptLine.Of(LineKind.Info, help.Explanation));
             details.AddRange(help.Notes.Select(note => TranscriptLine.Of(LineKind.Info, "• " + note, SpanStyle.Dim)));
@@ -173,6 +176,7 @@ public sealed class PromptHelp
             Scroll = 0;
             SelectedAction = 0;
         }
+
         PublishTarget(state);
     }
 
@@ -197,6 +201,7 @@ public sealed class PromptHelp
         {
             Add(TranscriptLine.Of(LineKind.Info, ""), -1);
         }
+
         for (var index = 0; index < _actions.Count; index++)
         {
             var style = index == SelectedAction ? SpanStyle.TopType : SpanStyle.Member;
@@ -231,6 +236,7 @@ public sealed class PromptHelp
         {
             return;
         }
+
         SelectedAction = selected;
         var rows = Lines(width);
         var target = Enumerable.Range(0, rows.Count).First(index => rows[index].Action == SelectedAction);

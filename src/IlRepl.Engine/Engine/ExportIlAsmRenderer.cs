@@ -6,11 +6,11 @@ using Mono.Cecil;
 using FieldDefinition = Mono.Cecil.FieldDefinition;
 using MethodDefinition = Mono.Cecil.MethodDefinition;
 using ModuleDefinition = Mono.Cecil.ModuleDefinition;
-using TypeDefinition = Mono.Cecil.TypeDefinition;
-using TypeReference = Mono.Cecil.TypeReference;
 using ReflectionFieldAttributes = System.Reflection.FieldAttributes;
 using ReflectionMethodAttributes = System.Reflection.MethodAttributes;
 using ReflectionTypeAttributes = System.Reflection.TypeAttributes;
+using TypeDefinition = Mono.Cecil.TypeDefinition;
+using TypeReference = Mono.Cecil.TypeReference;
 
 namespace IlRepl.Engine;
 

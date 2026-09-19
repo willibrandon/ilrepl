@@ -107,6 +107,7 @@ public sealed class SessionPackageTests
             unique.Write(bytes);
             fixture.PackageAsset(removed, "1.0.0", "lib/net10.0/" + removed + ".dll", bytes.ToArray());
         }
+
         fixture.WritePackage(fixture.AssemblyName, "1.0.0", 42, (removed, "[1.0.0]"));
         fixture.WritePackage(fixture.AssemblyName, "2.0.0", 84);
         await using var controller = await fixture.StartAsync(TestContext.CancellationToken);
@@ -220,6 +221,7 @@ public sealed class SessionPackageTests
         {
             username = feed.Username, password = feed.Password, marker,
         }), TestContext.CancellationToken);
+
         await using var controller = await fixture.StartAsync(new Dictionary<string, string?>
         {
             ["NUGET_NETCORE_PLUGIN_PATHS"] = typeof(SessionPackageTests).Assembly.Location,
@@ -444,11 +446,19 @@ public sealed class SessionPackageTests
         {
             ["type"] = "Transitive", ["resolved"] = "1.0.0", ["contentHash"] = Convert.ToBase64String(new byte[64]),
         };
-        if (corruptHash) portable[fixture.AssemblyName]!["contentHash"] = Convert.ToBase64String(new byte[64]);
+
+        if (corruptHash)
+        {
+            portable[fixture.AssemblyName]!["contentHash"] = Convert.ToBase64String(new byte[64]);
+        }
+
         if (changedRequest)
         {
-            document = document with { References = [.. document.References.Select(reference => reference.Request == fixture.AssemblyName
-                ? reference with { RequestedVersion = "[2.0.0]" } : reference)] };
+            document = document with
+            {
+                References = [.. document.References.Select(reference => reference.Request == fixture.AssemblyName
+                    ? reference with { RequestedVersion = "[2.0.0]" } : reference)],
+            };
         }
 
         var path = Path.Combine(fixture.DirectoryPath, "foreign.ilrepl.json");
@@ -525,6 +535,7 @@ public sealed class SessionPackageTests
             using var archive = ZipFile.Open(Path.Combine(fixture.FeedPath, runtimePackage + ".2.0.0.nupkg"), ZipArchiveMode.Update);
             archive.GetEntry("lib/net10.0/" + runtimePackage + ".dll")!.Delete();
         }
+
         Directory.Delete(fixture.PackageCachePath, recursive: true);
 
         var restored = await controller.HandleAsync(".session restore", TestContext.CancellationToken);
@@ -584,6 +595,7 @@ public sealed class SessionPackageTests
                 ? old.References.Single() with { Identity = previous.Identity, RequestedVersion = null } : reference)],
             Assets = [.. document.Assets, .. old.Assets], PackageLock = parsed.ToJsonString(),
         };
+
         var path = Path.Combine(fixture.DirectoryPath, "incompatible-runtime.ilrepl.json");
         await File.WriteAllBytesAsync(path, SessionCodec.Write(document), TestContext.CancellationToken);
         await SubmitAsync(controller, ".session open \"" + path + "\" --force");
@@ -623,6 +635,7 @@ public sealed class SessionPackageTests
             References = [.. document.References.Select(reference => reference with { Framework = "net9.0" })],
             PackageLock = document.PackageLock!.Replace("net10.0", "net9.0", StringComparison.Ordinal),
         }), TestContext.CancellationToken);
+
         await SubmitAsync(controller, ".session open \"" + path + "\" --force");
 
         await SubmitAsync(controller, ".session restore");
@@ -655,6 +668,7 @@ public sealed class SessionPackageTests
             ["NUGET_PACKAGES"] = fixture.PackageCachePath,
             ["NUGET_COMMON_APPLICATION_DATA"] = Path.Combine(outside, "machine"),
         };
+
         async Task<IReplEngine> StartUnisolated(CancellationToken token) =>
             await HostProcessEngine.StartAsync(HostPaths.HostAssembly, fixture.DirectoryPath, environment, token);
         await using (var unisolated = new SessionController(await StartUnisolated(TestContext.CancellationToken), StartUnisolated))

@@ -14,12 +14,20 @@ internal sealed partial class ImportedMethodFamily
     {
         foreach (var body in _methods.Values.OfType<MethodEditBody>().ToArray())
         {
-            if (_runtimeHelperTypes.Contains(ContextOf(body.Method))) continue;
+            if (_runtimeHelperTypes.Contains(ContextOf(body.Method)))
+            {
+                continue;
+            }
+
             foreach (var resolved in body.State.Entries.Select(entry => entry.Instruction?.Operand).OfType<ResolvedMethod>())
             {
                 var target = resolved.Method ?? _pinned[resolved.Definition!.Name];
                 if (target.Module.Assembly != body.Method.Module.Assembly
-                    || _methods.ContainsKey(IlAsmRenderer.DefinitionOf(target)) || !SharesCopiedContext(target)) continue;
+                    || _methods.ContainsKey(IlAsmRenderer.DefinitionOf(target)) || !SharesCopiedContext(target))
+                {
+                    continue;
+                }
+
                 AddMethod(target);
             }
         }
@@ -34,15 +42,34 @@ internal sealed partial class ImportedMethodFamily
         {
             if (method.DeclaringType is { } owner && (!method.IsStatic && ContainsCopiedType(owner)
                     || owner.IsConstructedGenericType && owner.GetGenericArguments().Any(ContainsCopiedType))
-                || method.IsGenericMethod && method.GetGenericArguments().Any(ContainsCopiedType)) return true;
+                || method.IsGenericMethod && method.GetGenericArguments().Any(ContainsCopiedType))
+            {
+                return true;
+            }
+
             method = IlAsmRenderer.DefinitionOf(method);
-            if (method == Selected.Method) return true;
-            if (!visited.Add(method)) continue;
+            if (method == Selected.Method)
+            {
+                return true;
+            }
+
+            if (!visited.Add(method))
+            {
+                continue;
+            }
+
             var references = SharedHelperReferences(method);
-            if (references.LooksUpTypes || references.Types.Any(ContainsCopiedType)) return true;
+            if (references.LooksUpTypes || references.Types.Any(ContainsCopiedType))
+            {
+                return true;
+            }
+
             foreach (var call in references.Calls)
             {
-                if (call.Module.Assembly == target.Module.Assembly) pending.Enqueue(call);
+                if (call.Module.Assembly == target.Module.Assembly)
+                {
+                    pending.Enqueue(call);
+                }
             }
         }
 
@@ -51,7 +78,11 @@ internal sealed partial class ImportedMethodFamily
 
     private (Type[] Types, MethodBase[] Calls, bool LooksUpTypes) SharedHelperReferences(MethodBase method)
     {
-        if (_sharedHelperReferences.TryGetValue(method, out var cached)) return cached;
+        if (_sharedHelperReferences.TryGetValue(method, out var cached))
+        {
+            return cached;
+        }
+
         var types = new HashSet<Type>();
         var calls = new HashSet<MethodBase>();
         var looksUpTypes = false;
@@ -60,7 +91,11 @@ internal sealed partial class ImportedMethodFamily
         var parameters = (method.DeclaringType?.GetGenericArguments() ?? Type.EmptyTypes)
             .Concat(method.IsGenericMethod ? method.GetGenericArguments() : Type.EmptyTypes);
         types.UnionWith(parameters.Where(type => type.IsGenericParameter).SelectMany(type => type.GetGenericParameterConstraints()));
-        if (method.DeclaringType?.TypeInitializer is { } initializer && initializer != method) calls.Add(initializer);
+        if (method.DeclaringType?.TypeInitializer is { } initializer && initializer != method)
+        {
+            calls.Add(initializer);
+        }
+
         if (!method.IsAbstract && !method.Attributes.HasFlag(MethodAttributes.PinvokeImpl) && !HasNonIlImplementation(method))
         {
             DisassembledMethod listing;
@@ -75,8 +110,11 @@ internal sealed partial class ImportedMethodFamily
             }
 
             if (listing.Problems.Count != 0 || listing.Entries.Any(entry => entry.Kind == DisassembledEntryKind.Raw))
+            {
                 throw new ReplException($"cannot inspect same-assembly helper {MemberResolver.Describe(method)}: "
                     + "its complete metadata dependencies are unavailable");
+            }
+
             types.UnionWith(listing.Locals.SelectMany(SignatureTypes));
             types.UnionWith(listing.Clauses.Select(clause => clause.CatchType).OfType<Type>());
             foreach (var entry in listing.Entries)
@@ -85,15 +123,26 @@ internal sealed partial class ImportedMethodFamily
                 {
                     case ResolvedMethod { Method: { } call }:
                         calls.Add(call);
-                        if (!call.IsStatic && call.DeclaringType is { } owner) types.Add(owner);
-                        if (call.IsGenericMethod) types.UnionWith(call.GetGenericArguments());
+                        if (!call.IsStatic && call.DeclaringType is { } owner)
+                        {
+                            types.Add(owner);
+                        }
+
+                        if (call.IsGenericMethod)
+                        {
+                            types.UnionWith(call.GetGenericArguments());
+                        }
+
                         looksUpTypes |= IsTypeLookup(call) || IsAssemblyActivation(call) || IsActivation(call);
                         break;
                     case FieldInfo field:
                         if (field.DeclaringType is { } fieldOwner)
                         {
                             types.Add(fieldOwner);
-                            if (fieldOwner.TypeInitializer is { } fieldInitializer) calls.Add(fieldInitializer);
+                            if (fieldOwner.TypeInitializer is { } fieldInitializer)
+                            {
+                                calls.Add(fieldInitializer);
+                            }
                         }
 
                         types.UnionWith(SignatureTypes(RuntimeMetadataSignatures.Read(field)));

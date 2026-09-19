@@ -29,10 +29,17 @@ internal static class WorkerOwnerWatchdog
     {
         var identity = Environment.GetEnvironmentVariable(Variable);
         Environment.SetEnvironmentVariable(Variable, null);
-        if (OperatingSystem.IsWindows() || identity is null) return;
+        if (OperatingSystem.IsWindows() || identity is null)
+        {
+            return;
+        }
+
         var pieces = identity.Split(':');
         if (pieces.Length != 2 || !int.TryParse(pieces[0], out var processId) || !long.TryParse(pieces[1], out var started))
+        {
             throw new InvalidDataException("invalid worker ownership identity");
+        }
+
         var thread = new Thread(() =>
         {
             try
@@ -41,12 +48,16 @@ internal static class WorkerOwnerWatchdog
                 var scope = new OwnedProcessScope("owner", processId, started, null);
                 OwnedProcessGroup.WaitForExitAsync(scope, CancellationToken.None).GetAwaiter().GetResult();
             }
-            catch (ArgumentException) { }
+            catch (ArgumentException)
+            {
+            }
+
             using var group = new OwnedProcessGroup();
             group.Adopt(Environment.ProcessId);
             group.StopAsync().GetAwaiter().GetResult();
             Environment.Exit(3);
         }) { IsBackground = true, Name = "ilrepl worker owner" };
+
         thread.Start();
     }
 }

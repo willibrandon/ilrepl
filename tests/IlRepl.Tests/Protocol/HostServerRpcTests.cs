@@ -66,7 +66,8 @@ public sealed class HostServerRpcTests
             var first = await proxy.HandleAsync("ldc.i4 6", TestContext.CancellationToken);
             Assert.IsTrue(first.Succeeded);
             Assert.AreEqual("[int32]", first.Status.Stack);
-            Assert.Contains(l => l.Kind == LineKind.Stack && l.Spans.Any(s => s.Style == SpanStyle.TopType && s.Text == "int32"), first.Lines);
+            Assert.Contains(l => l.Kind == LineKind.Stack && l.Spans.Any(s => s.Style == SpanStyle.TopType && s.Text == "int32"),
+                first.Lines);
 
             await proxy.HandleAsync("ldc.i4 7", TestContext.CancellationToken);
             await proxy.HandleAsync("mul", TestContext.CancellationToken);
@@ -191,7 +192,8 @@ public sealed class HostServerRpcTests
 
             var reply = await proxy.RollbackAsync(mark, TestContext.CancellationToken);
             Assert.IsTrue(reply.Succeeded);
-            Assert.Contains(l => l.Kind == LineKind.Info && l.PlainText.Contains("method F abandoned", StringComparison.Ordinal), reply.Lines);
+            Assert.Contains(l => l.Kind == LineKind.Info && l.PlainText.Contains("method F abandoned", StringComparison.Ordinal),
+                reply.Lines);
             Assert.IsNull(reply.Status.OpenMethod);
             Assert.AreEqual(0, reply.Status.OpenDepth);
 
@@ -202,6 +204,7 @@ public sealed class HostServerRpcTests
             Assert.AreNotEqual(mark.Generation, ran.Status.Mark.Generation);
         }
     }
+
     /// <summary>
     /// Whole-document analysis and earlier source locations survive the same generated RPC contract as the native host.
     /// </summary>
@@ -231,5 +234,4 @@ public sealed class HostServerRpcTests
             Assert.AreEqual("F", handled.Status.OpenMethod);
         }
     }
-
 }

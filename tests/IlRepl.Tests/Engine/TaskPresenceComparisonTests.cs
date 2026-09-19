@@ -165,7 +165,10 @@ public sealed class TaskPresenceComparisonTests
 
     private static void Add(Session session, string source)
     {
-        foreach (var line in source.Split('\n')) session.AddLine(line);
+        foreach (var line in source.Split('\n'))
+        {
+            session.AddLine(line);
+        }
     }
 
     private Task<ComparisonReply> RunAsync(Session session, string command) =>

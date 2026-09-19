@@ -321,6 +321,7 @@ public static partial class CilSyntaxParser
                     IsVector = inner.Length == 0,
                     Shape = inner
                 };
+
                 continue;
             }
 
@@ -1050,6 +1051,7 @@ public static partial class CilSyntaxParser
                     IsArgument = opName.StartsWith("ldarg", StringComparison.Ordinal)
                     || opName.StartsWith("starg", StringComparison.Ordinal)
                 };
+
                 break;
             case OperandType.InlineType:
                 if (operandText.Length == 0)

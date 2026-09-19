@@ -7,7 +7,10 @@ namespace IlRepl.Tui;
 /// <summary>
 /// Orders paste application before later input and preserves control keys grouped with printable text.
 /// </summary>
-internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source, Func<Hex1bEvent, bool> filter) : ChannelReader<Hex1bEvent>
+internal sealed class PromptInputReader(
+    ChannelReader<Hex1bEvent> source,
+    Func<Hex1bEvent, bool> filter,
+    Func<PasteContext, bool> take) : ChannelReader<Hex1bEvent>
 {
     private TaskCompletionSource? _applied;
     private TaskCompletionSource? _frameReady;
@@ -26,6 +29,7 @@ internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source, Func<H
             item = null;
             return false;
         }
+
         if (_pendingText is not null)
         {
             item = Filter(TakeTextOrControl());
@@ -43,6 +47,14 @@ internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source, Func<H
             return false;
         }
 
+        // Hex1b cancels a paste it delivered when Escape arrives. A paste taken here is cancelled the same way.
+        if (item is Hex1bKeyEvent { Key: Hex1bKey.Escape } && _paste is { IsCompleted: false, IsCancelled: false } streaming)
+        {
+            streaming.Cancel();
+            item = Hex1bKeyEvent.Plain(Hex1bKey.None);
+            return true;
+        }
+
         if (item is Hex1bKeyEvent { Key: Hex1bKey.None } key && FindControl(key.Text, 0) >= 0)
         {
             // Hex1b treats some control bytes inside multi-character text tokens as printable.
@@ -53,10 +65,24 @@ internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source, Func<H
         }
 
         item = Filter(item);
+
+        // Hex1b delivers a paste to the focused node from a background task, so that frames keep rendering. A frame
+        // that rebuilds the palette at that moment can leave the delivery without the editor, and the text with it.
+        // A paste meant for the prompt is therefore read here, which does not depend on where focus is. Later input
+        // waits for it alone: a paste that travels on through focus has no one here to say when it has landed.
         if (item is Hex1bPasteEvent paste)
         {
+            // The gate stands before the read starts, because a paste that has already arrived in full can be applied at once.
             _paste = paste.Paste;
             _applied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (take(paste.Paste))
+            {
+                item = Hex1bKeyEvent.Plain(Hex1bKey.None);
+            }
+            else
+            {
+                Applied();
+            }
         }
 
         return true;
@@ -69,6 +95,7 @@ internal sealed class PromptInputReader(ChannelReader<Hex1bEvent> source, Func<H
         {
             await frame.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
+
         if (_pendingText is not null)
         {
             return true;

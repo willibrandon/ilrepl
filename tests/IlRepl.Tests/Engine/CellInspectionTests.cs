@@ -28,6 +28,7 @@ public sealed class CellInspectionTests
             {
                 session.AddLine(line);
             }
+
             Assert.IsFalse(File.Exists(files.MarkerPath));
             Assert.IsNull(Assert.ContainsSingle(session.Cell.Arguments).Value);
 

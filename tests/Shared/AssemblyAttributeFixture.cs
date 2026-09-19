@@ -24,6 +24,7 @@ public static class AssemblyAttributeFixture
             "attribute" => typeof(Attribute), "extensions" => typeof(CustomAttributeExtensions),
             "data" => typeof(CustomAttributeData), "provider" => typeof(ICustomAttributeProvider), _ => receiver,
         };
+
         return owner.GetMethods(BindingFlags.Public | (dispatch is "instance" or "provider" ? BindingFlags.Instance : BindingFlags.Static))
             .Where(method => method.Name is "GetCustomAttributes" or "GetCustomAttribute" or "IsDefined"
                 or "GetCustomAttributesData" or "get_CustomAttributes")
@@ -50,7 +51,11 @@ public static class AssemblyAttributeFixture
         var types = new Dictionary<Type, TypeReferenceHandle>();
         TypeReferenceHandle TypeReference(Type type)
         {
-            if (types.TryGetValue(type, out var handle)) return handle;
+            if (types.TryGetValue(type, out var handle))
+            {
+                return handle;
+            }
+
             if (!references.TryGetValue(type.Assembly, out var reference))
             {
                 var identity = type.Assembly.GetName();
@@ -67,20 +72,44 @@ public static class AssemblyAttributeFixture
 
         void EncodeType(SignatureTypeEncoder encoder, Type type)
         {
-            if (type == typeof(bool)) encoder.Boolean();
-            else if (type == typeof(int)) encoder.Int32();
-            else if (type == typeof(string)) encoder.String();
-            else if (type == typeof(object)) encoder.Object();
-            else if (type.IsArray) EncodeType(encoder.SZArray(), type.GetElementType()!);
-            else if (type.IsGenericParameter) encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+            if (type == typeof(bool))
+            {
+                encoder.Boolean();
+            }
+            else if (type == typeof(int))
+            {
+                encoder.Int32();
+            }
+            else if (type == typeof(string))
+            {
+                encoder.String();
+            }
+            else if (type == typeof(object))
+            {
+                encoder.Object();
+            }
+            else if (type.IsArray)
+            {
+                EncodeType(encoder.SZArray(), type.GetElementType()!);
+            }
+            else if (type.IsGenericParameter)
+            {
+                encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+            }
             else if (type.IsGenericType)
             {
                 var arguments = type.GetGenericArguments();
                 var parameters = encoder.GenericInstantiation(TypeReference(type.GetGenericTypeDefinition()), arguments.Length,
                     type.IsValueType);
-                foreach (var argument in arguments) EncodeType(parameters.AddArgument(), argument);
+                foreach (var argument in arguments)
+                {
+                    EncodeType(parameters.AddArgument(), argument);
+                }
             }
-            else encoder.Type(TypeReference(type), type.IsValueType);
+            else
+            {
+                encoder.Type(TypeReference(type), type.IsValueType);
+            }
         }
 
         EntityHandle MethodReference(MethodBase method)
@@ -92,18 +121,36 @@ public static class AssemblyAttributeFixture
                 ? definition.GetGenericArguments().Length : 0, isInstanceMethod: !definition.IsStatic).Parameters(parameters.Length,
                 result =>
                 {
-                    if (definition is not MethodInfo info || info.ReturnType == typeof(void)) result.Void();
-                    else EncodeType(result.Type(), info.ReturnType);
+                    if (definition is not MethodInfo info || info.ReturnType == typeof(void))
+                    {
+                        result.Void();
+                    }
+                    else
+                    {
+                        EncodeType(result.Type(), info.ReturnType);
+                    }
                 }, arguments =>
                 {
-                    foreach (var parameter in parameters) EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    foreach (var parameter in parameters)
+                    {
+                        EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    }
                 });
+
             var member = metadata.AddMemberReference(TypeReference(definition.DeclaringType!), metadata.GetOrAddString(definition.Name),
                 metadata.GetOrAddBlob(signature));
-            if (method is not MethodInfo { IsGenericMethod: true } closed) return member;
+            if (method is not MethodInfo { IsGenericMethod: true } closed)
+            {
+                return member;
+            }
+
             var specification = new BlobBuilder();
             var encoded = new BlobEncoder(specification).MethodSpecificationSignature(closed.GetGenericArguments().Length);
-            foreach (var argument in closed.GetGenericArguments()) EncodeType(encoded.AddArgument(), argument);
+            foreach (var argument in closed.GetGenericArguments())
+            {
+                EncodeType(encoded.AddArgument(), argument);
+            }
+
             return metadata.AddMethodSpecification(member, metadata.GetOrAddBlob(specification));
         }
 
@@ -137,9 +184,15 @@ public static class AssemblyAttributeFixture
             if (target is "Assembly" or "Module")
             {
                 Call(typeof(Assembly).GetMethod(nameof(Assembly.GetExecutingAssembly))!);
-                if (target == "Module") Call(typeof(Assembly).GetProperty(nameof(Assembly.ManifestModule))!.GetMethod!);
+                if (target == "Module")
+                {
+                    Call(typeof(Assembly).GetProperty(nameof(Assembly.ManifestModule))!.GetMethod!);
+                }
             }
-            else if (target == "Type") LoadType(owner);
+            else if (target == "Type")
+            {
+                LoadType(owner);
+            }
             else
             {
                 instructions.OpCode(ILOpCode.Ldtoken);
@@ -149,9 +202,18 @@ public static class AssemblyAttributeFixture
 
             foreach (var parameter in inspection.GetParameters().Skip(inspection.IsStatic ? 1 : 0))
             {
-                if (parameter.ParameterType == typeof(Type)) LoadType(TypeReference(typeof(CLSCompliantAttribute)));
-                else if (parameter.ParameterType == typeof(bool)) instructions.LoadConstantI4(0);
-                else throw new InvalidOperationException("unsupported inspection argument " + parameter.ParameterType);
+                if (parameter.ParameterType == typeof(Type))
+                {
+                    LoadType(TypeReference(typeof(CLSCompliantAttribute)));
+                }
+                else if (parameter.ParameterType == typeof(bool))
+                {
+                    instructions.LoadConstantI4(0);
+                }
+                else
+                {
+                    throw new InvalidOperationException("unsupported inspection argument " + parameter.ParameterType);
+                }
             }
 
             Call(inspection);
@@ -175,7 +237,11 @@ public static class AssemblyAttributeFixture
         }
 
         instructions.LoadConstantI4(42);
-        if (!metadataOnly) instructions.OpCode(ILOpCode.Mul);
+        if (!metadataOnly)
+        {
+            instructions.OpCode(ILOpCode.Mul);
+        }
+
         instructions.OpCode(ILOpCode.Ret);
         var bodies = new BlobBuilder();
         var offset = new MethodBodyStreamEncoder(bodies).AddMethodBody(instructions);

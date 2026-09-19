@@ -12,10 +12,20 @@ These instructions apply to the entire repository.
 ## Code
 
 - Keep one type per file.
-- Keep changed lines at 140 characters or fewer.
+- Keep C# lines at 140 characters or fewer. In other files, keep changed lines within the same limit.
+- Give every body braces, with each brace on its own line. This includes single statements, `try`, `catch`, `finally`, `else`, and `lock`.
+- Braces that hold no statements, as in `{ get; set; }`, an initializer, a pattern, or a `switch` expression, may share one line.
+  Once they take more than one line, lay them out like a body.
+- Directly after a closing brace, only closing punctuation or a property's initializer may follow on its line, as in `});`,
+  `}, token).ConfigureAwait(false);`, or `} = value;`. The statement may finish there, but no second statement may start.
+- Put the `while` that ends a `do`, or a member access written straight after the brace as in `}.ToList()`, on the next line.
+- Leave a blank line after a line that begins with a closing brace, before the next statement, comment, member, accessor, or `case`.
+- When a parameter list does not fit on one line, put every parameter on its own line.
 - Prefer `using` directives and short type names over repeated fully qualified `System.*` names.
-- Add triple slash XML documentation to every changed public or internal type and member.
-- Write every `<summary>` as exactly three physical lines: the opening tag, one text line, and the closing tag.
+- The build enforces these rules through `.editorconfig` and the analyzers in `src/IlRepl.SourceGen`. Fix what they report.
+- Do not suppress a rule.
+- Add triple slash XML documentation to every public or internal type and member.
+- Write every `<summary>` as exactly three physical lines: the opening tag, one text line, and the closing tag. Put the rest in `<remarks>`.
 - Add no dependency unless Microsoft or the .NET Foundation owns it. Prefer a small local implementation when practical.
 - When adding or changing a file-based app script, update its directory's README in the same change.
 

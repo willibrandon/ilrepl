@@ -56,10 +56,19 @@ internal sealed class ExportExecution : IDisposable
     /// <param name="dependencies">Paths of dependency images.</param>
     /// <param name="cancellationToken">Cancels execution and cleans up the child process.</param>
     /// <returns>The actual typed result, exception, and console output.</returns>
-    internal async Task<ExportObservation> RunAsync(byte[] image, string type, string method, string profile,
-        object?[]? arguments = null, Type[]? genericArguments = null, string standardInput = "",
-        IReadOnlyDictionary<string, string>? environment = null, string culture = "", string uiCulture = "",
-        string[]? dependencies = null, CancellationToken cancellationToken = default)
+    internal async Task<ExportObservation> RunAsync(
+        byte[] image,
+        string type,
+        string method,
+        string profile,
+        object?[]? arguments = null,
+        Type[]? genericArguments = null,
+        string standardInput = "",
+        IReadOnlyDictionary<string, string>? environment = null,
+        string culture = "",
+        string uiCulture = "",
+        string[]? dependencies = null,
+        CancellationToken cancellationToken = default)
     {
         ResetFiles();
         var identity = Guid.NewGuid().ToString("N");
@@ -84,7 +93,11 @@ internal sealed class ExportExecution : IDisposable
         start.ArgumentList.Add(requestPath);
         start.ArgumentList.Add(resultPath);
         start.Environment.Clear();
-        foreach (var (name, value) in variables) start.Environment.Add(name, value);
+        foreach (var (name, value) in variables)
+        {
+            start.Environment.Add(name, value);
+        }
+
         try
         {
             var result = await ToolProcess.RunAsync(start, cancellationToken);
@@ -109,12 +122,19 @@ internal sealed class ExportExecution : IDisposable
     /// <returns>The complete process environment.</returns>
     internal Dictionary<string, string> CreateEnvironment(string profile, IReadOnlyDictionary<string, string>? overrides = null)
     {
-        if (profile is not ("deterministic" or "tiered")) throw new ArgumentException("Unknown runtime profile.", nameof(profile));
+        if (profile is not ("deterministic" or "tiered"))
+        {
+            throw new ArgumentException("Unknown runtime profile.", nameof(profile));
+        }
+
         var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var variables = new Dictionary<string, string>(comparer);
         foreach (var name in new[] { "PATH", "SystemRoot", "WINDIR", "COMSPEC", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH" })
         {
-            if (Environment.GetEnvironmentVariable(name) is { } value) variables[name] = value;
+            if (Environment.GetEnvironmentVariable(name) is { } value)
+            {
+                variables[name] = value;
+            }
         }
 
         var home = Directory.CreateDirectory(Path.Combine(_directory, "home")).FullName;
@@ -136,6 +156,7 @@ internal sealed class ExportExecution : IDisposable
                 {
                     throw new ArgumentException("Fixture variables cannot override the runtime compilation profile.", nameof(overrides));
                 }
+
                 variables[name] = value;
             }
         }
@@ -145,6 +166,7 @@ internal sealed class ExportExecution : IDisposable
         {
             variables["DOTNET_" + name] = enabled;
         }
+
         return variables;
     }
 
@@ -160,7 +182,11 @@ internal sealed class ExportExecution : IDisposable
         var environment = Environment.GetEnvironmentVariables().Keys.Cast<string>()
             .ToDictionary(name => name, _ => (string?)null,
                 OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        foreach (var (name, value) in CreateEnvironment(profile)) environment[name] = value;
+        foreach (var (name, value) in CreateEnvironment(profile))
+        {
+            environment[name] = value;
+        }
+
         await using var host = await HostProcessEngine.StartAsync(null, _workingDirectory, environment, cancellationToken);
         var culture = "[System.Runtime]System.Globalization.CultureInfo";
         foreach (var line in new[]
@@ -170,11 +196,13 @@ internal sealed class ExportExecution : IDisposable
             "call void " + culture + "::set_CurrentCulture(class " + culture + ")",
             "call class " + culture + " " + culture + "::get_InvariantCulture()",
             "call void " + culture + "::set_CurrentUICulture(class " + culture + ")", ".run",
-        }.Concat(example.Source.Split('\n')).Concat(["ldc.i4 " + example.Input, example.Call]))
+        }
+            .Concat(example.Source.Split('\n')).Concat(["ldc.i4 " + example.Input, example.Call]))
         {
             var reply = await host.HandleAsync(line, cancellationToken);
             Assert.IsTrue(reply.Succeeded, string.Join('\n', reply.Lines.Select(output => output.PlainText)));
         }
+
         var result = await host.HandleAsync(".run", cancellationToken);
         Assert.IsTrue(result.Succeeded, string.Join('\n', result.Lines.Select(output => output.PlainText)));
         Assert.AreEqual("  = " + example.Expected + " : int32",
@@ -204,7 +232,11 @@ internal sealed class ExportExecution : IDisposable
 
     private void ResetFiles()
     {
-        if (Directory.Exists(_workingDirectory)) Directory.Delete(_workingDirectory, recursive: true);
+        if (Directory.Exists(_workingDirectory))
+        {
+            Directory.Delete(_workingDirectory, recursive: true);
+        }
+
         Directory.CreateDirectory(_workingDirectory);
         foreach (var (path, content) in _files)
         {
@@ -213,6 +245,7 @@ internal sealed class ExportExecution : IDisposable
             {
                 throw new ArgumentException("Fixture paths must remain inside the working directory.");
             }
+
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             File.WriteAllText(destination, content);
         }

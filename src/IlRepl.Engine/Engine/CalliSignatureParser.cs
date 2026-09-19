@@ -3,9 +3,12 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Parses the operand of <c>calli</c>: <c>[instance] [vararg] RetType(Params)</c> for managed
-/// pointers and <c>unmanaged [cdecl|stdcall|thiscall|fastcall] RetType(Params)</c> for native ones.
+/// Parses the operand of <c>calli</c> for managed pointers and for native ones.
 /// </summary>
+/// <remarks>
+/// The form is <c>[instance] [vararg] RetType(Params)</c> for managed pointers and <c>unmanaged [cdecl|stdcall|thiscall|fastcall]
+/// RetType(Params)</c> for native ones.
+/// </remarks>
 public static class CalliSignatureParser
 {
     /// <summary>

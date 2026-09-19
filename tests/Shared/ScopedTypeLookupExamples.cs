@@ -62,6 +62,7 @@ public static class ScopedTypeLookupExamples
             4 => "class Lookup.Owner/Generic<class Lookup.Owner/Nested[]>",
             _ => "Lookup.Owner",
         };
+
         return ".method public static bool Read() {\n.locals init (class " + receiver + " scope)\n"
             + (scope == "executing" ? "call class Assembly Assembly::GetExecutingAssembly()\n"
                 : "ldtoken Lookup.Owner\ncall class Type Type::GetTypeFromHandle(valuetype RuntimeTypeHandle)\n"

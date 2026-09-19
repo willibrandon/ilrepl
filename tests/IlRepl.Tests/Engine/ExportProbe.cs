@@ -24,6 +24,7 @@ internal static class ExportProbe
             await Console.Out.WriteAsync(new string('o', 128 * 1024));
             return true;
         }
+
         if (args is ["--export-tool-wait", var signal])
         {
             await File.WriteAllTextAsync(signal + ".pending", Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
@@ -31,10 +32,19 @@ internal static class ExportProbe
             await new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously).Task;
             return true;
         }
-        if (args.Length != 3 || args[0] != "--export-probe") return false;
+
+        if (args.Length != 3 || args[0] != "--export-probe")
+        {
+            return false;
+        }
+
         var request = JsonSerializer.Deserialize(await File.ReadAllTextAsync(args[1]), ExportJsonContext.Default.ExportRequest)
             ?? throw new InvalidDataException("The export request is missing.");
-        if (!request.EndOfInput) throw new InvalidDataException("Export comparison requires an explicit end of input.");
+        if (!request.EndOfInput)
+        {
+            throw new InvalidDataException("Export comparison requires an explicit end of input.");
+        }
+
         var completion = new TaskCompletionSource<ExportObservation>(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
@@ -47,6 +57,7 @@ internal static class ExportProbe
                 completion.SetException(exception);
             }
         }, request.StackSize);
+
         thread.Start();
         var result = await completion.Task;
         await File.WriteAllTextAsync(args[2], JsonSerializer.Serialize(result, ExportJsonContext.Default.ExportObservation));
@@ -75,6 +86,7 @@ internal static class ExportProbe
                     AssemblyName.GetAssemblyName(candidate).Name == name.Name);
                 return path is null ? null : context.LoadFromAssemblyPath(path);
             };
+
             var assembly = context.LoadFromAssemblyPath(request.ImagePath);
             var method = assembly.GetType(request.Type, throwOnError: true)!
                 .GetMethod(request.Method, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)

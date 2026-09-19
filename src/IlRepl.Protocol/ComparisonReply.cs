@@ -10,5 +10,11 @@ namespace IlRepl.Protocol;
 /// <param name="StartingState">The declaration state, input, environment, and filesystem conditions.</param>
 /// <param name="Original">The original-side result.</param>
 /// <param name="Edited">The edited-side result.</param>
-public sealed record ComparisonReply(string Name, string BaselineFingerprint, int Revision, string Outcome, string StartingState,
-    ComparisonSide Original, ComparisonSide Edited);
+public sealed record ComparisonReply(
+    string Name,
+    string BaselineFingerprint,
+    int Revision,
+    string Outcome,
+    string StartingState,
+    ComparisonSide Original,
+    ComparisonSide Edited);

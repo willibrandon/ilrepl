@@ -1,10 +1,11 @@
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Keeps the caret in view: the offsets move only as far as they must to bring the caret cell
-/// inside the viewport, and are clamped to the document, so the first frame after any change
-/// shows the caret and nothing moves while it stays visible.
+/// Keeps the caret in view by moving the offsets only as far as they must to bring the caret cell inside the viewport.
 /// </summary>
+/// <remarks>
+/// The offsets are clamped to the document, so the first frame after any change shows the caret and nothing moves while it stays visible.
+/// </remarks>
 public static class PromptViewport
 {
     /// <summary>

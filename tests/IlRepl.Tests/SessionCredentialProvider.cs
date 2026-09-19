@@ -15,7 +15,11 @@ internal static class SessionCredentialProvider
     internal static async Task<bool> TryRunAsync(string[] args)
     {
         var configuration = Environment.GetEnvironmentVariable("ILREPL_TEST_CREDENTIAL_PROVIDER");
-        if (!args.Contains("-Plugin", StringComparer.OrdinalIgnoreCase) || configuration is null) return false;
+        if (!args.Contains("-Plugin", StringComparer.OrdinalIgnoreCase) || configuration is null)
+        {
+            return false;
+        }
+
         using var settings = JsonDocument.Parse(await File.ReadAllTextAsync(configuration));
         var root = settings.RootElement;
         await Console.Out.WriteLineAsync(JsonSerializer.Serialize(new
@@ -23,11 +27,16 @@ internal static class SessionCredentialProvider
             RequestId = "provider-handshake", Type = "Request", Method = "Handshake",
             Payload = new { ProtocolVersion = "2.0.0", MinimumProtocolVersion = "2.0.0" },
         }));
+
         while (await Console.In.ReadLineAsync() is { } line)
         {
             using var document = JsonDocument.Parse(line);
             var request = document.RootElement;
-            if (request.GetProperty("Type").GetString() != "Request") continue;
+            if (request.GetProperty("Type").GetString() != "Request")
+            {
+                continue;
+            }
+
             var method = request.GetProperty("Method").GetString();
             object payload = method switch
             {
@@ -40,6 +49,7 @@ internal static class SessionCredentialProvider
                 },
                 _ => new { ResponseCode = "Success" },
             };
+
             if (method == "GetAuthenticationCredentials")
             {
                 var received = request.GetProperty("Payload");
@@ -50,7 +60,11 @@ internal static class SessionCredentialProvider
             {
                 RequestId = request.GetProperty("RequestId").GetString(), Type = "Response", Method = method, Payload = payload,
             }));
-            if (method == "Close") break;
+
+            if (method == "Close")
+            {
+                break;
+            }
         }
 
         return true;

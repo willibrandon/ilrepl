@@ -6,9 +6,11 @@ namespace IlRepl.Engine;
 
 /// <summary>
 /// Turns signature blobs into <see cref="IlSignature"/> trees for <see cref="SignatureDecoder{TType, TGenericContext}"/>.
-/// Named types resolve through a callback (the module's <c>ResolveType</c> wrapped in the caller's
-/// failure handling); a type that does not resolve keeps its spelling from the metadata row.
 /// </summary>
+/// <remarks>
+/// Named types resolve through a callback (the module's <c>ResolveType</c> wrapped in the caller's failure handling); a type that does not
+/// resolve keeps its spelling from the metadata row.
+/// </remarks>
 /// <param name="resolve">Resolves a metadata token to a runtime type, or returns null.</param>
 public sealed class MetadataSignatureProvider(Func<int, Type?> resolve) : ISignatureTypeProvider<IlSignature, GenericContext>
 {
@@ -37,6 +39,7 @@ public sealed class MetadataSignatureProvider(Func<int, Type?> resolve) : ISigna
             PrimitiveTypeCode.TypedReference => typeof(TypedReference),
             _ => throw new BadImageFormatException($"unexpected primitive type code {typeCode}"),
         };
+
         return IlSignature.Primitive(type, TypeParser.PrimitiveKeyword(type)!);
     }
 
@@ -52,7 +55,8 @@ public sealed class MetadataSignatureProvider(Func<int, Type?> resolve) : ISigna
 
         var definition = reader.GetTypeDefinition(handle);
         var name = DefinitionName(reader, definition);
-        var assembly = reader.IsAssembly ? reader.GetString(reader.GetAssemblyDefinition().Name) : reader.GetString(reader.GetModuleDefinition().Name);
+        var assembly = reader.IsAssembly ? reader.GetString(reader.GetAssemblyDefinition().Name)
+            : reader.GetString(reader.GetModuleDefinition().Name);
         return IlSignature.Unresolved($"[{assembly}]{name}", rawTypeKind == (byte)SignatureTypeKind.ValueType);
     }
 
@@ -63,11 +67,16 @@ public sealed class MetadataSignatureProvider(Func<int, Type?> resolve) : ISigna
         var resolved = resolve(MetadataTokens.GetToken(handle));
         return resolved is not null
             ? IlSignature.Named(resolved)
-            : IlSignature.Unresolved(ReferenceName(reader, reader.GetTypeReference(handle)), rawTypeKind == (byte)SignatureTypeKind.ValueType);
+            : IlSignature.Unresolved(ReferenceName(reader, reader.GetTypeReference(handle)),
+            rawTypeKind == (byte)SignatureTypeKind.ValueType);
     }
 
     /// <inheritdoc/>
-    public IlSignature GetTypeFromSpecification(MetadataReader reader, GenericContext genericContext, TypeSpecificationHandle handle, byte rawTypeKind)
+    public IlSignature GetTypeFromSpecification(
+        MetadataReader reader,
+        GenericContext genericContext,
+        TypeSpecificationHandle handle,
+        byte rawTypeKind)
     {
         ArgumentNullException.ThrowIfNull(reader);
         return reader.GetTypeSpecification(handle).DecodeSignature(this, genericContext);
@@ -77,7 +86,8 @@ public sealed class MetadataSignatureProvider(Func<int, Type?> resolve) : ISigna
     public IlSignature GetSZArrayType(IlSignature elementType) => IlSignature.SzArray(elementType);
 
     /// <inheritdoc/>
-    public IlSignature GetArrayType(IlSignature elementType, ArrayShape shape) => IlSignature.Array(elementType, shape.Rank, shape.Sizes, shape.LowerBounds);
+    public IlSignature GetArrayType(IlSignature elementType, ArrayShape shape) =>
+        IlSignature.Array(elementType, shape.Rank, shape.Sizes, shape.LowerBounds);
 
     /// <inheritdoc/>
     public IlSignature GetByReferenceType(IlSignature elementType) => IlSignature.ByRef(elementType);
@@ -86,16 +96,19 @@ public sealed class MetadataSignatureProvider(Func<int, Type?> resolve) : ISigna
     public IlSignature GetPointerType(IlSignature elementType) => IlSignature.Pointer(elementType);
 
     /// <inheritdoc/>
-    public IlSignature GetGenericInstantiation(IlSignature genericType, ImmutableArray<IlSignature> typeArguments) => IlSignature.GenericInstance(genericType, typeArguments);
+    public IlSignature GetGenericInstantiation(IlSignature genericType, ImmutableArray<IlSignature> typeArguments) =>
+        IlSignature.GenericInstance(genericType, typeArguments);
 
     /// <inheritdoc/>
-    public IlSignature GetFunctionPointerType(MethodSignature<IlSignature> signature) => IlSignature.FunctionPointer(MetadataSignatures.Convert(signature));
+    public IlSignature GetFunctionPointerType(MethodSignature<IlSignature> signature) =>
+        IlSignature.FunctionPointer(MetadataSignatures.Convert(signature));
 
     /// <inheritdoc/>
     public IlSignature GetGenericMethodParameter(GenericContext genericContext, int index)
     {
         ArgumentNullException.ThrowIfNull(genericContext);
-        return IlSignature.MethodParameter(index, index < genericContext.MethodArguments.Count ? genericContext.MethodArguments[index] : null);
+        return IlSignature.MethodParameter(index,
+            index < genericContext.MethodArguments.Count ? genericContext.MethodArguments[index] : null);
     }
 
     /// <inheritdoc/>
@@ -106,7 +119,8 @@ public sealed class MetadataSignatureProvider(Func<int, Type?> resolve) : ISigna
     }
 
     /// <inheritdoc/>
-    public IlSignature GetModifiedType(IlSignature modifier, IlSignature unmodifiedType, bool isRequired) => IlSignature.Modified(unmodifiedType, modifier, isRequired);
+    public IlSignature GetModifiedType(IlSignature modifier, IlSignature unmodifiedType, bool isRequired) =>
+        IlSignature.Modified(unmodifiedType, modifier, isRequired);
 
     /// <inheritdoc/>
     public IlSignature GetPinnedType(IlSignature elementType) => IlSignature.Pinned(elementType);

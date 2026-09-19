@@ -16,14 +16,25 @@ public readonly record struct CompletionEdit(DocumentRange Range, string Text, i
     /// </summary>
     internal static bool Accept(PromptState state, CompletionItem item)
     {
-        if (For(state, item) is not { } edit) return false;
+        if (For(state, item) is not { } edit)
+        {
+            return false;
+        }
+
         edit.Apply(state);
         if (item.Continuation is { } token)
+        {
             state.Anchors.Add(edit.Range.Start.Value, edit.Range.Start.Value + (edit.CaretOffset ?? edit.Text.Length), token);
+        }
+
         state.PaletteDismissed = true;
         state.PaletteNavigated = false;
         state.Prediction.Hide();
-        if (item.Continues) state.Requester?.Request(state);
+        if (item.Continues)
+        {
+            state.Requester?.Request(state);
+        }
+
         return true;
     }
 
@@ -33,12 +44,24 @@ public readonly record struct CompletionEdit(DocumentRange Range, string Text, i
     internal static string? PendingPrediction(PromptState state)
     {
         var snapshot = state.PendingDisplay ?? state.Completions;
-        if (snapshot is null || snapshot.Reply.Items.Count == 0) return null;
+        if (snapshot is null || snapshot.Reply.Items.Count == 0)
+        {
+            return null;
+        }
+
         var item = snapshot.Reply.Items[Math.Clamp(state.SelectedIndex, 0, snapshot.Reply.Items.Count - 1)];
-        if (state.Requester?.CanRebind(state, snapshot, item) != true) return null;
+        if (state.Requester?.CanRebind(state, snapshot, item) != true)
+        {
+            return null;
+        }
+
         var start = snapshot.Reply.ReplaceStart;
         var length = snapshot.Reply.ReplaceLength;
-        if (start < 0 || length < 0 || start > state.CurrentLine.Length - length) return null;
+        if (start < 0 || length < 0 || start > state.CurrentLine.Length - length)
+        {
+            return null;
+        }
+
         var offset = state.Editor.Document.PositionToOffset(new DocumentPosition(state.CaretLine, 1)).Value + start;
         var range = new DocumentRange(new DocumentOffset(offset), new DocumentOffset(offset + length));
         return new CompletionEdit(range, item.InsertText + (item.TakesOperand ? " " : ""), item.CaretOffset).Prediction(state);

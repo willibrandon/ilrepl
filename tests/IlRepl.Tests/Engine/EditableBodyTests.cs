@@ -82,8 +82,11 @@ public sealed class EditableBodyTests
     {
         var session = IlLines.Load(".class public Holder {", ".method public static int32 M() {",
             directive, "ldc.i4.s 42", "ret", "}", "}");
-        foreach (var image in new[] { AssemblyExporter.Write(session, "member-init"),
-            IlasmLocator.Assemble(IlAsmRenderer.Render(session)) })
+        foreach (var image in new[]
+        {
+            AssemblyExporter.Write(session, "member-init"),
+            IlasmLocator.Assemble(IlAsmRenderer.Render(session)),
+        })
         {
             using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
             var method = module.Types.Single(type => type.Name == "Holder").Methods.Single(method => method.Name == "M");
@@ -344,8 +347,12 @@ public sealed class EditableBodyTests
     [DataRow("HANDLER", "TRY", "HANDLER", "DONE", "TRY")]
     [DataRow("TRY", "HANDLER", "HANDLER", "HANDLER", "HANDLER")]
     [DataRow("TRY", "HANDLER", "DONE", "HANDLER", "HANDLER")]
-    public void RangeClause_InvalidBoundariesRejectCommit(string tryStart, string tryEnd, string handlerStart,
-        string handlerEnd, string diagnosticLabel)
+    public void RangeClause_InvalidBoundariesRejectCommit(
+        string tryStart,
+        string tryEnd,
+        string handlerStart,
+        string handlerEnd,
+        string diagnosticLabel)
     {
         var session = IlLines.Load(".method int32 M() { ldc.i4.s 42; ret }");
         var original = session.Methods.Single().Version.Body;
@@ -358,6 +365,7 @@ public sealed class EditableBodyTests
             "HANDLER: pop", "leave DONE",
             "DONE: ldloc.0", "}",
         };
+
         var exception = Assert.ThrowsExactly<ReplException>(() =>
         {
             foreach (var line in source)
@@ -365,6 +373,7 @@ public sealed class EditableBodyTests
                 session.AddLine(line);
             }
         });
+
         Assert.Contains(diagnosticLabel, exception.Message);
         Assert.AreSame(original, session.Methods.Single().Version.Body);
         Assert.AreEqual(42, original.Invoke(null, null));

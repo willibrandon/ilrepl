@@ -1,9 +1,12 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Everything a line needs to be parsed: the locals and arguments it can name, the generic
-/// parameters in scope, the type resolver, and the session methods a call can name without a type.
+/// Everything a line needs to be parsed.
 /// </summary>
+/// <remarks>
+/// It holds the locals and arguments it can name, the generic parameters in scope, the type resolver, and the session methods a call can
+/// name without a type.
+/// </remarks>
 /// <param name="Locals">The declared locals, by index.</param>
 /// <param name="Arguments">The declared arguments or parameters, by index.</param>
 /// <param name="Generics">The generic parameters in scope for <c>!N</c> and <c>!!N</c>.</param>
@@ -26,7 +29,12 @@ public sealed record ParseContext(
     /// <param name="generics">The generic parameters in scope.</param>
     /// <param name="resolver">The type resolver.</param>
     /// <param name="methods">The session methods.</param>
-    public ParseContext(IReadOnlyList<LocalDeclaration> locals, IReadOnlyList<ArgumentDeclaration> arguments, GenericContext generics, TypeResolver resolver, IReadOnlyList<MethodSignature> methods)
+    public ParseContext(
+        IReadOnlyList<LocalDeclaration> locals,
+        IReadOnlyList<ArgumentDeclaration> arguments,
+        GenericContext generics,
+        TypeResolver resolver,
+        IReadOnlyList<MethodSignature> methods)
         : this(locals, arguments, generics, resolver, methods, TypeTable.Empty)
     {
     }
@@ -37,9 +45,11 @@ public sealed record ParseContext(
     public int ThisIndex { get; init; } = -1;
 
     /// <summary>
-    /// True when a lookup only inspects: nothing it names may be declared ahead of its declaration,
-    /// so a reference to a member or nested type that does not exist yet is an error, not a promise.
+    /// True when a lookup only inspects, so nothing it names may be declared ahead of its declaration.
     /// </summary>
+    /// <remarks>
+    /// A reference to a member or nested type that does not exist yet is then an error, not a promise.
+    /// </remarks>
     public bool Inspecting { get; init; }
 
     /// <summary>

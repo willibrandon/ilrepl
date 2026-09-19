@@ -68,6 +68,7 @@ public sealed partial class EditingSession
                     {
                         ExactType = argument.ExactType,
                     }));
+
                 break;
             case ".vararg":
                 body.IsVarArg = true;
@@ -86,6 +87,7 @@ public sealed partial class EditingSession
                         identity, true, first + index, name, GenericParameterAttributes.None))]);
                 break;
             }
+
             case ".typeargs":
             {
                 _state.TypeArguments = CellGenericBinding.Arguments(rest,
@@ -94,6 +96,7 @@ public sealed partial class EditingSession
 
                 break;
             }
+
             case ".try":
                 if (rest is not ("" or "{"))
                 {

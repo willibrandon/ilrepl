@@ -56,6 +56,7 @@ internal sealed class ExecutionThread : IAsyncDisposable
                 completion.TrySetException(exception);
             }
         }, cancellationToken);
+
         return completion.Task;
     }
 

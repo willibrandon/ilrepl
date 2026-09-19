@@ -31,8 +31,15 @@ public sealed class ProcessMeasurements : IDisposable
     /// <param name="stage">The startup or execution boundary.</param>
     public void Mark(string stage)
     {
-        if (string.IsNullOrEmpty(_directory)) return;
-        lock (_lock) { _stages.TryAdd(stage, Stopwatch.GetTimestamp()); }
+        if (string.IsNullOrEmpty(_directory))
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            _stages.TryAdd(stage, Stopwatch.GetTimestamp());
+        }
     }
 
     /// <summary>
@@ -40,14 +47,22 @@ public sealed class ProcessMeasurements : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (string.IsNullOrEmpty(_directory)) return;
+        if (string.IsNullOrEmpty(_directory))
+        {
+            return;
+        }
+
         Mark("exit");
         try
         {
             Directory.CreateDirectory(_directory);
             using var process = Process.GetCurrentProcess();
             IReadOnlyDictionary<string, long> stages;
-            lock (_lock) { stages = new Dictionary<string, long>(_stages); }
+            lock (_lock)
+            {
+                stages = new Dictionary<string, long>(_stages);
+            }
+
             var measurement = new ProcessMeasurement(_role, Environment.ProcessId, RuntimeInformation.FrameworkDescription,
                 GC.GetTotalAllocatedBytes(precise: true), GC.GetTotalMemory(forceFullCollection: true), process.WorkingSet64, stages);
             File.WriteAllText(Path.Combine(_directory, $"{_role}-{Environment.ProcessId}.json"),

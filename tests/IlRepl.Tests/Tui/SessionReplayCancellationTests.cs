@@ -36,6 +36,7 @@ public sealed class SessionReplayCancellationTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         PromptState? prompt = null;
         await using var terminal = AppTest.Build(engine, new Transcript(), onPrompt: value => prompt = value);
         var run = IlReplApp.RunAsync(terminal, prompt, token);
@@ -85,6 +86,7 @@ public sealed class SessionReplayCancellationTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         var epoch = engine.AssemblyVersion >> 32;
         PromptState? prompt = null;
         var transcript = new Transcript();

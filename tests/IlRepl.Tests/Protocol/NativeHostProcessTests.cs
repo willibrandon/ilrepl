@@ -25,7 +25,10 @@ public sealed class NativeHostProcessTests
         var token = TestContext.CancellationToken;
         await using var engine = await HostPaths.StartEngineAsync(token);
         foreach (var line in files.PendingDocument().Entries.SelectMany(entry => entry.Source))
+        {
             Assert.IsTrue((await engine.HandleAsync(line, token)).Succeeded, line);
+        }
+
         var prepared = await engine.HandleAsync(".jit", token);
         Assert.IsTrue(prepared.Succeeded);
         Assert.IsNotNull(prepared.PendingNative);

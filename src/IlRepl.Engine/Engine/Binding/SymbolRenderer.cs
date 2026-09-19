@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace IlRepl.Engine.Binding;
@@ -250,12 +251,13 @@ public static class SymbolRenderer
             sb.Append("unmanaged ");
             var word = signature.UnmanagedConvention switch
             {
-                System.Runtime.InteropServices.CallingConvention.Cdecl => "cdecl ",
-                System.Runtime.InteropServices.CallingConvention.StdCall => "stdcall ",
-                System.Runtime.InteropServices.CallingConvention.ThisCall => "thiscall ",
-                System.Runtime.InteropServices.CallingConvention.FastCall => "fastcall ",
+                CallingConvention.Cdecl => "cdecl ",
+                CallingConvention.StdCall => "stdcall ",
+                CallingConvention.ThisCall => "thiscall ",
+                CallingConvention.FastCall => "fastcall ",
                 _ => "",
             };
+
             if (!signature.IsExtensibleUnmanaged)
             {
                 sb.Append(word);

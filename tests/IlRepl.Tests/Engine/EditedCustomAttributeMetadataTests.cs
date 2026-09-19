@@ -48,7 +48,11 @@ public sealed class EditedCustomAttributeMetadataTests
         Assert.AreEqual(0, tag.GetField("Runs")!.GetValue(null));
         Assert.Contains(dependency => dependency.Location.Contains(": attribute Tag", StringComparison.Ordinal)
             && dependency.Disposition == "copied", edit.Dependencies);
-        foreach (var line in EditedCustomAttributeExamples.Scenario().Split('\n')) session.AddLine(line);
+        foreach (var line in EditedCustomAttributeExamples.Scenario().Split('\n'))
+        {
+            session.AddLine(line);
+        }
+
         var reply = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy using Scenario"),
             TestContext.CancellationToken);
         Assert.AreEqual("different", reply.Outcome, reply.Original.Detail + "; " + reply.Edited.Detail);
@@ -70,6 +74,7 @@ public sealed class EditedCustomAttributeMetadataTests
                     AssertInstances(exported, added: false);
                     Assert.AreEqual(42, exported.Invoke(null, [42]));
                 }
+
                 Assert.AreEqual(423, assembly.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally
@@ -77,6 +82,7 @@ public sealed class EditedCustomAttributeMetadataTests
                 context.Unload();
             }
         }
+
         AssertInstances(method, added: false);
         AssertInstances(alias, added: false);
         Assert.AreEqual(0, originalTag.GetField("Runs")!.GetValue(null));
@@ -97,7 +103,11 @@ public sealed class EditedCustomAttributeMetadataTests
         var source = EditedCustomAttributeExamples.Method(isPrivate: true, edited: true, additionalParameter: true);
         session.CommitEdit(edit.Name, source);
         AssertData(Assert.IsInstanceOfType<MethodInfo>(edit.Method), added: true);
-        foreach (var line in IlLines.Expand(".class public Marker { .field public int64 Added; }")) session.AddLine(line);
+        foreach (var line in IlLines.Expand(".class public Marker { .field public int64 Added; }"))
+        {
+            session.AddLine(line);
+        }
+
         session.CommitEdit(edit.Name, source);
         session.CommitEdit(pinned.Name, pinned.Source);
         foreach (var target in new[] { pinned.Original.Requested, pinned.OriginalMethod, pinned.Method! })
@@ -108,6 +118,7 @@ public sealed class EditedCustomAttributeMetadataTests
             Assert.IsNull(kind.GetField("Added"));
             Assert.AreEqual(42, target.Invoke(null, [42]));
         }
+
         Assert.AreEqual(2, edit.Revision);
         var method = Assert.IsInstanceOfType<MethodInfo>(edit.Method);
         var alias = Assert.IsInstanceOfType<MethodInfo>(session.TypeTable.MethodAliases[edit.Name]);
@@ -117,6 +128,7 @@ public sealed class EditedCustomAttributeMetadataTests
             AssertInstances(target, added: true, redefined: true);
             Assert.AreEqual(42, target.Invoke(null, [42, 99]));
         }
+
         foreach (var image in new[] { AssemblyExporter.Write(session, "added-custom"), IlasmLocator.Assemble(session.ToIlAsm()) })
         {
             var assembly = Assembly.Load(image);
@@ -126,6 +138,7 @@ public sealed class EditedCustomAttributeMetadataTests
                 AssertInstances(Exported(assembly, target), added: true, redefined: true);
             }
         }
+
         session.CommitEdit(edit.Name, ".method private static int32 Read(int32 value) {\nldarg.0\nret\n}");
         Assert.AreEqual(3, edit.Revision);
         AssertOriginal(Assert.IsInstanceOfType<MethodInfo>(edit.Method));
@@ -150,9 +163,15 @@ public sealed class EditedCustomAttributeMetadataTests
               ret
             }
             """.Replace("int32(64) }", "int32(64) property bool AllowMultiple = bool(true) }", StringComparison.Ordinal));
-        foreach (var method in new[] { edit.Method!, session.TypeTable.MethodAliases[edit.Name] }) AssertSimple(method);
+        foreach (var method in new[] { edit.Method!, session.TypeTable.MethodAliases[edit.Name] })
+        {
+            AssertSimple(method);
+        }
+
         foreach (var image in new[] { AssemblyExporter.Write(session, "simple-custom"), IlasmLocator.Assemble(session.ToIlAsm()) })
+        {
             AssertSimple(Exported(Assembly.Load(image), edit.Method!));
+        }
     }
 
     /// <summary>
@@ -210,15 +229,21 @@ public sealed class EditedCustomAttributeMetadataTests
         var parameters = method.GetParameters();
         Assert.HasCount(added ? 2 : 1, parameters);
         AssertTarget(parameters[0].GetCustomAttributesData(), "parameter", ["parameter-1", "parameter-2"], redefined);
-        if (added) AssertTarget(parameters[1].GetCustomAttributesData(), null, ["added"], redefined);
+        if (added)
+        {
+            AssertTarget(parameters[1].GetCustomAttributesData(), null, ["added"], redefined);
+        }
     }
 
     private static void AssertTarget(IList<CustomAttributeData> attributes, string? original, string[] names, bool redefined)
     {
         Assert.HasCount(names.Length + (original is null ? 0 : 1), attributes);
         if (original is not null)
+        {
             AssertOriginalAttribute(attributes.Where(attribute => attribute.AttributeType == typeof(ObsoleteAttribute)).ToArray(),
                 original);
+        }
+
         var tags = attributes.Where(attribute => attribute.AttributeType != typeof(ObsoleteAttribute)).ToArray();
         var actualNames = tags.Select(tag => (string)tag.NamedArguments.Single(argument => argument.MemberName == "Name")
             .TypedValue.Value!);

@@ -16,7 +16,10 @@ internal sealed class BatchConsoleCancellation : IDisposable
     internal BatchConsoleCancellation(CancellationToken cancellationToken)
     {
         _cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        if (OperatingSystem.IsWindows()) Console.CancelKeyPress += OnCancelKeyPress;
+        if (OperatingSystem.IsWindows())
+        {
+            Console.CancelKeyPress += OnCancelKeyPress;
+        }
     }
 
     /// <summary>
@@ -29,7 +32,10 @@ internal sealed class BatchConsoleCancellation : IDisposable
         eventArgs.Cancel = true;
         lock (_sync)
         {
-            if (!_disposed) _cancellation.Cancel();
+            if (!_disposed)
+            {
+                _cancellation.Cancel();
+            }
         }
     }
 
@@ -38,10 +44,18 @@ internal sealed class BatchConsoleCancellation : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (OperatingSystem.IsWindows()) Console.CancelKeyPress -= OnCancelKeyPress;
+        if (OperatingSystem.IsWindows())
+        {
+            Console.CancelKeyPress -= OnCancelKeyPress;
+        }
+
         lock (_sync)
         {
-            if (_disposed) return;
+            if (_disposed)
+            {
+                return;
+            }
+
             _disposed = true;
             _cancellation.Dispose();
         }

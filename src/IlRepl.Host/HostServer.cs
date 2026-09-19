@@ -91,7 +91,9 @@ public sealed partial class HostServer : IReplHost, IAsyncDisposable
         HandleWithCompletionAsync(() => _engine.HandleRetainedSourceAsync(line, location, cancellationToken));
 
     /// <inheritdoc />
-    public Task<HandleReply[]> HandleRetainedSourceRunAsync(string[] lines, AnalysisLocation[] locations,
+    public Task<HandleReply[]> HandleRetainedSourceRunAsync(
+        string[] lines,
+        AnalysisLocation[] locations,
         CancellationToken cancellationToken) =>
         HandleRunWithCompletionAsync(() => _engine.HandleRetainedSourceRunAsync(lines, locations, cancellationToken));
 
@@ -179,11 +181,17 @@ public sealed partial class HostServer : IReplHost, IAsyncDisposable
             try
             {
                 if (!OperatingSystem.IsWindows())
+                {
                     await server.StopOwnedWorkersAsync().WaitAsync(TimeSpan.FromSeconds(1), CancellationToken.None).ConfigureAwait(false);
+                }
+
                 await server.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1), CancellationToken.None).ConfigureAwait(false);
                 settled = true;
             }
-            catch (TimeoutException) { }
+            catch (TimeoutException)
+            {
+            }
+
             if (!settled || !OwnedProcessGroup.IsRunning(frontendOwner))
             {
                 if (!OperatingSystem.IsWindows())
@@ -192,9 +200,11 @@ public sealed partial class HostServer : IReplHost, IAsyncDisposable
                     group.Adopt(Environment.ProcessId);
                     await group.StopAsync().ConfigureAwait(false);
                 }
+
                 Environment.Exit(3);
             }
         }
+
         return 0;
     }
 }

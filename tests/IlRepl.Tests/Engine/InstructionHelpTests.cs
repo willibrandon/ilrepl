@@ -215,15 +215,18 @@ public sealed class InstructionHelpTests
             Assert.Contains("static virtual", Prose(help));
             Assert.Contains("ldftn", Prose(help));
         }
+
         if (opcode == "readonly.")
         {
             Assert.Contains("address", Prose(help));
         }
+
         if (opcode == "no.")
         {
             Assert.Contains("unverifiable", Prose(help));
             Assert.Contains("optional", Prose(help));
         }
+
         if (opcode == "volatile.")
         {
             Assert.Contains("does not make", Prose(help));
@@ -302,6 +305,7 @@ public sealed class InstructionHelpTests
         {
             session.AddLine(line);
         }
+
         return session;
     }
 }

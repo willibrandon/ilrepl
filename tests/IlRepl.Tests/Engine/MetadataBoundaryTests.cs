@@ -103,7 +103,10 @@ public sealed class MetadataBoundaryTests
         Assert.AreEqual(42, edit.Method!.Invoke(null, null));
         AssertCallbackCount(source, flow, 1);
         if (flow.StartsWith("callback-", StringComparison.Ordinal))
+        {
             Assert.AreEqual(1, edit.Method.DeclaringType!.GetField("Calls")!.GetValue(null));
+        }
+
         var external = MethodDisassembler.Disassemble(edit.Method, session).Entries
             .Select(entry => entry.Instruction?.Operand).OfType<ResolvedMethod>()
             .Select(method => method.Method!).Single(method => method.Name == MetadataBoundaryFixture.CalledMethod(flow));
@@ -141,7 +144,9 @@ public sealed class MetadataBoundaryTests
     private static void AssertCallbackCount(Assembly source, string flow, int expected)
     {
         if (flow.StartsWith("callback-", StringComparison.Ordinal))
+        {
             Assert.AreEqual(expected, source.GetType("MetadataBoundary.Owner")!.GetField("Calls")!.GetValue(null));
+        }
     }
 
     private static void AssertProblem(MethodEdit edit, string flow)
@@ -183,13 +188,24 @@ public sealed class MetadataBoundaryTests
         foreach (var image in images)
         {
             var context = new AssemblyLoadContext("metadata-boundary-copy", isCollectible: true);
-            if (retained) context.Resolving += (_, name) => name.Name == source.GetName().Name ? source
+            if (retained)
+            {
+                context.Resolving += (_, name) => name.Name == source.GetName().Name ? source
                 : name.Name == inspector.GetName().Name ? inspector : null;
+            }
+
             try
             {
                 var exported = context.LoadFromStream(new MemoryStream(image));
-                if (retained) Assert.Contains(reference => reference.Name == inspector.GetName().Name, exported.GetReferencedAssemblies());
-                else Assert.DoesNotContain(reference => reference.Name == inspector.GetName().Name, exported.GetReferencedAssemblies());
+                if (retained)
+                {
+                    Assert.Contains(reference => reference.Name == inspector.GetName().Name, exported.GetReferencedAssemblies());
+                }
+                else
+                {
+                    Assert.DoesNotContain(reference => reference.Name == inspector.GetName().Name, exported.GetReferencedAssemblies());
+                }
+
                 Assert.AreEqual(expected, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
             }
             finally

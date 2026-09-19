@@ -17,7 +17,10 @@ public sealed partial class SessionFileStore
         if (reference.Origin == "project" || (reference.Origin == "assembly" && reference.Assets.Length != 0))
         {
             request = Path.GetFullPath(request.Replace('\\', Path.DirectorySeparatorChar), directory);
-            if (!File.Exists(request) && remembered.TryGetValue("request", out var local)) request = local;
+            if (!File.Exists(request) && remembered.TryGetValue("request", out var local))
+            {
+                request = local;
+            }
         }
 
         string? package = null;

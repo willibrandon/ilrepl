@@ -4,16 +4,20 @@ using IlRepl.Protocol;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Turns one line of IL text into an <see cref="Instruction"/>: it strips comments, peels off
-/// labels, looks up the opcode, and parses the operand in whatever form that opcode takes.
+/// Turns one line of IL text into an <see cref="Instruction"/>.
 /// </summary>
+/// <remarks>
+/// It strips comments, peels off labels, looks up the opcode, and parses the operand in whatever form that opcode takes.
+/// </remarks>
 public static class InstructionParser
 {
     /// <summary>
-    /// Removes <c>//</c> and <c>/* */</c> comments from a line on its own, leaving strings and
-    /// quoted names untouched. The session removes them with the state a <c>/*</c> carries from
-    /// line to line, see <see cref="Session.Normalize"/>; this is for a line with no lines around it.
+    /// Removes <c>//</c> and <c>/* */</c> comments from a line on its own, leaving strings and quoted names untouched.
     /// </summary>
+    /// <remarks>
+    /// The session removes them with the state a <c>/*</c> carries from line to line, see <see cref="Session.Normalize"/>; this is for a
+    /// line with no lines around it.
+    /// </remarks>
     /// <param name="line">The line.</param>
     /// <returns>The line without comments.</returns>
     public static string StripComments(string line)

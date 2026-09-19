@@ -37,17 +37,28 @@ public sealed class NativeWorkerContext : IDisposable
         try
         {
             _context = new NativeLoadContext(target, Session.Resolver, options.Collectible, _nativeDirectory);
-            foreach (var image in target.Assemblies) _context.LoadFromAssemblyName(new AssemblyName(image.Name));
+            foreach (var image in target.Assemblies)
+            {
+                _context.LoadFromAssemblyName(new AssemblyName(image.Name));
+            }
+
             Session.RestoreNative(target, _context);
-            if (target.Method is { } identity) Method = _context.ResolveMethod(identity);
+            if (target.Method is { } identity)
+            {
+                Method = _context.ResolveMethod(identity);
+            }
             else
             {
                 _cell = CellCompiler.CompileForInspection(Session);
                 Method = Close(_cell.Implementation!);
             }
+
             InvocationMethod = target.Scenario is { } scenario ? _context.ResolveMethod(scenario)
                 : _cell is null ? Method : Close(_cell.EntryPoint);
-            if (Method.ContainsGenericParameters) throw new ReplException("native inspection requires closed generic arguments");
+            if (Method.ContainsGenericParameters)
+            {
+                throw new ReplException("native inspection requires closed generic arguments");
+            }
         }
         catch
         {
@@ -84,7 +95,10 @@ public sealed class NativeWorkerContext : IDisposable
         RequireActivationPermission();
         var handles = Method.IsGenericMethod ? Method.GetGenericArguments().Select(type => type.TypeHandle).ToArray() : [];
         if (Method.DeclaringType is { IsConstructedGenericType: true } owner)
+        {
             handles = [.. owner.GetGenericArguments().Select(type => type.TypeHandle), .. handles];
+        }
+
         RuntimeHelpers.PrepareMethod(Method.MethodHandle, handles);
     }
 
@@ -94,7 +108,11 @@ public sealed class NativeWorkerContext : IDisposable
     /// <returns>A task completing when that invocation has finished.</returns>
     public async Task InvokeAsync()
     {
-        if (!_options.Run) throw new ReplException("native body execution requires literals, using Scenario, or --run");
+        if (!_options.Run)
+        {
+            throw new ReplException("native body execution requires literals, using Scenario, or --run");
+        }
+
         if (!_activated)
         {
             Session.Activate();
@@ -106,12 +124,21 @@ public sealed class NativeWorkerContext : IDisposable
                         ? parameter.ParameterType.GetElementType()! : parameter.ParameterType))];
             _activated = true;
         }
+
         var value = InvocationMethod.Invoke(null, Arguments);
-        if (value is Task task) await task.ConfigureAwait(false);
-        else if (value is ValueTask valueTask) await valueTask.ConfigureAwait(false);
+        if (value is Task task)
+        {
+            await task.ConfigureAwait(false);
+        }
+        else if (value is ValueTask valueTask)
+        {
+            await valueTask.ConfigureAwait(false);
+        }
         else if (value is not null && value.GetType().IsGenericType
             && value.GetType().GetGenericTypeDefinition() == typeof(ValueTask<>))
+        {
             await ((Task)value.GetType().GetMethod("AsTask")!.Invoke(value, null)!).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -119,7 +146,11 @@ public sealed class NativeWorkerContext : IDisposable
     /// </summary>
     public void RequireActivationPermission()
     {
-        if (_options.Run || _options.AllowInitializers) return;
+        if (_options.Run || _options.AllowInitializers)
+        {
+            return;
+        }
+
         var bindings = _target.Bindings.ToDictionary(binding => _context!.ResolveMethod(binding.Trampoline),
             binding => _context!.ResolveMethod(binding.Implementation));
         var reached = NativeActivationGraph.Assemblies(Method, bindings);
@@ -130,9 +161,15 @@ public sealed class NativeWorkerContext : IDisposable
             foreach (var handle in reader.TypeDefinitions)
             {
                 var type = reader.GetTypeDefinition(handle);
-                if (reader.GetString(type.Name) != "<Module>") continue;
+                if (reader.GetString(type.Name) != "<Module>")
+                {
+                    continue;
+                }
+
                 if (type.GetMethods().Any(method => reader.GetString(reader.GetMethodDefinition(method).Name) == ".cctor"))
+                {
                     throw new ReplException($"module '{image.Name}' has an initializer; use --allow-initializers or an explicit workload");
+                }
             }
         }
     }
@@ -144,11 +181,27 @@ public sealed class NativeWorkerContext : IDisposable
     {
         _cell?.Release();
         Session.Resolver.Dispose();
-        if (_context is { IsCollectible: true }) _context.Unload();
+        if (_context is { IsCollectible: true })
+        {
+            _context.Unload();
+        }
+
         _lifetime.Dispose();
-        try { if (Directory.Exists(_nativeDirectory)) Directory.Delete(_nativeDirectory, recursive: true); }
-        catch (IOException) { /* The supervisor retries cleanup after native libraries are released by process exit. */ }
-        catch (UnauthorizedAccessException) { /* Preserve inspection results when user code changed asset permissions. */ }
+        try
+        {
+            if (Directory.Exists(_nativeDirectory))
+            {
+                Directory.Delete(_nativeDirectory, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+            // The supervisor retries cleanup after native libraries are released by process exit.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Preserve inspection results when user code changed asset permissions.
+        }
     }
 
     private MethodInfo Close(MethodInfo method) => method.IsGenericMethodDefinition

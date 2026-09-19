@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
@@ -20,7 +22,10 @@ public static class GenericConstraints
     /// <param name="scope">The scope that knows their constraints.</param>
     /// <returns>Whether all arguments satisfy their corresponding slots.</returns>
     public static bool SatisfiesMethod(
-        MethodSymbol definition, TypeSymbol? declaring, IReadOnlyList<TypeSymbol> arguments, IBindingScope scope)
+        MethodSymbol definition,
+        TypeSymbol? declaring,
+        IReadOnlyList<TypeSymbol> arguments,
+        IBindingScope scope)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(arguments);
@@ -55,7 +60,10 @@ public static class GenericConstraints
     /// <param name="substitute">Rewrites a constraint in terms of the arguments supplied for the owner's other parameters.</param>
     /// <param name="scope">The scope that knows bases, interfaces, and constructors.</param>
     /// <returns>True when the argument fits.</returns>
-    public static bool Satisfies(GenericParameterSymbol parameter, TypeSymbol argument, Func<TypeSymbol, TypeSymbol> substitute,
+    public static bool Satisfies(
+        GenericParameterSymbol parameter,
+        TypeSymbol argument,
+        Func<TypeSymbol, TypeSymbol> substitute,
         IBindingScope scope)
     {
         ArgumentNullException.ThrowIfNull(parameter);
@@ -69,7 +77,7 @@ public static class GenericConstraints
             return false;
         }
 
-        if (argument.IsByRefLike && !parameter.Attributes.HasFlag(System.Reflection.GenericParameterAttributes.AllowByRefLike))
+        if (argument.IsByRefLike && !parameter.Attributes.HasFlag(GenericParameterAttributes.AllowByRefLike))
         {
             return false;
         }

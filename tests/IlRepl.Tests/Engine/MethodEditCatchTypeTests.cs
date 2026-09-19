@@ -77,6 +77,7 @@ public sealed class MethodEditCatchTypeTests
                 CatchType = exception,
             });
         }, session.Resolver);
+
         Assert.AreEqual(41, original.GetMethod("Read")!.Invoke(null, null));
         var edit = session.PrepareEdit("int32 [" + assembly.GetName().Name + "]N.Fixture::Read()", "Copy");
         Assert.IsEmpty(edit.Problems, string.Join("\n", edit.Problems));

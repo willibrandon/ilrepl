@@ -25,6 +25,11 @@ public sealed class AssemblyTypeIndex
     private readonly Dictionary<string, List<TypeDefinitionHandle>> _bySimpleName = new(StringComparer.Ordinal);
     private IReadOnlyList<TypeIndexEntry>? _entries;
 
+    /// <summary>
+    /// Builds the whole index from an assembly's metadata in one uninterrupted pass.
+    /// </summary>
+    /// <param name="source">The leased assembly source.</param>
+    /// <param name="reader">Its metadata reader.</param>
     internal AssemblyTypeIndex(AssemblySymbolSource source, MetadataReader reader)
         : this(source)
     {
@@ -46,7 +51,9 @@ public sealed class AssemblyTypeIndex
     /// <param name="cancellationToken">Cancels construction between metadata rows.</param>
     /// <returns>The complete immutable index.</returns>
     internal static async ValueTask<AssemblyTypeIndex> CreateAsync(
-        AssemblySymbolSource source, MetadataReader reader, CancellationToken cancellationToken)
+        AssemblySymbolSource source,
+        MetadataReader reader,
+        CancellationToken cancellationToken)
     {
         var index = new AssemblyTypeIndex(source);
         var processed = 0;
@@ -138,7 +145,6 @@ public sealed class AssemblyTypeIndex
                     default:
                         break;
                 }
-
             }
             catch (Exception exception) when (ReplRecovery.IsRecoverable(exception))
             {
@@ -190,6 +196,7 @@ public sealed class AssemblyTypeIndex
             {
                 entries.Add(entry);
             }
+
             if (++processed % 128 == 0 && Stopwatch.GetElapsedTime(slice) >= TimeSpan.FromMilliseconds(4))
             {
                 await Task.Yield();

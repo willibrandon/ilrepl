@@ -66,6 +66,7 @@ public static class DiagnosticFormatter
             AnalysisSourceKind.Unavailable => "source location unavailable",
             _ => source.Location.Line >= 0 ? "accepted " + Location(source.Location) : "previously accepted source",
         };
+
         return location + (source.Source.Length == 0 ? "" : ": " + source.Source.Trim());
     }
 

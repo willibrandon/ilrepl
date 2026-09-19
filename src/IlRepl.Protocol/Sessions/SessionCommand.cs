@@ -69,6 +69,7 @@ public static class SessionCommand
             "run" => SessionOperation.Run,
             _ => throw new ArgumentException("usage: .session [save|open|restore|restart|cells|cell|run]"),
         };
+
         action = ParseAction(requested, words);
         return true;
     }
@@ -92,6 +93,7 @@ public static class SessionCommand
                 _ when word.StartsWith("--", StringComparison.Ordinal) => throw new ArgumentException($"unsupported option '{word}'"),
                 _ => action,
             };
+
             if (!word.StartsWith("--", StringComparison.Ordinal))
             {
                 values.Add(word);
@@ -202,7 +204,11 @@ public static class SessionCommand
     /// <returns>The path without enclosing quotes.</returns>
     public static string UnquotePath(string text)
     {
-        if (!text.StartsWith('"')) return text;
+        if (!text.StartsWith('"'))
+        {
+            return text;
+        }
+
         var words = SessionWords(text);
         return words.Count == 1 ? words[0] : throw new ArgumentException("specify one quoted path");
     }

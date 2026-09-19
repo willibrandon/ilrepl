@@ -17,7 +17,11 @@ internal static class ComparisonSatelliteFiles
     internal static IReadOnlyList<string> Paths(ComparisonAssembly parent)
     {
         if (parent.OriginalLocation is not { } location || Path.GetDirectoryName(location) is not { } root
-            || !Directory.Exists(root)) return [];
+            || !Directory.Exists(root))
+        {
+            return [];
+        }
+
         var fileName = new AssemblyName(parent.Name).Name + ".resources.dll";
         var paths = new HashSet<string>(StringComparer.Ordinal);
         foreach (var directory in Directory.EnumerateDirectories(root))
@@ -32,11 +36,23 @@ internal static class ComparisonSatelliteFiles
                 continue;
             }
 
-            if (culture.Length == 0) continue;
+            if (culture.Length == 0)
+            {
+                continue;
+            }
+
             var path = Path.Combine(root, culture, fileName);
-            if (!File.Exists(path)) path = Path.Combine(root, culture.ToLowerInvariant(), fileName);
-            if (File.Exists(path)) paths.Add(path);
+            if (!File.Exists(path))
+            {
+                path = Path.Combine(root, culture.ToLowerInvariant(), fileName);
+            }
+
+            if (File.Exists(path))
+            {
+                paths.Add(path);
+            }
         }
+
         return paths.Order(StringComparer.Ordinal).ToArray();
     }
 }

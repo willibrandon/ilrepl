@@ -102,11 +102,27 @@ public sealed class SessionDependencyReplacementTests
         var image = Image(fixture, fixture.AssemblyName);
         using var core = new ReplCore();
         core.AdoptReferences(Document(image));
-        if (use == "method") Submit(core, ".method int32 ReadSaved() {");
+        if (use == "method")
+        {
+            Submit(core, ".method int32 ReadSaved() {");
+        }
+
         Submit(core, "call int32 [" + fixture.AssemblyName + "]DependencySamples.Values::Read()");
-        if (use != "cell") Submit(core, "ret");
-        if (use == "method") Submit(core, "}");
-        if (use == "activated") Submit(core, ".clear");
+        if (use != "cell")
+        {
+            Submit(core, "ret");
+        }
+
+        if (use == "method")
+        {
+            Submit(core, "}");
+        }
+
+        if (use == "activated")
+        {
+            Submit(core, ".clear");
+        }
+
         var before = core.CaptureSession(new SessionEditor());
         var assembly = core.Session.Resolver.LoadedAssemblies.Single();
 
@@ -116,8 +132,16 @@ public sealed class SessionDependencyReplacementTests
         Assert.Contains("--reload", error.Message);
         Assert.AreSame(assembly, core.Session.Resolver.LoadedAssemblies.Single());
         Assert.AreSequenceEqual(before.References, core.CaptureSession(new SessionEditor()).References);
-        if (use == "method") Submit(core, "call ReadSaved");
-        if (use == "activated") Submit(core, "call int32 [" + fixture.AssemblyName + "]DependencySamples.Values::Read()");
+        if (use == "method")
+        {
+            Submit(core, "call ReadSaved");
+        }
+
+        if (use == "activated")
+        {
+            Submit(core, "call int32 [" + fixture.AssemblyName + "]DependencySamples.Values::Read()");
+        }
+
         Submit(core, "ret");
         Assert.Contains(line => line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal), core.Transcript.Lines);
     }

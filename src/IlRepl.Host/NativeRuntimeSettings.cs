@@ -49,23 +49,46 @@ public static class NativeRuntimeSettings
         {
             var canonical = Canonical(key);
             if (Unsafe(key) || Diagnostics.Contains(canonical)
-                || canonical.StartsWith("DOTNET_", StringComparison.Ordinal) && Owned.Contains(canonical[7..])) continue;
+                || canonical.StartsWith("DOTNET_", StringComparison.Ordinal) && Owned.Contains(canonical[7..]))
+            {
+                continue;
+            }
+
             result[canonical] = value;
         }
+
         var explicitKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (key, value) in package.Options.Environment)
         {
             var canonical = Canonical(key);
             if (Unsafe(key))
+            {
                 throw new ReplException($"'{key}' cannot be set for native inspection; startup hooks and profilers are disabled");
+            }
+
             if (Diagnostics.Contains(canonical) && value != "1")
+            {
                 throw new ReplException($"'{key}' must be 1 for native inspection; CoreCLR diagnostics and tracing are required");
+            }
+
             if (canonical.StartsWith("DOTNET_", StringComparison.Ordinal) && Owned.Contains(canonical[7..]))
+            {
                 throw new ReplException($"'{key}' is owned by native capture and cannot be overridden with --env");
-            if (!explicitKeys.Add(canonical)) throw new ReplException($"duplicate runtime setting '{canonical}'");
+            }
+
+            if (!explicitKeys.Add(canonical))
+            {
+                throw new ReplException($"duplicate runtime setting '{canonical}'");
+            }
+
             result[canonical] = value;
         }
-        foreach (var key in Diagnostics) result[key] = "1";
+
+        foreach (var key in Diagnostics)
+        {
+            result[key] = "1";
+        }
+
         result["DOTNET_TieredCompilation"] = package.Options.Tier == "fullopts" ? "0" : "1";
         result["DOTNET_TieredPGO"] = package.Options.Pgo && package.Options.Tier != "fullopts" ? "1" : "0";
         result["DOTNET_JitDisasm"] = Filter(target, package.Options.Info) + " ilrepl.native.probes.*!*";
@@ -79,20 +102,34 @@ public static class NativeRuntimeSettings
         var exclude = new List<string>();
         foreach (var side in new[] { package.Left, package.Right }.OfType<NativeTarget>())
         {
-            if (side.Method is not { } method) continue;
+            if (side.Method is not { } method)
+            {
+                continue;
+            }
+
             var image = side.Assemblies.FirstOrDefault(assembly => assembly.Name == method.Assembly)?.Image;
             if (image is null)
             {
                 var assembly = Assembly.Load(new AssemblyName(method.Assembly));
                 image = File.ReadAllBytes(assembly.Location);
             }
+
             using var pe = new PEReader(new MemoryStream(image, writable: false));
             if (pe.PEHeaders.CorHeader?.ManagedNativeHeaderDirectory.Size > 0)
+            {
                 exclude.Add(new AssemblyName(method.Assembly).Name!);
+            }
         }
+
         if (exclude.Any(name => name.Any(character => char.IsWhiteSpace(character) || character is ';' or ',')))
+        {
             result["DOTNET_ReadyToRun"] = "0";
-        else if (exclude.Count != 0) result["DOTNET_ReadyToRunExcludeList"] = string.Join(';', exclude.Distinct(StringComparer.Ordinal));
+        }
+        else if (exclude.Count != 0)
+        {
+            result["DOTNET_ReadyToRunExcludeList"] = string.Join(';', exclude.Distinct(StringComparer.Ordinal));
+        }
+
         return result;
     }
 
@@ -114,8 +151,16 @@ public static class NativeRuntimeSettings
 
     private static string Filter(NativeTarget target, bool info)
     {
-        if (info) return "ilrepl.native.capability!IlRepl.NativeCapability:Probe(int)";
-        if (target.Method is not { } method) return "ilrepl.cell.*!IlRepl.Cell:Run(*) ilrepl.cell.*!IlRepl.CellBody:Run(*)";
+        if (info)
+        {
+            return "ilrepl.native.capability!IlRepl.NativeCapability:Probe(int)";
+        }
+
+        if (target.Method is not { } method)
+        {
+            return "ilrepl.cell.*!IlRepl.Cell:Run(*) ilrepl.cell.*!IlRepl.CellBody:Run(*)";
+        }
+
         var captured = target.Assemblies.FirstOrDefault(assembly => assembly.Name == method.Assembly);
         var image = captured?.Image ?? File.ReadAllBytes(Assembly.Load(new AssemblyName(method.Assembly)).Location);
         using var pe = new PEReader(new MemoryStream(image, writable: false));

@@ -246,7 +246,9 @@ public sealed class RuntimeBindingScope : IBindingScope
     }
 
     /// <inheritdoc/>
-    public bool TryGetDeclaration(TypeSymbol declaring, [NotNullWhen(
+    public bool TryGetDeclaration(
+        TypeSymbol declaring,
+        [NotNullWhen(
         true)] out IDeclarationMembers? members)
     {
         ArgumentNullException.ThrowIfNull(declaring);
@@ -644,6 +646,12 @@ public sealed class RuntimeBindingScope : IBindingScope
         return symbol;
     }
 
+    /// <summary>
+    /// Records the runtime object represented by a declared or loaded field symbol.
+    /// </summary>
+    /// <param name="symbol">The field symbol this scope hands out.</param>
+    /// <param name="payload">The <see cref="FieldInfo"/> or payload record behind it.</param>
+    /// <returns>The same symbol, so a caller can register and return it in one expression.</returns>
     internal FieldSymbol Register(FieldSymbol symbol, object payload)
     {
         if (payload is FieldInfo field)
@@ -666,5 +674,4 @@ public sealed class RuntimeBindingScope : IBindingScope
 
         return symbol;
     }
-
 }

@@ -21,8 +21,13 @@ internal static class RuntimeArrayMethods
     /// Determines whether a bound method names the runtime-provided array element-address operation.
     /// </summary>
     internal static bool IsAddress(MethodSymbol method) => method is
-        { Source: MethodSymbolSource.Loaded, Name: "Address", IsStatic: false, DeclaringType: { IsArray: true } array,
-            ReturnType: { Kind: TypeSymbolKind.ByRef } result }
+    {
+        Source: MethodSymbolSource.Loaded,
+        Name: "Address",
+        IsStatic: false,
+        DeclaringType: { IsArray: true } array,
+        ReturnType: { Kind: TypeSymbolKind.ByRef } result,
+    }
         && SymbolIdentity.Equal(result.Element, array.Element)
         && method.Parameters.Count == (array.Kind == TypeSymbolKind.SzArray ? 1 : array.Rank)
         && method.Parameters.All(parameter => SymbolIdentity.Equal(parameter.Type, TypeSymbol.Primitive("int32")));

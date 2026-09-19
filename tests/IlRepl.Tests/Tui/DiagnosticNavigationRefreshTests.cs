@@ -31,7 +31,11 @@ public sealed class DiagnosticNavigationRefreshTests
     [DataRow("cancel", false)]
     public async Task F8_ContextChangesAtInputBoundaryPreserveOnlyCurrentSource(string change, bool backwards)
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var ct = TestContext.CancellationToken;
         await using var engine = new CompletionEngine { HoldCompletion = false };
         await engine.PrimeAsync(ct);
@@ -59,7 +63,11 @@ public sealed class DiagnosticNavigationRefreshTests
             var changed = false;
             prompt.FilterInput = input =>
             {
-                if (changed || input is not Hex1bKeyEvent { Key: Hex1bKey.F8 }) return false;
+                if (changed || input is not Hex1bKeyEvent { Key: Hex1bKey.F8 })
+                {
+                    return false;
+                }
+
                 changed = true;
                 engine.HoldAnalysis = true;
                 switch (change)
@@ -81,10 +89,19 @@ public sealed class DiagnosticNavigationRefreshTests
                         prompt.Analyzer!.Cancel();
                         break;
                 }
+
                 return false;
             };
-            if (backwards) await auto.Shift().KeyAsync(Hex1bKey.F8, ct: ct);
-            else await auto.KeyAsync(Hex1bKey.F8, ct: ct);
+
+            if (backwards)
+            {
+                await auto.Shift().KeyAsync(Hex1bKey.F8, ct: ct);
+            }
+            else
+            {
+                await auto.KeyAsync(Hex1bKey.F8, ct: ct);
+            }
+
             await auto.WaitUntilAsync(_ => changed && recorder.Count > frame
                 && engine.Analyses.Any(call => !call.Release.Task.IsCompleted),
                 description: "F8 is dispatched while replacement analysis remains held");
@@ -95,16 +112,34 @@ public sealed class DiagnosticNavigationRefreshTests
                 Assert.AreEqual(3, prompt.CaretLine, "The displayed diagnostic must remain reachable during a catalog refresh.");
                 Assert.AreEqual(2, prompt.CaretColumn);
             }
-            else Assert.AreEqual(expected, prompt.Editor.Cursor.Position, "Invalidated source must not be navigated.");
+            else
+            {
+                Assert.AreEqual(expected, prompt.Editor.Cursor.Position, "Invalidated source must not be navigated.");
+            }
+
             Assert.AreEqual(change == "document" ? "nop\nnop" : source, prompt.Text);
         }
         finally
         {
-            foreach (var call in engine.Analyses) call.Release.TrySetResult();
-            foreach (var call in engine.Calls) call.Release.TrySetResult();
+            foreach (var call in engine.Analyses)
+            {
+                call.Release.TrySetResult();
+            }
+
+            foreach (var call in engine.Calls)
+            {
+                call.Release.TrySetResult();
+            }
+
             await cancellation.CancelAsync();
-            try { await run; }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            try
+            {
+                await run;
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+            }
+
             await IlReplApp.SettleAsync(prompt);
         }
     }
@@ -115,7 +150,11 @@ public sealed class DiagnosticNavigationRefreshTests
     [TestMethod]
     public async Task RuntimeReplacement_DoesNotReusePreviousDiagnosticLocations()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var ct = TestContext.CancellationToken;
         await using var controller = new SessionController(new InProcessEngine(),
             _ => Task.FromResult<IReplEngine>(new InProcessEngine()));
@@ -131,6 +170,7 @@ public sealed class DiagnosticNavigationRefreshTests
                 requester.Refresh(state);
                 return state.Analysis is not null;
             });
+
             Assert.Contains(item => item.Code == "FLOW005", state.Analysis!.Diagnostics);
             var caret = state.Editor.Cursor.Position;
             var revision = controller.Status.Revision;
@@ -154,6 +194,9 @@ public sealed class DiagnosticNavigationRefreshTests
     {
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
         cancellation.CancelAfter(AppTest.Timeout);
-        while (!ready()) await Task.Delay(1, cancellation.Token);
+        while (!ready())
+        {
+            await Task.Delay(1, cancellation.Token);
+        }
     }
 }

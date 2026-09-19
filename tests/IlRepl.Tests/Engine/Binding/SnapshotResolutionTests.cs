@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.Loader;
+using System.Text;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using Mono.Cecil;
@@ -38,9 +39,24 @@ public sealed class SnapshotResolutionTests
         }
 
         AssemblyLoadEventHandler loaded = (_, e) => Record("AssemblyLoad " + e.LoadedAssembly.GetName().Name);
-        ResolveEventHandler assemblyResolve = (_, e) => { Record("AssemblyResolve " + e.Name); return null; };
-        ResolveEventHandler typeResolve = (_, e) => { Record("TypeResolve " + e.Name); return null; };
-        Func<AssemblyLoadContext, AssemblyName, Assembly?> resolving = (_, name) => { Record("Resolving " + name.Name); return null; };
+        ResolveEventHandler assemblyResolve = (_, e) =>
+        {
+            Record("AssemblyResolve " + e.Name);
+            return null;
+        };
+
+        ResolveEventHandler typeResolve = (_, e) =>
+        {
+            Record("TypeResolve " + e.Name);
+            return null;
+        };
+
+        Func<AssemblyLoadContext, AssemblyName, Assembly?> resolving = (_, name) =>
+        {
+            Record("Resolving " + name.Name);
+            return null;
+        };
+
         AppDomain.CurrentDomain.AssemblyLoad += loaded;
         AppDomain.CurrentDomain.AssemblyResolve += assemblyResolve;
         AppDomain.CurrentDomain.TypeResolve += typeResolve;
@@ -49,8 +65,13 @@ public sealed class SnapshotResolutionTests
         {
             using var snapshot = BindingSnapshot.Capture(context);
             var scope = new SnapshotBindingScope(snapshot);
-            foreach (var text in new[] { "[System.Runtime]System.String",
-                "class [System.Collections]System.Collections.Generic.List`1<int32>", "Console", "Dictionary<string, int32>" })
+            foreach (var text in new[]
+            {
+                "[System.Runtime]System.String",
+                "class [System.Collections]System.Collections.Generic.List`1<int32>",
+                "Console",
+                "Dictionary<string, int32>",
+            })
             {
                 SymbolBinder.BindType(CilSyntaxParser.ParseType(text), scope);
             }
@@ -89,7 +110,7 @@ public sealed class SnapshotResolutionTests
         using var snapshot = BindingSnapshot.Capture(context);
         var scope = new SnapshotBindingScope(snapshot);
         var viaRuntime = SymbolBinder.BindType(CilSyntaxParser.ParseType("[System.Runtime]System.Text.StringBuilder"), scope).Type;
-        Assert.AreEqual(RuntimeSymbolImporter.Import(typeof(System.Text.StringBuilder)), viaRuntime);
+        Assert.AreEqual(RuntimeSymbolImporter.Import(typeof(StringBuilder)), viaRuntime);
         Assert.AreEqual("System.Private.CoreLib", viaRuntime.AssemblyName);
 
         var list = SymbolBinder.BindType(CilSyntaxParser.ParseType("class [System.Collections]System.Collections.Generic.List`1<int32>"),
@@ -143,6 +164,7 @@ public sealed class SnapshotResolutionTests
 
             return null;
         };
+
         AppDomain.CurrentDomain.AssemblyResolve += assemblyResolve;
         try
         {
@@ -254,6 +276,7 @@ public sealed class SnapshotResolutionTests
             method.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ret);
             type.Methods.Add(method);
         }, resolver, "SnapshotPriority" + Guid.NewGuid().ToString("N"));
+
         var secondContext = new AssemblyLoadContext("snapshot-copy", isCollectible: true);
         try
         {
@@ -303,6 +326,7 @@ public sealed class SnapshotResolutionTests
                 type.Fields.Add(new FieldDefinition("Absent", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static,
                     new TypeReference("A", "B", module, missing)));
             });
+
         var source = AssemblySymbolSource.For(fixture.Assembly)!;
         var catalog = new LoadedBindingCatalog([(fixture.Assembly, source)]);
         var handle = source.TypeHandleOf(RuntimeSymbolImporter.Import(fixture).Definition)!.Value;
@@ -322,8 +346,18 @@ public sealed class SnapshotResolutionTests
     {
         var context = new ParseContext([], [], GenericContext.Empty, new TypeResolver(), []);
         using var snapshot = BindingSnapshot.Capture(context);
-        foreach (var type in new[] { typeof(List<>), typeof(Dictionary<,>.Enumerator), typeof(Environment.SpecialFolder), typeof(Action<>),
-            typeof(IComparable<>), typeof(ValueTuple<,>), typeof(Enum), typeof(ValueType), typeof(System.Text.StringBuilder) })
+        foreach (var type in new[]
+        {
+            typeof(List<>),
+            typeof(Dictionary<,>.Enumerator),
+            typeof(Environment.SpecialFolder),
+            typeof(Action<>),
+            typeof(IComparable<>),
+            typeof(ValueTuple<,>),
+            typeof(Enum),
+            typeof(ValueType),
+            typeof(StringBuilder),
+        })
         {
             var expected = RuntimeSymbolImporter.Import(type);
             var located = snapshot.Catalog.Locate(expected);

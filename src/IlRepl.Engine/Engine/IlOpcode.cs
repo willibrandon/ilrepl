@@ -3,11 +3,13 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// One CIL opcode as it is encoded: its value, its ILAsm name, how its operand is laid out, and
-/// the <see cref="OpCode"/> the emitters use for it when Reflection.Emit has one. The <c>no.</c>
-/// prefix (ECMA-335 III.2.2) has no <see cref="OpCode"/>, so a reader that only knew
-/// <see cref="OpCodes"/> could not decode it; it is described here like any other instruction.
+/// One CIL opcode as it is encoded.
 /// </summary>
+/// <remarks>
+/// It holds its value, its ILAsm name, how its operand is laid out, and the <see cref="OpCode"/> the emitters use for it when
+/// Reflection.Emit has one. The <c>no.</c> prefix (ECMA-335 III.2.2) has no <see cref="OpCode"/>, so a reader that only knew <see
+/// cref="OpCodes"/> could not decode it. It is described here like any other instruction.
+/// </remarks>
 /// <param name="Value">The encoded value: the byte for a one-byte opcode, <c>0xFExx</c> for a two-byte one.</param>
 /// <param name="Name">The ILAsm name.</param>
 /// <param name="OperandType">How the operand is laid out after the opcode.</param>
@@ -20,8 +22,7 @@ public sealed record IlOpcode(ushort Value, string Name, OperandType OperandType
     public int Size => Value > 0xFF ? 2 : 1;
 
     /// <summary>
-    /// The number of operand bytes that follow the opcode, or -1 for <c>switch</c>, whose table has
-    /// a length of its own.
+    /// The number of operand bytes that follow the opcode, or -1 for <c>switch</c>, whose table has a length of its own.
     /// </summary>
     public int OperandSize => OpcodeTable.OperandSize(OperandType);
 

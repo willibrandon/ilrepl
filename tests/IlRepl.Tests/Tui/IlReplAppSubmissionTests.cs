@@ -71,9 +71,11 @@ public sealed class IlReplAppSubmissionTests
         engine.Allow(2);
         await auto.WaitUntilTextAsync("sending 2/6");
         adapter.Resize(70, 20);
-        await auto.WaitUntilAsync(s => s.Width == 70 && s.Height == 20 && s.GetLine(19).Contains("sending 2/6", StringComparison.Ordinal) && AppTest.PromptRow(s, 0) == "il[1]>", description: "the status bar is on the new last row");
+        await auto.WaitUntilAsync(s => s.Width == 70 && s.Height == 20 && s.GetLine(19).Contains("sending 2/6", StringComparison.Ordinal)
+            && AppTest.PromptRow(s, 0) == "il[1]>", description: "the status bar is on the new last row");
         adapter.Resize(120, 40);
-        await auto.WaitUntilAsync(s => s.Width == 120 && s.GetLine(39).Contains("sending 2/6", StringComparison.Ordinal) && AppTest.PromptRow(s, 0) == "il[1]>", description: "and again after growing");
+        await auto.WaitUntilAsync(s => s.Width == 120 && s.GetLine(39).Contains("sending 2/6", StringComparison.Ordinal)
+            && AppTest.PromptRow(s, 0) == "il[1]>", description: "and again after growing");
         engine.Allow(4);
         await auto.WaitUntilTextAsync("end of method Twice");
 
@@ -82,10 +84,11 @@ public sealed class IlReplAppSubmissionTests
     }
 
     /// <summary>
-    /// Enter while lines are in flight waits its turn: the buffer was cleared when the block was
-    /// sent, so the block cannot go twice, and each Enter on the empty buffer is one blank line,
-    /// run after the block in order.
+    /// Enter while lines are in flight waits its turn: each Enter on the empty buffer is one blank line, run after the block in order.
     /// </summary>
+    /// <remarks>
+    /// The buffer was cleared when the block was sent, so the block cannot go twice.
+    /// </remarks>
     [TestMethod]
     public async Task Submit_WhileSending_ExtraEnterQueuesAfterBlock()
     {
@@ -104,14 +107,16 @@ public sealed class IlReplAppSubmissionTests
 
         // A typed character proves the Enters before it have been handled while the block was in flight.
         await auto.TypeAsync("q", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q" && s.ContainsText("sending 0/6") && engine.Handled.Count == 0, description: "the Enters were handled while busy and nothing was sent ahead of the block");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q" && s.ContainsText("sending 0/6") && engine.Handled.Count == 0,
+            description: "the Enters were handled while busy and nothing was sent ahead of the block");
         await auto.BackspaceAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "the buffer is empty again");
         engine.Allow(6);
         await auto.WaitUntilTextAsync("end of method Twice");
         await auto.WaitUntilTextAsync("sending 0/1");
         engine.Allow(2);
-        await auto.WaitUntilAsync(s => !s.ContainsText("sending") && engine.Handled.Count == 8, description: "the two blank lines went after the block");
+        await auto.WaitUntilAsync(s => !s.ContainsText("sending") && engine.Handled.Count == 8,
+            description: "the two blank lines went after the block");
         Assert.AreSequenceEqual([.. s_twice.Select((l, i) => i == 0 || i == 5 ? l : "  " + l), "", ""], engine.Handled);
         Assert.DoesNotContain(l => l.Kind == LineKind.Error, transcript.Lines, "a blank line on an empty cell is not an error");
         Assert.AreEqual("il[2]>", AppTest.PromptRow(terminal.CreateSnapshot(), 0));
@@ -137,13 +142,16 @@ public sealed class IlReplAppSubmissionTests
         await AppTest.TypeLinesAsync(auto, s_twice, ct);
         await auto.WaitUntilTextAsync("sending 0/6");
         await auto.TypeAsync("nop", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop" && s.ContainsText("sending 0/6"), description: "typing lands in the buffer while the block is in flight");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop" && s.ContainsText("sending 0/6"),
+            description: "typing lands in the buffer while the block is in flight");
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && engine.Handled.Count == 0, description: "the line is queued, not sent ahead of the block");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && engine.Handled.Count == 0,
+            description: "the line is queued, not sent ahead of the block");
         engine.Allow(7);
         await auto.WaitUntilTextAsync("il[2]> nop");
         await auto.WaitUntilTextAsync("1 instruction");
-        Assert.AreSequenceEqual([.. s_twice, "nop"], engine.Handled.Select(l => l.Trim()).ToList(), "the block went first, then the queued line");
+        Assert.AreSequenceEqual([.. s_twice, "nop"], engine.Handled.Select(l => l.Trim()).ToList(),
+            "the block went first, then the queued line");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -169,7 +177,8 @@ public sealed class IlReplAppSubmissionTests
         await auto.LeftAsync(ct: ct);
         await auto.LeftAsync(ct: ct);
         await auto.TypeAsync("q", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> aqbc" && AppTest.CaretAt(s, 9, 0), description: "the arrows moved the caret");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> aqbc" && AppTest.CaretAt(s, 9, 0),
+            description: "the arrows moved the caret");
         await auto.Shift().KeyAsync(Hex1bKey.Home, ct: ct);
         await auto.TypeAsync("y", ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ybc", description: "typing replaced the selection");
@@ -203,7 +212,8 @@ public sealed class IlReplAppSubmissionTests
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await auto.WaitUntilTextAsync("method Twice abandoned; the block is back in the editor");
         await auto.WaitUntilTextAsync("editing 6 lines");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 5) == "  ...> }" && !s.ContainsText("sending"), description: "the whole block is back");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {"
+            && AppTest.PromptRow(s, 5) == "  ...> }" && !s.ContainsText("sending"), description: "the whole block is back");
         Assert.HasCount(2, engine.Handled, "cancellation stops the pending line before it reaches the real engine");
         Assert.AreEqual(0, engine.Status.OpenDepth);
         Assert.IsFalse(terminal.CreateSnapshot().ContainsText("method Twice │"), "no method is open");
@@ -270,7 +280,8 @@ public sealed class IlReplAppSubmissionTests
         engine.Allow(1);
         await auto.WaitUntilTextAsync("engine error:");
         await auto.WaitUntilTextAsync("editing 6 lines");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 5) == "  ...> }" && !s.ContainsText("sending"), description: "the whole block is back");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {"
+            && AppTest.PromptRow(s, 5) == "  ...> }" && !s.ContainsText("sending"), description: "the whole block is back");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -357,10 +368,13 @@ public sealed class IlReplAppSubmissionTests
         engine.Allow(2);
         await auto.WaitUntilTextAsync("sending 2/6");
         await AppTest.TypeLinesAsync(auto, ["nop"], ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && s.ContainsText("sending 2/6"), description: "the line is queued behind the block");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && s.ContainsText("sending 2/6"),
+            description: "the line is queued behind the block");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await auto.WaitUntilTextAsync("method Twice abandoned; the block is back in the editor");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 7 lines") && AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 6) == "  ...> nop", description: "the block and the queued line are both back");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 7 lines")
+            && AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 6) == "  ...> nop",
+            description: "the block and the queued line are both back");
         Assert.HasCount(2, engine.Handled);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -368,9 +382,11 @@ public sealed class IlReplAppSubmissionTests
     }
 
     /// <summary>
-    /// A line typed while a block is in flight is judged against where the block will leave the
-    /// engine, not against the method the worker is still closing: it queues as a complete line.
+    /// A line typed while a block is in flight is judged against where the block will leave the engine.
     /// </summary>
+    /// <remarks>
+    /// It is not judged against the method the worker is still closing. It queues as a complete line.
+    /// </remarks>
     [TestMethod]
     public async Task Submit_WhileSending_TypedLineQueuesAsComplete()
     {
@@ -387,7 +403,8 @@ public sealed class IlReplAppSubmissionTests
         await auto.WaitUntilTextAsync("sending 1/6");
         await auto.WaitUntilTextAsync("method Twice │");
         await AppTest.TypeLinesAsync(auto, ["nop"], ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && !s.ContainsText("editing") && s.ContainsText("sending 1/6"), description: "the line queued instead of continuing a block");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && !s.ContainsText("editing") && s.ContainsText("sending 1/6"),
+            description: "the line queued instead of continuing a block");
         engine.Allow(5);
         await auto.WaitUntilTextAsync("end of method Twice");
         engine.Allow(1);
@@ -417,7 +434,9 @@ public sealed class IlReplAppSubmissionTests
         await AppTest.TypeLinesAsync(auto, s_twice, ct);
         await auto.WaitUntilTextAsync("engine error: the engine lost its footing");
         await auto.WaitUntilTextAsync("method Twice abandoned; the block is back in the editor");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines") && AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 5) == "  ...> }" && !s.ContainsText("sending"), description: "the whole block is back");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 6 lines")
+            && AppTest.PromptRow(s, 0) == "il[1]> .method int32 Twice(int32 n) {" && AppTest.PromptRow(s, 5) == "  ...> }"
+            && !s.ContainsText("sending"), description: "the whole block is back");
         Assert.AreEqual(0, engine.Status.OpenDepth);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -425,10 +444,12 @@ public sealed class IlReplAppSubmissionTests
     }
 
     /// <summary>
-    /// Enter on an empty buffer while a block is in flight queues a run; when the block is
-    /// withdrawn, that run comes back as a blank line after the block, and resending both
-    /// commits the block and runs the cell.
+    /// Enter on an empty buffer while a block is in flight queues a run.
     /// </summary>
+    /// <remarks>
+    /// When the block is withdrawn, that run comes back as a blank line after the block, and resending both commits the block and runs the
+    /// cell.
+    /// </remarks>
     [TestMethod]
     public async Task Submit_CtrlC_WithQueuedBlankRun_ReturnsItAsABlankLine()
     {
@@ -448,17 +469,20 @@ public sealed class IlReplAppSubmissionTests
         await auto.WaitUntilTextAsync("sending 2/6");
         await auto.EnterAsync(ct: ct);
         await auto.TypeAsync("q", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q" && s.ContainsText("sending 2/6"), description: "the blank run is queued behind the block");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q" && s.ContainsText("sending 2/6"),
+            description: "the blank run is queued behind the block");
         await auto.BackspaceAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "the buffer is empty again");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await auto.WaitUntilTextAsync("method Twice abandoned; the block is back in the editor");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 7 lines") && AppTest.PromptRow(s, 5) == "  ...> }" && AppTest.PromptRow(s, 6) == "  ...>", description: "the block is back with the blank run after it");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 7 lines") && AppTest.PromptRow(s, 5) == "  ...> }"
+            && AppTest.PromptRow(s, 6) == "  ...>", description: "the block is back with the blank run after it");
         await auto.WaitUntilTextAsync("Enter sends 7 lines");
         engine.Allow(7);
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("end of method Twice");
-        await auto.WaitUntilAsync(_ => transcript.Lines.Any(l => l.Kind == LineKind.Result), description: "the blank line ran the cell that was waiting");
+        await auto.WaitUntilAsync(_ => transcript.Lines.Any(l => l.Kind == LineKind.Result),
+            description: "the blank line ran the cell that was waiting");
         Assert.AreEqual("", engine.Handled[^1]);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);

@@ -98,7 +98,8 @@ public sealed class IlReaderTests
     public void Read_Switch_TargetsAreRelativeToEndOfTable()
     {
         // nop; switch (3 targets: +1, +2, -18); nop; nop; nop
-        byte[] il = [0x00, 0x45, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0xEE, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00];
+        byte[] il = [0x00, 0x45, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0xEE, 0xFF, 0xFF, 0xFF, 0x00, 0x00,
+            0x00];
         var result = IlReader.Read(il);
         Assert.IsEmpty(result.Problems, string.Join("; ", result.Problems));
         var sw = result.Instructions[1];
@@ -153,8 +154,7 @@ public sealed class IlReaderTests
     }
 
     /// <summary>
-    /// A target that is not the start of an instruction, or past the end, is a problem but the
-    /// instructions are all kept.
+    /// A target that is not the start of an instruction, or past the end, is a problem but the instructions are all kept.
     /// </summary>
     [TestMethod]
     public void Read_TargetsOffInstructionBoundaries_AreProblems()

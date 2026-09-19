@@ -44,6 +44,7 @@ internal sealed class SampleFixture
             UseShellExecute = false,
             WorkingDirectory = RepoPaths.Root,
         };
+
         foreach (var argument in new[] { "build", projectDirectory, "-c", RepoPaths.Configuration, "--nologo", "-v", "quiet" })
         {
             startInfo.ArgumentList.Add(argument);
@@ -55,7 +56,8 @@ internal sealed class SampleFixture
         await process.WaitForExitAsync().ConfigureAwait(false);
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException($"building {project} failed:\n{await stdout.ConfigureAwait(false)}\n{await stderr.ConfigureAwait(false)}");
+            throw new InvalidOperationException(
+                $"building {project} failed:\n{await stdout.ConfigureAwait(false)}\n{await stderr.ConfigureAwait(false)}");
         }
 
         return File.Exists(output) ? output : throw new FileNotFoundException("sample output missing after build", output);

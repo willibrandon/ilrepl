@@ -66,9 +66,17 @@ public static partial class ComparisonWorker
             FileSystemInfo entry = file.IsDirectory ? new DirectoryInfo(file.Path) : new FileInfo(file.Path);
             if (!OperatingSystem.IsWindows() && file.LinkTarget is null)
             {
-                if (file.Attributes is { } attributes) entry.Attributes = attributes;
-                if (file.UnixMode is { } mode) File.SetUnixFileMode(file.Path, mode);
+                if (file.Attributes is { } attributes)
+                {
+                    entry.Attributes = attributes;
+                }
+
+                if (file.UnixMode is { } mode)
+                {
+                    File.SetUnixFileMode(file.Path, mode);
+                }
             }
+
             if (restore is not null)
             {
                 restore(file);
@@ -101,7 +109,10 @@ public static partial class ComparisonWorker
                 entry.LastAccessTimeUtc = lastAccess;
             }
 
-            if (OperatingSystem.IsWindows() && file.Attributes is { } capturedAttributes) entry.Attributes = capturedAttributes;
+            if (OperatingSystem.IsWindows() && file.Attributes is { } capturedAttributes)
+            {
+                entry.Attributes = capturedAttributes;
+            }
 
             void Verify(DateTime? expected, DateTime actual, string name)
             {
@@ -115,12 +126,21 @@ public static partial class ComparisonWorker
         foreach (var file in files)
         {
             if (file.Attributes is { } attributes && File.GetAttributes(file.Path) != attributes)
+            {
                 throw new ReplException($"cannot restore attributes for comparison fixture '{file.Path}' on this filesystem");
+            }
+
             if (file.UnixMode is { } mode && (OperatingSystem.IsWindows() || File.GetUnixFileMode(file.Path) != mode))
+            {
                 throw new ReplException($"cannot restore Unix mode for comparison fixture '{file.Path}' on this filesystem");
+            }
+
             if (file.LinkTarget is not null)
             {
-                if (restore is not null) restore(file);
+                if (restore is not null)
+                {
+                    restore(file);
+                }
                 else if (file.LastAccessTimeUtc is { } accessed)
                 {
                     FileSystemInfo entry = file.IsDirectory ? new DirectoryInfo(file.Path) : new FileInfo(file.Path);

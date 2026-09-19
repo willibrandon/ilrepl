@@ -42,6 +42,7 @@ public sealed partial class SessionFileStore
         {
             throw new FileNotFoundException("session file does not exist: " + fullPath, fullPath, exception);
         }
+
         var document = SessionCodec.Read(bytes);
         var assets = document.Assets.ToDictionary(asset => asset.Hash, StringComparer.Ordinal);
         var references = document.References.Select(reference => ResolveLocators(reference, directory)).ToArray();

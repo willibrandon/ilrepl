@@ -71,7 +71,11 @@ public static class TypeNameFixture
         var types = new Dictionary<Type, TypeReferenceHandle>();
         TypeReferenceHandle TypeReference(Type type)
         {
-            if (types.TryGetValue(type, out var handle)) return handle;
+            if (types.TryGetValue(type, out var handle))
+            {
+                return handle;
+            }
+
             if (!references.TryGetValue(type.Assembly, out var reference))
             {
                 var assembly = type.Assembly.GetName();
@@ -79,6 +83,7 @@ public static class TypeNameFixture
                     metadata.GetOrAddBlob(assembly.GetPublicKeyToken()!), 0, default);
                 references.Add(type.Assembly, reference);
             }
+
             handle = metadata.AddTypeReference(type.IsNested ? TypeReference(type.DeclaringType!) : reference,
                 metadata.GetOrAddString(type.Namespace ?? ""), metadata.GetOrAddString(type.Name));
             types.Add(type, handle);
@@ -87,26 +92,57 @@ public static class TypeNameFixture
 
         void EncodeType(SignatureTypeEncoder encoder, Type type)
         {
-            if (type == typeof(bool)) encoder.Boolean();
-            else if (type == typeof(int)) encoder.Int32();
-            else if (type == typeof(string)) encoder.String();
-            else if (type == typeof(object)) encoder.Object();
-            else if (type == typeof(nint)) encoder.IntPtr();
-            else if (type.IsArray) EncodeType(encoder.SZArray(), type.GetElementType()!);
-            else if (type.IsGenericParameter) encoder.GenericTypeParameter(type.GenericParameterPosition);
+            if (type == typeof(bool))
+            {
+                encoder.Boolean();
+            }
+            else if (type == typeof(int))
+            {
+                encoder.Int32();
+            }
+            else if (type == typeof(string))
+            {
+                encoder.String();
+            }
+            else if (type == typeof(object))
+            {
+                encoder.Object();
+            }
+            else if (type == typeof(nint))
+            {
+                encoder.IntPtr();
+            }
+            else if (type.IsArray)
+            {
+                EncodeType(encoder.SZArray(), type.GetElementType()!);
+            }
+            else if (type.IsGenericParameter)
+            {
+                encoder.GenericTypeParameter(type.GenericParameterPosition);
+            }
             else if (type.IsGenericType)
             {
                 var arguments = type.GetGenericArguments();
                 var parameters = encoder.GenericInstantiation(TypeReference(type.GetGenericTypeDefinition()), arguments.Length,
                     type.IsValueType);
-                foreach (var argument in arguments) EncodeType(parameters.AddArgument(), argument);
+                foreach (var argument in arguments)
+                {
+                    EncodeType(parameters.AddArgument(), argument);
+                }
             }
-            else encoder.Type(TypeReference(type), type.IsValueType);
+            else
+            {
+                encoder.Type(TypeReference(type), type.IsValueType);
+            }
         }
 
         EntityHandle SignatureType(Type type)
         {
-            if (!type.IsArray && !type.IsGenericType) return TypeReference(type);
+            if (!type.IsArray && !type.IsGenericType)
+            {
+                return TypeReference(type);
+            }
+
             var signature = new BlobBuilder();
             EncodeType(new BlobEncoder(signature).TypeSpecificationSignature(), type);
             return metadata.AddTypeSpecification(metadata.GetOrAddBlob(signature));
@@ -124,13 +160,22 @@ public static class TypeNameFixture
             new BlobEncoder(signature).MethodSignature(isInstanceMethod: !method.IsStatic).Parameters(definition.GetParameters().Length,
                 result =>
                 {
-                    if (definition is not MethodInfo info || info.ReturnType == typeof(void)) result.Void();
-                    else EncodeType(result.Type(), info.ReturnType);
+                    if (definition is not MethodInfo info || info.ReturnType == typeof(void))
+                    {
+                        result.Void();
+                    }
+                    else
+                    {
+                        EncodeType(result.Type(), info.ReturnType);
+                    }
                 }, arguments =>
                 {
                     foreach (var parameter in definition.GetParameters())
+                    {
                         EncodeType(arguments.AddParameter().Type(), parameter.ParameterType);
+                    }
                 });
+
             return metadata.AddMemberReference(SignatureType(declaring), metadata.GetOrAddString(method.Name),
                 metadata.GetOrAddBlob(signature));
         }
@@ -155,12 +200,18 @@ public static class TypeNameFixture
         {
             var signature = new BlobBuilder();
             new BlobEncoder(signature).MethodSignature(genericParameterCount: methodName == "Probe" ? 1 : 0).Parameters(0,
-                returns => EncodeType(returns.Type(), result), _ => { });
+                returns => EncodeType(returns.Type(), result), _ =>
+                {
+                });
+
             var method = metadata.AddMethodDefinition(MethodAttributes.Static
                 | (methodName == "Read" || methodName == "Probe" ? MethodAttributes.Public : MethodAttributes.Private),
                 MethodImplAttributes.IL, metadata.GetOrAddString(methodName), metadata.GetOrAddBlob(signature),
                 encoder.AddMethodBody(body, maxStack: 12, localVariablesSignature: locals), MetadataTokens.ParameterHandle(1));
-            if (methodName == "Probe") metadata.AddGenericParameter(method, 0, metadata.GetOrAddString("T"), 0);
+            if (methodName == "Probe")
+            {
+                metadata.AddGenericParameter(method, 0, metadata.GetOrAddString("T"), 0);
+            }
         }
 
         var expected = Expected(shape, api, dispatch, identity);
@@ -171,11 +222,19 @@ public static class TypeNameFixture
             instructions.OpCode(method.IsStatic ? ILOpCode.Call : ILOpCode.Callvirt);
             instructions.Token(MethodReference(method));
         }
+
         void LoadString(string? value)
         {
-            if (value is null) instructions.OpCode(ILOpCode.Ldnull);
-            else instructions.LoadString(metadata.GetOrAddUserString(value));
+            if (value is null)
+            {
+                instructions.OpCode(ILOpCode.Ldnull);
+            }
+            else
+            {
+                instructions.LoadString(metadata.GetOrAddUserString(value));
+            }
         }
+
         if (shape == "null")
         {
             var start = instructions.DefineLabel();
@@ -222,9 +281,13 @@ public static class TypeNameFixture
             instructions.Token(type);
             Call(typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle))!);
         }
+
         void LoadReceiver()
         {
-            if (shape == "null") instructions.OpCode(ILOpCode.Ldnull);
+            if (shape == "null")
+            {
+                instructions.OpCode(ILOpCode.Ldnull);
+            }
             else if (shape == "ordinary")
             {
                 instructions.LoadConstantI4(42);
@@ -254,16 +317,27 @@ public static class TypeNameFixture
             {
                 var signature = new BlobBuilder();
                 var encoded = new BlobEncoder(signature).TypeSpecificationSignature();
-                if (shape is "array" or "auxiliary-array") encoded.SZArray().Type(shape == "array" ? owner : auxiliary, false);
-                else encoded.GenericInstantiation(TypeReference(typeof(List<>)), 1, false).AddArgument().Type(owner, false);
+                if (shape is "array" or "auxiliary-array")
+                {
+                    encoded.SZArray().Type(shape == "array" ? owner : auxiliary, false);
+                }
+                else
+                {
+                    encoded.GenericInstantiation(TypeReference(typeof(List<>)), 1, false).AddArgument().Type(owner, false);
+                }
+
                 LoadType(metadata.AddTypeSpecification(metadata.GetOrAddBlob(signature)));
             }
-            else LoadType(shape switch
+            else
+            {
+                LoadType(shape switch
             {
                 "bcl" => TypeReference(typeof(string)), "sibling" => sibling, "nested" => nested,
                 "auxiliary" => auxiliary, _ => owner,
             });
+            }
         }
+
         var inspection = api == "ToString" ? typeof(Type).GetMethod(nameof(ToString), Type.EmptyTypes)!
             : typeof(Type).GetProperty(api)!.GetMethod!;
         void LoadInspection()
@@ -274,6 +348,7 @@ public static class TypeNameFixture
             instructions.OpCode(ILOpCode.Castclass);
             instructions.Token(TypeReference(typeof(MethodInfo)));
         }
+
         if (dispatch == "token")
         {
             instructions.OpCode(ILOpCode.Ldtoken);
@@ -281,7 +356,10 @@ public static class TypeNameFixture
             instructions.OpCode(ILOpCode.Pop);
             LoadString("token");
         }
-        else if (dispatch == "lookalike") instructions.Call(MetadataTokens.MethodDefinitionHandle(4));
+        else if (dispatch == "lookalike")
+        {
+            instructions.Call(MetadataTokens.MethodDefinitionHandle(4));
+        }
         else if (dispatch == "invoke")
         {
             LoadInspection();
@@ -304,8 +382,16 @@ public static class TypeNameFixture
         }
         else if (dispatch is "delegate" or "named" or "pointer")
         {
-            if (dispatch == "delegate") LoadInspection();
-            if (dispatch != "pointer") LoadType(SignatureType(typeof(Func<string>)));
+            if (dispatch == "delegate")
+            {
+                LoadInspection();
+            }
+
+            if (dispatch != "pointer")
+            {
+                LoadType(SignatureType(typeof(Func<string>)));
+            }
+
             LoadReceiver();
             if (dispatch == "pointer")
             {
@@ -320,7 +406,11 @@ public static class TypeNameFixture
                 LoadString(inspection.Name);
                 Call(typeof(Delegate).GetMethod(nameof(Delegate.CreateDelegate), [typeof(Type), typeof(object), typeof(string)])!);
             }
-            else Call(typeof(MethodInfo).GetMethod(nameof(MethodInfo.CreateDelegate), [typeof(Type), typeof(object)])!);
+            else
+            {
+                Call(typeof(MethodInfo).GetMethod(nameof(MethodInfo.CreateDelegate), [typeof(Type), typeof(object)])!);
+            }
+
             instructions.OpCode(ILOpCode.Castclass);
             instructions.Token(SignatureType(typeof(Func<string>)));
             Call(typeof(Func<string>).GetMethod(nameof(Func<string>.Invoke))!);
@@ -344,6 +434,7 @@ public static class TypeNameFixture
             Call(dispatch == "object" ? typeof(object).GetMethod(nameof(ToString))!
                 : shape == "member" ? typeof(MemberInfo).GetProperty(nameof(MemberInfo.Name))!.GetMethod! : inspection);
         }
+
         instructions.OpCode(ILOpCode.Ret);
         Method("Query", typeof(string), instructions);
         instructions = new InstructionEncoder(new BlobBuilder());
@@ -362,22 +453,59 @@ public static class TypeNameFixture
 
     private static string? Expected(string shape, string api, string dispatch, string identity)
     {
-        if (dispatch is "lookalike" or "token") return dispatch;
-        if (shape == "member") return "Probe";
-        if (shape == "ordinary") return "42";
-        if (shape == "null" || shape == "parameter" && api is "FullName" or "AssemblyQualifiedName") return null;
-        if (shape == "parameter") return "T";
+        if (dispatch is "lookalike" or "token")
+        {
+            return dispatch;
+        }
+
+        if (shape == "member")
+        {
+            return "Probe";
+        }
+
+        if (shape == "ordinary")
+        {
+            return "42";
+        }
+
+        if (shape == "null" || shape == "parameter" && api is "FullName" or "AssemblyQualifiedName")
+        {
+            return null;
+        }
+
+        if (shape == "parameter")
+        {
+            return "T";
+        }
+
         var simple = shape switch
         {
             "bcl" => "String", "sibling" => "Sibling", "nested" => "Nested", "auxiliary" => "Auxiliary",
             "array" => "Owner[]", "auxiliary-array" => "Auxiliary[]", "constructed" => "List`1", _ => "Owner",
         };
-        if (api == "Name") return simple;
-        if (api == "Namespace") return shape == "bcl" ? "System" : shape == "constructed" ? "System.Collections.Generic" : "TypeNames";
+
+        if (api == "Name")
+        {
+            return simple;
+        }
+
+        if (api == "Namespace")
+        {
+            return shape == "bcl" ? "System" : shape == "constructed" ? "System.Collections.Generic" : "TypeNames";
+        }
+
         var full = shape == "bcl" ? "System.String" : shape == "nested" ? "TypeNames.Owner+Nested" : "TypeNames." + simple;
-        if (shape == "constructed") full = api == "ToString" ? "System.Collections.Generic.List`1[TypeNames.Owner]"
+        if (shape == "constructed")
+        {
+            full = api == "ToString" ? "System.Collections.Generic.List`1[TypeNames.Owner]"
             : "System.Collections.Generic.List`1[[TypeNames.Owner, " + identity + "]]";
-        if (api == "AssemblyQualifiedName") full += ", " + (shape is "bcl" or "constructed" ? typeof(string).Assembly.FullName : identity);
+        }
+
+        if (api == "AssemblyQualifiedName")
+        {
+            full += ", " + (shape is "bcl" or "constructed" ? typeof(string).Assembly.FullName : identity);
+        }
+
         return full;
     }
 }

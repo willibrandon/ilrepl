@@ -41,9 +41,14 @@ public sealed class ToolProcessTests
         {
             while (!File.Exists(signal))
             {
-                if (task.IsCompleted) await task;
+                if (task.IsCompleted)
+                {
+                    await task;
+                }
+
                 await Task.Delay(10, TestContext.CancellationToken);
             }
+
             var text = await File.ReadAllTextAsync(signal, TestContext.CancellationToken);
             using var process = Process.GetProcessById(int.Parse(text, CultureInfo.InvariantCulture));
             Assert.IsFalse(process.HasExited);
@@ -54,8 +59,14 @@ public sealed class ToolProcessTests
         finally
         {
             await cancellation.CancelAsync();
-            try { await task; }
-            catch (OperationCanceledException) { }
+            try
+            {
+                await task;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
             Directory.Delete(directory, recursive: true);
         }
     }
@@ -67,7 +78,12 @@ public sealed class ToolProcessTests
         {
             start.ArgumentList.Add(typeof(ToolProcessTests).Assembly.Location);
         }
-        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
         return start;
     }
 }

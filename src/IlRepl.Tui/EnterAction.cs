@@ -1,9 +1,11 @@
 namespace IlRepl.Tui;
 
 /// <summary>
-/// What Enter will do now. The key handler and the status bar's hint both read it, so the hint
-/// never promises one thing while the key does another.
+/// What Enter will do now.
 /// </summary>
+/// <remarks>
+/// The key handler and the status bar's hint both read it, so the hint never promises one thing while the key does another.
+/// </remarks>
 public enum EnterAction
 {
     /// <summary>

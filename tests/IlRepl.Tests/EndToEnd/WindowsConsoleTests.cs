@@ -71,6 +71,7 @@ public sealed class WindowsConsoleTests
                 frontendRecord, RepoPaths.FrontEndAssembly, "--no-color", script];
             options.WorkingDirectory = files.DirectoryPath;
         }).AddWorkloadFilter(recorder).WithHeadless().WithDimensions(100, 30).Build();
+
         // The run ends when the PTY process is seen to exit or this token is cancelled. Closing the console disposes the
         // terminal, which releases that process, so the close case ends the run itself instead of waiting to see the exit.
         using var running = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -96,8 +97,19 @@ public sealed class WindowsConsoleTests
                 // This independent client survives the PTY root's final TerminateProcess fallback long enough to witness close.
                 var ready = Path.Combine(files.DirectoryPath, "observer.ready");
                 var observe = new ProcessStartInfo(HostLocator.FindDotnet()) { UseShellExecute = false };
-                foreach (var argument in new[] { typeof(WindowsConsoleProbe).Assembly.Location, "--windows-console",
-                    "observe-close", frontend.Id.ToString(), closeMarker, ready }) observe.ArgumentList.Add(argument);
+                foreach (var argument in new[]
+                {
+                    typeof(WindowsConsoleProbe).Assembly.Location,
+                    "--windows-console",
+                    "observe-close",
+                    frontend.Id.ToString(),
+                    closeMarker,
+                    ready,
+                })
+                {
+                    observe.ArgumentList.Add(argument);
+                }
+
                 observer = Process.Start(observe) ?? throw new InvalidOperationException("The console observer did not start.");
                 await WaitUntilAsync(() => File.Exists(ready), token);
                 await terminal.DisposeAsync();
@@ -108,39 +120,82 @@ public sealed class WindowsConsoleTests
             else
             {
                 var signal = new ProcessStartInfo(HostLocator.FindDotnet());
-                foreach (var argument in new[] { typeof(WindowsConsoleProbe).Assembly.Location, "--windows-console",
-                    "break", frontend.Id.ToString() }) signal.ArgumentList.Add(argument);
+                foreach (var argument in new[]
+                {
+                    typeof(WindowsConsoleProbe).Assembly.Location,
+                    "--windows-console",
+                    "break",
+                    frontend.Id.ToString(),
+                })
+                {
+                    signal.ArgumentList.Add(argument);
+                }
+
                 var sent = await ToolProcess.RunAsync(signal, token);
                 Assert.AreEqual(0, sent.ExitCode, sent.StandardError);
                 Assert.AreEqual(130, await run.WaitAsync(TimeSpan.FromSeconds(20), token), recorder.Output);
                 Assert.Contains("batch partial output", recorder.Output);
                 Assert.DoesNotContain("runtime restarted", recorder.Output);
             }
+
             await OwnedProcessGroup.WaitForExitAsync(frontend, token);
             await OwnedProcessGroup.WaitForExitAsync(host, token);
             await WaitUntilAsync(() => records.All(record => !ComparisonDescendantSource.IsRunning(record)), token);
             Assert.IsTrue(frontend.HasExited);
             Assert.IsTrue(host.HasExited);
-            foreach (var record in records) Assert.IsFalse(ComparisonDescendantSource.IsRunning(record), record);
+            foreach (var record in records)
+            {
+                Assert.IsFalse(ComparisonDescendantSource.IsRunning(record), record);
+            }
         }
         finally
         {
             TestContext.WriteLine(await DiagnosticsAsync());
-            if (frontend is { HasExited: false }) frontend.Kill(entireProcessTree: true);
-            if (host is { HasExited: false }) host.Kill(entireProcessTree: true);
-            if (observer is { HasExited: false }) observer.Kill();
-            if (frontend is not null) await OwnedProcessGroup.WaitForExitAsync(frontend, CancellationToken.None);
-            if (host is not null) await OwnedProcessGroup.WaitForExitAsync(host, CancellationToken.None);
-            if (observer is not null) await OwnedProcessGroup.WaitForExitAsync(observer, CancellationToken.None);
+            if (frontend is { HasExited: false })
+            {
+                frontend.Kill(entireProcessTree: true);
+            }
+
+            if (host is { HasExited: false })
+            {
+                host.Kill(entireProcessTree: true);
+            }
+
+            if (observer is { HasExited: false })
+            {
+                observer.Kill();
+            }
+
+            if (frontend is not null)
+            {
+                await OwnedProcessGroup.WaitForExitAsync(frontend, CancellationToken.None);
+            }
+
+            if (host is not null)
+            {
+                await OwnedProcessGroup.WaitForExitAsync(host, CancellationToken.None);
+            }
+
+            if (observer is not null)
+            {
+                await OwnedProcessGroup.WaitForExitAsync(observer, CancellationToken.None);
+            }
+
             frontend?.Dispose();
             host?.Dispose();
             observer?.Dispose();
             if (File.Exists(descendants))
+            {
                 foreach (var record in await File.ReadAllLinesAsync(descendants, CancellationToken.None))
                 {
                     using var process = ComparisonDescendantSource.Open(record);
-                    if (process is { HasExited: false }) process.Kill(entireProcessTree: true);
+                    if (process is { HasExited: false })
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
                 }
+            }
+
             await terminal.DisposeAsync();
             if (close)
             {
@@ -173,13 +228,16 @@ public sealed class WindowsConsoleTests
                 try
                 {
                     if (File.Exists(path))
+                    {
                         output += "\n" + Path.GetFileName(path) + ": " + await File.ReadAllTextAsync(path, CancellationToken.None);
+                    }
                 }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
                     output += "\n" + Path.GetFileName(path) + ": " + exception.Message;
                 }
             }
+
             return output;
         }
     }
@@ -188,6 +246,9 @@ public sealed class WindowsConsoleTests
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(20));
-        while (!condition()) await Task.Delay(10, deadline.Token);
+        while (!condition())
+        {
+            await Task.Delay(10, deadline.Token);
+        }
     }
 }

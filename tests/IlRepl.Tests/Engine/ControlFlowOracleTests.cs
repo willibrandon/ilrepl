@@ -83,6 +83,7 @@ public sealed class ControlFlowOracleTests
                     break;
             }
         }, session.Resolver);
+
         using var oracle = new IlVerificationOracle();
         var errors = oracle.Verify(image);
         var method = fixture.GetMethod("M")!;
@@ -117,6 +118,7 @@ public sealed class ControlFlowOracleTests
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         using var oracle = new IlVerificationOracle();
         Assert.Contains(VerifierError.Unverifiable, oracle.Verify(image));
         var method = fixture.GetMethod("M")!;
@@ -147,6 +149,7 @@ public sealed class ControlFlowOracleTests
             il.Emit(OpCodes.Ldc_I4, 42);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var listing = MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
         var diagnostics = StackAnalysis.Diagnostics(listing);
         Assert.Contains(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error
@@ -173,6 +176,7 @@ public sealed class ControlFlowOracleTests
             il.Emit(OpCodes.Ldc_I4, 42);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var listing = MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
         var diagnostics = StackAnalysis.Diagnostics(listing);
         Assert.Contains(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error
@@ -202,6 +206,7 @@ public sealed class ControlFlowOracleTests
             il.Emit(OpCodes.Calli, site);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var listing = MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
         var diagnostics = StackAnalysis.Diagnostics(listing);
         Assert.Contains(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Error
@@ -226,6 +231,7 @@ public sealed class ControlFlowOracleTests
             il.Emit(OpCodes.Call, target);
             il.Emit(OpCodes.Ret);
         });
+
         using var oracle = new IlVerificationOracle();
         var error = Assert.ThrowsExactly<FileNotFoundException>(() => oracle.Verify(image));
         Assert.Contains("IlReplMissingVerificationReference", error.Message);

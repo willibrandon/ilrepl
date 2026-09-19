@@ -1,17 +1,22 @@
+using System.Collections.Immutable;
 using System.Globalization;
+using System.Reflection.PortableExecutable;
 using IlRepl.Engine;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using CecilInstruction = Mono.Cecil.Cil.Instruction;
 using MethodDefinition = Mono.Cecil.MethodDefinition;
+using PEReaderExtensions = System.Reflection.Metadata.PEReaderExtensions;
 
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Compares bodies with Mono.Cecil's reader, an implementation that shares nothing with the
-/// engine's: instruction by instruction against a disassembly, and body against body across two
-/// assemblies by the meaning of every operand.
+/// Compares bodies with Mono.Cecil's reader, an implementation that shares nothing with the engine's.
 /// </summary>
+/// <remarks>
+/// It compares instruction by instruction against a disassembly, and body against body across two assemblies by the meaning of every
+/// operand.
+/// </remarks>
 internal static class CecilOracle
 {
     /// <summary>
@@ -97,29 +102,42 @@ internal static class CecilOracle
     }
 
     /// <summary>
-    /// Asserts that two bodies mean the same: exact encodings, offsets, immediates, targets, and
-    /// clause ranges, and every metadata operand equal by its symbolic identity, with the two
-    /// modules' own scopes mapped onto each other.
+    /// Asserts that two bodies mean the same.
     /// </summary>
+    /// <remarks>
+    /// That means exact encodings, offsets, immediates, targets, and clause ranges, and every metadata operand equal by its symbolic
+    /// identity, with the two modules' own scopes mapped onto each other.
+    /// </remarks>
     /// <param name="original">The original method.</param>
     /// <param name="reassembled">The method assembled from the listing.</param>
     /// <param name="originalScope">The full assembly name the original module's own references count as.</param>
     /// <param name="reassembledScope">The full assembly name the reassembled module's own references count as.</param>
-    public static void AssertSameMeaning(MethodDefinition original, MethodDefinition reassembled, string originalScope, string reassembledScope) =>
+    public static void AssertSameMeaning(
+        MethodDefinition original,
+        MethodDefinition reassembled,
+        string originalScope,
+        string reassembledScope) =>
         AssertSameMeaning(original, reassembled, originalScope, reassembledScope, null, null);
 
     /// <summary>
-    /// As above, and with both images at hand also compares the table each token operand comes
-    /// from, which Cecil hides: a TypeSpec wrapping a reference is not the reference itself, and
-    /// the runtime treats the two differently for an open generic type.
+    /// As above, and with both images at hand also compares the table each token operand comes from, which Cecil hides.
     /// </summary>
+    /// <remarks>
+    /// A TypeSpec wrapping a reference is not the reference itself, and the runtime treats the two differently for an open generic type.
+    /// </remarks>
     /// <param name="original">The original method.</param>
     /// <param name="reassembled">The method assembled from the listing.</param>
     /// <param name="originalScope">The full assembly name the original module's own references count as.</param>
     /// <param name="reassembledScope">The full assembly name the reassembled module's own references count as.</param>
     /// <param name="originalImage">The original image, or null to skip the token table check.</param>
     /// <param name="reassembledImage">The reassembled image, or null to skip the token table check.</param>
-    public static void AssertSameMeaning(MethodDefinition original, MethodDefinition reassembled, string originalScope, string reassembledScope, byte[]? originalImage, byte[]? reassembledImage)
+    public static void AssertSameMeaning(
+        MethodDefinition original,
+        MethodDefinition reassembled,
+        string originalScope,
+        string reassembledScope,
+        byte[]? originalImage,
+        byte[]? reassembledImage)
     {
         var where = original.FullName;
         if (originalImage is not null && reassembledImage is not null)
@@ -133,19 +151,22 @@ internal static class CecilOracle
     }
 
     /// <summary>
-    /// The shape of every token operand in a body, in order: a type by reference against a type
-    /// signature, and a member against a generic method instance. Which table a reference came
-    /// through within a shape, a TypeDef or a TypeRef, a MethodDef or a MemberRef, is not part of
-    /// it, because a member of the module being reassembled is rightly a reference from outside.
+    /// The shape of every token operand in a body, in order.
     /// </summary>
+    /// <remarks>
+    /// A shape is a type by reference against a type signature, and a member against a generic method instance. Which table a reference
+    /// came through within a shape, a TypeDef or a TypeRef, a MethodDef or a MemberRef, is not part of it, because a member of the module
+    /// being reassembled is rightly a reference from outside.
+    /// </remarks>
     private static List<string> RawTokens(byte[] image, MethodDefinition method)
     {
-        using var pe = new System.Reflection.PortableExecutable.PEReader(System.Collections.Immutable.ImmutableArray.Create(image));
-        var body = System.Reflection.Metadata.PEReaderExtensions.GetMethodBody(pe, method.RVA);
+        using var pe = new PEReader(ImmutableArray.Create(image));
+        var body = PEReaderExtensions.GetMethodBody(pe, method.RVA);
         var read = IlReader.Read(body.GetILBytes()!);
         Assert.IsEmpty(read.Problems, method.FullName + ": " + string.Join("; ", read.Problems));
         return read.Instructions
-            .Where(i => i.Op.OperandType is System.Reflection.Emit.OperandType.InlineType or System.Reflection.Emit.OperandType.InlineTok or System.Reflection.Emit.OperandType.InlineMethod or System.Reflection.Emit.OperandType.InlineField)
+            .Where(i => i.Op.OperandType is System.Reflection.Emit.OperandType.InlineType or System.Reflection.Emit.OperandType.InlineTok
+            or System.Reflection.Emit.OperandType.InlineMethod or System.Reflection.Emit.OperandType.InlineField)
             .Select(i => $"IL_{i.Offset:x4} {i.Op.Name} {Shape(i.Operand.Token)}")
             .ToList();
     }
@@ -160,7 +181,11 @@ internal static class CecilOracle
         var table => $"table 0x{table:x2}",
     };
 
-    private static void AssertSameMeaningCore(MethodDefinition original, MethodDefinition reassembled, string originalScope, string reassembledScope)
+    private static void AssertSameMeaningCore(
+        MethodDefinition original,
+        MethodDefinition reassembled,
+        string originalScope,
+        string reassembledScope)
     {
         var where = original.FullName;
         var a = original.Body.Instructions;
@@ -172,12 +197,14 @@ internal static class CecilOracle
             Assert.AreEqual(a[i].Offset, b[i].Offset, at + ": offset");
             Assert.AreEqual(a[i].OpCode.Value, b[i].OpCode.Value, at + ": opcode encoding");
             Assert.AreEqual(a[i].GetSize(), b[i].GetSize(), at + ": size");
-            Assert.AreEqual(Identity(a[i].Operand, original.Module, originalScope), Identity(b[i].Operand, reassembled.Module, reassembledScope), at + ": operand");
+            Assert.AreEqual(Identity(a[i].Operand, original.Module, originalScope),
+                Identity(b[i].Operand, reassembled.Module, reassembledScope), at + ": operand");
         }
 
         // Clause order is dispatch order: the same clauses in another order mean something else.
         var ha = original.Body.ExceptionHandlers.Select(h => Describe(h, original.Body.CodeSize, original.Module, originalScope)).ToList();
-        var hb = reassembled.Body.ExceptionHandlers.Select(h => Describe(h, reassembled.Body.CodeSize, reassembled.Module, reassembledScope)).ToList();
+        var hb = reassembled.Body.ExceptionHandlers.Select(h => Describe(h, reassembled.Body.CodeSize, reassembled.Module,
+            reassembledScope)).ToList();
         Assert.AreSequenceEqual(ha, hb, where + ": clauses");
         Assert.AreEqual(original.Body.MaxStackSize, reassembled.Body.MaxStackSize, where + ": maxstack");
         Assert.AreEqual(original.Body.InitLocals, reassembled.Body.InitLocals, where + ": init locals");
@@ -187,22 +214,30 @@ internal static class CecilOracle
             where + ": locals");
     }
 
-    private static int ArgumentIndex(MethodDefinition method, ParameterDefinition parameter) => method.Parameters.IndexOf(parameter) + (method.HasThis ? 1 : 0);
+    private static int ArgumentIndex(MethodDefinition method, ParameterDefinition parameter) =>
+        method.Parameters.IndexOf(parameter) + (method.HasThis ? 1 : 0);
 
     private static string Describe(ExceptionHandler handler, int codeSize) =>
-        $"{handler.HandlerType} try {handler.TryStart.Offset}-{handler.TryEnd?.Offset ?? codeSize} filter {handler.FilterStart?.Offset ?? -1} handler {handler.HandlerStart.Offset}-{handler.HandlerEnd?.Offset ?? codeSize} catch {handler.CatchType?.MetadataToken.ToInt32() ?? 0}";
+        $"{handler.HandlerType} try {handler.TryStart.Offset}-{handler.TryEnd?.Offset ?? codeSize} filter " +
+        $"{handler.FilterStart?.Offset ?? -1} handler {handler.HandlerStart.Offset}-{handler.HandlerEnd?.Offset ?? codeSize} catch " +
+        $"{handler.CatchType?.MetadataToken.ToInt32() ?? 0}";
 
     private static string Describe(IlExceptionClause clause) =>
-        $"{clause.Kind} try {clause.TryStart}-{clause.TryEnd} filter {clause.FilterStart ?? -1} handler {clause.HandlerStart}-{clause.HandlerEnd} catch {clause.CatchToken}";
+        $"{clause.Kind} try {clause.TryStart}-{clause.TryEnd} filter {clause.FilterStart ?? -1} handler " +
+        $"{clause.HandlerStart}-{clause.HandlerEnd} catch {clause.CatchToken}";
 
     private static string Describe(ExceptionHandler handler, int codeSize, ModuleDefinition module, string scope) =>
-        $"{handler.HandlerType} try {handler.TryStart.Offset}-{handler.TryEnd?.Offset ?? codeSize} filter {handler.FilterStart?.Offset ?? -1} handler {handler.HandlerStart.Offset}-{handler.HandlerEnd?.Offset ?? codeSize} catch {(handler.CatchType is null ? "" : Identity(handler.CatchType, module, scope))}";
+        $"{handler.HandlerType} try {handler.TryStart.Offset}-{handler.TryEnd?.Offset ?? codeSize} filter " +
+        $"{handler.FilterStart?.Offset ?? -1} handler {handler.HandlerStart.Offset}-{handler.HandlerEnd?.Offset ?? codeSize} catch " +
+        $"{(handler.CatchType is null ? "" : Identity(handler.CatchType, module, scope))}";
 
     /// <summary>
-    /// The symbolic identity of an operand: its full name and the assembly identity of every
-    /// scope in it, with the module's own scope named by <paramref name="self"/>. The table a
-    /// reference came through is not part of it, so a MethodDef and a MemberRef to one member agree.
+    /// The symbolic identity of an operand: its full name and the assembly identity of every scope in it.
     /// </summary>
+    /// <remarks>
+    /// The module's own scope is named by <paramref name="self"/>. The table a reference came through is not part of it, so a MethodDef and
+    /// a MemberRef to one member agree.
+    /// </remarks>
     private static string Identity(object? operand, ModuleDefinition module, string self)
     {
         switch (operand)
@@ -222,31 +257,39 @@ internal static class CecilOracle
             case VariableDefinition v:
                 return "V_" + v.Index.ToString(CultureInfo.InvariantCulture);
             case ParameterDefinition p:
-                return "A_" + (p.Method is MethodDefinition owner ? ArgumentIndex(owner, p) : p.Sequence).ToString(CultureInfo.InvariantCulture);
+                return "A_"
+                    + (p.Method is MethodDefinition owner ? ArgumentIndex(owner, p) : p.Sequence).ToString(CultureInfo.InvariantCulture);
             case TypeReference type:
                 return TypeIdentity(type, self);
             case FieldReference field:
                 return "field " + TypeIdentity(field.FieldType, self) + " " + TypeIdentity(field.DeclaringType, self) + "::" + field.Name;
             case GenericInstanceMethod instance:
-                return Identity(instance.ElementMethod, module, self) + "<" + string.Join(",", instance.GenericArguments.Select(g => TypeIdentity(g, self))) + ">";
+                return Identity(instance.ElementMethod, module, self) + "<"
+                    + string.Join(",", instance.GenericArguments.Select(g => TypeIdentity(g, self))) + ">";
             case MethodReference method:
-                return "method " + Convention(method) + TypeIdentity(method.ReturnType, self) + " " + TypeIdentity(method.DeclaringType, self) + "::" + method.Name + "(" + string.Join(",", method.Parameters.Select(p => TypeIdentity(p.ParameterType, self))) + ")" + (method.HasGenericParameters ? "`" + method.GenericParameters.Count.ToString(CultureInfo.InvariantCulture) : "");
+                return "method " + Convention(method) + TypeIdentity(method.ReturnType, self) + " "
+                    + TypeIdentity(method.DeclaringType, self) + "::" + method.Name + "("
+                    + string.Join(",", method.Parameters.Select(p => TypeIdentity(p.ParameterType, self))) + ")"
+                    + (method.HasGenericParameters ? "`" + method.GenericParameters.Count.ToString(CultureInfo.InvariantCulture) : "");
             case CallSite site:
-                return "sig " + Convention(site) + TypeIdentity(site.ReturnType, self) + "(" + string.Join(",", site.Parameters.Select(p => TypeIdentity(p.ParameterType, self))) + ")";
+                return "sig " + Convention(site) + TypeIdentity(site.ReturnType, self) + "("
+                    + string.Join(",", site.Parameters.Select(p => TypeIdentity(p.ParameterType, self))) + ")";
             default:
                 return operand.GetType().Name + ":" + Convert.ToString(operand, CultureInfo.InvariantCulture);
         }
     }
 
     private static string Convention(IMethodSignature signature) =>
-        (signature.HasThis ? "instance " : "") + (signature.ExplicitThis ? "explicit " : "") + signature.CallingConvention.ToString().ToLowerInvariant() + " ";
+        (signature.HasThis ? "instance " : "") + (signature.ExplicitThis ? "explicit " : "")
+        + signature.CallingConvention.ToString().ToLowerInvariant() + " ";
 
     private static string TypeIdentity(TypeReference type, string self)
     {
         switch (type)
         {
             case GenericInstanceType instance:
-                return TypeIdentity(instance.ElementType, self) + "<" + string.Join(",", instance.GenericArguments.Select(g => TypeIdentity(g, self))) + ">";
+                return TypeIdentity(instance.ElementType, self) + "<"
+                    + string.Join(",", instance.GenericArguments.Select(g => TypeIdentity(g, self))) + ">";
             case ArrayType array:
                 return TypeIdentity(array.ElementType, self) + "[" + string.Join(",", array.Dimensions.Select(d => d.ToString())) + "]";
             case ByReferenceType byRef:
@@ -262,24 +305,28 @@ internal static class CecilOracle
             case SentinelType sentinel:
                 return "..., " + TypeIdentity(sentinel.ElementType, self);
             case FunctionPointerType fn:
-                return "method " + Convention(fn) + TypeIdentity(fn.ReturnType, self) + " *(" + string.Join(",", fn.Parameters.Select(p => TypeIdentity(p.ParameterType, self))) + ")";
+                return "method " + Convention(fn) + TypeIdentity(fn.ReturnType, self) + " *("
+                    + string.Join(",", fn.Parameters.Select(p => TypeIdentity(p.ParameterType, self))) + ")";
             case GenericParameter parameter:
-                return (parameter.Type == GenericParameterType.Method ? "!!" : "!") + parameter.Position.ToString(CultureInfo.InvariantCulture);
+                return (parameter.Type == GenericParameterType.Method ? "!!" : "!")
+                    + parameter.Position.ToString(CultureInfo.InvariantCulture);
             default:
             {
-                var name = type.IsNested ? TypeIdentity(type.DeclaringType, self) + "/" + type.Name : (type.Namespace.Length == 0 ? type.Name : type.Namespace + "." + type.Name);
+                var name = type.IsNested ? TypeIdentity(type.DeclaringType, self) + "/" + type.Name
+                    : (type.Namespace.Length == 0 ? type.Name : type.Namespace + "." + type.Name);
                 return type.IsNested ? name : "[" + ScopeName(type, self) + "]" + name;
             }
         }
     }
 
     /// <summary>
-    /// The full identity of the assembly a type lives in: name, version, culture, and public key
-    /// token. A compiled reference names a facade such as System.Collections that forwards the
-    /// type on, and the listing names where the runtime finds it, so a reference the runtime can
-    /// load is followed to the assembly that defines the type; one it cannot keeps the identity
-    /// written in the reference, so two versions of one name stay two identities.
+    /// The full identity of the assembly a type lives in: name, version, culture, and public key token.
     /// </summary>
+    /// <remarks>
+    /// A compiled reference names a facade such as System.Collections that forwards the type on, and the listing names where the runtime
+    /// finds it, so a reference the runtime can load is followed to the assembly that defines the type; one it cannot keeps the identity
+    /// written in the reference, so two versions of one name stay two identities.
+    /// </remarks>
     private static string ScopeName(TypeReference type, string self)
     {
         switch (type.Scope)

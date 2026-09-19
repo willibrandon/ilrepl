@@ -33,14 +33,34 @@ public static partial class ComparisonDescendantSource
         var wait = Stopwatch.StartNew();
         while (!File.Exists(ready))
         {
-            if (wait.Elapsed > TimeSpan.FromSeconds(30)) throw new TimeoutException("the descendant did not become ready");
+            if (wait.Elapsed > TimeSpan.FromSeconds(30))
+            {
+                throw new TimeoutException("the descendant did not become ready");
+            }
+
             Thread.Sleep(10);
         }
 
-        if (grandchild) process.WaitForExit();
-        if (mode == "exit") Environment.Exit(23);
-        if (mode == "throw") throw new InvalidOperationException("worker failure");
-        if (mode is "timeout" or "cancel") Thread.Sleep(Timeout.Infinite);
+        if (grandchild)
+        {
+            process.WaitForExit();
+        }
+
+        if (mode == "exit")
+        {
+            Environment.Exit(23);
+        }
+
+        if (mode == "throw")
+        {
+            throw new InvalidOperationException("worker failure");
+        }
+
+        if (mode is "timeout" or "cancel")
+        {
+            Thread.Sleep(Timeout.Infinite);
+        }
+
         return 42;
     }
 
@@ -60,6 +80,7 @@ public static partial class ComparisonDescendantSource
             UseShellExecute = false,
             CreateNoWindow = escape && OperatingSystem.IsWindows(),
         };
+
         start.Environment["ILREPL_DESCENDANT_RECORD"] = record;
         start.Environment["ILREPL_DESCENDANT_READY"] = ready;
         start.Environment["ILREPL_DESCENDANT_BRANCH"] = grandchild.ToString();
@@ -94,7 +115,10 @@ public static partial class ComparisonDescendantSource
             var process = Process.GetProcessById(int.Parse(parts[0], CultureInfo.InvariantCulture));
             try
             {
-                if (OwnedProcessGroup.GetStartIdentity(process) == long.Parse(parts[1], CultureInfo.InvariantCulture)) return process;
+                if (OwnedProcessGroup.GetStartIdentity(process) == long.Parse(parts[1], CultureInfo.InvariantCulture))
+                {
+                    return process;
+                }
             }
             catch
             {
@@ -120,7 +144,9 @@ public static partial class ComparisonDescendantSource
     public static void EscapeProcessGroup()
     {
         if (!OperatingSystem.IsWindows() && CreateSession() < 0)
+        {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
     }
 
     [LibraryImport("libc", EntryPoint = "setsid", SetLastError = true)]

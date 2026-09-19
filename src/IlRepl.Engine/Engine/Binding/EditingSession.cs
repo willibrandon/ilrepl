@@ -1,3 +1,4 @@
+using System.Globalization;
 using IlRepl.Protocol;
 
 namespace IlRepl.Engine.Binding;
@@ -61,7 +62,9 @@ public sealed partial class EditingSession : IDisposable
         }
     }
 
-    private void ReplayAcceptedLines(IReadOnlyList<string> lines, IReadOnlyList<AnalysisLocation?> locations,
+    private void ReplayAcceptedLines(
+        IReadOnlyList<string> lines,
+        IReadOnlyList<AnalysisLocation?> locations,
         CancellationToken cancellationToken)
     {
         for (var index = 0; index < lines.Count; index++)
@@ -122,7 +125,10 @@ public sealed partial class EditingSession : IDisposable
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The independent editing context.</returns>
     public async ValueTask<EditingView> SpeculateAsync(
-        IReadOnlyList<string> lines, int caretLine, bool inspecting = false, CancellationToken cancellationToken = default)
+        IReadOnlyList<string> lines,
+        int caretLine,
+        bool inspecting = false,
+        CancellationToken cancellationToken = default)
     {
         var processed = 0;
         foreach (var _ in ReplayPrefix(lines, caretLine, cancellationToken))
@@ -217,6 +223,7 @@ public sealed partial class EditingSession : IDisposable
         {
             types = types.Clone();
         }
+
         var generics = body.Generics;
         var access = body.Access;
         if (activeBody && _state.Method is null && _state.OpenTypes.LastOrDefault() is { } owner)
@@ -262,7 +269,7 @@ public sealed partial class EditingSession : IDisposable
             .Concat(_state.CellDeclarations)
             .Concat(_state.OpenTypes.Take(1).SelectMany(block => new[] { block.HeaderLine }.Concat(block.Lines)))
             .Concat(_state.Method is { Header: { } header } ? [header] : []);
-        return string.Concat(words.Select(word => word.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + word));
+        return string.Concat(words.Select(word => word.Length.ToString(CultureInfo.InvariantCulture) + ":" + word));
     }
 
     private void ApplyLine(string raw, int lineNumber)

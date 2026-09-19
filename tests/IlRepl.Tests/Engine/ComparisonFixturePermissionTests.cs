@@ -35,7 +35,10 @@ public sealed class ComparisonFixturePermissionTests
             foreach (var path in ComparisonFixturePermissionExamples.Paths)
             {
                 expected.Add(((int)(attributes[path] & ObservedAttributes)).ToString(CultureInfo.InvariantCulture));
-                if (modes[path] is { } mode) expected.Add(((int)mode).ToString(CultureInfo.InvariantCulture));
+                if (modes[path] is { } mode)
+                {
+                    expected.Add(((int)mode).ToString(CultureInfo.InvariantCulture));
+                }
             }
 
             var session = IlLines.Load(ComparisonFixturePermissionExamples.Source(!OperatingSystem.IsWindows(), true).Split('\n'));
@@ -54,13 +57,18 @@ public sealed class ComparisonFixturePermissionTests
             Assert.IsTrue(package.Files.Single(file => file.Path == "readonly.txt").Attributes!.Value.HasFlag(FileAttributes.ReadOnly));
             if (OperatingSystem.IsWindows())
             {
-                foreach (var captured in package.Files) Assert.IsNull(captured.UnixMode);
+                foreach (var captured in package.Files)
+                {
+                    Assert.IsNull(captured.UnixMode);
+                }
             }
             else
             {
                 foreach (var path in ComparisonFixturePermissionExamples.Paths)
+                {
                     Assert.AreEqual(ComparisonFixturePermissionExamples.Mode(path),
                         package.Files.Single(file => file.Path == path).UnixMode);
+                }
             }
 
             UnlockFixture(fixture.FullName);
@@ -220,9 +228,15 @@ public sealed class ComparisonFixturePermissionTests
             entry.CreationTimeUtc = ComparisonFixtureTimeExamples.Timestamp;
             entry.LastWriteTimeUtc = ComparisonFixtureTimeExamples.Timestamp;
             entry.LastAccessTimeUtc = ComparisonFixtureTimeExamples.Timestamp;
-            if (path is "." or "nested" or "empty" or "readonly.txt") File.SetAttributes(fullPath, attributes | FileAttributes.ReadOnly);
+            if (path is "." or "nested" or "empty" or "readonly.txt")
+            {
+                File.SetAttributes(fullPath, attributes | FileAttributes.ReadOnly);
+            }
+
             if (!OperatingSystem.IsWindows() && !attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
                 File.SetUnixFileMode(fullPath, ComparisonFixturePermissionExamples.Mode(path));
+            }
         }
 
         return fixture;
@@ -236,7 +250,9 @@ public sealed class ComparisonFixturePermissionTests
 
     private static UnixFileMode? UnixMode(string path) => OperatingSystem.IsWindows() ? null : File.GetUnixFileMode(path);
 
-    private static void AssertSource(string root, Dictionary<string, FileAttributes> attributes,
+    private static void AssertSource(
+        string root,
+        Dictionary<string, FileAttributes> attributes,
         Dictionary<string, UnixFileMode?> modes)
     {
         foreach (var path in ComparisonFixturePermissionExamples.Paths)
@@ -266,13 +282,21 @@ public sealed class ComparisonFixturePermissionTests
         foreach (var path in ComparisonFixturePermissionExamples.Paths)
         {
             var fullPath = Path.Combine(root, path);
-            if (!File.Exists(fullPath) && !Directory.Exists(fullPath)) continue;
+            if (!File.Exists(fullPath) && !Directory.Exists(fullPath))
+            {
+                continue;
+            }
+
             var attributes = File.GetAttributes(fullPath);
             File.SetAttributes(fullPath, attributes & ~FileAttributes.ReadOnly);
             if (!OperatingSystem.IsWindows())
             {
                 var mode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-                if (attributes.HasFlag(FileAttributes.Directory)) mode |= UnixFileMode.UserExecute;
+                if (attributes.HasFlag(FileAttributes.Directory))
+                {
+                    mode |= UnixFileMode.UserExecute;
+                }
+
                 File.SetUnixFileMode(fullPath, mode);
             }
         }

@@ -90,7 +90,9 @@ internal sealed class GenericCompletionBinding
     /// <param name="selected">The selected owner, or null.</param>
     /// <returns>The applicable owners with partial substitutions.</returns>
     public IReadOnlyList<GenericArgumentContext> Arguments(
-        CompletionDocumentKey document, CompletionSite site, GenericCompletionTarget? selected)
+        CompletionDocumentKey document,
+        CompletionSite site,
+        GenericCompletionTarget? selected)
     {
         var span = GenericArgumentSpan.At(document.Lines[document.Line], document.Caret, _view.InBlockComment);
         if (span is null)
@@ -145,7 +147,9 @@ internal sealed class GenericCompletionBinding
     /// <param name="selected">The selected owner, or null.</param>
     /// <returns>The applicable constructed methods.</returns>
     public IReadOnlyList<MethodSymbol> Signatures(
-        CompletionDocumentKey document, CompletionSite site, GenericCompletionTarget? selected)
+        CompletionDocumentKey document,
+        CompletionSite site,
+        GenericCompletionTarget? selected)
     {
         try
         {
@@ -158,7 +162,9 @@ internal sealed class GenericCompletionBinding
     }
 
     private List<MethodSymbol> ResolveSignatures(
-        CompletionDocumentKey document, CompletionSite site, GenericCompletionTarget? selected)
+        CompletionDocumentKey document,
+        CompletionSite site,
+        GenericCompletionTarget? selected)
     {
         var span = GenericArgumentSpan.At(document.Lines[document.Line], document.Caret, _view.InBlockComment, afterClose: true);
         if (span is null)

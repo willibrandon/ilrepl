@@ -18,7 +18,11 @@ internal sealed class ObservationIdentityMap(ObservationIdentityMap? previous = 
     /// <returns>The identity shared with earlier snapshots when the same object is still present.</returns>
     internal int Get(object value)
     {
-        if (TryGet(value, out var identity)) return identity;
+        if (TryGet(value, out var identity))
+        {
+            return identity;
+        }
+
         identity = ++_nextIdentity;
         _identities.Add(value, new StrongBox<int>(identity));
         return identity;
@@ -32,7 +36,11 @@ internal sealed class ObservationIdentityMap(ObservationIdentityMap? previous = 
             return true;
         }
 
-        if (previous is not null) return previous.TryGet(value, out identity);
+        if (previous is not null)
+        {
+            return previous.TryGet(value, out identity);
+        }
+
         identity = 0;
         return false;
     }

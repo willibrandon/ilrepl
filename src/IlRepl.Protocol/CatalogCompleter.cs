@@ -1,15 +1,19 @@
 namespace IlRepl.Protocol;
 
 /// <summary>
-/// Prefix completion over a catalog of opcodes and commands. The front-end runs this locally
-/// on every keystroke; the catalog itself comes from the host once.
+/// Prefix completion over a catalog of opcodes and commands.
 /// </summary>
+/// <remarks>
+/// The front-end runs this locally on every keystroke; the catalog itself comes from the host once.
+/// </remarks>
 public static class CatalogCompleter
 {
     /// <summary>
-    /// Returns the catalog entries whose name starts with <paramref name="word"/>. A word that
-    /// starts with a dot matches commands; anything else matches opcodes.
+    /// Returns the catalog entries whose name starts with <paramref name="word"/>.
     /// </summary>
+    /// <remarks>
+    /// A word that starts with a dot matches commands; anything else matches opcodes.
+    /// </remarks>
     /// <param name="catalog">The catalog.</param>
     /// <param name="word">The first word typed so far.</param>
     /// <returns>The matches in catalog order, or an empty list for an empty word.</returns>

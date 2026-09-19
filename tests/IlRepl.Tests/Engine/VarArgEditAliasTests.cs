@@ -156,6 +156,7 @@ public sealed class VarArgEditAliasTests
         {
             CallingConvention = MethodCallingConvention.VarArg,
         };
+
         read.Parameters.Add(new ParameterDefinition("first", ParameterAttributes.None, module.TypeSystem.Int32));
         owner.Methods.Add(read);
         read.Body.InitLocals = true;

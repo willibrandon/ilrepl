@@ -75,7 +75,10 @@ public sealed class NativeDisassemblyTests
         var unattributed = NativeDisassembly.Unattributed(text, ["Owner:Value():int"], compilations[..publishedCount]);
 
         Assert.HasCount(2 - publishedCount, unattributed);
-        foreach (var block in unattributed) Assert.AreEqual(listing.TrimEnd('\n'), block);
+        foreach (var block in unattributed)
+        {
+            Assert.AreEqual(listing.TrimEnd('\n'), block);
+        }
     }
 
     /// <summary>

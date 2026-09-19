@@ -17,7 +17,10 @@ public static class TypeDeclarationValidator
     /// <param name="context">The accepting session's context.</param>
     /// <returns>Implicit static interface mappings that must be emitted.</returns>
     public static IReadOnlyList<ClassOverrideDeclaration> Validate(
-        TypeDeclaration declaration, Type type, TypeTable types, ParseContext context)
+        TypeDeclaration declaration,
+        Type type,
+        TypeTable types,
+        ParseContext context)
     {
         ArgumentNullException.ThrowIfNull(declaration);
         ArgumentNullException.ThrowIfNull(type);

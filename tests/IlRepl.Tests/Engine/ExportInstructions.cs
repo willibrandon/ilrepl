@@ -38,8 +38,10 @@ internal static class ExportInstructions
                     or OperandType.InlineTok or OperandType.InlineType => token((int)operand!),
                 _ => Convert.ToString(operand, CultureInfo.InvariantCulture),
             };
+
             yield return "instruction " + offsets[offset] + " " + code.Name + " " + value;
         }
+
         foreach (var region in body.ExceptionRegions)
         {
             yield return "region " + region.Kind + " " + offsets[region.TryOffset] + ":"
@@ -67,6 +69,7 @@ internal static class ExportInstructions
                 OperandType.InlineSwitch => 4 + 4 * BitConverter.ToInt32(bytes, offset),
                 _ => 4,
             };
+
             var end = offset + size;
             object? operand = code.OperandType switch
             {
@@ -82,9 +85,11 @@ internal static class ExportInstructions
                 OperandType.InlineI8 => BitConverter.ToInt64(bytes, offset),
                 _ => BitConverter.ToInt32(bytes, offset),
             };
+
             result.Add((start, code, operand));
             offset = end;
         }
+
         return result;
     }
 }

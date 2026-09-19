@@ -59,6 +59,7 @@ internal sealed partial class ExportIlAsmRenderer
                 ExceptionHandlerType.Fault => "fault",
                 _ => throw new ReplException("the metadata contains an invalid exception handler"),
             };
+
             Line(".try " + Label(handler.TryStart.Offset) + " to " + Label(handler.TryEnd?.Offset ?? body.CodeSize)
                 + " " + kind + " handler " + Label(handler.HandlerStart.Offset)
                 + " to " + Label(handler.HandlerEnd?.Offset ?? body.CodeSize));

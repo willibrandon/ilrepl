@@ -168,6 +168,7 @@ public sealed class SessionReplayTests
                 Lines = [".method int32 Value() {", "ldc.i4 42", "ret", "}", "call Value", "ret"],
             },
         };
+
         using var replay = new ReplCore();
 
         var result = replay.RunSession(document, [], CancellationToken.None);
@@ -277,6 +278,7 @@ public sealed class SessionReplayTests
         {
             Entries = [.. captured.Entries, new SessionEntry { Number = 3, Source = [".reset"] }],
         };
+
         using var replay = new ReplCore();
 
         var exception = Assert.ThrowsExactly<ReplException>(() => replay.RunSession(document, [], CancellationToken.None));
@@ -306,6 +308,7 @@ public sealed class SessionReplayTests
                 Entries = [.. captured.Entries[..boundary], new SessionEntry { Number = 2, Source = ["ldc.i4.2"] },
                     .. captured.Entries[boundary..]],
             };
+
             File.Delete(marker);
             using var replay = new ReplCore();
 
@@ -474,7 +477,11 @@ public sealed class SessionReplayTests
     public void RunSession_BlankEditorDoesNotBecomeSource(bool pending)
     {
         using var source = new ReplCore();
-        if (pending) Submit(source, "ldc.i4 42");
+        if (pending)
+        {
+            Submit(source, "ldc.i4 42");
+        }
+
         var editor = new SessionEditor { Lines = ["", " \t", ""] };
         var document = source.CaptureSession(editor);
         using var replay = new ReplCore();

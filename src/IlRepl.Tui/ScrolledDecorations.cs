@@ -4,11 +4,12 @@ using Hex1b.Documents;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// The decorations of a line scrolled sideways, cut so that none begins on a surrogate pair at
-/// the scrolled edge: a style that starts inside a character built from several code units
-/// would split that character on screen, so such a style starts at the next character that is
-/// a whole code unit instead, and the wide characters before it wear the plain colour.
+/// The decorations of a line scrolled sideways, cut so that none begins on a surrogate pair at the scrolled edge.
 /// </summary>
+/// <remarks>
+/// A style that starts inside a character built from several code units would split that character on screen, so such a style starts at the
+/// next character that is a whole code unit instead, and the wide characters before it wear the plain colour.
+/// </remarks>
 public sealed class ScrolledDecorations : ITextDecorationProvider
 {
     private readonly IReadOnlyList<ITextDecorationProvider> _inner;
@@ -53,9 +54,11 @@ public sealed class ScrolledDecorations : ITextDecorationProvider
     }
 
     /// <summary>
-    /// The first character index at or after the scrolled edge where a style may start: the
-    /// start of a text element that is not a surrogate pair.
+    /// The first character index at or after the scrolled edge where a style may start.
     /// </summary>
+    /// <remarks>
+    /// That index is the start of a text element that is not a surrogate pair.
+    /// </remarks>
     /// <param name="line">The line's text.</param>
     /// <param name="left">The character index the visible text starts at.</param>
     /// <returns>The index, or the line's length when no such character follows.</returns>

@@ -50,7 +50,11 @@ public sealed class NativeOutputBuffer
     /// <param name="bytes">The next bytes from the worker's output pipe.</param>
     public void Append(ReadOnlySpan<byte> bytes)
     {
-        if (Overflowed) return;
+        if (Overflowed)
+        {
+            return;
+        }
+
         if (!_started)
         {
             _startup.Write(bytes);
@@ -64,13 +68,16 @@ public sealed class NativeOutputBuffer
                     _startup.Write(prefix);
                     Overflowed = true;
                 }
+
                 return;
             }
+
             _started = true;
             AppendUser(_startup.WrittenSpan[(index + _marker.Length)..]);
             _startup.Clear();
             return;
         }
+
         AppendUser(bytes);
     }
 
@@ -78,6 +85,9 @@ public sealed class NativeOutputBuffer
     {
         var remaining = _limit - _output.WrittenCount;
         _output.Write(bytes[..Math.Min(bytes.Length, remaining)]);
-        if (bytes.Length > remaining) Overflowed = true;
+        if (bytes.Length > remaining)
+        {
+            Overflowed = true;
+        }
     }
 }

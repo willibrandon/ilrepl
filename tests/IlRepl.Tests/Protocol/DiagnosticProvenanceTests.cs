@@ -150,6 +150,7 @@ public sealed class DiagnosticProvenanceTests
             Assert.AreEqual("int32", value.Actual);
             Assert.AreEqual(3, Assert.ContainsSingle(value.Producers).Location.Line);
         }
+
         var stringValue = Assert.ContainsSingle(text.Values);
         Assert.AreEqual("string", stringValue.Actual);
         Assert.AreEqual(5, Assert.ContainsSingle(stringValue.Producers).Location.Line);

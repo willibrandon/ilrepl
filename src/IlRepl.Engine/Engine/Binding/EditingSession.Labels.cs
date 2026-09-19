@@ -13,7 +13,10 @@ public sealed partial class EditingSession
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Current and future labels belonging to the caret's body.</returns>
     public IReadOnlySet<string> ForwardLabels(
-        IReadOnlyList<string> lines, int caretLine, CompletionSite site, CancellationToken cancellationToken = default)
+        IReadOnlyList<string> lines,
+        int caretLine,
+        CompletionSite site,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(site);
         var view = Speculate(lines, caretLine, cancellationToken: cancellationToken);

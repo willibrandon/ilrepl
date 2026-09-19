@@ -8,8 +8,12 @@ namespace IlRepl.Protocol;
 /// <param name="Stack">The incoming stack, when analysis can describe it.</param>
 /// <param name="Conflicts">The conflicting operands and their producers.</param>
 /// <param name="Incoming">The separate predecessors of an incompatible join.</param>
-public sealed record DiagnosticExplanation(InstructionHelp? Instruction, string Requirement, AnalyzedStack? Stack,
-    IReadOnlyList<StackConflict> Conflicts, IReadOnlyList<DiagnosticStackPath> Incoming)
+public sealed record DiagnosticExplanation(
+    InstructionHelp? Instruction,
+    string Requirement,
+    AnalyzedStack? Stack,
+    IReadOnlyList<StackConflict> Conflicts,
+    IReadOnlyList<DiagnosticStackPath> Incoming)
 {
     /// <summary>
     /// The rejected source, distinguishing the current document from accepted or imported instructions.

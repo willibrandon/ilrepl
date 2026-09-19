@@ -6,8 +6,12 @@ namespace IlRepl.Repl;
 
 public sealed partial class OperandCompleter
 {
-    private static bool ConfirmEnclosingType(string line, CompletionSite site, EditingView view,
-        SnapshotBindingScope scope, out bool complete)
+    private static bool ConfirmEnclosingType(
+        string line,
+        CompletionSite site,
+        EditingView view,
+        SnapshotBindingScope scope,
+        out bool complete)
     {
         complete = false;
         var comment = false;
@@ -42,6 +46,7 @@ public sealed partial class OperandCompleter
             ArgumentIndex = site.EnclosingTypeStart >= 0 ? site.EnclosingParameterIndex : site.ArgumentIndex,
             IsFunctionPointerReturn = false,
         };
+
         return (site.Owner != ".field" || !declared.Pinned) && MemberEligibility.Admits(declared.Type, enclosing, view);
     }
 }

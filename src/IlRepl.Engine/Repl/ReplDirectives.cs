@@ -1,10 +1,11 @@
 namespace IlRepl.Repl;
 
 /// <summary>
-/// The dot-words the prompt takes as directives rather than commands. They live apart from
-/// <see cref="ReplCore"/> so the tokenizer's vocabulary can read them without touching the
-/// core's own initialization.
+/// The dot-words the prompt takes as directives rather than commands.
 /// </summary>
+/// <remarks>
+/// They live apart from <see cref="ReplCore"/> so the tokenizer's vocabulary can read them without touching the core's own initialization.
+/// </remarks>
 public static class ReplDirectives
 {
     /// <summary>
@@ -13,6 +14,7 @@ public static class ReplDirectives
     public static IReadOnlyList<string> Names { get; } =
     [
         ".locals", ".args", ".typeparams", ".typeargs", ".vararg", ".method", ".try", ".maxstack",
-        ".class", ".field", ".property", ".event", ".get", ".set", ".other", ".addon", ".removeon", ".fire", ".override", ".pack", ".size", ".param", ".custom",
+        ".class", ".field", ".property", ".event", ".get", ".set", ".other", ".addon", ".removeon", ".fire", ".override", ".pack", ".size",
+        ".param", ".custom",
     ];
 }

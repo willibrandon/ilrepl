@@ -64,7 +64,11 @@ public sealed partial record PromptWidget
     }
 
     private static BorderWidget BuildPalette(
-        WidgetContext<VStackWidget> context, IReadOnlyList<CompletionItem> candidates, PromptState state, PromptFit fit, int width)
+        WidgetContext<VStackWidget> context,
+        IReadOnlyList<CompletionItem> candidates,
+        PromptState state,
+        PromptFit fit,
+        int width)
     {
         var rows = Math.Max(1, fit.PaletteRows);
         var first = Math.Clamp(state.SelectedIndex - (rows / 2), 0, Math.Max(0, candidates.Count - rows));
@@ -153,6 +157,7 @@ public sealed partial record PromptWidget
             CompletionKind.Signatures => "signatures",
             _ => candidates[0].Name.StartsWith('.') ? "commands" : "opcodes",
         };
+
         var total = reply?.Total ?? candidates.Count;
         var provisional = reply?.TotalIsProvisional == true ? "~" : "";
         return state.PendingDisplay is not null ? "updating " + kind

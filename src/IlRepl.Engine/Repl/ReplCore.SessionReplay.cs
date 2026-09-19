@@ -120,6 +120,7 @@ public sealed partial class ReplCore
         {
             throw new ReplException(string.Join('\n', referenceProblems));
         }
+
         foreach (var entry in replay.Entries)
         {
             cancellationToken.ThrowIfCancellationRequested();

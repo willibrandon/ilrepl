@@ -19,11 +19,13 @@ public sealed partial class ReplCore
     internal EditingSeed CaptureEditingSeed()
     {
         var seed = Session.CaptureEditingSeed();
-        return _editBlock is { } block ? seed with
-        {
-            OpenLines = [".edit " + block.Name + " {", .. block.Lines],
-            OpenLocations = [null, .. block.Locations],
-        } : seed;
+        return _editBlock is { } block
+            ? seed with
+            {
+                OpenLines = [".edit " + block.Name + " {", .. block.Lines],
+                OpenLocations = [null, .. block.Locations],
+            }
+            : seed;
     }
 
     private HandleResult Edit(string argument)

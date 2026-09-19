@@ -10,6 +10,12 @@ namespace IlRepl.Engine;
 /// </summary>
 public sealed class MethodEdit
 {
+    /// <summary>
+    /// Starts an edit from a captured original, with the original's source as the first draft.
+    /// </summary>
+    /// <param name="name">The stable name chosen for the copy.</param>
+    /// <param name="reference">The original method reference used to create this edit.</param>
+    /// <param name="baseline">The executable family captured from the original.</param>
     internal MethodEdit(string name, string reference, ImportedMethodFamily baseline)
     {
         Name = name;

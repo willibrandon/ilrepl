@@ -10,7 +10,8 @@ public sealed partial class HostProcessEngine
 {
     private readonly SemaphoreSlim _mutations = new(1);
 
-    private async Task<HandleReply> InvokeInspectionAsync(Func<CancellationToken, Task<HandleReply>> invoke,
+    private async Task<HandleReply> InvokeInspectionAsync(
+        Func<CancellationToken, Task<HandleReply>> invoke,
         CancellationToken cancellationToken)
     {
         await _lifetime.WaitForDispatchAsync(cancellationToken).ConfigureAwait(false);
@@ -31,8 +32,11 @@ public sealed partial class HostProcessEngine
             {
                 if (cancellationToken.IsCancellationRequested && progress.Sequence > baseline && progress.IsRunning
                     && Interlocked.Exchange(ref requested, 1) == 0)
+                {
                     _ = SendCancellationAsync(progress.Identity);
+                }
             }
+
             ProgressChanged += Observe;
             try
             {
@@ -40,14 +44,23 @@ public sealed partial class HostProcessEngine
                 cancellationToken.ThrowIfCancellationRequested();
                 return await invoke(CancellationToken.None).ConfigureAwait(false);
             }
-            finally { ProgressChanged -= Observe; }
+            finally
+            {
+                ProgressChanged -= Observe;
+            }
         }
-        finally { _mutations.Release(); }
+        finally
+        {
+            _mutations.Release();
+        }
     }
 
     private async Task SendCancellationAsync(string identity)
     {
-        try { await _host.InterruptAsync(identity, CancellationToken.None).ConfigureAwait(false); }
+        try
+        {
+            await _host.InterruptAsync(identity, CancellationToken.None).ConfigureAwait(false);
+        }
         catch (Exception exception) when (exception is ConnectionLostException or RemoteInvocationException or ObjectDisposedException)
         {
             // The original invocation still observes process loss and publishes the terminal result.

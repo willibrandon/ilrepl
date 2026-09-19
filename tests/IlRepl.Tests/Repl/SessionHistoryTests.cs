@@ -49,7 +49,11 @@ public sealed class SessionHistoryTests
     public async Task Run_StopsWithoutPresentingStaleOutputForUnrunCells()
     {
         using var core = new ReplCore();
-        foreach (var line in new[] { "ldc.i4.1", "ldc.i4.0", "div" }) Assert.IsTrue(core.Handle(line).Succeeded);
+        foreach (var line in new[] { "ldc.i4.1", "ldc.i4.0", "div" })
+        {
+            Assert.IsTrue(core.Handle(line).Succeeded);
+        }
+
         Assert.IsFalse(core.Handle("ret").Succeeded);
         Assert.IsTrue(core.Handle("ldc.i4 42").Succeeded);
         Assert.IsTrue(core.Handle("ret").Succeeded);
@@ -70,6 +74,7 @@ public sealed class SessionHistoryTests
         {
             Action = new SessionAction { Operation = SessionOperation.Cells },
         }, TestContext.CancellationToken);
+
         Assert.Contains(line => line.PlainText == "  2: cell, unrun (historical)", listed.Reply.Lines);
         Assert.DoesNotContain(line => line.Kind == LineKind.Result, listed.Reply.Lines);
         Assert.DoesNotContain(line => line.Kind == LineKind.Result, ReplCore.RenderSessionHistory(ran.Document));
@@ -133,7 +138,11 @@ public sealed class SessionHistoryTests
         string[] source = ["/* saved comment", "   comment end */", ".method int32 Read() {", "ldc.i4 42", "ret", "}",
             "ldc.i4 99", ".clear", "call Read", "ret", ".reset", "ldc.i4.1", "ldc.i4.0", "div", "ret",
             ".method int32 Pending() {", "  ldc.i4.7"];
-        foreach (var line in source) _ = core.Handle(line);
+        foreach (var line in source)
+        {
+            _ = core.Handle(line);
+        }
+
         var document = core.CaptureSession(new SessionEditor { Lines = ["ret", "}"] });
         Assert.AreSequenceEqual(["succeeded", "succeeded", "failed"], document.Cells.Select(cell => cell.State));
         await using var engine = new InProcessEngine();

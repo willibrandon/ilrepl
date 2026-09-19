@@ -56,6 +56,9 @@ internal sealed class ImmutableObservationComparer : IEqualityComparer<string>
     private void Record()
     {
         Callbacks++;
-        if (RejectCallbacks) throw new InvalidOperationException("observation invoked the user's comparer");
+        if (RejectCallbacks)
+        {
+            throw new InvalidOperationException("observation invoked the user's comparer");
+        }
     }
 }

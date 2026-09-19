@@ -124,6 +124,7 @@ public sealed class ByRefLikeComparisonTests
                 {
                     Attributes = (GenericParameterAttributes)RuntimeGenericAttributes.AllowByRefLike,
                 };
+
                 read.GenericParameters.Add(parameter);
                 argument = parameter;
             }
@@ -132,6 +133,7 @@ public sealed class ByRefLikeComparisonTests
             read.Body.GetILProcessor().Emit(OpCodes.Ldc_I4, 41);
             read.Body.GetILProcessor().Emit(OpCodes.Ret);
         }, session.Resolver);
+
         Assert.IsTrue(assembly.GetType("N.ComparisonRefValue")!.IsByRefLike);
         var valueType = "valuetype [" + assembly.GetName().Name + "]N.ComparisonRefValue";
         var reference = "int32 [" + assembly.GetName().Name + "]N.Fixture::Read"

@@ -19,10 +19,23 @@ namespace IlRepl.Tests.Shared;
 /// <param name="Expected">The integer result required from every execution path.</param>
 /// <param name="BrowserCompatible">Whether the fixture can execute under the browser Mono interpreter.</param>
 /// <param name="ExportVerification">Export-specific verifier codes, or null to use the independent fixture's codes.</param>
-public sealed record ControlFlowExample(string Name, string[] Body, bool Accepted, string Finding = "", bool Unverifiable = false,
-    string Verification = "", string GenericParameters = "", string GenericArguments = "", string VerificationFailure = "",
-    string Implementation = "", string Members = "", string Declarations = "", int Input = 1, int Expected = 42,
-    string? ExportVerification = null, bool BrowserCompatible = true)
+public sealed record ControlFlowExample(
+    string Name,
+    string[] Body,
+    bool Accepted,
+    string Finding = "",
+    bool Unverifiable = false,
+    string Verification = "",
+    string GenericParameters = "",
+    string GenericArguments = "",
+    string VerificationFailure = "",
+    string Implementation = "",
+    string Members = "",
+    string Declarations = "",
+    int Input = 1,
+    int Expected = 42,
+    string? ExportVerification = null,
+    bool BrowserCompatible = true)
 {
     /// <summary>
     /// The complete declaration entered at the prompt.

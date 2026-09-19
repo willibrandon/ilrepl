@@ -40,6 +40,7 @@ public sealed class EngineCompletionTests
             Assert.AreEqual(localItem.InstructionHelp with { Notes = remoteItem.InstructionHelp.Notes }, remoteItem.InstructionHelp);
             Assert.AreSequenceEqual(localItem.InstructionHelp.Notes, remoteItem.InstructionHelp.Notes);
         }
+
         Assert.AreEqual(left.ReplaceStart, right.ReplaceStart);
         Assert.AreEqual(left.ReplaceLength, right.ReplaceLength);
         Assert.AreEqual(beforeLocal, local.Status);
@@ -57,7 +58,11 @@ public sealed class EngineCompletionTests
     [DataRow(true)]
     public async Task Paging_RejectsMutationAndPreservesOrder(bool useHost)
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = useHost
             ? (IReplEngine)await HostPaths.StartEngineAsync(TestContext.CancellationToken) : new InProcessEngine();
         const string line = "call string::";
@@ -240,8 +245,12 @@ public sealed class EngineCompletionTests
         var unknown = await engine.CompleteAsync(new CompletionRequest([missing], 0, missing.Length, null, []), ct);
         Assert.IsEmpty(unknown.Items);
         Assert.AreEqual(status, engine.Status);
-        foreach (var line in new[] { ".clear", "call [System.Runtime]System.Reflection.Assembly::GetExecutingAssembly()",
-            "call [Greeter]Greeter.CompletionProbe::Report([System.Runtime]System.Reflection.Assembly)" })
+        foreach (var line in new[]
+        {
+            ".clear",
+            "call [System.Runtime]System.Reflection.Assembly::GetExecutingAssembly()",
+            "call [Greeter]Greeter.CompletionProbe::Report([System.Runtime]System.Reflection.Assembly)",
+        })
         {
             Assert.IsTrue((await engine.HandleAsync(line, ct)).Succeeded);
         }

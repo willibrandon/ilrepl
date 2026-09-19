@@ -55,19 +55,36 @@ public sealed partial class SiblingTypeLookupTests
     [DataRow("activator", "plain", 2, false, false, false, "literal")]
     [DataRow("activator", "nested", 3, false, true, true, "return")]
     [DataRow("activator", "generic", 8, true, true, true, "argument")]
-    public async Task Edit_NameOnlySiblingPreservesContext(string api, string shape, int arity, bool ignoreCase,
-        bool internalType, bool qualified, string flow)
+    public async Task Edit_NameOnlySiblingPreservesContext(
+        string api,
+        string shape,
+        int arity,
+        bool ignoreCase,
+        bool internalType,
+        bool qualified,
+        string flow)
         => await RunCaseAsync(api, shape, arity, ignoreCase, internalType, qualified, flow);
 
-    private async Task RunCaseAsync(string api, string shape, int arity, bool ignoreCase, bool internalType,
-        bool qualified, string flow, string? directory = null)
+    private async Task RunCaseAsync(
+        string api,
+        string shape,
+        int arity,
+        bool ignoreCase,
+        bool internalType,
+        bool qualified,
+        string flow,
+        string? directory = null)
     {
         var path = Path.Combine(directory ?? Path.GetTempPath(), "sibling-" + Guid.NewGuid().ToString("N") + ".dll");
         try
         {
             var session = new Session();
             var image = SiblingTypeLookupFixture.Create(api, shape, arity, ignoreCase, internalType, qualified, flow, path);
-            if (api == "activator-from") File.WriteAllBytes(path, image);
+            if (api == "activator-from")
+            {
+                File.WriteAllBytes(path, image);
+            }
+
             // CreateInstanceFrom always uses LoadFrom's default context; this case already runs in an isolated child.
             var assembly = api == "activator-from" ? session.Resolver.Load(Assembly.LoadFrom(path).FullName!)
                 : session.Resolver.LoadImage(image);
@@ -106,14 +123,20 @@ public sealed partial class SiblingTypeLookupTests
                 var reflected = StateType(edit.Method.Module.Assembly, shape);
                 Assert.IsNotNull(reflected.GetNestedType("Initializer", BindingFlags.NonPublic));
             }
+
             await AssertComparisonAsync(session, "different", "43");
             session.AddLine("call Copy");
             foreach (var exported in new[] { AssemblyExporter.Write(session, "sibling-copy"), IlasmLocator.Assemble(session.ToIlAsm()) })
+            {
                 AssertExport(exported);
+            }
         }
         finally
         {
-            if (directory is null && File.Exists(path)) File.Delete(path);
+            if (directory is null && File.Exists(path))
+            {
+                File.Delete(path);
+            }
         }
     }
 
@@ -123,7 +146,11 @@ public sealed partial class SiblingTypeLookupTests
             | BindingFlags.Static | BindingFlags.DeclaredOnly))
         {
             Assert.IsTrue(method.ReturnType == typeof(int) || method.ReturnType == typeof(string));
-            foreach (var parameter in method.GetParameters()) Assert.AreEqual(typeof(string), parameter.ParameterType);
+            foreach (var parameter in method.GetParameters())
+            {
+                Assert.AreEqual(typeof(string), parameter.ParameterType);
+            }
+
             var listing = MethodDisassembler.Disassemble(method, session);
             Assert.IsEmpty(listing.Problems);
             foreach (var entry in listing.Entries)
@@ -135,7 +162,11 @@ public sealed partial class SiblingTypeLookupTests
                     MemberInfo member => member.DeclaringType,
                     _ => null,
                 };
-                if (referenced?.Assembly == owner.Assembly) Assert.AreEqual(owner, referenced, entry.DisplayText);
+
+                if (referenced?.Assembly == owner.Assembly)
+                {
+                    Assert.AreEqual(owner, referenced, entry.DisplayText);
+                }
             }
         }
     }
@@ -148,6 +179,7 @@ public sealed partial class SiblingTypeLookupTests
             "nested" => type.IsNested && type.Name == "Nested",
             _ => !type.IsNested && !type.IsGenericType,
         }));
+
         return type.IsGenericTypeDefinition ? type.MakeGenericType(typeof(int)) : type;
     }
 

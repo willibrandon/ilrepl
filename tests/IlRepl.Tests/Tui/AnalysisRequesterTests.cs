@@ -25,7 +25,11 @@ public sealed class AnalysisRequesterTests
     [TestMethod]
     public async Task OutOfOrderReplies_KeepTheCurrentDocument()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine { HoldAnalysis = true };
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
@@ -40,11 +44,21 @@ public sealed class AnalysisRequesterTests
         Assert.HasCount(1, engine.Analyses, "A second RPC must wait until the cancelled first one settles.");
         Assert.IsTrue(old.Cancellation.IsCancellationRequested);
         old.Release.SetResult();
-        await WaitAsync(() => { requester.Refresh(state); return engine.Analyses.Count == 2; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return engine.Analyses.Count == 2;
+        });
+
         Assert.IsNull(state.Analysis);
         var current = engine.Analyses.Last();
         current.Release.SetResult();
-        await WaitAsync(() => { requester.Refresh(state); return state.Analysis is not null; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return state.Analysis is not null;
+        });
+
         Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
         await requester.SettleAsync(TimeSpan.FromSeconds(2));
     }
@@ -55,7 +69,11 @@ public sealed class AnalysisRequesterTests
     [TestMethod]
     public async Task SameKeyReply_DoesNotRetireReplacement()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine { HoldAnalysis = true };
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
@@ -69,7 +87,12 @@ public sealed class AnalysisRequesterTests
         requester.Refresh(state);
         Assert.HasCount(1, engine.Analyses);
         old.Release.SetResult();
-        await WaitAsync(() => { requester.Refresh(state); return engine.Analyses.Count == 2; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return engine.Analyses.Count == 2;
+        });
+
         Assert.IsTrue(requester.IsPending);
         Assert.IsNull(state.Analysis, "The cancelled same-key response cannot satisfy the replacement request.");
         var current = engine.Analyses.Last();
@@ -77,9 +100,19 @@ public sealed class AnalysisRequesterTests
         requester.Refresh(state);
         Assert.IsTrue(current.Cancellation.IsCancellationRequested);
         current.Release.SetResult();
-        await WaitAsync(() => { requester.Refresh(state); return engine.Analyses.Count == 3; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return engine.Analyses.Count == 3;
+        });
+
         engine.Analyses.Last().Release.SetResult();
-        await WaitAsync(() => { requester.Refresh(state); return state.Analysis is not null; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return state.Analysis is not null;
+        });
+
         Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
         await requester.SettleAsync(TimeSpan.FromSeconds(2));
     }
@@ -90,7 +123,11 @@ public sealed class AnalysisRequesterTests
     [TestMethod]
     public async Task AssemblyChangeAndShutdown_RetireOwnedWorkers()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine { HoldAnalysis = true };
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
@@ -143,21 +180,34 @@ public sealed class AnalysisRequesterTests
     [TestMethod]
     public async Task CaretMoves_ProjectWholeDocumentWithoutRpc()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
         var requester = new AnalysisRequester(engine);
         state.SetText("ldc.i4.1\nret", 0);
         requester.Refresh(state);
-        await WaitAsync(() => { requester.Refresh(state); return state.Analysis is not null; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return state.Analysis is not null;
+        });
+
         Assert.AreEqual("[]", state.Analysis!.Stack!.Render());
         var calls = engine.Analyses.Count;
         state.Editor.SetCursorPosition(new DocumentOffset(9));
         requester.Refresh(state);
         Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
         Assert.HasCount(calls, engine.Analyses);
-        for (var index = 0; index < 20; index++) requester.Refresh(state);
+        for (var index = 0; index < 20; index++)
+        {
+            requester.Refresh(state);
+        }
+
         Assert.HasCount(calls, engine.Analyses);
         await requester.SettleAsync(TimeSpan.FromSeconds(2));
     }
@@ -168,7 +218,11 @@ public sealed class AnalysisRequesterTests
     [TestMethod]
     public async Task CaretMoves_ReuseEditedDocumentWhileAnalysisIsPending()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine { HoldAnalysis = true };
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
@@ -185,7 +239,12 @@ public sealed class AnalysisRequesterTests
             requester.Refresh(state);
             Assert.IsTrue(typed.Cancellation.IsCancellationRequested);
             typed.Release.SetResult();
-            await WaitAsync(() => { requester.Refresh(state); return engine.Analyses.Count == 2; });
+            await WaitAsync(() =>
+            {
+                requester.Refresh(state);
+                return engine.Analyses.Count == 2;
+            });
+
             var restored = engine.Analyses.Last();
             await restored.Prepared;
             for (var index = 0; index < 20; index++)
@@ -195,8 +254,14 @@ public sealed class AnalysisRequesterTests
                 Assert.IsFalse(restored.Cancellation.IsCancellationRequested);
                 Assert.HasCount(2, engine.Analyses);
             }
+
             restored.Release.SetResult();
-            await WaitAsync(() => { requester.Refresh(state); return state.Analysis is not null; });
+            await WaitAsync(() =>
+            {
+                requester.Refresh(state);
+                return state.Analysis is not null;
+            });
+
             Assert.AreEqual("ldc.i4.1\nret", state.Text);
             Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
             Assert.IsEmpty(state.Analysis.Diagnostics);
@@ -205,7 +270,11 @@ public sealed class AnalysisRequesterTests
         }
         finally
         {
-            foreach (var call in engine.Analyses) call.Release.TrySetResult();
+            foreach (var call in engine.Analyses)
+            {
+                call.Release.TrySetResult();
+            }
+
             await requester.SettleAsync(TimeSpan.FromSeconds(2));
         }
     }
@@ -216,7 +285,11 @@ public sealed class AnalysisRequesterTests
     [TestMethod]
     public async Task RapidEdits_CoalesceToLatestDocument()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new CompletionEngine { HoldAnalysis = true };
         await engine.PrimeAsync(TestContext.CancellationToken);
         var state = new PromptState(new PromptHistory(), new CilTokenizer(engine.Vocabulary));
@@ -230,12 +303,23 @@ public sealed class AnalysisRequesterTests
             state.SetText(text, text.Length);
             requester.Refresh(state);
         }
+
         Assert.HasCount(1, engine.Analyses);
         engine.Analyses.First().Release.SetResult();
-        await WaitAsync(() => { requester.Refresh(state); return engine.Analyses.Count == 2; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return engine.Analyses.Count == 2;
+        });
+
         Assert.AreEqual("ldc.i4 99", engine.Analyses.Last().Request.Lines[0]);
         engine.Analyses.Last().Release.SetResult();
-        await WaitAsync(() => { requester.Refresh(state); return state.Analysis is not null; });
+        await WaitAsync(() =>
+        {
+            requester.Refresh(state);
+            return state.Analysis is not null;
+        });
+
         Assert.AreEqual("[int32]", state.Analysis!.Stack!.Render());
         await requester.SettleAsync(TimeSpan.FromSeconds(2));
     }
@@ -326,6 +410,7 @@ public sealed class AnalysisRequesterTests
                 // Attach the real analyzer after the completion palette has appeared.
                 value.Analyzer = null;
             }).WithPresentation(adapter).AddPresentationFilter(recorder).Build();
+
         recorder.Terminal = terminal;
         using var terminalCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var run = terminal.RunAsync(terminalCancellation.Token);
@@ -364,7 +449,11 @@ public sealed class AnalysisRequesterTests
                 await auto.TabAsync(ct: ct);
                 await auto.WaitUntilAsync(_ =>
                 {
-                    if (prompt.Text == "pop\n" + expected) return true;
+                    if (prompt.Text == "pop\n" + expected)
+                    {
+                        return true;
+                    }
+
                     if (engine.AssemblyVersion != version && prompt.Requester?.IsPending == false
                         && prompt.Completions is { } refreshed && prompt.Requester.Matches(prompt, refreshed))
                     {
@@ -392,6 +481,7 @@ public sealed class AnalysisRequesterTests
             catch (OperationCanceledException) when (terminalCancellation.IsCancellationRequested)
             {
             }
+
             Trace("after app stopped");
             prompt.Analyzer = analyzer;
             await IlReplApp.SettleAsync(prompt);

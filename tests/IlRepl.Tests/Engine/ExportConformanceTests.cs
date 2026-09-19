@@ -5,9 +5,9 @@ using IlRepl.Host;
 using IlRepl.Protocol;
 using IlRepl.Tests.Shared;
 using ILVerify;
+using Mono.Cecil.Cil;
 using GenericParameter = Mono.Cecil.GenericParameter;
 using ModuleDefinition = Mono.Cecil.ModuleDefinition;
-using Mono.Cecil.Cil;
 using TypeAttributes = Mono.Cecil.TypeAttributes;
 using TypeDefinition = Mono.Cecil.TypeDefinition;
 
@@ -102,6 +102,7 @@ public sealed class ExportConformanceTests
                 Assert.AreSequenceEqual(original, File.ReadAllBytes(path));
                 cancellation.Cancel();
             }, cancellation.Token));
+
             Assert.AreEqual(64 * 1024L, observed);
             Assert.AreSequenceEqual(original, File.ReadAllBytes(path));
             Assert.AreSequenceEqual([path], Directory.GetFiles(directory));
@@ -294,6 +295,7 @@ public sealed class ExportConformanceTests
             Assert.AreEqual(profile, observation.Profile);
             Assert.AreEqual(Environment.Version.ToString(), observation.Runtime);
         }
+
         var eof = await execution.RunAsync(AssemblyExporter.Write(session, "Eof"), "IlRepl.Cell", "Run", profile,
             cancellationToken: TestContext.CancellationToken);
         Assert.AreEqual("", eof.Result.Value.GetString());

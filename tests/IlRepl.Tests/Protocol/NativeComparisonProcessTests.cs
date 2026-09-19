@@ -1,5 +1,5 @@
-using IlRepl.Host;
 using IlRepl.Engine;
+using IlRepl.Host;
 using IlRepl.Protocol;
 using IlRepl.Repl;
 using IlRepl.Tests.Engine;
@@ -86,6 +86,7 @@ public sealed class NativeComparisonProcessTests
                 Assert.DoesNotContain(line => line.Contains(field.Symbol, StringComparison.Ordinal), display);
             }
         }
+
         Assert.AreSequenceEqual(result.Left.Compilations[0].Normalized, result.Right.Compilations[0].Normalized);
     }
 
@@ -247,7 +248,9 @@ public sealed class NativeComparisonProcessTests
     private static void Submit(ReplCore core, params string[] source)
     {
         foreach (var line in IlLines.Expand(source))
+        {
             Assert.IsTrue(core.Handle(line).Succeeded, line + "\n"
                 + string.Join('\n', core.Transcript.Lines.Select(item => item.PlainText)));
+        }
     }
 }

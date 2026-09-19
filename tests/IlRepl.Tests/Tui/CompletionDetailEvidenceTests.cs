@@ -31,6 +31,7 @@ public sealed class CompletionDetailEvidenceTests
         {
             Assert.IsTrue((await engine.HandleAsync(line, ct)).Succeeded, line);
         }
+
         const string original = "call ReviewEvidenceConsu";
         const string effect = "Stack effect: [string, int32, int64, float64] → []";
         var recorder = new FrameRecorder();
@@ -64,6 +65,7 @@ public sealed class CompletionDetailEvidenceTests
             {
                 await auto.KeyAsync(Hex1bKey.PageDown, ct: ct);
             }
+
             await auto.WaitUntilAsync(_ => prompt.DetailScroll == target && recorder.Frames is [.., var frame]
                 && frame.Index >= firstFrame && DetailText(frame).Contains(effect, StringComparison.Ordinal),
                 description: "PageDown exposes the complete stack effect inside the detail pane");
@@ -83,6 +85,7 @@ public sealed class CompletionDetailEvidenceTests
             catch (OperationCanceledException) when (terminalCancellation.IsCancellationRequested)
             {
             }
+
             await IlReplApp.SettleAsync(prompt);
         }
     }
@@ -93,15 +96,22 @@ public sealed class CompletionDetailEvidenceTests
     [TestMethod]
     public async Task OperandDetail_AssemblyRefreshPreservesNavigation()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var ct = TestContext.CancellationToken;
         await using var engine = new CompletionEngine();
         await engine.PrimeAsync(ct);
         foreach (var name in new[] { "ReviewNavigateAlpha", "ReviewNavigateBeta" })
         {
             foreach (var line in new[] { $".method void {name}(string text, int32 count, int64 ticks, float64 amount) {{", "ret", "}" })
+            {
                 Assert.IsTrue((await engine.HandleAsync(line, ct)).Succeeded, line);
+            }
         }
+
         const string original = "call ReviewNavigate";
         const string effect = "Stack effect: [string, int32, int64, float64] → []";
         var recorder = new FrameRecorder();
@@ -135,7 +145,11 @@ public sealed class CompletionDetailEvidenceTests
             var rows = PromptWidget.DetailLines(prompt, engine.Catalog, 48);
             var target = rows.ToList().FindIndex(row => row.StartsWith("Stack effect:", StringComparison.Ordinal));
             Assert.IsGreaterThan(0, target);
-            for (var index = 0; index < target; index++) await auto.KeyAsync(Hex1bKey.PageDown, ct: ct);
+            for (var index = 0; index < target; index++)
+            {
+                await auto.KeyAsync(Hex1bKey.PageDown, ct: ct);
+            }
+
             await auto.WaitUntilAsync(_ => prompt.DetailScroll == target && recorder.Frames is [.., var frame]
                 && DetailText(frame).Contains(effect, StringComparison.Ordinal));
             await auto.KeyAsync(Hex1bKey.PageUp, ct: ct);
@@ -152,10 +166,20 @@ public sealed class CompletionDetailEvidenceTests
         }
         finally
         {
-            foreach (var call in engine.Calls) call.Release.TrySetResult();
+            foreach (var call in engine.Calls)
+            {
+                call.Release.TrySetResult();
+            }
+
             await cancellation.CancelAsync();
-            try { await run; }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            try
+            {
+                await run;
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+            }
+
             await IlReplApp.SettleAsync(prompt);
         }
     }

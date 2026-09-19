@@ -5,10 +5,12 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Decodes the bytes of a method body into instructions. Pure: it reads opcodes and operand
-/// layouts, computes branch and switch targets, and checks that every target is the start of an
-/// instruction; it never touches metadata or the runtime.
+/// Decodes the bytes of a method body into instructions.
 /// </summary>
+/// <remarks>
+/// Pure: it reads opcodes and operand layouts, computes branch and switch targets, and checks that every target is the start of an
+/// instruction; it never touches metadata or the runtime.
+/// </remarks>
 public static class IlReader
 {
     /// <summary>
@@ -64,7 +66,8 @@ public static class IlReader
                 offset += 4;
                 if (count < 0 || count > (il.Length - offset) / 4)
                 {
-                    problems.Add($"switch at {LabelFor(start)} declares {count} targets but only {(il.Length - offset) / 4} fit in the body");
+                    problems.Add(
+                        $"switch at {LabelFor(start)} declares {count} targets but only {(il.Length - offset) / 4} fit in the body");
                     break;
                 }
 
@@ -94,7 +97,9 @@ public static class IlReader
 
             if (il.Length - offset < operandSize)
             {
-                problems.Add($"truncated operand at {LabelFor(start)}: '{op.Name}' needs {operandSize} byte{(operandSize == 1 ? "" : "s")} but {il.Length - offset} remain");
+                problems.Add(
+                    $"truncated operand at {LabelFor(start)}: '{op.Name}' needs {operandSize} byte{(operandSize == 1 ? "" : "s")} but " +
+                    $"{il.Length - offset} remain");
                 break;
             }
 
@@ -172,14 +177,17 @@ public static class IlReader
         {
             if (instruction.BranchTarget is int t && !starts.Contains(t))
             {
-                problems.Add($"{instruction.Op.Name} at {instruction.Label} targets {LabelFor(t)}, which is not the start of an instruction");
+                problems.Add(
+                    $"{instruction.Op.Name} at {instruction.Label} targets {LabelFor(t)}, which is not the start of an instruction");
             }
 
             for (var i = 0; i < instruction.Operand.SwitchTargets.Length; i++)
             {
                 if (!starts.Contains(instruction.Operand.SwitchTargets[i]))
                 {
-                    problems.Add($"switch at {instruction.Label} target {i} is {LabelFor(instruction.Operand.SwitchTargets[i])}, which is not the start of an instruction");
+                    problems.Add(
+                        $"switch at {instruction.Label} target {i} is {LabelFor(instruction.Operand.SwitchTargets[i])}, which is not the " +
+                        $"start of an instruction");
                 }
             }
         }

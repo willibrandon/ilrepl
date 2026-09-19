@@ -194,6 +194,7 @@ public sealed class TypeIndexTests
                 events.Add("load " + e.LoadedAssembly.GetName().Name);
             }
         };
+
         ResolveEventHandler resolve = (_, e) =>
         {
             if (Environment.CurrentManagedThreadId == thread)
@@ -203,6 +204,7 @@ public sealed class TypeIndexTests
 
             return null;
         };
+
         AppDomain.CurrentDomain.AssemblyLoad += loaded;
         AppDomain.CurrentDomain.TypeResolve += resolve;
         AppDomain.CurrentDomain.AssemblyResolve += resolve;
@@ -286,7 +288,10 @@ public sealed class TypeIndexTests
     [TestMethod]
     public void TypeIndex_DistinguishesLoadsOfTheSameBytes()
     {
-        var (_, image, _) = CecilFixture.Build((_, _) => { });
+        var (_, image, _) = CecilFixture.Build((_, _) =>
+        {
+        });
+
         var first = new AssemblyLoadContext("index-first", isCollectible: true);
         var second = new AssemblyLoadContext("index-second", isCollectible: true);
         try

@@ -67,6 +67,7 @@ public sealed class PromptHelpContentTests
             var row = Assert.ContainsSingle(rows.Where(row => row.Line.PlainText == "• " + note));
             Assert.AreSequenceEqual([new TranscriptSpan("• " + note, SpanStyle.Dim)], row.Line.Spans);
         }
+
         Assert.AreEqual("", rows[action - 1].Line.PlainText);
         Assert.AreEqual(-1, rows[action - 1].Action);
         Assert.HasCount(2, rows.Where(row => row.Line.PlainText.Length == 0));

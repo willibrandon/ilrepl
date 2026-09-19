@@ -58,6 +58,7 @@ public sealed class IlReplAppHelpTests
                             .WaitAsync(AppTest.Timeout, ct).GetAwaiter().GetResult();
                         Assert.IsGreaterThan(previous, engine.AssemblyVersion);
                     }
+
                     Volatile.Write(ref publishedSequence, sequence);
                     if (active && sequence >= 3)
                     {
@@ -65,6 +66,7 @@ public sealed class IlReplAppHelpTests
                     }
                 };
             }).WithPresentation(adapter).Build();
+
         using var terminalCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var run = terminal.RunAsync(terminalCancellation.Token);
         try
@@ -81,6 +83,7 @@ public sealed class IlReplAppHelpTests
                 await auto.WaitUntilAsync(snapshot => snapshot.Height == 8 && snapshot.ContainsText("il[1]> constr"),
                     description: "the compact viewport will require Tab to scroll to the documentation link");
             }
+
             var text = prompt.Text;
             var caret = prompt.Editor.Cursor.Position;
             var version = prompt.Editor.Document.Version;
@@ -119,8 +122,10 @@ public sealed class IlReplAppHelpTests
             catch (OperationCanceledException) when (terminalCancellation.IsCancellationRequested)
             {
             }
+
             await IlReplApp.SettleAsync(prompt);
         }
+
         Assert.IsEmpty(AppTest.Echoes(transcript));
     }
 
@@ -146,6 +151,7 @@ public sealed class IlReplAppHelpTests
                 prompt = state;
                 state.DocumentationTargetChanged = (_, sequence, _) => Volatile.Write(ref publishedSequence, sequence);
             }).WithPresentation(adapter).Build();
+
         using var terminalCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var run = terminal.RunAsync(terminalCancellation.Token);
         try
@@ -158,7 +164,10 @@ public sealed class IlReplAppHelpTests
             await auto.WaitUntilAsync(snapshot => snapshot.GetLine(0).StartsWith("help ·", StringComparison.Ordinal)
                 || snapshot.ContainsText("APPLICATION ERROR"));
             if (IlReplApp.FindNode<RescueNode>(app) is { HasError: true } rescue)
+            {
                 Assert.Fail(rescue.ErrorPhase + ": " + rescue.Exception);
+            }
+
             var undo = prompt.Editor.History.UndoCount;
             Assert.IsGreaterThan(0, undo);
 
@@ -184,8 +193,10 @@ public sealed class IlReplAppHelpTests
             catch (OperationCanceledException) when (terminalCancellation.IsCancellationRequested)
             {
             }
+
             await IlReplApp.SettleAsync(prompt);
         }
+
         Assert.IsEmpty(AppTest.Echoes(transcript));
     }
 
@@ -207,6 +218,7 @@ public sealed class IlReplAppHelpTests
                 prompt = state;
                 state.DocumentationTargetChanged = (_, sequence, _) => Volatile.Write(ref publishedSequence, sequence);
             }).WithPresentation(adapter).Build();
+
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");
@@ -273,6 +285,7 @@ public sealed class IlReplAppHelpTests
         {
             await auto.WaitUntilAsync(_ => prompt.Help is { Scroll: > 0 }, description: "the help page scrolls");
         }
+
         await auto.TabAsync(ct: ct);
         await auto.WaitUntilAsync(snapshot => string.Concat(Enumerable.Range(0, snapshot.Height)
                 .Select(row => snapshot.GetLine(row).Trim())).Contains(
@@ -312,6 +325,7 @@ public sealed class IlReplAppHelpTests
                 prompt = state;
                 state.OpenDocumentation = url => Volatile.Write(ref opened, url);
             }).WithPresentation(adapter).Build();
+
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
         await auto.WaitUntilTextAsync("il[1]>");

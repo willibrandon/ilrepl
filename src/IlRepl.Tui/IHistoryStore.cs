@@ -1,9 +1,11 @@
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Where history is kept between runs: a file on the desktop, the browser's own database on the
-/// docs site. A store that cannot do its job says why and the prompt goes on without it.
+/// Where history is kept between runs: a file on the desktop, the browser's own database on the docs site.
 /// </summary>
+/// <remarks>
+/// A store that cannot do its job says why and the prompt goes on without it.
+/// </remarks>
 public interface IHistoryStore
 {
     /// <summary>
@@ -12,8 +14,7 @@ public interface IHistoryStore
     string? Problem { get; }
 
     /// <summary>
-    /// How many entries this store has written so far. Read when a session begins, it is the
-    /// count the session's own writes start from.
+    /// How many entries this store has written so far. Read when a session begins, it is the count the session's own writes start from.
     /// </summary>
     int Written { get; }
 

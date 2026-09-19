@@ -11,7 +11,10 @@ namespace IlRepl.Tui;
 /// <param name="CaretLine">Which line of <paramref name="Text"/> the caret goes to, counted from zero.</param>
 /// <param name="Note">An information line to add to the transcript, or null.</param>
 /// <param name="Snapshot">What the history store held, for <see cref="SubmissionEventKind.HistoryLoaded"/>.</param>
-/// <param name="Select">For <see cref="SubmissionEventKind.Refused"/>, whether the line at <see cref="CaretLine"/> is selected: a block's refused line is, a line on its own is not put back at all.</param>
+/// <param name="Select">
+/// For <see cref="SubmissionEventKind.Refused"/>, whether the line at <see cref="CaretLine"/> is selected: a block's refused line is, a
+/// line on its own is not put back at all.
+/// </param>
 public sealed record SubmissionEvent(
     SubmissionEventKind Kind,
     IReadOnlyList<TranscriptLine>? Lines = null,
@@ -97,7 +100,12 @@ public sealed record SubmissionEvent(
     /// <param name="note">A note to add, or null.</param>
     /// <param name="select">Whether the line at <paramref name="caretLine"/> is selected.</param>
     /// <returns>The event.</returns>
-    public static SubmissionEvent Refused(IReadOnlyList<TranscriptLine> lines, string text, int caretLine, string? note = null, bool select = true) => new(SubmissionEventKind.Refused, Lines: lines, Text: text, CaretLine: caretLine, Note: note, Select: select);
+    public static SubmissionEvent Refused(
+        IReadOnlyList<TranscriptLine> lines,
+        string text,
+        int caretLine,
+        string? note = null,
+        bool select = true) => new(SubmissionEventKind.Refused, Lines: lines, Text: text, CaretLine: caretLine, Note: note, Select: select);
 
     /// <summary>
     /// A failure: the unsent text comes back and the message goes to the transcript.
@@ -106,7 +114,8 @@ public sealed record SubmissionEvent(
     /// <param name="message">What went wrong, or null when the transcript already says.</param>
     /// <param name="text">The text coming back.</param>
     /// <returns>The event.</returns>
-    public static SubmissionEvent Failure(IReadOnlyList<TranscriptLine> lines, string? message, string text) => new(SubmissionEventKind.Failed, Lines: lines, Text: text, Note: message);
+    public static SubmissionEvent Failure(IReadOnlyList<TranscriptLine> lines, string? message, string text) =>
+        new(SubmissionEventKind.Failed, Lines: lines, Text: text, Note: message);
 
     /// <summary>
     /// A cancel: the text still to send comes back.
@@ -114,7 +123,8 @@ public sealed record SubmissionEvent(
     /// <param name="lines">The lines the withdrawal produced.</param>
     /// <param name="text">The text coming back.</param>
     /// <returns>The event.</returns>
-    public static SubmissionEvent Cancel(IReadOnlyList<TranscriptLine> lines, string text) => new(SubmissionEventKind.Cancelled, Lines: lines, Text: text);
+    public static SubmissionEvent Cancel(IReadOnlyList<TranscriptLine> lines, string text) =>
+        new(SubmissionEventKind.Cancelled, Lines: lines, Text: text);
 
     /// <summary>
     /// The user asked to leave.

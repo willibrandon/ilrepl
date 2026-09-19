@@ -3,10 +3,12 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for how session methods keep their identity: every caller binds to a trampoline, a
-/// compatible redefinition rebinds it in one store, and a version lives as long as something
-/// can still reach it.
+/// Tests for how session methods keep their identity.
 /// </summary>
+/// <remarks>
+/// Every caller binds to a trampoline, a compatible redefinition rebinds it in one store, and a version lives as long as something can
+/// still reach it.
+/// </remarks>
 [TestClass]
 public sealed class MethodVersionTests
 {
@@ -27,8 +29,7 @@ public sealed class MethodVersionTests
     }
 
     /// <summary>
-    /// A delegate taken over a session method keeps working, and sees the new body, after a
-    /// compatible redefinition.
+    /// A delegate taken over a session method keeps working, and sees the new body, after a compatible redefinition.
     /// </summary>
     [TestMethod]
     public void Run_RetainedDelegate_SeesCompatibleRedefinition()
@@ -73,8 +74,7 @@ public sealed class MethodVersionTests
     }
 
     /// <summary>
-    /// A signature change with no callers gives the method a new identity; the old trampoline
-    /// is no longer the one the session binds.
+    /// A signature change with no callers gives the method a new identity; the old trampoline is no longer the one the session binds.
     /// </summary>
     [TestMethod]
     public void AddLine_SignatureChange_IsANewIdentity()
@@ -93,8 +93,7 @@ public sealed class MethodVersionTests
     }
 
     /// <summary>
-    /// A call already inside the old version finishes there while a rebind happens, and the
-    /// next call takes the new version.
+    /// A call already inside the old version finishes there while a rebind happens, and the next call takes the new version.
     /// </summary>
     [TestMethod]
     public void Run_CallInFlight_FinishesOnItsVersion()
@@ -135,13 +134,13 @@ public sealed class MethodVersionTests
     }
 
     /// <summary>
-    /// The version's assembly and the trampoline's are session assemblies, and a version depends
-    /// on the trampolines its body calls.
+    /// The version's assembly and the trampoline's are session assemblies, and a version depends on the trampolines its body calls.
     /// </summary>
     [TestMethod]
     public void Methods_LiveInSessionAssemblies()
     {
-        var session = Load(".method int32 One() {", "ldc.i4 1", "ret", "}", ".method int32 Two() {", "call int32 One()", "dup", "add", "ret", "}");
+        var session = Load(".method int32 One() {", "ldc.i4 1", "ret", "}", ".method int32 Two() {", "call int32 One()", "dup", "add",
+            "ret", "}");
         var one = session.Methods[0];
         var two = session.Methods[1];
         Assert.IsTrue(SessionAssemblies.IsSessionAssembly(one.Version.Body.DeclaringType!.Assembly));

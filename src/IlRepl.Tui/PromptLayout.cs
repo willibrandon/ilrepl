@@ -1,10 +1,12 @@
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Shares the terminal's rows: the status bar and the separator come first, then the editor
-/// grows with its lines up to a third of the terminal, then the palette with its border, and the
-/// transcript takes the rest. On a short terminal the palette goes before the editor shrinks.
+/// Shares the terminal's rows between the status bar, the separator, the editor, the palette, and the transcript.
 /// </summary>
+/// <remarks>
+/// The status bar and the separator come first, then the editor grows with its lines up to a third of the terminal, then the palette with
+/// its border, and the transcript takes the rest. On a short terminal the palette goes before the editor shrinks.
+/// </remarks>
 public static class PromptLayout
 {
     /// <summary>

@@ -283,7 +283,8 @@ public sealed partial class Session
             return OpenTypeBlock(text[".class".Length..], text);
         }
 
-        if (text.StartsWith(".method", StringComparison.Ordinal) && (text.Length == ".method".Length || !char.IsLetter(text[".method".Length])))
+        if (text.StartsWith(".method", StringComparison.Ordinal)
+            && (text.Length == ".method".Length || !char.IsLetter(text[".method".Length])))
         {
             return OpenBlock(text[".method".Length..], text);
         }
@@ -292,13 +293,15 @@ public sealed partial class Session
         {
             DeclareTypeParameters(text[".typeparams".Length..]);
             _declarationLines.Add(text);
-            return new LineResult(LineOutcome.TypeParameters, null, "type parameters: " + string.Join(", ", _typeParameterNames.Select(n => "!!" + n)));
+            return new LineResult(LineOutcome.TypeParameters, null,
+                "type parameters: " + string.Join(", ", _typeParameterNames.Select(n => "!!" + n)));
         }
 
         if (text.StartsWith(".typeargs", StringComparison.Ordinal))
         {
             BindTypeArguments(text[".typeargs".Length..]);
-            return new LineResult(LineOutcome.TypeArguments, null, "type arguments: " + string.Join(", ", TypeArguments!.Select(TypeNameFormatter.Pretty)));
+            return new LineResult(LineOutcome.TypeArguments, null,
+                "type arguments: " + string.Join(", ", TypeArguments!.Select(TypeNameFormatter.Pretty)));
         }
 
         var previousEntries = _cell.Entries.Count;
@@ -306,7 +309,11 @@ public sealed partial class Session
         switch (result.Outcome)
         {
             case LineOutcome.Empty:
-                if (_cell.Entries.Count != previousEntries) _bodyLines.Add(text);
+                if (_cell.Entries.Count != previousEntries)
+                {
+                    _bodyLines.Add(text);
+                }
+
                 break;
             case LineOutcome.Locals:
             case LineOutcome.Arguments:
@@ -325,7 +332,9 @@ public sealed partial class Session
     /// Captures the session boundary from which an uncommitted submission can be withdrawn.
     /// </summary>
     /// <returns>The mark.</returns>
-    public SessionMark Mark() => new(Generation, _bodyLines.Count, _declarationLines.Count, _open?.BodyLines.Count, _openType?.Outermost.Lines.Count, InBlockComment, BraceSeen: _open?.State.BraceSeen ?? true);
+    public SessionMark Mark() =>
+        new(Generation, _bodyLines.Count, _declarationLines.Count, _open?.BodyLines.Count, _openType?.Outermost.Lines.Count, InBlockComment,
+        BraceSeen: _open?.State.BraceSeen ?? true);
 
     /// <summary>
     /// Withdraws uncommitted input since a mark, refusing if intervening irreversible changes prevent recovery.
@@ -596,8 +605,12 @@ public sealed partial class Session
             cancellationToken.ThrowIfCancellationRequested();
             RecordActivation(compiled);
             Activate();
-            var invocation = compiled with { ArgumentValues = compiled.InvocationArguments.Select(argument => argument.ExecutionValue())
-                .ToArray() };
+            var invocation = compiled with
+            {
+                ArgumentValues = compiled.InvocationArguments.Select(argument => argument.ExecutionValue())
+                    .ToArray(),
+            };
+
             ClearCell();
             CellsRun++;
             Submissions++;
@@ -670,7 +683,8 @@ public sealed partial class Session
             {
                 if (!ReferenceEquals(other, replacing))
                 {
-                    RequireCompatibleReferences(other.State, "method " + other.Signature.Name, signature, "(the previous definition stays)");
+                    RequireCompatibleReferences(other.State, "method " + other.Signature.Name, signature,
+                        "(the previous definition stays)");
                 }
             }
 
@@ -682,7 +696,9 @@ public sealed partial class Session
             }
             catch (ReplException ex)
             {
-                throw new ReplException($"cannot redefine {signature.Name} as {signature.Describe()}: the cell body would no longer compile: {ex.Message}  (.clear the cell first, or keep the signature)", ex);
+                throw new ReplException(
+                    $"cannot redefine {signature.Name} as {signature.Describe()}: the cell body would no longer compile: {ex.Message}  " +
+                    $"(.clear the cell first, or keep the signature)", ex);
             }
         }
 
@@ -694,6 +710,7 @@ public sealed partial class Session
             Signatures = table,
             State = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen, _typeTable, null),
         };
+
         return new LineResult(LineOutcome.MethodStart, null, "method " + signature.DescribeWithNames());
     }
 
@@ -726,7 +743,8 @@ public sealed partial class Session
             {
                 if (!ReferenceEquals(existing, replacing))
                 {
-                    RequireCompatibleReferences(existing.State, "method " + existing.Signature.Name, open.Signature, "(the previous definition stays)");
+                    RequireCompatibleReferences(existing.State, "method " + existing.Signature.Name, open.Signature,
+                        "(the previous definition stays)");
                 }
             }
 
@@ -749,7 +767,9 @@ public sealed partial class Session
         }
         catch (ReplException ex)
         {
-            throw new ReplException($"cannot {(replacing is null ? "define" : "replace")} {name}: the cell body would no longer compile: {ex.Message}  (.clear the cell first)", ex);
+            throw new ReplException(
+                $"cannot {(replacing is null ? "define" : "replace")} {name}: the cell body would no longer compile: {ex.Message}  " +
+                $"(.clear the cell first)", ex);
         }
 
         // Phase A: everything that can fail. A same-signature replacement keeps its trampoline,
@@ -773,6 +793,7 @@ public sealed partial class Session
                 ? target.Method
                 : throw new ReplException($"no method '{signature.Name}' is bound in the session");
         });
+
         CompiledMethodVersion? version = null;
         Delegate? implementation = null;
         try
@@ -815,7 +836,8 @@ public sealed partial class Session
             trampoline.Bind(implementation!);
         }
 
-        var committed = new SessionMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State, trampoline, version) { Order = sameSignature ? replacing!.Order : Submissions };
+        var committed = new SessionMethod(open.Signature, open.HeaderLine, [.. open.BodyLines], open.State, trampoline,
+            version) { Order = sameSignature ? replacing!.Order : Submissions };
         var index = replacing is null ? -1 : _methods.IndexOf(replacing);
         if (index < 0)
         {
@@ -878,7 +900,8 @@ public sealed partial class Session
                 {
                     if (method.Body is { } body)
                     {
-                        RequireCompatibleReferences(body, $"{declaration.KindWord} {declaration.FullName}", replacement, "(the previous definition stays)");
+                        RequireCompatibleReferences(body, $"{declaration.KindWord} {declaration.FullName}", replacement,
+                            "(the previous definition stays)");
                     }
                 }
             }
@@ -889,9 +912,11 @@ public sealed partial class Session
     {
         foreach (var entry in state.Entries)
         {
-            if (entry.Instruction?.Operand is ResolvedMethod { Definition: { } bound } && bound.Name == replacement.Name && !SameSignature(bound, replacement))
+            if (entry.Instruction?.Operand is ResolvedMethod { Definition: { } bound } && bound.Name == replacement.Name
+                && !SameSignature(bound, replacement))
             {
-                throw new ReplException($"cannot redefine {replacement.Name} as {replacement.Describe()}: {what} references {bound.Describe()}  {hint}");
+                throw new ReplException(
+                    $"cannot redefine {replacement.Name} as {replacement.Describe()}: {what} references {bound.Describe()}  {hint}");
             }
         }
     }
@@ -907,6 +932,7 @@ public sealed partial class Session
             // Contexts own their binding tables; memoization must not extend the lifetime of retired definition types.
             _methodSignatures.SetTarget(signatures);
         }
+
         return signatures!;
     }
 
@@ -939,8 +965,12 @@ public sealed partial class Session
         open.Signature, open.BodyLines, open.Signatures, CaptureLocations(open.BodyLines, open.State.Entries),
         braceSeen ?? open.State.BraceSeen);
 
-    private CellState ReplayBody(MethodSignature signature, List<string> lines, IReadOnlyList<MethodSignature> table,
-        AnalysisLocation?[] locations, bool braceSeen)
+    private CellState ReplayBody(
+        MethodSignature signature,
+        List<string> lines,
+        IReadOnlyList<MethodSignature> table,
+        AnalysisLocation?[] locations,
+        bool braceSeen)
     {
         // The opening brace is never stored: a replay starts with it seen unless told otherwise.
         var state = new CellState(Resolver, GenericContext.Empty, table, signature, braceSeen, _typeTable, null);

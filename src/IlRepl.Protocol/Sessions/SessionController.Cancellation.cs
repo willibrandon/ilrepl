@@ -16,7 +16,13 @@ public sealed partial class SessionController
     /// </summary>
     public bool IsReplaying
     {
-        get { lock (_executionLock) { return _executionCancellation is not null; } }
+        get
+        {
+            lock (_executionLock)
+            {
+                return _executionCancellation is not null;
+            }
+        }
     }
 
     /// <summary>
@@ -36,29 +42,50 @@ public sealed partial class SessionController
         {
             interruptible.ProgressChanged += progress =>
             {
-                if (ReferenceEquals(candidate, _runningCandidate)) ProgressChanged?.Invoke(progress);
+                if (ReferenceEquals(candidate, _runningCandidate))
+                {
+                    ProgressChanged?.Invoke(progress);
+                }
             };
         }
-        if (candidate is not IHostedEngine hosted) return;
+
+        if (candidate is not IHostedEngine hosted)
+        {
+            return;
+        }
+
         hosted.OutputReceived += output =>
         {
-            if (ReferenceEquals(candidate, _runningCandidate)) ForwardOutput(output);
+            if (ReferenceEquals(candidate, _runningCandidate))
+            {
+                ForwardOutput(output);
+            }
         };
+
         hosted.CheckpointReceived += checkpoint =>
         {
-            if (ReferenceEquals(candidate, _runningCandidate)) _runningCheckpoint = checkpoint;
+            if (ReferenceEquals(candidate, _runningCandidate))
+            {
+                _runningCheckpoint = checkpoint;
+            }
         };
+
         hosted.Exited += exit =>
         {
             if (ReferenceEquals(candidate, _runningCandidate) && !exit.Expected)
             {
                 _runningExit = exit;
-                lock (_lifecycleLock) { _lastHostExit = exit; }
+                lock (_lifecycleLock)
+                {
+                    _lastHostExit = exit;
+                }
             }
         };
     }
 
-    private async Task<(IReplEngine Engine, SessionReply Reply)> RunCandidateAsync(IReplEngine candidate, SessionRequest request,
+    private async Task<(IReplEngine Engine, SessionReply Reply)> RunCandidateAsync(
+        IReplEngine candidate,
+        SessionRequest request,
         CancellationToken cancellationToken)
     {
         using var execution = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -92,6 +119,7 @@ public sealed partial class SessionController
                     + string.Join(' ', request.Action.Numbers.Order()))],
                 ExitCode = _runningExit?.ExitCode, StandardError = _runningExit?.StandardError,
             };
+
             if (interruptedNumber is { } number)
             {
                 var cell = source.Cells.FirstOrDefault(item => item.Number == number) ?? new SessionCell { Number = number };
@@ -103,6 +131,7 @@ public sealed partial class SessionController
                         : [.. source.Cells, cell],
                 };
             }
+
             source = source with { Interruptions = [.. source.Interruptions, interruption] };
             IReplEngine? recovered = null;
             try
@@ -125,15 +154,30 @@ public sealed partial class SessionController
                     Editor = source.Editor, Modified = true,
                     HistoryLineLimit = request.HistoryLineLimit ?? HistoryLineLimit,
                 }, cancellationToken).ConfigureAwait(false);
+
                 var notice = _runningExit is null ? "session run cancelled" : "session run interrupted by host exit";
-                return (recovered, reply with { Reply = reply.Reply with { Succeeded = false,
-                    Lines = [.. ExitLines(_runningExit), .. reply.Reply.Lines,
-                    TranscriptLine.Of(LineKind.Info, "  " + notice + "; all source remains available", SpanStyle.Dim)] } });
+                return (recovered, reply with
+                {
+                    Reply = reply.Reply with
+                    {
+                        Succeeded = false,
+                        Lines = [.. ExitLines(_runningExit), .. reply.Reply.Lines,
+                            TranscriptLine.Of(LineKind.Info, "  " + notice + "; all source remains available", SpanStyle.Dim)],
+                    },
+                });
             }
             catch (Exception recoveryFailure)
             {
-                if (recovered is not null) await recovered.DisposeAsync().ConfigureAwait(false);
-                if (recoveryFailure is OperationCanceledException && cancellationToken.IsCancellationRequested) throw;
+                if (recovered is not null)
+                {
+                    await recovered.DisposeAsync().ConfigureAwait(false);
+                }
+
+                if (recoveryFailure is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+
                 SetRuntimeState(SessionRuntimeState.Unavailable);
                 return (new InactiveEngine(), new SessionReply
                 {
@@ -155,6 +199,7 @@ public sealed partial class SessionController
                 _runningCandidate = null;
                 _executionCancellation = null;
             }
+
             ProgressChanged?.Invoke(Progress);
         }
     }

@@ -157,6 +157,7 @@ public sealed class CustomModifierOrderTests
                 FieldAttributes.Public | FieldAttributes.Static,
                 Annotated(module, parameter: false)));
         }, session.Resolver, "Modifiers");
+
         var owner = $"[{fixture.Assembly.GetName().Name}]N.Modifiers";
         session.AddLine("ldc.i4 7");
         session.AddLine($"call {ReturnType} {owner}::Echo({ParameterType})");
@@ -197,6 +198,7 @@ public sealed class CustomModifierOrderTests
             processor.Emit(OpCodes.Ret);
             type.Methods.Add(constructor);
         }, session.Resolver, "Constructors");
+
         var owner = $"[{fixture.Assembly.GetName().Name}]N.Constructors";
         var returnType = $"void modreq({Volatile}) modopt({Long}) modreq({Cdecl})";
 
@@ -372,11 +374,13 @@ public sealed class CustomModifierOrderTests
             {
                 CallingConvention = MethodCallingConvention.VarArg,
             };
+
             var processor = count.Body.GetILProcessor();
             processor.Emit(OpCodes.Ldc_I4_1);
             processor.Emit(OpCodes.Ret);
             type.Methods.Add(count);
         }, session.Resolver, "Varargs");
+
         var owner = $"[{fixture.Assembly.GetName().Name}]N.Varargs";
 
         session.AddLine("ldc.i4 7");
@@ -467,6 +471,7 @@ public sealed class CustomModifierOrderTests
             "stloc scratch",
             "ldloc scratch",
         };
+
         var session = IlLines.Load(lines);
 
         using var editing = new EditingSession(new Session());
@@ -507,6 +512,7 @@ public sealed class CustomModifierOrderTests
             ExactReturnType = exact,
             Parameters = [new ParameterSymbol(parameter, "value") { ExactType = exact }],
         };
+
         var field = new FieldSymbol
         {
             Definition = DefinitionId.None,
@@ -588,6 +594,7 @@ public sealed class CustomModifierOrderTests
                 AddConstructor(module, type, field, new OptionalModifierType(volatileType, module.TypeSystem.Int32), 2);
             }
         }, session.Resolver, "ModifierOverloads");
+
         return $"[{fixture.Assembly.GetName().Name}]N.ModifierOverloads";
     }
 

@@ -51,6 +51,7 @@ public static class TypeLookupExamples
             4 => "System.Collections.Generic.List`1[Lookup.Owner+Nested[]]",
             _ => "Lookup.Owner",
         };
+
         return ignoreCase ? name.ToLowerInvariant() : name;
     }
 

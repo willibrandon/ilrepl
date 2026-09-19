@@ -26,7 +26,11 @@ internal static class NativeWorkerProgram
     /// <returns>The worker exit code for malformed input.</returns>
     internal static async Task<int> RunAsync(string[] arguments)
     {
-        if (arguments.Length != 4) return 64;
+        if (arguments.Length != 4)
+        {
+            return 64;
+        }
+
         var root = arguments[3];
         OwnedProcessGroup.PrepareWorker();
         WorkerOwnerWatchdog.Start();
@@ -60,12 +64,20 @@ internal static class NativeWorkerProgram
             else
             {
                 using var context = new NativeWorkerContext(target, options, Path.Combine(root, "native"));
-                state = state with { MethodId = (ulong)context.Method.MethodHandle.Value, Method = NativeCapture.Identify(context.Method),
-                    Report = report with { Implementation = NativeCapture.Identify(context.Method),
+                state = state with
+                {
+                    MethodId = (ulong)context.Method.MethodHandle.Value,
+                    Method = NativeCapture.Identify(context.Method),
+                    Report = report with
+                    {
+                        Implementation = NativeCapture.Identify(context.Method),
                         ModuleVersionId = context.Method.Module.ModuleVersionId,
                         Collectible = context.Method.Module.Assembly.IsCollectible,
                         Roles = ["implementation: " + MemberResolver.Describe(context.Method),
-                        "invocation: " + MemberResolver.Describe(context.InvocationMethod)] } };
+                            "invocation: " + MemberResolver.Describe(context.InvocationMethod)],
+                    },
+                };
+
                 await NativeStateFile.WriteAsync(root, state).ConfigureAwait(false);
                 context.Prepare();
                 var elapsed = Stopwatch.StartNew();
@@ -74,18 +86,35 @@ internal static class NativeWorkerProgram
                     state = state with { Report = state.Report with { Invocations = state.Report.Invocations + 1 } };
                     await NativeStateFile.WriteAsync(root, state).ConfigureAwait(false);
                     await context.InvokeAsync().ConfigureAwait(false);
-                    if (options.Tier != "tier1") continue;
+                    if (options.Tier != "tier1")
+                    {
+                        continue;
+                    }
+
                     // Maintain at most 100 driver calls per second while allowing runtime events to stop the workload.
                     var next = TimeSpan.FromMilliseconds(state.Report.Invocations * 10L) - elapsed.Elapsed;
-                    if (next > TimeSpan.Zero) await Task.Delay(next).ConfigureAwait(false);
+                    if (next > TimeSpan.Zero)
+                    {
+                        await Task.Delay(next).ConfigureAwait(false);
+                    }
                 }
+
                 using var evidence = new NativeAddressEvidence();
                 var listings = await AvailableListingsAsync(root, state.Method.JitNames).ConfigureAwait(false);
                 evidence.Collect(context, listings, report.Architecture);
-                state = state with { Probes = evidence.Probes, Report = state.Report with { Addresses = evidence.Facts,
-                    Constants = evidence.Constants } };
+                state = state with
+                {
+                    Probes = evidence.Probes,
+                    Report = state.Report with
+                    {
+                        Addresses = evidence.Facts,
+                        Constants = evidence.Constants,
+                    },
+                };
+
                 await NativeStateFile.WriteAsync(root, state).ConfigureAwait(false);
             }
+
             state = state with { Report = state.Report with { Outcome = "complete" } };
         }
         catch (Exception exception)
@@ -93,6 +122,7 @@ internal static class NativeWorkerProgram
             var cause = exception is TargetInvocationException { InnerException: { } inner } ? inner : exception;
             state = state with { Report = state.Report with { Outcome = "failed", Detail = cause.GetType().Name + ": " + cause.Message } };
         }
+
         await NativeStateFile.WriteAsync(root, state).ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(root, "work-done"), "done").ConfigureAwait(false);
         await WaitForAsync(Path.Combine(root, "release")).ConfigureAwait(false);
@@ -102,7 +132,11 @@ internal static class NativeWorkerProgram
     private static async Task<NativeCompilation[]> AvailableListingsAsync(string root, string[] methodNames)
     {
         var path = Path.Combine(root, "native.txt");
-        if (!File.Exists(path)) return [];
+        if (!File.Exists(path))
+        {
+            return [];
+        }
+
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         var bytes = new byte[(int)Math.Min(stream.Length, 16 * 1024 * 1024)];
         var count = await stream.ReadAtLeastAsync(bytes.AsMemory(), bytes.Length, throwOnEndOfStream: false).ConfigureAwait(false);
@@ -112,7 +146,10 @@ internal static class NativeWorkerProgram
 
     private static async Task WaitForAsync(string path)
     {
-        while (!File.Exists(path)) await Task.Delay(10).ConfigureAwait(false);
+        while (!File.Exists(path))
+        {
+            await Task.Delay(10).ConfigureAwait(false);
+        }
     }
 
     private static MethodInfo CapabilityProbe()

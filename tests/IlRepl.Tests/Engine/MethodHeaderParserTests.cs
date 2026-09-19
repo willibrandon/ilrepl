@@ -44,7 +44,8 @@ public sealed class MethodHeaderParserTests
     [TestMethod]
     public void Parse_IlAsmModifiers_AreIgnored()
     {
-        var signature = MethodHeaderParser.Parse(" public static hidebysig int32 Add(int32 a, int32 b) cil managed {", Context, out var opensBlock);
+        var signature = MethodHeaderParser.Parse(" public static hidebysig int32 Add(int32 a, int32 b) cil managed {", Context,
+            out var opensBlock);
         Assert.IsTrue(opensBlock);
         Assert.AreEqual("int32 Add(int32 a, int32 b)", signature.DescribeWithNames());
     }
@@ -83,8 +84,10 @@ public sealed class MethodHeaderParserTests
     [TestMethod]
     public void Parse_ReservedNames_Throw()
     {
-        Assert.Contains("'Run' is reserved", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" object Run() {", Context, out _)).Message);
-        Assert.Contains("'Invoke' is reserved", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" void Invoke() {", Context, out _)).Message);
+        Assert.Contains("'Run' is reserved",
+            Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" object Run() {", Context, out _)).Message);
+        Assert.Contains("'Invoke' is reserved",
+            Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" void Invoke() {", Context, out _)).Message);
     }
 
     /// <summary>
@@ -93,8 +96,10 @@ public sealed class MethodHeaderParserTests
     [TestMethod]
     public void Parse_BadName_Throws()
     {
-        Assert.Contains("bad method name '2x'", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 2x() {", Context, out _)).Message);
-        Assert.Contains("bad method name", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 Foo<T>() {", Context, out _)).Message);
+        Assert.Contains("bad method name '2x'",
+            Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 2x() {", Context, out _)).Message);
+        Assert.Contains("bad method name",
+            Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 Foo<T>() {", Context, out _)).Message);
     }
 
     /// <summary>
@@ -103,7 +108,8 @@ public sealed class MethodHeaderParserTests
     [TestMethod]
     public void Parse_DuplicateParameter_Throws()
     {
-        Assert.Contains("parameter 'n' is already declared", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 F(int32 n, int32 n) {", Context, out _)).Message);
+        Assert.Contains("parameter 'n' is already declared",
+            Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 F(int32 n, int32 n) {", Context, out _)).Message);
     }
 
     /// <summary>
@@ -112,7 +118,8 @@ public sealed class MethodHeaderParserTests
     [TestMethod]
     public void Parse_VoidParameter_Throws()
     {
-        Assert.Contains("cannot be void", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 F(void x) {", Context, out _)).Message);
+        Assert.Contains("cannot be void",
+            Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 F(void x) {", Context, out _)).Message);
     }
 
     /// <summary>
@@ -121,8 +128,10 @@ public sealed class MethodHeaderParserTests
     [TestMethod]
     public void Parse_MissingParameterList_ShowsUsage()
     {
-        Assert.Contains("usage: .method", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 Fib {", Context, out _)).Message);
-        Assert.Contains("usage: .method", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" Fib() {", Context, out _)).Message);
+        Assert.Contains("usage: .method",
+            Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 Fib {", Context, out _)).Message);
+        Assert.Contains("usage: .method",
+            Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" Fib() {", Context, out _)).Message);
         Assert.Contains("usage: .method", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse("", Context, out _)).Message);
     }
 
@@ -132,7 +141,8 @@ public sealed class MethodHeaderParserTests
     [TestMethod]
     public void Parse_InstanceKeyword_Throws()
     {
-        Assert.Contains("remove 'instance'", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" instance int32 F() {", Context, out _)).Message);
+        Assert.Contains("remove 'instance'",
+            Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" instance int32 F() {", Context, out _)).Message);
     }
 
     /// <summary>
@@ -141,8 +151,10 @@ public sealed class MethodHeaderParserTests
     [TestMethod]
     public void Parse_VarargSentinel_Throws()
     {
-        Assert.Contains("cannot be vararg", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" vararg int32 F() {", Context, out _)).Message);
-        Assert.Contains("cannot be vararg", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 F(int32, ...) {", Context, out _)).Message);
+        Assert.Contains("cannot be vararg",
+            Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" vararg int32 F() {", Context, out _)).Message);
+        Assert.Contains("cannot be vararg",
+            Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 F(int32, ...) {", Context, out _)).Message);
     }
 
     /// <summary>
@@ -151,7 +163,8 @@ public sealed class MethodHeaderParserTests
     [TestMethod]
     public void Parse_TrailingJunk_Throws()
     {
-        Assert.Contains("unexpected 'extra' after the parameter list", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 F() extra {", Context, out _)).Message);
+        Assert.Contains("unexpected 'extra' after the parameter list",
+            Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" int32 F() extra {", Context, out _)).Message);
     }
 
     /// <summary>
@@ -160,7 +173,8 @@ public sealed class MethodHeaderParserTests
     [TestMethod]
     public void Parse_CellGenericParameter_Throws()
     {
-        Assert.Contains("generic parameter", Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" !!T Id(!!T x) {", Context, out _)).Message);
+        Assert.Contains("generic parameter",
+            Assert.ThrowsExactly<ReplException>(() => MethodHeaderParser.Parse(" !!T Id(!!T x) {", Context, out _)).Message);
     }
 
     /// <summary>
@@ -169,7 +183,9 @@ public sealed class MethodHeaderParserTests
     [TestMethod]
     public void Parse_AssemblyQualifiedParameter_KeepsQualifier()
     {
-        var signature = MethodHeaderParser.Parse(" void F([System.Runtime]System.Object o, [in] int32 x, [out] [System.Runtime]System.String s) {", Context, out _);
+        var signature =
+            MethodHeaderParser.Parse(" void F([System.Runtime]System.Object o, [in] int32 x, [out] [System.Runtime]System.String s) {",
+            Context, out _);
         Assert.AreSequenceEqual([typeof(object), typeof(int), typeof(string)], signature.ParameterTypes);
         Assert.AreEqual("o", signature.Parameters[0].Name);
         Assert.AreEqual("s", signature.Parameters[2].Name);
@@ -181,7 +197,8 @@ public sealed class MethodHeaderParserTests
     [TestMethod]
     public void Parse_ReturnTypeWithParentheses_IsParsed()
     {
-        var modopt = MethodHeaderParser.Parse(" int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsLong) F() {", Context, out var opensBlock);
+        var modopt = MethodHeaderParser.Parse(" int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsLong) F() {", Context,
+            out var opensBlock);
         Assert.AreEqual(typeof(int), modopt.ReturnType);
         Assert.AreEqual("F", modopt.Name);
         Assert.IsTrue(opensBlock);

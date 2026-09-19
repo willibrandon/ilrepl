@@ -32,28 +32,46 @@ public static class ProcessNativeRunner
     /// <param name="register">The frontend ownership acknowledgement.</param>
     /// <param name="cancellationToken">Cancels execution and ownership registration.</param>
     /// <returns>The resulting worker observations.</returns>
-    internal static async Task<NativeReply> RunAsync(NativePackage package,
-        Func<OwnedProcessScope, CancellationToken, Task>? register, CancellationToken cancellationToken)
+    internal static async Task<NativeReply> RunAsync(
+        NativePackage package,
+        Func<OwnedProcessScope, CancellationToken, Task>? register,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(package);
         cancellationToken.ThrowIfCancellationRequested();
         var capabilityKey = package.Options.Info ? NativeCapabilityCache.Key(package) : null;
-        if (capabilityKey is not null && NativeCapabilityCache.TryGet(capabilityKey, out var cached)) return cached;
+        if (capabilityKey is not null && NativeCapabilityCache.TryGet(capabilityKey, out var cached))
+        {
+            return cached;
+        }
+
         var root = Path.Combine(Path.GetTempPath(), "ilrepl-native-" + Guid.NewGuid().ToString("N"));
         var left = await RunSideAsync(package, true, root, register, cancellationToken).ConfigureAwait(false);
         if (package.Right is null)
         {
             var reply = new NativeReply { Outcome = left.Outcome, Left = left };
-            if (capabilityKey is not null) NativeCapabilityCache.Store(capabilityKey, reply);
+            if (capabilityKey is not null)
+            {
+                NativeCapabilityCache.Store(capabilityKey, reply);
+            }
+
             return reply;
         }
+
         var right = await RunSideAsync(package, false, root, register, cancellationToken).ConfigureAwait(false);
         if (left.Outcome != "complete" || right.Outcome != "complete")
+        {
             return new NativeReply { Outcome = "incomplete", Left = left, Right = right };
+        }
+
         if (!package.Options.Raw && (left.NormalizationProblems.Length != 0 || right.NormalizationProblems.Length != 0))
+        {
             return new NativeReply { Outcome = "indeterminate", Left = left, Right = right };
-        var leftLines = left.Compilations[^1].Normalized;
-        var rightLines = right.Compilations[^1].Normalized;
+        }
+
+        // An address load is compared as one step, because its length in instructions follows the address and not the code.
+        var leftLines = NativeAddressLoads.Fold(left.Compilations[^1].Normalized);
+        var rightLines = NativeAddressLoads.Fold(right.Compilations[^1].Normalized);
         var equal = leftLines.SequenceEqual(rightLines, StringComparer.Ordinal);
         return new NativeReply
         {
@@ -62,12 +80,25 @@ public static class ProcessNativeRunner
         };
     }
 
-    private static async Task<NativeReport> RunSideAsync(NativePackage package, bool left, string root,
-        Func<OwnedProcessScope, CancellationToken, Task>? register, CancellationToken cancellationToken)
+    private static async Task<NativeReport> RunSideAsync(
+        NativePackage package,
+        bool left,
+        string root,
+        Func<OwnedProcessScope, CancellationToken, Task>? register,
+        CancellationToken cancellationToken)
     {
         var target = left ? package.Left : package.Right!;
-        var state = new NativeWorkerState { Report = new NativeReport { Name = target.Name, Fingerprint = target.Fingerprint,
-            IsCapability = package.Options.Info, Raw = package.Options.Raw } };
+        var state = new NativeWorkerState
+        {
+            Report = new NativeReport
+            {
+                Name = target.Name,
+                Fingerprint = target.Fingerprint,
+                IsCapability = package.Options.Info,
+                Raw = package.Options.Raw,
+            },
+        };
+
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var outputLifetime = new CancellationTokenSource();
         using var process = new Process();
@@ -105,26 +136,41 @@ public static class ProcessNativeRunner
                 UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
                 StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8, CreateNoWindow = true,
             };
+
             process.StartInfo.ArgumentList.Add("--fx-version");
             process.StartInfo.ArgumentList.Add(NativeRuntimeSettings.FrameworkVersion(typeof(object).Assembly.Location));
             process.StartInfo.ArgumentList.Add("--roll-forward");
             process.StartInfo.ArgumentList.Add("Disable");
             foreach (var argument in new[] { host, "--native-worker", packagePath, left ? "left" : "right", root })
+            {
                 process.StartInfo.ArgumentList.Add(argument);
+            }
+
             process.StartInfo.Environment.Clear();
-            foreach (var (key, value) in environment) process.StartInfo.Environment[key] = value;
+            foreach (var (key, value) in environment)
+            {
+                process.StartInfo.Environment[key] = value;
+            }
+
             lifetime.CancelAfter(TimeSpan.FromMinutes(2));
             connecting = DiagnosticsClientConnector.FromDiagnosticPort(port.Address + ",listen", lifetime.Token);
             WorkerOwnerWatchdog.Configure(process.StartInfo);
             started = process.Start();
-            if (!started) throw new IOException("could not start the native inspection runtime");
+            if (!started)
+            {
+                throw new IOException("could not start the native inspection runtime");
+            }
+
             input = WriteInputAsync(process.StandardInput.BaseStream, package.Options.StandardInput, lifetime.Token);
             stdout = ReadOutputAsync(process.StandardOutput, 64 * 1024, overflow, outputLifetime.Token,
                 NativeOutputBuffer.StartMarker(root));
             stderr = ReadOutputAsync(process.StandardError, 64 * 1024, overflow, outputLifetime.Token);
             var exit = OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None);
             if (await Task.WhenAny(connecting, exit).ConfigureAwait(false) == exit)
+            {
                 throw new IOException($"native runtime exited during diagnostics startup with code {process.ExitCode}");
+            }
+
             connector = await connecting.ConfigureAwait(false) ?? throw new IOException("CoreCLR diagnostics startup timed out");
             // Windows' default pipe avoids reverse-pipe reconnection delays between start, resume, and stop commands.
             var diagnostics = OperatingSystem.IsWindows() ? new DiagnosticsClient(process.Id) : connector.Instance;
@@ -151,28 +197,61 @@ public static class ProcessNativeRunner
                 {
                     group.Attach(process);
                 if (register is not null)
-                    await register(OwnedProcessGroup.Describe(process, Guid.NewGuid().ToString("N")), cancellationToken)
+                    {
+                        await register(OwnedProcessGroup.Describe(process, Guid.NewGuid().ToString("N")), cancellationToken)
                         .ConfigureAwait(false);
+                    }
+
                     attached = true;
                     await File.WriteAllTextAsync(Path.Combine(root, "start"), "start", lifetime.Token).ConfigureAwait(false);
                 }
+
                 if (!ready && File.Exists(Path.Combine(root, "ready")))
                 {
                     ready = true;
                     lifetime.CancelAfter(package.Options.TimeoutMilliseconds);
                 }
+
                 var statePath = Path.Combine(root, "state.json");
                 state = await NativeStateFile.ReadAsync(statePath, lifetime.Token).ConfigureAwait(false) ?? state;
                 var observed = state.MethodId != 0 && collector.Observed(state.MethodId, state.Method, package.Options.Tier);
                 if (observed && package.Options.Tier == "tier1")
+                {
                     await File.WriteAllTextAsync(Path.Combine(root, "stop"), "stop", lifetime.Token).ConfigureAwait(false);
-                if (overflow.Task.IsCompleted) { outcome = "output-limit"; detail = "worker output exceeded 64 KiB"; break; }
+                }
+
+                if (overflow.Task.IsCompleted)
+                {
+                    outcome = "output-limit";
+                    detail = "worker output exceeded 64 KiB";
+                    break;
+                }
+
                 if (File.Exists(listingPath) && new FileInfo(listingPath).Length > 16 * 1024 * 1024)
-                { outcome = "listing-limit"; detail = "JIT output exceeded 16 MiB"; break; }
+                {
+                    outcome = "listing-limit";
+                    detail = "JIT output exceeded 16 MiB";
+                    break;
+                }
+
                 if (File.Exists(Path.Combine(root, "work-done"))
-                    && (package.Options.Tier != "tier1" || observed || state.Report.Outcome != "complete")) break;
-                if (exit.IsCompleted) { outcome = "crashed"; detail = $"native runtime exited with code {process.ExitCode}"; break; }
-                if (tracing.IsFaulted) { await tracing.ConfigureAwait(false); }
+                    && (package.Options.Tier != "tier1" || observed || state.Report.Outcome != "complete"))
+                {
+                    break;
+                }
+
+                if (exit.IsCompleted)
+                {
+                    outcome = "crashed";
+                    detail = $"native runtime exited with code {process.ExitCode}";
+                    break;
+                }
+
+                if (tracing.IsFaulted)
+                {
+                    await tracing.ConfigureAwait(false);
+                }
+
                 await Task.Delay(10, lifetime.Token).ConfigureAwait(false);
             }
         }
@@ -199,7 +278,10 @@ public static class ProcessNativeRunner
                     using var drain = new CancellationTokenSource(TimeSpan.FromSeconds(finished ? 30 : 5));
                     await session.StopAsync(drain.Token).ConfigureAwait(false);
                     draining = true;
-                    if (tracing is not null) await tracing.WaitAsync(drain.Token).ConfigureAwait(false);
+                    if (tracing is not null)
+                    {
+                        await tracing.WaitAsync(drain.Token).ConfigureAwait(false);
+                    }
                 }
                 catch (Exception exception) when (exception is IOException or OperationCanceledException
                     or DiagnosticsClientException or FormatException)
@@ -209,29 +291,57 @@ public static class ProcessNativeRunner
                         : "the runtime event session could not be stopped: ") + exception.Message;
                 }
             }
+
             await lifetime.CancelAsync().ConfigureAwait(false);
             if (started && !process.HasExited && File.Exists(Path.Combine(root, "work-done")))
             {
                 // Orderly shutdown also flushes release runtimes that leave the final native listing buffered.
                 await File.WriteAllTextAsync(Path.Combine(root, "release"), "release", CancellationToken.None).ConfigureAwait(false);
-                try { await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5),
-                    CancellationToken.None).ConfigureAwait(false); }
-                catch (TimeoutException) { /* A workload can register an exit handler that never returns. */ }
+                try
+                {
+                    await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None)
+                        .WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None)
+                        .ConfigureAwait(false);
+                }
+                catch (TimeoutException)
+                {
+                    // A workload can register an exit handler that never returns.
+                }
             }
+
             Kill(process);
-            if (started) await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None).ConfigureAwait(false);
+            if (started)
+            {
+                await OwnedProcessGroup.WaitForExitAsync(process, CancellationToken.None).ConfigureAwait(false);
+            }
+
             await group.StopAsync().ConfigureAwait(false);
             outputLifetime.CancelAfter(TimeSpan.FromSeconds(1));
-            if (input is not null) await input.ConfigureAwait(false);
+            if (input is not null)
+            {
+                await input.ConfigureAwait(false);
+            }
+
             if (connector is null && connecting is not null)
             {
-                try { connector = await connecting.ConfigureAwait(false); }
-                catch (OperationCanceledException) { /* The reverse endpoint was cancelled during startup. */ }
+                try
+                {
+                    connector = await connecting.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // The reverse endpoint was cancelled during startup.
+                }
             }
+
             source?.Dispose();
             session?.Dispose();
-            if (connector is not null) await connector.DisposeAsync().ConfigureAwait(false);
+            if (connector is not null)
+            {
+                await connector.DisposeAsync().ConfigureAwait(false);
+            }
         }
+
         var finalStatePath = Path.Combine(root, "state.json");
         state = await NativeStateFile.ReadAsync(finalStatePath, CancellationToken.None).ConfigureAwait(false) ?? state;
         var report = state.Report with
@@ -240,6 +350,7 @@ public static class ProcessNativeRunner
             StandardOutput = stdout is null ? "" : await stdout.ConfigureAwait(false),
             StandardError = stderr is null ? "" : await stderr.ConfigureAwait(false),
         };
+
         var raw = File.Exists(listingPath) ? await ReadListingAsync(listingPath).ConfigureAwait(false) : "";
         var events = collector?.Snapshot() ?? [];
         var publications = events.Where(item => NativeEventCollector.Selected(item, state.MethodId, state.Method)).ToList();
@@ -250,13 +361,22 @@ public static class ProcessNativeRunner
             Address = item.Compilation.Address, Length = (ulong)item.Compilation.CodeSize, Kind = "code",
             Symbol = item.Compilation.Method, Evidence = "EventPipe MethodLoadVerbose published code range",
         })).ToArray();
+
         var normalizationProblems = new HashSet<string>(StringComparer.Ordinal);
         foreach (var block in blocks)
         {
-            if (state.Method is null || !state.Method.JitNames.Contains(block.Method, StringComparer.Ordinal)) continue;
+            if (state.Method is null || !state.Method.JitNames.Contains(block.Method, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
             var matches = publications.Where(item => item.Compilation.CodeSize == block.CodeSize
                 && SameTier(item.Compilation.Tier, block.Tier)).ToArray();
-            if (matches.Length != 1) continue;
+            if (matches.Length != 1)
+            {
+                continue;
+            }
+
             var published = matches[0].Compilation;
             publications.Remove(matches[0]);
             var normalized = NativeNormalizer.Normalize(block with { Address = published.Address }, addresses, state.Probes, blocks,
@@ -270,25 +390,52 @@ public static class ProcessNativeRunner
                     true) : normalized.Lines,
             });
         }
+
         report = report with
         {
             Compilations = [.. compilations], Addresses = addresses, NormalizationProblems = [.. normalizationProblems],
             UnattributedListings = NativeDisassembly.Unattributed(raw, state.Method?.JitNames ?? [], compilations),
         };
+
         if (report.UnattributedListings.Length != 0 && report.Outcome == "complete")
+        {
             report = report with { Outcome = "incomplete", Detail = "selected-signature output lacks complete, unambiguous attribution" };
+        }
+
         if (compilations.Count == 0 && report.Outcome == "complete")
-            report = report with { Outcome = "incomplete",
+        {
+            report = report with
+            {
+                Outcome = "incomplete",
                 Detail = "no complete listing could be attributed to the selected runtime method "
-                + $"({blocks.Length} listings; {publications.Count} matching publications)" };
+                    + $"({blocks.Length} listings; {publications.Count} matching publications)",
+            };
+        }
+
         if (report.Outcome == "complete" && package.Options.Tier is "tier0" or "tier1"
             && !compilations.Any(compilation => package.Options.Tier == "tier0"
                 ? compilation.Tier is "Tier0" or "Instrumented Tier0" : compilation.Tier is "Tier1" or "Instrumented Tier1" or "OSR"))
-            report = report with { Outcome = "tier-unavailable",
-                Detail = "the requested tier was not observed; retained actual compilations" };
-        if (source?.EventsLost > 0) report = report with { Outcome = "incomplete", Detail = "runtime diagnostic events were lost" };
-        try { ComparisonDirectory.Delete(root); }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+        {
+            report = report with
+            {
+                Outcome = "tier-unavailable",
+                Detail = "the requested tier was not observed; retained actual compilations",
+            };
+        }
+
+        if (source?.EventsLost > 0)
+        {
+            report = report with { Outcome = "incomplete", Detail = "runtime diagnostic events were lost" };
+        }
+
+        try
+        {
+            ComparisonDirectory.Delete(root);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
+
         return report;
     }
 
@@ -297,7 +444,11 @@ public static class ProcessNativeRunner
         var runtime = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
         var root = Directory.GetParent(runtime)?.Parent?.Parent?.FullName;
         var host = root is null ? "" : Path.Combine(root, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
-        if (!File.Exists(host)) throw new ReplException("cannot locate the dotnet host for this exact CoreCLR installation");
+        if (!File.Exists(host))
+        {
+            throw new ReplException("cannot locate the dotnet host for this exact CoreCLR installation");
+        }
+
         return host;
     }
 
@@ -311,6 +462,7 @@ public static class ProcessNativeRunner
         var count = await stream.ReadAtLeastAsync(buffer.AsMemory(), buffer.Length, throwOnEndOfStream: false).ConfigureAwait(false);
         return Encoding.UTF8.GetString(buffer, 0, count);
     }
+
     private static async Task WriteInputAsync(Stream stream, string input, CancellationToken cancellationToken)
     {
         await using (stream.ConfigureAwait(false))
@@ -330,8 +482,12 @@ public static class ProcessNativeRunner
         }
     }
 
-    private static async Task<string> ReadOutputAsync(StreamReader reader, int limit, TaskCompletionSource overflow,
-        CancellationToken cancellationToken, string? startMarker = null)
+    private static async Task<string> ReadOutputAsync(
+        StreamReader reader,
+        int limit,
+        TaskCompletionSource overflow,
+        CancellationToken cancellationToken,
+        string? startMarker = null)
     {
         using var capturedOutput = reader;
         var output = new NativeOutputBuffer(limit, startMarker);
@@ -342,7 +498,10 @@ public static class ProcessNativeRunner
                 is var count && count != 0)
             {
                 output.Append(buffer.AsSpan(0, count));
-                if (output.Overflowed) overflow.TrySetResult();
+                if (output.Overflowed)
+                {
+                    overflow.TrySetResult();
+                }
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -367,5 +526,4 @@ public static class ProcessNativeRunner
             // The process either has not started or already exited.
         }
     }
-
 }

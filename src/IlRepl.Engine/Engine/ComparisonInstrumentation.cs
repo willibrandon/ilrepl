@@ -1,8 +1,8 @@
 using Mono.Cecil;
 using Mono.Cecil.Cil;
-using CilInstruction = Mono.Cecil.Cil.Instruction;
 using Assembly = System.Reflection.Assembly;
 using AssemblyName = System.Reflection.AssemblyName;
+using CilInstruction = Mono.Cecil.Cil.Instruction;
 using RuntimeGenericAttributes = System.Reflection.GenericParameterAttributes;
 
 namespace IlRepl.Engine;
@@ -12,11 +12,23 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static partial class ComparisonInstrumentation
 {
+    /// <summary>
+    /// Adds a public wrapper beside the target that records the call, its arguments, and its result or exception.
+    /// </summary>
+    /// <param name="writer">The writer for the comparison assembly.</param>
+    /// <param name="target">The selected method under observation, whose body stays as it is.</param>
+    /// <param name="externalVarArg">The external vararg original that the wrapper calls in place of the target, or null.</param>
+    /// <returns>The wrapper, named <c>__ilrepl_observe_</c> plus the target's name and underscores until it is unique.</returns>
     internal static MethodDefinition Wrap(CecilWriter writer, MethodDefinition target, MethodReference? externalVarArg = null)
         => Wrap(writer, target, [], "__ilrepl_observe_" + target.Name, externalVarArg);
 
-    private static MethodDefinition Wrap(CecilWriter writer, MethodDefinition target, TypeReference[] optionalParameters, string name,
-        MethodReference? externalVarArg = null, GenericParameter[]? callerParameters = null)
+    private static MethodDefinition Wrap(
+        CecilWriter writer,
+        MethodDefinition target,
+        TypeReference[] optionalParameters,
+        string name,
+        MethodReference? externalVarArg = null,
+        GenericParameter[]? callerParameters = null)
     {
         var owner = target.DeclaringType;
         while (owner.Methods.Any(method => method.Name == name))
@@ -32,6 +44,7 @@ internal static partial class ComparisonInstrumentation
             CallingConvention = target.CallingConvention == MethodCallingConvention.VarArg
                 ? MethodCallingConvention.Default : target.CallingConvention,
         };
+
         owner.Methods.Add(wrapper);
         foreach (var parameter in target.GenericParameters)
         {
@@ -45,6 +58,7 @@ internal static partial class ComparisonInstrumentation
             {
                 Attributes = parameter.Attributes & ~GenericParameterAttributes.VarianceMask,
             };
+
             wrapper.GenericParameters.Add(copy);
             map.Add(parameter, copy);
         }
@@ -62,7 +76,11 @@ internal static partial class ComparisonInstrumentation
         foreach (var parameter in target.Parameters)
         {
             var copy = new ParameterDefinition(parameter.Name, parameter.Attributes, parameter.ParameterType);
-            if (parameter.HasConstant) copy.Constant = parameter.Constant;
+            if (parameter.HasConstant)
+            {
+                copy.Constant = parameter.Constant;
+            }
+
             wrapper.Parameters.Add(copy);
         }
 
@@ -70,6 +88,7 @@ internal static partial class ComparisonInstrumentation
         {
             wrapper.Parameters.Add(new ParameterDefinition(parameter));
         }
+
         CecilCustomAttributes.CopyMethod(target, wrapper);
 
         for (var index = 0; index < target.GenericParameters.Count; index++)
@@ -336,6 +355,7 @@ internal static partial class ComparisonInstrumentation
                 ExplicitThis = destination.ExplicitThis,
                 CallingConvention = destination.CallingConvention,
             };
+
             foreach (var parameter in destination.Parameters)
             {
                 called.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
@@ -392,6 +412,7 @@ internal static partial class ComparisonInstrumentation
             HandlerEnd = end,
             CatchType = writer.Import(typeof(Exception)),
         });
+
         return wrapper;
     }
 

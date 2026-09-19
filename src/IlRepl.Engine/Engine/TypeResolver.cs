@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Text;
 
 namespace IlRepl.Engine;
 
@@ -7,6 +9,9 @@ namespace IlRepl.Engine;
 /// </summary>
 public sealed partial class TypeResolver : IDisposable
 {
+    /// <summary>
+    /// The namespaces searched, in order, for a type name written without one, and preferred among equally close name suggestions.
+    /// </summary>
     internal static readonly string[] CommonNamespaces =
     [
         "System", "System.Text", "System.Collections.Generic", "System.Collections", "System.IO", "System.Linq",
@@ -141,7 +146,11 @@ public sealed partial class TypeResolver : IDisposable
     /// <param name="image">Its original image.</param>
     internal void AddCaptured(Assembly assembly, byte[] image)
     {
-        if (!_extra.Contains(assembly)) _extra.Insert(0, assembly);
+        if (!_extra.Contains(assembly))
+        {
+            _extra.Insert(0, assembly);
+        }
+
         _images.TryAdd(assembly, image);
         _context.RegisterCaptured(assembly);
     }
@@ -228,7 +237,7 @@ public sealed partial class TypeResolver : IDisposable
     /// <param name="assembly">The assembly.</param>
     /// <param name="image">The bytes read when it was loaded.</param>
     /// <returns>True when the image is known.</returns>
-    public bool TryGetImage(Assembly assembly, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out byte[]? image)
+    public bool TryGetImage(Assembly assembly, [NotNullWhen(true)] out byte[]? image)
     {
         ArgumentNullException.ThrowIfNull(assembly);
         return _images.TryGetValue(assembly, out image);
@@ -267,16 +276,18 @@ public sealed partial class TypeResolver : IDisposable
     }
 
     /// <summary>
-    /// The reflection spelling of an IL type name: nesting with <c>+</c>, and a backslash before
-    /// each character reflection's own name grammar reserves, so a type called <c>Comma,Name</c>
-    /// is looked up as one name and not as a name and an assembly.
+    /// The reflection spelling of an IL type name: nesting with <c>+</c> and reserved characters escaped with a backslash.
     /// </summary>
+    /// <remarks>
+    /// The backslash goes before each character reflection's own name grammar reserves, so a type called <c>Comma,Name</c> is looked up as
+    /// one name and not as a name and an assembly.
+    /// </remarks>
     /// <param name="ilName">The IL name.</param>
     /// <returns>The name for <see cref="Assembly.GetType(string)"/>.</returns>
     public static string ReflectionName(string ilName)
     {
         ArgumentNullException.ThrowIfNull(ilName);
-        var sb = new System.Text.StringBuilder(ilName.Length);
+        var sb = new StringBuilder(ilName.Length);
         foreach (var c in ilName)
         {
             if (c == '/')

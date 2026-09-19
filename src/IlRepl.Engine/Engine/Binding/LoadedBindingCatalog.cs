@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
 using System.Runtime.Loader;
 
 namespace IlRepl.Engine.Binding;
@@ -57,6 +58,7 @@ public sealed class LoadedBindingCatalog
 
                 _ownedReferences[source.Instance] = bindings;
             }
+
             if (!_byName.TryGetValue(source.Name, out var same))
             {
                 same = [];
@@ -78,7 +80,11 @@ public sealed class LoadedBindingCatalog
         {
             foreach (var source in catalog.Sources)
             {
-                if (!combined._byInstance.TryAdd(source.Instance, source)) continue;
+                if (!combined._byInstance.TryAdd(source.Instance, source))
+                {
+                    continue;
+                }
+
                 combined._sources.Add(source);
                 combined._contexts.Add(source.Instance, catalog._contexts[source.Instance]);
                 combined._observedTypes.Add(source.Instance, catalog._observedTypes[source.Instance]);
@@ -252,7 +258,9 @@ public sealed class LoadedBindingCatalog
     }
 
     private TypeSymbol? ResolveTypeReference(
-        AssemblySymbolSource requester, TypeReferenceHandle handle, HashSet<TypeReferenceHandle> parents)
+        AssemblySymbolSource requester,
+        TypeReferenceHandle handle,
+        HashSet<TypeReferenceHandle> parents)
     {
         if (!parents.Add(handle))
         {
@@ -260,7 +268,7 @@ public sealed class LoadedBindingCatalog
         }
 
         if (_observedTypes.TryGetValue(requester.Instance, out var observed)
-            && observed.TryGetValue(System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(handle), out var actual)
+            && observed.TryGetValue(MetadataTokens.GetToken(handle), out var actual)
             && SourceOf(actual) is not null)
         {
             return actual;

@@ -71,6 +71,41 @@ public sealed class SessionTerminalTests
     }
 
     /// <summary>
+    /// A paste into the path dialog lands in the dialog, leaves the source alone, and does not hold back the keys after it.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task SaveDialog_PasteGoesToThePathAndLaterKeysStillArrive()
+    {
+        var token = TestContext.CancellationToken;
+        using var files = new SessionWorkspaceFixture();
+        await using var engine = await SessionWorkspaceFixture.StartAsync(token);
+        PromptState? prompt = null;
+        var adapter = new ScriptedPresentationAdapter(100, 30);
+        await using var terminal = AppTest.Build(engine, new Transcript(), configure: builder => builder.WithPresentation(adapter),
+            onPrompt: value => prompt = value);
+        var run = terminal.RunAsync(token);
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
+        await auto.WaitUntilTextAsync("il[1]>");
+        await auto.TypeAsync("ldc.i4.s 42", ct: token);
+        await auto.Ctrl().KeyAsync(Hex1bKey.S, ct: token);
+        await auto.WaitUntilTextAsync("Save session");
+        await adapter.PasteAsync("pasted-path");
+        await auto.WaitUntilAsync(_ => prompt!.SessionDialog?.Path.Contains("pasted-path", StringComparison.Ordinal) == true);
+        Assert.AreEqual("ldc.i4.s 42", prompt!.Text, "A paste in the path dialog must not edit the source behind it.");
+
+        await auto.KeyAsync(Hex1bKey.Escape, ct: token);
+        await auto.WaitUntilAsync(_ => prompt.SessionDialog is null && !prompt.SessionBusy);
+        await auto.Ctrl().KeyAsync(Hex1bKey.S, ct: token);
+        await auto.WaitUntilTextAsync("Save session");
+        await EnterPathAsync(auto, files.SessionPath, token);
+        await auto.WaitUntilTextAsync("saved session ");
+        await auto.WaitUntilAsync(_ => !prompt.SessionBusy);
+        await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
+        await run.WaitAsync(AppTest.Timeout, token);
+    }
+
+    /// <summary>
     /// The first save requests a path, Escape preserves selection, and the next save reuses its associated path.
     /// </summary>
     [TestMethod]
@@ -159,23 +194,33 @@ public sealed class SessionTerminalTests
         prompt.Invalidate = () =>
         {
             invalidate();
-            if (prompt.Events.Any(item => item.Kind == SubmissionEventKind.SessionDocument)) posted.TrySetResult();
+            if (prompt.Events.Any(item => item.Kind == SubmissionEventKind.SessionDocument))
+            {
+                posted.TrySetResult();
+            }
         };
+
         var armed = 1;
         var frame = 0;
         prompt.DocumentationTargetChanged = (_, _, _) =>
         {
-            if (prompt.SessionDialog is not { Submitted: true } || Volatile.Read(ref armed) == 0) return;
+            if (prompt.SessionDialog is not { Submitted: true } || Volatile.Read(ref armed) == 0)
+            {
+                return;
+            }
+
             if (Interlocked.Increment(ref frame) == 1)
             {
                 // Move past the Enter frame so its pending wake-up cannot conceal a lost completion redraw.
                 invalidate();
                 return;
             }
+
             Interlocked.Exchange(ref armed, 0);
             release.TrySetResult();
             posted.Task.WaitAsync(AppTest.Timeout, token).GetAwaiter().GetResult();
         };
+
         try
         {
             await EnterPathAsync(auto, files.SessionPath, token);
@@ -251,6 +296,7 @@ public sealed class SessionTerminalTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         PromptState? prompt = null;
         await using var terminal = AppTest.Build(engine, new Transcript(), onPrompt: value => prompt = value);
         var run = terminal.RunAsync(token);
@@ -291,6 +337,7 @@ public sealed class SessionTerminalTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         await using var terminal = AppTest.Build(engine, new Transcript());
         var run = terminal.RunAsync(token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
@@ -329,6 +376,7 @@ public sealed class SessionTerminalTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         PromptState? prompt = null;
         var recorder = new FrameRecorder();
         await using var terminal = AppTest.Build(engine, new Transcript(), onPrompt: value => prompt = value,
@@ -350,10 +398,15 @@ public sealed class SessionTerminalTests
             reached.TrySetResult();
             await release.Task.WaitAsync(cancellationToken);
         };
+
         var firstFrame = recorder.Count;
         try
         {
-            if (!save) await auto.KeyAsync(Hex1bKey.DownArrow, ct: token);
+            if (!save)
+            {
+                await auto.KeyAsync(Hex1bKey.DownArrow, ct: token);
+            }
+
             await auto.EnterAsync(ct: token);
             await reached.Task.WaitAsync(AppTest.Timeout, token);
             prompt.Invalidate!.Invoke();
@@ -396,6 +449,7 @@ public sealed class SessionTerminalTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         File.Delete(files.SessionPath);
         Directory.CreateDirectory(files.SessionPath);
         Hex1bApp? app = null;
@@ -449,6 +503,7 @@ public sealed class SessionTerminalTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         Hex1bApp? app = null;
         PromptState? prompt = null;
         await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, new Transcript(),
@@ -486,7 +541,11 @@ public sealed class SessionTerminalTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
         await auto.WaitUntilAsync(_ => app?.FocusedNode is ButtonNode { Label: "Save" });
         await MoveAsync(Hex1bKey.DownArrow, "Discard");
-        if (save) await MoveAsync(Hex1bKey.UpArrow, "Save");
+        if (save)
+        {
+            await MoveAsync(Hex1bKey.UpArrow, "Save");
+        }
+
         await auto.EnterAsync(ct: token);
         await run.WaitAsync(AppTest.Timeout, token);
 
@@ -551,6 +610,7 @@ public sealed class SessionTerminalTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         PromptState? prompt = null;
         await using var terminal = AppTest.Build(engine, new Transcript(), onPrompt: value => prompt = value);
         var run = terminal.RunAsync(token);
@@ -566,6 +626,7 @@ public sealed class SessionTerminalTests
             Action = new SessionAction { Operation = SessionOperation.Capture },
             Editor = engine.Editor,
         }, token);
+
         Assert.IsFalse(current.Dirty);
         Assert.AreEqual(files.SessionPath, current.Path);
         Assert.IsEmpty(current.Document.Entries);

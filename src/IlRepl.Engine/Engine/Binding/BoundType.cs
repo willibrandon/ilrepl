@@ -12,5 +12,9 @@ namespace IlRepl.Engine.Binding;
 /// <param name="RequiredModifiers">The <c>modreq</c> types, in order.</param>
 /// <param name="OptionalModifiers">The <c>modopt</c> types, in order.</param>
 /// <param name="ExactType">The type with its top-level custom modifiers retained in metadata order.</param>
-public sealed record BoundType(TypeSymbol Type, bool Pinned, IReadOnlyList<TypeSymbol> RequiredModifiers,
-    IReadOnlyList<TypeSymbol> OptionalModifiers, TypeSymbol ExactType);
+public sealed record BoundType(
+    TypeSymbol Type,
+    bool Pinned,
+    IReadOnlyList<TypeSymbol> RequiredModifiers,
+    IReadOnlyList<TypeSymbol> OptionalModifiers,
+    TypeSymbol ExactType);

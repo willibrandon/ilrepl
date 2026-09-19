@@ -15,9 +15,18 @@ internal sealed class NativeDiagnosticPort : IDisposable
     internal NativeDiagnosticPort()
     {
         var name = "ijn-" + Guid.NewGuid().ToString("N")[..16];
-        if (OperatingSystem.IsWindows()) { Address = name; return; }
+        if (OperatingSystem.IsWindows())
+        {
+            Address = name;
+            return;
+        }
+
         var root = Path.GetTempPath();
-        if (Encoding.UTF8.GetByteCount(Path.Combine(root, name, "p")) + 1 > 100) root = "/tmp";
+        if (Encoding.UTF8.GetByteCount(Path.Combine(root, name, "p")) + 1 > 100)
+        {
+            root = "/tmp";
+        }
+
         _directory = Path.Combine(root, name);
         Directory.CreateDirectory(_directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         Address = Path.Combine(_directory, "p");
@@ -33,6 +42,9 @@ internal sealed class NativeDiagnosticPort : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (_directory is not null && Directory.Exists(_directory)) Directory.Delete(_directory, recursive: true);
+        if (_directory is not null && Directory.Exists(_directory))
+        {
+            Directory.Delete(_directory, recursive: true);
+        }
     }
 }

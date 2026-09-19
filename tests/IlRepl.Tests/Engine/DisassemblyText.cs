@@ -4,9 +4,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Renders a disassembled method the way the tests want to read it: one line per entry with
-/// the offset in hex, labels bare, block boundaries as their words, and the stack column beside.
+/// Renders a disassembled method the way the tests want to read it, one line per entry.
 /// </summary>
+/// <remarks>
+/// Each line has the offset in hex, labels bare, block boundaries as their words, and the stack column beside.
+/// </remarks>
 internal static class DisassemblyText
 {
     /// <summary>
@@ -33,7 +35,8 @@ internal static class DisassemblyText
     /// <param name="method">The method.</param>
     /// <returns>The texts.</returns>
     public static List<string> Instructions(DisassembledMethod method) =>
-        method.Entries.Where(e => e.Kind is DisassembledEntryKind.Instruction or DisassembledEntryKind.Raw).Select(e => e.DisplayText).ToList();
+        method.Entries.Where(e => e.Kind is DisassembledEntryKind.Instruction or DisassembledEntryKind.Raw).Select(e => e.DisplayText)
+        .ToList();
 
     /// <summary>
     /// The stack column entry for the instruction at an offset.
@@ -46,7 +49,8 @@ internal static class DisassemblyText
         var column = StackAnalysis.Run(method);
         for (var i = 0; i < method.Entries.Count; i++)
         {
-            if (method.Entries[i].Kind is DisassembledEntryKind.Instruction or DisassembledEntryKind.Raw && method.Entries[i].Offset == offset)
+            if (method.Entries[i].Kind is DisassembledEntryKind.Instruction or DisassembledEntryKind.Raw
+                && method.Entries[i].Offset == offset)
             {
                 return column[i]!;
             }

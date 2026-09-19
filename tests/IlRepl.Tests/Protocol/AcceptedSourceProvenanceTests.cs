@@ -39,6 +39,7 @@ public sealed class AcceptedSourceProvenanceTests
             _ => [".class public Fixture {", ".method public static int32 Read() {", "ldc.i4.1", "ret", "}", "}",
                 ".edit int32 Fixture::Read() as Copy {", ".method public static int32 Read() cil managed {"],
         };
+
         foreach (var line in prefix)
         {
             var accepted = await engine.HandleAsync(line, TestContext.CancellationToken);
@@ -57,6 +58,7 @@ public sealed class AcceptedSourceProvenanceTests
             "definition" => [".method void Nothing() {", "ret", "}"],
             _ => [],
         };
+
         foreach (var line in replayLines)
         {
             var accepted = await engine.HandleAsync(line, TestContext.CancellationToken);

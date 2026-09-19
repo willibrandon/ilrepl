@@ -17,13 +17,21 @@ internal sealed partial class ImportedMethodFamily
         && method.GetParameters() is { Length: >= 2 } parameters
         && parameters[0].ParameterType == typeof(string) && parameters[1].ParameterType == typeof(string);
 
-    private MethodDefinition WriteActivation(CecilWriter writer, TypeDefinition owner, Assembly context,
-        MethodReference target, int index)
+    private MethodDefinition WriteActivation(
+        CecilWriter writer,
+        TypeDefinition owner,
+        Assembly context,
+        MethodReference target,
+        int index)
     {
         var wrapper = new MethodDefinition("Activate" + index, CecilMethodAttributes.Assembly | CecilMethodAttributes.Static,
             target.ReturnType);
         owner.Methods.Add(wrapper);
-        foreach (var parameter in target.Parameters) wrapper.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
+        foreach (var parameter in target.Parameters)
+        {
+            wrapper.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
+        }
+
         var translated = new VariableDefinition(writer.Module.TypeSystem.String);
         wrapper.Body.Variables.Add(translated);
         var il = wrapper.Body.GetILProcessor();
@@ -36,8 +44,15 @@ internal sealed partial class ImportedMethodFamily
         }
 
         il.Emit(OpCodes.Ldarg_1);
-        if (target.Parameters.Count == 8) il.Emit(OpCodes.Ldarg_2);
-        else il.Emit(OpCodes.Ldc_I4_0);
+        if (target.Parameters.Count == 8)
+        {
+            il.Emit(OpCodes.Ldarg_2);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+        }
+
         il.Emit(OpCodes.Ldstr, context.FullName!);
         WriteTypeLookupNames(writer, il);
         il.Emit(OpCodes.Call, writer.Import(typeof(CopiedTypeNames).GetMethod(nameof(CopiedTypeNames.TranslateActivation),
@@ -48,12 +63,22 @@ internal sealed partial class ImportedMethodFamily
         il.Emit(OpCodes.Brfalse, original);
         il.Emit(OpCodes.Ldloc, translated);
         il.Emit(OpCodes.Ldc_I4_1);
-        if (target.Parameters.Count == 8) il.Emit(OpCodes.Ldarg_2);
-        else il.Emit(OpCodes.Ldc_I4_0);
+        if (target.Parameters.Count == 8)
+        {
+            il.Emit(OpCodes.Ldarg_2);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+        }
+
         il.Emit(OpCodes.Call, writer.Import(typeof(Type).GetMethod(nameof(Type.GetType), [typeof(string), typeof(bool), typeof(bool)])!));
         if (target.Parameters.Count == 8)
         {
-            foreach (var parameter in wrapper.Parameters.Skip(3)) il.Emit(OpCodes.Ldarg, parameter);
+            foreach (var parameter in wrapper.Parameters.Skip(3))
+            {
+                il.Emit(OpCodes.Ldarg, parameter);
+            }
         }
         else
         {
@@ -61,8 +86,14 @@ internal sealed partial class ImportedMethodFamily
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldnull);
-            if (target.Parameters.Count == 3) il.Emit(OpCodes.Ldarg_2);
-            else il.Emit(OpCodes.Ldnull);
+            if (target.Parameters.Count == 3)
+            {
+                il.Emit(OpCodes.Ldarg_2);
+            }
+            else
+            {
+                il.Emit(OpCodes.Ldnull);
+            }
         }
 
         il.Emit(OpCodes.Call, writer.Import(typeof(Activator).GetMethod(nameof(Activator.CreateInstance),
@@ -85,9 +116,16 @@ internal sealed partial class ImportedMethodFamily
             il.Emit(OpCodes.Ldstr, context.FullName!);
             il.Append(suppliedAssembly);
         }
-        else il.Emit(OpCodes.Ldarg_1);
+        else
+        {
+            il.Emit(OpCodes.Ldarg_1);
+        }
 
-        foreach (var parameter in wrapper.Parameters.Skip(2)) il.Emit(OpCodes.Ldarg, parameter);
+        foreach (var parameter in wrapper.Parameters.Skip(2))
+        {
+            il.Emit(OpCodes.Ldarg, parameter);
+        }
+
         il.Emit(OpCodes.Call, target);
         il.Emit(OpCodes.Ret);
         return wrapper;

@@ -22,7 +22,10 @@ internal sealed class CapturedTextWriter(bool error, Action<string, bool>? outpu
     /// <inheritdoc />
     public override void Write(string? value)
     {
-        if (value is not null) Write(value.AsSpan());
+        if (value is not null)
+        {
+            Write(value.AsSpan());
+        }
     }
 
     /// <inheritdoc />
@@ -35,7 +38,11 @@ internal sealed class CapturedTextWriter(bool error, Action<string, bool>? outpu
                 var length = Math.Min(buffer.Length, 8192);
                 var chunk = buffer[..length].ToString();
                 _text.Append(chunk);
-                if (output is not null && _text.Length > 65536) _text.Remove(0, _text.Length - 65536);
+                if (output is not null && _text.Length > 65536)
+                {
+                    _text.Remove(0, _text.Length - 65536);
+                }
+
                 output?.Invoke(chunk, error);
                 buffer = buffer[length..];
             }
@@ -55,6 +62,9 @@ internal sealed class CapturedTextWriter(bool error, Action<string, bool>? outpu
     /// <inheritdoc />
     public override string ToString()
     {
-        lock (_lock) { return _text.ToString(); }
+        lock (_lock)
+        {
+            return _text.ToString();
+        }
     }
 }

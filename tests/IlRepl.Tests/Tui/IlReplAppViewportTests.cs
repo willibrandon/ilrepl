@@ -8,10 +8,11 @@ using IlRepl.Tui;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// The prompt keeps its caret in view on every frame, not only on the frame a wait happens to
-/// see: the offsets are computed at render time from the caret, so the first frame after any
-/// change is right.
+/// The prompt keeps its caret in view on every frame, not only on the frame a wait happens to see.
 /// </summary>
+/// <remarks>
+/// The offsets are computed at render time from the caret, so the first frame after any change is right.
+/// </remarks>
 [TestClass]
 public sealed class IlReplAppViewportTests
 {
@@ -66,7 +67,8 @@ public sealed class IlReplAppViewportTests
         var start = recorder.Count;
         await AppTest.TypeLinesAsync(auto, s_long[..^1], ct);
         await auto.TypeAsync("}", ct: ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.PromptRow(s, 7) == "  ...> }" && AppTest.CaretAt(s, 8, 7), description: "thirteen lines in eight rows with the caret on the last");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.PromptRow(s, 7) == "  ...> }"
+            && AppTest.CaretAt(s, 8, 7), description: "thirteen lines in eight rows with the caret on the last");
         await auto.WaitUntilAsync(_ => recorder.Since(start).Any(frame => frame.Contains("editing 13 lines") && frame.Contains("  ...> }")),
             description: "the typed frame's presentation filter completed");
         AssertEveryFrameShowsCaret(recorder.Since(start));
@@ -76,8 +78,7 @@ public sealed class IlReplAppViewportTests
     }
 
     /// <summary>
-    /// Moving the caret up through a scrolled buffer keeps it in view on every frame, all the way
-    /// to the first line.
+    /// Moving the caret up through a scrolled buffer keeps it in view on every frame, all the way to the first line.
     /// </summary>
     [TestMethod]
     public async Task CaretMove_MiddleOfDocument_EveryFrameShowsCaret()
@@ -94,14 +95,16 @@ public sealed class IlReplAppViewportTests
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_long[..^1], ct);
         await auto.TypeAsync("}", ct: ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.CaretAt(s, 8, 7), description: "the caret is on the last line");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.CaretAt(s, 8, 7),
+            description: "the caret is on the last line");
         var start = recorder.Count;
         for (var i = 0; i < 12; i++)
         {
             await auto.UpAsync(ct: ct);
         }
 
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.CaretLine(s) == 0, description: "the first line is in view with the caret on it");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.CaretLine(s) == 0,
+            description: "the first line is in view with the caret on it");
         AssertEveryFrameShowsCaret(recorder.Since(start));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -150,7 +153,8 @@ public sealed class IlReplAppViewportTests
         var transcript = new Transcript();
         var recorder = new FrameRecorder();
         var adapter = new ScriptedPresentationAdapter(80, 24);
-        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).AddPresentationFilter(recorder).Build();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter)
+            .AddPresentationFilter(recorder).Build();
         recorder.Terminal = terminal;
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
@@ -159,10 +163,13 @@ public sealed class IlReplAppViewportTests
         var start = recorder.Count;
         var wide = "ldstr \"" + new string('x', 100) + "end\"";
         await adapter.PasteAsync("ldc.i4 1\n" + wide + "\n");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 1).EndsWith("xxxend\"", StringComparison.Ordinal) && AppTest.CaretAt(s, 79, 1), description: "the end of the wide line and the caret are in view");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines")
+            && AppTest.PromptRow(s, 1).EndsWith("xxxend\"", StringComparison.Ordinal) && AppTest.CaretAt(s, 79, 1),
+            description: "the end of the wide line and the caret are in view");
         AssertEveryFrameShowsCaret(recorder.Since(start));
         await auto.HomeAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 1).StartsWith("  ...> ldstr \"xxx", StringComparison.Ordinal) && AppTest.CaretAt(s, 7, 1), description: "Home scrolls back to the start");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 1).StartsWith("  ...> ldstr \"xxx", StringComparison.Ordinal)
+            && AppTest.CaretAt(s, 7, 1), description: "Home scrolls back to the start");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -188,7 +195,9 @@ public sealed class IlReplAppViewportTests
         var start = recorder.Count;
         await AppTest.TypeLinesAsync(auto, block, ct);
         await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.Caret(s) is { } c && AppTest.Row(s, c.Y) == "  ...>   lcd.i4 1" && s.GetCell(9, c.Y).Background is not null, description: "the refused line is in view, selected, with the caret on it");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.Caret(s) is { } c
+            && AppTest.Row(s, c.Y) == "  ...>   lcd.i4 1" && s.GetCell(9, c.Y).Background is not null,
+            description: "the refused line is in view, selected, with the caret on it");
         AssertEveryFrameShowsCaret(recorder.Since(start));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -206,7 +215,8 @@ public sealed class IlReplAppViewportTests
         var transcript = new Transcript();
         var recorder = new FrameRecorder();
         var adapter = new ScriptedPresentationAdapter(100, 30);
-        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).AddPresentationFilter(recorder).Build();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter)
+            .AddPresentationFilter(recorder).Build();
         recorder.Terminal = terminal;
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
@@ -214,10 +224,12 @@ public sealed class IlReplAppViewportTests
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_long[..^1], ct);
         await auto.TypeAsync("}", ct: ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.CaretAt(s, 8, 9), description: "ten rows at thirty lines");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.CaretAt(s, 8, 9),
+            description: "ten rows at thirty lines");
         var start = recorder.Count;
         adapter.Resize(60, 12);
-        await auto.WaitUntilAsync(s => s.Width == 60 && s.Height == 12 && AppTest.PromptRow(s, 3) == "  ...> }" && AppTest.CaretAt(s, 8, 3), description: "four rows at twelve lines, the caret still on the last line");
+        await auto.WaitUntilAsync(s => s.Width == 60 && s.Height == 12 && AppTest.PromptRow(s, 3) == "  ...> }" && AppTest.CaretAt(s, 8, 3),
+            description: "four rows at twelve lines, the caret still on the last line");
         AssertEveryFrameShowsCaret(DrawnAt(recorder.Since(start), 60, 12));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -225,8 +237,7 @@ public sealed class IlReplAppViewportTests
     }
 
     /// <summary>
-    /// Growing the terminal shows more of the buffer and keeps the caret in view on every frame
-    /// drawn at the new size.
+    /// Growing the terminal shows more of the buffer and keeps the caret in view on every frame drawn at the new size.
     /// </summary>
     [TestMethod]
     public async Task Resize_Grow_EveryFrameShowsCaret()
@@ -236,7 +247,8 @@ public sealed class IlReplAppViewportTests
         var transcript = new Transcript();
         var recorder = new FrameRecorder();
         var adapter = new ScriptedPresentationAdapter(60, 12);
-        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter).AddPresentationFilter(recorder).Build();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript).WithPresentation(adapter)
+            .AddPresentationFilter(recorder).Build();
         recorder.Terminal = terminal;
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
@@ -244,10 +256,12 @@ public sealed class IlReplAppViewportTests
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, s_long[..^1], ct);
         await auto.TypeAsync("}", ct: ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.CaretAt(s, 8, 3), description: "four rows at twelve lines");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.CaretAt(s, 8, 3),
+            description: "four rows at twelve lines");
         var start = recorder.Count;
         adapter.Resize(100, 40);
-        await auto.WaitUntilAsync(s => s.Width == 100 && s.Height == 40 && AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.CaretAt(s, 8, 12), description: "all thirteen lines fit and the caret is on the last");
+        await auto.WaitUntilAsync(s => s.Width == 100 && s.Height == 40 && AppTest.PromptRow(s, 0) == "il[1]> .method void F() {"
+            && AppTest.CaretAt(s, 8, 12), description: "all thirteen lines fit and the caret is on the last");
         AssertEveryFrameShowsCaret(DrawnAt(recorder.Since(start), 100, 40));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -270,7 +284,9 @@ public sealed class IlReplAppViewportTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync(".method void F() {\n  ldstr \"héllo wörld\"\n\tpop\n  ret\n}");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 5 lines") && AppTest.PromptRow(s, 1) == "  ...>   ldstr \"héllo wörld\"" && AppTest.PromptRow(s, 2).EndsWith("pop", StringComparison.Ordinal) && AppTest.CaretAt(s, 8, 4), description: "every line is beside its gutter");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 5 lines") && AppTest.PromptRow(s, 1) == "  ...>   ldstr \"héllo wörld\""
+            && AppTest.PromptRow(s, 2).EndsWith("pop", StringComparison.Ordinal) && AppTest.CaretAt(s, 8, 4),
+            description: "every line is beside its gutter");
         using var snapshot = terminal.CreateSnapshot();
         var top = AppTest.PromptTop(snapshot);
         for (var i = 0; i < 5; i++)
@@ -312,9 +328,13 @@ public sealed class IlReplAppViewportTests
             && AppTest.PromptTop(s) == 6 && s.GetLine(5).StartsWith("───", StringComparison.Ordinal) && AppTest.CaretAt(s, 8, 2),
             description: "three editor rows above the status bar, the separator above them");
         using var snapshot = terminal.CreateSnapshot();
-        Assert.IsTrue(snapshot.GetLine(1).StartsWith("il[1]> nop", StringComparison.Ordinal) || snapshot.GetLine(0).Contains("il[1]> nop", StringComparison.Ordinal) || snapshot.GetLine(2).StartsWith("il[1]> nop", StringComparison.Ordinal), "the transcript keeps the rows above the separator:\n" + snapshot.GetText());
+        Assert.IsTrue(snapshot.GetLine(1).StartsWith("il[1]> nop", StringComparison.Ordinal)
+            || snapshot.GetLine(0).Contains("il[1]> nop", StringComparison.Ordinal)
+            || snapshot.GetLine(2).StartsWith("il[1]> nop", StringComparison.Ordinal),
+            "the transcript keeps the rows above the separator:\n" + snapshot.GetText());
         Assert.IsFalse(snapshot.ContainsText("opcodes"), "no palette on a small screen");
-        Assert.IsTrue(snapshot.GetLine(9).Contains("Enter sends 6 lines", StringComparison.Ordinal), "what Enter does is the hint that fits: " + snapshot.GetLine(9));
+        Assert.IsTrue(snapshot.GetLine(9).Contains("Enter sends 6 lines", StringComparison.Ordinal),
+            "what Enter does is the hint that fits: " + snapshot.GetLine(9));
         AssertEveryFrameShowsCaret(recorder.Since(start));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -338,15 +358,19 @@ public sealed class IlReplAppViewportTests
         string[] block = [".method void F() {", .. Enumerable.Range(1, 10).Select(i => $"ldc.i4 {i}"), "ret"];
         await AppTest.TypeLinesAsync(auto, block, ct);
         await auto.TypeAsync("}", ct: ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.PromptRow(s, 0) == "  ...>   ldc.i4 5" && AppTest.CaretAt(s, 8, 7), description: "the buffer is scrolled to its last eight lines");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 13 lines") && AppTest.PromptRow(s, 0) == "  ...>   ldc.i4 5"
+            && AppTest.CaretAt(s, 8, 7), description: "the buffer is scrolled to its last eight lines");
         using (var before = terminal.CreateSnapshot())
         {
             await auto.ClickAtAsync(14, AppTest.PromptTop(before) + 2, ct: ct);
         }
 
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "  ...>   ldc.i4 5" && AppTest.CaretAt(s, 14, 2) && AppTest.PromptRow(s, 2) == "  ...>   ldc.i4 7", description: "the caret is on the seventh value, where the click landed, and nothing scrolled");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "  ...>   ldc.i4 5" && AppTest.CaretAt(s, 14, 2)
+            && AppTest.PromptRow(s, 2) == "  ...>   ldc.i4 7",
+            description: "the caret is on the seventh value, where the click landed, and nothing scrolled");
         await auto.TypeAsync("0", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...>   ldc.i04 7", description: "typing goes where the click put the caret");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...>   ldc.i04 7",
+            description: "typing goes where the click put the caret");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -356,7 +380,8 @@ public sealed class IlReplAppViewportTests
     // be the old layout cropped. A frame the app drew at the new size has the status bar, with
     // the hint that names what Enter does, on the new last row.
     private static List<Frame> DrawnAt(IReadOnlyList<Frame> frames, int width, int height) =>
-        frames.Where(f => f.Width == width && f.Height == height && f.Lines[^1].TrimEnd().EndsWith("lines", StringComparison.Ordinal)).ToList();
+        frames.Where(f => f.Width == width && f.Height == height && f.Lines[^1].TrimEnd().EndsWith("lines", StringComparison.Ordinal))
+        .ToList();
 
     private static void AssertEveryFrameShowsCaret(IReadOnlyList<Frame> frames)
     {
@@ -383,18 +408,22 @@ public sealed class IlReplAppViewportTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync("ldstr \"" + new string('漢', 45) + "\"");
-        await auto.WaitUntilAsync(s => AppTest.Caret(s) is { } c && c.Y == AppTest.PromptTop(s) && c.X > 7 && s.GetCell(c.X - 1, c.Y).Character == "\"", description: "the caret cell follows the closing quote, in view");
+        await auto.WaitUntilAsync(s => AppTest.Caret(s) is { } c && c.Y == AppTest.PromptTop(s) && c.X > 7
+            && s.GetCell(c.X - 1, c.Y).Character == "\"", description: "the caret cell follows the closing quote, in view");
         await auto.HomeAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldstr \"漢", StringComparison.Ordinal) && AppTest.CaretAt(s, 7, 0), description: "Home scrolls back to the start");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldstr \"漢", StringComparison.Ordinal)
+            && AppTest.CaretAt(s, 7, 0), description: "Home scrolls back to the start");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
 
     /// <summary>
-    /// A line of emoji scrolls by whole characters: nothing renders as a replacement glyph, the
-    /// caret's cell is in view, and a click on either cell of an emoji puts the caret before it.
+    /// A line of emoji scrolls by whole characters, and a click on either cell of an emoji puts the caret before it.
     /// </summary>
+    /// <remarks>
+    /// Nothing renders as a replacement glyph, and the caret's cell is in view.
+    /// </remarks>
     [TestMethod]
     public async Task Paste_Emoji_ScrollsWholeCharactersAndClicksLand()
     {
@@ -403,14 +432,17 @@ public sealed class IlReplAppViewportTests
         var transcript = new Transcript();
         var adapter = new ScriptedPresentationAdapter(80, 24);
         PromptState? prompt = null;
-        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, onPrompt: p => prompt = p).WithPresentation(adapter).WithMouse().Build();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, onPrompt: p => prompt = p)
+            .WithPresentation(adapter).WithMouse().Build();
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
 
         await auto.WaitUntilTextAsync("il[1]>");
         var text = "ldstr \"" + string.Concat(Enumerable.Repeat("😀", 40)) + "\"";
         await adapter.PasteAsync(text);
-        await auto.WaitUntilAsync(s => AppTest.Caret(s) is { } c && c.Y == AppTest.PromptTop(s) && s.GetCell(c.X - 1, c.Y).Character == "\"" && s.GetCell(7, c.Y).Character == "😀", description: "the row starts on a whole emoji and the caret follows the quote");
+        await auto.WaitUntilAsync(s => AppTest.Caret(s) is { } c && c.Y == AppTest.PromptTop(s)
+            && s.GetCell(c.X - 1, c.Y).Character == "\"" && s.GetCell(7, c.Y).Character == "😀",
+            description: "the row starts on a whole emoji and the caret follows the quote");
         Assert.DoesNotContain("\uFFFD", terminal.CreateSnapshot().GetText(), "no replacement glyph");
 
         // The last emoji takes the two cells before the quote; a click on either puts the caret
@@ -426,9 +458,12 @@ public sealed class IlReplAppViewportTests
             }
 
             await auto.ClickAtAsync(x, y, ct: ct);
-            await auto.WaitUntilAsync(s => prompt!.Editor.Cursor.Position.Value == lastEmoji && AppTest.Caret(s) is { } c && c.Y == y && s.GetCell(c.X, c.Y).Character == "😀" && s.GetCell(c.X + 2, c.Y).Character == "\"", description: "the caret sits on the last emoji's first cell");
+            await auto.WaitUntilAsync(s => prompt!.Editor.Cursor.Position.Value == lastEmoji && AppTest.Caret(s) is { } c && c.Y == y
+                && s.GetCell(c.X, c.Y).Character == "😀" && s.GetCell(c.X + 2, c.Y).Character == "\"",
+                description: "the caret sits on the last emoji's first cell");
             await auto.EndAsync(ct: ct);
-            await auto.WaitUntilAsync(s => prompt!.Editor.Cursor.Position.Value == text.Length && AppTest.Caret(s) is { } c && s.GetCell(c.X - 1, c.Y).Character == "\"", description: "End returns the caret, on screen too, to the end of the line");
+            await auto.WaitUntilAsync(s => prompt!.Editor.Cursor.Position.Value == text.Length && AppTest.Caret(s) is { } c
+                && s.GetCell(c.X - 1, c.Y).Character == "\"", description: "End returns the caret, on screen too, to the end of the line");
         }
 
         Assert.DoesNotContain("\uFFFD", terminal.CreateSnapshot().GetText(), "still no replacement glyph");
@@ -438,10 +473,11 @@ public sealed class IlReplAppViewportTests
     }
 
     /// <summary>
-    /// The scrolled left edge is a character index chosen for the caret's line; on another line
-    /// it may fall inside an emoji. Each row starts on a whole character of its own, and a click
-    /// on that row lands on the line it shows.
+    /// The scrolled left edge is a character index chosen for the caret's line; on another line it may fall inside an emoji.
     /// </summary>
+    /// <remarks>
+    /// Each row starts on a whole character of its own, and a click on that row lands on the line it shows.
+    /// </remarks>
     [TestMethod]
     public async Task Paste_EmojiOnAnotherLine_StartsOnWholeCharacters()
     {
@@ -450,7 +486,8 @@ public sealed class IlReplAppViewportTests
         var transcript = new Transcript();
         var adapter = new ScriptedPresentationAdapter(80, 24);
         PromptState? prompt = null;
-        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, onPrompt: p => prompt = p).WithPresentation(adapter).WithMouse().Build();
+        await using var terminal = IlReplApp.Configure(Hex1bTerminal.CreateBuilder(), engine, transcript, onPrompt: p => prompt = p)
+            .WithPresentation(adapter).WithMouse().Build();
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
 
@@ -458,7 +495,10 @@ public sealed class IlReplAppViewportTests
         // The second line is one column wider than the text area, so the left edge moves to
         // character index one, which on the first line is inside the emoji.
         await adapter.PasteAsync("😀 nop\n" + new string('x', 73));
-        await auto.WaitUntilAsync(s => AppTest.CaretLine(s) == 1 && AppTest.PromptRow(s, 0).StartsWith("il[1]> 😀 nop", StringComparison.Ordinal) && s.GetCell(7, AppTest.PromptTop(s)).Character == "😀", description: "the first row starts on the whole emoji while the caret's line is scrolled");
+        await auto.WaitUntilAsync(s => AppTest.CaretLine(s) == 1
+            && AppTest.PromptRow(s, 0).StartsWith("il[1]> 😀 nop", StringComparison.Ordinal)
+            && s.GetCell(7, AppTest.PromptTop(s)).Character == "😀",
+            description: "the first row starts on the whole emoji while the caret's line is scrolled");
         Assert.DoesNotContain("\uFFFD", terminal.CreateSnapshot().GetText(), "no replacement glyph");
 
         int top;
@@ -468,16 +508,19 @@ public sealed class IlReplAppViewportTests
         }
 
         await auto.ClickAtAsync(7, top, ct: ct);
-        await auto.WaitUntilAsync(_ => prompt!.CaretLine == 1 && prompt.Editor.Cursor.Position.Value <= 2, description: "a click on the emoji's row puts the caret on that line, at the emoji");
+        await auto.WaitUntilAsync(_ => prompt!.CaretLine == 1 && prompt.Editor.Cursor.Position.Value <= 2,
+            description: "a click on the emoji's row puts the caret on that line, at the emoji");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
 
     /// <summary>
-    /// A line of decomposed accents is many characters but few cells: it fits, so the whole line
-    /// stays in view with the opcode at the left and the caret after the quote.
+    /// A line of decomposed accents is many characters but few cells: it fits, so the whole line stays in view.
     /// </summary>
+    /// <remarks>
+    /// The opcode is at the left and the caret is after the quote.
+    /// </remarks>
     [TestMethod]
     public async Task Paste_DecomposedAccents_StaysFullyVisible()
     {
@@ -491,9 +534,13 @@ public sealed class IlReplAppViewportTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync("ldstr \"" + string.Concat(Enumerable.Repeat("e\u0301", 60)) + "\"");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldstr \"e", StringComparison.Ordinal) && AppTest.Caret(s) is { } c && c.Y == AppTest.PromptTop(s) && s.GetCell(c.X - 1, c.Y).Character == "\"" && c.X == 7 + 68, description: "the whole line is in view with the caret after the quote");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldstr \"e", StringComparison.Ordinal)
+            && AppTest.Caret(s) is { } c && c.Y == AppTest.PromptTop(s) && s.GetCell(c.X - 1, c.Y).Character == "\"" && c.X == 7 + 68,
+            description: "the whole line is in view with the caret after the quote");
         await auto.HomeAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 7, 0) && AppTest.PromptRow(s, 0).StartsWith("il[1]> ldstr", StringComparison.Ordinal), description: "Home keeps the line where it is");
+        await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 7, 0)
+            && AppTest.PromptRow(s, 0).StartsWith("il[1]> ldstr", StringComparison.Ordinal),
+            description: "Home keeps the line where it is");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -515,7 +562,9 @@ public sealed class IlReplAppViewportTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await adapter.PasteAsync("ldstr \"" + string.Concat(Enumerable.Repeat("👩\u200D💻", 40)) + "\"");
-        await auto.WaitUntilAsync(s => AppTest.Caret(s) is { } c && c.Y == AppTest.PromptTop(s) && s.GetCell(c.X - 1, c.Y).Character == "\"" && s.GetCell(7, c.Y).Character.StartsWith("👩", StringComparison.Ordinal), description: "the row starts on a whole joined emoji and the caret follows the quote");
+        await auto.WaitUntilAsync(s => AppTest.Caret(s) is { } c && c.Y == AppTest.PromptTop(s)
+            && s.GetCell(c.X - 1, c.Y).Character == "\"" && s.GetCell(7, c.Y).Character.StartsWith("👩", StringComparison.Ordinal),
+            description: "the row starts on a whole joined emoji and the caret follows the quote");
         Assert.DoesNotContain("\uFFFD", terminal.CreateSnapshot().GetText(), "no replacement glyph");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);

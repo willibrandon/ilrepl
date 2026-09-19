@@ -11,4 +11,8 @@ namespace IlRepl.Repl;
 /// <param name="Document">The complete immutable document and selected generic anchors.</param>
 /// <param name="Site">The syntax-defined completion site.</param>
 internal sealed record CompletionQueryIdentity(
-    Guid Session, long Revision, long BindingEpoch, CompletionDocumentKey Document, CompletionSite Site);
+    Guid Session,
+    long Revision,
+    long BindingEpoch,
+    CompletionDocumentKey Document,
+    CompletionSite Site);

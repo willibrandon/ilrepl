@@ -28,8 +28,12 @@ public sealed class NativeCompletionTests
         Submit(core, ".method int32 Value(int32 value) { ldarg.0; ret }",
             ".method int32 'My Scenario'() { ldc.i4.s 42; call Value; ret }",
             ".method int32 'My Needs Argument'(int32 value) { ldarg.0; ret }");
-        if (nativeDiff) Submit(core, ".edit Value as Copy {", ".method public static int32 Value(int32 value) cil managed {",
-            "ldarg.0", "ret", "}", "}");
+        if (nativeDiff)
+        {
+            Submit(core, ".edit Value as Copy {", ".method public static int32 Value(int32 value) cil managed {",
+                "ldarg.0", "ret", "}", "}");
+        }
+
         await using var engine = new InProcessEngine(core);
         var start = (nativeDiff ? ".diff Copy --native" : ".jit Value") + " using ";
         var source = start + "MySuffix --tier tier1";
@@ -112,7 +116,9 @@ public sealed class NativeCompletionTests
     private static void Submit(ReplCore core, params string[] source)
     {
         foreach (var line in IlLines.Expand(source))
+        {
             Assert.IsTrue(core.Handle(line).Succeeded, line + "\n"
                 + string.Join('\n', core.Transcript.Lines.Select(item => item.PlainText)));
+        }
     }
 }

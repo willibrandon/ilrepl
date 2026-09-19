@@ -20,7 +20,11 @@ internal static partial class CopiedTypeNames
     /// <returns>The translated name, or the original input when it cannot be parsed.</returns>
     internal static string? Translate(string? name, bool ignoreCase, string context, string[] names, bool preserveAssemblies)
     {
-        if (name is null || !TypeName.TryParse(name.AsSpan(), out var parsed)) return name;
+        if (name is null || !TypeName.TryParse(name.AsSpan(), out var parsed))
+        {
+            return name;
+        }
+
         return TranslateType(parsed, ignoreCase, context, names, preserveAssemblies).AssemblyQualifiedName;
     }
 
@@ -33,7 +37,11 @@ internal static partial class CopiedTypeNames
     /// <returns>The translated name without an outer assembly qualifier, or the unchanged invalid input.</returns>
     internal static string? TranslateScoped(string? name, bool ignoreCase, string[] names)
     {
-        if (name is null || !TypeName.TryParse(name.AsSpan(), out var parsed) || parsed.AssemblyName is not null) return name;
+        if (name is null || !TypeName.TryParse(name.AsSpan(), out var parsed) || parsed.AssemblyName is not null)
+        {
+            return name;
+        }
+
         return TranslateType(parsed, ignoreCase, null, names, false).FullName;
     }
 
@@ -42,8 +50,16 @@ internal static partial class CopiedTypeNames
         if (type.IsArray || type.IsPointer || type.IsByRef)
         {
             var element = TranslateType(type.GetElementType(), ignoreCase, context, names, preserveAssemblies);
-            if (type.IsSZArray) return element.MakeSZArrayTypeName();
-            if (type.IsArray) return element.MakeArrayTypeName(type.GetArrayRank());
+            if (type.IsSZArray)
+            {
+                return element.MakeSZArrayTypeName();
+            }
+
+            if (type.IsArray)
+            {
+                return element.MakeArrayTypeName(type.GetArrayRank());
+            }
+
             return type.IsPointer ? element.MakePointerTypeName() : element.MakeByRefTypeName();
         }
 
@@ -59,12 +75,20 @@ internal static partial class CopiedTypeNames
             return definition.MakeGenericTypeName(ImmutableArray.Create(arguments));
         }
 
-        if (preserveAssemblies && type.AssemblyName is not null) return type;
+        if (preserveAssemblies && type.AssemblyName is not null)
+        {
+            return type;
+        }
+
         var comparison = ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         string? match = null;
         for (var index = 0; index < names.Length; index += 3)
         {
-            if (!string.Equals(type.FullName, names[index], comparison)) continue;
+            if (!string.Equals(type.FullName, names[index], comparison))
+            {
+                continue;
+            }
+
             var assembly = type.AssemblyName;
             if (assembly is null ? context is not null && names[index + 1] != context
                 : !AssemblyName.ReferenceMatchesDefinition(new AssemblyName(assembly.FullName), new AssemblyName(names[index + 1])))
@@ -72,13 +96,24 @@ internal static partial class CopiedTypeNames
                 continue;
             }
 
-            if (assembly?.Version is { } version && version > new AssemblyName(names[index + 1]).Version) continue;
+            if (assembly?.Version is { } version && version > new AssemblyName(names[index + 1]).Version)
+            {
+                continue;
+            }
 
-            if (match is not null && match != names[index + 2]) throw new AmbiguousMatchException();
+            if (match is not null && match != names[index + 2])
+            {
+                throw new AmbiguousMatchException();
+            }
+
             match = names[index + 2];
         }
 
-        if (match is null) return type;
+        if (match is null)
+        {
+            return type;
+        }
+
         var result = TypeName.Parse(match.AsSpan());
         return preserveAssemblies ? result.WithAssemblyName(null) : result;
     }

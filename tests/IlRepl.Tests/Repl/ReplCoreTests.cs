@@ -142,7 +142,9 @@ public sealed class ReplCoreTests
 
         core.Handle(".time on");
         core.Handle("ret");
-        Assert.Contains(l => l.Kind == LineKind.Result && (l.PlainText.Contains("ms", StringComparison.Ordinal) || l.PlainText.Contains("µs", StringComparison.Ordinal)), core.Transcript.Lines);
+        Assert.Contains(l => l.Kind == LineKind.Result
+            && (l.PlainText.Contains("ms", StringComparison.Ordinal) || l.PlainText.Contains("µs", StringComparison.Ordinal)),
+            core.Transcript.Lines);
 
         core.Handle(".quiet on");
         core.Handle("ldc.i4 3");
@@ -214,8 +216,7 @@ public sealed class ReplCoreTests
     }
 
     /// <summary>
-    /// A comment inside an open method or class is ignored rather than reported as a blank line
-    /// that cannot run while the block is open.
+    /// A comment inside an open method or class is ignored rather than reported as a blank line that cannot run while the block is open.
     /// </summary>
     [TestMethod]
     public void Handle_CommentOnlyLine_InsideBlock_Succeeds()
@@ -234,8 +235,7 @@ public sealed class ReplCoreTests
     }
 
     /// <summary>
-    /// A blank line inside an open block comment is part of the comment, and text after the
-    /// closing delimiter is handled.
+    /// A blank line inside an open block comment is part of the comment, and text after the closing delimiter is handled.
     /// </summary>
     [TestMethod]
     public void Handle_BlankLineInsideBlockComment_DoesNotRun()
@@ -371,7 +371,28 @@ public sealed class ReplCoreTests
     public void Handle_Il_HasNoErrorSpan()
     {
         var core = new ReplCore();
-        foreach (var line in new[] { ".locals init (int32 i)", ".method int32 F(int32 n) {", ".locals init (int32 r)", ".try {", "ldarg n", "stloc r", "leave END", "} catch [System.Runtime]System.Exception {", "pop", "ldc.i4 0", "stloc r", "leave END", "}", "END: ldloc r", "ret", "}", "ldc.i4 1", "stloc i", ".il" })
+        foreach (var line in new[]
+        {
+            ".locals init (int32 i)",
+            ".method int32 F(int32 n) {",
+            ".locals init (int32 r)",
+            ".try {",
+            "ldarg n",
+            "stloc r",
+            "leave END",
+            "} catch [System.Runtime]System.Exception {",
+            "pop",
+            "ldc.i4 0",
+            "stloc r",
+            "leave END",
+            "}",
+            "END: ldloc r",
+            "ret",
+            "}",
+            "ldc.i4 1",
+            "stloc i",
+            ".il",
+        })
         {
             Assert.IsTrue(core.Handle(line).Succeeded, line);
         }
@@ -380,13 +401,16 @@ public sealed class ReplCoreTests
         Assert.IsGreaterThan(10, listing.Count);
         Assert.Contains(l => l.Spans.Contains(new TranscriptSpan(".assembly", SpanStyle.Directive)), listing);
         Assert.Contains(l => l.Spans.Contains(new TranscriptSpan("managed", SpanStyle.Keyword)), listing);
-        Assert.DoesNotContain(l => l.Spans.Any(s => s.Style == SpanStyle.Error), listing, string.Join("\n", listing.Where(l => l.Spans.Any(s => s.Style == SpanStyle.Error)).Select(l => l.PlainText)));
+        Assert.DoesNotContain(l => l.Spans.Any(s => s.Style == SpanStyle.Error), listing,
+            string.Join("\n", listing.Where(l => l.Spans.Any(s => s.Style == SpanStyle.Error)).Select(l => l.PlainText)));
     }
 
     /// <summary>
-    /// A header whose brace comes on the next line has opened nothing yet: the depth counts
-    /// braces the session has seen, so an editor adding the brace itself reaches zero at the close.
+    /// A header whose brace comes on the next line has opened nothing yet.
     /// </summary>
+    /// <remarks>
+    /// The depth counts braces the session has seen, so an editor adding the brace itself reaches zero at the close.
+    /// </remarks>
     [TestMethod]
     public void Handle_HeaderWithoutBrace_OpenDepthCountsFromTheBrace()
     {
@@ -419,8 +443,7 @@ public sealed class ReplCoreTests
     }
 
     /// <summary>
-    /// A refused line changes nothing, the block comment it opened included, so the corrected
-    /// line that follows is read as code.
+    /// A refused line changes nothing, the block comment it opened included, so the corrected line that follows is read as code.
     /// </summary>
     [TestMethod]
     public void Handle_RefusedLine_LeavesNoCommentOpen()

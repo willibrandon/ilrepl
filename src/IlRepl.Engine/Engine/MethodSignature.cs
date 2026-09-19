@@ -1,11 +1,14 @@
+using System.Reflection;
 using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
 
 /// <summary>
-/// The name, return type, and parameters of a method defined with <c>.method</c>. Calls resolve
-/// against it before the method exists as a builder, so nothing here reflects over emitted code.
+/// The name, return type, and parameters of a method defined with <c>.method</c>.
 /// </summary>
+/// <remarks>
+/// Calls resolve against it before the method exists as a builder, so nothing here reflects over emitted code.
+/// </remarks>
 /// <param name="Name">The method name.</param>
 /// <param name="ReturnType">The return type; <c>void</c> when the method returns nothing.</param>
 /// <param name="Parameters">The parameters in order. Names are optional and values are unused.</param>
@@ -22,20 +25,20 @@ public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList
     internal TypeSymbol? ExactReturnType { get; init; }
 
     /// <summary>
-    /// The method attributes as declared: access, <c>static</c>, <c>virtual</c>, and the rest. A
-    /// session method is public and static.
+    /// The method attributes as declared: access, <c>static</c>, <c>virtual</c>, and the rest. A session method is public and static.
     /// </summary>
-    public System.Reflection.MethodAttributes Attributes { get; init; } = System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static;
+    public MethodAttributes Attributes { get; init; } = MethodAttributes.Public
+        | MethodAttributes.Static;
 
     /// <summary>
     /// The implementation attributes: <c>noinlining</c>, <c>synchronized</c>, and the rest.
     /// </summary>
-    public System.Reflection.MethodImplAttributes ImplAttributes { get; init; }
+    public MethodImplAttributes ImplAttributes { get; init; }
 
     /// <summary>
     /// The calling convention; <c>vararg</c> for a vararg member.
     /// </summary>
-    public System.Reflection.CallingConventions CallingConvention { get; init; } = System.Reflection.CallingConventions.Standard;
+    public CallingConventions CallingConvention { get; init; } = CallingConventions.Standard;
 
     /// <summary>
     /// The <c>modreq</c> types on the return type.
@@ -65,7 +68,7 @@ public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList
     /// <summary>
     /// True for a static method.
     /// </summary>
-    public bool IsStatic => Attributes.HasFlag(System.Reflection.MethodAttributes.Static);
+    public bool IsStatic => Attributes.HasFlag(MethodAttributes.Static);
 
     /// <summary>
     /// Renders a member the way a listing shows it: <c>instance int32 Sum()</c>, <c>static int32 Make(int32)</c>.
@@ -102,6 +105,7 @@ public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList
                 : SymbolRenderer.Annotated(parameter.ExactType);
             return (type + " " + (parameter.Name ?? "")).TrimEnd();
         });
+
         return $"{returnType} {Name}({string.Join(", ", parameters)})";
     }
 }

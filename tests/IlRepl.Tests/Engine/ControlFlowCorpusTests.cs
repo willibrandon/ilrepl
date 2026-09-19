@@ -70,6 +70,7 @@ public sealed class ControlFlowCorpusTests
         {
             verification = oracle.Verify(original).ToArray();
         }
+
         TestContext.WriteLine($"{name}: {string.Join(", ", verification)}");
         var expected = example.Verification.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         Assert.AreSequenceEqual(expected.Order(),
@@ -80,12 +81,14 @@ public sealed class ControlFlowCorpusTests
                 preview.Diagnostics.Any(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Unverifiable),
                 string.Join("; ", preview.Diagnostics.Select(diagnostic => diagnostic.Message)));
         }
+
         if (name == "PointerFieldArithmetic")
         {
             var diagnostics = preview.Diagnostics.Where(diagnostic => diagnostic.Code == "FLOW007").ToArray();
             Assert.HasCount(1, diagnostics);
             Assert.AreEqual(Array.IndexOf(lines, "add"), diagnostics[0].Location.Line);
         }
+
         if (name == "InheritedFieldsBeforeBaseCall")
         {
             var diagnostics = preview.Diagnostics.Where(diagnostic => diagnostic.Code == "FLOW007").ToArray();
@@ -93,6 +96,7 @@ public sealed class ControlFlowCorpusTests
             Assert.AreSequenceEqual(["ldfld", "ldflda", "stfld"], diagnostics.Select(diagnostic =>
                 diagnostic.Message.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0]));
         }
+
         if (name == "InitOnlyFieldAddresses")
         {
             var diagnostics = preview.Diagnostics.Where(diagnostic => diagnostic.Code == "FLOW007").ToArray();
@@ -100,6 +104,7 @@ public sealed class ControlFlowCorpusTests
             Assert.AreSequenceEqual(["ldflda", "ldsflda"], diagnostics.Select(diagnostic =>
                 diagnostic.Message.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0]));
         }
+
         if (refusal is not null)
         {
             Assert.Contains(example.Finding, refusal.Message);
@@ -134,6 +139,7 @@ public sealed class ControlFlowCorpusTests
                     var edit = exported.PrepareEdit("ExportRendererWitness", "ExportRendererCopy");
                     exported.CommitEdit(edit.Name, edit.Source);
                 }
+
                 Add(exported, "ldc.i4 " + example.Input, example.Call);
                 var identity = edited ? "edited" : "text";
                 var saved = AssemblyExporter.Write(exported, "FlowExport");
@@ -182,6 +188,7 @@ public sealed class ControlFlowCorpusTests
             Assert.AreEqual("ILVerification could not finish the fixture: " + example.VerificationFailure, error.Message);
             return;
         }
+
         var actual = oracle.Verify(image).Select(code => code.ToString()).Distinct().Order();
         var expected = (example.ExportVerification ?? example.Verification)
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Order();
@@ -204,6 +211,7 @@ public sealed class ControlFlowCorpusTests
         {
             ".locals init (method int32 *(int32) pointer)", "ldftn int32 Id(int32)", "stloc pointer", "ldloc pointer", "ret",
         };
+
         using var editing = new EditingSession(session);
         var preview = await editing.AnalyzeAsync(new AnalysisRequest(lines, 4, 3, 1), TestContext.CancellationToken);
         Assert.DoesNotContain(diagnostic => diagnostic.Kind is AnalysisDiagnosticKind.Error

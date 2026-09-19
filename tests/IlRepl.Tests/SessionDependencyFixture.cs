@@ -173,9 +173,13 @@ internal sealed class SessionDependencyFixture : IDisposable
         var source = configuration.Root!.Element("packageSources")!.Element("add")!;
         source.SetAttributeValue("value", feed.Source);
         source.SetAttributeValue("allowInsecureConnections", "true");
-        if (credentials) configuration.Root.Add(new XElement("packageSourceCredentials", new XElement("local",
-            new XElement("add", new XAttribute("key", "Username"), new XAttribute("value", feed.Username)),
-            new XElement("add", new XAttribute("key", "ClearTextPassword"), new XAttribute("value", feed.Password)))));
+        if (credentials)
+        {
+            configuration.Root.Add(new XElement("packageSourceCredentials", new XElement("local",
+                new XElement("add", new XAttribute("key", "Username"), new XAttribute("value", feed.Username)),
+                new XElement("add", new XAttribute("key", "ClearTextPassword"), new XAttribute("value", feed.Password)))));
+        }
+
         configuration.Save(path);
     }
 

@@ -17,7 +17,11 @@ internal static class LifetimeSupervisorProgram
     {
         if (OperatingSystem.IsWindows() || args.Length != 5
             || !long.TryParse(args[2], out var epoch) || !int.TryParse(args[3], out var frontendId)
-            || !long.TryParse(args[4], out var frontendStart)) return 64;
+            || !long.TryParse(args[4], out var frontendStart))
+        {
+            return 64;
+        }
+
         using var measurements = new ProcessMeasurements("supervisor");
         Console.CancelKeyPress += (_, eventArgs) => eventArgs.Cancel = true;
         var secret = Environment.GetEnvironmentVariable("ILREPL_SUPERVISOR_HANDSHAKE")
@@ -29,8 +33,14 @@ internal static class LifetimeSupervisorProgram
         using var rpc = new JsonRpc(RpcTransport.CreateHandler(connection, connection));
         rpc.AddLocalRpcTarget(RpcTargetMetadata.FromShape<ISupervisorService>(), service, null);
         rpc.StartListening();
-        try { await rpc.Completion.ConfigureAwait(false); }
-        catch (Exception exception) when (exception is IOException or OperationCanceledException) { }
+        try
+        {
+            await rpc.Completion.ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException)
+        {
+        }
+
         service.PreserveOnDispose = OwnedProcessGroup.IsRunning(new OwnedProcessScope("frontend", frontendId, frontendStart, null));
         return 0;
     }

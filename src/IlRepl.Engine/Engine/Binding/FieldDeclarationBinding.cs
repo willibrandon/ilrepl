@@ -64,6 +64,7 @@ public static class FieldDeclarationBinding
                 "privatescope" => FieldAttributes.PrivateScope,
                 _ => null,
             };
+
             if (access is { } a)
             {
                 if (accessSeen)

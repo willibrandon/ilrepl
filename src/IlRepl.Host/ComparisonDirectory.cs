@@ -11,8 +11,14 @@ internal static class ComparisonDirectory
     /// <param name="path">The unique worker-owned temporary directory.</param>
     internal static void Create(string path)
     {
-        if (OperatingSystem.IsWindows()) Directory.CreateDirectory(path);
-        else Directory.CreateDirectory(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        if (OperatingSystem.IsWindows())
+        {
+            Directory.CreateDirectory(path);
+        }
+        else
+        {
+            Directory.CreateDirectory(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     /// <summary>

@@ -77,6 +77,7 @@ public static partial class BrowserWorkspace
                     Action = new SessionAction { Operation = SessionOperation.Hydrate, Force = true, Path = InitialPath() },
                     Document = SupplyBundledAssets(document), Editor = document.Editor, AnnounceOpen = InitialAnnounceOpen(),
                 }, CancellationToken.None).ConfigureAwait(false);
+
                 StartupMessages = opened.Reply.Lines;
             }
             catch (Exception exception) when (source.StartsWith('#')
@@ -101,6 +102,7 @@ public static partial class BrowserWorkspace
             s_checkpoint = document;
             PublishedAssets.UnionWith(document.Assets.Select(asset => asset.Hash));
         };
+
         controller.EditorChanged = editor =>
         {
             var serialized = JsonSerializer.Serialize(editor, SessionJsonContext.Default.SessionEditor);
@@ -110,6 +112,7 @@ public static partial class BrowserWorkspace
                 EditorChanged(serialized);
             }
         };
+
         controller.ExternalActionAsync = async (request, cancellationToken) =>
         {
             var document = request.Document!;
@@ -130,8 +133,13 @@ public static partial class BrowserWorkspace
                         "  browser downloads include available dependency images; --embed is already applied", SpanStyle.Dim));
                 }
 
-                return new SessionReply { Document = document, Path = path, Dirty = false,
-                    Reply = new HandleReply(true, false, [.. lines], controller.Status) };
+                return new SessionReply
+                {
+                    Document = document,
+                    Path = path,
+                    Dirty = false,
+                    Reply = new HandleReply(true, false, [.. lines], controller.Status),
+                };
             }
 
             if (request.Action.Operation == SessionOperation.Restart)
@@ -145,9 +153,13 @@ public static partial class BrowserWorkspace
             {
                 await PageAction("run", Encoding.UTF8.GetString(SessionCodec.Write(document)),
                     string.Join(' ', request.Action.Numbers)).WaitAsync(cancellationToken).ConfigureAwait(false);
-                return new SessionReply { Document = document, Reply = new HandleReply(true, false,
-                    [TranscriptLine.Of(LineKind.Info, "  starting a fresh runtime to run the saved source", SpanStyle.Dim)],
-                    controller.Status) };
+                return new SessionReply
+                {
+                    Document = document,
+                    Reply = new HandleReply(true, false,
+                        [TranscriptLine.Of(LineKind.Info, "  starting a fresh runtime to run the saved source", SpanStyle.Dim)],
+                        controller.Status),
+                };
             }
 
             if (request.Action.Operation == SessionOperation.Open)
@@ -164,6 +176,7 @@ public static partial class BrowserWorkspace
 
             return null;
         };
+
         await controller.SessionAsync(new SessionRequest
         {
             Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = controller.Editor,
@@ -204,8 +217,10 @@ public static partial class BrowserWorkspace
                         {
                             barrier.TrySetResult(prompt.CaptureSessionEditor());
                         }
+
                         break;
                 }
+
                 return true;
             }
 
@@ -258,11 +273,13 @@ public static partial class BrowserWorkspace
                 barrier.TrySetCanceled();
                 throw new InvalidOperationException("the editor did not respond; wait for the current operation or restart the session");
             }
+
             if (s_prompt?.Submission is { } submission)
             {
                 await submission.Completion.ConfigureAwait(false);
             }
         }
+
         if (operation == "validate")
         {
             if (!value.StartsWith('#') && Encoding.UTF8.GetByteCount(value) > BrowserFileLimit)
@@ -286,6 +303,7 @@ public static partial class BrowserWorkspace
                 Action = new SessionAction { Operation = SessionOperation.AcknowledgeSave, Path = path },
                 Document = downloaded, Editor = controller.Editor,
             }, CancellationToken.None).ConfigureAwait(false);
+
             return "";
         }
 
@@ -305,6 +323,7 @@ public static partial class BrowserWorkspace
                 {
                     Action = new SessionAction { Operation = SessionOperation.Run, Numbers = numbers }, Editor = controller.Editor,
                 }, CancellationToken.None).ConfigureAwait(false);
+
                 s_prompt?.Post(new SubmissionEvent(SubmissionEventKind.SessionDocument, result.Reply.Lines)
                 {
                     SessionEditor = result.Reply.SessionEditor,
@@ -327,6 +346,7 @@ public static partial class BrowserWorkspace
         {
             Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = controller.Editor,
         }, CancellationToken.None).ConfigureAwait(false);
+
         if (operation == "share")
         {
             return SessionCodec.Share(captured.Document, value);
@@ -360,9 +380,19 @@ public static partial class BrowserWorkspace
 
     [JSImport("checkpoint", "main.js")]
     [return: JSMarshalAs<JSType.Promise<JSType.Void>>]
-    private static partial Task Checkpoint(string document, string? path, bool dirty, bool echoStack, bool showTiming,
-        int pendingSubmission, string pendingSource, int entryPrefix, string cellNumbers, string assetHashes,
-        string pendingInput, string editor);
+    private static partial Task Checkpoint(
+        string document,
+        string? path,
+        bool dirty,
+        bool echoStack,
+        bool showTiming,
+        int pendingSubmission,
+        string pendingSource,
+        int entryPrefix,
+        string cellNumbers,
+        string assetHashes,
+        string pendingInput,
+        string editor);
 
     [JSImport("editorChanged", "main.js")]
     private static partial void EditorChanged(string editor);

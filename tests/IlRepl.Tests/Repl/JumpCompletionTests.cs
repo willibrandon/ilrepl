@@ -94,9 +94,21 @@ public sealed class JumpCompletionTests
         var member = generic ? "static !!0 Target<T>(!!0 value)" : "instance int32 Target(int32 value)";
         var source = concrete ? "static int32 Bridge<U>(int32 value)"
             : generic ? "static !!0 Bridge<U>(!!0 value)" : "instance int32 Bridge(int32 value)";
-        var lines = new[] { ".class public JumpHost {", ".method public instance void .ctor() {",
-            "ldarg.0", "call instance void Object::.ctor()", "ret", "}", ".method public " + member + " {",
-            generic ? "ldarg.0" : "ldarg.1", "ret", "}", ".method public " + source + " {" };
+        var lines = new[]
+        {
+            ".class public JumpHost {",
+            ".method public instance void .ctor() {",
+            "ldarg.0",
+            "call instance void Object::.ctor()",
+            "ret",
+            "}",
+            ".method public " + member + " {",
+            generic ? "ldarg.0" : "ldarg.1",
+            "ret",
+            "}",
+            ".method public " + source + " {",
+        };
+
         var prefix = concrete ? "jmp JumpHost::Target<int32>" : generic ? "jmp JumpHost::Target<!!0>" : "jmp JumpHost::Tar";
         using var completer = new OperandCompleter(session);
         if (generic)
@@ -135,8 +147,17 @@ public sealed class JumpCompletionTests
     public async Task Complete_GenericJump_RejectsIncompatibleInstantiation()
     {
         using var completer = new OperandCompleter(new Session());
-        var lines = new[] { ".class public JumpHost {", ".method public static !!0 Target<T>(!!0 value) {",
-            "ldarg.0", "ret", "}", ".method public static !!0 Bridge<U>(!!0 value) {", "jmp JumpHost::Target<string>" };
+        var lines = new[]
+        {
+            ".class public JumpHost {",
+            ".method public static !!0 Target<T>(!!0 value) {",
+            "ldarg.0",
+            "ret",
+            "}",
+            ".method public static !!0 Bridge<U>(!!0 value) {",
+            "jmp JumpHost::Target<string>",
+        };
+
         var reply = await completer.CompleteAsync(new CompletionRequest(lines, lines.Length - 1, lines[^1].Length, null, []),
             TestContext.CancellationToken);
         Assert.IsEmpty(reply.Items);

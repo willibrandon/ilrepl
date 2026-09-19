@@ -105,7 +105,9 @@ public sealed class CompletionRequester
         }
 
         if (_acceptance is { } acceptance && (!acceptance.Matches(CurrentKey(state)) || state.PaletteDismissed))
+        {
             _acceptance = null;
+        }
 
         var revision = _engine.Status.Revision;
         var assemblyVersion = _engine.AssemblyVersion;
@@ -143,6 +145,7 @@ public sealed class CompletionRequester
         {
             state.PendingDisplay = null;
         }
+
         if (!key.Site.IsOperand)
         {
             Cancel(state);
@@ -218,7 +221,11 @@ public sealed class CompletionRequester
     internal void QueueAcceptance(PromptState state, CompletionItem item)
     {
         var displayed = state.Completions ?? state.PendingDisplay;
-        if (displayed is null || !CanRebind(state, displayed, item)) return;
+        if (displayed is null || !CanRebind(state, displayed, item))
+        {
+            return;
+        }
+
         var current = CurrentKey(state);
         _acceptance = new CompletionAcceptance(current, item);
         Refresh(state);
@@ -302,8 +309,14 @@ public sealed class CompletionRequester
             if (selection.Matches(CurrentKey(state)))
             {
                 var index = snapshot.Visible().ToList().FindIndex(selection.Selects);
-                if (index >= 0) state.SelectedIndex = index;
-                else state.DetailScroll = 0;
+                if (index >= 0)
+                {
+                    state.SelectedIndex = index;
+                }
+                else
+                {
+                    state.DetailScroll = 0;
+                }
             }
         }
 
@@ -323,16 +336,22 @@ public sealed class CompletionRequester
         if (_acceptance is { } acceptance)
         {
             if (!acceptance.Matches(CurrentKey(state)))
+            {
                 _acceptance = null;
+            }
             else if (snapshot.Reply.Items.FirstOrDefault(acceptance.Selects) is { } selected)
             {
                 _acceptance = null;
                 CompletionEdit.Accept(state, selected);
             }
             else if (reply.Cursor is not null)
+            {
                 state.MoreCompletions = true;
+            }
             else
+            {
                 _acceptance = null;
+            }
         }
     }
 
@@ -344,7 +363,11 @@ public sealed class CompletionRequester
 
     private void CancelCore(PromptState state, bool retainAcceptance)
     {
-        if (!retainAcceptance) _acceptance = null;
+        if (!retainAcceptance)
+        {
+            _acceptance = null;
+        }
+
         CancelPending();
         LastAnswered = null;
         state.Completions = null;
@@ -417,6 +440,7 @@ public sealed class CompletionRequester
             // that prefix, so let it decide this uncertain site; a real comment receives no rows.
             site = _classifier.Classify(state.CurrentLine, caret, false);
         }
+
         var request = new CompletionRequest(state.Text.Split('\n'), line, caret, null, state.Anchors.Snapshot(), state.ExplicitCompletion);
         _current = new CompletionRequestKey(new CompletionDocumentKey(request), document.Version, _engine.Status.Revision,
             site, selection, state.Anchors.Version) { AssemblyVersion = _engine.AssemblyVersion };
@@ -491,6 +515,7 @@ public sealed class CompletionRequester
         {
             state.Post(SubmissionEvent.Completion(result));
         }
+
         state.Invalidate?.Invoke();
     }
 

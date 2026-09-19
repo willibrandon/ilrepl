@@ -27,12 +27,20 @@ public sealed class IncrementalReturnTests
     {
         using var core = new ReplCore();
         var session = core.Session;
-        if (method) session.AddLine(".method int32 Answer() {");
+        if (method)
+        {
+            session.AddLine(".method int32 Answer() {");
+        }
+
         Add(session, "ldc.i4.s 40", "ldc.i4.2", "add");
         var result = AppendAndCompare(session.State);
         Assert.AreSequenceEqual<int>([2], result.Before[^2]!.Values!.Single().Origins);
         Assert.AreEqual(2, result.MaxStack);
-        if (method) Add(session, "}", "call int32 Answer()");
+        if (method)
+        {
+            Add(session, "}", "call int32 Answer()");
+        }
+
         Assert.AreEqual(42, session.Run().Value);
     }
 
@@ -48,7 +56,11 @@ public sealed class IncrementalReturnTests
         using var core = new ReplCore();
         var session = core.Session;
         Add(session, ".method void Empty() {", "nop");
-        if (unreachable) session.AddLine("ret");
+        if (unreachable)
+        {
+            session.AddLine("ret");
+        }
+
         var result = AppendAndCompare(session.State);
         Assert.AreEqual(unreachable, result.Before[^2] is null);
         Assert.IsNull(result.End);
@@ -124,12 +136,20 @@ public sealed class IncrementalReturnTests
     {
         using var core = new ReplCore();
         var session = core.Session;
-        if (method) session.AddLine(".method int32 Answer() {");
+        if (method)
+        {
+            session.AddLine(".method int32 Answer() {");
+        }
+
         Add(session, "ldc.i4.s 42", "ldc.i4.1");
         AssertFallback(session.State, method ? "exactly one int32" : "stack must hold 0 or 1 value");
         session.AddLine("pop");
         AppendAndCompare(session.State);
-        if (method) Add(session, "}", "call int32 Answer()");
+        if (method)
+        {
+            Add(session, "}", "call int32 Answer()");
+        }
+
         Assert.AreEqual(42, session.Run().Value);
     }
 
@@ -181,6 +201,7 @@ public sealed class IncrementalReturnTests
                 Assert.IsNull(right);
                 continue;
             }
+
             Assert.IsNotNull(right);
             Assert.AreEqual(left.Kind, right.Kind);
             Assert.AreEqual(left.ThisArgumentIsOriginal, right.ThisArgumentIsOriginal);
@@ -228,6 +249,9 @@ public sealed class IncrementalReturnTests
 
     private static void Add(Session session, params string[] lines)
     {
-        foreach (var line in lines) session.AddLine(line);
+        foreach (var line in lines)
+        {
+            session.AddLine(line);
+        }
     }
 }

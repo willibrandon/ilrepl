@@ -106,8 +106,14 @@ public sealed class SessionDocumentTests
 
         var exception = Assert.ThrowsExactly<ReplException>(() =>
         {
-            if (run) _ = core.RunSession(new SessionDocument(), [], CancellationToken.None);
-            else _ = core.ReopenSession(new SessionDocument());
+            if (run)
+            {
+                _ = core.RunSession(new SessionDocument(), [], CancellationToken.None);
+            }
+            else
+            {
+                _ = core.ReopenSession(new SessionDocument());
+            }
         });
 
         Assert.Contains("requires a fresh execution host", exception.Message);
@@ -209,6 +215,7 @@ public sealed class SessionDocumentTests
         {
             Action = new SessionAction { Operation = SessionOperation.Cell, Numbers = [1] },
         }, token);
+
         Assert.IsNotNull(recalled.Reply.SessionEditor);
         Assert.AreSequenceEqual(expected.Split('\n'), recalled.Reply.SessionEditor.Lines);
         await using var fresh = new InProcessEngine();
@@ -658,8 +665,14 @@ public sealed class SessionDocumentTests
     public void Handle_CommentsAndStringLiteralsDoNotRequestSessionActions()
     {
         using var core = new ReplCore();
-        foreach (var source in new[] { "// .session open stolen.ilrepl.json", "/*", ".save hidden.ilrepl.json", "*/",
-            "ldstr \".session open text.ilrepl.json\"" })
+        foreach (var source in new[]
+        {
+            "// .session open stolen.ilrepl.json",
+            "/*",
+            ".save hidden.ilrepl.json",
+            "*/",
+            "ldstr \".session open text.ilrepl.json\"",
+        })
         {
             var reply = core.Handle(source);
             Assert.IsTrue(reply.Succeeded, Transcript(core));
@@ -708,8 +721,16 @@ public sealed class SessionDocumentTests
         Assert.AreEqual(SessionOperation.Run, selected.SessionAction.Operation);
         Assert.AreSequenceEqual([2, 3, 4, 7], selected.SessionAction.Numbers);
 
-        foreach (var command in new[] { ".session run 0", ".session run 3-2", ".session run 2 1-3", ".session cell 1-2",
-            ".session save a b", ".session open", ".session run --force" })
+        foreach (var command in new[]
+        {
+            ".session run 0",
+            ".session run 3-2",
+            ".session run 2 1-3",
+            ".session cell 1-2",
+            ".session save a b",
+            ".session open",
+            ".session run --force",
+        })
         {
             var rejected = core.Handle(command);
             Assert.IsFalse(rejected.Succeeded, command);

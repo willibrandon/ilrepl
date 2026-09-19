@@ -22,7 +22,10 @@ public static class ConcurrentCollectionComparisonExamples
         var entries = new Dictionary<string, int>(StringComparer.Ordinal);
         var length = edited && count == 0 ? 1 : count;
         for (var index = 0; index < length; index++)
+        {
             entries.Add(Keys[index], 42 + index + (edited && index == length - 1 ? 1 : 0));
+        }
+
         return entries;
     }
 
@@ -47,6 +50,7 @@ public static class ConcurrentCollectionComparisonExamples
             source += "dup\nldstr \"" + key + "\"\nldc.i4 " + value.ToString(CultureInfo.InvariantCulture)
                 + "\ncallvirt instance bool " + dictionary + "::TryAdd(string, int32)\npop\n";
         }
+
         return source + "ret\n}";
     }
 }

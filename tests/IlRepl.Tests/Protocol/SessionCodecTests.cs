@@ -181,6 +181,7 @@ public sealed class SessionCodecTests
             TypeAliases = new() { ["Owner"] = "Example.Owner, Example" },
             MethodAliases = new() { ["PreviousEdit"] = MethodIdentityExample() with { Token = 0x06000003 } },
         };
+
         var document = EditDocument(snapshot);
 
         var reopened = SessionCodec.Read(SessionCodec.Write(document));
@@ -273,6 +274,7 @@ public sealed class SessionCodecTests
             "method-argument-empty" => original with { MethodArguments = ["\t"] },
             _ => original,
         };
+
         var valid = EditSnapshot() with { Original = identity };
         var snapshot = invalid switch
         {
@@ -304,11 +306,17 @@ public sealed class SessionCodecTests
         {
             Interruptions =
             [
-                new() { Identity = "attempt-one", Number = 7, Source = ["  call Slow", "", "ret"],
-                    Extensions = new() { ["future"] = JsonSerializer.SerializeToElement("retained") } },
+                new()
+                {
+                    Identity = "attempt-one",
+                    Number = 7,
+                    Source = ["  call Slow", "", "ret"],
+                    Extensions = new() { ["future"] = JsonSerializer.SerializeToElement("retained") },
+                },
                 new() { Identity = "attempt-two", Number = 7, Source = [".compare Copy ()"] },
             ],
         };
+
         var file = SessionCodec.Read(SessionCodec.Write(document));
         var url = SessionCodec.Share(document, "https://example.test/demo");
         foreach (var reopened in new[] { file, SessionCodec.ReadFragment(url[url.IndexOf('#')..]) })
@@ -358,6 +366,7 @@ public sealed class SessionCodecTests
             "line-return" => original with { Source = ["nop\rret"] },
             _ => original,
         };
+
         var document = new SessionDocument
         {
             Interruptions = invalid == "collection-null" ? null! : invalid == "duplicate" ? [original, original] : [interruption!],
@@ -378,6 +387,7 @@ public sealed class SessionCodecTests
         {
             Interruptions = [template.Interruptions[0] with { Source = [new string('a', limit - overhead)] }],
         };
+
         var fragment = SessionCodec.Share(Sized(SessionCodec.FragmentDocumentLimit), "https://example.test/demo");
         var reopened = SessionCodec.ReadFragment(fragment[fragment.IndexOf('#')..]);
         Assert.AreEqual(SessionCodec.FragmentDocumentLimit - overhead, reopened.Interruptions[0].Source[0].Length);
@@ -399,6 +409,7 @@ public sealed class SessionCodecTests
             IlreplVersion = "9.8.7", Framework = "net8.0", Description = ".NET 8.0.1", Rid = "osx-arm64",
             OperatingSystem = "author system", Architecture = "Arm64", Culture = "ja-JP",
         };
+
         var document = new SessionDocument { Runtime = recorded, Entries = [new() { Source = ["ldc.i4 42"] }] };
         using var core = new ReplCore();
         Assert.IsEmpty(core.ReopenSession(SessionCodec.Read(SessionCodec.Write(document))));
@@ -447,6 +458,7 @@ public sealed class SessionCodecTests
             "baseline-missing" => original with { BaselineReference = "unknown" },
             _ => original,
         };
+
         var document = EditDocument(snapshot);
         if (invalid == "baseline-origin")
         {
@@ -571,6 +583,7 @@ public sealed class SessionCodecTests
             "cell" => document with { Cells = [document.Cells[0] with { Source = [line!] }] },
             _ => document with { Cells = [document.Cells[0] with { Inputs = [line!] }] },
         };
+
         var error = Assert.ThrowsExactly<InvalidDataException>(() => SessionCodec.Validate(invalid));
         Assert.Contains("physical lines", error.Message);
     }
@@ -637,6 +650,7 @@ public sealed class SessionCodecTests
             "framework-null" => document with { References = [reference with { Frameworks = [null!] }] },
             _ => document with { Entries = [new() { Kind = SessionEntryKind.Reference, Reference = "absent" }] },
         };
+
         Assert.ThrowsExactly<InvalidDataException>(() => SessionCodec.Validate(invalid));
     }
 
@@ -667,6 +681,7 @@ public sealed class SessionCodecTests
                 _ => [asset with { Hash = "abcd" }],
             },
         };
+
         Assert.ThrowsExactly<InvalidDataException>(() => SessionCodec.Validate(invalid));
     }
 
@@ -884,26 +899,47 @@ public sealed class SessionCodecTests
         {
             ["future"] = JsonSerializer.SerializeToElement(new { value = "keep", items = (int[])[1, 2] }),
         };
+
         var hash = SessionCodec.Hash([1, 2, 3, 4]);
         return new SessionDocument
         {
             Runtime = new() { Framework = "net10.0", Rid = "linux-x64", Culture = "en-US", Extensions = fields },
             Entries =
             [
-                new() { Identity = "source-7", Number = 7, Source = ["  // café λ", "ldstr \"hello\\nworld\"", "", "ret"],
-                    Extensions = fields },
+                new()
+                {
+                    Identity = "source-7",
+                    Number = 7,
+                    Source = ["  // café λ", "ldstr \"hello\\nworld\"", "", "ret"],
+                    Extensions = fields,
+                },
             ],
             Cells =
             [
-                new() { Identity = "cell-7", Number = 7, Source = ["ldarg n", "ret"], Inputs = [".args (int32 n = 42)"],
-                    State = "succeeded", Output = [new(LineKind.Result, [new("= 42 : int32", SpanStyle.Number)])], Extensions = fields },
+                new()
+                {
+                    Identity = "cell-7",
+                    Number = 7,
+                    Source = ["ldarg n", "ret"],
+                    Inputs = [".args (int32 n = 42)"],
+                    State = "succeeded",
+                    Output = [new(LineKind.Result, [new("= 42 : int32", SpanStyle.Number)])],
+                    Extensions = fields,
+                },
             ],
             Editor = new() { Lines = ["  ldc.i4", ""], Caret = 9, Anchor = 2, Revision = 17, Extensions = fields },
             References =
             [
-                new() { Identity = "reference-one", Origin = "package", Request = "Fixture", RequestedVersion = "[1.2.3]",
-                    Version = "1.2.3", Assets = [new() { Name = "Fixture", Hash = hash, Path = "lib/fixture.dll", Extensions = fields }],
-                    Extensions = fields },
+                new()
+                {
+                    Identity = "reference-one",
+                    Origin = "package",
+                    Request = "Fixture",
+                    RequestedVersion = "[1.2.3]",
+                    Version = "1.2.3",
+                    Assets = [new() { Name = "Fixture", Hash = hash, Path = "lib/fixture.dll", Extensions = fields }],
+                    Extensions = fields,
+                },
             ],
             Assets = [new() { Hash = hash, Image = [1, 2, 3, 4], Extensions = fields }],
             PackageLock = "{\"version\":1}",

@@ -88,8 +88,11 @@ public sealed class MethodEditAccessibilityTests
         session.AddLine("call Scenario");
         Assert.AreEqual("second", session.Run().Value);
         session.AddLine("call Scenario");
-        foreach (var image in new[] { AssemblyExporter.Write(session, "nested-generic-edit"),
-            IlasmLocator.Assemble(session.ToIlAsm()) })
+        foreach (var image in new[]
+        {
+            AssemblyExporter.Write(session, "nested-generic-edit"),
+            IlasmLocator.Assemble(session.ToIlAsm()),
+        })
         {
             var context = new AssemblyLoadContext("nested-generic-edit-" + Guid.NewGuid(), isCollectible: true);
             try
@@ -174,8 +177,11 @@ public sealed class MethodEditAccessibilityTests
 
     private static void AssertExports(Session session, MethodEdit edit, int expected, bool isPrivate, bool nestedPrivate)
     {
-        foreach (var image in new[] { AssemblyExporter.Write(session, "edit-accessibility"),
-            IlasmLocator.Assemble(session.ToIlAsm()) })
+        foreach (var image in new[]
+        {
+            AssemblyExporter.Write(session, "edit-accessibility"),
+            IlasmLocator.Assemble(session.ToIlAsm()),
+        })
         {
             var context = new AssemblyLoadContext("edit-accessibility-" + Guid.NewGuid(), isCollectible: true);
             try

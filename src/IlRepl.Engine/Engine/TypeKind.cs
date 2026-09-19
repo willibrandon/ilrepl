@@ -1,8 +1,7 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// What kind of type a <c>.class</c> block declares, decided the way ILAsm decides it: by the
-/// <c>interface</c> word or the base type.
+/// What kind of type a <c>.class</c> block declares, decided the way ILAsm decides it: by the <c>interface</c> word or the base type.
 /// </summary>
 public enum TypeKind
 {

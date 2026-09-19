@@ -3,9 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for <c>.override</c> in both places: inside a method, naming the slot the method fills,
-/// and at class level, naming the slot and the method that fills it.
+/// Tests for <c>.override</c> in both places, inside a method and at class level.
 /// </summary>
+/// <remarks>
+/// Inside a method it names the slot the method fills. At class level it names the slot and the method that fills it.
+/// </remarks>
 [TestClass]
 public sealed class OverrideParserTests
 {
@@ -32,7 +34,8 @@ public sealed class OverrideParserTests
     public void ParseInBody_ShortAndLongForms()
     {
         var method = Member("public virtual instance string Describe() {");
-        var shortForm = OverrideParser.ParseInBody("[System.Runtime]System.Object::ToString", Context, method, ".override [System.Runtime]System.Object::ToString");
+        var shortForm = OverrideParser.ParseInBody("[System.Runtime]System.Object::ToString", Context, method,
+            ".override [System.Runtime]System.Object::ToString");
         Assert.AreEqual(typeof(object).GetMethod("ToString"), shortForm.Target);
         var longForm = OverrideParser.ParseInBody("method instance string [System.Runtime]System.Object::ToString()", Context, method, "");
         Assert.AreEqual(shortForm.Target, longForm.Target);
@@ -48,13 +51,26 @@ public sealed class OverrideParserTests
     public void ParseInBody_ChecksTargetAndMethod()
     {
         var describe = Member("public virtual instance string Describe() {");
-        Assert.Contains("is not virtual", Assert.ThrowsExactly<ReplException>(() => OverrideParser.ParseInBody("method instance class [System.Runtime]System.Type [System.Runtime]System.Object::GetType()", Context, describe, "")).Message);
+        Assert.Contains("is not virtual",
+            Assert.ThrowsExactly<ReplException>(
+                () => OverrideParser.ParseInBody(
+                    "method instance class [System.Runtime]System.Type [System.Runtime]System.Object::GetType()", Context, describe, ""))
+                    .Message);
         var plain = Member("public instance string Describe() {");
-        Assert.Contains("must be virtual", Assert.ThrowsExactly<ReplException>(() => OverrideParser.ParseInBody("[System.Runtime]System.Object::ToString", Context, plain, "")).Message);
+        Assert.Contains("must be virtual",
+            Assert.ThrowsExactly<ReplException>(() => OverrideParser.ParseInBody("[System.Runtime]System.Object::ToString", Context, plain,
+            "")).Message);
         var wrongShape = Member("public virtual instance int32 Describe() {");
-        Assert.Contains("does not match", Assert.ThrowsExactly<ReplException>(() => OverrideParser.ParseInBody("method instance string [System.Runtime]System.Object::ToString()", Context, wrongShape, "")).Message);
-        Assert.Contains("belongs at class level", Assert.ThrowsExactly<ReplException>(() => OverrideParser.ParseInBody("[System.Runtime]System.Object::ToString with method instance string Point::Describe()", Context, describe, "")).Message);
-        Assert.Contains("usage: .override T::M", Assert.ThrowsExactly<ReplException>(() => OverrideParser.ParseInBody("ToString", Context, describe, "")).Message);
+        Assert.Contains("does not match",
+            Assert.ThrowsExactly<ReplException>(
+                () => OverrideParser.ParseInBody("method instance string [System.Runtime]System.Object::ToString()", Context, wrongShape,
+                "")).Message);
+        Assert.Contains("belongs at class level",
+            Assert.ThrowsExactly<ReplException>(
+                () => OverrideParser.ParseInBody("[System.Runtime]System.Object::ToString with method instance string Point::Describe()",
+                Context, describe, "")).Message);
+        Assert.Contains("usage: .override T::M",
+            Assert.ThrowsExactly<ReplException>(() => OverrideParser.ParseInBody("ToString", Context, describe, "")).Message);
     }
 
     /// <summary>
@@ -64,14 +80,21 @@ public sealed class OverrideParserTests
     public void ParseAtClassLevel_RecordsTargetAndBody()
     {
         var context = new ParseContext([], [], GenericContext.Empty, new TypeResolver(), []);
-        var declaration = OverrideParser.ParseAtClassLevel("method instance string [System.Runtime]System.Object::ToString() with method instance string Point::Describe()", context, "");
+        var declaration =
+            OverrideParser.ParseAtClassLevel(
+                "method instance string [System.Runtime]System.Object::ToString() with method instance string Point::Describe()", context,
+                "");
         Assert.AreEqual(typeof(object).GetMethod("ToString"), declaration.Target);
         Assert.AreEqual("Describe", declaration.BodyName);
         Assert.AreEqual(typeof(string), declaration.BodyReturnType);
         Assert.IsEmpty(declaration.BodyParameterTypes);
         Assert.IsFalse(declaration.BodyIsStatic);
-        Assert.Contains("belongs inside the method", Assert.ThrowsExactly<ReplException>(() => OverrideParser.ParseAtClassLevel("[System.Runtime]System.Object::ToString", context, "")).Message);
-        Assert.Contains("names a method of this type", Assert.ThrowsExactly<ReplException>(() => OverrideParser.ParseAtClassLevel("[System.Runtime]System.Object::ToString with Describe", context, "")).Message);
+        Assert.Contains("belongs inside the method",
+            Assert.ThrowsExactly<ReplException>(() => OverrideParser.ParseAtClassLevel("[System.Runtime]System.Object::ToString", context,
+            "")).Message);
+        Assert.Contains("names a method of this type",
+            Assert.ThrowsExactly<ReplException>(
+                () => OverrideParser.ParseAtClassLevel("[System.Runtime]System.Object::ToString with Describe", context, "")).Message);
     }
 
     /// <summary>
@@ -97,7 +120,8 @@ public sealed class OverrideParserTests
         Assert.AreEqual(typeof(object).GetMethod("ToString"), type.Methods[0].Overrides[0].Target);
         Assert.AreEqual(typeof(object).GetMethod("GetHashCode"), type.Overrides[0].Target);
         Assert.AreEqual("Hash", type.Overrides[0].BodyName);
-        var unknown = Load(".class public Named {", ".override method instance int32 [System.Runtime]System.Object::GetHashCode() with method instance int32 Named::Hash()");
+        var unknown = Load(".class public Named {",
+            ".override method instance int32 [System.Runtime]System.Object::GetHashCode() with method instance int32 Named::Hash()");
         Assert.Contains("Hash(), which Named does not declare", Assert.ThrowsExactly<ReplException>(() => unknown.AddLine("}")).Message);
     }
 }

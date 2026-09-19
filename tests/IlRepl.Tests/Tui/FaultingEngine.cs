@@ -46,7 +46,6 @@ internal sealed class FaultingEngine : IReplEngine
     public Task<long> WaitForAssembliesAsync(long version, CancellationToken cancellationToken) =>
         _inner.WaitForAssembliesAsync(version, cancellationToken);
 
-
     /// <inheritdoc/>
     public Task<AnalysisReply> AnalyzeAsync(AnalysisRequest request, CancellationToken cancellationToken) =>
         _inner.AnalyzeAsync(request, cancellationToken);

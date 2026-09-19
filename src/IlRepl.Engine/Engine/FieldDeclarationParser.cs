@@ -40,7 +40,8 @@ public static class FieldDeclarationParser
             }
 
             var constantTarget = Nullable.GetUnderlyingType(type) ?? type;
-            if (!(constantTarget.IsPrimitive || constantTarget.IsEnum || constantTarget == typeof(string) || constantTarget == typeof(object) || constantTarget == typeof(decimal) || !constantTarget.IsValueType))
+            if (!(constantTarget.IsPrimitive || constantTarget.IsEnum || constantTarget == typeof(string)
+                || constantTarget == typeof(object) || constantTarget == typeof(decimal) || !constantTarget.IsValueType))
             {
                 throw new ReplException($"a constant must be a primitive, string, or enum; {TypeNameFormatter.Pretty(type)} is neither");
             }
@@ -55,5 +56,4 @@ public static class FieldDeclarationParser
             ExactType = RuntimeSymbolTypes.RequiresExact(declaration.Type.ExactType) ? declaration.Type.ExactType : null,
         };
     }
-
 }

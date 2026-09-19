@@ -47,8 +47,16 @@ internal static class NativeCapabilityCache
     /// <param name="reply">The completed probe.</param>
     internal static void Store(string key, NativeReply reply)
     {
-        if (reply.Outcome != "complete") return;
-        if (Reports.Count >= 32 && Reports.Keys.FirstOrDefault() is { } oldest) Reports.TryRemove(oldest, out _);
+        if (reply.Outcome != "complete")
+        {
+            return;
+        }
+
+        if (Reports.Count >= 32 && Reports.Keys.FirstOrDefault() is { } oldest)
+        {
+            Reports.TryRemove(oldest, out _);
+        }
+
         Reports[key] = reply;
     }
 }

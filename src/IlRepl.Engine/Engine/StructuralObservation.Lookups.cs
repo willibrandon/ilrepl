@@ -13,7 +13,11 @@ internal sealed partial class StructuralObservation
     private ObservedValue? CaptureLookup(object value, int depth, int identity)
     {
         var type = value.GetType();
-        if (!ImplementsLookup(type)) return null;
+        if (!ImplementsLookup(type))
+        {
+            return null;
+        }
+
         var name = TypeName(type);
         var lookup = FrameworkLookup(type);
         if (lookup is null)
@@ -22,7 +26,11 @@ internal sealed partial class StructuralObservation
         }
 
         var comparer = lookup.GetField("_comparer", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(value);
-        if (comparer is null) return Unavailable(name, "runtime lookup comparer is unavailable");
+        if (comparer is null)
+        {
+            return Unavailable(name, "runtime lookup comparer is unavailable");
+        }
+
         var members = new List<ObservedMember> { new("comparer", Capture(comparer, depth + 1)) };
         var iterator = (IEnumerator)lookup.GetMethod(nameof(IEnumerable.GetEnumerator), Type.EmptyTypes)!.Invoke(value, null)!;
         try
@@ -41,6 +49,7 @@ internal sealed partial class StructuralObservation
                 {
                     new("key", Capture(grouping.GetType().GetProperty("Key")!.GetValue(grouping), depth + 2)),
                 };
+
                 var elements = ((IEnumerable)grouping).GetEnumerator();
                 try
                 {
@@ -83,11 +92,17 @@ internal sealed partial class StructuralObservation
 
     private static Type? FrameworkLookup(Type type)
     {
-        if (type.Assembly != typeof(Enumerable).Assembly) return null;
+        if (type.Assembly != typeof(Enumerable).Assembly)
+        {
+            return null;
+        }
+
         for (var current = type; current is not null; current = current.BaseType)
         {
             if (current.IsConstructedGenericType && current.GetGenericTypeDefinition().FullName == "System.Linq.Lookup`2")
+            {
                 return current;
+            }
         }
 
         return null;

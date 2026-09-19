@@ -35,6 +35,7 @@ public sealed class BatchInterruptTests
             options.Arguments = [RepoPaths.FrontEndAssembly, "--batch", "--no-color"];
             options.WorkingDirectory = RepoPaths.Root;
         }).WithHeadless().WithDimensions(100, 30).Build();
+
         var run = terminal.RunAsync(token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(20));
         await auto.TypeAsync("ldc.i4 42", ct: token);
@@ -61,6 +62,7 @@ public sealed class BatchInterruptTests
             options.Arguments = [RepoPaths.FrontEndAssembly, "--batch", "--no-color"];
             options.WorkingDirectory = RepoPaths.Root;
         }).WithHeadless().WithDimensions(100, 30).Build();
+
         var run = terminal.RunAsync(token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(20));
         await auto.TypeAsync("ldc.i4 42", ct: token);
@@ -96,19 +98,26 @@ public sealed class BatchInterruptTests
         if (mode == "run")
         {
             await using var engine = new InProcessEngine();
-            foreach (var line in source[..^1]) Assert.IsTrue((await engine.HandleAsync(line, token)).Succeeded);
+            foreach (var line in source[..^1])
+            {
+                Assert.IsTrue((await engine.HandleAsync(line, token)).Succeeded);
+            }
+
             var captured = await engine.SessionAsync(new SessionRequest
             {
                 Action = new SessionAction { Operation = SessionOperation.Capture },
             }, token);
+
             await File.WriteAllBytesAsync(files.SessionPath, SessionCodec.Write(captured.Document), token);
         }
+
         string[] arguments = mode switch
         {
             "eval" => ["--no-color", "--eval", string.Join(';', source)],
             "run" => ["--no-color", "--session", files.SessionPath, "--run"],
             _ => ["--no-color", "--batch"],
         };
+
         var recorder = new WorkloadRecorder();
         await using var terminal = Hex1bTerminal.CreateBuilder().WithPtyProcess(options =>
         {
@@ -116,6 +125,7 @@ public sealed class BatchInterruptTests
             options.Arguments = [RepoPaths.FrontEndAssembly, .. arguments];
             options.WorkingDirectory = files.DirectoryPath;
         }).AddWorkloadFilter(recorder).WithHeadless().WithDimensions(100, 30).Build();
+
         var run = terminal.RunAsync(token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(20));
         if (mode == "stdin")
@@ -126,6 +136,7 @@ public sealed class BatchInterruptTests
                 await auto.EnterAsync(ct: token);
             }
         }
+
         await auto.WaitUntilAsync(_ => File.Exists(marker) && new FileInfo(marker).Length != 0);
         var hostId = int.Parse(await File.ReadAllTextAsync(marker, token));
         using var host = Process.GetProcessById(hostId);

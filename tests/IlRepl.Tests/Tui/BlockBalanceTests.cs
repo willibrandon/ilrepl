@@ -116,9 +116,11 @@ public sealed class BlockBalanceTests
     }
 
     /// <summary>
-    /// A declaration header without its brace opens the block already, and the brace on the next
-    /// line is the header's own rather than a deeper level, so the close brings the depth to zero.
+    /// A declaration header without its brace opens the block already, and the brace on the next line is the header's own.
     /// </summary>
+    /// <remarks>
+    /// That brace is not a deeper level, so the close brings the depth to zero.
+    /// </remarks>
     [TestMethod]
     public void Scan_HeaderWithoutBrace_WaitsForIt()
     {
@@ -159,9 +161,11 @@ public sealed class BlockBalanceTests
     }
 
     /// <summary>
-    /// A region may leave its braces out: .try alone waits for one, and a handler header ends
-    /// the part before it and opens the next at the same depth, with or without braces of its own.
+    /// A region may leave its braces out: .try alone waits for one, and a handler header opens the next part at the same depth.
     /// </summary>
+    /// <remarks>
+    /// The handler header also ends the part before it, and it does both with or without braces of its own.
+    /// </remarks>
     [TestMethod]
     public void Scan_BracelessRegions_StayOpenUntilTheClose()
     {
@@ -184,9 +188,11 @@ public sealed class BlockBalanceTests
     }
 
     /// <summary>
-    /// A comment between the brace and the keyword, or before the keyword, does not hide a
-    /// handler header; a keyword inside a comment is only a comment.
+    /// A comment between the brace and the keyword, or before the keyword, does not hide a handler header.
     /// </summary>
+    /// <remarks>
+    /// A keyword inside a comment is only a comment.
+    /// </remarks>
     [TestMethod]
     public void Scan_HandlerPartedByAComment_IsStillAHandler()
     {
@@ -205,8 +211,7 @@ public sealed class BlockBalanceTests
     }
 
     /// <summary>
-    /// A comment inside a word leaves one word once it is taken out, as the engine reads it, so
-    /// a header parted that way is still a header.
+    /// A comment inside a word leaves one word once it is taken out, as the engine reads it, so a header parted that way is still a header.
     /// </summary>
     [TestMethod]
     public void Scan_CommentInsideAWord_ReadsAsTheEngineDoes()
@@ -219,16 +224,19 @@ public sealed class BlockBalanceTests
     }
 
     /// <summary>
-    /// A command's argument is text: a brace in a path opens nothing. The scanner knows a
-    /// command only when told which dot-words are commands.
+    /// A command's argument is text: a brace in a path opens nothing.
     /// </summary>
+    /// <remarks>
+    /// The scanner knows a command only when told which dot-words are commands.
+    /// </remarks>
     [TestMethod]
     public void Scan_CommandArguments_HaveNoBraces()
     {
         string[] commands = [".save", ".load"];
         Assert.AreEqual(0, BlockBalance.Scan(".save /tmp/cell{draft.dll", commands: commands).Depth);
         Assert.AreEqual(0, BlockBalance.Scan("  .load a{b", commands: commands).Depth);
-        Assert.AreEqual(1, BlockBalance.Scan(".load a{b", openDepth: 1, commands: commands).Depth, "a command inside a block leaves the block as it was");
+        Assert.AreEqual(1, BlockBalance.Scan(".load a{b", openDepth: 1, commands: commands).Depth,
+            "a command inside a block leaves the block as it was");
         Assert.IsTrue(BlockBalance.IsComplete(".save /tmp/cell{draft.dll", commands: commands));
         Assert.AreEqual(1, BlockBalance.Scan(".method int32 F() {", commands: commands).Depth, "a declaration is not a command");
         Assert.AreEqual(1, BlockBalance.Scan(".save /tmp/cell{draft.dll").Depth, "with no commands known, a brace is a brace");

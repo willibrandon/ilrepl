@@ -22,8 +22,25 @@ public sealed class TypeOperandCompletionTests
     {
         get
         {
-            foreach (var opcode in new[] { "box", "unbox", "unbox.any", "castclass", "isinst", "ldobj", "stobj", "cpobj",
-                "initobj", "sizeof", "mkrefany", "refanyval", "constrained.", "ldelem", "ldelema", "stelem" })
+            foreach (var opcode in new[]
+            {
+                "box",
+                "unbox",
+                "unbox.any",
+                "castclass",
+                "isinst",
+                "ldobj",
+                "stobj",
+                "cpobj",
+                "initobj",
+                "sizeof",
+                "mkrefany",
+                "refanyval",
+                "constrained.",
+                "ldelem",
+                "ldelema",
+                "stelem",
+            })
             {
                 yield return [opcode + " vo|", "void"];
                 yield return [opcode + " int3|&", "int32"];

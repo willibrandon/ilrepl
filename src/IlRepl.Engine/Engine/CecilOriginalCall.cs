@@ -30,7 +30,11 @@ internal static class CecilOriginalCall
         {
             var copy = new ParameterDefinition(parameter.Name, (ParameterAttributes)parameter.Attributes,
                 writer.Import(parameter.ParameterType));
-            if (parameter.HasDefaultValue) copy.Constant = parameter.RawDefaultValue;
+            if (parameter.HasDefaultValue)
+            {
+                copy.Constant = parameter.RawDefaultValue;
+            }
+
             target.Parameters.Add(copy);
         }
 
@@ -46,6 +50,13 @@ internal static class CecilOriginalCall
         return ComparisonInstrumentation.Wrap(writer, target);
     }
 
+    /// <summary>
+    /// Stands the written copy in for the original by replacing its body with a direct call to the original method.
+    /// </summary>
+    /// <param name="edit">The edit whose original context could not be copied.</param>
+    /// <param name="selected">The written copy of the selected method, whose body is replaced.</param>
+    /// <param name="writer">The writer for the assembly that holds <paramref name="selected"/>.</param>
+    /// <exception cref="ReplException">The original is not a public static method of a visible type, or the signatures differ.</exception>
     internal static void Replace(MethodEdit edit, MethodDefinition selected, CecilWriter writer)
     {
         var original = edit.Original.Method;

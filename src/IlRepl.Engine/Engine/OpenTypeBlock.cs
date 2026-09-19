@@ -4,10 +4,12 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A <c>.class</c> block being typed: its header, the prototype builder the stack model sees,
-/// the members so far, and, for the outermost block, every line typed since the header so the
-/// family can be replayed after an undo. Nothing here is visible to cells until the family commits.
+/// A <c>.class</c> block being typed.
 /// </summary>
+/// <remarks>
+/// It holds its header, the prototype builder the stack model sees, the members so far, and, for the outermost block, every line typed
+/// since the header so the family can be replayed after an undo. Nothing here is visible to cells until the family commits.
+/// </remarks>
 internal sealed class OpenTypeBlock
 {
     /// <summary>
@@ -161,15 +163,20 @@ internal sealed class OpenTypeBlock
     }
 
     /// <summary>
-    /// On the outermost block, every type of the family that has closed, by path, with its
-    /// prototype and members, so the family can be validated and published as one.
+    /// On the outermost block, every type of the family that has closed, by path, with its prototype and members.
     /// </summary>
-    public Dictionary<string, (System.Reflection.Emit.TypeBuilder Prototype, OwnMembers Members)> FamilyTypes { get; } = new(StringComparer.Ordinal);
+    /// <remarks>
+    /// This lets the family be validated and published as one.
+    /// </remarks>
+    public Dictionary<string, (TypeBuilder Prototype, OwnMembers Members)> FamilyTypes { get; } =
+        new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The index of the field a class-level <c>.custom</c> attaches to, as in ILAsm where an
-    /// attribute follows the field it describes, or -1 when the next one attaches to the type.
+    /// The index of the field a class-level <c>.custom</c> attaches to, or -1 when the next one attaches to the type.
     /// </summary>
+    /// <remarks>
+    /// This is as in ILAsm, where an attribute follows the field it describes.
+    /// </remarks>
     public int AttributeField { get; set; } = -1;
 
     /// <summary>
@@ -179,8 +186,7 @@ internal sealed class OpenTypeBlock
 }
 
 /// <summary>
-/// A <c>.property</c> or <c>.event</c> block, kept until the type closes so its accessors can
-/// name methods declared later.
+/// A <c>.property</c> or <c>.event</c> block, kept until the type closes so its accessors can name methods declared later.
 /// </summary>
 internal sealed class PendingAccessorBlock
 {

@@ -1,12 +1,15 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for parsing <c>.field</c> lines: access words, the contract words, offsets, constants,
-/// and the ILAsm rule that no access word means privatescope.
+/// Tests for parsing <c>.field</c> lines: access words, the contract words, offsets, and constants.
 /// </summary>
+/// <remarks>
+/// Also covers the ILAsm rule that no access word means privatescope.
+/// </remarks>
 [TestClass]
 public sealed class FieldDeclarationParserTests
 {
@@ -51,12 +54,12 @@ public sealed class FieldDeclarationParserTests
         Assert.IsTrue(field.IsInitOnly);
         Assert.Contains("must be static", Assert.ThrowsExactly<ReplException>(() => Parse("public literal int32 Max = int32(5)")).Message);
         Assert.Contains("needs its value", Assert.ThrowsExactly<ReplException>(() => Parse("public static literal int32 Max")).Message);
-        Assert.Contains("not both", Assert.ThrowsExactly<ReplException>(() => Parse("public static literal initonly int32 Max = int32(5)")).Message);
+        Assert.Contains("not both",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public static literal initonly int32 Max = int32(5)")).Message);
     }
 
     /// <summary>
-    /// A constant sets the default without making the field a literal; the runtime never uses
-    /// it to initialize storage.
+    /// A constant sets the default without making the field a literal; the runtime never uses it to initialize storage.
     /// </summary>
     [TestMethod]
     public void Parse_Initializer_IsIndependentOfLiteral()
@@ -81,8 +84,10 @@ public sealed class FieldDeclarationParserTests
         Assert.AreEqual((byte)200, Parse("public static literal uint8 U = uint8(200)").DefaultValue);
         Assert.AreEqual(5L, Parse("public static literal int64 L = 5").DefaultValue);
         Assert.IsNull(Parse("public static string N = nullref").DefaultValue);
-        Assert.Contains("write int32(...)", Assert.ThrowsExactly<ReplException>(() => Parse("public static literal int32 X = int64(5)")).Message);
-        Assert.Contains("nullref is not a valid int32", Assert.ThrowsExactly<ReplException>(() => Parse("public static int32 X = nullref")).Message);
+        Assert.Contains("write int32(...)",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public static literal int32 X = int64(5)")).Message);
+        Assert.Contains("nullref is not a valid int32",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public static int32 X = nullref")).Message);
     }
 
     /// <summary>
@@ -105,7 +110,7 @@ public sealed class FieldDeclarationParserTests
     {
         var field = Parse("public int32 modreq([System.Runtime]System.Runtime.CompilerServices.IsVolatile) V");
         Assert.AreEqual(typeof(int), field.Type);
-        Assert.AreSequenceEqual([typeof(System.Runtime.CompilerServices.IsVolatile)], field.RequiredModifiers);
+        Assert.AreSequenceEqual([typeof(IsVolatile)], field.RequiredModifiers);
     }
 
     /// <summary>

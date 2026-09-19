@@ -8,12 +8,23 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-var configurationOption = new Option<string>("--configuration", "-c") { Description = "The build configuration.", DefaultValueFactory = _ => "Release" };
-var outputOption = new Option<string>("--output") { Description = "Where the browser assets go, relative to the repository.", DefaultValueFactory = _ => "docs/public/try" };
+var configurationOption = new Option<string>("--configuration", "-c")
+{
+    Description = "The build configuration.",
+    DefaultValueFactory = _ => "Release",
+};
+
+var outputOption = new Option<string>("--output")
+{
+    Description = "Where the browser assets go, relative to the repository.",
+    DefaultValueFactory = _ => "docs/public/try",
+};
+
 var conformanceOption = new Option<bool>("--conformance")
 {
     Description = "Includes the test-only browser conformance entry point.",
 };
+
 var root = new RootCommand("Publishes the browser build of ilrepl and copies it into the docs site.")
 {
     configurationOption, outputOption, conformanceOption,

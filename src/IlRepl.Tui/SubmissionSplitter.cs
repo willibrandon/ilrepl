@@ -3,11 +3,12 @@ using IlRepl.Protocol;
 namespace IlRepl.Tui;
 
 /// <summary>
-/// Cuts a buffer into the units a submission sends: single lines at the top level, blank lines
-/// that run the cell, and brace blocks from their opening line to the line that balances them.
-/// Depth is counted from what the engine already has open, a comment line is never a boundary,
-/// and a blank line inside a block is not sent at all.
+/// Cuts a buffer into the units a submission sends: single lines, blank lines that run the cell, and brace blocks.
 /// </summary>
+/// <remarks>
+/// Single lines are units at the top level, and a brace block runs from its opening line to the line that balances it. Depth is counted
+/// from what the engine already has open, a comment line is never a boundary, and a blank line inside a block is not sent at all.
+/// </remarks>
 public static class SubmissionSplitter
 {
     /// <summary>
@@ -18,7 +19,11 @@ public static class SubmissionSplitter
     /// <param name="inBlockComment">Whether the engine has a <c>/*</c> open when the buffer starts.</param>
     /// <param name="commands">The dot-words that are commands, whose arguments hold no brace that counts; null to know none.</param>
     /// <returns>The units, in order.</returns>
-    public static IReadOnlyList<SubmissionUnit> Split(IReadOnlyList<string> lines, int openDepth = 0, bool inBlockComment = false, IReadOnlyCollection<string>? commands = null)
+    public static IReadOnlyList<SubmissionUnit> Split(
+        IReadOnlyList<string> lines,
+        int openDepth = 0,
+        bool inBlockComment = false,
+        IReadOnlyCollection<string>? commands = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
         var units = new List<SubmissionUnit>();

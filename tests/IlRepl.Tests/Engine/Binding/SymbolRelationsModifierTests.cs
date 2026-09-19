@@ -28,6 +28,7 @@ public sealed partial class SymbolRelationsTests
             ReturnType = typeParameter,
             Parameters = [new ParameterSymbol(typeParameter, "value")],
         };
+
         var field = new FieldSymbol
         {
             Definition = DefinitionId.ForDeclaration(1, 2),

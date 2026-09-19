@@ -22,7 +22,10 @@ public sealed partial class SessionController
 
     private IReadOnlyList<TranscriptLine> UnstreamedFrontendOutput(IReadOnlyList<TranscriptLine> lines)
     {
-        lock (_outputLock) { return _frontendOutputAcknowledged ? [] : lines; }
+        lock (_outputLock)
+        {
+            return _frontendOutputAcknowledged ? [] : lines;
+        }
     }
 
     private void EndFrontendOutput()
@@ -38,8 +41,16 @@ public sealed partial class SessionController
     {
         lock (_outputLock)
         {
-            if (OutputReceived is not { } receive) return;
-            if (_streamedIdentity == output.Identity && _streamedSequence >= output.Sequence) return;
+            if (OutputReceived is not { } receive)
+            {
+                return;
+            }
+
+            if (_streamedIdentity == output.Identity && _streamedSequence >= output.Sequence)
+            {
+                return;
+            }
+
             receive(_frontendOutputLines.Count == 0 ? output
                 : output with { LeadingLines = [.. _frontendOutputLines, .. output.LeadingLines] });
             if (_frontendOutputLines.Count != 0)
@@ -47,6 +58,7 @@ public sealed partial class SessionController
                 _frontendOutputAcknowledged = true;
                 _frontendOutputLines = [];
             }
+
             _streamedIdentity = output.Identity;
             _streamedSequence = output.Sequence;
         }
@@ -57,8 +69,13 @@ public sealed partial class SessionController
         lock (_outputLock)
         {
             return reply.OutputSequence > 0 && reply.OutputIdentity == _streamedIdentity && reply.OutputSequence <= _streamedSequence
-                ? reply with { Lines = [.. reply.Lines.Where((line, index) => line.Kind != LineKind.Output
-                    && !reply.StreamedLineIndexes.Contains(index))], StreamedLineIndexes = [] } : reply;
+                ? reply with
+                {
+                    Lines = [.. reply.Lines.Where((line, index) => line.Kind != LineKind.Output
+                        && !reply.StreamedLineIndexes.Contains(index))],
+                    StreamedLineIndexes = [],
+                }
+                : reply;
         }
     }
 }
