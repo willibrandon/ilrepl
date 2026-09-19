@@ -51,8 +51,14 @@ internal sealed class NativeLoadContext : AssemblyLoadContext
     /// <returns>The captured native library handle or the platform fallback.</returns>
     protected override nint LoadUnmanagedDll(string unmanagedDllName)
     {
-        foreach (var name in new[] { unmanagedDllName, unmanagedDllName + ".dll", unmanagedDllName + ".so",
-            "lib" + unmanagedDllName + ".so", "lib" + unmanagedDllName + ".dylib" })
+        foreach (var name in new[]
+        {
+            unmanagedDllName,
+            unmanagedDllName + ".dll",
+            unmanagedDllName + ".so",
+            "lib" + unmanagedDllName + ".so",
+            "lib" + unmanagedDllName + ".dylib",
+        })
         {
             if (_native.TryGetValue(name, out var path))
             {

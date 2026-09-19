@@ -82,8 +82,11 @@ public sealed class EditableBodyTests
     {
         var session = IlLines.Load(".class public Holder {", ".method public static int32 M() {",
             directive, "ldc.i4.s 42", "ret", "}", "}");
-        foreach (var image in new[] { AssemblyExporter.Write(session, "member-init"),
-            IlasmLocator.Assemble(IlAsmRenderer.Render(session)) })
+        foreach (var image in new[]
+        {
+            AssemblyExporter.Write(session, "member-init"),
+            IlasmLocator.Assemble(IlAsmRenderer.Render(session)),
+        })
         {
             using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
             var method = module.Types.Single(type => type.Name == "Holder").Methods.Single(method => method.Name == "M");

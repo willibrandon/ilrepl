@@ -306,8 +306,13 @@ public sealed class SessionCodecTests
         {
             Interruptions =
             [
-                new() { Identity = "attempt-one", Number = 7, Source = ["  call Slow", "", "ret"],
-                    Extensions = new() { ["future"] = JsonSerializer.SerializeToElement("retained") } },
+                new()
+                {
+                    Identity = "attempt-one",
+                    Number = 7,
+                    Source = ["  call Slow", "", "ret"],
+                    Extensions = new() { ["future"] = JsonSerializer.SerializeToElement("retained") },
+                },
                 new() { Identity = "attempt-two", Number = 7, Source = [".compare Copy ()"] },
             ],
         };
@@ -901,20 +906,40 @@ public sealed class SessionCodecTests
             Runtime = new() { Framework = "net10.0", Rid = "linux-x64", Culture = "en-US", Extensions = fields },
             Entries =
             [
-                new() { Identity = "source-7", Number = 7, Source = ["  // café λ", "ldstr \"hello\\nworld\"", "", "ret"],
-                    Extensions = fields },
+                new()
+                {
+                    Identity = "source-7",
+                    Number = 7,
+                    Source = ["  // café λ", "ldstr \"hello\\nworld\"", "", "ret"],
+                    Extensions = fields,
+                },
             ],
             Cells =
             [
-                new() { Identity = "cell-7", Number = 7, Source = ["ldarg n", "ret"], Inputs = [".args (int32 n = 42)"],
-                    State = "succeeded", Output = [new(LineKind.Result, [new("= 42 : int32", SpanStyle.Number)])], Extensions = fields },
+                new()
+                {
+                    Identity = "cell-7",
+                    Number = 7,
+                    Source = ["ldarg n", "ret"],
+                    Inputs = [".args (int32 n = 42)"],
+                    State = "succeeded",
+                    Output = [new(LineKind.Result, [new("= 42 : int32", SpanStyle.Number)])],
+                    Extensions = fields,
+                },
             ],
             Editor = new() { Lines = ["  ldc.i4", ""], Caret = 9, Anchor = 2, Revision = 17, Extensions = fields },
             References =
             [
-                new() { Identity = "reference-one", Origin = "package", Request = "Fixture", RequestedVersion = "[1.2.3]",
-                    Version = "1.2.3", Assets = [new() { Name = "Fixture", Hash = hash, Path = "lib/fixture.dll", Extensions = fields }],
-                    Extensions = fields },
+                new()
+                {
+                    Identity = "reference-one",
+                    Origin = "package",
+                    Request = "Fixture",
+                    RequestedVersion = "[1.2.3]",
+                    Version = "1.2.3",
+                    Assets = [new() { Name = "Fixture", Hash = hash, Path = "lib/fixture.dll", Extensions = fields }],
+                    Extensions = fields,
+                },
             ],
             Assets = [new() { Hash = hash, Image = [1, 2, 3, 4], Extensions = fields }],
             PackageLock = "{\"version\":1}",

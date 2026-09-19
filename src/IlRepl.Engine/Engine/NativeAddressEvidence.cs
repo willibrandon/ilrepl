@@ -229,8 +229,14 @@ public sealed class NativeAddressEvidence : IDisposable
         il.Emit(OpCodes.Conv_I);
         il.Emit(OpCodes.Ret);
         var compiled = type.CreateType()!.GetMethod(name)!;
-        _probes.Add(new NativeProbe { Method = compiled.DeclaringType!.FullName + ":" + name, Kind = kind, Symbol = symbol,
-            DisplaySymbol = _display.GetValueOrDefault((kind, symbol), "") });
+        _probes.Add(new NativeProbe
+        {
+            Method = compiled.DeclaringType!.FullName + ":" + name,
+            Kind = kind,
+            Symbol = symbol,
+            DisplaySymbol = _display.GetValueOrDefault((kind, symbol), ""),
+        });
+
         RuntimeHelpers.PrepareMethod(compiled.MethodHandle);
     }
 

@@ -118,8 +118,15 @@ public sealed class GenericOperandCompletionTests
     public async Task Complete_OuterMethodConstraint_ValidatesBeforeSignature(string owner, string parameters)
     {
         var session = new Session();
-        foreach (var line in new[] { ".class public Host {", ".method public static int32 Value<valuetype T>() {",
-            "ldc.i4.7", "ret", "}", "}" })
+        foreach (var line in new[]
+        {
+            ".class public Host {",
+            ".method public static int32 Value<valuetype T>() {",
+            "ldc.i4.7",
+            "ret",
+            "}",
+            "}",
+        })
         {
             session.AddLine(line);
         }

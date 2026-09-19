@@ -452,15 +452,27 @@ public sealed class IlAsmRendererTests
         });
 
         var assembly = fixture.Assembly.GetName().Name;
-        var add = new Instruction { Op = OpCodes.Call, Text = "call", Kind = OperandKind.Method,
-            Operand = new ResolvedMethod(fixture.GetMethod("add")!, null) };
+        var add = new Instruction
+        {
+            Op = OpCodes.Call,
+            Text = "call",
+            Kind = OperandKind.Method,
+            Operand = new ResolvedMethod(fixture.GetMethod("add")!, null),
+        };
+
         Assert.AreEqual($"call int32 [{assembly}]N.Fixture::'add'(int32)", IlAsmRenderer.RenderInstruction(add));
         var data = new Instruction { Op = OpCodes.Ldsfld, Text = "ldsfld", Kind = OperandKind.Field, Operand = fixture.GetField("Data")! };
         Assert.AreEqual($"ldsfld int32 modreq([System.Runtime]System.Runtime.CompilerServices.IsVolatile) [{assembly}]N.Fixture::Data",
             IlAsmRenderer.RenderInstruction(data));
         var lambda = fixture.GetNestedType("<>c")!.GetMethod("<Main>b__0_0")!;
-        var ldftn = new Instruction { Op = OpCodes.Ldftn, Text = "ldftn", Kind = OperandKind.Method,
-            Operand = new ResolvedMethod(lambda, null) };
+        var ldftn = new Instruction
+        {
+            Op = OpCodes.Ldftn,
+            Text = "ldftn",
+            Kind = OperandKind.Method,
+            Operand = new ResolvedMethod(lambda, null),
+        };
+
         Assert.AreEqual($"ldftn void [{assembly}]N.Fixture/'<>c'::'<Main>b__0_0'()", IlAsmRenderer.RenderInstruction(ldftn));
     }
 

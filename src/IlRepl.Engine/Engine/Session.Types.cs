@@ -948,15 +948,22 @@ public sealed partial class Session
         {
             if (entry.Kind == EntryKind.Param && entry.ParamIndex is > 0 and var index && entry.ParamHasDefault)
             {
-                parameters[index - 1] = parameters[index - 1] with { DefaultValue = entry.ParamDefault, HasDefault = true,
-                    Attributes = parameters[index - 1].Attributes | ParameterAttributes.HasDefault };
+                parameters[index - 1] = parameters[index - 1] with
+                {
+                    DefaultValue = entry.ParamDefault,
+                    HasDefault = true,
+                    Attributes = parameters[index - 1].Attributes | ParameterAttributes.HasDefault,
+                };
             }
             else if (entry.Kind == EntryKind.Custom && entry.Custom is { } custom)
             {
                 if (entry.ParamIndex is > 0 and var target)
                 {
-                    parameters[target - 1] = parameters[target - 1] with { CustomAttributes = [.. parameters[target - 1].CustomAttributes,
-                        custom] };
+                    parameters[target - 1] = parameters[target - 1] with
+                    {
+                        CustomAttributes = [.. parameters[target - 1].CustomAttributes,
+                            custom],
+                    };
                 }
                 else if (entry.ParamIndex == 0)
                 {
@@ -969,8 +976,13 @@ public sealed partial class Session
             }
         }
 
-        var kept = signature with { Parameters = parameters, CustomAttributes = methodAttributes,
-            ReturnCustomAttributes = returnAttributes };
+        var kept = signature with
+        {
+            Parameters = parameters,
+            CustomAttributes = methodAttributes,
+            ReturnCustomAttributes = returnAttributes,
+        };
+
         var declaration = new MethodDeclaration(kept, [.. state.Overrides], member.HeaderLine, [.. member.BodyLines],
             state.Member is { IsAbstract: true } ? null : state);
         block.Methods.Add(declaration);

@@ -58,8 +58,14 @@ public sealed class AssemblyExporterTests
             "ldc.i4 3", "ldc.i4 4", "newobj instance void Point::.ctor(int32, int32)", "newobj instance void Line::.ctor(valuetype Point)",
             "call instance int32 Line::Sum()"]);
         Assert.AreEqual(14, session.Run().Value);
-        foreach (var line in new[] { "ldc.i4 3", "ldc.i4 4", "newobj instance void Point::.ctor(int32, int32)",
-            "newobj instance void Line::.ctor(valuetype Point)", "call instance int32 Line::Sum()" })
+        foreach (var line in new[]
+        {
+            "ldc.i4 3",
+            "ldc.i4 4",
+            "newobj instance void Point::.ctor(int32, int32)",
+            "newobj instance void Line::.ctor(valuetype Point)",
+            "call instance int32 Line::Sum()",
+        })
         {
             session.AddLine(line);
         }

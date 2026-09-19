@@ -417,8 +417,13 @@ public static class CecilBodyEmitter
                     break;
                 case BlockKind.Catch:
                     LeaveCurrent();
-                    _frames[^1].Handlers.Add(new Handler { Kind = BlockKind.Catch,
-                        CatchType = writer.Import(map.Map(entry.CatchType ?? typeof(object))), Start = Mark() });
+                    _frames[^1].Handlers.Add(new Handler
+                    {
+                        Kind = BlockKind.Catch,
+                        CatchType = writer.Import(map.Map(entry.CatchType ?? typeof(object))),
+                        Start = Mark(),
+                    });
+
                     break;
                 case BlockKind.Filter:
                     LeaveCurrent();

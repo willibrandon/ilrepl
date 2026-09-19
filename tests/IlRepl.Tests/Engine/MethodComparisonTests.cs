@@ -135,9 +135,21 @@ public sealed class MethodComparisonTests
             "add", "stfld int32 Counter::Value", "ldarg.0", "ldfld int32 Counter::Value", "ret", "}", "}");
         var edit = Commit(session, "instance int32 Counter::Next()");
         var owner = edit.Method!.DeclaringType!.FullName!;
-        foreach (var line in new[] { ".method int32 Scenario() {", $".locals init (class {owner} counter)",
-            "ldc.i4 40", $"newobj instance void {owner}::.ctor(int32)", "stloc.0", "ldloc.0",
-            $"call instance int32 {owner}::Next()", "pop", "ldloc.0", $"call instance int32 {owner}::Next()", "ret", "}" })
+        foreach (var line in new[]
+        {
+            ".method int32 Scenario() {",
+            $".locals init (class {owner} counter)",
+            "ldc.i4 40",
+            $"newobj instance void {owner}::.ctor(int32)",
+            "stloc.0",
+            "ldloc.0",
+            $"call instance int32 {owner}::Next()",
+            "pop",
+            "ldloc.0",
+            $"call instance int32 {owner}::Next()",
+            "ret",
+            "}",
+        })
         {
             session.AddLine(line);
         }
@@ -301,8 +313,18 @@ public sealed class MethodComparisonTests
             ".method public static void Set([out] int32& value) { ldarg.0; ldc.i4 42; stind.i4; ret }", "}");
         var edit = Commit(session, "void Writer::Set(int32&)");
         Assert.IsTrue(edit.Method!.GetParameters()[0].IsOut);
-        foreach (var line in new[] { ".method int32 Scenario() {", ".locals init (int32 value)", "ldc.i4 123", "stloc.0",
-            "ldloca.s 0", "call void Copy(int32&)", "ldloc.0", "ret", "}" })
+        foreach (var line in new[]
+        {
+            ".method int32 Scenario() {",
+            ".locals init (int32 value)",
+            "ldc.i4 123",
+            "stloc.0",
+            "ldloca.s 0",
+            "call void Copy(int32&)",
+            "ldloc.0",
+            "ret",
+            "}",
+        })
         {
             session.AddLine(line);
         }

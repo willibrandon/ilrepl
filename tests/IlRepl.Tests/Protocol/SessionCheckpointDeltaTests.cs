@@ -159,12 +159,25 @@ public sealed class SessionCheckpointDeltaTests
             Entries =
             [
                 new SessionEntry { Identity = "source", Source = ["// retained source"] },
-                new SessionEntry { Identity = "edit", Kind = SessionEntryKind.Edit, Source = [".edit Example {"],
-                    Edit = edit, Mark = SessionMark.Initial, Extensions = new() { ["future"] = JsonSerializer.SerializeToElement(1) } },
+                new SessionEntry
+                {
+                    Identity = "edit",
+                    Kind = SessionEntryKind.Edit,
+                    Source = [".edit Example {"],
+                    Edit = edit,
+                    Mark = SessionMark.Initial,
+                    Extensions = new() { ["future"] = JsonSerializer.SerializeToElement(1) },
+                },
             ],
-            Cells = [new SessionCell { Identity = "cell", Source = ["ldc.i4.s 42", "ret"], State = "succeeded",
-                Inputs = [".args (int32 n = 42)"], Output = [TranscriptLine.Of(LineKind.Result, "= 42", SpanStyle.Number)],
-                Extensions = new() { ["future"] = JsonSerializer.SerializeToElement(1) } }],
+            Cells = [new SessionCell
+            {
+                Identity = "cell",
+                Source = ["ldc.i4.s 42", "ret"],
+                State = "succeeded",
+                Inputs = [".args (int32 n = 42)"],
+                Output = [TranscriptLine.Of(LineKind.Result, "= 42", SpanStyle.Number)],
+                Extensions = new() { ["future"] = JsonSerializer.SerializeToElement(1) },
+            }],
             Assets = [new SessionAsset { Hash = SessionCodec.Hash(image), Image = image }],
             Editor = new SessionEditor { Lines = ["// draft"], Caret = 2, Anchor = 1 },
         };

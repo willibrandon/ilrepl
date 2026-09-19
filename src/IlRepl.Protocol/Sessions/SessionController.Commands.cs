@@ -65,24 +65,35 @@ public sealed partial class SessionController
         {
             var path = await SessionSnapshotStore.WriteAsync(action.Path!, captured.Document, action.Embed, cancellationToken)
                 .ConfigureAwait(false);
-            return captured with { Path = path, Dirty = false, Reply = new HandleReply(true, false,
-                [TranscriptLine.Of(LineKind.Info, "  saved session " + path, SpanStyle.Dim)], Status) };
+            return captured with
+            {
+                Path = path,
+                Dirty = false,
+                Reply = new HandleReply(true, false,
+                    [TranscriptLine.Of(LineKind.Info, "  saved session " + path, SpanStyle.Dim)], Status),
+            };
         }
 
         if (action.Operation is SessionOperation.Capture or SessionOperation.Summary)
         {
-            return captured with { Reply = new HandleReply(true, false,
-                [TranscriptLine.Of(LineKind.Info, "  session: " + (captured.Path ?? "unsaved scratch")
-                    + "; execution host unavailable", SpanStyle.Dim)], Status) };
+            return captured with
+            {
+                Reply = new HandleReply(true, false,
+                    [TranscriptLine.Of(LineKind.Info, "  session: " + (captured.Path ?? "unsaved scratch")
+                        + "; execution host unavailable", SpanStyle.Dim)], Status),
+            };
         }
 
         if (action.Operation == SessionOperation.Cells)
         {
-            return captured with { Reply = new HandleReply(true, false,
-                [.. captured.Document.Cells.SelectMany(cell => new[]
-                {
-                    TranscriptLine.Of(LineKind.Info, $"  {cell.Number}: {cell.Kind}, {cell.State} (historical)", SpanStyle.Dim),
-                }.Concat(cell.Output))], Status) };
+            return captured with
+            {
+                Reply = new HandleReply(true, false,
+                    [.. captured.Document.Cells.SelectMany(cell => new[]
+                    {
+                        TranscriptLine.Of(LineKind.Info, $"  {cell.Number}: {cell.Kind}, {cell.State} (historical)", SpanStyle.Dim),
+                    }.Concat(cell.Output))], Status),
+            };
         }
 
         if (action.Operation == SessionOperation.Cell)
@@ -93,9 +104,13 @@ public sealed partial class SessionController
             var lines = cell.Kind == "cell" ? cell.Inputs.Concat(cell.Source).ToArray() : cell.Source;
             var length = string.Join('\n', lines).Length;
             var editor = new SessionEditor { Lines = lines, Caret = length, Anchor = length, Revision = Editor.Revision + 1 };
-            return captured with { Document = captured.Document with { Editor = editor }, Reply = new HandleReply(true, false,
-                [TranscriptLine.Of(LineKind.Info, $"  recalled cell {number}; previous output is historical", SpanStyle.Dim),
-                    .. cell.Output], Status) { SessionEditor = editor } };
+            return captured with
+            {
+                Document = captured.Document with { Editor = editor },
+                Reply = new HandleReply(true, false,
+                    [TranscriptLine.Of(LineKind.Info, $"  recalled cell {number}; previous output is historical", SpanStyle.Dim),
+                        .. cell.Output], Status) { SessionEditor = editor },
+            };
         }
 
         return captured with { Reply = Failure("host unavailable; use .session restart before this operation") };

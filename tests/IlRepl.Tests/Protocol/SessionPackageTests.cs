@@ -454,8 +454,11 @@ public sealed class SessionPackageTests
 
         if (changedRequest)
         {
-            document = document with { References = [.. document.References.Select(reference => reference.Request == fixture.AssemblyName
-                ? reference with { RequestedVersion = "[2.0.0]" } : reference)] };
+            document = document with
+            {
+                References = [.. document.References.Select(reference => reference.Request == fixture.AssemblyName
+                    ? reference with { RequestedVersion = "[2.0.0]" } : reference)],
+            };
         }
 
         var path = Path.Combine(fixture.DirectoryPath, "foreign.ilrepl.json");

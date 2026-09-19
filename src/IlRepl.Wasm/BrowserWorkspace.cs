@@ -133,8 +133,13 @@ public static partial class BrowserWorkspace
                         "  browser downloads include available dependency images; --embed is already applied", SpanStyle.Dim));
                 }
 
-                return new SessionReply { Document = document, Path = path, Dirty = false,
-                    Reply = new HandleReply(true, false, [.. lines], controller.Status) };
+                return new SessionReply
+                {
+                    Document = document,
+                    Path = path,
+                    Dirty = false,
+                    Reply = new HandleReply(true, false, [.. lines], controller.Status),
+                };
             }
 
             if (request.Action.Operation == SessionOperation.Restart)
@@ -148,9 +153,13 @@ public static partial class BrowserWorkspace
             {
                 await PageAction("run", Encoding.UTF8.GetString(SessionCodec.Write(document)),
                     string.Join(' ', request.Action.Numbers)).WaitAsync(cancellationToken).ConfigureAwait(false);
-                return new SessionReply { Document = document, Reply = new HandleReply(true, false,
-                    [TranscriptLine.Of(LineKind.Info, "  starting a fresh runtime to run the saved source", SpanStyle.Dim)],
-                    controller.Status) };
+                return new SessionReply
+                {
+                    Document = document,
+                    Reply = new HandleReply(true, false,
+                        [TranscriptLine.Of(LineKind.Info, "  starting a fresh runtime to run the saved source", SpanStyle.Dim)],
+                        controller.Status),
+                };
             }
 
             if (request.Action.Operation == SessionOperation.Open)

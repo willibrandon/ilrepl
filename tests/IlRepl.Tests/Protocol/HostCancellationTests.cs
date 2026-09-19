@@ -42,9 +42,16 @@ public sealed class HostCancellationTests
             }
         };
 
-        foreach (var line in new[] { "ldstr " + LiteralParser.Escape(marker), "ldstr \"entered\"",
-            "call void File::WriteAllText(string, string)", "WAIT: ldstr " + LiteralParser.Escape(release),
-            "call bool File::Exists(string)", "brfalse WAIT", "ldc.i4 73" })
+        foreach (var line in new[]
+        {
+            "ldstr " + LiteralParser.Escape(marker),
+            "ldstr \"entered\"",
+            "call void File::WriteAllText(string, string)",
+            "WAIT: ldstr " + LiteralParser.Escape(release),
+            "call bool File::Exists(string)",
+            "brfalse WAIT",
+            "ldc.i4 73",
+        })
         {
             Assert.IsTrue((await engine.HandleAsync(line, token)).Succeeded);
         }

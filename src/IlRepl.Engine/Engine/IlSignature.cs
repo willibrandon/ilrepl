@@ -123,8 +123,13 @@ public sealed record IlSignature
     /// <param name="arguments">The arguments.</param>
     /// <returns>The signature.</returns>
     public static IlSignature GenericInstance(IlSignature definition, IReadOnlyList<IlSignature> arguments) =>
-        new(IlSignatureKind.GenericInstance) { Element = definition, Arguments = arguments, IsValueType = definition.IsValueType,
-        Resolved = definition.Resolved };
+        new(IlSignatureKind.GenericInstance)
+        {
+            Element = definition,
+            Arguments = arguments,
+            IsValueType = definition.IsValueType,
+            Resolved = definition.Resolved,
+        };
 
     /// <summary>
     /// A vector.

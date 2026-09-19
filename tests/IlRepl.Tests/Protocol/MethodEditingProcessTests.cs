@@ -57,8 +57,15 @@ public sealed class MethodEditingProcessTests
         Assert.Contains(helper.Symbol, text);
         Assert.Contains(helper.Assembly, text);
         Assert.Contains(helper.Location, text);
-        foreach (var line in new[] { ".edit Copy {", ".method public static int32 Read() cil managed {",
-            "ldc.i4.7", "ret", "}", "}" })
+        foreach (var line in new[]
+        {
+            ".edit Copy {",
+            ".method public static int32 Read() cil managed {",
+            "ldc.i4.7",
+            "ret",
+            "}",
+            "}",
+        })
         {
             Assert.IsTrue((await engine.HandleAsync(line, token)).Succeeded, line);
         }

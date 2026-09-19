@@ -97,8 +97,15 @@ public sealed class WindowsConsoleTests
                 // This independent client survives the PTY root's final TerminateProcess fallback long enough to witness close.
                 var ready = Path.Combine(files.DirectoryPath, "observer.ready");
                 var observe = new ProcessStartInfo(HostLocator.FindDotnet()) { UseShellExecute = false };
-                foreach (var argument in new[] { typeof(WindowsConsoleProbe).Assembly.Location, "--windows-console",
-                    "observe-close", frontend.Id.ToString(), closeMarker, ready })
+                foreach (var argument in new[]
+                {
+                    typeof(WindowsConsoleProbe).Assembly.Location,
+                    "--windows-console",
+                    "observe-close",
+                    frontend.Id.ToString(),
+                    closeMarker,
+                    ready,
+                })
                 {
                     observe.ArgumentList.Add(argument);
                 }
@@ -113,8 +120,13 @@ public sealed class WindowsConsoleTests
             else
             {
                 var signal = new ProcessStartInfo(HostLocator.FindDotnet());
-                foreach (var argument in new[] { typeof(WindowsConsoleProbe).Assembly.Location, "--windows-console",
-                    "break", frontend.Id.ToString() })
+                foreach (var argument in new[]
+                {
+                    typeof(WindowsConsoleProbe).Assembly.Location,
+                    "--windows-console",
+                    "break",
+                    frontend.Id.ToString(),
+                })
                 {
                     signal.ArgumentList.Add(argument);
                 }

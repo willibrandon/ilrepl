@@ -215,8 +215,13 @@ internal static class ProjectResolver
         var entries = document.Entries.ToList();
         if (previous is null)
         {
-            entries.Add(new SessionEntry { Kind = SessionEntryKind.Reference, Reference = reference.Identity,
-                Number = document.Cells.Select(cell => cell.Number).DefaultIfEmpty(0).Max() + 1, Source = [".load " + path] });
+            entries.Add(new SessionEntry
+            {
+                Kind = SessionEntryKind.Reference,
+                Reference = reference.Identity,
+                Number = document.Cells.Select(cell => cell.Number).DefaultIfEmpty(0).Max() + 1,
+                Source = [".load " + path],
+            });
         }
 
         return document with

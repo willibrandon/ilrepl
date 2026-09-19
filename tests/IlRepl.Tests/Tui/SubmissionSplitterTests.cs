@@ -47,8 +47,20 @@ public sealed class SubmissionSplitterTests
     [TestMethod]
     public void Split_TryChain_IsOneBlock()
     {
-        var lines = new[] { ".try {", "nop", "leave END", "} catch [System.Runtime]System.Exception {", "pop", "leave END", "} finally {",
-            "nop", "}", "END: nop" };
+        var lines = new[]
+        {
+            ".try {",
+            "nop",
+            "leave END",
+            "} catch [System.Runtime]System.Exception {",
+            "pop",
+            "leave END",
+            "} finally {",
+            "nop",
+            "}",
+            "END: nop",
+        };
+
         var units = SubmissionSplitter.Split(lines);
         Assert.HasCount(2, units);
         Assert.AreEqual(Unit(0, 9, SubmissionUnitKind.Block, 0, 1, 2, 3, 4, 5, 6, 7, 8), units[0]);

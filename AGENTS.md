@@ -14,6 +14,8 @@ These instructions apply to the entire repository.
 - Keep one type per file.
 - Keep C# lines at 140 characters or fewer. In other files, keep changed lines within the same limit.
 - Give every body braces, with each brace on its own line. This includes single statements, `try`, `catch`, `finally`, `else`, and `lock`.
+- Braces that hold no statements, as in `{ get; set; }`, an initializer, a pattern, or a `switch` expression, may share one line.
+  Once they take more than one line, lay them out like a body.
 - Only what completes the surrounding expression or declaration may share a line with a closing brace, as in `});` or `} = value;`.
 - Put the `while` that ends a `do` on the line after the closing brace.
 - Leave a blank line after a closing brace before the next statement, comment, member, or `case`.

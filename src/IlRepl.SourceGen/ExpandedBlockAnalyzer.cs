@@ -24,7 +24,10 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
         context.RegisterSyntaxNodeAction(AnalyzeBlock, SyntaxKind.Block, SyntaxKind.SwitchStatement, SyntaxKind.NamespaceDeclaration,
             SyntaxKind.ClassDeclaration, SyntaxKind.StructDeclaration, SyntaxKind.InterfaceDeclaration, SyntaxKind.EnumDeclaration,
-            SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration, SyntaxKind.AccessorList);
+            SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration, SyntaxKind.AccessorList, SyntaxKind.SwitchExpression,
+            SyntaxKind.ObjectInitializerExpression, SyntaxKind.CollectionInitializerExpression, SyntaxKind.ArrayInitializerExpression,
+            SyntaxKind.ComplexElementInitializerExpression, SyntaxKind.WithInitializerExpression,
+            SyntaxKind.AnonymousObjectCreationExpression, SyntaxKind.PropertyPatternClause);
     }
 
     private static void AnalyzeBlock(SyntaxNodeAnalysisContext context)
@@ -45,21 +48,28 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
                 open = space.OpenBraceToken;
                 close = space.CloseBraceToken;
                 break;
-            case AccessorListSyntax accessors:
-                // "{ get; set; }" reads as one phrase. Accessors that take lines of their own are a body like any other.
-                var lines = accessors.SyntaxTree.GetLineSpan(accessors.Span);
-                if (lines.StartLinePosition.Line == lines.EndLinePosition.Line)
+            case BaseTypeDeclarationSyntax type:
+                open = type.OpenBraceToken;
+                close = type.CloseBraceToken;
+                break;
+            default:
+                // Braces that hold no statements read as one phrase on one line, as "{ get; set; }", "new() { Name = name }",
+                // and "kind switch { 0 => a, _ => b }" do. Once they take more than one line they are laid out like a body.
+                (open, close) = context.Node switch
+                {
+                    AccessorListSyntax accessors => (accessors.OpenBraceToken, accessors.CloseBraceToken),
+                    SwitchExpressionSyntax choice => (choice.OpenBraceToken, choice.CloseBraceToken),
+                    InitializerExpressionSyntax initializer => (initializer.OpenBraceToken, initializer.CloseBraceToken),
+                    AnonymousObjectCreationExpressionSyntax anonymous => (anonymous.OpenBraceToken, anonymous.CloseBraceToken),
+                    _ => (((PropertyPatternClauseSyntax)context.Node).OpenBraceToken,
+                        ((PropertyPatternClauseSyntax)context.Node).CloseBraceToken),
+                };
+
+                if (SharesLine(open, close))
                 {
                     return;
                 }
 
-                open = accessors.OpenBraceToken;
-                close = accessors.CloseBraceToken;
-                break;
-            default:
-                var type = (BaseTypeDeclarationSyntax)context.Node;
-                open = type.OpenBraceToken;
-                close = type.CloseBraceToken;
                 break;
         }
 

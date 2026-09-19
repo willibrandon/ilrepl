@@ -227,8 +227,13 @@ public sealed class HostInteractionTests
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
         await using var controller = await SessionWorkspaceFixture.StartAsync(token);
-        foreach (var line in new[] { "ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"running\"",
-            "call void System.IO.File::WriteAllText(string, string)", "LOOP: br LOOP" })
+        foreach (var line in new[]
+        {
+            "ldstr " + LiteralParser.Escape(files.MarkerPath),
+            "ldstr \"running\"",
+            "call void System.IO.File::WriteAllText(string, string)",
+            "LOOP: br LOOP",
+        })
         {
             Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded);
         }
@@ -270,8 +275,13 @@ public sealed class HostInteractionTests
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
         await using var controller = await SessionWorkspaceFixture.StartAsync(token);
-        foreach (var line in new[] { "ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"running\"",
-            "call void System.IO.File::WriteAllText(string, string)", "LOOP: br LOOP" })
+        foreach (var line in new[]
+        {
+            "ldstr " + LiteralParser.Escape(files.MarkerPath),
+            "ldstr \"running\"",
+            "call void System.IO.File::WriteAllText(string, string)",
+            "LOOP: br LOOP",
+        })
         {
             Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded);
         }

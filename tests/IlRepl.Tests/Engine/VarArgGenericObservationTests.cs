@@ -147,8 +147,11 @@ public sealed class VarArgGenericObservationTests
         session.TypeTable.MethodAliases.Add("Copy", owner.GetMethod("Read")!);
         session.ClearCell();
         AddScenario(session, invokeGeneric, declareScenario: false);
-        foreach (var image in new[] { AssemblyExporter.Write(session, "parsed-generic-varargs"),
-            IlasmLocator.Assemble(session.ToIlAsm()) })
+        foreach (var image in new[]
+        {
+            AssemblyExporter.Write(session, "parsed-generic-varargs"),
+            IlasmLocator.Assemble(session.ToIlAsm()),
+        })
         {
             using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
             var caller = module.Types.Single(type => type.Name == "Caller`1");

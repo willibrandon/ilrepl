@@ -49,13 +49,15 @@ public sealed partial class InProcessEngine
         }
 
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
-        var result = _nativeRunner is null ? new NativeReply
-        {
-            Left = new NativeReport
+        var result = _nativeRunner is null
+            ? new NativeReply
             {
-                Name = package.Left.Name, Detail = "this frontend has no isolated CoreCLR native inspection worker",
-            },
-        } : await _nativeRunner(package, cancellation.Token).ConfigureAwait(false);
+                Left = new NativeReport
+                    {
+                        Name = package.Left.Name, Detail = "this frontend has no isolated CoreCLR native inspection worker",
+                    },
+            }
+            : await _nativeRunner(package, cancellation.Token).ConfigureAwait(false);
 
         await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try

@@ -74,8 +74,11 @@ public sealed class ModuleInitializerEditTests
         session.AddLine("call First");
         session.AddLine("call Second");
         session.AddLine("add");
-        foreach (var image in new[] { AssemblyExporter.Write(session, "module-initializer-copies"),
-            IlasmLocator.Assemble(session.ToIlAsm()) })
+        foreach (var image in new[]
+        {
+            AssemblyExporter.Write(session, "module-initializer-copies"),
+            IlasmLocator.Assemble(session.ToIlAsm()),
+        })
         {
             var context = new AssemblyLoadContext("module-initializer-copies", isCollectible: true);
             try
@@ -125,8 +128,11 @@ public sealed class ModuleInitializerEditTests
         Assert.AreEqual("142", revised.Original.Result!.Value);
         Assert.AreEqual("143", revised.Edited.Result!.Value);
         session.AddLine("call Copy");
-        foreach (var image in new[] { AssemblyExporter.Write(session, "module-initializer-export"),
-            IlasmLocator.Assemble(session.ToIlAsm()) })
+        foreach (var image in new[]
+        {
+            AssemblyExporter.Write(session, "module-initializer-export"),
+            IlasmLocator.Assemble(session.ToIlAsm()),
+        })
         {
             var context = new AssemblyLoadContext("module-initializer-export", isCollectible: true);
             try

@@ -156,9 +156,15 @@ public sealed partial class SessionController
                 }, cancellationToken).ConfigureAwait(false);
 
                 var notice = _runningExit is null ? "session run cancelled" : "session run interrupted by host exit";
-                return (recovered, reply with { Reply = reply.Reply with { Succeeded = false,
-                    Lines = [.. ExitLines(_runningExit), .. reply.Reply.Lines,
-                    TranscriptLine.Of(LineKind.Info, "  " + notice + "; all source remains available", SpanStyle.Dim)] } });
+                return (recovered, reply with
+                {
+                    Reply = reply.Reply with
+                    {
+                        Succeeded = false,
+                        Lines = [.. ExitLines(_runningExit), .. reply.Reply.Lines,
+                            TranscriptLine.Of(LineKind.Info, "  " + notice + "; all source remains available", SpanStyle.Dim)],
+                    },
+                });
             }
             catch (Exception recoveryFailure)
             {

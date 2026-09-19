@@ -98,8 +98,14 @@ public sealed class IndirectReflectionTests
         Assert.IsEmpty(edit.Problems, string.Join("; ", edit.Problems));
         session.CommitEdit(edit.Name, edit.Source);
         Assert.AreEqual(42, edit.Method!.Invoke(null, [Activator.CreateInstance(edit.Method.DeclaringType!)]));
-        foreach (var line in new[] { ".method int32 Scenario() {", "newobj instance void IlRepl.Edits.Copy.Owner::.ctor()",
-            "call Copy", "ret", "}" })
+        foreach (var line in new[]
+        {
+            ".method int32 Scenario() {",
+            "newobj instance void IlRepl.Edits.Copy.Owner::.ctor()",
+            "call Copy",
+            "ret",
+            "}",
+        })
         {
             session.AddLine(line);
         }

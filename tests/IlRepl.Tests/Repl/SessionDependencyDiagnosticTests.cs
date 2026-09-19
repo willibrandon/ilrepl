@@ -80,8 +80,12 @@ public sealed class SessionDependencyDiagnosticTests
         var document = new SessionDocument
         {
             References = [reference],
-            Entries = [new SessionEntry { Kind = SessionEntryKind.Reference, Reference = reference.Identity,
-                Source = [".load " + reference.Request] }],
+            Entries = [new SessionEntry
+            {
+                Kind = SessionEntryKind.Reference,
+                Reference = reference.Identity,
+                Source = [".load " + reference.Request],
+            }],
         };
 
         var options = new ReplOptions { SupportsDependencyRestore = canRestore };

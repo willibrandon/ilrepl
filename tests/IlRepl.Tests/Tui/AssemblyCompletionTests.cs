@@ -42,9 +42,16 @@ public sealed class AssemblyCompletionTests
 
         try
         {
-            foreach (var line in new[] { ".load " + first, ".load " + SampleHost.Samples.GreeterDll,
-                "ldstr " + Quote(second), "ldstr " + Quote(release),
-                "call Greeter.BackgroundAssemblyLoader::LoadAsync(string, string)", "pop", "ret" })
+            foreach (var line in new[]
+            {
+                ".load " + first,
+                ".load " + SampleHost.Samples.GreeterDll,
+                "ldstr " + Quote(second),
+                "ldstr " + Quote(release),
+                "call Greeter.BackgroundAssemblyLoader::LoadAsync(string, string)",
+                "pop",
+                "ret",
+            })
             {
                 Assert.IsTrue((await engine.HandleAsync(line, ct)).Succeeded, line);
             }

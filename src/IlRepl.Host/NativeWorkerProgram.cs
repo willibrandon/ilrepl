@@ -64,12 +64,20 @@ internal static class NativeWorkerProgram
             else
             {
                 using var context = new NativeWorkerContext(target, options, Path.Combine(root, "native"));
-                state = state with { MethodId = (ulong)context.Method.MethodHandle.Value, Method = NativeCapture.Identify(context.Method),
-                    Report = report with { Implementation = NativeCapture.Identify(context.Method),
+                state = state with
+                {
+                    MethodId = (ulong)context.Method.MethodHandle.Value,
+                    Method = NativeCapture.Identify(context.Method),
+                    Report = report with
+                    {
+                        Implementation = NativeCapture.Identify(context.Method),
                         ModuleVersionId = context.Method.Module.ModuleVersionId,
                         Collectible = context.Method.Module.Assembly.IsCollectible,
                         Roles = ["implementation: " + MemberResolver.Describe(context.Method),
-                        "invocation: " + MemberResolver.Describe(context.InvocationMethod)] } };
+                            "invocation: " + MemberResolver.Describe(context.InvocationMethod)],
+                    },
+                };
+
                 await NativeStateFile.WriteAsync(root, state).ConfigureAwait(false);
                 context.Prepare();
                 var elapsed = Stopwatch.StartNew();
@@ -94,8 +102,16 @@ internal static class NativeWorkerProgram
                 using var evidence = new NativeAddressEvidence();
                 var listings = await AvailableListingsAsync(root, state.Method.JitNames).ConfigureAwait(false);
                 evidence.Collect(context, listings, report.Architecture);
-                state = state with { Probes = evidence.Probes, Report = state.Report with { Addresses = evidence.Facts,
-                    Constants = evidence.Constants } };
+                state = state with
+                {
+                    Probes = evidence.Probes,
+                    Report = state.Report with
+                    {
+                        Addresses = evidence.Facts,
+                        Constants = evidence.Constants,
+                    },
+                };
+
                 await NativeStateFile.WriteAsync(root, state).ConfigureAwait(false);
             }
 

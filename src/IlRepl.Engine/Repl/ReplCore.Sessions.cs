@@ -354,9 +354,13 @@ public sealed partial class ReplCore
         {
             var hash = SessionCodec.Hash(image);
             _assets.TryAdd(hash, new SessionAsset { Hash = hash, Image = image });
-            assets.Add(new SessionReferenceAsset { Name = assembly.FullName!, Hash = hash,
+            assets.Add(new SessionReferenceAsset
+            {
+                Name = assembly.FullName!,
+                Hash = hash,
                 Path = File.Exists(request) ? Path.GetFullPath(request) : null,
-                Mvid = assembly.ManifestModule.ModuleVersionId.ToString() });
+                Mvid = assembly.ManifestModule.ModuleVersionId.ToString(),
+            });
         }
 
         var reference = new SessionReference { Request = request, Version = assembly.GetName().Version?.ToString(), Assets = [.. assets] };

@@ -157,10 +157,22 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Endfinally);
             il.Append(end);
             il.Emit(OpCodes.Ret);
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = catchStart,
-                HandlerStart = catchStart, HandlerEnd = finallyStart, CatchType = module.ImportReference(typeof(Exception)) });
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally) { TryStart = tryStart, TryEnd = finallyStart,
-                HandlerStart = finallyStart, HandlerEnd = end });
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch)
+            {
+                TryStart = tryStart,
+                TryEnd = catchStart,
+                HandlerStart = catchStart,
+                HandlerEnd = finallyStart,
+                CatchType = module.ImportReference(typeof(Exception)),
+            });
+
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally)
+            {
+                TryStart = tryStart,
+                TryEnd = finallyStart,
+                HandlerStart = finallyStart,
+                HandlerEnd = end,
+            });
         });
 
         var blocks = method.Entries.Where(e => e.Kind == DisassembledEntryKind.Block).Select(e => e.Block!.Value).ToList();
@@ -203,10 +215,22 @@ public sealed class MethodDisassemblerTests
             il.Append(faultStart);
             il.Emit(OpCodes.Endfinally);
             il.Append(end);
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Filter) { TryStart = tryStart, TryEnd = filterStart,
-                FilterStart = filterStart, HandlerStart = handlerStart, HandlerEnd = faultStart });
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Fault) { TryStart = tryStart, TryEnd = faultStart,
-                HandlerStart = faultStart, HandlerEnd = end });
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Filter)
+            {
+                TryStart = tryStart,
+                TryEnd = filterStart,
+                FilterStart = filterStart,
+                HandlerStart = handlerStart,
+                HandlerEnd = faultStart,
+            });
+
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Fault)
+            {
+                TryStart = tryStart,
+                TryEnd = faultStart,
+                HandlerStart = faultStart,
+                HandlerEnd = end,
+            });
         });
 
         var blocks = method.Entries.Where(e => e.Kind == DisassembledEntryKind.Block).Select(e => (e.Block!.Value, e.Offset)).ToList();
@@ -241,8 +265,14 @@ public sealed class MethodDisassemblerTests
             il.Append(handlerStart);
             il.Emit(OpCodes.Leave, end);
             il.Append(end);
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = gap,
-                HandlerStart = handlerStart, HandlerEnd = end, CatchType = module.ImportReference(typeof(Exception)) });
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch)
+            {
+                TryStart = tryStart,
+                TryEnd = gap,
+                HandlerStart = handlerStart,
+                HandlerEnd = end,
+                CatchType = module.ImportReference(typeof(Exception)),
+            });
         });
 
         Assert.DoesNotContain(e => e.Kind == DisassembledEntryKind.Block, method.Entries);
@@ -277,8 +307,13 @@ public sealed class MethodDisassemblerTests
             il.Emit(OpCodes.Ret);
             il.Append(handlerStart);
             il.Emit(OpCodes.Endfinally);
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally) { TryStart = tryStart, TryEnd = gap,
-                HandlerStart = handlerStart, HandlerEnd = null });
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally)
+            {
+                TryStart = tryStart,
+                TryEnd = gap,
+                HandlerStart = handlerStart,
+                HandlerEnd = null,
+            });
         });
 
         Assert.AreEqual(IlReader.LabelFor(method.CodeSize), method.Entries[^1].Label);
@@ -733,10 +768,23 @@ public sealed class MethodDisassemblerTests
         il.Emit(OpCodes.Leave, end);
         il.Append(end);
         il.Emit(OpCodes.Ret);
-        m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = argumentHandler,
-            HandlerStart = exceptionHandler, HandlerEnd = end, CatchType = module.ImportReference(typeof(Exception)) });
-        m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = argumentHandler,
-            HandlerStart = argumentHandler, HandlerEnd = exceptionHandler, CatchType = module.ImportReference(typeof(ArgumentException)) });
+        m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch)
+        {
+            TryStart = tryStart,
+            TryEnd = argumentHandler,
+            HandlerStart = exceptionHandler,
+            HandlerEnd = end,
+            CatchType = module.ImportReference(typeof(Exception)),
+        });
+
+        m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch)
+        {
+            TryStart = tryStart,
+            TryEnd = argumentHandler,
+            HandlerStart = argumentHandler,
+            HandlerEnd = exceptionHandler,
+            CatchType = module.ImportReference(typeof(ArgumentException)),
+        });
     }
 
     /// <summary>

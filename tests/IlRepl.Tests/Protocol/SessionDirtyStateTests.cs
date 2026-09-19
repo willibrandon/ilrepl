@@ -59,10 +59,16 @@ public sealed class SessionDirtyStateTests
             "embedded-copy" => baseline with { Assets = [new SessionAsset { Hash = SessionCodec.Hash([1, 2, 3]), Image = [1, 2, 3] }] },
             "editor-text" => baseline with { Editor = editor with { Lines = ["// café λ ", ""] } },
             "blank-lines" => baseline with { Editor = editor with { Lines = ["", ""] } },
-            "source" => baseline with { Entries = [baseline.Entries[0] with
-                { Source = [.. baseline.Entries[0].Source, "// retained source"] }, .. baseline.Entries.Skip(1)] },
-            "historical-output" => baseline with { Cells = [baseline.Cells[0] with
-                { Output = [.. output, TranscriptLine.Of(LineKind.Output, "retained output")] }] },
+            "source" => baseline with
+            {
+                Entries = [baseline.Entries[0] with
+                    { Source = [.. baseline.Entries[0].Source, "// retained source"] }, .. baseline.Entries.Skip(1)],
+            },
+            "historical-output" => baseline with
+            {
+                Cells = [baseline.Cells[0] with
+                    { Output = [.. output, TranscriptLine.Of(LineKind.Output, "retained output")] }],
+            },
             "cell-state" => baseline with { Cells = [baseline.Cells[0] with { State = "failed" }] },
             "runtime" => baseline with { Runtime = baseline.Runtime with { Culture = "tr-TR" } },
             "extension" => baseline with { Extensions = new Dictionary<string, JsonElement> { ["future"] = FutureField() } },

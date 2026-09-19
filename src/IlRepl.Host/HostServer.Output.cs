@@ -67,10 +67,12 @@ public sealed partial class HostServer
             return _engine.Progress.Identity == _outputIdentity
                 ? reply with
                 {
-                    OutputIdentity = _outputIdentity, OutputSequence = _outputSequence,
+                    OutputIdentity = _outputIdentity,
+                    OutputSequence = _outputSequence,
                     StreamedLineIndexes = [.. reply.Lines.Select((line, index) => (line, index))
                         .Where(item => _streamedOutputLines.Contains(item.line)).Select(item => item.index)],
-                } : reply;
+                }
+                : reply;
         }
     }
 }

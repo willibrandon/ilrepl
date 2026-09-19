@@ -168,13 +168,15 @@ internal sealed class EditingStack
             };
         }
 
-        return operand.Signature is { } signature ? view with
-        {
-            ReturnType = SymbolIdentity.Equal(signature.ReturnType, TypeSymbol.Void) ? null : signature.ReturnType,
-            ArgumentPops = signature.ArgumentPopCount + 1,
-            ParameterTypes = signature.Parameters,
-            HasImplicitThis = signature.HasThis && !signature.ExplicitThis,
-        } : view;
+        return operand.Signature is { } signature
+            ? view with
+            {
+                ReturnType = SymbolIdentity.Equal(signature.ReturnType, TypeSymbol.Void) ? null : signature.ReturnType,
+                ArgumentPops = signature.ArgumentPopCount + 1,
+                ParameterTypes = signature.Parameters,
+                HasImplicitThis = signature.HasThis && !signature.ExplicitThis,
+            }
+            : view;
     }
 
     /// <summary>

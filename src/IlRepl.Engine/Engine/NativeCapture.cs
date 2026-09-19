@@ -410,11 +410,14 @@ public static class NativeCapture
             Fingerprint = Convert.ToHexStringLower(fingerprint), Assemblies = [.. images.Values], Bindings = [.. bindings.Values],
             Types = types, Aliases = aliases, NativeLibraries = ComparisonCapture.CaptureNativeLibraries(
                 sourceResolver),
-            Cell = cell ? new NativeCell
-            {
-                Declarations = [.. session.DeclarationLines], Body = [.. session.BodyLines],
-                TypeArguments = [.. (session.TypeArguments ?? []).Select(type => type.AssemblyQualifiedName!)],
-            } : null,
+            Cell = cell
+                ? new NativeCell
+                {
+                    Declarations = [.. session.DeclarationLines],
+                    Body = [.. session.BodyLines],
+                    TypeArguments = [.. (session.TypeArguments ?? []).Select(type => type.AssemblyQualifiedName!)],
+                }
+                : null,
         };
     }
 

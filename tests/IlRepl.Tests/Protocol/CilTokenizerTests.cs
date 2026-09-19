@@ -124,8 +124,13 @@ public sealed partial class CilTokenizerTests
     [TestMethod]
     public void Tokenize_IsPureAndRepeatable()
     {
-        var lines = new[] { "call int32 [System.Runtime]System.Math::Max(int32, int32)",
-            ".method public static int32 Fib(int32 n) cil managed {", "ldstr \"a\" // b" };
+        var lines = new[]
+        {
+            "call int32 [System.Runtime]System.Math::Max(int32, int32)",
+            ".method public static int32 Fib(int32 n) cil managed {",
+            "ldstr \"a\" // b",
+        };
+
         foreach (var line in lines)
         {
             var first = Tokenizer.Tokenize(line);

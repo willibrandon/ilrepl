@@ -413,8 +413,14 @@ public static class MemberTokenFixture
                 Call(typeof(string).GetMethod(nameof(string.Trim), Type.EmptyTypes)!);
             }
 
-            var lookup = kind switch { "Field" => nameof(Type.GetField), "Property" => nameof(Type.GetProperty),
-                "Event" => nameof(Type.GetEvent), _ => nameof(Type.GetMethod) };
+            var lookup = kind switch
+            {
+                "Field" => nameof(Type.GetField),
+                "Property" => nameof(Type.GetProperty),
+                "Event" => nameof(Type.GetEvent),
+                _ => nameof(Type.GetMethod),
+            };
+
             Call(typeof(Type).GetMethod(lookup, [typeof(string)])!);
             if (kind is not ("Parameter" or "GenericParameter"))
             {

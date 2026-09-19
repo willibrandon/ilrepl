@@ -303,11 +303,18 @@ public sealed partial class SessionController : IInterruptibleEngine
 
                 await InstallEngineAsync(candidate).ConfigureAwait(false);
                 var editor = RecoveryEditor();
-                result = restored with { Document = restored.Document with { Editor = editor },
-                    Reply = restored.Reply with { Lines = [.. ExitLines(exit),
-                    TranscriptLine.Of(LineKind.Info,
-                        "  runtime restarted; source and definitions retained, objects and static values reset", SpanStyle.Dim)],
-                    SessionEditor = editor } };
+                result = restored with
+                {
+                    Document = restored.Document with { Editor = editor },
+                    Reply = restored.Reply with
+                    {
+                        Lines = [.. ExitLines(exit),
+                            TranscriptLine.Of(LineKind.Info,
+                                "  runtime restarted; source and definitions retained, objects and static values reset", SpanStyle.Dim)],
+                        SessionEditor = editor,
+                    },
+                };
+
                 SetRuntimeState(SessionRuntimeState.Ready);
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
@@ -317,9 +324,13 @@ public sealed partial class SessionController : IInterruptibleEngine
                     await candidate.DisposeAsync().ConfigureAwait(false);
                 }
 
-                result = retained with { Reply = Failure("host unavailable: " + exception.Message
-                    + "; source remains editable; use .session save or .session restart") with
-                    { SessionEditor = retained.Document.Editor } };
+                result = retained with
+                {
+                    Reply = Failure("host unavailable: " + exception.Message
+                        + "; source remains editable; use .session save or .session restart") with
+                        { SessionEditor = retained.Document.Editor },
+                };
+
                 SetRuntimeState(SessionRuntimeState.Unavailable);
             }
 

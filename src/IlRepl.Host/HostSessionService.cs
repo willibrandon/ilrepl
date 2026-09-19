@@ -35,8 +35,11 @@ internal sealed class HostSessionService
             document = await MaterializeNativeAsync(document, cancellationToken).ConfigureAwait(false);
             return await _engine.SessionAsync(request with
             {
-                Action = new SessionAction { Operation = request.Action.Execute ? SessionOperation.Run : SessionOperation.Hydrate,
-                    Path = path },
+                Action = new SessionAction
+                {
+                    Operation = request.Action.Execute ? SessionOperation.Run : SessionOperation.Hydrate,
+                    Path = path,
+                },
                 Document = document, Editor = document.Editor,
             }, cancellationToken).ConfigureAwait(false);
         }

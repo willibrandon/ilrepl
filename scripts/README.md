@@ -23,7 +23,8 @@ dotnet run --file scripts/Publish-NativeAot.cs -- --rid osx-arm64 --package-vers
 
 The scripts build under the repository's `.editorconfig` and the analyzers in `src/IlRepl.SourceGen`, like every project,
 so `dotnet build scripts/<name>.cs` reports a layout error as the solution build would. `dotnet format` cannot process a
-file-based app, so fix what that build reports by hand.
+file-based app, so fix what that build reports by hand. The solution does not include the scripts, so build each of them after a
+change to the analyzers.
 
 The bootstrap catalog lets the terminal offer editing and command help before the execution host connects.
 After changing the engine's command catalog or IL vocabulary, run `Generate-BootstrapCatalog.cs` from inside the repository.

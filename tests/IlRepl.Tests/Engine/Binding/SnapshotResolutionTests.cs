@@ -65,8 +65,13 @@ public sealed class SnapshotResolutionTests
         {
             using var snapshot = BindingSnapshot.Capture(context);
             var scope = new SnapshotBindingScope(snapshot);
-            foreach (var text in new[] { "[System.Runtime]System.String",
-                "class [System.Collections]System.Collections.Generic.List`1<int32>", "Console", "Dictionary<string, int32>" })
+            foreach (var text in new[]
+            {
+                "[System.Runtime]System.String",
+                "class [System.Collections]System.Collections.Generic.List`1<int32>",
+                "Console",
+                "Dictionary<string, int32>",
+            })
             {
                 SymbolBinder.BindType(CilSyntaxParser.ParseType(text), scope);
             }
@@ -341,8 +346,18 @@ public sealed class SnapshotResolutionTests
     {
         var context = new ParseContext([], [], GenericContext.Empty, new TypeResolver(), []);
         using var snapshot = BindingSnapshot.Capture(context);
-        foreach (var type in new[] { typeof(List<>), typeof(Dictionary<,>.Enumerator), typeof(Environment.SpecialFolder), typeof(Action<>),
-            typeof(IComparable<>), typeof(ValueTuple<,>), typeof(Enum), typeof(ValueType), typeof(StringBuilder) })
+        foreach (var type in new[]
+        {
+            typeof(List<>),
+            typeof(Dictionary<,>.Enumerator),
+            typeof(Environment.SpecialFolder),
+            typeof(Action<>),
+            typeof(IComparable<>),
+            typeof(ValueTuple<,>),
+            typeof(Enum),
+            typeof(ValueType),
+            typeof(StringBuilder),
+        })
         {
             var expected = RuntimeSymbolImporter.Import(type);
             var located = snapshot.Catalog.Locate(expected);

@@ -138,8 +138,12 @@ public sealed class ProtocolJsonTests
         Assert.IsNotNull(backLine);
         Assert.AreSequenceEqual(line.Spans, backLine.Spans);
 
-        var vocabulary = new CilVocabulary(new Dictionary<string, CilOperandKind> { ["ldc.i4"] = CilOperandKind.Integer,
-            ["no."] = CilOperandKind.Integer }, [".locals"], [".show", ".?"], ["instance"], ["int32"]);
+        var vocabulary = new CilVocabulary(new Dictionary<string, CilOperandKind>
+        {
+            ["ldc.i4"] = CilOperandKind.Integer,
+            ["no."] = CilOperandKind.Integer,
+        }, [".locals"], [".show", ".?"], ["instance"], ["int32"]);
+
         var vocabularyJson = JsonSerializer.Serialize(vocabulary, ProtocolJsonContext.Default.CilVocabulary);
         Assert.Contains("\"ldc.i4\":\"Integer\"", vocabularyJson);
         var back = JsonSerializer.Deserialize(vocabularyJson, ProtocolJsonContext.Default.CilVocabulary);

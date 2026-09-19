@@ -16,8 +16,14 @@ public sealed class GenericConstraintBindingTests
     public void OpenGenericMethod_ValidatesItsArguments()
     {
         var session = new Session();
-        foreach (var line in new[] { ".class public Host {", ".method public static void Touch<valuetype T>() {",
-            "ret", "}", ".method public static void Caller() {" })
+        foreach (var line in new[]
+        {
+            ".class public Host {",
+            ".method public static void Touch<valuetype T>() {",
+            "ret",
+            "}",
+            ".method public static void Caller() {",
+        })
         {
             session.AddLine(line);
         }
@@ -86,8 +92,14 @@ public sealed class GenericConstraintBindingTests
     public void PrivateStructConstructor_RetainsImplicitDefault()
     {
         var session = new Session();
-        foreach (var line in new[] { ".class public sequential NoDefault extends System.ValueType {",
-            ".method private specialname rtspecialname instance void .ctor() {", "ret", "}", "}" })
+        foreach (var line in new[]
+        {
+            ".class public sequential NoDefault extends System.ValueType {",
+            ".method private specialname rtspecialname instance void .ctor() {",
+            "ret",
+            "}",
+            "}",
+        })
         {
             session.AddLine(line);
         }

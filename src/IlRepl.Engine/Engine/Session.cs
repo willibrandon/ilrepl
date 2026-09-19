@@ -605,8 +605,12 @@ public sealed partial class Session
             cancellationToken.ThrowIfCancellationRequested();
             RecordActivation(compiled);
             Activate();
-            var invocation = compiled with { ArgumentValues = compiled.InvocationArguments.Select(argument => argument.ExecutionValue())
-                .ToArray() };
+            var invocation = compiled with
+            {
+                ArgumentValues = compiled.InvocationArguments.Select(argument => argument.ExecutionValue())
+                    .ToArray(),
+            };
+
             ClearCell();
             CellsRun++;
             Submissions++;

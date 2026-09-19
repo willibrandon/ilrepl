@@ -58,8 +58,24 @@ public sealed class NameSuggestionsTests
     [TestMethod]
     public void WithinBound_AgreesWithLevenshtein()
     {
-        var words = new[] { "Concat", "Concta", "Console", "Xonsole", "Cosnole", "WriteLine", "Write", "Trim", "Trmi", "ToString",
-            "tostring", "", "a", "ab" };
+        var words = new[]
+        {
+            "Concat",
+            "Concta",
+            "Console",
+            "Xonsole",
+            "Cosnole",
+            "WriteLine",
+            "Write",
+            "Trim",
+            "Trmi",
+            "ToString",
+            "tostring",
+            "",
+            "a",
+            "ab",
+        };
+
         foreach (var a in words)
         {
             foreach (var b in words)

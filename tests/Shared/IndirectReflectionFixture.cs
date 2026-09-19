@@ -20,11 +20,30 @@ public static class IndirectReflectionFixture
         {
             foreach (var target in new[] { "Assembly", "Module" })
             {
-                foreach (var dispatch in new[] { "invoke", "invoke options", "local", "helper", "handle", "invoker", "delegate",
+                foreach (var dispatch in new[]
+                {
+                    "invoke",
+                    "invoke options",
+                    "local",
+                    "helper",
+                    "handle",
+                    "invoker",
+                    "delegate",
                     "method delegate",
-                    "delegate options", "open delegate", "open delegate options", "open method delegate", "generic method delegate",
-                    "open generic method delegate", "named delegate", "named delegate ignore case", "named delegate options",
-                    "invoke member", "invoke member culture", "invoke member options", "ireflect" })
+                    "delegate options",
+                    "open delegate",
+                    "open delegate options",
+                    "open method delegate",
+                    "generic method delegate",
+                    "open generic method delegate",
+                    "named delegate",
+                    "named delegate ignore case",
+                    "named delegate options",
+                    "invoke member",
+                    "invoke member culture",
+                    "invoke member options",
+                    "ireflect",
+                })
                 {
                     yield return (target, "GetTypes", dispatch);
                 }
@@ -40,8 +59,15 @@ public static class IndirectReflectionFixture
                 }
             }
 
-            foreach (var api in new[] { "GetExportedTypes", "GetManifestResourceNames", "GetManifestResourceInfo",
-                "GetManifestResourceStream", "typed resource", "typed attributes" })
+            foreach (var api in new[]
+            {
+                "GetExportedTypes",
+                "GetManifestResourceNames",
+                "GetManifestResourceInfo",
+                "GetManifestResourceStream",
+                "typed resource",
+                "typed attributes",
+            })
             {
                 yield return ("Assembly", api, "invoke");
             }

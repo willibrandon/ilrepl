@@ -67,8 +67,12 @@ internal sealed record GenericArgumentContext
                 continue;
             }
 
-            var ready = parameter with { Constraints = parameter.Constraints
-                .Where(constraint => !DependsOnPending(Substitute(constraint))).ToArray() };
+            var ready = parameter with
+            {
+                Constraints = parameter.Constraints
+                    .Where(constraint => !DependsOnPending(Substitute(constraint))).ToArray(),
+            };
+
             if (!GenericConstraints.Satisfies(ready, argument, Substitute, scope))
             {
                 return false;

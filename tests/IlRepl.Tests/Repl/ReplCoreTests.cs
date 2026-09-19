@@ -373,9 +373,28 @@ public sealed class ReplCoreTests
     public void Handle_Il_HasNoErrorSpan()
     {
         var core = new ReplCore();
-        foreach (var line in new[] { ".locals init (int32 i)", ".method int32 F(int32 n) {", ".locals init (int32 r)", ".try {", "ldarg n",
-            "stloc r", "leave END", "} catch [System.Runtime]System.Exception {", "pop", "ldc.i4 0", "stloc r", "leave END", "}",
-            "END: ldloc r", "ret", "}", "ldc.i4 1", "stloc i", ".il" })
+        foreach (var line in new[]
+        {
+            ".locals init (int32 i)",
+            ".method int32 F(int32 n) {",
+            ".locals init (int32 r)",
+            ".try {",
+            "ldarg n",
+            "stloc r",
+            "leave END",
+            "} catch [System.Runtime]System.Exception {",
+            "pop",
+            "ldc.i4 0",
+            "stloc r",
+            "leave END",
+            "}",
+            "END: ldloc r",
+            "ret",
+            "}",
+            "ldc.i4 1",
+            "stloc i",
+            ".il",
+        })
         {
             Assert.IsTrue(core.Handle(line).Succeeded, line);
         }

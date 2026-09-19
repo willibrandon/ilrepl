@@ -242,8 +242,15 @@ public static class AssemblyReferenceFixture
             }
         }
 
-        var receiver = target switch { "Assembly" => typeof(Assembly), "Module" => typeof(Module),
-            "ModuleHandle" => typeof(ModuleHandle), "String" => typeof(string), _ => typeof(object) };
+        var receiver = target switch
+        {
+            "Assembly" => typeof(Assembly),
+            "Module" => typeof(Module),
+            "ModuleHandle" => typeof(ModuleHandle),
+            "String" => typeof(string),
+            _ => typeof(object),
+        };
+
         var method = operation switch
         {
             "equality" => receiver.GetMethod("op_Equality", [receiver, receiver]),

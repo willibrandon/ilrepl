@@ -311,8 +311,15 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
     {
         lock (_gate)
         {
-            foreach (var name in new[] { unmanagedDllName, unmanagedDllName + ".dll", unmanagedDllName + ".so",
-                "lib" + unmanagedDllName, "lib" + unmanagedDllName + ".so", "lib" + unmanagedDllName + ".dylib" })
+            foreach (var name in new[]
+            {
+                unmanagedDllName,
+                unmanagedDllName + ".dll",
+                unmanagedDllName + ".so",
+                "lib" + unmanagedDllName,
+                "lib" + unmanagedDllName + ".so",
+                "lib" + unmanagedDllName + ".dylib",
+            })
             {
                 if (_native.TryGetValue(name, out var path))
                 {
@@ -322,8 +329,15 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
 
             foreach (var directory in _paths.Values.Select(Path.GetDirectoryName).Distinct())
             {
-                foreach (var name in new[] { unmanagedDllName, unmanagedDllName + ".dll", unmanagedDllName + ".so",
-                    "lib" + unmanagedDllName, "lib" + unmanagedDllName + ".so", "lib" + unmanagedDllName + ".dylib" })
+                foreach (var name in new[]
+                {
+                    unmanagedDllName,
+                    unmanagedDllName + ".dll",
+                    unmanagedDllName + ".so",
+                    "lib" + unmanagedDllName,
+                    "lib" + unmanagedDllName + ".so",
+                    "lib" + unmanagedDllName + ".dylib",
+                })
                 {
                     var candidate = Path.Combine(directory!, name);
                     if (File.Exists(candidate))

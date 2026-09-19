@@ -756,8 +756,15 @@ public sealed class CellState
             hasDefault = true;
         }
 
-        _entries.Add(new CellEntry { Kind = EntryKind.Param, Source = source, ParamIndex = index, ParamDefault = value,
-            ParamHasDefault = hasDefault });
+        _entries.Add(new CellEntry
+        {
+            Kind = EntryKind.Param,
+            Source = source,
+            ParamIndex = index,
+            ParamDefault = value,
+            ParamHasDefault = hasDefault,
+        });
+
         return new LineResult(LineOutcome.Param, null, hasDefault ? $"param {index} = {ConstantText.Describe(value)}" : $"param {index}");
     }
 

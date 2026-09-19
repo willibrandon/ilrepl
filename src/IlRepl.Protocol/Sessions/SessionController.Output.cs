@@ -69,8 +69,13 @@ public sealed partial class SessionController
         lock (_outputLock)
         {
             return reply.OutputSequence > 0 && reply.OutputIdentity == _streamedIdentity && reply.OutputSequence <= _streamedSequence
-                ? reply with { Lines = [.. reply.Lines.Where((line, index) => line.Kind != LineKind.Output
-                    && !reply.StreamedLineIndexes.Contains(index))], StreamedLineIndexes = [] } : reply;
+                ? reply with
+                {
+                    Lines = [.. reply.Lines.Where((line, index) => line.Kind != LineKind.Output
+                        && !reply.StreamedLineIndexes.Contains(index))],
+                    StreamedLineIndexes = [],
+                }
+                : reply;
         }
     }
 }

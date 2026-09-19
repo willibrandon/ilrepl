@@ -193,8 +193,11 @@ internal static partial class PackageResolver
 
                         var asset = await DependencyAsset.ReadAsync(path, kind, assets, cancellationToken).ConfigureAwait(false);
                         var segments = item.Path.Split('/');
-                        selected.Add(asset with { PackagePath = item.Path,
-                            Rid = segments.Length > 2 && segments[0] == "runtimes" ? segments[1] : null });
+                        selected.Add(asset with
+                        {
+                            PackagePath = item.Path,
+                            Rid = segments.Length > 2 && segments[0] == "runtimes" ? segments[1] : null,
+                        });
                     }
                 }
 
@@ -270,8 +273,13 @@ internal static partial class PackageResolver
             if (requestedId is not null && !entries.Any(entry => entry.Kind == SessionEntryKind.Reference
                 && entry.Reference == identities[requestedId]))
             {
-                entries.Add(new SessionEntry { Kind = SessionEntryKind.Reference, Reference = identities[requestedId],
-                    Number = document.Cells.Select(cell => cell.Number).DefaultIfEmpty(0).Max() + 1, Source = [".load " + request] });
+                entries.Add(new SessionEntry
+                {
+                    Kind = SessionEntryKind.Reference,
+                    Reference = identities[requestedId],
+                    Number = document.Cells.Select(cell => cell.Number).DefaultIfEmpty(0).Max() + 1,
+                    Source = [".load " + request],
+                });
             }
 
             return document with

@@ -87,8 +87,17 @@ public static class ProcessNativeRunner
         CancellationToken cancellationToken)
     {
         var target = left ? package.Left : package.Right!;
-        var state = new NativeWorkerState { Report = new NativeReport { Name = target.Name, Fingerprint = target.Fingerprint,
-            IsCapability = package.Options.Info, Raw = package.Options.Raw } };
+        var state = new NativeWorkerState
+        {
+            Report = new NativeReport
+            {
+                Name = target.Name,
+                Fingerprint = target.Fingerprint,
+                IsCapability = package.Options.Info,
+                Raw = package.Options.Raw,
+            },
+        };
+
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var outputLifetime = new CancellationTokenSource();
         using var process = new Process();
@@ -394,17 +403,23 @@ public static class ProcessNativeRunner
 
         if (compilations.Count == 0 && report.Outcome == "complete")
         {
-            report = report with { Outcome = "incomplete",
+            report = report with
+            {
+                Outcome = "incomplete",
                 Detail = "no complete listing could be attributed to the selected runtime method "
-                + $"({blocks.Length} listings; {publications.Count} matching publications)" };
+                    + $"({blocks.Length} listings; {publications.Count} matching publications)",
+            };
         }
 
         if (report.Outcome == "complete" && package.Options.Tier is "tier0" or "tier1"
             && !compilations.Any(compilation => package.Options.Tier == "tier0"
                 ? compilation.Tier is "Tier0" or "Instrumented Tier0" : compilation.Tier is "Tier1" or "Instrumented Tier1" or "OSR"))
         {
-            report = report with { Outcome = "tier-unavailable",
-                Detail = "the requested tier was not observed; retained actual compilations" };
+            report = report with
+            {
+                Outcome = "tier-unavailable",
+                Detail = "the requested tier was not observed; retained actual compilations",
+            };
         }
 
         if (source?.EventsLost > 0)

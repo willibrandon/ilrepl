@@ -730,12 +730,14 @@ public static partial class IlReplApp
         var detailLines = PromptWidget.DetailLines(prompt, engine.Catalog, size.Width).Count;
         var diagnosticLines = PromptDiagnostics.Lines(prompt, size.Width).Count;
         var interruptNotice = prompt.Interruption.BuildNotice(InterruptTime);
-        var supervisionNotice = engine is IProcessSupervision supervised ? supervised.Supervision switch
-        {
-            { Restoring: true } => "Restoring process supervision; your runtime remains available",
-            { Degraded: true } => "Process supervision unavailable; press Alt+R to retry without restarting",
-            _ => null,
-        } : null;
+        var supervisionNotice = engine is IProcessSupervision supervised
+            ? supervised.Supervision switch
+            {
+                { Restoring: true } => "Restoring process supervision; your runtime remains available",
+                { Degraded: true } => "Process supervision unavailable; press Alt+R to retry without restarting",
+                _ => null,
+            }
+            : null;
 
         var noticeWidth = Math.Max(1, size.Width);
         var noticeRows = (interruptNotice is null ? 0 : (interruptNotice.Length + noticeWidth - 1) / noticeWidth)

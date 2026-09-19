@@ -163,8 +163,12 @@ internal sealed partial class ImportedMethodFamily
         var offset = 0;
         foreach (var original in _types.Keys)
         {
-            foreach (var value in new[] { original.FullName!, original.Assembly.FullName!,
-                CecilSerializedTypeName.Format(writer.Import(original)) })
+            foreach (var value in new[]
+            {
+                original.FullName!,
+                original.Assembly.FullName!,
+                CecilSerializedTypeName.Format(writer.Import(original)),
+            })
             {
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4, offset++);

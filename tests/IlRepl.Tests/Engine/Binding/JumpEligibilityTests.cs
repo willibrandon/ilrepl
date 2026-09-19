@@ -48,8 +48,17 @@ public sealed class JumpEligibilityTests
     public void Jump_RequiresEnclosingSignature(string source, string target, bool eligible)
     {
         using var editing = new EditingSession(new Session());
-        var lines = new[] { ".class public JumpHost {", ".method public " + target + " {", "ldnull", "throw", "}",
-            ".method public " + source + " {", "" };
+        var lines = new[]
+        {
+            ".class public JumpHost {",
+            ".method public " + target + " {",
+            "ldnull",
+            "throw",
+            "}",
+            ".method public " + source + " {",
+            "",
+        };
+
         var view = editing.Speculate(lines, lines.Length - 1, cancellationToken: TestContext.CancellationToken);
         Assert.IsEmpty(view.SkippedLines);
         var method = view.Scope.Methods(view.Owner!, "Target").Single();
@@ -67,8 +76,13 @@ public sealed class JumpEligibilityTests
     public void Jump_ChecksImplicitReceiver(string baseType, bool eligible)
     {
         using var editing = new EditingSession(new Session());
-        var lines = new[] { ".class public JumpHost extends " + baseType + " {",
-            ".method public instance int32 Bridge(int32 value) {", "" };
+        var lines = new[]
+        {
+            ".class public JumpHost extends " + baseType + " {",
+            ".method public instance int32 Bridge(int32 value) {",
+            "",
+        };
+
         var view = editing.Speculate(lines, 2, cancellationToken: TestContext.CancellationToken);
         Assert.IsEmpty(view.SkippedLines);
         var method = RuntimeSymbolImporter.Import(typeof(Random).GetMethod(nameof(Random.Next), [typeof(int)])!);

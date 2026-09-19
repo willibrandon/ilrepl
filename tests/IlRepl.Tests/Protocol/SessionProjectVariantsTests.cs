@@ -214,8 +214,12 @@ public sealed class SessionProjectVariantsTests
         var release = Path.Combine(fixture.DirectoryPath, "release.build");
         AddBuildGate(project, marker, release);
         var started = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var watcher = new FileSystemWatcher(fixture.DirectoryPath, "build.pid") { NotifyFilter = NotifyFilters.LastWrite
-            | NotifyFilters.FileName | NotifyFilters.Size };
+        using var watcher = new FileSystemWatcher(fixture.DirectoryPath, "build.pid")
+        {
+            NotifyFilter = NotifyFilters.LastWrite
+                | NotifyFilters.FileName | NotifyFilters.Size,
+        };
+
         void Observe(object sender, FileSystemEventArgs args)
         {
             try
@@ -343,8 +347,17 @@ public sealed class SessionProjectVariantsTests
 
     private async Task<string> RunSdkAsync(string directory, string[] arguments)
     {
-        using var process = new Process { StartInfo = new ProcessStartInfo("dotnet") { WorkingDirectory = directory,
-            RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false } };
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo("dotnet")
+            {
+                WorkingDirectory = directory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            },
+        };
+
         foreach (var argument in arguments)
         {
             process.StartInfo.ArgumentList.Add(argument);
@@ -370,8 +383,11 @@ public sealed class SessionProjectVariantsTests
     }
 
     private async Task<SessionDocument> CaptureAsync(SessionController controller) =>
-        (await controller.SessionAsync(new SessionRequest { Action = new SessionAction { Operation = SessionOperation.Capture },
-            Editor = controller.Editor }, TestContext.CancellationToken)).Document;
+        (await controller.SessionAsync(new SessionRequest
+        {
+            Action = new SessionAction { Operation = SessionOperation.Capture },
+            Editor = controller.Editor,
+        }, TestContext.CancellationToken)).Document;
 
     private async Task<HandleReply> SubmitAsync(SessionController controller, string line)
     {

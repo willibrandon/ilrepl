@@ -398,8 +398,12 @@ public sealed partial class SessionController : IReplEngine
 
             _checkpointBatch = false;
             var failed = Failure(exception.Message);
-            return failed with { Quit = _disposed, Lines = [.. UnstreamedFrontendOutput(reply?.Lines ?? []), .. failed.Lines],
-                Diagnostics = reply?.Diagnostics ?? [] };
+            return failed with
+            {
+                Quit = _disposed,
+                Lines = [.. UnstreamedFrontendOutput(reply?.Lines ?? []), .. failed.Lines],
+                Diagnostics = reply?.Diagnostics ?? [],
+            };
         }
         catch (OperationCanceledException) when (_disposed)
         {
@@ -514,8 +518,13 @@ public sealed partial class SessionController : IReplEngine
             var captured = await CaptureAsync(cancellationToken).ConfigureAwait(false);
             if (action.Operation is SessionOperation.Run or SessionOperation.Load or SessionOperation.Restore)
             {
-                request = request with { Document = request.Document ?? captured.Document,
-                    AssociatedPath = captured.Path, Modified = captured.Dirty || action.Operation != SessionOperation.Restore };
+                request = request with
+                {
+                    Document = request.Document ?? captured.Document,
+                    AssociatedPath = captured.Path,
+                    Modified = captured.Dirty || action.Operation != SessionOperation.Restore,
+                };
+
                 if (action.Operation == SessionOperation.Run)
                 {
                     request = request with { Action = action with { Path = captured.Path } };
@@ -540,9 +549,12 @@ public sealed partial class SessionController : IReplEngine
                 if (PublishCheckpointAsync is { } publish)
                 {
                     await publish(action.Operation == SessionOperation.Run
-                        ? captured with { PendingSubmission = action.Numbers.FirstOrDefault(
-                            captured.Document.Cells.FirstOrDefault(cell => cell.Kind == "cell")?.Number ?? Status.CellNumber),
-                            PendingSource = captured.Document.Editor.Lines }
+                        ? captured with
+                        {
+                            PendingSubmission = action.Numbers.FirstOrDefault(
+                                captured.Document.Cells.FirstOrDefault(cell => cell.Kind == "cell")?.Number ?? Status.CellNumber),
+                            PendingSource = captured.Document.Editor.Lines,
+                        }
                         : captured, cancellationToken).ConfigureAwait(false);
                 }
 

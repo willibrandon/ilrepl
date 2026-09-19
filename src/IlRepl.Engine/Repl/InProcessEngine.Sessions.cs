@@ -167,8 +167,14 @@ public sealed partial class InProcessEngine
             var cell = _core.CaptureSession(request.Editor).Cells.SingleOrDefault(cell => cell.Number == number)
                 ?? throw new ReplException($"no retained cell {number}; use .session cells");
             var lines = _core.RecallSessionCell(cell);
-            var editor = new SessionEditor { Lines = lines, Caret = string.Join('\n', lines).Length,
-                Anchor = string.Join('\n', lines).Length, Revision = request.Editor.Revision + 1 };
+            var editor = new SessionEditor
+            {
+                Lines = lines,
+                Caret = string.Join('\n', lines).Length,
+                Anchor = string.Join('\n', lines).Length,
+                Revision = request.Editor.Revision + 1,
+            };
+
             _core.Transcript.Add(LineKind.Info, $"  recalled cell {number}; previous output is historical", SpanStyle.Dim);
             foreach (var output in cell.Output)
             {
@@ -243,8 +249,14 @@ public sealed partial class InProcessEngine
     private SessionReply CaptureReply(SessionEditor editor)
     {
         var document = _core.CaptureSession(editor);
-        return new SessionReply { Document = document, Path = _sessionPath, Dirty = IsDirty(document),
-            Diagnostics = _sessionDiagnostics, Reply = new HandleReply(true, false, [], _core.Status) };
+        return new SessionReply
+        {
+            Document = document,
+            Path = _sessionPath,
+            Dirty = IsDirty(document),
+            Diagnostics = _sessionDiagnostics,
+            Reply = new HandleReply(true, false, [], _core.Status),
+        };
     }
 
     private bool IsDirty(SessionDocument document) => _savedSessionHash is null
@@ -255,8 +267,13 @@ public sealed partial class InProcessEngine
     {
         var content = document with
         {
-            Editor = document.Editor with { Caret = 0, Anchor = 0, Revision = 0,
-                Lines = document.Editor.Lines.Length == 1 && document.Editor.Lines[0].Length == 0 ? [] : document.Editor.Lines },
+            Editor = document.Editor with
+            {
+                Caret = 0,
+                Anchor = 0,
+                Revision = 0,
+                Lines = document.Editor.Lines.Length == 1 && document.Editor.Lines[0].Length == 0 ? [] : document.Editor.Lines,
+            },
             Assets = [],
         };
 

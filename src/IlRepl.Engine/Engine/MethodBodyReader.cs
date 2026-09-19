@@ -269,8 +269,15 @@ internal sealed class MethodBodyReader
         {
             case OperandType.InlineNone:
             {
-                int? local = name switch { "ldloc.0" or "stloc.0" => 0, "ldloc.1" or "stloc.1" => 1,
-                    "ldloc.2" or "stloc.2" => 2, "ldloc.3" or "stloc.3" => 3, _ => null };
+                int? local = name switch
+                {
+                    "ldloc.0" or "stloc.0" => 0,
+                    "ldloc.1" or "stloc.1" => 1,
+                    "ldloc.2" or "stloc.2" => 2,
+                    "ldloc.3" or "stloc.3" => 3,
+                    _ => null,
+                };
+
                 int? argument = name switch { "ldarg.0" => 0, "ldarg.1" => 1, "ldarg.2" => 2, "ldarg.3" => 3, _ => null };
                 if (local is int l && l >= localCount)
                 {
@@ -283,34 +290,73 @@ internal sealed class MethodBodyReader
                 }
 
                 var retPops = name == "ret" && _definition is MethodInfo { ReturnType: var rt } && rt != typeof(void) ? 1 : 0;
-                return Instruction(raw, new Instruction { Op = emit, Text = name, LocalIndex = local,
-                    ArgumentIndex = argument, RetPops = retPops }, local is int ul && unresolvedLocals.Contains(ul));
+                return Instruction(raw, new Instruction
+                {
+                    Op = emit,
+                    Text = name,
+                    LocalIndex = local,
+                    ArgumentIndex = argument,
+                    RetPops = retPops,
+                }, local is int ul && unresolvedLocals.Contains(ul));
             }
 
             case OperandType.ShortInlineI:
                 return name == "ldc.i4.s"
-                    ? Instruction(raw, new Instruction { Op = emit, Text = $"{name} {raw.Operand.Integer}",
-                        Kind = OperandKind.SByte, Operand = (sbyte)raw.Operand.Integer })
-                    : Instruction(raw, new Instruction { Op = emit, Text = $"{name} {raw.Operand.Integer}",
-                        Kind = OperandKind.Byte, Operand = (byte)raw.Operand.Integer });
+                    ? Instruction(raw, new Instruction
+                    {
+                        Op = emit,
+                        Text = $"{name} {raw.Operand.Integer}",
+                        Kind = OperandKind.SByte,
+                        Operand = (sbyte)raw.Operand.Integer,
+                    })
+                    : Instruction(raw, new Instruction
+                    {
+                        Op = emit,
+                        Text = $"{name} {raw.Operand.Integer}",
+                        Kind = OperandKind.Byte,
+                        Operand = (byte)raw.Operand.Integer,
+                    });
+
             case OperandType.InlineI:
-                return Instruction(raw, new Instruction { Op = emit, Text = $"{name} {raw.Operand.Integer}",
-                    Kind = OperandKind.Int32, Operand = (int)raw.Operand.Integer });
+                return Instruction(raw, new Instruction
+                {
+                    Op = emit,
+                    Text = $"{name} {raw.Operand.Integer}",
+                    Kind = OperandKind.Int32,
+                    Operand = (int)raw.Operand.Integer,
+                });
+
             case OperandType.InlineI8:
-                return Instruction(raw, new Instruction { Op = emit, Text = $"{name} {raw.Operand.Integer}",
-                    Kind = OperandKind.Int64, Operand = raw.Operand.Integer });
+                return Instruction(raw, new Instruction
+                {
+                    Op = emit,
+                    Text = $"{name} {raw.Operand.Integer}",
+                    Kind = OperandKind.Int64,
+                    Operand = raw.Operand.Integer,
+                });
+
             case OperandType.ShortInlineR:
             {
                 var value = BitConverter.Int32BitsToSingle(unchecked((int)raw.Operand.Bits32));
-                return Instruction(raw, new Instruction { Op = emit, Text = $"{name} {FloatText(raw.Operand.Bits32)}",
-                    Kind = OperandKind.Single, Operand = value });
+                return Instruction(raw, new Instruction
+                {
+                    Op = emit,
+                    Text = $"{name} {FloatText(raw.Operand.Bits32)}",
+                    Kind = OperandKind.Single,
+                    Operand = value,
+                });
             }
 
             case OperandType.InlineR:
             {
                 var value = BitConverter.Int64BitsToDouble(unchecked((long)raw.Operand.Bits64));
-                return Instruction(raw, new Instruction { Op = emit, Text = $"{name} {DoubleText(raw.Operand.Bits64)}",
-                    Kind = OperandKind.Double, Operand = value });
+                return Instruction(raw, new Instruction
+                {
+                    Op = emit,
+                    Text = $"{name} {DoubleText(raw.Operand.Bits64)}",
+                    Kind = OperandKind.Double,
+                    Operand = value,
+                });
             }
 
             case OperandType.ShortInlineBrTarget:
@@ -323,8 +369,13 @@ internal sealed class MethodBodyReader
             case OperandType.InlineSwitch:
             {
                 var labels = raw.Operand.SwitchTargets.Select(IlReader.LabelFor).ToArray();
-                return Instruction(raw, new Instruction { Op = emit, Text = $"{name} ({string.Join(", ", labels)})",
-                    Kind = OperandKind.Labels, Operand = labels });
+                return Instruction(raw, new Instruction
+                {
+                    Op = emit,
+                    Text = $"{name} ({string.Join(", ", labels)})",
+                    Kind = OperandKind.Labels,
+                    Operand = labels,
+                });
             }
 
             case OperandType.ShortInlineVar:
@@ -339,8 +390,15 @@ internal sealed class MethodBodyReader
                         return Raw(raw, $"{name} {index}", $"{name} at {raw.Label} names local {index} but the body declares {localCount}");
                     }
 
-                    return Instruction(raw, new Instruction { Op = emit, Text = $"{name} V_{index}", Kind = OperandKind
-                        .Local, Operand = index, LocalIndex = index }, unresolvedLocals.Contains(index));
+                    return Instruction(raw, new Instruction
+                    {
+                        Op = emit,
+                        Text = $"{name} V_{index}",
+                        Kind = OperandKind
+                            .Local,
+                        Operand = index,
+                        LocalIndex = index,
+                    }, unresolvedLocals.Contains(index));
                 }
 
                 if (index >= argumentCount)
@@ -348,8 +406,14 @@ internal sealed class MethodBodyReader
                     return Raw(raw, $"{name} {index}", $"{name} at {raw.Label} names argument {index} but the method has {argumentCount}");
                 }
 
-                return Instruction(raw, new Instruction { Op = emit, Text = $"{name} {index}", Kind = OperandKind.Argument,
-                    Operand = index, ArgumentIndex = index });
+                return Instruction(raw, new Instruction
+                {
+                    Op = emit,
+                    Text = $"{name} {index}",
+                    Kind = OperandKind.Argument,
+                    Operand = index,
+                    ArgumentIndex = index,
+                });
             }
 
             case OperandType.InlineString:
@@ -357,8 +421,13 @@ internal sealed class MethodBodyReader
                 var value = Try(() => _module.ResolveString(raw.Operand.Token), $"the string at {raw.Label}");
                 return value is null
                     ? Raw(raw, $"{name} 0x{raw.Operand.Token:x8}", null)
-                    : Instruction(raw, new Instruction { Op = emit, Text = $"{name} {LiteralParser.Escape(value)}",
-                        Kind = OperandKind.String, Operand = value });
+                    : Instruction(raw, new Instruction
+                    {
+                        Op = emit,
+                        Text = $"{name} {LiteralParser.Escape(value)}",
+                        Kind = OperandKind.String,
+                        Operand = value,
+                    });
             }
 
             case OperandType.InlineType:
@@ -390,8 +459,13 @@ internal sealed class MethodBodyReader
             return Raw(raw, $"{emit.Name} {text}", null);
         }
 
-        return Instruction(raw, new Instruction { Op = emit, Text = $"{emit.Name} {text}", Kind = OperandKind.Type,
-            Operand = type }, type is null);
+        return Instruction(raw, new Instruction
+        {
+            Op = emit,
+            Text = $"{emit.Name} {text}",
+            Kind = OperandKind.Type,
+            Operand = type,
+        }, type is null);
     }
 
     private DisassembledEntry FieldInstruction(RawInstruction raw, OpCode emit)
@@ -404,8 +478,14 @@ internal sealed class MethodBodyReader
             return Raw(raw, $"{emit.Name} {text ?? $"0x{token:x8}"}", null);
         }
 
-        text ??= IlAsmRenderer.RenderInstruction(new Instruction { Op = emit, Text = "", Kind = OperandKind.Field,
-            Operand = field })[(emit.Name!.Length + 1)..];
+        text ??= IlAsmRenderer.RenderInstruction(new Instruction
+        {
+            Op = emit,
+            Text = "",
+            Kind = OperandKind.Field,
+            Operand = field,
+        })[(emit.Name!.Length + 1)..];
+
         return Instruction(raw, new Instruction { Op = emit, Text = $"{emit.Name} {text}", Kind = OperandKind.Field, Operand = field });
     }
 
@@ -419,10 +499,21 @@ internal sealed class MethodBodyReader
             return Raw(raw, $"{emit.Name} {text ?? $"0x{token:x8}"}", null);
         }
 
-        text ??= IlAsmRenderer.RenderInstruction(new Instruction { Op = emit, Text = "", Kind = OperandKind.Method,
-            Operand = resolved })[(emit.Name!.Length + 1)..];
-        return Instruction(raw, new Instruction { Op = emit, Text = $"{emit.Name} {text}", Kind = OperandKind.Method,
-            Operand = resolved }, effectUnknown);
+        text ??= IlAsmRenderer.RenderInstruction(new Instruction
+        {
+            Op = emit,
+            Text = "",
+            Kind = OperandKind.Method,
+            Operand = resolved,
+        })[(emit.Name!.Length + 1)..];
+
+        return Instruction(raw, new Instruction
+        {
+            Op = emit,
+            Text = $"{emit.Name} {text}",
+            Kind = OperandKind.Method,
+            Operand = resolved,
+        }, effectUnknown);
     }
 
     private DisassembledEntry TokenInstruction(RawInstruction raw, OpCode emit)
@@ -440,8 +531,13 @@ internal sealed class MethodBodyReader
                     _provider, _generics), null);
                 var text = signature is not null ? IlSignatureRenderer.TypeOperand(signature, IsTypeSpecification(token))
                     : TypeOperandText(type);
-                return Instruction(raw, new Instruction { Op = emit, Text = $"{emit.Name} {text}", Kind = OperandKind.Token,
-                    Operand = type });
+                return Instruction(raw, new Instruction
+                {
+                    Op = emit,
+                    Text = $"{emit.Name} {text}",
+                    Kind = OperandKind.Token,
+                    Operand = type,
+                });
             }
 
             case FieldInfo field:
@@ -508,8 +604,17 @@ internal sealed class MethodBodyReader
         var calli = signature.ToCalliSignature();
         var text = $"{emit.Name} {IlSignatureRenderer.IlAsm(signature)}";
         return calli is null
-            ? new DisassembledEntry(DisassembledEntryKind.Instruction, raw.Offset) { Instruction = new Instruction {
-                Op = emit, Text = text, Kind = OperandKind.Signature }, Raw = raw, EffectUnknown = true }
+            ? new DisassembledEntry(DisassembledEntryKind.Instruction, raw.Offset)
+            {
+                Instruction = new Instruction
+                {
+                    Op = emit,
+                    Text = text,
+                    Kind = OperandKind.Signature,
+                },
+                Raw = raw,
+                EffectUnknown = true,
+            }
             : Instruction(raw, new Instruction { Op = emit, Text = text, Kind = OperandKind.Signature, Operand = calli });
     }
 

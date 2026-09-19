@@ -90,8 +90,11 @@ public sealed class NoPrefixTests
             ".locals ()", ".maxstack 8", "ldarg.0", "ldc.i4.0", prefix, "ldelema int32", "ldind.i4", "ret", "}", "}");
         using var oracle = ModuleDefinition.ReadModule(new MemoryStream(independent));
         var expected = oracle.Types.Single(type => type.Name == "Fixture").Methods.Single();
-        foreach (var image in new[] { AssemblyExporter.Write(authored, "no-prefix-export"),
-            IlasmLocator.Assemble(IlAsmRenderer.Render(authored)) })
+        foreach (var image in new[]
+        {
+            AssemblyExporter.Write(authored, "no-prefix-export"),
+            IlasmLocator.Assemble(IlAsmRenderer.Render(authored)),
+        })
         {
             using var module = ModuleDefinition.ReadModule(new MemoryStream(image));
             var methods = module.Types.SelectMany(type => type.Methods).Where(method => method.Name == "Read").ToArray();

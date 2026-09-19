@@ -91,9 +91,13 @@ public sealed partial class SessionController
             }
 
             SetRuntimeState(SessionRuntimeState.Unavailable);
-            Workspace = new SessionReply { Document = new SessionDocument { Editor = Editor },
+            Workspace = new SessionReply
+            {
+                Document = new SessionDocument { Editor = Editor },
                 Reply = Failure(exception is OperationCanceledException ? "host startup cancelled; use .session restart to try again"
-                    : "host unavailable: " + exception.Message + "; use .session restart to try again") };
+                    : "host unavailable: " + exception.Message + "; use .session restart to try again"),
+            };
+
             RecoveryCompleted?.Invoke(Workspace);
         }
     }

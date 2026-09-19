@@ -245,8 +245,12 @@ public sealed class EngineCompletionTests
         var unknown = await engine.CompleteAsync(new CompletionRequest([missing], 0, missing.Length, null, []), ct);
         Assert.IsEmpty(unknown.Items);
         Assert.AreEqual(status, engine.Status);
-        foreach (var line in new[] { ".clear", "call [System.Runtime]System.Reflection.Assembly::GetExecutingAssembly()",
-            "call [Greeter]Greeter.CompletionProbe::Report([System.Runtime]System.Reflection.Assembly)" })
+        foreach (var line in new[]
+        {
+            ".clear",
+            "call [System.Runtime]System.Reflection.Assembly::GetExecutingAssembly()",
+            "call [Greeter]Greeter.CompletionProbe::Report([System.Runtime]System.Reflection.Assembly)",
+        })
         {
             Assert.IsTrue((await engine.HandleAsync(line, ct)).Succeeded);
         }

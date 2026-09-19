@@ -213,8 +213,15 @@ public sealed class NativeWorkloadProcessTests
         try
         {
             Submit(core, ".method void Work() {");
-            foreach (var setting in new[] { "DOTNET_DiagnosticPorts", "DOTNET_JitStdOutFile", "DOTNET_JitDisasm",
-                "DOTNET_JitDisasmSummary", "DOTNET_JitDisasmTesting", "DOTNET_JitDisasmWithCodeBytes" })
+            foreach (var setting in new[]
+            {
+                "DOTNET_DiagnosticPorts",
+                "DOTNET_JitStdOutFile",
+                "DOTNET_JitDisasm",
+                "DOTNET_JitDisasmSummary",
+                "DOTNET_JitDisasmTesting",
+                "DOTNET_JitDisasmWithCodeBytes",
+            })
             {
                 Submit(core, "ldstr " + LiteralParser.Escape(setting), "ldnull",
                     "call void Environment::SetEnvironmentVariable(string, string)");

@@ -243,15 +243,40 @@ public sealed partial class ReplCoreDisassembleTests
     public void Handle_Dis_Listing_PastesBackIntoAMethod()
     {
         var core = Load(Fib);
-        foreach (var line in new[] { ".method int32 Safe(int32 d) {", ".locals init (int32 n)", ".try {", "ldc.i4 1", "ldarg d", "div",
-            "stloc n", "leave END", "} filter {", "isinst DivideByZeroException", "ldnull", "cgt.un", "endfilter", "} handler {", "pop",
-            "ldc.i4 42", "stloc n", "leave END", "}", "END: ldloc n", "ret", "}" })
+        foreach (var line in new[]
+        {
+            ".method int32 Safe(int32 d) {",
+            ".locals init (int32 n)",
+            ".try {",
+            "ldc.i4 1",
+            "ldarg d",
+            "div",
+            "stloc n",
+            "leave END",
+            "} filter {",
+            "isinst DivideByZeroException",
+            "ldnull",
+            "cgt.un",
+            "endfilter",
+            "} handler {",
+            "pop",
+            "ldc.i4 42",
+            "stloc n",
+            "leave END",
+            "}",
+            "END: ldloc n",
+            "ret",
+            "}",
+        })
         {
             core.Handle(line);
         }
 
-        foreach (var (name, header, argument, expected) in new[] { ("Fib", ".method int32 Fib2(int32 n) {", "10", "55"),
-            ("Safe", ".method int32 Safe2(int32 d) {", "0", "42") })
+        foreach (var (name, header, argument, expected) in new[]
+        {
+            ("Fib", ".method int32 Fib2(int32 n) {", "10", "55"),
+            ("Safe", ".method int32 Safe2(int32 d) {", "0", "42"),
+        })
         {
             var before = core.Transcript.Lines.Count;
             Assert.IsTrue(core.Handle(".dis " + name).Succeeded);
@@ -329,8 +354,13 @@ public sealed partial class ReplCoreDisassembleTests
 
         Assert.IsTrue(core.Handle("}").Succeeded, string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
         var run = core.Transcript.Lines.Count;
-        foreach (var line in new[] { "ldstr \"abc\"", "newobj instance void [Fixtures]Fixtures.Holder::.ctor(string)",
-            "call int32 Read2(class [Fixtures]Fixtures.Holder)", "ret" })
+        foreach (var line in new[]
+        {
+            "ldstr \"abc\"",
+            "newobj instance void [Fixtures]Fixtures.Holder::.ctor(string)",
+            "call int32 Read2(class [Fixtures]Fixtures.Holder)",
+            "ret",
+        })
         {
             Assert.IsTrue(core.Handle(line).Succeeded,
                 line + "\n" + string.Join("\n", core.Transcript.Lines.Skip(run).Select(l => l.Kind + ": " + l.PlainText)));

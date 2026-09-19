@@ -26,8 +26,15 @@ public sealed class HostRecoveryTests
         await using var controller = new SessionController(initial, async ct => await HostPaths.StartEngineAsync(ct));
         var recovered = new TaskCompletionSource<SessionReply>(TaskCreationOptions.RunContinuationsAsynchronously);
         controller.RecoveryCompleted += reply => recovered.TrySetResult(reply);
-        foreach (var line in new[] { ".method int32 Answer() {", "ldc.i4 42", "ret", "}", "ldc.i4.0",
-            "call void System.Environment::Exit(int32)" })
+        foreach (var line in new[]
+        {
+            ".method int32 Answer() {",
+            "ldc.i4 42",
+            "ret",
+            "}",
+            "ldc.i4.0",
+            "call void System.Environment::Exit(int32)",
+        })
         {
             var reply = await controller.HandleAsync(line, token);
             Assert.IsTrue(reply.Succeeded, string.Join('\n', reply.Lines.Select(item => item.PlainText)));

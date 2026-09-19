@@ -146,8 +146,14 @@ public sealed class StackAnalysisTests
             il.Append(handler);
             il.Emit(OpCodes.Leave, end);
             il.Append(end);
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = handler,
-                HandlerStart = handler, HandlerEnd = end, CatchType = module.ImportReference(typeof(Exception)) });
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch)
+            {
+                TryStart = tryStart,
+                TryEnd = handler,
+                HandlerStart = handler,
+                HandlerEnd = end,
+                CatchType = module.ImportReference(typeof(Exception)),
+            });
         });
 
         var lines = DisassemblyText.LinesWithStack(method);

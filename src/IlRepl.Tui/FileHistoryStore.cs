@@ -262,8 +262,13 @@ public sealed class FileHistoryStore : IHistoryStore
             try
             {
                 return new FileStream(LockPath,
-                    OwnerOnly(new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.None,
-                    BufferSize = 1 }));
+                    OwnerOnly(new FileStreamOptions
+                    {
+                        Mode = FileMode.OpenOrCreate,
+                        Access = FileAccess.ReadWrite,
+                        Share = FileShare.None,
+                        BufferSize = 1,
+                    }));
             }
             catch (IOException) when (Stopwatch.GetElapsedTime(started) < _lockTimeout)
             {
