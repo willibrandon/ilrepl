@@ -32,10 +32,10 @@ Share links contain source and dependency images, including the bundled sample. 
 Links longer than 16 KiB fall back to a session download. Expanded links are limited to 1 MiB and imported files to 8 MiB.
 Session files created in the terminal can be up to 64 MiB. If clipboard access is unavailable, the page displays the link for copying.
 
-Ctrl+Q ends the session and a fresh one starts in its place. The restart button reopens retained source in a fresh runtime without
-executing it. The page also recovers source and the editor draft if a cell stops responding. Previous results remain historical text.
-The old runtime stops before its replacement starts. Input typed during replacement stays in the editor, and Enter
-creates a new line. Press Enter again after the session is ready to submit it. Objects and static values are lost.
+Ctrl+Q and the restart button end the session and start a fresh one in its place, without the previous source or history.
+If a cell stops responding, the page replaces the runtime and reopens the source and editor draft without executing them.
+Previous results remain historical text, and objects and static values are lost. The old runtime stops before its replacement
+starts. Input typed meanwhile stays in the editor, where Enter adds a line. Press Enter again once the session is ready.
 See [Saving and sharing sessions](/usage/sessions/) for the terminal's session commands and dependency handling.
 
 ```cil

@@ -358,10 +358,15 @@
 
     if (restartButton) {
       restartButton.addEventListener('click', () => {
+        // Like quit, the button starts a fresh worker without the previous source, history, or unacknowledged input.
+        // Repeated clicks coalesce, but a replacement that is reopening retained source is superseded.
+        if (preparing && !checkpoint) return;
         window.ilreplLastRestart = 'button';
         setStatus('Restarting');
-        recordInterruption();
-        startWorker();
+        stopWorker();
+        checkpoint = null;
+        queuedInput.length = 0;
+        startWorker('', null);
       });
     }
 

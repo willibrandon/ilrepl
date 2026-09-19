@@ -49,7 +49,7 @@ Run from the repository root with the SDK selected by `global.json`:
 dotnet test
 dotnet scripts/Highlight-Cil.cs --verify
 dotnet scripts/Publish-Wasm.cs --configuration Debug
-pnpm --dir docs build
+pnpm --dir docs build:site
 dotnet scripts/Publish-NativeAot.cs --rid linux-x64
 ```
 

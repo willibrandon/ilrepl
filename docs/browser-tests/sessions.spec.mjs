@@ -317,23 +317,27 @@ test('opening an empty session file still announces the explicit open', async ({
   expect(saved.cells).toEqual([]);
 });
 
-test('manual restart recovers accepted source and the unsent editor', async ({ page }) => {
+test('manual restart starts a fresh session without source, history, or the unsent editor', async ({ page }) => {
+  const initial = await terminalText(page);
   await typeLine(page, 'ldc.i4.s 29');
-  await expect(page.locator('#terminal')).toContainText('┊ [int32]');
+  await typeLine(page, 'ret');
+  await expect(page.locator('#terminal')).toContainText('= 29 : int32');
   await focus(page);
-  await page.keyboard.type('// survives restart');
+  await page.keyboard.type('// discarded by restart');
   const before = await download(page);
-  expect(before.editor.lines).toEqual(['// survives restart']);
+  expect(before.cells).toHaveLength(1);
+  expect(before.editor.lines).toEqual(['// discarded by restart']);
   const count = await page.evaluate(() => window.ilreplSessionCount);
   await page.getByRole('button', { name: 'Restart the session', exact: true }).click();
   await ready(page, count + 1);
   expect(await page.evaluate(() => window.ilreplLastRestart)).toBe('button');
   await expect(page.locator('#terminal')).not.toContainText(openNotice);
-  await expect(page.locator('#terminal')).not.toContainText('= 29 : int32');
+  await expect(page.locator('#terminal')).not.toContainText('saved session history');
+  await expect.poll(() => terminalText(page)).toBe(initial);
   const after = await download(page);
-  expect(after.entries).toEqual(before.entries);
-  expect(after.editor.lines).toEqual(['// survives restart']);
+  expect(after.entries).toEqual([]);
   expect(after.cells).toEqual([]);
+  expect(after.editor.lines.join('')).toBe('');
 });
 
 for (const shortcut of [false, true]) {
