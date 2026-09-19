@@ -209,6 +209,7 @@ public static class SymbolBinder
             "ldloc.3" or "stloc.3" => 3,
             _ => (int?)null,
         };
+
         if (implicitLocal is int localIndex)
         {
             if (localIndex >= scope.Locals.Count)
@@ -228,6 +229,7 @@ public static class SymbolBinder
             "ldarg.3" => 3,
             _ => (int?)null,
         };
+
         if (implicitArgument is int argumentIndex)
         {
             if (argumentIndex >= scope.Arguments.Count)
@@ -578,6 +580,7 @@ public static class SymbolBinder
             ExactGenericArguments = exactMethodArguments,
             ExactOptionalParameterTypes = exactOptionalTypes ?? (method.OptionalParameterTypes is null ? null : []),
         };
+
         if (scope.TryGetDeclaration(declaring, out var own))
         {
             var bound = BindOwnMethod(own, declaring, scope, syntax, parameterTypes, boundParameterTypes, returnType,
@@ -734,7 +737,11 @@ public static class SymbolBinder
     /// Each replacement is confirmed in a scope that loads nothing. Ambiguity is accepted for an
     /// abbreviated reference because the name fits and the user has not chosen an overload yet.
     /// </remarks>
-    private static string ConfirmedSuggestion(IBindingScope scope, MemberSyntax syntax, string name, IEnumerable<string> pool,
+    private static string ConfirmedSuggestion(
+        IBindingScope scope,
+        MemberSyntax syntax,
+        string name,
+        IEnumerable<string> pool,
         bool wantConstructor)
     {
         var pure = scope.ForSuggestions(out var lease);
@@ -779,6 +786,7 @@ public static class SymbolBinder
                     return false;
                 }
             });
+
             return nearest is null ? "" : NameSuggestions.Parenthetical(nearest);
         }
     }
@@ -913,9 +921,18 @@ public static class SymbolBinder
         return new BoundMethod(signature, null, null);
     }
 
-    private static BoundMethod BindOwnMethod(IDeclarationMembers own, TypeSymbol declaring, IBindingScope scope, MemberSyntax syntax,
-        IReadOnlyList<TypeSymbol>? parameterTypes, IReadOnlyList<BoundType>? boundParameterTypes, TypeSymbol? returnType,
-        BoundType? boundReturnType, bool explicitInstance, bool wantConstructor, IReadOnlyList<TypeSymbol>? methodArguments,
+    private static BoundMethod BindOwnMethod(
+        IDeclarationMembers own,
+        TypeSymbol declaring,
+        IBindingScope scope,
+        MemberSyntax syntax,
+        IReadOnlyList<TypeSymbol>? parameterTypes,
+        IReadOnlyList<BoundType>? boundParameterTypes,
+        TypeSymbol? returnType,
+        BoundType? boundReturnType,
+        bool explicitInstance,
+        bool wantConstructor,
+        IReadOnlyList<TypeSymbol>? methodArguments,
         IReadOnlyList<TypeSymbol>? optionalTypes)
     {
         var name = syntax.Name;
@@ -992,6 +1009,7 @@ public static class SymbolBinder
                 })],
                 IsDeclared = false,
             };
+
             return new BoundMethod(own.DefineForward(forward), null, optionalTypes);
         }
 
@@ -1039,10 +1057,16 @@ public static class SymbolBinder
     /// Finds a member a type being written inherits: from a base still being written through its
     /// declarations, from a loaded base through its members.
     /// </remarks>
-    private static BoundMethod? BindInherited(TypeSymbol baseType, IBindingScope scope, MemberSyntax syntax,
-        IReadOnlyList<TypeSymbol>? parameterTypes, IReadOnlyList<BoundType>? boundParameterTypes,
-        BoundType? boundReturnType, bool explicitInstance,
-        IReadOnlyList<TypeSymbol>? methodArguments, IReadOnlyList<TypeSymbol>? optionalTypes)
+    private static BoundMethod? BindInherited(
+        TypeSymbol baseType,
+        IBindingScope scope,
+        MemberSyntax syntax,
+        IReadOnlyList<TypeSymbol>? parameterTypes,
+        IReadOnlyList<BoundType>? boundParameterTypes,
+        BoundType? boundReturnType,
+        bool explicitInstance,
+        IReadOnlyList<TypeSymbol>? methodArguments,
+        IReadOnlyList<TypeSymbol>? optionalTypes)
     {
         var name = syntax.Name;
         var arity = methodArguments?.Count ?? 0;
@@ -1086,7 +1110,10 @@ public static class SymbolBinder
         return null;
     }
 
-    private static BoundMethod BindGenericDefinition(MemberSyntax syntax, TypeSymbol declaring, IReadOnlyList<TypeSymbol> typeArguments,
+    private static BoundMethod BindGenericDefinition(
+        MemberSyntax syntax,
+        TypeSymbol declaring,
+        IReadOnlyList<TypeSymbol> typeArguments,
         IBindingScope scope)
     {
         var name = syntax.Name;

@@ -200,6 +200,7 @@ public sealed class SessionCliTests
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+
         startInfo.ArgumentList.Add(RepoPaths.FrontEndAssembly);
         startInfo.ArgumentList.Add("--no-color");
         foreach (var argument in arguments)

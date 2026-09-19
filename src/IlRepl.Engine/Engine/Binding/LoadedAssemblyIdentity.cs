@@ -6,7 +6,11 @@ namespace IlRepl.Engine.Binding;
 /// Copies full assembly identity for metadata-only matching against already loaded assemblies.
 /// </summary>
 internal sealed record LoadedAssemblyIdentity(
-    string Name, Version? Version, string Culture, string PublicKeyToken, AssemblyContentType Content)
+    string Name,
+    Version? Version,
+    string Culture,
+    string PublicKeyToken,
+    AssemblyContentType Content)
 {
     /// <summary>
     /// Copies identity components without keeping the mutable AssemblyName supplied by the caller.

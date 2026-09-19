@@ -113,8 +113,7 @@ public sealed class StackCompatibilityTests
     }
 
     /// <summary>
-    /// A reference the model could not type is accepted for any reference return; a value that is
-    /// exactly object is not narrowed.
+    /// A reference the model could not type is accepted for any reference return; a value that is exactly object is not narrowed.
     /// </summary>
     [TestMethod]
     public void CanReturn_UnknownReference_IsAcceptedButExactObjectIsNot()

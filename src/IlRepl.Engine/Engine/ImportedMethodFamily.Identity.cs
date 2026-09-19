@@ -9,6 +9,11 @@ namespace IlRepl.Engine;
 /// </summary>
 internal sealed partial class ImportedMethodFamily
 {
+    /// <summary>
+    /// Maps each runtime member of an earlier revision onto its replacement in this one.
+    /// </summary>
+    /// <param name="previous">The revision whose copied types, methods, and fields are being replaced.</param>
+    /// <param name="map">The map that receives the pairs, generic parameters and the forwarding method included.</param>
     internal void MapPrevious(ImportedMethodFamily previous, EmitMap map)
     {
         if (previous._forwardingMethod is { } oldForwarding && _forwardingMethod is { } newForwarding)
@@ -45,6 +50,7 @@ internal sealed partial class ImportedMethodFamily
 
                     break;
                 }
+
                 case MethodBase method:
                     map.Add(method, (MethodBase)replacement);
                     break;
@@ -63,7 +69,10 @@ internal sealed partial class ImportedMethodFamily
     /// <param name="writer">The comparison assembly writer.</param>
     /// <param name="revision">The revision whose identities callers currently reference.</param>
     /// <param name="definitions">The source-to-definition map written for this family.</param>
-    internal static void DefineRevisionReferences(CecilWriter writer, ImportedMethodFamily revision, Dictionary<MemberInfo,
+    internal static void DefineRevisionReferences(
+        CecilWriter writer,
+        ImportedMethodFamily revision,
+        Dictionary<MemberInfo,
         IMemberDefinition> definitions)
     {
         if (revision._forwardingMethod is { } forwarding)

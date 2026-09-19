@@ -13,7 +13,9 @@ public sealed partial class SessionController
     /// <param name="start">The factory shared by initial startup and explicit runtime replacement.</param>
     /// <param name="initialRequest">An optional session document to open after the first host connects.</param>
     /// <param name="historyLineLimit">The history row limit established before startup, or zero for unlimited output.</param>
-    public SessionController(Func<CancellationToken, Task<IReplEngine>> start, SessionRequest? initialRequest = null,
+    public SessionController(
+        Func<CancellationToken, Task<IReplEngine>> start,
+        SessionRequest? initialRequest = null,
         int historyLineLimit = 0) : this(new InactiveEngine(), start, historyLineLimit)
     {
         _runtimeState = SessionRuntimeState.Starting;
@@ -42,6 +44,7 @@ public sealed partial class SessionController
                 {
                     HistoryLineLimit = initialRequest.HistoryLineLimit ?? HistoryLineLimit,
                 }, cancellationToken).ConfigureAwait(false);
+
             await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
@@ -50,6 +53,7 @@ public sealed partial class SessionController
                     await candidate.DisposeAsync().ConfigureAwait(false);
                     return;
                 }
+
                 var previous = _engine;
                 await InstallEngineAsync(candidate).ConfigureAwait(false);
                 await previous.DisposeAsync().ConfigureAwait(false);
@@ -63,8 +67,10 @@ public sealed partial class SessionController
                         Document = opened.Document with { Editor = editor },
                         Dirty = opened.Dirty || !SameEditorText(saved, editor),
                     };
+
                     RecoveryCompleted?.Invoke(Workspace with { StartupEditor = saved });
                 }
+
                 SetRuntimeState(SessionRuntimeState.Ready);
             }
             finally
@@ -74,12 +80,24 @@ public sealed partial class SessionController
         }
         catch (Exception exception)
         {
-            if (candidate is not null) await candidate.DisposeAsync().ConfigureAwait(false);
-            if (_disposed || RuntimeState != SessionRuntimeState.Starting) return;
+            if (candidate is not null)
+            {
+                await candidate.DisposeAsync().ConfigureAwait(false);
+            }
+
+            if (_disposed || RuntimeState != SessionRuntimeState.Starting)
+            {
+                return;
+            }
+
             SetRuntimeState(SessionRuntimeState.Unavailable);
-            Workspace = new SessionReply { Document = new SessionDocument { Editor = Editor },
+            Workspace = new SessionReply
+            {
+                Document = new SessionDocument { Editor = Editor },
                 Reply = Failure(exception is OperationCanceledException ? "host startup cancelled; use .session restart to try again"
-                    : "host unavailable: " + exception.Message + "; use .session restart to try again") };
+                    : "host unavailable: " + exception.Message + "; use .session restart to try again"),
+            };
+
             RecoveryCompleted?.Invoke(Workspace);
         }
     }

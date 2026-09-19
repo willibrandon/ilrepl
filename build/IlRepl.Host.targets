@@ -39,7 +39,7 @@
       RuntimeIdentifiers=;PublishAot=false;SelfContained=false;PublishSingleFile=false;PublishTrimmed=false;
       PublishReadyToRun=$(IlReplHostPublishReadyToRun);UseAppHost=false;OutputPath=$(_IlReplHostOutputDirectory);
       IntermediateOutputPath=$(_IlReplHostIntermediateDirectory);_IlReplHostBuildDirectory=$(_IlReplHostBuildDirectory);
-      PublishDir=$(_IlReplHostPublishDirectory)
+      PublishDir=$(_IlReplHostPublishDirectory);_IlReplHostBuild=true
     </_IlReplHostPublishProperties>
 
     <_IlReplHostExcludedFiles>$(_IlReplHostPublishDirectory)**\*.pdb;$(_IlReplHostPublishDirectory)**\*.xml</_IlReplHostExcludedFiles>

@@ -16,19 +16,42 @@ internal static partial class ComparisonCommand
             var character = text[index];
             if (quote != '\0')
             {
-                if (character == '\\') index++;
-                else if (character == quote) quote = '\0';
+                if (character == '\\')
+                {
+                    index++;
+                }
+                else if (character == quote)
+                {
+                    quote = '\0';
+                }
+
                 continue;
             }
 
-            if (character is '\'' or '"') quote = character;
-            else if (character == '(') depth++;
-            else if (character == ')' && depth > 0) depth--;
+            if (character is '\'' or '"')
+            {
+                quote = character;
+            }
+            else if (character == '(')
+            {
+                depth++;
+            }
+            else if (character == ')' && depth > 0)
+            {
+                depth--;
+            }
             else if (depth == 0 && character is ',' or ')')
             {
                 var value = text[start..index].Trim();
-                if (value.Length != 0) arguments.Add(value);
-                else if (character == ',' || arguments.Count != 0) throw new ReplException("a comparison argument is missing");
+                if (value.Length != 0)
+                {
+                    arguments.Add(value);
+                }
+                else if (character == ',' || arguments.Count != 0)
+                {
+                    throw new ReplException("a comparison argument is missing");
+                }
+
                 if (character == ')')
                 {
                     text = text[(index + 1)..].TrimStart();

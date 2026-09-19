@@ -46,6 +46,7 @@ public static class ArrayKindExamples
             "jagged" => array + "[]",
             _ => array,
         };
+
         return ".method public static class Type Read() {\nldtoken " + target
             + "\ncall class Type Type::GetTypeFromHandle(valuetype RuntimeTypeHandle)\nret\n}";
     }

@@ -1,3 +1,4 @@
+using System.Reflection.Emit;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
@@ -46,7 +47,8 @@ public sealed class InspectionContextTests
     public void ResolveMethod_MissingNestedTypeInParameter_DeclaresNothing()
     {
         var session = Open(".class public C {", ".method public static void M() {");
-        Assert.Throws<ReplException>(() => MemberResolver.ResolveMethod("void [System.Console]System.Console::WriteLine(class C/Missing)", session.InspectionContext, false));
+        Assert.Throws<ReplException>(() => MemberResolver.ResolveMethod("void [System.Console]System.Console::WriteLine(class C/Missing)",
+            session.InspectionContext, false));
         Ok(session, "ret");
         Ok(session, "}");
         Ok(session, "}");
@@ -64,7 +66,7 @@ public sealed class InspectionContextTests
         var resolved = MemberResolver.ResolveMethod("instance int32 Point::Sum()", session.InspectionContext, false);
         Assert.IsNotNull(resolved.Method);
         Assert.IsNull(resolved.Declared);
-        Assert.IsFalse(resolved.Method.DeclaringType is System.Reflection.Emit.TypeBuilder);
+        Assert.IsFalse(resolved.Method.DeclaringType is TypeBuilder);
         Assert.IsNotNull(resolved.Method.GetMethodBody());
 
         // The editor's own context still sees the prototype.

@@ -33,6 +33,7 @@ public sealed partial class ActivationEditTests
         {
             Assert.AreEqual(42, edit.Original.Requested.Invoke(null, [assembly, name]));
         }
+
         Assert.IsEmpty(edit.Problems, string.Join('\n', edit.Problems));
         session.CommitEdit(edit.Name, edit.Source);
         Assert.AreEqual(42, edit.Method!.Invoke(null, [assembly, name]));

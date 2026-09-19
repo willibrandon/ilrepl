@@ -84,6 +84,7 @@ public static class PromptDiagnostics
             AnalysisDiagnosticKind.Unknown => "unknown",
             _ => "incomplete",
         };
+
         var suffix = count > 1 ? $" ({count} findings; F8 next)" : "";
         var where = diagnostic.Explanation?.Source is { Kind: not AnalysisSourceKind.Document } source
             ? " at " + DiagnosticFormatter.Source(source) : $" on line {diagnostic.Location.Line + 1}";

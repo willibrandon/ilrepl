@@ -24,8 +24,14 @@ public static class PromptWidgetExtensions
     /// <param name="width">The terminal width for completion columns and wrapped detail.</param>
     /// <returns>The prompt.</returns>
     public static PromptWidget IlPrompt<TParent>(
-        this WidgetContext<TParent> context, string label, IReadOnlyList<CompletionItem> catalog,
-        PromptState state, PromptFit fit, int openDepth, bool commentOpen, int width = 80)
+        this WidgetContext<TParent> context,
+        string label,
+        IReadOnlyList<CompletionItem> catalog,
+        PromptState state,
+        PromptFit fit,
+        int openDepth,
+        bool commentOpen,
+        int width = 80)
         where TParent : Hex1bWidget
     {
         ArgumentNullException.ThrowIfNull(context);

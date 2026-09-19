@@ -47,7 +47,10 @@ public sealed class CollectionComparisonTests
             Assert.HasCount(3, value.Members);
             Assert.AreEqual("comparer", value.Members[0].Name);
             Assert.AreEqual("comparer", value.Members[0].Value.Kind);
-            if (set) Assert.AreSequenceEqual(["first", "second"], value.Members.Skip(1).Select(member => member.Value.Value));
+            if (set)
+            {
+                Assert.AreSequenceEqual(["first", "second"], value.Members.Skip(1).Select(member => member.Value.Value));
+            }
             else
             {
                 Assert.AreEqual("first", value.Members[1].Value.Members[0].Value.Value);
@@ -149,7 +152,11 @@ public sealed class CollectionComparisonTests
             var value = Observe(source);
             var field = value.Members.Single(member => member.Name.EndsWith("::Extra", StringComparison.Ordinal)).Value;
             var element = value.Members.Single(member => member.Name == "0").Value;
-            if (source == dictionary) element = element.Members[1].Value;
+            if (source == dictionary)
+            {
+                element = element.Members[1].Value;
+            }
+
             Assert.AreEqual("object", field.Kind);
             Assert.AreEqual("reference", element.Kind);
             Assert.AreEqual(field.Identity, element.Identity);

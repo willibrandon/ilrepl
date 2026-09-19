@@ -4,9 +4,11 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Creates generic method parameters that stand in for a cell's <c>.typeparams</c> while lines
-/// are validated. The real parameters are created again on the method that is compiled.
+/// Creates generic method parameters that stand in for a cell's <c>.typeparams</c> while lines are validated.
 /// </summary>
+/// <remarks>
+/// The real parameters are created again on the method that is compiled.
+/// </remarks>
 public static class PrototypeGenerics
 {
     private static int s_counter;
@@ -25,7 +27,8 @@ public static class PrototypeGenerics
         }
 
         var id = Interlocked.Increment(ref s_counter);
-        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("ilrepl.prototype" + id), OperatingSystem.IsBrowser() ? AssemblyBuilderAccess.Run : AssemblyBuilderAccess.RunAndCollect);
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("ilrepl.prototype" + id),
+            OperatingSystem.IsBrowser() ? AssemblyBuilderAccess.Run : AssemblyBuilderAccess.RunAndCollect);
         var module = assembly.DefineDynamicModule("prototype");
         var type = module.DefineType("Prototype", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
         var method = type.DefineMethod("Run", MethodAttributes.Public | MethodAttributes.Static);

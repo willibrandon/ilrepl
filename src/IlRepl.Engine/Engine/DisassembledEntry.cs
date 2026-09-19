@@ -38,9 +38,11 @@ public sealed record DisassembledEntry(DisassembledEntryKind Kind, int Offset)
     public string? CatchText { get; init; }
 
     /// <summary>
-    /// True when the stack effect of this line cannot be modeled: an operand that did not
-    /// resolve, or a prefix the simulator does not know. The analysis loses the stack from here.
+    /// True when the stack effect of this line cannot be modeled: an operand that did not resolve, or a prefix the simulator does not know.
     /// </summary>
+    /// <remarks>
+    /// The analysis loses the stack from here.
+    /// </remarks>
     public bool EffectUnknown { get; init; }
 
     /// <summary>

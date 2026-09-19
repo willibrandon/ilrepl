@@ -3,9 +3,11 @@ using System.Text.Json.Serialization;
 namespace IlRepl.Protocol;
 
 /// <summary>
-/// How a span of transcript text is drawn. The terminal UI maps each style to a colour and the
-/// batch writer to an ANSI code; over the wire the name travels as a string.
+/// How a span of transcript text is drawn.
 /// </summary>
+/// <remarks>
+/// The terminal UI maps each style to a colour and the batch writer to an ANSI code; over the wire the name travels as a string.
+/// </remarks>
 [JsonConverter(typeof(JsonStringEnumConverter<SpanStyle>))]
 public enum SpanStyle
 {

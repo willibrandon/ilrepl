@@ -1,10 +1,12 @@
 namespace IlRepl.Tui;
 
 /// <summary>
-/// The entries the prompt walks with Up and Down. While browsing, each entry is a working copy
-/// the user may edit without changing the entry itself, and the buffer the browsing started from
-/// is kept at the newest end, as prompt_toolkit keeps it. A new entry ends browsing.
+/// The entries the prompt walks with Up and Down.
 /// </summary>
+/// <remarks>
+/// While browsing, each entry is a working copy the user may edit without changing the entry itself, and the buffer the browsing started
+/// from is kept at the newest end, as prompt_toolkit keeps it. A new entry ends browsing.
+/// </remarks>
 public sealed class PromptHistory
 {
     /// <summary>
@@ -67,9 +69,11 @@ public sealed class PromptHistory
     }
 
     /// <summary>
-    /// Takes what the store held when it was read. The store's writes since this session began
-    /// are the session's own, and those the read holds are at its end.
+    /// Takes what the store held when it was read.
     /// </summary>
+    /// <remarks>
+    /// The store's writes since this session began are the session's own, and those the read holds are at its end.
+    /// </remarks>
     /// <param name="snapshot">What the store held.</param>
     public void Load(HistorySnapshot snapshot) => Load(snapshot.Entries, snapshot.Written - _baseline);
 
@@ -133,13 +137,13 @@ public sealed class PromptHistory
     }
 
     /// <summary>
-    /// Takes the stored entries, which go before whatever this session has added while they
-    /// were being read, so a line submitted before the store answered stays recallable. The
-    /// session's own writes that the store had taken before it was read are the last stored
-    /// entries and are not added again; a stored run that merely reads the same is left alone.
-    /// Browsing goes on where it was: the working copies and the draft the buffer held when it
-    /// began stay.
+    /// Takes the stored entries, which go before whatever this session has added while they were being read.
     /// </summary>
+    /// <remarks>
+    /// A line submitted before the store answered therefore stays recallable. The session's own writes that the store had taken before it
+    /// was read are the last stored entries and are not added again, and a stored run that merely reads the same is left alone. Browsing
+    /// goes on where it was: the working copies and the draft the buffer held when it began stay.
+    /// </remarks>
     /// <param name="stored">The entries from the store, oldest first.</param>
     /// <param name="own">How many of them, at the end, this session wrote itself before the store was read.</param>
     public void Load(IEnumerable<string> stored, int own = 0)
@@ -190,8 +194,7 @@ public sealed class PromptHistory
     }
 
     /// <summary>
-    /// Moves to the previous entry, keeping the text the buffer holds now as the working copy of
-    /// the place it came from.
+    /// Moves to the previous entry, keeping the text the buffer holds now as the working copy of the place it came from.
     /// </summary>
     /// <param name="current">The buffer's text now.</param>
     /// <returns>The text to show, or null at the oldest entry.</returns>

@@ -109,6 +109,7 @@ foreach (var file in files)
             {
                 blocks[Key(body)] = (where, language, editor, spans);
             }
+
             i = end;
         }
     }
@@ -314,6 +315,7 @@ async Task<List<IReadOnlyList<TranscriptSpan>>> TranscriptAsync(InProcessEngine 
     {
         return StyledLines(body, SpanStyle.Input);
     }
+
     var directory = Directory.GetCurrentDirectory();
     var normalized = produced.Select(line => TrimEndSpans(line.Kind == LineKind.Info
         ? line.Spans.Select(span => span with { Text = NormalizeSavePath(span.Text, directory, Path.DirectorySeparatorChar) }).ToArray()
@@ -459,6 +461,7 @@ static async Task<List<TranscriptLine>> SubmitAsync(IReplEngine engine, IReadOnl
                     failed |= message.Kind == SubmissionEventKind.Failed;
                 }
             });
+
         await submission.Completion;
         if (failed)
         {
@@ -870,51 +873,113 @@ static string FindRoot()
     return directory ?? throw new InvalidOperationException("run from inside the repository");
 }
 
-// The shapes of a transcript's lines, compiled ahead of time.
+/// <summary>
+/// The shapes of a transcript's lines, compiled ahead of time.
+/// </summary>
 static partial class Patterns
 {
+    /// <summary>
+    /// Matches a numbered prompt with input typed after it.
+    /// </summary>
+    /// <returns>The compiled pattern, whose match covers the prompt and its trailing space.</returns>
     [GeneratedRegex(@"^il\[\d+\]> ")]
     public static partial Regex InputLine();
 
+    /// <summary>
+    /// Matches a numbered prompt with nothing typed after it.
+    /// </summary>
+    /// <returns>The compiled pattern.</returns>
     [GeneratedRegex(@"^il\[\d+\]>\s*$")]
     public static partial Regex BarePrompt();
 
+    /// <summary>
+    /// Matches a numbered prompt at the start of a line, with or without input after it.
+    /// </summary>
+    /// <returns>The compiled pattern.</returns>
     [GeneratedRegex(@"^il\[\d+\]>")]
     public static partial Regex PromptNumber();
 
+    /// <summary>
+    /// Matches a numbered prompt and its optional trailing space, which callers strip to compare the input text alone.
+    /// </summary>
+    /// <returns>The compiled pattern.</returns>
     [GeneratedRegex(@"^il\[\d+\]> ?")]
     public static partial Regex PagePrompt();
 
+    /// <summary>
+    /// Matches an input line as its gutter, a prompt or a continuation marker, followed by the typed text.
+    /// </summary>
+    /// <returns>The compiled pattern: group 1 is the gutter and group 2 is the text after it.</returns>
     [GeneratedRegex(@"^(il\[\d+\]> |  \.\.\.>(?: |$))(.*)$")]
     public static partial Regex Gutter();
 
+    /// <summary>
+    /// Matches a listing line that opens a type, by its leading kind keyword.
+    /// </summary>
+    /// <returns>The compiled pattern.</returns>
     [GeneratedRegex(@"^\s*(class|struct|interface|enum|delegate) \S")]
     public static partial Regex TypeHeader();
 
+    /// <summary>
+    /// Matches a stack display line: the bracketed type names and the optional top marker.
+    /// </summary>
+    /// <returns>The compiled pattern: groups 1 to 4 are the opening, the type names, the closing bracket, and the top marker.</returns>
     [GeneratedRegex(@"^(  ┊ \[)(.*?)(\])( ◂ top)?$")]
     public static partial Regex StackLine();
 
+    /// <summary>
+    /// Matches a result line that ends in the value's type.
+    /// </summary>
+    /// <returns>The compiled pattern: group 1 is the lead, group 2 the value, and group 3 the type suffix.</returns>
     [GeneratedRegex(@"^(  = )(.*)( : .+)$")]
     public static partial Regex ResultWithType();
 
+    /// <summary>
+    /// Matches a result line that carries a value alone.
+    /// </summary>
+    /// <returns>The compiled pattern: group 1 is the lead and group 2 the value.</returns>
     [GeneratedRegex(@"^(  = )(.*)$")]
     public static partial Regex ResultLine();
 
+    /// <summary>
+    /// Matches a numeric literal that starts exactly at the search position.
+    /// </summary>
+    /// <returns>The compiled pattern.</returns>
     [GeneratedRegex(@"\G-?(\d+(\.\d+)?([eE][+-]?\d+)?|NaN|Infinity)(?![\w.])")]
     public static partial Regex NumberAt();
 
+    /// <summary>
+    /// Matches a braced placeholder at the search position: a type name or a note that formatting threw.
+    /// </summary>
+    /// <returns>The compiled pattern: group 1 is the text between the braces.</returns>
     [GeneratedRegex(@"\G\{(ToString threw [A-Za-z0-9_.]+|threw [A-Za-z0-9_.]+|[A-Za-z_][A-Za-z0-9_.`<>/\[\], ]*)\}")]
     public static partial Regex Placeholder();
 
+    /// <summary>
+    /// Matches a field name and its equals sign at the search position.
+    /// </summary>
+    /// <returns>The compiled pattern: group 1 is the field name.</returns>
     [GeneratedRegex(@"\G([A-Za-z_][A-Za-z0-9_]*) = ")]
     public static partial Regex FieldLabel();
 
+    /// <summary>
+    /// Matches an error line and splits its <c>error:</c> lead from the message.
+    /// </summary>
+    /// <returns>The compiled pattern: group 1 is the lead and group 2 the message.</returns>
     [GeneratedRegex(@"^(  error: )(.*)$")]
     public static partial Regex ErrorLine();
 
+    /// <summary>
+    /// Matches an instruction row of a listing: the offset column, the instruction, and the optional stack column.
+    /// </summary>
+    /// <returns>The compiled pattern: group 1 is the offset column, group 2 the instruction, and group 3 the stack column.</returns>
     [GeneratedRegex(@"^(\s*[0-9a-f]{3,4}\s+)(.*?)(\s+(\[[^\[\]]*\]|unreachable|\?))?$")]
     public static partial Regex ListingRow();
 
+    /// <summary>
+    /// Matches a listing line that is a label, a directive, or a brace.
+    /// </summary>
+    /// <returns>The compiled pattern.</returns>
     [GeneratedRegex(@"^\s*([A-Za-z_][A-Za-z0-9_]*:\s*$|\.[a-z]|\{|\})")]
     public static partial Regex ListingIl();
 

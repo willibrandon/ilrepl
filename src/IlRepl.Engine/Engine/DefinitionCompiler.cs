@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using Mono.Cecil;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
@@ -88,7 +89,9 @@ public static class DefinitionCompiler
             writer.DefineExternal(prototype, external);
         }
 
-        var cell = writer.DefineType("IlRepl", "Cell", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit, writer.Object);
+        var cell = writer.DefineType("IlRepl", "Cell",
+            TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
+            writer.Object);
         var returnType = writer.ImportSignature(
             signature.ReturnType,
             signature.ExactReturnType,
@@ -105,7 +108,7 @@ public static class DefinitionCompiler
                 parameter.RequiredModifiers,
                 parameter.OptionalModifiers);
             method.Parameters.Add(new ParameterDefinition(
-                parameter.Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                parameter.Name ?? ("arg" + i.ToString(CultureInfo.InvariantCulture)),
                 ParameterAttributes.None,
                 parameterType));
         }
@@ -156,11 +159,15 @@ public static class DefinitionCompiler
         }
         catch (InvalidProgramException ex) when (ex.Message.Contains("Vararg", StringComparison.OrdinalIgnoreCase))
         {
-            throw new ReplException($"the runtime only supports the vararg calling convention on Windows; method {name} cannot be prepared here (the block is still open)", ex);
+            throw new ReplException(
+                $"the runtime only supports the vararg calling convention on Windows; method {name} cannot be prepared here (the block " +
+                $"is still open)", ex);
         }
         catch (InvalidProgramException ex)
         {
-            throw new ReplException($"the JIT rejected method {name}: {ex.Message} (check .show for a stack mismatch between branches; the block is still open)", ex);
+            throw new ReplException(
+                $"the JIT rejected method {name}: {ex.Message} " +
+                $"(check .show for a stack mismatch between branches; the block is still open)", ex);
         }
         catch (Exception ex)
         {

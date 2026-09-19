@@ -1,0 +1,32 @@
+<Project>
+  <!--
+    Every project is checked by the repository's own analyzers, the host that a frontend publishes for itself included.
+    Only the restore of that nested build leaves them out: it forces its target framework and runtime onto every project
+    it reaches, NuGet's walk ignores the removal of properties on a reference, and the analyzers' own restore would be
+    overwritten. The nested build announces itself with _IlReplHostBuild, and a restore with ExcludeRestorePackageImports.
+
+    A property a project passes to its references would otherwise travel on to the analyzers and build them a second
+    time into the same folder, where one build's clean removes the assembly another project is compiling against.
+    Removing those properties leaves exactly one build of the analyzers.
+  -->
+  <PropertyGroup>
+    <_AnalyzerPropertiesToRemove>IncludeIlReplHostInOutput;RuntimeIdentifier;SelfContained</_AnalyzerPropertiesToRemove>
+    <_AnalyzerPropertiesToRemove
+      >$(_AnalyzerPropertiesToRemove);PublishAot;PublishReadyToRun;PublishSingleFile;PublishTrimmed</_AnalyzerPropertiesToRemove>
+    <_AnalyzerPropertiesToRemove
+      >$(_AnalyzerPropertiesToRemove);RuntimeIdentifiers;UseAppHost;OutputPath;IntermediateOutputPath</_AnalyzerPropertiesToRemove>
+    <_AnalyzerPropertiesToRemove
+      >$(_AnalyzerPropertiesToRemove);PublishDir;TargetFramework;_IlReplHostBuild;_IlReplHostBuildDirectory</_AnalyzerPropertiesToRemove>
+    <_RestoringNestedHost Condition="'$(_IlReplHostBuild)' == 'true' and '$(ExcludeRestorePackageImports)' == 'true'"
+      >true</_RestoringNestedHost>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'IlRepl.SourceGen' and '$(_RestoringNestedHost)' != 'true'
+                        and Exists('$(MSBuildThisFileDirectory)src/IlRepl.SourceGen/IlRepl.SourceGen.csproj')">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)src/IlRepl.SourceGen/IlRepl.SourceGen.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all"
+                      GlobalPropertiesToRemove="$(_AnalyzerPropertiesToRemove)" />
+  </ItemGroup>
+</Project>

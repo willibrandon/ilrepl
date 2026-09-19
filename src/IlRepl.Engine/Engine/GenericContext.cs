@@ -1,9 +1,13 @@
+using System.Globalization;
+
 namespace IlRepl.Engine;
 
 /// <summary>
 /// The generic parameters that <c>!N</c> and <c>!!N</c> refer to while a type is being parsed.
-/// <c>!N</c> names a type parameter of the declaring type; <c>!!N</c> names a method type parameter.
 /// </summary>
+/// <remarks>
+/// <c>!N</c> names a type parameter of the declaring type; <c>!!N</c> names a method type parameter.
+/// </remarks>
 /// <param name="TypeArguments">The declaring type's generic arguments, addressed by <c>!N</c>.</param>
 /// <param name="MethodArguments">The method's generic arguments, addressed by <c>!!N</c>.</param>
 public sealed record GenericContext(IReadOnlyList<Type> TypeArguments, IReadOnlyList<Type> MethodArguments)
@@ -43,7 +47,7 @@ public sealed record GenericContext(IReadOnlyList<Type> TypeArguments, IReadOnly
     {
         var list = isMethod ? MethodArguments : TypeArguments;
         var prefix = isMethod ? "!!" : "!";
-        if (int.TryParse(reference, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var index))
+        if (int.TryParse(reference, NumberStyles.None, CultureInfo.InvariantCulture, out var index))
         {
             if (index < list.Count)
             {

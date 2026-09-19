@@ -68,6 +68,7 @@ public static class CompletionProbe
             Console.WriteLine(string.Join(", ", s_loaded.Where(assembly => assembly != reportingAssembly)
                 .Select(assembly => assembly.FullName)));
         }
+
         s_loaded.Clear();
         s_initialModules.Clear();
         return result;

@@ -2,11 +2,13 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A type as a metadata signature encodes it, kept whole: custom modifiers in position, array
-/// shapes with their sizes and bounds, function pointers with their own signatures, pinning,
-/// generic parameters by position. Reflection cannot represent all of this, so the listing
-/// renders from here and only the stack simulator works from the projected <see cref="Type"/>.
+/// A type as a metadata signature encodes it, kept whole.
 /// </summary>
+/// <remarks>
+/// It keeps custom modifiers in position, array shapes with their sizes and bounds, function pointers with their own signatures, pinning,
+/// and generic parameters by position. Reflection cannot represent all of this, so the listing renders from here and only the stack
+/// simulator works from the projected <see cref="Type"/>.
+/// </remarks>
 public sealed record IlSignature
 {
     private IlSignature(IlSignatureKind kind)
@@ -20,15 +22,20 @@ public sealed record IlSignature
     public IlSignatureKind Kind { get; }
 
     /// <summary>
-    /// The runtime type for a primitive, a named type, the definition of a generic instance, or
-    /// a generic parameter the context could name; null when resolution failed or does not apply.
+    /// The runtime type, or null when resolution failed or does not apply.
     /// </summary>
+    /// <remarks>
+    /// There is a runtime type for a primitive, a named type, the definition of a generic instance, or a generic parameter the context
+    /// could name.
+    /// </remarks>
     public Type? Resolved { get; init; }
 
     /// <summary>
-    /// The spelling of a named type that did not resolve, as <c>[Assembly]Namespace.Name</c>, or
-    /// <c>Outer/Inner</c> for a nested one; null otherwise.
+    /// The spelling of a named type that did not resolve, or null otherwise.
     /// </summary>
+    /// <remarks>
+    /// The spelling is <c>[Assembly]Namespace.Name</c>, or <c>Outer/Inner</c> for a nested one.
+    /// </remarks>
     public string? UnresolvedName { get; init; }
 
     /// <summary>
@@ -97,7 +104,8 @@ public sealed record IlSignature
     /// <param name="type">The runtime type.</param>
     /// <param name="keyword">Its IL keyword.</param>
     /// <returns>The signature.</returns>
-    public static IlSignature Primitive(Type type, string keyword) => new(IlSignatureKind.Primitive) { Resolved = type, Keyword = keyword, IsValueType = type.IsValueType };
+    public static IlSignature Primitive(Type type, string keyword) =>
+        new(IlSignatureKind.Primitive) { Resolved = type, Keyword = keyword, IsValueType = type.IsValueType };
 
     /// <summary>
     /// A named type that resolved.
@@ -112,7 +120,8 @@ public sealed record IlSignature
     /// <param name="name">The <c>[Assembly]Namespace.Name</c> spelling.</param>
     /// <param name="isValueType">True when the signature marked it <c>valuetype</c>.</param>
     /// <returns>The signature.</returns>
-    public static IlSignature Unresolved(string name, bool isValueType) => new(IlSignatureKind.Named) { UnresolvedName = name, IsValueType = isValueType };
+    public static IlSignature Unresolved(string name, bool isValueType) =>
+        new(IlSignatureKind.Named) { UnresolvedName = name, IsValueType = isValueType };
 
     /// <summary>
     /// A generic instance.
@@ -120,7 +129,14 @@ public sealed record IlSignature
     /// <param name="definition">The generic type.</param>
     /// <param name="arguments">The arguments.</param>
     /// <returns>The signature.</returns>
-    public static IlSignature GenericInstance(IlSignature definition, IReadOnlyList<IlSignature> arguments) => new(IlSignatureKind.GenericInstance) { Element = definition, Arguments = arguments, IsValueType = definition.IsValueType, Resolved = definition.Resolved };
+    public static IlSignature GenericInstance(IlSignature definition, IReadOnlyList<IlSignature> arguments) =>
+        new(IlSignatureKind.GenericInstance)
+        {
+            Element = definition,
+            Arguments = arguments,
+            IsValueType = definition.IsValueType,
+            Resolved = definition.Resolved,
+        };
 
     /// <summary>
     /// A vector.
@@ -137,7 +153,8 @@ public sealed record IlSignature
     /// <param name="sizes">The declared sizes.</param>
     /// <param name="lowerBounds">The declared lower bounds.</param>
     /// <returns>The signature.</returns>
-    public static IlSignature Array(IlSignature element, int rank, IReadOnlyList<int> sizes, IReadOnlyList<int> lowerBounds) => new(IlSignatureKind.Array) { Element = element, Rank = rank, Sizes = sizes, LowerBounds = lowerBounds };
+    public static IlSignature Array(IlSignature element, int rank, IReadOnlyList<int> sizes, IReadOnlyList<int> lowerBounds) =>
+        new(IlSignatureKind.Array) { Element = element, Rank = rank, Sizes = sizes, LowerBounds = lowerBounds };
 
     /// <summary>
     /// A managed pointer.
@@ -167,7 +184,8 @@ public sealed record IlSignature
     /// <param name="modifier">The modifier type.</param>
     /// <param name="required">True for <c>modreq</c>.</param>
     /// <returns>The signature.</returns>
-    public static IlSignature Modified(IlSignature element, IlSignature modifier, bool required) => new(IlSignatureKind.Modified) { Element = element, Modifier = modifier, IsRequired = required, IsValueType = element.IsValueType };
+    public static IlSignature Modified(IlSignature element, IlSignature modifier, bool required) =>
+        new(IlSignatureKind.Modified) { Element = element, Modifier = modifier, IsRequired = required, IsValueType = element.IsValueType };
 
     /// <summary>
     /// A pinned local type.
@@ -182,7 +200,8 @@ public sealed record IlSignature
     /// <param name="index">The position.</param>
     /// <param name="parameter">The runtime generic parameter when the context has one.</param>
     /// <returns>The signature.</returns>
-    public static IlSignature TypeParameter(int index, Type? parameter) => new(IlSignatureKind.TypeParameter) { Index = index, Resolved = parameter };
+    public static IlSignature TypeParameter(int index, Type? parameter) =>
+        new(IlSignatureKind.TypeParameter) { Index = index, Resolved = parameter };
 
     /// <summary>
     /// A generic parameter of the method.
@@ -190,7 +209,8 @@ public sealed record IlSignature
     /// <param name="index">The position.</param>
     /// <param name="parameter">The runtime generic parameter when the context has one.</param>
     /// <returns>The signature.</returns>
-    public static IlSignature MethodParameter(int index, Type? parameter) => new(IlSignatureKind.MethodParameter) { Index = index, Resolved = parameter };
+    public static IlSignature MethodParameter(int index, Type? parameter) =>
+        new(IlSignatureKind.MethodParameter) { Index = index, Resolved = parameter };
 
     /// <summary>
     /// The signature without its custom modifiers and pinning.
@@ -212,9 +232,12 @@ public sealed record IlSignature
     };
 
     /// <summary>
-    /// The closest runtime type, for the stack simulator: modifiers and pinning dropped, a function
-    /// pointer as <c>native int</c> (its stack category), an unresolved part as null (an unknown slot).
+    /// The closest runtime type, for the stack simulator.
     /// </summary>
+    /// <remarks>
+    /// Modifiers and pinning are dropped. A function pointer becomes <c>native int</c>, its stack category. An unresolved part becomes
+    /// null, an unknown slot.
+    /// </remarks>
     /// <returns>The type, or null when any part is unresolved.</returns>
     public Type? ToClrType()
     {
@@ -266,14 +289,19 @@ public sealed record IlSignature
     public override string ToString() => IlSignatureRenderer.IlAsm(this);
 
     /// <summary>
-    /// Builds a signature from a runtime type, for the paths that have no metadata reader: a
-    /// dynamic assembly, or a reflected member's modifiers.
+    /// Builds a signature from a runtime type, for the paths that have no metadata reader.
     /// </summary>
+    /// <remarks>
+    /// Those paths are a dynamic assembly and a reflected member's modifiers.
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <param name="requiredModifiers">Required modifiers to wrap it in, innermost first.</param>
     /// <param name="optionalModifiers">Optional modifiers to wrap it in, innermost first.</param>
     /// <returns>The signature.</returns>
-    public static IlSignature FromType(Type type, IReadOnlyList<Type>? requiredModifiers = null, IReadOnlyList<Type>? optionalModifiers = null)
+    public static IlSignature FromType(
+        Type type,
+        IReadOnlyList<Type>? requiredModifiers = null,
+        IReadOnlyList<Type>? optionalModifiers = null)
     {
         ArgumentNullException.ThrowIfNull(type);
         var result = FromType(type);
@@ -300,7 +328,8 @@ public sealed record IlSignature
 
         if (type.IsGenericParameter)
         {
-            return type.DeclaringMethod is null ? TypeParameter(type.GenericParameterPosition, type) : MethodParameter(type.GenericParameterPosition, type);
+            return type.DeclaringMethod is null ? TypeParameter(type.GenericParameterPosition, type)
+                : MethodParameter(type.GenericParameterPosition, type);
         }
 
         if (type.IsByRef)

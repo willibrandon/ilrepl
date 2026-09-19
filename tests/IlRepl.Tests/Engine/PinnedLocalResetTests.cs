@@ -1,9 +1,9 @@
 using System.Reflection;
 using System.Runtime.Loader;
-using ILVerify;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
+using ILVerify;
 
 namespace IlRepl.Tests.Engine;
 
@@ -45,8 +45,11 @@ public sealed class PinnedLocalResetTests
         Assert.Contains(diagnostic => diagnostic.Kind == AnalysisDiagnosticKind.Unverifiable
             && diagnostic.Location.Offset == reset.Offset, diagnostics);
 
-        foreach (var image in new[] { AssemblyExporter.Write(session, "pinned-reset"),
-            IlasmLocator.Assemble(IlAsmRenderer.Render(session)) })
+        foreach (var image in new[]
+        {
+            AssemblyExporter.Write(session, "pinned-reset"),
+            IlasmLocator.Assemble(IlAsmRenderer.Render(session)),
+        })
         {
             using var oracle = new IlVerificationOracle();
             Assert.Contains(VerifierError.StackUnexpected, oracle.Verify(image));

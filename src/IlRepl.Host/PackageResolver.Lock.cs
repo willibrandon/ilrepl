@@ -34,8 +34,10 @@ internal static partial class PackageResolver
         return framework;
     }
 
-    private static ImmutableArray<LibraryDependency> PinnedRequests(PackagesLockFile recorded,
-        Dictionary<string, SessionReference> roots, NuGetFramework framework)
+    private static ImmutableArray<LibraryDependency> PinnedRequests(
+        PackagesLockFile recorded,
+        Dictionary<string, SessionReference> roots,
+        NuGetFramework framework)
     {
         var portable = recorded.Targets.SingleOrDefault(target => target.TargetFramework == framework
             && string.IsNullOrEmpty(target.RuntimeIdentifier))
@@ -83,25 +85,44 @@ internal static partial class PackageResolver
         }
     }
 
-    private static bool PinRuntimeRequests(PackagesLockFile recorded, LockFile restored, PackageSpec spec,
-        NuGetFramework framework, string runtime)
+    private static bool PinRuntimeRequests(
+        PackagesLockFile recorded,
+        LockFile restored,
+        PackageSpec spec,
+        NuGetFramework framework,
+        string runtime)
     {
         var known = RuntimeDependencies(recorded, framework);
         var info = spec.TargetFrameworks.Single(target => target.FrameworkName == framework);
         var target = restored.GetTarget(framework, runtime);
-        if (target is null) return false;
+        if (target is null)
+        {
+            return false;
+        }
+
         var pins = new List<LibraryDependency>();
         foreach (var selected in target.Libraries)
         {
             if (selected.Name is null || !known.TryGetValue(selected.Name, out var versions)
-                || versions.Any(dependency => dependency.ResolvedVersion == selected.Version)) continue;
+                || versions.Any(dependency => dependency.ResolvedVersion == selected.Version))
+            {
+                continue;
+            }
+
             var ranges = target.Libraries.SelectMany(library => library.Dependencies)
                 .Where(dependency => dependency.Id.Equals(selected.Name, StringComparison.OrdinalIgnoreCase))
                 .Select(dependency => dependency.VersionRange).ToArray();
             var available = versions.Select(dependency => dependency.ResolvedVersion).Distinct().Order().ToArray();
             var candidates = available.Where(version => ranges.All(range => range.Satisfies(version))).ToArray();
-            if (candidates.Length == 0) candidates = available;
-            if (info.Dependencies.Any(dependency => dependency.Name.Equals(selected.Name, StringComparison.OrdinalIgnoreCase))) continue;
+            if (candidates.Length == 0)
+            {
+                candidates = available;
+            }
+
+            if (info.Dependencies.Any(dependency => dependency.Name.Equals(selected.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
 
             var pinned = ranges.Any(range => range.IsFloating) ? candidates[^1] : candidates[0];
             pins.Add(new LibraryDependency
@@ -118,6 +139,7 @@ internal static partial class PackageResolver
                 Dependencies = info.Dependencies.AddRange(pins),
             };
         }
+
         return pins.Count != 0;
     }
 
@@ -127,8 +149,13 @@ internal static partial class PackageResolver
             .GroupBy(dependency => dependency.Id, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
 
-    private static void MergeLockedTargets(string path, PackagesLockFile recorded, Dictionary<string, SessionReference> roots,
-        NuGetFramework framework, string runtime, bool platformChange)
+    private static void MergeLockedTargets(
+        string path,
+        PackagesLockFile recorded,
+        Dictionary<string, SessionReference> roots,
+        NuGetFramework framework,
+        string runtime,
+        bool platformChange)
     {
         var restored = PackagesLockFileFormat.Read(path);
         foreach (var dependency in restored.Targets.SelectMany(target => target.Dependencies))

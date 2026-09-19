@@ -14,7 +14,9 @@ public static class SessionCheckpointDelta
     /// <param name="previous">The previously acknowledged immutable snapshot, or null for the first transfer.</param>
     /// <param name="publishedAssets">Content hashes already acknowledged by the receiver.</param>
     /// <returns>The incremental document and the number of source entries retained from the previous snapshot.</returns>
-    public static (SessionDocument Document, int EntryPrefix) Create(SessionDocument document, SessionDocument? previous,
+    public static (SessionDocument Document, int EntryPrefix) Create(
+        SessionDocument document,
+        SessionDocument? previous,
         IReadOnlySet<string> publishedAssets)
     {
         ArgumentNullException.ThrowIfNull(document);

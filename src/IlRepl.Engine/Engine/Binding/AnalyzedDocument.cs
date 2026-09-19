@@ -8,7 +8,9 @@ namespace IlRepl.Engine.Binding;
 /// <param name="Lines">The analyzed source snapshot.</param>
 /// <param name="Reply">The shared diagnostics and session identity.</param>
 /// <param name="Positions">The incoming stack, instruction flag, and help at each document line.</param>
-internal sealed record AnalyzedDocument(IReadOnlyList<string> Lines, AnalysisReply Reply,
+internal sealed record AnalyzedDocument(
+    IReadOnlyList<string> Lines,
+    AnalysisReply Reply,
     IReadOnlyList<(AnalyzedStack? Stack, bool BeforeInstruction, InstructionHelp? Help)> Positions)
 {
     /// <summary>

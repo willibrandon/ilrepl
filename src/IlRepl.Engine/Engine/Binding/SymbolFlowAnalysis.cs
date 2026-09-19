@@ -46,6 +46,7 @@ internal static class SymbolFlowAnalysis
         {
             BodyName = body.Signature?.Name ?? "cell",
         };
+
         return new ControlFlowAnalysis<TypeSymbol>(Rules(scope)).Run(graph,
             SymbolIdentity.Equal(returnType, TypeSymbol.Void) ? null : returnType,
             body.Signature is null, cancellationToken);
@@ -81,6 +82,7 @@ internal static class SymbolFlowAnalysis
         {
             BodyName = body.Signature?.Name ?? "cell",
         };
+
         var original = previous.End;
         var values = original?.Values;
         var copies = values?.Select(value => value with { Origins = [] }).ToArray();
@@ -143,7 +145,9 @@ internal static class SymbolFlowAnalysis
     /// <summary>
     /// Analyzes a captured body with cancellation points within the fixed-point worklist.
     /// </summary>
-    public static ValueTask<FlowResult<TypeSymbol>> RunAsync(EditingBody body, IBindingScope scope,
+    public static ValueTask<FlowResult<TypeSymbol>> RunAsync(
+        EditingBody body,
+        IBindingScope scope,
         CancellationToken cancellationToken = default)
     {
         var returnType = body.Signature?.ReturnType;
@@ -156,6 +160,7 @@ internal static class SymbolFlowAnalysis
         {
             BodyName = body.Signature?.Name ?? "cell",
         };
+
         return new ControlFlowAnalysis<TypeSymbol>(Rules(scope)).RunAsync(graph,
             SymbolIdentity.Equal(returnType, TypeSymbol.Void) ? null : returnType,
             body.Signature is null, cancellationToken);

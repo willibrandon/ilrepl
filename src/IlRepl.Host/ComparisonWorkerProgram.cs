@@ -46,6 +46,7 @@ internal static class ComparisonWorkerProgram
                 File.WriteAllText(arguments[5], "output-limit");
                 Environment.Exit(73);
             }, captureOutput: false, useStandardInput: true).ConfigureAwait(false);
+
         await File.WriteAllTextAsync(arguments[4], JsonSerializer.Serialize(result,
             ProtocolJsonContext.Default.ComparisonSide)).ConfigureAwait(false);
         await File.WriteAllTextAsync(arguments[8], "ready").ConfigureAwait(false);

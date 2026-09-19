@@ -59,7 +59,8 @@ public sealed class CellStateTests
     public void Apply_RetWithWrongType_Explains()
     {
         var state = Body(Signature("Answer", typeof(int)), "ldstr \"42\"");
-        Assert.Contains("ret needs int32 on the stack but found string", Assert.ThrowsExactly<ReplException>(() => state.Apply("ret")).Message);
+        Assert.Contains("ret needs int32 on the stack but found string",
+            Assert.ThrowsExactly<ReplException>(() => state.Apply("ret")).Message);
         Assert.AreEqual("[string]", state.Stack.Render(), "a rejected ret changes nothing");
 
         var boxed = Body(Signature("Boxed", typeof(object)), "ldc.i4 1");
@@ -76,7 +77,8 @@ public sealed class CellStateTests
     public void Apply_RetInVoidMethodWithValue_Throws()
     {
         var state = Body(Signature("Hi", typeof(void)), "ldc.i4 1");
-        Assert.Contains("ret in void method Hi needs an empty stack but found [int32] (pop first)", Assert.ThrowsExactly<ReplException>(() => state.Apply("ret")).Message);
+        Assert.Contains("ret in void method Hi needs an empty stack but found [int32] (pop first)",
+            Assert.ThrowsExactly<ReplException>(() => state.Apply("ret")).Message);
         state.Apply("pop");
         var result = state.Apply("ret");
         Assert.AreEqual(0, result.Instruction!.RetPops);
@@ -90,7 +92,8 @@ public sealed class CellStateTests
     public void Apply_RetWithTwoValues_Throws()
     {
         var state = Body(Signature("Two", typeof(int)), "ldc.i4 1", "ldc.i4 2");
-        Assert.Contains("ret needs exactly one int32 on the stack but found [int32, int32]", Assert.ThrowsExactly<ReplException>(() => state.Apply("ret")).Message);
+        Assert.Contains("ret needs exactly one int32 on the stack but found [int32, int32]",
+            Assert.ThrowsExactly<ReplException>(() => state.Apply("ret")).Message);
     }
 
     /// <summary>
@@ -114,16 +117,19 @@ public sealed class CellStateTests
     public void Apply_CloseWithWrongStack_Throws()
     {
         var two = Body(Signature("F", typeof(int)), "ldc.i4 1", "ldc.i4 2");
-        Assert.Contains("method F needs a ret before }: the stack holds [int32, int32] but F returns int32", Assert.ThrowsExactly<ReplException>(() => two.Apply("}")).Message);
+        Assert.Contains("method F needs a ret before }: the stack holds [int32, int32] but F returns int32",
+            Assert.ThrowsExactly<ReplException>(() => two.Apply("}")).Message);
 
         var empty = Body(Signature("F", typeof(int)));
         Assert.Contains("the stack is empty but F returns int32", Assert.ThrowsExactly<ReplException>(() => empty.Apply("}")).Message);
 
         var voidWithValue = Body(Signature("Nop", typeof(void)), "ldc.i4 1");
-        Assert.Contains("the stack holds [int32] but Nop returns void (pop it)", Assert.ThrowsExactly<ReplException>(() => voidWithValue.Apply("}")).Message);
+        Assert.Contains("the stack holds [int32] but Nop returns void (pop it)",
+            Assert.ThrowsExactly<ReplException>(() => voidWithValue.Apply("}")).Message);
 
         var wrongType = Body(Signature("F", typeof(int)), "ldstr \"x\"");
-        Assert.Contains("the stack holds [string] but F returns int32", Assert.ThrowsExactly<ReplException>(() => wrongType.Apply("}")).Message);
+        Assert.Contains("the stack holds [string] but F returns int32",
+            Assert.ThrowsExactly<ReplException>(() => wrongType.Apply("}")).Message);
     }
 
     /// <summary>
@@ -185,10 +191,13 @@ public sealed class CellStateTests
     public void Apply_ArgsInsideMethod_Throws()
     {
         var state = Body(Signature("F", typeof(void)));
-        Assert.Contains(".args is not allowed inside a method; parameters come from the header", Assert.ThrowsExactly<ReplException>(() => state.Apply(".args (int32 x = 1)")).Message);
+        Assert.Contains(".args is not allowed inside a method; parameters come from the header",
+            Assert.ThrowsExactly<ReplException>(() => state.Apply(".args (int32 x = 1)")).Message);
         Assert.Contains("cannot be vararg", Assert.ThrowsExactly<ReplException>(() => state.Apply(".vararg")).Message);
-        Assert.Contains(".typeparams is not allowed inside a method", Assert.ThrowsExactly<ReplException>(() => state.Apply(".typeparams (T)")).Message);
-        Assert.Contains("close the method with } first", Assert.ThrowsExactly<ReplException>(() => state.Apply(".typeargs (int32)")).Message);
+        Assert.Contains(".typeparams is not allowed inside a method",
+            Assert.ThrowsExactly<ReplException>(() => state.Apply(".typeparams (T)")).Message);
+        Assert.Contains("close the method with } first",
+            Assert.ThrowsExactly<ReplException>(() => state.Apply(".typeargs (int32)")).Message);
         Assert.AreEqual(LineOutcome.Locals, state.Apply(".locals init (int32 x)").Outcome);
     }
 
@@ -199,7 +208,8 @@ public sealed class CellStateTests
     public void Apply_NestedMethod_Throws()
     {
         var state = Body(Signature("Outer", typeof(void)));
-        Assert.Contains("a method is already open (Outer); close it with } before defining another", Assert.ThrowsExactly<ReplException>(() => state.Apply(".method void Inner() {")).Message);
+        Assert.Contains("a method is already open (Outer); close it with } before defining another",
+            Assert.ThrowsExactly<ReplException>(() => state.Apply(".method void Inner() {")).Message);
     }
 
     /// <summary>
@@ -250,8 +260,10 @@ public sealed class CellStateTests
     public void Apply_RetWithExactObjectForString_Throws()
     {
         var state = Body(Signature("F", typeof(string)), "newobj instance void Object::.ctor()");
-        Assert.Contains("ret needs string on the stack but found object", Assert.ThrowsExactly<ReplException>(() => state.Apply("ret")).Message);
-        Assert.Contains("the stack holds [object] but F returns string", Assert.ThrowsExactly<ReplException>(() => state.Apply("}")).Message);
+        Assert.Contains("ret needs string on the stack but found object",
+            Assert.ThrowsExactly<ReplException>(() => state.Apply("ret")).Message);
+        Assert.Contains("the stack holds [object] but F returns string",
+            Assert.ThrowsExactly<ReplException>(() => state.Apply("}")).Message);
     }
 
     /// <summary>
@@ -261,10 +273,12 @@ public sealed class CellStateTests
     public void Apply_RetWithBoxedValueForString_Throws()
     {
         var explicitRet = Body(Signature("Bad", typeof(string)), "ldc.i4.1", "box int32");
-        Assert.Contains("ret needs string on the stack but found object", Assert.ThrowsExactly<ReplException>(() => explicitRet.Apply("ret")).Message);
+        Assert.Contains("ret needs string on the stack but found object",
+            Assert.ThrowsExactly<ReplException>(() => explicitRet.Apply("ret")).Message);
 
         var implied = Body(Signature("Bad", typeof(string)), "ldc.i4.1", "box int32");
-        Assert.Contains("the stack holds [object] but Bad returns string", Assert.ThrowsExactly<ReplException>(() => implied.Apply("}")).Message);
+        Assert.Contains("the stack holds [object] but Bad returns string",
+            Assert.ThrowsExactly<ReplException>(() => implied.Apply("}")).Message);
 
         var boxedObject = Body(Signature("Bad", typeof(string)), "newobj instance void Object::.ctor()", "box object");
         Assert.Contains("found object", Assert.ThrowsExactly<ReplException>(() => boxedObject.Apply("ret")).Message);

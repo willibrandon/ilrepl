@@ -29,6 +29,7 @@ public sealed class ImportedDiagnosticExplanationTests
             il.Emit(OpCodes.Call, module.ImportReference(typeof(Math).GetMethod(nameof(Math.Abs), [typeof(int)])!));
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var body = MethodDisassembler.Disassemble(fixture.GetMethod("WrongArgument")!, session);
         StackAnalysis.Run(body, out var diagnostics);
 

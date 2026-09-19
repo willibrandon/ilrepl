@@ -74,14 +74,22 @@ public sealed partial class HostServer
         }
 
         if (_client is { } client)
+        {
             await client.ExecutionChangedAsync(progress, CancellationToken.None).ConfigureAwait(false);
+        }
     }
 
     private async Task FlushCompletionAsync(HostCompletionDelivery delivery)
     {
-        if (delivery.Pending is not { } progress) return;
+        if (delivery.Pending is not { } progress)
+        {
+            return;
+        }
+
         delivery.Pending = null;
         if (_client is { } client)
+        {
             await client.ExecutionChangedAsync(progress, CancellationToken.None).ConfigureAwait(false);
+        }
     }
 }

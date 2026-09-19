@@ -30,6 +30,7 @@ public sealed class ControlFlowOperandTableTests
                 ["shl"] = ["YNYNNN", "YNYNNN", "YNYNNN", "NNNNNN", "NNNNNN", "NNNNNN"],
                 ["add.ovf"] = ["YNYNNN", "NYNNNN", "YNYNNN", "NNNNNN", "NNNNNN", "NNNNNN"],
             };
+
             foreach (var (opcode, table) in tables)
             {
                 for (var left = 0; left < 6; left++)
@@ -72,6 +73,7 @@ public sealed class ControlFlowOperandTableTests
             il.Emit(OpCodes.Ldc_I4, 42);
             il.Emit(OpCodes.Ret);
         }, session.Resolver);
+
         using var oracle = new IlVerificationOracle();
         var errors = oracle.Verify(image);
         Assert.AreEqual(verifierAccepts, errors.Count == 0, string.Join(", ", errors));

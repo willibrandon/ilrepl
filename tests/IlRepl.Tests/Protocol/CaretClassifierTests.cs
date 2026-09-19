@@ -934,8 +934,25 @@ public sealed class CaretClassifierTests
     [TestMethod]
     public void Classify_IntegerStringAndFloatOperands_AreNoSites()
     {
-        foreach (var spelling in new[] { "ldc.i4 4|2", "ldc.i4.s |", "ldc.i8 1|", "ldc.r8 1.|5", "ldc.r4 |", "ldstr \"ab|c\"",
-            "ldstr \"abc\"|", "ldstr |", "nop|", "nop |", "add |", "ret|", "ldloc.0 |", "ldarg.1|", "unaligned. |", "unaligned. 4|" })
+        foreach (var spelling in new[]
+        {
+            "ldc.i4 4|2",
+            "ldc.i4.s |",
+            "ldc.i8 1|",
+            "ldc.r8 1.|5",
+            "ldc.r4 |",
+            "ldstr \"ab|c\"",
+            "ldstr \"abc\"|",
+            "ldstr |",
+            "nop|",
+            "nop |",
+            "add |",
+            "ret|",
+            "ldloc.0 |",
+            "ldarg.1|",
+            "unaligned. |",
+            "unaligned. 4|",
+        })
         {
             var site = Classify(spelling, out _);
             Assert.AreEqual(CompletionSiteKind.None, site.Kind, spelling);
@@ -949,9 +966,26 @@ public sealed class CaretClassifierTests
     [TestMethod]
     public void Classify_FirstWord_IsNoSite()
     {
-        foreach (var spelling in new[] { "|", "ca|ll", "call|", "|call Console::WriteLine()", "cal|l Console::WriteLine()",
-            ".loc|als init (int32 a)", ".meth|od", "bo|x", "L1: ca|ll", "L1: |", "   |", "  bo|x String", "catch|", "cat|ch Exception",
-            "}|", "{|", "|}" })
+        foreach (var spelling in new[]
+        {
+            "|",
+            "ca|ll",
+            "call|",
+            "|call Console::WriteLine()",
+            "cal|l Console::WriteLine()",
+            ".loc|als init (int32 a)",
+            ".meth|od",
+            "bo|x",
+            "L1: ca|ll",
+            "L1: |",
+            "   |",
+            "  bo|x String",
+            "catch|",
+            "cat|ch Exception",
+            "}|",
+            "{|",
+            "|}",
+        })
         {
             Assert.AreEqual(CompletionSiteKind.None, Classify(spelling, out _).Kind, spelling);
         }

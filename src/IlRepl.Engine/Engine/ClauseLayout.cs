@@ -1,12 +1,13 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Decides how exception clauses are drawn. Clauses that nest the way ILGenerator, the C#
-/// compiler, and the REPL's own emitter lay them out become <c>.try { } catch T { } finally { }</c>
-/// blocks: a finally or fault whose protected range is exactly another region's try plus its
-/// handlers folds into that region as its trailing handler, and regions nest inside a try, a
-/// filter, or a handler. Anything else keeps its clauses in ildasm's offset form.
+/// Decides how exception clauses are drawn.
 /// </summary>
+/// <remarks>
+/// Clauses that nest the way ILGenerator, the C# compiler, and the REPL's own emitter lay them out become <c>.try { } catch T { } finally {
+/// }</c> blocks: a finally or fault whose protected range is exactly another region's try plus its handlers folds into that region as its
+/// trailing handler, and regions nest inside a try, a filter, or a handler. Anything else keeps its clauses in ildasm's offset form.
+/// </remarks>
 public static class ClauseLayout
 {
     /// <summary>
@@ -37,12 +38,14 @@ public static class ClauseLayout
             folded = false;
             foreach (var trailing in regions)
             {
-                if (trailing.Handlers.Count != 1 || trailing.Handlers[0].Kind is not (IlClauseKind.Finally or IlClauseKind.Fault) || trailing.Handlers[0].LexicalStart != trailing.TryEnd)
+                if (trailing.Handlers.Count != 1 || trailing.Handlers[0].Kind is not (IlClauseKind.Finally or IlClauseKind.Fault)
+                    || trailing.Handlers[0].LexicalStart != trailing.TryEnd)
                 {
                     continue;
                 }
 
-                var owner = regions.FirstOrDefault(r => !ReferenceEquals(r, trailing) && r.TryStart == trailing.TryStart && r.End == trailing.TryEnd);
+                var owner = regions.FirstOrDefault(r => !ReferenceEquals(r, trailing) && r.TryStart == trailing.TryStart
+                    && r.End == trailing.TryEnd);
                 if (owner is null)
                 {
                     continue;

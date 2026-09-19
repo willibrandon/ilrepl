@@ -43,11 +43,23 @@ internal sealed class DiagnosticTail
                 _boundary!.TrySetResult();
                 content = _text.ToString();
             }
-            if (Encoding.UTF8.GetByteCount(content) <= 65536) return;
+
+            if (Encoding.UTF8.GetByteCount(content) <= 65536)
+            {
+                return;
+            }
+
             var remove = Math.Max(1, content.Length - 65536);
             while (remove < content.Length && Encoding.UTF8.GetByteCount(content.AsSpan(remove)) > 65536)
+            {
                 remove += Math.Max(1, (content.Length - remove) / 4);
-            if (remove < content.Length && char.IsLowSurrogate(content[remove])) remove++;
+            }
+
+            if (remove < content.Length && char.IsLowSurrogate(content[remove]))
+            {
+                remove++;
+            }
+
             _text.Remove(0, remove);
         }
     }
@@ -130,6 +142,9 @@ internal sealed class DiagnosticTail
     /// <returns>The complete retained text.</returns>
     public override string ToString()
     {
-        lock (_text) return _text.ToString();
+        lock (_text)
+        {
+            return _text.ToString();
+        }
     }
 }

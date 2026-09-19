@@ -85,8 +85,15 @@ public sealed class MemberDirectiveTypeCompletionTests
     public async Task Complete_AccessorArgument_ConfirmsDeclaration(bool duplicate)
     {
         var session = new Session();
-        foreach (var line in new[] { ".class public Host {", ".method public static List<int32> get_Items() {",
-            "ldnull", "ret", "}", ".property List<int32> Items() {" })
+        foreach (var line in new[]
+        {
+            ".class public Host {",
+            ".method public static List<int32> get_Items() {",
+            "ldnull",
+            "ret",
+            "}",
+            ".property List<int32> Items() {",
+        })
         {
             session.AddLine(line);
         }
@@ -118,10 +125,14 @@ public sealed class MemberDirectiveTypeCompletionTests
     public async Task Complete_OverrideArgument_ConfirmsSignature(bool valid)
     {
         var session = new Session();
-        foreach (var line in new[] { ".class public interface abstract IValue<T> {",
-            ".method public abstract virtual instance !0 Get() { }", "}",
+        foreach (var line in new[]
+        {
+            ".class public interface abstract IValue<T> {",
+            ".method public abstract virtual instance !0 Get() { }",
+            "}",
             ".class public Host implements IValue<int32> {",
-            ".method public virtual instance " + (valid ? "int32" : "string") + " Read() {" })
+            ".method public virtual instance " + (valid ? "int32" : "string") + " Read() {",
+        })
         {
             session.AddLine(line);
         }
@@ -151,8 +162,17 @@ public sealed class MemberDirectiveTypeCompletionTests
     private static Session AttributeSession()
     {
         var session = new Session();
-        foreach (var line in new[] { ".class public Mark<T> extends System.Attribute {", ".method public instance void .ctor() {",
-            "ldarg.0", "call instance void System.Attribute::.ctor()", "ret", "}", "}", ".class public Host {" })
+        foreach (var line in new[]
+        {
+            ".class public Mark<T> extends System.Attribute {",
+            ".method public instance void .ctor() {",
+            "ldarg.0",
+            "call instance void System.Attribute::.ctor()",
+            "ret",
+            "}",
+            "}",
+            ".class public Host {",
+        })
         {
             session.AddLine(line);
         }

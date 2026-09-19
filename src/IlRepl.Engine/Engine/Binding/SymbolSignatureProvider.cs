@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Reflection;
 using System.Reflection.Metadata;
+using System.Runtime.InteropServices;
 
 namespace IlRepl.Engine.Binding;
 
@@ -28,7 +29,15 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
     {
     }
 
-    internal SymbolSignatureProvider(AssemblySymbolSource source, LoadedBindingCatalog catalog,
+    /// <summary>
+    /// Initializes a provider that can hand type references to a caller's own resolver instead of the catalog.
+    /// </summary>
+    /// <param name="source">The module's symbol source.</param>
+    /// <param name="catalog">The catalog.</param>
+    /// <param name="reference">Resolves a type reference from its handle and raw type kind, or null to use the catalog.</param>
+    internal SymbolSignatureProvider(
+        AssemblySymbolSource source,
+        LoadedBindingCatalog catalog,
         Func<TypeReferenceHandle, byte, TypeSymbol>? reference)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -80,7 +89,10 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
     }
 
     /// <inheritdoc/>
-    public TypeSymbol GetTypeFromSpecification(MetadataReader reader, SymbolGenericOwner genericContext, TypeSpecificationHandle handle,
+    public TypeSymbol GetTypeFromSpecification(
+        MetadataReader reader,
+        SymbolGenericOwner genericContext,
+        TypeSpecificationHandle handle,
         byte rawTypeKind)
     {
         ArgumentNullException.ThrowIfNull(reader);
@@ -153,13 +165,14 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
         StripModifiers(signature.ReturnType, out _, out var optionalModifiers);
         var unmanaged = header.CallingConvention switch
         {
-            SignatureCallingConvention.CDecl => System.Runtime.InteropServices.CallingConvention.Cdecl,
-            SignatureCallingConvention.StdCall => System.Runtime.InteropServices.CallingConvention.StdCall,
-            SignatureCallingConvention.ThisCall => System.Runtime.InteropServices.CallingConvention.ThisCall,
-            SignatureCallingConvention.FastCall => System.Runtime.InteropServices.CallingConvention.FastCall,
+            SignatureCallingConvention.CDecl => CallingConvention.Cdecl,
+            SignatureCallingConvention.StdCall => CallingConvention.StdCall,
+            SignatureCallingConvention.ThisCall => CallingConvention.ThisCall,
+            SignatureCallingConvention.FastCall => CallingConvention.FastCall,
             SignatureCallingConvention.Unmanaged => FunctionPointerConvention.FromMarkers(optionalModifiers),
-            _ => System.Runtime.InteropServices.CallingConvention.Winapi,
+            _ => CallingConvention.Winapi,
         };
+
         var isUnmanaged = header.CallingConvention is SignatureCallingConvention.CDecl or SignatureCallingConvention.StdCall
             or SignatureCallingConvention.ThisCall or SignatureCallingConvention.FastCall or SignatureCallingConvention.Unmanaged;
         int? sentinel = signature.RequiredParameterCount < signature.ParameterTypes.Length ? signature.RequiredParameterCount : null;

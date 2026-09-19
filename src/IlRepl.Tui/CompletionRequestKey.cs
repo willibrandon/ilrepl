@@ -14,8 +14,13 @@ namespace IlRepl.Tui;
 /// <param name="AnchorVersion">The local anchored-selection version.</param>
 /// <param name="Cursor">The server's optional next-page token.</param>
 public sealed record CompletionRequestKey(
-    CompletionDocumentKey Document, long Version, long Revision, CompletionSite Site, DocumentRange? Selection,
-    long AnchorVersion, string? Cursor = null)
+    CompletionDocumentKey Document,
+    long Version,
+    long Revision,
+    CompletionSite Site,
+    DocumentRange? Selection,
+    long AnchorVersion,
+    string? Cursor = null)
 {
     /// <summary>
     /// The searchable assembly-load version observed when this request started.

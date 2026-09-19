@@ -14,7 +14,8 @@ internal static class RepoPaths
     /// The build configuration the tests were built with, taken from the output path.
     /// </summary>
     public static string Configuration { get; } =
-        AppContext.BaseDirectory.Contains($"{Path.DirectorySeparatorChar}Release{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ? "Release" : "Debug";
+        AppContext.BaseDirectory.Contains($"{Path.DirectorySeparatorChar}Release{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+        ? "Release" : "Debug";
 
     /// <summary>
     /// The directory of the transcript samples.

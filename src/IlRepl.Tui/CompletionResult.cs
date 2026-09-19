@@ -11,4 +11,8 @@ namespace IlRepl.Tui;
 /// <param name="Cancelled">Whether the request was cancelled.</param>
 /// <param name="Faulted">Whether the request failed.</param>
 public sealed record CompletionResult(
-    long Generation, CompletionRequestKey Key, CompletionReply? Reply, bool Cancelled = false, bool Faulted = false);
+    long Generation,
+    CompletionRequestKey Key,
+    CompletionReply? Reply,
+    bool Cancelled = false,
+    bool Faulted = false);

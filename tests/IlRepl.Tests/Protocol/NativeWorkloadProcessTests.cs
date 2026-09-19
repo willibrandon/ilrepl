@@ -131,7 +131,10 @@ public sealed class NativeWorkloadProcessTests
         var running = ProcessNativeRunner.RunAsync(package, cancellation.Token);
         var observed = entered.Task.WaitAsync(TestContext.CancellationToken);
         if (await Task.WhenAny(running, observed) == running)
+        {
             Assert.Fail("Worker finished before entering its body: " + Details(await running));
+        }
+
         await observed;
         await cancellation.CancelAsync();
 
@@ -210,10 +213,20 @@ public sealed class NativeWorkloadProcessTests
         try
         {
             Submit(core, ".method void Work() {");
-            foreach (var setting in new[] { "DOTNET_DiagnosticPorts", "DOTNET_JitStdOutFile", "DOTNET_JitDisasm",
-                "DOTNET_JitDisasmSummary", "DOTNET_JitDisasmTesting", "DOTNET_JitDisasmWithCodeBytes" })
+            foreach (var setting in new[]
+            {
+                "DOTNET_DiagnosticPorts",
+                "DOTNET_JitStdOutFile",
+                "DOTNET_JitDisasm",
+                "DOTNET_JitDisasmSummary",
+                "DOTNET_JitDisasmTesting",
+                "DOTNET_JitDisasmWithCodeBytes",
+            })
+            {
                 Submit(core, "ldstr " + LiteralParser.Escape(setting), "ldnull",
                     "call void Environment::SetEnvironmentVariable(string, string)");
+            }
+
             Submit(core, "ldstr " + LiteralParser.Escape(Environment.ProcessPath!),
                 "ldstr " + LiteralParser.Escape(files.DirectoryPath), "ldc.i4.1",
                 "ldstr " + LiteralParser.Escape(crash ? "exit" : "return"),
@@ -226,22 +239,34 @@ public sealed class NativeWorkloadProcessTests
 
             Assert.AreEqual(crash ? "crashed" : "complete", result.Outcome, Details(result));
             Assert.AreEqual(1, result.Left.Invocations);
-            if (!crash) Assert.AreEqual("42", result.Left.StandardOutput);
+            if (!crash)
+            {
+                Assert.AreEqual("42", result.Left.StandardOutput);
+            }
+
             var descendants = await File.ReadAllLinesAsync(record, TestContext.CancellationToken);
             Assert.HasCount(2, descendants);
             foreach (var descendant in descendants)
+            {
                 Assert.IsFalse(ComparisonDescendantSource.IsRunning(descendant), "descendant survived native cleanup: " + descendant);
+            }
         }
         finally
         {
             if (File.Exists(record))
+            {
                 foreach (var descendant in await File.ReadAllLinesAsync(record, CancellationToken.None))
                 {
                     using var process = ComparisonDescendantSource.Open(descendant);
-                    if (process is null || process.HasExited) continue;
+                    if (process is null || process.HasExited)
+                    {
+                        continue;
+                    }
+
                     process.Kill(entireProcessTree: true);
                     await process.WaitForExitAsync(CancellationToken.None);
                 }
+            }
         }
     }
 
@@ -258,7 +283,9 @@ public sealed class NativeWorkloadProcessTests
     private static void Submit(ReplCore core, params string[] source)
     {
         foreach (var line in IlLines.Expand(source))
+        {
             Assert.IsTrue(core.Handle(line).Succeeded, line + "\n"
                 + string.Join('\n', core.Transcript.Lines.Select(item => item.PlainText)));
+        }
     }
 }

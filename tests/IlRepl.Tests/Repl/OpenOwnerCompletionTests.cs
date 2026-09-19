@@ -1,3 +1,4 @@
+using System.Runtime.Loader;
 using IlRepl.Engine;
 using IlRepl.Protocol;
 using IlRepl.Repl;
@@ -108,7 +109,7 @@ public sealed class OpenOwnerCompletionTests
 
     private static void CheckExport(byte[] image, bool generic)
     {
-        var context = new System.Runtime.Loader.AssemblyLoadContext("open-owner-export", isCollectible: true);
+        var context = new AssemblyLoadContext("open-owner-export", isCollectible: true);
         try
         {
             var assembly = context.LoadFromStream(new MemoryStream(image));

@@ -49,8 +49,7 @@ public sealed class AutoIndentTests
     }
 
     /// <summary>
-    /// The text before the caret decides, not the whole line: Enter in the middle of a line uses
-    /// what is to the left of the caret.
+    /// The text before the caret decides, not the whole line: Enter in the middle of a line uses what is to the left of the caret.
     /// </summary>
     [TestMethod]
     public void Continuation_UsesTextBeforeCaret()

@@ -75,9 +75,17 @@ public sealed class CallingConventionEditTests
         Assert.AreEqual(!originalVararg, edit.Method!.CallingConvention.HasFlag(CallingConventions.VarArgs));
         var call = originalVararg ? "call Copy" : "ldc.i4.7\ncall vararg int32 Copy(..., int32)";
         var expected = originalVararg ? 42 : 43;
-        foreach (var line in call.Split('\n')) session.AddLine(line);
+        foreach (var line in call.Split('\n'))
+        {
+            session.AddLine(line);
+        }
+
         Assert.AreEqual(expected, session.Run().Value);
-        foreach (var line in call.Split('\n')) session.AddLine(line);
+        foreach (var line in call.Split('\n'))
+        {
+            session.AddLine(line);
+        }
+
         foreach (var image in new[] { AssemblyExporter.Write(session, "convention-edit"), IlasmLocator.Assemble(session.ToIlAsm()) })
         {
             using var module = ModuleDefinition.ReadModule(new MemoryStream(image));

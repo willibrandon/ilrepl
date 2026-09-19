@@ -48,8 +48,13 @@ public sealed class Submission
     /// <param name="inBlockComment">Whether the engine has a <c>/*</c> open when the buffer starts.</param>
     /// <param name="persist">Writes the history entry; awaited before the first line goes.</param>
     /// <param name="post">Where events go.</param>
-    public Submission(IReplEngine engine, IReadOnlyList<string> lines, int openDepth, bool inBlockComment,
-        Func<CancellationToken, Task> persist, Action<SubmissionEvent> post)
+    public Submission(
+        IReplEngine engine,
+        IReadOnlyList<string> lines,
+        int openDepth,
+        bool inBlockComment,
+        Func<CancellationToken, Task> persist,
+        Action<SubmissionEvent> post)
     {
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(lines);
@@ -68,6 +73,7 @@ public sealed class Submission
             RuntimeEpoch = update.Kind == SubmissionEventKind.SessionDocument ? engine.AssemblyVersion >> 32 : runtimeEpoch,
             SubmissionIdentity = _sourceIdentity,
         });
+
         Total = _units.Sum(u => u.Sends.Count);
         var after = BlockBalance.Scan(string.Join('\n', lines), openDepth, inBlockComment, commands: engine.Vocabulary.Commands);
         DepthAfter = Math.Max(0, after.Depth);
@@ -126,10 +132,19 @@ public sealed class Submission
         {
             controller.CancelExecution();
         }
+
         lock (_comparisonLock)
         {
-            if (!_running) return;
-            if (!replaying) _cancellation.Cancel();
+            if (!_running)
+            {
+                return;
+            }
+
+            if (!replaying)
+            {
+                _cancellation.Cancel();
+            }
+
             _comparisonCancellation?.Cancel();
         }
     }
@@ -358,6 +373,7 @@ public sealed class Submission
             {
                 // A replaced runtime restores the acknowledged source through its recovery event.
             }
+
             _post(SubmissionEvent.Cancel(withdrawn, TextFrom(_boundary)));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

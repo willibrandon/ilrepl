@@ -26,6 +26,7 @@ public sealed partial class EditingSession
         {
             method = method.WithDefinition(prepared.Definition, null);
         }
+
         if (owner is not null)
         {
             var declaration = _state.Types.DeclarationOf(owner.Type)!;
@@ -65,6 +66,7 @@ public sealed partial class EditingSession
                 owner is null ? [] : _state.Types.DeclarationOf(owner.Type)!.GenericParameters.Select(p => p.AsType).ToArray(),
                 method.GenericParameters.Select(p => p.AsType).ToArray()),
         };
+
         if (owner is not null && !method.IsStatic)
         {
             var receiver = body.Generics.TypeArguments.Count == 0
@@ -77,6 +79,7 @@ public sealed partial class EditingSession
         {
             ExactType = parameter.ExactType,
         }));
+
         _state.Method = body;
         if (closes)
         {
@@ -164,6 +167,7 @@ public sealed partial class EditingSession
             IsPlaceholder = declaration.IsPlaceholder,
             Properties = declaration.Properties,
         };
+
         _state.Types.Add(SymbolRenderer.IlPath(declaration.Type), declaration.Type, replacement);
     }
 
@@ -175,5 +179,4 @@ public sealed partial class EditingSession
             throw new ReplException($"labels referenced but never defined: {string.Join(", ", pending)} (define with 'NAME:')");
         }
     }
-
 }

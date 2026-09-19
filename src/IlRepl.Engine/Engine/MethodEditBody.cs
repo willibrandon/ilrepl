@@ -12,8 +12,22 @@ namespace IlRepl.Engine;
 /// <param name="State">The validated body in its source declaring context.</param>
 internal sealed record MethodEditBody(MethodBase Method, DisassembledMethod Listing, string Source, CellState State)
 {
-    internal static MethodEditBody Read(MethodBase method, Session session, IReadOnlyList<MethodSignature> signatures,
-        TypeTable? types = null, Type? contextType = null)
+    /// <summary>
+    /// Disassembles a method and renders it as an editable <c>.method</c> definition, validated as written.
+    /// </summary>
+    /// <param name="method">The method to edit.</param>
+    /// <param name="session">The session whose resolver and types the body is read against.</param>
+    /// <param name="signatures">The method signatures the body may call by name.</param>
+    /// <param name="types">The type table to parse against, or null for the session's own.</param>
+    /// <param name="contextType">The type to treat as the declaring type, or null for the method's own.</param>
+    /// <returns>The editable body.</returns>
+    /// <exception cref="ReplException">The body holds an instruction the disassembler cannot express as editable source.</exception>
+    internal static MethodEditBody Read(
+        MethodBase method,
+        Session session,
+        IReadOnlyList<MethodSignature> signatures,
+        TypeTable? types = null,
+        Type? contextType = null)
     {
         var listing = MethodDisassembler.Disassemble(method, session);
         if (listing.Problems.Count != 0 || listing.Entries.Any(e => e.EffectUnknown || e.Kind == DisassembledEntryKind.Raw))
@@ -31,6 +45,7 @@ internal sealed record MethodEditBody(MethodBase Method, DisassembledMethod List
                 string.Join(", ", listing.Locals.Select((local, index) =>
                     IlSignatureRenderer.IlAsmNamed(local) + " V_" + index.ToString(CultureInfo.InvariantCulture))) + ")",
         };
+
         lines.AddRange(listing.Clauses.Select(clause => clause.Describe()));
         foreach (var entry in listing.Entries.Where(e => e.Instruction is not null))
         {
@@ -46,8 +61,24 @@ internal sealed record MethodEditBody(MethodBase Method, DisassembledMethod List
         return Parse(listing, string.Join('\n', lines), session, signatures, types, contextType);
     }
 
-    internal static MethodEditBody Parse(DisassembledMethod listing, string source, Session session,
-        IReadOnlyList<MethodSignature> signatures, TypeTable? types = null, Type? contextType = null)
+    /// <summary>
+    /// Parses and validates edited source as a replacement body for a disassembled method.
+    /// </summary>
+    /// <param name="listing">The original disassembly of the method being edited.</param>
+    /// <param name="source">The edited text, holding exactly one complete <c>.method</c> definition.</param>
+    /// <param name="session">The session whose resolver and types the body is read against.</param>
+    /// <param name="signatures">The method signatures the body may call by name.</param>
+    /// <param name="types">The type table to parse against, or null for the session's own.</param>
+    /// <param name="contextType">The type to treat as the declaring type, or null for the method's own.</param>
+    /// <returns>The editable body.</returns>
+    /// <exception cref="ReplException">The source is incomplete or changes the method's name, static flag, or generic arity.</exception>
+    internal static MethodEditBody Parse(
+        DisassembledMethod listing,
+        string source,
+        Session session,
+        IReadOnlyList<MethodSignature> signatures,
+        TypeTable? types = null,
+        Type? contextType = null)
     {
         var method = listing.Method;
         var owner = contextType ?? method.DeclaringType ?? throw new ReplException("the method has no declaring type");
@@ -82,10 +113,12 @@ internal sealed record MethodEditBody(MethodBase Method, DisassembledMethod List
         {
             MethodParameterNames = signature.TypeParameters.Select(parameter => parameter.Name).ToArray(),
         };
+
         var state = new CellState(session.Resolver, generics, signatures, signature, opens, types ?? session.TypeTable, member)
         {
             ValidateOnCompletion = true,
         };
+
         var ended = false;
         foreach (var line in lines.Skip(first + 1))
         {

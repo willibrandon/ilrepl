@@ -97,8 +97,16 @@ public sealed class ImmutableCollectionComparisonTests
         var first = ImmutableDictionary<string, string>.Empty;
         var second = ImmutableDictionary<string, string>.Empty;
         var entries = ImmutableCollectionComparisonExamples.Contents(8, false, false);
-        foreach (var entry in entries) first = first.Add(entry.Key, entry.Value);
-        foreach (var entry in entries.Reverse()) second = second.Add(entry.Key, entry.Value);
+        foreach (var entry in entries)
+        {
+            first = first.Add(entry.Key, entry.Value);
+        }
+
+        foreach (var entry in entries.Reverse())
+        {
+            second = second.Add(entry.Key, entry.Value);
+        }
+
         second = second.Add("removed", "discarded").Remove("removed");
         Assert.AreEqual(Observe(first), Observe(second));
         Assert.AreEqual(Observe(entries.Keys.ToImmutableHashSet()), Observe(entries.Keys.Reverse().ToImmutableHashSet()));
@@ -123,6 +131,7 @@ public sealed class ImmutableCollectionComparisonTests
             comparer.Callbacks = 0;
             comparer.RejectCallbacks = true;
         }
+
         var observed = Observe(dictionary);
         var key = observed.Members.Single(member => member.Name == "comparer").Value;
         var value = observed.Members.Single(member => member.Name == "value comparer").Value;
@@ -209,8 +218,16 @@ public sealed class ImmutableCollectionComparisonTests
         {
             var left = ImmutableHashSet.CreateBuilder<string>(StringComparer.OrdinalIgnoreCase);
             var right = ImmutableHashSet.CreateBuilder<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var key in entries.Keys) left.Add(key);
-            foreach (var key in entries.Keys.Reverse()) right.Add(key);
+            foreach (var key in entries.Keys)
+            {
+                left.Add(key);
+            }
+
+            foreach (var key in entries.Keys.Reverse())
+            {
+                right.Add(key);
+            }
+
             first = left;
             second = right;
         }
@@ -218,11 +235,20 @@ public sealed class ImmutableCollectionComparisonTests
         {
             var left = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase, StringComparer.Ordinal);
             var right = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase, StringComparer.Ordinal);
-            foreach (var entry in entries) left.Add(entry.Key, entry.Value);
-            foreach (var entry in entries.Reverse()) right.Add(entry.Key, entry.Value);
+            foreach (var entry in entries)
+            {
+                left.Add(entry.Key, entry.Value);
+            }
+
+            foreach (var entry in entries.Reverse())
+            {
+                right.Add(entry.Key, entry.Value);
+            }
+
             first = left;
             second = right;
         }
+
         var observed = Observe(first);
         Assert.AreEqual(observed, Observe(second));
         AssertContents(observed, set, 8, false);
@@ -266,6 +292,7 @@ public sealed class ImmutableCollectionComparisonTests
             Assert.AreEqual("42", entries["first"]);
             Assert.AreEqual("43", entries["second"]);
         }
+
         Assert.AreEqual(0, first.UserCodeCalls);
         Assert.AreEqual(0, second.UserCodeCalls);
     }
@@ -343,6 +370,7 @@ public sealed class ImmutableCollectionComparisonTests
                 Assert.HasCount(8, member.Value.Members);
                 Assert.AreSequenceEqual(Enumerable.Repeat("0", 7), member.Value.Members.Skip(1).Select(item => item.Value.Value));
             }
+
             var actual = observed.Members.Skip(1).Select(member => member.Value.Members[0].Value.Value!);
             var expected = Enumerable.Range(0, count).Select(index => index.ToString(CultureInfo.InvariantCulture));
             Assert.AreSequenceEqual(expected.Order(StringComparer.Ordinal), actual.Order(StringComparer.Ordinal));
@@ -359,6 +387,7 @@ public sealed class ImmutableCollectionComparisonTests
             Assert.IsNotNull(side.Result, side.Detail);
             Assert.HasCount(1, side.Invocations);
         }
+
         return result;
     }
 
@@ -378,7 +407,10 @@ public sealed class ImmutableCollectionComparisonTests
             Assert.AreEqual("comparer", Comparer(value, "value comparer").Kind);
             var actual = Entries(value).ToDictionary(entry => entry.Members[0].Value.Value!, entry => entry.Members[1].Value.Value);
             Assert.HasCount(expected.Count, actual);
-            foreach (var (key, item) in expected) Assert.AreEqual(item, actual[key]);
+            foreach (var (key, item) in expected)
+            {
+                Assert.AreEqual(item, actual[key]);
+            }
         }
     }
 

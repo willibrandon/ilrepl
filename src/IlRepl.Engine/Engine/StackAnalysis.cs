@@ -83,6 +83,7 @@ public static class StackAnalysis
                 ? [IlReader.LabelFor(target)] : raw.Operand.SwitchTargets.Select(IlReader.LabelFor).ToArray() : [],
             EffectUnknown = entry.EffectUnknown,
         }).ToArray();
+
         var hasThis = !method.Method.IsStatic;
         var declaringType = method.Method.DeclaringType;
         var tracksConstructorInitialization = method.Method.Name == ".ctor" && hasThis
@@ -92,6 +93,7 @@ public static class StackAnalysis
         {
             BodyName = method.Method.Name,
         };
+
         var constructorState = graph.Seeds[0].ConstructorState;
         var offsets = entries.Select((entry, index) => (entry.Offset, index)).ToDictionary(pair => pair.Offset, pair => pair.index);
 
@@ -140,6 +142,7 @@ public static class StackAnalysis
                 IlClauseKind.Finally => BlockKind.Finally,
                 _ => BlockKind.Fault,
             };
+
             var handlerSection = Section(kind, clause.HandlerStart, clause.HandlerEnd, group);
             var filterSection = -1;
             if (clause.FilterStart is { } filter)
@@ -211,6 +214,7 @@ public static class StackAnalysis
                 {
                     ExactType = argument.ExactType,
                 }).ToArray();
+
             view = view with
             {
                 JumpRestriction = JumpCompatibility.Problem(RuntimeFlowAnalysis.JumpTarget(jump, jumpScope), source,

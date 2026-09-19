@@ -61,8 +61,16 @@ public sealed class StructuralObservationIdentityTests
         Assert.AreEqual(before.Identity, after.Identity);
         Assert.HasCount(4, after.Members);
         Assert.AreSequenceEqual(before.Members.Select(member => member.Value.Value), after.Members.Select(member => member.Value.Value));
-        foreach (var index in new[] { 0, 1 }) Assert.AreNotEqual(before.Members[index].Value.Identity, after.Members[index].Value.Identity);
-        foreach (var index in new[] { 2, 3 }) Assert.AreEqual(before.Members[index].Value.Identity, after.Members[index].Value.Identity);
+        foreach (var index in new[] { 0, 1 })
+        {
+            Assert.AreNotEqual(before.Members[index].Value.Identity, after.Members[index].Value.Identity);
+        }
+
+        foreach (var index in new[] { 2, 3 })
+        {
+            Assert.AreEqual(before.Members[index].Value.Identity, after.Members[index].Value.Identity);
+        }
+
         foreach (var member in after.Members)
         {
             Assert.AreEqual("scalar", member.Value.Kind);

@@ -37,11 +37,19 @@ public static class HashtableComparisonExamples
             _ => "call class StringComparer StringComparer::get_" + comparer
                 + "()\nnewobj instance void Hashtable::.ctor(class IEqualityComparer)\n",
         };
+
         var entries = Contents(count, edited);
         foreach (var (key, value) in reverse ? entries.Reverse() : entries)
+        {
             source += "dup\nldstr \"" + key + "\"\nldc.i4 " + value.ToString(CultureInfo.InvariantCulture)
                 + "\nbox int32\ncallvirt instance void Hashtable::Add(object, object)\n";
-        for (var index = 0; index < wrappers; index++) source += "call class Hashtable Hashtable::Synchronized(class Hashtable)\n";
+        }
+
+        for (var index = 0; index < wrappers; index++)
+        {
+            source += "call class Hashtable Hashtable::Synchronized(class Hashtable)\n";
+        }
+
         return source + "ret\n}";
     }
 }

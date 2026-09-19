@@ -59,7 +59,9 @@ public sealed class MemberResolverTests
     [TestMethod]
     public void ResolveMethod_DeclaringTypeParameter_Resolves()
     {
-        var method = MemberResolver.ResolveMethod("instance void class [System.Collections]System.Collections.Generic.List`1<int32>::Add(!0)", Context, false).Method;
+        var method =
+            MemberResolver.ResolveMethod("instance void class [System.Collections]System.Collections.Generic.List`1<int32>::Add(!0)",
+            Context, false).Method;
         Assert.AreEqual(typeof(List<int>).GetMethod("Add"), method);
     }
 
@@ -69,7 +71,8 @@ public sealed class MemberResolverTests
     [TestMethod]
     public void ResolveMethod_GenericMethod_Instantiates()
     {
-        var method = MemberResolver.ResolveMethod("!!0 [System.Linq]System.Linq.Enumerable::First<int32>(class IEnumerable`1<!!0>)", Context, false).Method as MethodInfo;
+        var method = MemberResolver.ResolveMethod("!!0 [System.Linq]System.Linq.Enumerable::First<int32>(class IEnumerable`1<!!0>)",
+            Context, false).Method as MethodInfo;
         Assert.IsNotNull(method);
         Assert.IsTrue(method.IsGenericMethod);
         Assert.AreEqual(typeof(int), method.ReturnType);
@@ -81,7 +84,8 @@ public sealed class MemberResolverTests
     [TestMethod]
     public void ResolveMethod_VarargSentinel_KeepsOptionalTypes()
     {
-        var resolved = MemberResolver.ResolveMethod("vararg int32 Greeter.Hello::CountArgs(..., int32, string)", ContextWithGreeter(), false);
+        var resolved = MemberResolver.ResolveMethod("vararg int32 Greeter.Hello::CountArgs(..., int32, string)", ContextWithGreeter(),
+            false);
         Assert.IsNotNull(resolved.OptionalParameterTypes);
         Assert.HasCount(2, resolved.OptionalParameterTypes);
         Assert.AreEqual(3, resolved.ArgumentPopCount(false) + 1);
@@ -252,7 +256,8 @@ public sealed class MemberResolverTests
     [TestMethod]
     public void ResolveMethod_SessionMethodReturnTypeMismatch_Explains()
     {
-        Assert.Contains("method Fib returns int32, not int64", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("int64 Fib(int32)", ContextWith(Fib()), false)).Message);
+        Assert.Contains("method Fib returns int32, not int64",
+            Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("int64 Fib(int32)", ContextWith(Fib()), false)).Message);
     }
 
     /// <summary>
@@ -261,8 +266,10 @@ public sealed class MemberResolverTests
     [TestMethod]
     public void ResolveMethod_SessionMethodParameterMismatch_ListsDefined()
     {
-        Assert.Contains("no method Fib(string) in the session; defined: int32 Fib(int32)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fib(string)", ContextWith(Fib()), false)).Message);
-        Assert.Contains("no method Fib() in the session; defined: int32 Fib(int32)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fib()", ContextWith(Fib()), false)).Message);
+        Assert.Contains("no method Fib(string) in the session; defined: int32 Fib(int32)",
+            Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fib(string)", ContextWith(Fib()), false)).Message);
+        Assert.Contains("no method Fib() in the session; defined: int32 Fib(int32)",
+            Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fib()", ContextWith(Fib()), false)).Message);
     }
 
     /// <summary>
@@ -271,7 +278,8 @@ public sealed class MemberResolverTests
     [TestMethod]
     public void ResolveMethod_UnknownSessionMethod_SuggestsDotMethod()
     {
-        Assert.Contains("no method 'Fib' in the session (define one with .method, or write Type::Fib(...) for a framework method)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fib(int32)", Context, false)).Message);
+        Assert.Contains("no method 'Fib' in the session (define one with .method, or write Type::Fib(...) for a framework method)",
+            Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fib(int32)", Context, false)).Message);
         Assert.Contains("no method 'Fibb' in the session (did you mean 'Fib'?); defined: int32 Fib(int32)  (define one with .method)",
             Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("Fibb(int32)", ContextWith(Fib()), false)).Message);
     }
@@ -282,9 +290,14 @@ public sealed class MemberResolverTests
     [TestMethod]
     public void ResolveMethod_SessionMethodNewobj_Throws()
     {
-        Assert.Contains("newobj needs a constructor", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("void Fib(int32)", ContextWith(Fib()), true)).Message);
-        Assert.Contains("drop 'instance'", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance int32 Fib(int32)", ContextWith(Fib()), false)).Message);
-        Assert.Contains("not vararg", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("vararg int32 Fib(int32)", ContextWith(Fib()), false)).Message);
+        Assert.Contains("newobj needs a constructor",
+            Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("void Fib(int32)", ContextWith(Fib()), true)).Message);
+        Assert.Contains("drop 'instance'",
+            Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("instance int32 Fib(int32)", ContextWith(Fib()), false))
+            .Message);
+        Assert.Contains("not vararg",
+            Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("vararg int32 Fib(int32)", ContextWith(Fib()), false))
+            .Message);
     }
 
     /// <summary>
@@ -309,7 +322,8 @@ public sealed class MemberResolverTests
         Assert.IsTrue(MemberResolver.ResolveMethod("'Fib'", context, false).IsSessionMethod);
         Assert.Contains("returns int32, not int32 modopt(IsLong)", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod(
             "int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsLong) Fib(int32)", context, false)).Message);
-        Assert.Contains("unexpected 'extra'", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("int32 Fib extra", context, false)).Message);
+        Assert.Contains("unexpected 'extra'",
+            Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("int32 Fib extra", context, false)).Message);
     }
 
     /// <summary>
@@ -321,13 +335,17 @@ public sealed class MemberResolverTests
         var first = new MethodSignature("First", typeof(int), [new ArgumentDeclaration(typeof(int[]), "a", null, "")]);
         var context = ContextWith(first);
         Assert.IsTrue(MemberResolver.ResolveMethod("First(int32[])", context, false).IsSessionMethod);
-        Assert.Contains("no method First(int32[0...]) in the session; defined: int32 First(int32[])", Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("First(int32[0...])", context, false)).Message);
+        Assert.Contains("no method First(int32[0...]) in the session; defined: int32 First(int32[])",
+            Assert.ThrowsExactly<ReplException>(() => MemberResolver.ResolveMethod("First(int32[0...])", context, false)).Message);
     }
 
     /// <summary>
-    /// Quoted names, as listings print them, resolve: a method named like an opcode, a compiler-made
-    /// nested type and member, and a field whose name starts with angle brackets.
+    /// Quoted names, as listings print them, resolve.
     /// </summary>
+    /// <remarks>
+    /// The cases are a method named like an opcode, a compiler-made nested type and member, and a field whose name starts with angle
+    /// brackets.
+    /// </remarks>
     [TestMethod]
     public void ResolveMethod_QuotedNames_Resolve()
     {
@@ -337,10 +355,13 @@ public sealed class MemberResolverTests
 
         var add = MemberResolver.ResolveMethod("int32 [Fixtures]Fixtures.Shapes::'add'(int32, int32)", context, false);
         Assert.AreEqual("add", add.Method!.Name);
-        var lambda = MemberResolver.ResolveMethod("instance int32 [Fixtures]Fixtures.Shapes/'<>c'::'<Doubled>b__0_0'(int32)", context, false);
+        var lambda = MemberResolver.ResolveMethod("instance int32 [Fixtures]Fixtures.Shapes/'<>c'::'<Doubled>b__0_0'(int32)", context,
+            false);
         Assert.AreEqual("<Doubled>b__0_0", lambda.Method!.Name);
         Assert.AreEqual("<>c", lambda.Method.DeclaringType!.Name);
-        var field = MemberResolver.ResolveField("class [System.Runtime]System.Func`2<int32, int32> [Fixtures]Fixtures.Shapes/'<>c'::'<>9__0_0'", context);
+        var field =
+            MemberResolver.ResolveField("class [System.Runtime]System.Func`2<int32, int32> [Fixtures]Fixtures.Shapes/'<>c'::'<>9__0_0'",
+            context);
         Assert.AreEqual("<>9__0_0", field.Name);
         Assert.AreEqual("<>c", field.DeclaringType!.Name);
         var closure = TypeParser.Parse("class [Fixtures]Fixtures.Shapes/'<>c__DisplayClass13_0`1'<int32>", context);
@@ -362,11 +383,13 @@ public sealed class MemberResolverTests
         Assert.AreEqual("Larger", larger.Method.Name);
         var bare = MemberResolver.ResolveMethod("[Fixtures]Fixtures.Shapes::Larger<[1]>", context, false);
         Assert.IsTrue(bare.Method!.IsGenericMethodDefinition);
-        Assert.Throws<ReplException>(() => MemberResolver.ResolveMethod("!!0 [Fixtures]Fixtures.Shapes::Larger<[2]>(!!0, !!0)", context, false));
+        Assert.Throws<ReplException>(() => MemberResolver.ResolveMethod("!!0 [Fixtures]Fixtures.Shapes::Larger<[2]>(!!0, !!0)", context,
+            false));
         Assert.Throws<ReplException>(() => MemberResolver.ResolveMethod("[Fixtures]Fixtures.Shapes::Larger<[x]>", context, false));
 
         // An assembly-qualified array is a type argument, not an arity, and whitespace before the arguments is allowed.
-        var empty = MemberResolver.ResolveMethod("!!0[] [System.Runtime]System.Array::Empty<[System.Runtime]System.String[]>()", context, false);
+        var empty = MemberResolver.ResolveMethod("!!0[] [System.Runtime]System.Array::Empty<[System.Runtime]System.String[]>()", context,
+            false);
         Assert.AreEqual(typeof(string[]), empty.Method!.GetGenericArguments()[0]);
         var spaced = MemberResolver.ResolveMethod("[System.Runtime]System.Array::Empty <string>()", context, false);
         Assert.AreEqual(typeof(string), spaced.Method!.GetGenericArguments()[0]);

@@ -15,7 +15,11 @@ public sealed partial class HostServer
 
     private void RetainOutputPrefix(TranscriptLine line)
     {
-        if (line.Kind == LineKind.Output) return;
+        if (line.Kind == LineKind.Output)
+        {
+            return;
+        }
+
         lock (_outputLock)
         {
             BeginOutputOperation();
@@ -26,7 +30,11 @@ public sealed partial class HostServer
     private void BeginOutputOperation()
     {
         var identity = _engine.Progress.Identity;
-        if (identity == _outputIdentity) return;
+        if (identity == _outputIdentity)
+        {
+            return;
+        }
+
         _outputIdentity = identity;
         _outputSequence = 0;
         _pendingOutputLines.Clear();
@@ -35,7 +43,11 @@ public sealed partial class HostServer
 
     private void PublishOutput(string text, bool error)
     {
-        if (_client is not { } client) return;
+        if (_client is not { } client)
+        {
+            return;
+        }
+
         lock (_outputLock)
         {
             BeginOutputOperation();
@@ -55,10 +67,12 @@ public sealed partial class HostServer
             return _engine.Progress.Identity == _outputIdentity
                 ? reply with
                 {
-                    OutputIdentity = _outputIdentity, OutputSequence = _outputSequence,
+                    OutputIdentity = _outputIdentity,
+                    OutputSequence = _outputSequence,
                     StreamedLineIndexes = [.. reply.Lines.Select((line, index) => (line, index))
                         .Where(item => _streamedOutputLines.Contains(item.line)).Select(item => item.index)],
-                } : reply;
+                }
+                : reply;
         }
     }
 }

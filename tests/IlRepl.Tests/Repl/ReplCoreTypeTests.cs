@@ -4,9 +4,11 @@ using IlRepl.Repl;
 namespace IlRepl.Tests.Repl;
 
 /// <summary>
-/// Tests for <see cref="ReplCore"/> with <c>.class</c> blocks: the notes, the cell numbering,
-/// the status, and the commands that inspect, undo, clear, and reset types.
+/// Tests for <see cref="ReplCore"/> with <c>.class</c> blocks.
 /// </summary>
+/// <remarks>
+/// They cover the notes, the cell numbering, the status, and the commands that inspect, undo, clear, and reset types.
+/// </remarks>
 [TestClass]
 public sealed class ReplCoreTypeTests
 {
@@ -57,9 +59,11 @@ public sealed class ReplCoreTypeTests
     }
 
     /// <summary>
-    /// Members are noted as they arrive, a member inside a class shows both in the status, and
-    /// closing the class advances the cell number once.
+    /// Members are noted as they arrive, and closing the class advances the cell number once.
     /// </summary>
+    /// <remarks>
+    /// A member inside a class shows both in the status.
+    /// </remarks>
     [TestMethod]
     public void Handle_ClassClose_NotesEndAndAdvancesCellNumberOnce()
     {
@@ -135,7 +139,8 @@ public sealed class ReplCoreTypeTests
         core.Handle("}");
         core.Handle(".types");
         var listing = core.Transcript.Lines.Where(l => l.Kind == LineKind.Listing).Select(l => l.PlainText).ToList();
-        Assert.AreSequenceEqual(["  struct Point", "      public int32 X", "      public int32 Y", "      instance int32 Sum()", "  class Outer", "      class Outer/Inner"], listing);
+        Assert.AreSequenceEqual(["  struct Point", "      public int32 X", "      public int32 Y", "      instance int32 Sum()",
+            "  class Outer", "      class Outer/Inner"], listing);
     }
 
     /// <summary>

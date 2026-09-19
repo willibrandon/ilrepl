@@ -25,6 +25,7 @@ public sealed class DiagnosticFormatterTests
         {
             Explanation = new(null, "int32", new(kind, ["string"], true), [], []),
         };
+
         var lines = DiagnosticFormatter.Details(diagnostic).ToArray();
         Assert.AreSequenceEqual(["Expected: int32", "Stack before (bottom → top): " + expected + " (incomplete body)"], lines);
         Assert.DoesNotContain("wrong type", lines);
@@ -42,6 +43,7 @@ public sealed class DiagnosticFormatterTests
             Explanation = new(null, "int32", new(AnalyzedStackKind.Known, ["string"]),
                 [new(0, "argument 1", "int32", "string", [])], []),
         };
+
         var output = string.Join('\n', DiagnosticFormatter.Details(diagnostic));
         Assert.Contains("argument 1: expected int32; actual string", output);
         Assert.Contains("producer unavailable", output);
@@ -80,6 +82,7 @@ public sealed class DiagnosticFormatterTests
             Explanation = new(null, "int32", new(AnalyzedStackKind.Known, ["string"]),
                 [new(0, "argument 1", "int32", "string", [first, first, second])], []),
         };
+
         var origins = DiagnosticFormatter.Details(diagnostic).Where(line => line.StartsWith("  from ", StringComparison.Ordinal));
         Assert.AreSequenceEqual(["  from line 2: ldstr \"x\"", "  from line 4: ldstr \"x\""], origins);
     }

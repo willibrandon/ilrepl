@@ -54,8 +54,16 @@ internal static class DependencyCompatibility
             Platform(OperatingSystem.IsLinux() || OperatingSystem.IsFreeBSD(), path);
             var machine = image[5] == 2 ? BinaryPrimitives.ReadUInt16BigEndian(image[18..])
                 : BinaryPrimitives.ReadUInt16LittleEndian(image[18..]);
-            Check(machine switch { 3 => Architecture.X86, 40 => Architecture.Arm, 62 => Architecture.X64,
-                183 => Architecture.Arm64, 243 => Architecture.RiscV64, _ => null }, path);
+            Check(machine switch
+            {
+                3 => Architecture.X86,
+                40 => Architecture.Arm,
+                62 => Architecture.X64,
+                183 => Architecture.Arm64,
+                243 => Architecture.RiscV64,
+                _ => null,
+            }, path);
+
             return;
         }
 

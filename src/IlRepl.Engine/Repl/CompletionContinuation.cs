@@ -12,7 +12,11 @@ namespace IlRepl.Repl;
 /// <param name="DeclarationContext">The complete declaration environment of the selected definition.</param>
 /// <param name="TypePaths">The selected environment's symbolic identities and full names.</param>
 internal sealed record CompletionContinuation(
-    GenericCompletionTarget Target, string Text, long Revision, long BindingEpoch, string DeclarationContext,
+    GenericCompletionTarget Target,
+    string Text,
+    long Revision,
+    long BindingEpoch,
+    string DeclarationContext,
     IReadOnlyDictionary<DefinitionId, string> TypePaths)
 {
     /// <summary>

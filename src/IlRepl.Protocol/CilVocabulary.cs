@@ -1,11 +1,12 @@
 namespace IlRepl.Protocol;
 
 /// <summary>
-/// The words the tokenizer knows: every opcode with the kind of operand it takes, the directives,
-/// the commands, the ILAsm keywords, and the primitive type names. The engine builds it from its
-/// own tables and the host sends it with the hello, so the front-end colours with the same words
-/// the engine accepts.
+/// The words the tokenizer knows: every opcode, the directives, the commands, the ILAsm keywords, and the primitive type names.
 /// </summary>
+/// <remarks>
+/// Each opcode comes with the kind of operand it takes. The engine builds it from its own tables and the host sends it with the hello, so
+/// the front-end colours with the same words the engine accepts.
+/// </remarks>
 /// <param name="Opcodes">Every opcode by name, with its operand kind.</param>
 /// <param name="Directives">Every dot-word that is a directive, <c>.locals</c> and <c>.method</c> among them.</param>
 /// <param name="Commands">Every dot-word that is a command, aliases included.</param>

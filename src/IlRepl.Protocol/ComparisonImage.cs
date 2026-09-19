@@ -11,8 +11,14 @@ namespace IlRepl.Protocol;
 /// <param name="MethodArguments">The closed method generic arguments.</param>
 /// <param name="Arguments">The typed literal source of each fixed argument.</param>
 /// <param name="TypeNames">Generated type names mapped to the source identities used for structural observations.</param>
-public sealed record ComparisonImage(byte[] Image, string EntryType, string EntryMethod, int EntryToken,
-    IReadOnlyList<string> TypeArguments, IReadOnlyList<string> MethodArguments, IReadOnlyList<string> Arguments,
+public sealed record ComparisonImage(
+    byte[] Image,
+    string EntryType,
+    string EntryMethod,
+    int EntryToken,
+    IReadOnlyList<string> TypeArguments,
+    IReadOnlyList<string> MethodArguments,
+    IReadOnlyList<string> Arguments,
     IReadOnlyDictionary<string, string> TypeNames)
 {
     /// <summary>

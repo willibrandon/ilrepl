@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace IlRepl.Engine.Binding;
 
 /// <summary>
@@ -124,7 +126,7 @@ public static class CilPrimitives
     /// <param name="spelling">A keyword as written: <c>int32</c>, <c>int</c>, <c>native int</c>, <c>nativeint</c>.</param>
     /// <param name="keyword">The canonical keyword, or <see cref="DecimalAlias"/> for <c>decimal</c>.</param>
     /// <returns>True when the spelling is a primitive keyword or the decimal alias.</returns>
-    public static bool TryCanonical(string spelling, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? keyword)
+    public static bool TryCanonical(string spelling, [NotNullWhen(true)] out string? keyword)
     {
         ArgumentNullException.ThrowIfNull(spelling);
         if (spelling == DecimalAlias)

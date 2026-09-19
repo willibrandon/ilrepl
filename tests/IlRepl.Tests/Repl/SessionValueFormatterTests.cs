@@ -5,9 +5,11 @@ using IlRepl.Tests.Engine;
 namespace IlRepl.Tests.Repl;
 
 /// <summary>
-/// Tests for the display of session instances: structural by default, through readers that run
-/// none of the type's code, bounded and cycle-safe, and through ToString when the type has one.
+/// Tests for the display of session instances: structural by default, and through ToString when the type has one.
 /// </summary>
+/// <remarks>
+/// The structural display goes through readers that run none of the type's code, and it is bounded and cycle-safe.
+/// </remarks>
 [TestClass]
 public sealed class SessionValueFormatterTests
 {
@@ -36,7 +38,8 @@ public sealed class SessionValueFormatterTests
             ".field public int32 X",
             ".field public int32 Y",
             ".field private string Tag",
-            ".method public instance void .ctor(int32 x, int32 y) { ldarg.0; ldarg x; stfld int32 Point::X; ldarg.0; ldarg y; stfld int32 Point::Y; ldarg.0; ldstr \"p\"; stfld string Point::Tag; ret }",
+            ".method public instance void .ctor(int32 x, int32 y) { ldarg.0; ldarg x; stfld int32 Point::X; ldarg.0; ldarg y; stfld " +
+            "int32 Point::Y; ldarg.0; ldstr \"p\"; stfld string Point::Tag; ret }",
             "}");
         var value = Run(session, "ldc.i4 3", "ldc.i4 4", "newobj instance void Point::.ctor(int32, int32)", "box Point");
         Assert.AreEqual("Point { X = 3, Y = 4, Tag = \"p\" } : Point", Text(value), "private fields show too");
@@ -45,8 +48,7 @@ public sealed class SessionValueFormatterTests
     }
 
     /// <summary>
-    /// Base fields come first, a name declared twice is qualified, and a nested session value is
-    /// shown structurally to a bounded depth.
+    /// Base fields come first, a name declared twice is qualified, and a nested session value is shown structurally to a bounded depth.
     /// </summary>
     [TestMethod]
     public void Class_BaseFirstQualifiedAndNested()
@@ -59,12 +61,17 @@ public sealed class SessionValueFormatterTests
             ".class public Node extends Base {",
             ".field public int32 Id",
             ".field public class Node Next",
-            ".method public instance void .ctor() { ldarg.0; call instance void Base::.ctor(); ldarg.0; ldc.i4 2; stfld int32 Node::Id; ret }",
+            ".method public instance void .ctor() { ldarg.0; call instance void Base::.ctor(); ldarg.0; ldc.i4 2; stfld int32 Node::Id; " +
+            "ret }",
             "}");
         var chain = Run(session, ".locals init (class Node a, class Node b, class Node c, class Node d)",
-            "newobj instance void Node::.ctor()", "stloc a", "newobj instance void Node::.ctor()", "stloc b", "newobj instance void Node::.ctor()", "stloc c", "newobj instance void Node::.ctor()", "stloc d",
-            "ldloc a", "ldloc b", "stfld class Node Node::Next", "ldloc b", "ldloc c", "stfld class Node Node::Next", "ldloc c", "ldloc d", "stfld class Node Node::Next", "ldloc a");
-        Assert.AreEqual("Node { Base.Id = 1, Node.Id = 2, Next = Node { Base.Id = 1, Node.Id = 2, Next = Node { Base.Id = 1, Node.Id = 2, Next = Node {…} } } } : Node", Text(chain));
+            "newobj instance void Node::.ctor()", "stloc a", "newobj instance void Node::.ctor()", "stloc b",
+            "newobj instance void Node::.ctor()", "stloc c", "newobj instance void Node::.ctor()", "stloc d",
+            "ldloc a", "ldloc b", "stfld class Node Node::Next", "ldloc b", "ldloc c", "stfld class Node Node::Next", "ldloc c", "ldloc d",
+            "stfld class Node Node::Next", "ldloc a");
+        Assert.AreEqual(
+            "Node { Base.Id = 1, Node.Id = 2, Next = Node { Base.Id = 1, Node.Id = 2, Next = Node { Base.Id = 1, Node.Id = 2, Next = " +
+            "Node {…} } } } : Node", Text(chain));
     }
 
     /// <summary>
@@ -78,13 +85,13 @@ public sealed class SessionValueFormatterTests
             ".field public class Node Next",
             $".method public instance void .ctor() {{ ldarg.0; {ObjectCtor}; ret }}",
             "}");
-        var self = Run(session, ".locals init (class Node n)", "newobj instance void Node::.ctor()", "stloc n", "ldloc n", "ldloc n", "stfld class Node Node::Next", "ldloc n");
+        var self = Run(session, ".locals init (class Node n)", "newobj instance void Node::.ctor()", "stloc n", "ldloc n", "ldloc n",
+            "stfld class Node Node::Next", "ldloc n");
         Assert.AreEqual("Node { Next = ↺ Node } : Node", Text(self));
     }
 
     /// <summary>
-    /// A type that overrides ToString is shown through it, and a throwing override is marked
-    /// rather than propagated.
+    /// A type that overrides ToString is shown through it, and a throwing override is marked rather than propagated.
     /// </summary>
     [TestMethod]
     public void ToStringOverride_IsUsed()
@@ -97,7 +104,8 @@ public sealed class SessionValueFormatterTests
             "}",
             ".class public Angry {",
             $".method public instance void .ctor() {{ ldarg.0; {ObjectCtor}; ret }}",
-            ".method public virtual instance string ToString() { newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(); throw }",
+            ".method public virtual instance string ToString() { newobj instance void " +
+            "[System.Runtime]System.InvalidOperationException::.ctor(); throw }",
             "}",
             ".class public Quiet extends Named {",
             ".field public int32 More",
@@ -110,9 +118,11 @@ public sealed class SessionValueFormatterTests
     }
 
     /// <summary>
-    /// The display never runs the type's code: no ToString when there is none of its own, and a
-    /// session type that enumerates is shown by its fields, not enumerated.
+    /// The display never runs the type's code: a session type that enumerates is shown by its fields, not enumerated.
     /// </summary>
+    /// <remarks>
+    /// There is no ToString when the type has none of its own.
+    /// </remarks>
     [TestMethod]
     public void Display_RunsNoUserCode()
     {
@@ -120,7 +130,8 @@ public sealed class SessionValueFormatterTests
             ".class public Loud implements [System.Runtime]System.Collections.IEnumerable {",
             ".field public int32 Calls",
             $".method public instance void .ctor() {{ ldarg.0; {ObjectCtor}; ret }}",
-            ".method public virtual instance class [System.Runtime]System.Collections.IEnumerator GetEnumerator() { ldarg.0; dup; ldfld int32 Loud::Calls; ldc.i4 1; add; stfld int32 Loud::Calls; ldnull; ret }",
+            ".method public virtual instance class [System.Runtime]System.Collections.IEnumerator GetEnumerator() { ldarg.0; dup; ldfld " +
+            "int32 Loud::Calls; ldc.i4 1; add; stfld int32 Loud::Calls; ldnull; ret }",
             "}");
         var value = Run(session, "newobj instance void Loud::.ctor()")!;
         Assert.AreEqual("Loud { Calls = 0 } : Loud", Text(value));
@@ -149,7 +160,8 @@ public sealed class SessionValueFormatterTests
             ".class public sequential sealed Big extends [System.Runtime]System.ValueType {",
             ".field public string S",
             "}");
-        var longText = Text(Run(big, ".locals init (valuetype Big b)", "ldloca b", "ldstr \"" + new string('x', 700) + "\"", "stfld string Big::S", "ldloc b", "box Big"));
+        var longText = Text(Run(big, ".locals init (valuetype Big b)", "ldloca b", "ldstr \"" + new string('x', 700) + "\"",
+            "stfld string Big::S", "ldloc b", "box Big"));
         Assert.EndsWith("… : Big", longText);
         Assert.IsLessThan(600, longText.Length);
     }
@@ -180,8 +192,10 @@ public sealed class SessionValueFormatterTests
     [TestMethod]
     public void PointerField_ShowsTheAddress()
     {
-        var session = IlLines.Load(".class public sequential sealed Raw extends [System.Runtime]System.ValueType {", ".field public int32* P", "}");
-        var value = Run(session, ".locals init (valuetype Raw r)", "ldloca r", "ldc.i4 1", "conv.i", "stfld int32* Raw::P", "ldloc r", "box Raw");
+        var session = IlLines.Load(".class public sequential sealed Raw extends [System.Runtime]System.ValueType {",
+            ".field public int32* P", "}");
+        var value = Run(session, ".locals init (valuetype Raw r)", "ldloca r", "ldc.i4 1", "conv.i", "stfld int32* Raw::P", "ldloc r",
+            "box Raw");
         Assert.AreEqual("Raw { P = 1 } : Raw", Text(value));
     }
 }

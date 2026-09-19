@@ -8,7 +8,10 @@ namespace IlRepl.Engine;
 /// </summary>
 public static partial class ComparisonCapture
 {
-    private static void CaptureOriginalArgument(Type type, Session session, Dictionary<string, ComparisonAssembly> dependencies,
+    private static void CaptureOriginalArgument(
+        Type type,
+        Session session,
+        Dictionary<string, ComparisonAssembly> dependencies,
         TypeResolver source)
     {
         if (type.HasElementType)
@@ -36,6 +39,7 @@ public static partial class ComparisonCapture
             ModuleDefinition module => module.Assembly.Name.FullName,
             _ => throw new ReplException($"generic argument {type.FullName} has no loadable assembly identity"),
         };
+
         return ReflectionName(type) + ", " + assembly;
     }
 

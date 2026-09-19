@@ -1,5 +1,5 @@
-using IlRepl.Host;
 using IlRepl.Engine;
+using IlRepl.Host;
 using IlRepl.Protocol;
 using IlRepl.Repl;
 
@@ -31,14 +31,22 @@ public sealed class SessionControllerTests
             Interruptions = [new SessionInterruption { Number = 2, Source = ["ret"] }],
             Editor = new SessionEditor { Lines = ["// retained draft"] },
         };
+
         var request = Request(controller, SessionOperation.Hydrate, incoming) with { AnnounceOpen = announce };
 
         var reply = await controller.SessionAsync(request, TestContext.CancellationToken);
 
         Assert.IsTrue(reply.Reply.Succeeded);
         var output = string.Join('\n', reply.Reply.Lines.Select(line => line.PlainText));
-        if (announce) Assert.Contains("Session opened. Nothing has run yet.", output);
-        else Assert.DoesNotContain("Session opened.", output);
+        if (announce)
+        {
+            Assert.Contains("Session opened. Nothing has run yet.", output);
+        }
+        else
+        {
+            Assert.DoesNotContain("Session opened.", output);
+        }
+
         Assert.Contains("= 42 : int32", output);
         Assert.Contains("previous attempt starting at prompt 2 was interrupted; no code was replayed", output);
         Assert.Contains("end of saved history; no code executed", output);
@@ -65,6 +73,7 @@ public sealed class SessionControllerTests
             checkpoints.Add(snapshot);
             return Task.CompletedTask;
         };
+
         for (var index = 0; index < source.Length; index++)
         {
             controller.PendingInput = source[(index + 1)..];
@@ -136,6 +145,7 @@ public sealed class SessionControllerTests
             starts++;
             return Task.FromResult<IReplEngine>(new InProcessEngine());
         });
+
         await SubmitAsync(controller, "ldc.i4.1");
         controller.Editor = new SessionEditor { Lines = ["// unsaved draft"], Caret = 3, Anchor = 1, Revision = 7 };
         var originalEditor = controller.Editor;
@@ -178,6 +188,7 @@ public sealed class SessionControllerTests
             candidate = new InProcessEngine();
             return Task.FromResult<IReplEngine>(candidate);
         });
+
         await SubmitAsync(controller, "ldc.i4 42");
         controller.Editor = new SessionEditor { Lines = ["// retained editor"], Caret = 5, Anchor = 2, Revision = 11 };
         var editor = controller.Editor;
@@ -210,6 +221,7 @@ public sealed class SessionControllerTests
         {
             Editor = new SessionEditor { Lines = ["// incoming", ""], Caret = 7, Anchor = 2, Revision = 13 },
         };
+
         var oldEpoch = controller.AssemblyVersion >> 32;
         var changed = ObserveReplacementAsync();
 
@@ -296,6 +308,7 @@ public sealed class SessionControllerTests
                 pathPrompts++;
                 return Task.FromResult<string?>(originalPath);
             };
+
             await SubmitAsync(controller, "ldc.i4.1");
             var saved = await controller.SessionAsync(Request(controller, SessionOperation.Save), token);
             Assert.AreEqual(originalPath, saved.Path);
@@ -310,6 +323,7 @@ public sealed class SessionControllerTests
                 decisions++;
                 return Task.FromResult(decision);
             };
+
             var epoch = controller.AssemblyVersion >> 32;
 
             var reply = await controller.HandleAsync(".session open \"" + incomingPath + "\"", token);
@@ -433,6 +447,7 @@ public sealed class SessionControllerTests
             Action = new SessionAction { Operation = SessionOperation.Hydrate, Path = path },
             Document = Document("ldc.i4 42"),
         }, token);
+
         await using var controller = CreateController(initial);
         var epoch = controller.AssemblyVersion >> 32;
 
@@ -469,6 +484,7 @@ public sealed class SessionControllerTests
                 offered.TrySetResult(snapshot);
                 await accepted.Task.WaitAsync(cancellation);
             };
+
             var running = controller.HandleAsync("ret", token);
             HandleReply reply;
             try
@@ -569,6 +585,7 @@ public sealed class SessionControllerTests
             prompted.TrySetResult();
             return await path.Task.WaitAsync(cancellation);
         };
+
         var opening = controller.SessionAsync(Request(controller, SessionOperation.Open), token);
         try
         {
@@ -593,8 +610,12 @@ public sealed class SessionControllerTests
     private static SessionController CreateController(InProcessEngine? initial = null) =>
         new(initial ?? new InProcessEngine(), static _ => Task.FromResult<IReplEngine>(new InProcessEngine()));
 
-    private static SessionRequest Request(SessionController controller, SessionOperation operation, SessionDocument? document = null,
-        string? path = null, bool force = false) => new()
+    private static SessionRequest Request(
+        SessionController controller,
+        SessionOperation operation,
+        SessionDocument? document = null,
+        string? path = null,
+        bool force = false) => new()
     {
         Action = new SessionAction { Operation = operation, Path = path, Force = force },
         Editor = controller.Editor,

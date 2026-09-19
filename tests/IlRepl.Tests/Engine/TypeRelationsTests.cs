@@ -3,9 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for <see cref="TypeRelations"/>: the base chain and interfaces of session types come
-/// from their declarations, and assignability follows them.
+/// Tests for <see cref="TypeRelations"/>: the base chain and interfaces of session types come from their declarations.
 /// </summary>
+/// <remarks>
+/// Assignability follows them.
+/// </remarks>
 [TestClass]
 public sealed class TypeRelationsTests
 {
@@ -81,7 +83,8 @@ public sealed class TypeRelationsTests
         Assert.IsFalse(TypeRelations.IsAssignable(shape, circle, table));
         Assert.IsFalse(TypeRelations.IsAssignable(circle, square, table));
         Assert.IsFalse(TypeRelations.IsAssignable(circle, typeof(IDisposable), table));
-        Assert.IsTrue(TypeRelations.IsAssignable(circle.MakeArrayType(), shape.MakeArrayType(), table), "arrays of reference types are covariant");
+        Assert.IsTrue(TypeRelations.IsAssignable(circle.MakeArrayType(), shape.MakeArrayType(), table),
+            "arrays of reference types are covariant");
         Assert.IsTrue(TypeRelations.IsAssignable(circle.MakeArrayType(), typeof(Array), table));
         Assert.IsTrue(TypeRelations.IsAssignable(typeof(string), typeof(object), table));
         Assert.IsFalse(TypeRelations.IsAssignable(typeof(object), typeof(string), table));
@@ -105,7 +108,8 @@ public sealed class TypeRelationsTests
         Assert.IsTrue(TypeRelations.IsAssignable(boxOfString, ibox.MakeGenericType(typeof(string)), table));
         Assert.IsFalse(TypeRelations.IsAssignable(boxOfString, ibox.MakeGenericType(typeof(object)), table), "IBox is invariant");
         Assert.IsTrue(TypeRelations.IsAssignable(boxOfString, iout.MakeGenericType(typeof(object)), table), "IOut is covariant");
-        Assert.IsFalse(TypeRelations.IsAssignable(box.MakeGenericType(typeof(int)), iout.MakeGenericType(typeof(object)), table), "variance never applies to value types");
+        Assert.IsFalse(TypeRelations.IsAssignable(box.MakeGenericType(typeof(int)), iout.MakeGenericType(typeof(object)), table),
+            "variance never applies to value types");
         Assert.IsTrue(TypeIdentity.Equal(ibox.MakeGenericType(typeof(string)), TypeRelations.DeclaredInterfacesOf(boxOfString, table)[0]));
     }
 
@@ -124,7 +128,9 @@ public sealed class TypeRelationsTests
         Assert.AreEqual(typeof(int).MakeByRefType(), TypeRelations.Substitute(t.MakeByRefType(), from, to));
         Assert.AreEqual(typeof(IEnumerable<int>), TypeRelations.Substitute(typeof(IEnumerable<>).MakeGenericType(t), from, to));
         Assert.AreEqual(typeof(string), TypeRelations.Substitute(typeof(string), from, to));
-        Assert.AreEqual(typeof(List<int>), TypeRelations.SubstituteFor(typeof(Dictionary<int, string>), typeof(List<>).MakeGenericType(typeof(Dictionary<,>).GetGenericArguments()[0])));
+        Assert.AreEqual(typeof(List<int>),
+            TypeRelations.SubstituteFor(typeof(Dictionary<int, string>),
+            typeof(List<>).MakeGenericType(typeof(Dictionary<,>).GetGenericArguments()[0])));
     }
 
     /// <summary>
@@ -150,9 +156,13 @@ public sealed class TypeRelationsTests
         var a = Find(session, "A");
         Assert.IsTrue(TypeRelations.IsAssignable(a.MakeArrayType(), typeof(IEnumerable<>).MakeGenericType(a), table));
         Assert.IsTrue(TypeRelations.IsAssignable(a.MakeArrayType(), typeof(IList<>).MakeGenericType(a), table));
-        Assert.IsTrue(TypeRelations.IsAssignable(a.MakeArrayType(), typeof(IEnumerable<object>), table), "covariant over a reference element");
-        Assert.IsFalse(TypeRelations.IsAssignable(a.MakeArrayType(1), typeof(IEnumerable<>).MakeGenericType(a), table), "only vectors implement them");
-        foreach (var line in IlLines.Expand(".method class [System.Runtime]System.Collections.Generic.IEnumerable`1<class A> Many() { ldc.i4 2; newarr A; ret }"))
+        Assert.IsTrue(TypeRelations.IsAssignable(a.MakeArrayType(), typeof(IEnumerable<object>), table),
+            "covariant over a reference element");
+        Assert.IsFalse(TypeRelations.IsAssignable(a.MakeArrayType(1), typeof(IEnumerable<>).MakeGenericType(a), table),
+            "only vectors implement them");
+        foreach (
+            var line in IlLines.Expand(
+                ".method class [System.Runtime]System.Collections.Generic.IEnumerable`1<class A> Many() { ldc.i4 2; newarr A; ret }"))
         {
             session.AddLine(line);
         }
@@ -161,10 +171,11 @@ public sealed class TypeRelationsTests
     }
 
     /// <summary>
-    /// The runtime converts a vector to the collection interfaces over any reference type its
-    /// element converts to, whatever the interface's own variance; value elements and other
-    /// ranks stay put.
+    /// The runtime converts a vector to the collection interfaces over any reference type its element converts to.
     /// </summary>
+    /// <remarks>
+    /// This holds whatever the interface's own variance. Value elements and other ranks stay put.
+    /// </remarks>
     [TestMethod]
     public void IsAssignable_VectorToInterfaceOverABaseElement()
     {
@@ -175,7 +186,9 @@ public sealed class TypeRelationsTests
         Assert.IsTrue(TypeRelations.IsAssignable(a.MakeArrayType(), typeof(ICollection<object>), table));
         Assert.IsFalse(TypeRelations.IsAssignable(typeof(int[]), typeof(IList<object>), table));
         Assert.IsFalse(TypeRelations.IsAssignable(a.MakeArrayType(2), typeof(IList<object>), table));
-        foreach (var line in IlLines.Expand(".method class [System.Runtime]System.Collections.Generic.IList`1<object> Many() { ldc.i4 2; newarr A; ret }"))
+        foreach (
+            var line in IlLines.Expand(
+                ".method class [System.Runtime]System.Collections.Generic.IList`1<object> Many() { ldc.i4 2; newarr A; ret }"))
         {
             session.AddLine(line);
         }

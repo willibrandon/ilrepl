@@ -34,7 +34,10 @@ public sealed class SnapshotBindingScope : IBindingScope
     }
 
     private SnapshotBindingScope(
-        BindingSnapshot snapshot, SnapshotBindingState shared, SymbolGenericContext generics, bool confirming = false)
+        BindingSnapshot snapshot,
+        SnapshotBindingState shared,
+        SymbolGenericContext generics,
+        bool confirming = false)
     {
         _snapshot = snapshot;
         _shared = shared;
@@ -251,7 +254,9 @@ public sealed class SnapshotBindingScope : IBindingScope
     }
 
     /// <inheritdoc/>
-    public bool TryGetDeclaration(TypeSymbol declaring, [NotNullWhen(
+    public bool TryGetDeclaration(
+        TypeSymbol declaring,
+        [NotNullWhen(
         true)] out IDeclarationMembers? members)
     {
         ArgumentNullException.ThrowIfNull(declaring);
@@ -706,5 +711,4 @@ public sealed class SnapshotBindingScope : IBindingScope
         ArgumentNullException.ThrowIfNull(method);
         return SymbolRenderer.Describe(method, Pretty);
     }
-
 }

@@ -39,6 +39,7 @@ public sealed class TypeIndex
                 IsSession = true,
                 AssemblyName = definition.AssemblyName,
             };
+
             Add(entry);
             _sessionSymbols[entry] = symbol;
         }

@@ -31,7 +31,11 @@ internal sealed partial class ImportedMethodFamily
 
         void CaptureType(Type type)
         {
-            if (type.IsGenericParameter) return;
+            if (type.IsGenericParameter)
+            {
+                return;
+            }
+
             if (type.HasElementType)
             {
                 CaptureType(type.GetElementType()!);
@@ -39,7 +43,10 @@ internal sealed partial class ImportedMethodFamily
             }
 
             capture(type.Assembly, _session.Resolver);
-            foreach (var argument in type.GenericTypeArguments) CaptureType(argument);
+            foreach (var argument in type.GenericTypeArguments)
+            {
+                CaptureType(argument);
+            }
         }
 
         SessionMethodIdentity Identity(MethodBase method)
@@ -114,8 +121,16 @@ internal sealed partial class ImportedMethodFamily
         }
 
         var source = new Session(resolver) { DeferActivation = true };
-        foreach (var (name, identity) in snapshot.TypeAliases) source.TypeTable.Add(name, ResolveType(identity));
-        foreach (var (name, identity) in snapshot.MethodAliases) source.TypeTable.MethodAliases.Add(name, Method(identity));
+        foreach (var (name, identity) in snapshot.TypeAliases)
+        {
+            source.TypeTable.Add(name, ResolveType(identity));
+        }
+
+        foreach (var (name, identity) in snapshot.MethodAliases)
+        {
+            source.TypeTable.MethodAliases.Add(name, Method(identity));
+        }
+
         var pinned = snapshot.PinnedMethods.ToDictionary(pair => pair.Key, pair => (MethodInfo)Method(pair.Value), StringComparer.Ordinal);
         var signatures = snapshot.SignatureHeaders.Select(pair => MethodHeaderParser.Parse(
             pair.Value.TrimStart()[".method".Length..].TrimStart(), source.InspectionContext, out _)).ToArray();
@@ -132,10 +147,17 @@ internal sealed partial class ImportedMethodFamily
 
     private void RefreshSnapshotSession()
     {
-        if (_liveSession is null) return;
+        if (_liveSession is null)
+        {
+            return;
+        }
+
         _session.Resolver.AddSnapshotReferences(_liveSession.Resolver);
         _session.DeferActivation = _liveSession.DeferActivation;
         _session.ReplaceSnapshotTypes(_liveSession.TypeTable);
-        foreach (var type in SourceTypes) _session.TypeTable.Add(type.FullName!.Replace('+', '/'), type);
+        foreach (var type in SourceTypes)
+        {
+            _session.TypeTable.Add(type.FullName!.Replace('+', '/'), type);
+        }
     }
 }

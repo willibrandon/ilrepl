@@ -1,13 +1,15 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for parsing <c>.method</c> headers inside a <c>.class</c> block, where the ILAsm words
-/// mean what ILAsm says: instance unless static, no access unless an access word is written,
-/// constructors by name, and the virtual words recorded.
+/// Tests for parsing <c>.method</c> headers inside a <c>.class</c> block, where the ILAsm words mean what ILAsm says.
 /// </summary>
+/// <remarks>
+/// That means instance unless static, no access unless an access word is written, constructors by name, and the virtual words recorded.
+/// </remarks>
 [TestClass]
 public sealed class MemberHeaderParserTests
 {
@@ -40,7 +42,8 @@ public sealed class MemberHeaderParserTests
         var statics = Parse("public static int32 Make(int32 x) {");
         Assert.IsTrue(statics.IsStatic);
         Assert.AreEqual("static int32 Make(int32)", statics.DescribeMember());
-        Assert.Contains("static or instance, not both", Assert.ThrowsExactly<ReplException>(() => Parse("public static instance void M() {")).Message);
+        Assert.Contains("static or instance, not both",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public static instance void M() {")).Message);
     }
 
     /// <summary>
@@ -56,7 +59,8 @@ public sealed class MemberHeaderParserTests
         Assert.IsTrue(cctor.IsStatic);
         Assert.Contains(".ctor must be", Assert.ThrowsExactly<ReplException>(() => Parse("public static void .ctor() {")).Message);
         Assert.Contains(".cctor must be", Assert.ThrowsExactly<ReplException>(() => Parse("static void .cctor(int32 x) {")).Message);
-        Assert.Contains("no constructor", Assert.ThrowsExactly<ReplException>(() => Parse("public instance void .ctor() {", Interface)).Message);
+        Assert.Contains("no constructor",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public instance void .ctor() {", Interface)).Message);
     }
 
     /// <summary>
@@ -66,13 +70,18 @@ public sealed class MemberHeaderParserTests
     public void Parse_VirtualWords()
     {
         var virt = Parse("public virtual newslot final hidebysig instance string Name() {");
-        Assert.IsTrue(virt.Attributes.HasFlag(MethodAttributes.Virtual | MethodAttributes.NewSlot | MethodAttributes.Final | MethodAttributes.HideBySig));
+        Assert.IsTrue(virt.Attributes.HasFlag(MethodAttributes.Virtual | MethodAttributes.NewSlot | MethodAttributes.Final
+            | MethodAttributes.HideBySig));
         var abstractMethod = Parse("public abstract virtual instance int32 Area() {", Abstract);
         Assert.IsTrue(abstractMethod.Attributes.HasFlag(MethodAttributes.Abstract));
-        Assert.Contains("must be virtual", Assert.ThrowsExactly<ReplException>(() => Parse("public abstract instance int32 Area() {", Abstract)).Message);
-        Assert.Contains("add 'abstract' to the .class header", Assert.ThrowsExactly<ReplException>(() => Parse("public abstract virtual instance int32 Area() {")).Message);
-        Assert.Contains("needs 'virtual'", Assert.ThrowsExactly<ReplException>(() => Parse("public newslot instance int32 Area() {")).Message);
-        Assert.Contains("cannot be virtual outside an interface", Assert.ThrowsExactly<ReplException>(() => Parse("public static virtual int32 Zero() {")).Message);
+        Assert.Contains("must be virtual",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public abstract instance int32 Area() {", Abstract)).Message);
+        Assert.Contains("add 'abstract' to the .class header",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public abstract virtual instance int32 Area() {")).Message);
+        Assert.Contains("needs 'virtual'",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public newslot instance int32 Area() {")).Message);
+        Assert.Contains("cannot be virtual outside an interface",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public static virtual int32 Zero() {")).Message);
         var staticVirtual = Parse("public static virtual int32 One() {", Interface);
         Assert.IsTrue(staticVirtual.IsStatic && staticVirtual.Attributes.HasFlag(MethodAttributes.Virtual));
         var slot = Parse("public abstract virtual instance float64 Area() {", Interface);
@@ -85,16 +94,19 @@ public sealed class MemberHeaderParserTests
     [TestMethod]
     public void Parse_ParameterDetails()
     {
-        var signature = Parse("public static int32 modreq([System.Runtime]System.Runtime.CompilerServices.IsVolatile) M([in] int32 modopt([System.Runtime]System.Runtime.CompilerServices.IsVolatile) x, [out] int32& y) {");
-        Assert.AreSequenceEqual([typeof(System.Runtime.CompilerServices.IsVolatile)], signature.ReturnRequiredModifiers);
+        var signature =
+            Parse("public static int32 modreq([System.Runtime]System.Runtime.CompilerServices.IsVolatile) M([in] int32 " +
+            "modopt([System.Runtime]System.Runtime.CompilerServices.IsVolatile) x, [out] int32& y) {");
+        Assert.AreSequenceEqual([typeof(IsVolatile)], signature.ReturnRequiredModifiers);
         Assert.AreEqual(ParameterAttributes.In, signature.Parameters[0].Attributes);
-        Assert.AreSequenceEqual([typeof(System.Runtime.CompilerServices.IsVolatile)], signature.Parameters[0].OptionalModifiers);
+        Assert.AreSequenceEqual([typeof(IsVolatile)], signature.Parameters[0].OptionalModifiers);
         Assert.AreEqual(ParameterAttributes.Out, signature.Parameters[1].Attributes);
         Assert.IsTrue(signature.Parameters[1].Type.IsByRef);
         var vararg = Parse("public vararg int32 Count(int32 first, ...) {");
         Assert.IsTrue(vararg.CallingConvention.HasFlag(CallingConventions.VarArgs));
         Assert.HasCount(1, vararg.Parameters);
-        Assert.Contains("needs the vararg calling convention", Assert.ThrowsExactly<ReplException>(() => Parse("public int32 Count(int32 first, ...) {")).Message);
+        Assert.Contains("needs the vararg calling convention",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public int32 Count(int32 first, ...) {")).Message);
     }
 
     /// <summary>
@@ -105,8 +117,10 @@ public sealed class MemberHeaderParserTests
     {
         var signature = Parse("public instance void M() cil managed noinlining synchronized {");
         Assert.IsTrue(signature.ImplAttributes.HasFlag(MethodImplAttributes.NoInlining | MethodImplAttributes.Synchronized));
-        Assert.Contains("not supported", Assert.ThrowsExactly<ReplException>(() => Parse("public instance void M() runtime managed {")).Message);
-        Assert.Contains("not supported", Assert.ThrowsExactly<ReplException>(() => Parse("public pinvokeimpl(\"x\") static void M() {")).Message);
+        Assert.Contains("not supported",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public instance void M() runtime managed {")).Message);
+        Assert.Contains("not supported",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public pinvokeimpl(\"x\") static void M() {")).Message);
     }
 
     /// <summary>
@@ -115,7 +129,8 @@ public sealed class MemberHeaderParserTests
     [TestMethod]
     public void Parse_GenericMethodAndQuotedName()
     {
-        var signature = MethodHeaderParser.ParseMember("public instance !!0 Map<T>(!!0 x) {", Context, Class, out _, out _, out var typeParameters);
+        var signature = MethodHeaderParser.ParseMember("public instance !!0 Map<T>(!!0 x) {", Context, Class, out _, out _,
+            out var typeParameters);
         Assert.HasCount(1, typeParameters);
         Assert.AreSame(typeParameters[0], signature.ReturnType);
         Assert.AreSame(typeParameters[0], signature.Parameters[0].Type);
@@ -130,10 +145,12 @@ public sealed class MemberHeaderParserTests
     [TestMethod]
     public void Parse_EmptyBodyAndEnum()
     {
-        MethodHeaderParser.ParseMember("public abstract virtual instance int32 Area() { }", Context, Abstract, out var opens, out var closes, out _);
+        MethodHeaderParser.ParseMember("public abstract virtual instance int32 Area() { }", Context, Abstract, out var opens,
+            out var closes, out _);
         Assert.IsTrue(opens);
         Assert.IsTrue(closes);
         var enumHeader = TypeHeaderParser.Parse("public enum Color {", nested: false);
-        Assert.Contains("enum cannot declare methods", Assert.ThrowsExactly<ReplException>(() => Parse("public static int32 M() {", enumHeader)).Message);
+        Assert.Contains("enum cannot declare methods",
+            Assert.ThrowsExactly<ReplException>(() => Parse("public static int32 M() {", enumHeader)).Message);
     }
 }

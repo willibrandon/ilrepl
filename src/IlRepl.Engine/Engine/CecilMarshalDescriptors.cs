@@ -14,6 +14,13 @@ internal sealed class CecilMarshalDescriptors
 {
     private readonly Dictionary<IMarshalInfoProvider, byte[]> _descriptors = [];
 
+    /// <summary>
+    /// Records a descriptor and returns a placeholder that makes Cecil reserve at least as many blob bytes.
+    /// </summary>
+    /// <param name="target">The field or parameter receiving the descriptor.</param>
+    /// <param name="descriptor">The exact native signature bytes.</param>
+    /// <param name="objectType">The placeholder marshaller type used only before the image is corrected.</param>
+    /// <returns>The temporary descriptor to assign before writing the image.</returns>
     internal MarshalInfo Reserve(IMarshalInfoProvider target, byte[] descriptor, TypeReference objectType)
     {
         _descriptors.Add(target, descriptor);
@@ -24,6 +31,11 @@ internal sealed class CecilMarshalDescriptors
         };
     }
 
+    /// <summary>
+    /// Overwrites each reserved placeholder blob in a written image with the descriptor recorded for it.
+    /// </summary>
+    /// <param name="image">The PE image Cecil wrote, patched in place.</param>
+    /// <exception cref="ReplException">A descriptor is larger than the space reserved for it.</exception>
     internal void Apply(byte[] image)
     {
         if (_descriptors.Count == 0)

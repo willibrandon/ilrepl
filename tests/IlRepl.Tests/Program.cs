@@ -25,22 +25,56 @@ internal static class Program
     public static Task<int> Main(string[] args)
     {
         if (args is ["--console-startup-probe", var mode, var directory])
+        {
             return RunStatusProbeAsync(() => ConsoleStartupProbe.RunAsync(mode, directory));
-        if (args is ["--windows-console", ..]) return RunStatusProbeAsync(() => WindowsConsoleProbe.RunAsync(args));
-        if (args is ["--responsiveness-measure", ..]) return RunProbeAsync(() => ResponsivenessProbe.TryRunAsync(args));
-        if (args is ["--packaged-smoke", _]) return RunProbeAsync(() => PackagedSmoke.TryRunAsync(args));
-        if (args is ["--export-browser-corpus", _]) return RunProbeAsync(() => ExportBrowserCorpus.TryRunAsync(args));
+        }
+
+        if (args is ["--windows-console", ..])
+        {
+            return RunStatusProbeAsync(() => WindowsConsoleProbe.RunAsync(args));
+        }
+
+        if (args is ["--responsiveness-measure", ..])
+        {
+            return RunProbeAsync(() => ResponsivenessProbe.TryRunAsync(args));
+        }
+
+        if (args is ["--packaged-smoke", _])
+        {
+            return RunProbeAsync(() => PackagedSmoke.TryRunAsync(args));
+        }
+
+        if (args is ["--export-browser-corpus", _])
+        {
+            return RunProbeAsync(() => ExportBrowserCorpus.TryRunAsync(args));
+        }
+
         if (args is ["--export-probe", _, _] or ["--export-tool-output"] or ["--export-tool-wait", _])
+        {
             return RunProbeAsync(() => ExportProbe.TryRunAsync(args));
+        }
+
         if (args.Contains("-Plugin", StringComparer.OrdinalIgnoreCase)
             && Environment.GetEnvironmentVariable("ILREPL_TEST_CREDENTIAL_PROVIDER") is not null)
+        {
             return RunProbeAsync(() => SessionCredentialProvider.TryRunAsync(args));
+        }
+
         if (Environment.GetEnvironmentVariable(HistoryProbes.Probe) is "hold" or "append")
+        {
             return RunProbeAsync(HistoryProbes.TryRunAsync);
+        }
+
         if (Environment.GetEnvironmentVariable("ILREPL_ACTIVATION_PROBE_PATH") is not null)
+        {
             return RunProbeAsync(ActivationEditTests.TryRunFileActivationProbeAsync);
+        }
+
         if (Environment.GetEnvironmentVariable("ILREPL_DESCENDANT_RECORD") is not null)
+        {
             return RunProbeAsync(ComparisonDescendantTests.TryRunDescendantProbeAsync);
+        }
+
         return RunTestsAsync(args);
     }
 

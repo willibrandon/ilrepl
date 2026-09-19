@@ -1,9 +1,11 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// The <c>.method</c> block being typed: its header, the lines so far, and the state they
-/// produced. Nothing here is visible to calls from the cell until the block closes.
+/// The <c>.method</c> block being typed: its header, the lines so far, and the state they produced.
 /// </summary>
+/// <remarks>
+/// Nothing here is visible to calls from the cell until the block closes.
+/// </remarks>
 internal sealed class OpenMethodBlock
 {
     /// <summary>
@@ -22,9 +24,11 @@ internal sealed class OpenMethodBlock
     public required SessionMethod? Replacing { get; init; }
 
     /// <summary>
-    /// The method table as it will be once the block commits: the session's signatures with this
-    /// one added or substituted, so the body can call itself.
+    /// The method table as it will be once the block commits.
     /// </summary>
+    /// <remarks>
+    /// It is the session's signatures with this one added or substituted, so the body can call itself.
+    /// </remarks>
     public required IReadOnlyList<MethodSignature> Signatures { get; init; }
 
     /// <summary>

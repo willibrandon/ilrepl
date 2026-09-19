@@ -1,10 +1,10 @@
+using System.Globalization;
 using IlRepl.Tui;
 
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// Tests for <see cref="PromptViewport"/>: the caret is always inside the view, and the view
-/// moves only when it has to.
+/// Tests for <see cref="PromptViewport"/>: the caret is always inside the view, and the view moves only when it has to.
 /// </summary>
 [TestClass]
 public sealed class PromptViewportTests
@@ -26,9 +26,12 @@ public sealed class PromptViewportTests
     [TestMethod]
     public void Reveal_CaretOutsideVertically_MovesTheLeastItCan()
     {
-        Assert.AreEqual(new ViewportOffsets(6, 0), PromptViewport.Reveal(new ViewportOffsets(1, 0), 5, 10, caretLine: 10, caretColumn: 0, lineCount: 20));
-        Assert.AreEqual(new ViewportOffsets(2, 0), PromptViewport.Reveal(new ViewportOffsets(6, 0), 5, 10, caretLine: 2, caretColumn: 0, lineCount: 20));
-        Assert.AreEqual(new ViewportOffsets(1, 0), PromptViewport.Reveal(new ViewportOffsets(1, 0), 5, 10, caretLine: 5, caretColumn: 0, lineCount: 20));
+        Assert.AreEqual(new ViewportOffsets(6, 0),
+            PromptViewport.Reveal(new ViewportOffsets(1, 0), 5, 10, caretLine: 10, caretColumn: 0, lineCount: 20));
+        Assert.AreEqual(new ViewportOffsets(2, 0),
+            PromptViewport.Reveal(new ViewportOffsets(6, 0), 5, 10, caretLine: 2, caretColumn: 0, lineCount: 20));
+        Assert.AreEqual(new ViewportOffsets(1, 0),
+            PromptViewport.Reveal(new ViewportOffsets(1, 0), 5, 10, caretLine: 5, caretColumn: 0, lineCount: 20));
     }
 
     /// <summary>
@@ -37,9 +40,12 @@ public sealed class PromptViewportTests
     [TestMethod]
     public void Reveal_CaretOutsideHorizontally_MovesTheLeastItCan()
     {
-        Assert.AreEqual(new ViewportOffsets(1, 3), PromptViewport.Reveal(new ViewportOffsets(1, 0), 5, 10, caretLine: 1, caretColumn: 12, lineCount: 1));
-        Assert.AreEqual(new ViewportOffsets(1, 0), PromptViewport.Reveal(new ViewportOffsets(1, 0), 5, 10, caretLine: 1, caretColumn: 9, lineCount: 1));
-        Assert.AreEqual(new ViewportOffsets(1, 2), PromptViewport.Reveal(new ViewportOffsets(1, 5), 5, 10, caretLine: 1, caretColumn: 2, lineCount: 1));
+        Assert.AreEqual(new ViewportOffsets(1, 3),
+            PromptViewport.Reveal(new ViewportOffsets(1, 0), 5, 10, caretLine: 1, caretColumn: 12, lineCount: 1));
+        Assert.AreEqual(new ViewportOffsets(1, 0),
+            PromptViewport.Reveal(new ViewportOffsets(1, 0), 5, 10, caretLine: 1, caretColumn: 9, lineCount: 1));
+        Assert.AreEqual(new ViewportOffsets(1, 2),
+            PromptViewport.Reveal(new ViewportOffsets(1, 5), 5, 10, caretLine: 1, caretColumn: 2, lineCount: 1));
     }
 
     /// <summary>
@@ -48,8 +54,10 @@ public sealed class PromptViewportTests
     [TestMethod]
     public void Reveal_DocumentShrank_ClampsFirst()
     {
-        Assert.AreEqual(new ViewportOffsets(1, 0), PromptViewport.Reveal(new ViewportOffsets(10, 0), 5, 10, caretLine: 3, caretColumn: 0, lineCount: 3));
-        Assert.AreEqual(new ViewportOffsets(16, 0), PromptViewport.Reveal(new ViewportOffsets(30, 0), 5, 10, caretLine: 20, caretColumn: 0, lineCount: 20));
+        Assert.AreEqual(new ViewportOffsets(1, 0),
+            PromptViewport.Reveal(new ViewportOffsets(10, 0), 5, 10, caretLine: 3, caretColumn: 0, lineCount: 3));
+        Assert.AreEqual(new ViewportOffsets(16, 0),
+            PromptViewport.Reveal(new ViewportOffsets(30, 0), 5, 10, caretLine: 20, caretColumn: 0, lineCount: 20));
     }
 
     /// <summary>
@@ -58,13 +66,16 @@ public sealed class PromptViewportTests
     [TestMethod]
     public void Reveal_DegenerateViewport_StaysSane()
     {
-        Assert.AreEqual(new ViewportOffsets(4, 7), PromptViewport.Reveal(new ViewportOffsets(0, -1), 0, 0, caretLine: 4, caretColumn: 7, lineCount: 4));
+        Assert.AreEqual(new ViewportOffsets(4, 7),
+            PromptViewport.Reveal(new ViewportOffsets(0, -1), 0, 0, caretLine: 4, caretColumn: 7, lineCount: 4));
     }
 
     /// <summary>
-    /// The offsets count characters and the screen counts cells, so a line of wide characters
-    /// scrolls further than its character count says; narrow text is left as it was.
+    /// The offsets count characters and the screen counts cells.
     /// </summary>
+    /// <remarks>
+    /// A line of wide characters therefore scrolls further than its character count says. Narrow text is left as it was.
+    /// </remarks>
     [TestMethod]
     public void RevealWide_WideCharacters_ScrollUntilTheCaretCellFits()
     {
@@ -77,13 +88,16 @@ public sealed class PromptViewportTests
         Assert.AreEqual(1, offsets.Top);
 
         Assert.AreEqual(new ViewportOffsets(1, 0), PromptView.RevealWide(new ViewportOffsets(1, 0), 40, "ldstr \"narrow\"", 14));
-        Assert.AreEqual(new ViewportOffsets(1, 3), PromptView.RevealWide(new ViewportOffsets(1, 3), 40, line, 5), "a caret before the offset is left to the character reveal");
+        Assert.AreEqual(new ViewportOffsets(1, 3), PromptView.RevealWide(new ViewportOffsets(1, 3), 40, line, 5),
+            "a caret before the offset is left to the character reveal");
     }
 
     /// <summary>
-    /// Scrolling never starts inside a surrogate pair or a joined emoji: the offset lands on a
-    /// text element, and one whose character index fell inside a pair is moved to its start.
+    /// Scrolling never starts inside a surrogate pair or a joined emoji: the offset lands on a text element.
     /// </summary>
+    /// <remarks>
+    /// An offset whose character index fell inside a pair is moved to its start.
+    /// </remarks>
     [TestMethod]
     public void RevealWide_Emoji_KeepsTextElementBoundaries()
     {
@@ -100,7 +114,7 @@ public sealed class PromptViewportTests
         var joined = "ldstr \"" + string.Concat(Enumerable.Repeat("👩\u200D💻", 20)) + "\"";
         var family = PromptView.RevealWide(new ViewportOffsets(1, 0), 20, joined, joined.Length);
         var elements = new List<int>();
-        for (var i = 0; i < joined.Length; i += System.Globalization.StringInfo.GetNextTextElementLength(joined.AsSpan(i)))
+        for (var i = 0; i < joined.Length; i += StringInfo.GetNextTextElementLength(joined.AsSpan(i)))
         {
             elements.Add(i);
         }
@@ -109,11 +123,12 @@ public sealed class PromptViewportTests
     }
 
     /// <summary>
-    /// The horizontal reveal counts cells, not characters: a line of decomposed accents, many
-    /// characters but few cells, that fits the columns is not scrolled at all; a line of wide
-    /// characters is scrolled by whole characters until the caret's cell fits; and a joined emoji
-    /// is never split.
+    /// The horizontal reveal counts cells, not characters.
     /// </summary>
+    /// <remarks>
+    /// A line of decomposed accents, many characters but few cells, that fits the columns is not scrolled at all. A line of wide characters
+    /// is scrolled by whole characters until the caret's cell fits. A joined emoji is never split.
+    /// </remarks>
     [TestMethod]
     public void RevealCaret_CountsCellsAndLandsOnTextElements()
     {
@@ -128,12 +143,13 @@ public sealed class PromptViewportTests
         Assert.IsGreaterThan(0, scrolled.Left);
         Assert.IsLessThan(73, Hex1b.DisplayWidth.GetStringWidth(wide[scrolled.Left..]), "the caret's cell fits");
         Assert.IsGreaterThanOrEqualTo(73, Hex1b.DisplayWidth.GetStringWidth(wide[(scrolled.Left - 1)..]), "and no further than needed");
-        Assert.AreEqual(new ViewportOffsets(1, 0), PromptView.RevealCaret(scrolled, 1, 73, wide, 1, 0, 1), "Home scrolls back to the start");
+        Assert.AreEqual(new ViewportOffsets(1, 0), PromptView.RevealCaret(scrolled, 1, 73, wide, 1, 0, 1),
+            "Home scrolls back to the start");
 
         var joined = "ldstr \"" + string.Concat(Enumerable.Repeat("👩\u200D💻", 30)) + "\"";
         var family = PromptView.RevealCaret(new ViewportOffsets(1, 0), 1, 40, joined, 1, joined.Length, 1);
         var elements = new List<int>();
-        for (var i = 0; i < joined.Length; i += System.Globalization.StringInfo.GetNextTextElementLength(joined.AsSpan(i)))
+        for (var i = 0; i < joined.Length; i += StringInfo.GetNextTextElementLength(joined.AsSpan(i)))
         {
             elements.Add(i);
         }
@@ -143,16 +159,20 @@ public sealed class PromptViewportTests
     }
 
     /// <summary>
-    /// A style cut at the scrolled edge starts at the next character that is a whole code unit,
-    /// so it never begins inside a character built from several: in a run of joined emoji that
-    /// is the closing quote, and in plain text it is the edge itself.
+    /// A style cut at the scrolled edge starts at the next character that is a whole code unit.
     /// </summary>
+    /// <remarks>
+    /// It therefore never begins inside a character built from several. In a run of joined emoji that character is the closing quote, and
+    /// in plain text it is the edge itself.
+    /// </remarks>
     [TestMethod]
     public void SafeStart_SkipsSurrogatePairsAtTheEdge()
     {
         var joined = "ldstr \"" + string.Concat(Enumerable.Repeat("👩\u200D💻", 3)) + "\" nop";
-        Assert.AreEqual(joined.IndexOf('"', 8), ScrolledDecorations.SafeStart(joined, 12), "the quote is the first whole code unit after the edge");
-        Assert.AreEqual(joined.IndexOf('"', 8), ScrolledDecorations.SafeStart(joined, 14), "an edge inside a character moves on the same way");
+        Assert.AreEqual(joined.IndexOf('"', 8), ScrolledDecorations.SafeStart(joined, 12),
+            "the quote is the first whole code unit after the edge");
+        Assert.AreEqual(joined.IndexOf('"', 8), ScrolledDecorations.SafeStart(joined, 14),
+            "an edge inside a character moves on the same way");
         Assert.AreEqual(3, ScrolledDecorations.SafeStart("ldc.i4 1", 3), "plain text starts at the edge");
         Assert.AreEqual(9, ScrolledDecorations.SafeStart("ldstr \"漢漢\"", 9), "wide characters that are one code unit are fine");
         Assert.AreEqual(4, ScrolledDecorations.SafeStart("😀😀", 1), "no whole code unit follows");

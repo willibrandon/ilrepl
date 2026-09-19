@@ -59,6 +59,7 @@ internal static partial class ComparisonCommand
                     timeout = ComparisonDuration.Parse(Word(ref rest));
                     break;
                 }
+
                 case "--stdin":
                     stdin = LiteralParser.ParseString(Word(ref rest));
                     break;

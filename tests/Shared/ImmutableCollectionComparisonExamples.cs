@@ -25,6 +25,7 @@ public static class ImmutableCollectionComparisonExamples
             var changed = edited && index == length - 1;
             entries.Add(set && changed ? "changed" : Keys[index], changed ? "changed-value" : "value-" + index);
         }
+
         return entries;
     }
 
@@ -37,22 +38,35 @@ public static class ImmutableCollectionComparisonExamples
     /// <param name="valueComparer">The dictionary value comparer property, or default.</param>
     /// <param name="edited">Whether to change logical contents while retaining comparer settings.</param>
     /// <returns>The selected method declaration.</returns>
-    public static string Method(bool set, int count, string keyComparer = "default", string valueComparer = "default",
+    public static string Method(
+        bool set,
+        int count,
+        string keyComparer = "default",
+        string valueComparer = "default",
         bool edited = false)
     {
         var collection = set ? "class ImmutableHashSet<string>" : "class ImmutableDictionary<string, string>";
         var source = ".method public static " + collection + " Read() {\nldsfld " + collection + " " + collection + "::Empty\n";
         source += Comparer(keyComparer);
-        if (!set) source += Comparer(valueComparer);
+        if (!set)
+        {
+            source += Comparer(valueComparer);
+        }
+
         source += "callvirt instance " + collection + " " + collection + (set
             ? "::WithComparer(class IEqualityComparer<string>)\n"
             : "::WithComparers(class IEqualityComparer<string>, class IEqualityComparer<string>)\n");
         foreach (var (key, value) in Contents(count, edited, set))
         {
             source += "ldstr \"" + key + "\"\n";
-            if (!set) source += "ldstr \"" + value + "\"\n";
+            if (!set)
+            {
+                source += "ldstr \"" + value + "\"\n";
+            }
+
             source += "callvirt instance " + collection + " " + collection + (set ? "::Add(string)\n" : "::Add(string, string)\n");
         }
+
         return source + "ret\n}";
     }
 

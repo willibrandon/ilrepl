@@ -82,6 +82,7 @@ public static partial class MemberEligibility
             "ldtoken field" => true,
             _ => false,
         };
+
         return storage && InstructionMemberRules.InitOnlyStoreProblem(field, site.Owner, view.OpenMethod,
             view.Scope.Access.Type, view.StackKind != AnalyzedStackKind.Known || view.IsThisAt(view.Stack.Count - 2),
             view.Scope.Pretty) is null;
@@ -225,6 +226,7 @@ public static partial class MemberEligibility
             found |= part.IsGenericParameter;
             return null;
         });
+
         return found;
     }
 

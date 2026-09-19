@@ -5,11 +5,12 @@ using Hex1b;
 namespace IlRepl.Tests.Tui;
 
 /// <summary>
-/// A presentation adapter that feeds the terminal whatever bytes a test writes, so a bracketed
-/// paste reaches the app the way a real terminal sends one: through the terminal's own input
-/// parser, which turns the markers into a paste event. Keys still go through the automator.
-/// Output is discarded; snapshots come from the terminal itself.
+/// A presentation adapter that feeds the terminal whatever bytes a test writes.
 /// </summary>
+/// <remarks>
+/// A bracketed paste therefore reaches the app the way a real terminal sends one: through the terminal's own input parser, which turns the
+/// markers into a paste event. Keys still go through the automator. Output is discarded, and snapshots come from the terminal itself.
+/// </remarks>
 internal sealed class ScriptedPresentationAdapter : IHex1bTerminalPresentationAdapter
 {
     private readonly Channel<byte[]> _input = Channel.CreateUnbounded<byte[]>();

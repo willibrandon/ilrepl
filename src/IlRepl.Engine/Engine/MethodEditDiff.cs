@@ -184,10 +184,15 @@ public static class MethodEditDiff
             IFormattable value => value.ToString(null, CultureInfo.InvariantCulture),
             _ => family.NormalizeNames(instruction.Text[(instruction.Op.Name!.Length)..].Trim()),
         };
+
         return op + " " + operand;
     }
 
-    private static List<DiffInstruction> Metadata(DisassembledMethod listing, ImportedMethodFamily family, bool raw, bool originalSide,
+    private static List<DiffInstruction> Metadata(
+        DisassembledMethod listing,
+        ImportedMethodFamily family,
+        bool raw,
+        bool originalSide,
         string[]? anchors)
     {
         string Text(string text) => raw || originalSide ? text : family.NormalizeNames(text);
@@ -198,6 +203,7 @@ public static class MethodEditDiff
             ".initlocals " + listing.InitLocals,
             ".locals (" + string.Join(", ", listing.Locals.Select(local => Text(IlSignatureRenderer.IlAsm(local)))) + ")",
         };
+
         var rows = headers.Select(text => new DiffInstruction(text, text, null)).ToList();
         var offsets = listing.Entries.Where(entry => entry.Instruction is not null).Select((entry, index) => (entry.Offset, index))
             .ToDictionary(pair => pair.Offset, pair => pair.index);

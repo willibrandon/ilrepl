@@ -25,7 +25,11 @@ public sealed class VirtualComparisonTests
         var session = IlLines.Load(VirtualComparisonExamples.Source(false, true).Split('\n'));
         var edit = session.PrepareEdit(VirtualComparisonExamples.Reference(false), "Copy");
         session.CommitEdit(edit.Name, VirtualComparisonExamples.Method(false, true));
-        foreach (var line in VirtualStructScenario.Source.Split('\n')) session.AddLine(line);
+        foreach (var line in VirtualStructScenario.Source.Split('\n'))
+        {
+            session.AddLine(line);
+        }
+
         session.AddLine("call Scenario");
         Assert.AreEqual(14, session.Run().Value);
         var result = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy using Scenario"),
@@ -85,8 +89,16 @@ public sealed class VirtualComparisonTests
         var session = IlLines.Load(VirtualComparisonExamples.Source(generic, interfaceType).Split('\n'));
         var edit = session.PrepareEdit(VirtualComparisonExamples.Reference(generic), "Copy");
         session.CommitEdit(edit.Name, VirtualComparisonExamples.Method(generic, true));
-        foreach (var line in VirtualComparisonExamples.Scenario(kind, behavior, generic).Split('\n')) session.AddLine(line);
-        if (interfaceType) behavior = behavior[10..];
+        foreach (var line in VirtualComparisonExamples.Scenario(kind, behavior, generic).Split('\n'))
+        {
+            session.AddLine(line);
+        }
+
+        if (interfaceType)
+        {
+            behavior = behavior[10..];
+        }
+
         var selected = kind == "call" || behavior is "base" or "inherit" or "newslot";
         var added = kind != "call" && behavior == "base" ? 100 : 0;
         var overridden = behavior == "same" ? 8 : 107;

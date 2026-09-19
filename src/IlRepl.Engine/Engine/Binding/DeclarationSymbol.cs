@@ -23,8 +23,13 @@ public sealed class DeclarationSymbol
     /// <param name="fields">The fields declared so far.</param>
     /// <param name="methods">The methods declared so far, forward references included.</param>
     /// <param name="canDefineForward">True when the type takes references to members declared later.</param>
-    public DeclarationSymbol(TypeSymbol type, TypeSymbol? baseType, IReadOnlyList<TypeSymbol> interfaces,
-        IReadOnlyList<GenericParameterSymbol> genericParameters, IEnumerable<FieldSymbol> fields, IEnumerable<MethodSymbol> methods,
+    public DeclarationSymbol(
+        TypeSymbol type,
+        TypeSymbol? baseType,
+        IReadOnlyList<TypeSymbol> interfaces,
+        IReadOnlyList<GenericParameterSymbol> genericParameters,
+        IEnumerable<FieldSymbol> fields,
+        IEnumerable<MethodSymbol> methods,
         bool canDefineForward)
     {
         ArgumentNullException.ThrowIfNull(type);

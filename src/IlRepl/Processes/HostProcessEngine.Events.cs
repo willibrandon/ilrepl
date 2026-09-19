@@ -47,6 +47,7 @@ public sealed partial class HostProcessEngine : IReplClient, IHostedEngine, IPro
                 ProgressChanged?.Invoke(progress);
                 break;
             }
+
             previous = observed;
         }
     }
@@ -54,7 +55,11 @@ public sealed partial class HostProcessEngine : IReplClient, IHostedEngine, IPro
     /// <inheritdoc />
     Task IReplClient.CheckpointAsync(SessionReply checkpoint, CancellationToken cancellationToken)
     {
-        if (AcceptCheckpoint(checkpoint) is { } accepted) CheckpointReceived?.Invoke(accepted);
+        if (AcceptCheckpoint(checkpoint) is { } accepted)
+        {
+            CheckpointReceived?.Invoke(accepted);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -69,7 +74,9 @@ public sealed partial class HostProcessEngine : IReplClient, IHostedEngine, IPro
     public Task TerminateAsync(CancellationToken cancellationToken)
     {
         lock (_disposeLock)
+        {
             return _disposeTask is { } disposal ? disposal.WaitAsync(cancellationToken) : TerminateCoreAsync(cancellationToken);
+        }
     }
 
     private async Task TerminateCoreAsync(CancellationToken cancellationToken)
@@ -126,6 +133,7 @@ public sealed partial class HostProcessEngine : IReplClient, IHostedEngine, IPro
             // Disposal has already consumed the process lifetime.
         }
     }
+
     /// <inheritdoc />
     public ProcessSupervisionState Supervision => _lifetime.Supervision;
 

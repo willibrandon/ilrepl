@@ -107,8 +107,13 @@ public static class AssemblyLocationFixture
     /// <param name="stream">Whether the browser's actual source loader reads bytes rather than mapping that file.</param>
     /// <param name="machine">The desktop process architecture, or I386 for portable browser IL.</param>
     /// <returns>The real portable image and its independently specified observation.</returns>
-    public static (byte[] Image, string Expected) Create(string target, string api, string dispatch, string path,
-        bool stream = false, Machine machine = Machine.I386)
+    public static (byte[] Image, string Expected) Create(
+        string target,
+        string api,
+        string dispatch,
+        string path,
+        bool stream = false,
+        Machine machine = Machine.I386)
     {
         var metadata = new MetadataBuilder();
         var name = "LocationSource" + Guid.NewGuid().ToString("N");
@@ -119,7 +124,11 @@ public static class AssemblyLocationFixture
         var types = new Dictionary<Type, TypeReferenceHandle>();
         TypeReferenceHandle TypeReference(Type type)
         {
-            if (types.TryGetValue(type, out var handle)) return handle;
+            if (types.TryGetValue(type, out var handle))
+            {
+                return handle;
+            }
+
             if (!references.TryGetValue(type.Assembly, out var reference))
             {
                 var identity = type.Assembly.GetName();
@@ -136,26 +145,59 @@ public static class AssemblyLocationFixture
 
         void EncodeType(SignatureTypeEncoder encoder, Type type)
         {
-            if (type == typeof(bool)) encoder.Boolean();
-            else if (type == typeof(int)) encoder.Int32();
-            else if (type == typeof(long)) encoder.Int64();
-            else if (type == typeof(string)) encoder.String();
-            else if (type == typeof(object)) encoder.Object();
-            else if (type == typeof(nint)) encoder.IntPtr();
-            else if (type.IsArray) EncodeType(encoder.SZArray(), type.GetElementType()!);
+            if (type == typeof(bool))
+            {
+                encoder.Boolean();
+            }
+            else if (type == typeof(int))
+            {
+                encoder.Int32();
+            }
+            else if (type == typeof(long))
+            {
+                encoder.Int64();
+            }
+            else if (type == typeof(string))
+            {
+                encoder.String();
+            }
+            else if (type == typeof(object))
+            {
+                encoder.Object();
+            }
+            else if (type == typeof(nint))
+            {
+                encoder.IntPtr();
+            }
+            else if (type.IsArray)
+            {
+                EncodeType(encoder.SZArray(), type.GetElementType()!);
+            }
             else if (type.IsGenericParameter)
             {
-                if (type.DeclaringMethod is null) encoder.GenericTypeParameter(type.GenericParameterPosition);
-                else encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+                if (type.DeclaringMethod is null)
+                {
+                    encoder.GenericTypeParameter(type.GenericParameterPosition);
+                }
+                else
+                {
+                    encoder.GenericMethodTypeParameter(type.GenericParameterPosition);
+                }
             }
             else if (type.IsGenericType)
             {
                 var arguments = type.GetGenericArguments();
                 var parameters = encoder.GenericInstantiation(TypeReference(type.GetGenericTypeDefinition()), arguments.Length,
                     type.IsValueType);
-                foreach (var argument in arguments) EncodeType(parameters.AddArgument(), argument);
+                foreach (var argument in arguments)
+                {
+                    EncodeType(parameters.AddArgument(), argument);
+                }
             }
-            else encoder.Type(TypeReference(type), type.IsValueType);
+            else
+            {
+                encoder.Type(TypeReference(type), type.IsValueType);
+            }
         }
 
         EntityHandle MethodReference(MethodBase method)
@@ -163,35 +205,59 @@ public static class AssemblyLocationFixture
             var definition = method is MethodInfo { IsGenericMethod: true } generic ? generic.GetGenericMethodDefinition() : method;
             var declaring = method.DeclaringType!;
             if (declaring.IsConstructedGenericType)
+            {
                 definition = declaring.GetGenericTypeDefinition().GetMethods().Cast<MethodBase>()
                     .Concat(declaring.GetGenericTypeDefinition().GetConstructors())
                     .Single(candidate => candidate.MetadataToken == definition.MetadataToken);
+            }
+
             var signature = new BlobBuilder();
             var parameters = definition.GetParameters();
             new BlobEncoder(signature).MethodSignature(genericParameterCount: definition.IsGenericMethod
                 ? definition.GetGenericArguments().Length : 0, isInstanceMethod: !definition.IsStatic).Parameters(parameters.Length,
                 result =>
                 {
-                    if (definition is not MethodInfo info || info.ReturnType == typeof(void)) result.Void();
-                    else EncodeType(result.Type(), info.ReturnType);
+                    if (definition is not MethodInfo info || info.ReturnType == typeof(void))
+                    {
+                        result.Void();
+                    }
+                    else
+                    {
+                        EncodeType(result.Type(), info.ReturnType);
+                    }
                 }, arguments =>
                 {
                     foreach (var parameter in parameters)
+                    {
                         EncodeType(arguments.AddParameter().Type(parameter.ParameterType.IsByRef),
                             parameter.ParameterType.IsByRef ? parameter.ParameterType.GetElementType()! : parameter.ParameterType);
+                    }
                 });
+
             var parent = declaring.IsConstructedGenericType ? SignatureType(declaring) : TypeReference(declaring);
             var member = metadata.AddMemberReference(parent, metadata.GetOrAddString(definition.Name), metadata.GetOrAddBlob(signature));
-            if (method is not MethodInfo { IsGenericMethod: true } closed) return member;
+            if (method is not MethodInfo { IsGenericMethod: true } closed)
+            {
+                return member;
+            }
+
             var specification = new BlobBuilder();
             var encoded = new BlobEncoder(specification).MethodSpecificationSignature(closed.GetGenericArguments().Length);
-            foreach (var argument in closed.GetGenericArguments()) EncodeType(encoded.AddArgument(), argument);
+            foreach (var argument in closed.GetGenericArguments())
+            {
+                EncodeType(encoded.AddArgument(), argument);
+            }
+
             return metadata.AddMethodSpecification(member, metadata.GetOrAddBlob(specification));
         }
 
         EntityHandle SignatureType(Type type)
         {
-            if (!type.IsArray && !type.IsGenericType) return TypeReference(type);
+            if (!type.IsArray && !type.IsGenericType)
+            {
+                return TypeReference(type);
+            }
+
             var signature = new BlobBuilder();
             EncodeType(new BlobEncoder(signature).TypeSpecificationSignature(), type);
             return metadata.AddTypeSpecification(metadata.GetOrAddBlob(signature));
@@ -206,6 +272,7 @@ public static class AssemblyLocationFixture
         {
             "Module" => typeof(Module), "ModuleHandle" => typeof(ModuleHandle), "Type" => typeof(Type), _ => typeof(Assembly),
         };
+
         var inspection = api switch
         {
             "GetFile" or "GetModule" => receiver.GetMethod(api, [typeof(string)])!,
@@ -217,6 +284,7 @@ public static class AssemblyLocationFixture
             "ToString" => receiver.GetMethod(api, Type.EmptyTypes)!,
             _ => receiver.GetProperty(api)!.GetMethod!,
         };
+
         var expected = api switch
         {
             "Location" or "FullyQualifiedName" => stream ? "" : path,
@@ -234,8 +302,17 @@ public static class AssemblyLocationFixture
             "EntryPoint" => "Main",
             _ => path,
         };
-        if (IsModuleTable(api)) expected = Scope;
-        if (dispatch == "lookalike") expected = "user metadata";
+
+        if (IsModuleTable(api))
+        {
+            expected = Scope;
+        }
+
+        if (dispatch == "lookalike")
+        {
+            expected = "user metadata";
+        }
+
         var instructions = new InstructionEncoder(new BlobBuilder());
         void Call(MethodBase method)
         {
@@ -252,12 +329,18 @@ public static class AssemblyLocationFixture
 
         void LoadReceiver()
         {
-            if (target == "Type") LoadType(typeof(string));
+            if (target == "Type")
+            {
+                LoadType(typeof(string));
+            }
             else
             {
                 Call(typeof(Assembly).GetMethod(nameof(Assembly.GetExecutingAssembly))!);
                 if (target is "Module" or "ModuleHandle")
+                {
                     Call(typeof(Assembly).GetProperty(nameof(Assembly.ManifestModule))!.GetMethod!);
+                }
+
                 if (target == "ModuleHandle")
                 {
                     Call(typeof(Module).GetProperty(nameof(Module.ModuleHandle))!.GetMethod!);
@@ -276,7 +359,10 @@ public static class AssemblyLocationFixture
         }
         else
         {
-            if (dispatch == "lookalike") instructions.Call(MetadataTokens.MethodDefinitionHandle(3));
+            if (dispatch == "lookalike")
+            {
+                instructions.Call(MetadataTokens.MethodDefinitionHandle(3));
+            }
             else
             {
                 if (dispatch == "property")
@@ -319,15 +405,31 @@ public static class AssemblyLocationFixture
                 else
                 {
                     LoadReceiver();
-                    if (api is "GetFile" or "GetModule") instructions.LoadString(metadata.GetOrAddUserString(Scope));
-                    if (api.EndsWith("(bool)", StringComparison.Ordinal)) instructions.LoadConstantI4(1);
+                    if (api is "GetFile" or "GetModule")
+                    {
+                        instructions.LoadString(metadata.GetOrAddUserString(Scope));
+                    }
+
+                    if (api.EndsWith("(bool)", StringComparison.Ordinal))
+                    {
+                        instructions.LoadConstantI4(1);
+                    }
+
                     if (api == "GetPEKind")
                     {
                         instructions.LoadLocalAddress(1);
                         instructions.LoadLocalAddress(2);
                     }
-                    if (target == "ModuleHandle") instructions.Call(MethodReference(inspection));
-                    else Call(dispatch == "object" ? typeof(object).GetMethod(nameof(ToString))! : inspection);
+
+                    if (target == "ModuleHandle")
+                    {
+                        instructions.Call(MethodReference(inspection));
+                    }
+                    else
+                    {
+                        Call(dispatch == "object" ? typeof(object).GetMethod(nameof(ToString))! : inspection);
+                    }
+
                     if (api == "GetPEKind")
                     {
                         instructions.LoadLocal(1);
@@ -346,13 +448,17 @@ public static class AssemblyLocationFixture
                             instructions.LoadConstantI4(0);
                             instructions.OpCode(ILOpCode.Ldelem_ref);
                         }
+
                         instructions.StoreLocal(0);
                         instructions.LoadLocal(0);
                         Call(typeof(FileStream).GetProperty(nameof(FileStream.Name))!.GetMethod!);
                         instructions.LoadLocal(0);
                         Call(typeof(Stream).GetMethod(nameof(Stream.Dispose), Type.EmptyTypes)!);
                     }
-                    else if (api == "EntryPoint") Call(typeof(MemberInfo).GetProperty(nameof(MemberInfo.Name))!.GetMethod!);
+                    else if (api == "EntryPoint")
+                    {
+                        Call(typeof(MemberInfo).GetProperty(nameof(MemberInfo.Name))!.GetMethod!);
+                    }
                     else if (inspection.ReturnType.IsValueType)
                     {
                         instructions.OpCode(ILOpCode.Box);
@@ -381,6 +487,7 @@ public static class AssemblyLocationFixture
                         instructions.OpCode(ILOpCode.Conv_i4);
                         instructions.LoadConstantI4(1);
                     }
+
                     instructions.OpCode(ILOpCode.Ceq);
                 }
             }
@@ -390,6 +497,7 @@ public static class AssemblyLocationFixture
                 instructions.LoadArgument(0);
                 Call(typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
             }
+
             instructions.LoadConstantI4(42);
             instructions.OpCode(ILOpCode.Mul);
         }

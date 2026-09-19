@@ -67,6 +67,7 @@ internal sealed class RuntimeDeclarationMembers : IDeclarationMembers
             ReturnRequiredModifiers = adapter.ToTypes(signature.ReturnRequiredModifiers),
             ReturnOptionalModifiers = adapter.ToTypes(signature.ReturnOptionalModifiers),
         };
+
         var builder = (_own.DefineForward ?? throw new InvalidOperationException("the type cannot take forward references"))(declared);
         return _scope.Register(
             RuntimeSymbolImporter.Import(declared, Declaring, RuntimeDefinitions.Of(builder), MethodSymbolSource.Forward, false),

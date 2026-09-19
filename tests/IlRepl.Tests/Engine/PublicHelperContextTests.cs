@@ -60,7 +60,11 @@ public sealed class PublicHelperContextTests
         Assert.AreEqual(42, edit.Method.DeclaringType!.GetField("State")!.GetValue(null));
         AssertSentinels(owner, helper, other);
         AssertHelperDisposition(edit, shape, assembly, session);
-        foreach (var line in PublicHelperFixture.Scenario().Split('\n')) session.AddLine(line);
+        foreach (var line in PublicHelperFixture.Scenario().Split('\n'))
+        {
+            session.AddLine(line);
+        }
+
         foreach (var command in new[] { "Copy ()", "Copy using Scenario" })
         {
             var unchanged = await Run(session, command);
@@ -68,6 +72,7 @@ public sealed class PublicHelperContextTests
             AssertSide(unchanged.Original, "42");
             AssertSide(unchanged.Edited, "42");
         }
+
         var originalConstant = shape == "write" ? "ldc.i4.s 41" : "ldc.i4.s 42";
         Assert.Contains(originalConstant, edit.Source);
         session.CommitEdit(edit.Name, edit.Source.Replace(originalConstant,
@@ -83,6 +88,7 @@ public sealed class PublicHelperContextTests
             AssertSide(changed.Original, "42");
             AssertSide(changed.Edited, "43");
         }
+
         session.AddLine("call Copy");
         var exports = new[] { AssemblyExporter.Write(session, "public-helper-copy"), IlasmLocator.Assemble(session.ToIlAsm()) };
         foreach (var exportedImage in exports)
@@ -92,9 +98,16 @@ public sealed class PublicHelperContextTests
             try
             {
                 var exported = context.LoadFromStream(new MemoryStream(exportedImage));
-                if (shape is "stateless" or "identity") Assert.Contains(reference => reference.Name == assembly.GetName().Name,
-                    exported.GetReferencedAssemblies());
-                else Assert.DoesNotContain(reference => reference.Name == assembly.GetName().Name, exported.GetReferencedAssemblies());
+                if (shape is "stateless" or "identity")
+                {
+                    Assert.Contains(reference => reference.Name == assembly.GetName().Name,
+                        exported.GetReferencedAssemblies());
+                }
+                else
+                {
+                    Assert.DoesNotContain(reference => reference.Name == assembly.GetName().Name, exported.GetReferencedAssemblies());
+                }
+
                 Assert.AreEqual(43, exported.GetType("IlRepl.Cell")!.GetMethod("Run")!.Invoke(null, null));
                 var copied = exported.GetType(edit.Method.DeclaringType.FullName!)!.GetMethod("Read")!;
                 Assert.AreEqual(43, copied.Invoke(null, null));
@@ -131,11 +144,28 @@ public sealed class PublicHelperContextTests
         var target = MethodDisassembler.Disassemble(edit.Method!, session).Entries.Where(entry => entry.Instruction is not null)
             .Select(entry => entry.Instruction!.Operand).OfType<ResolvedMethod>().Select(method => method.Method!)
             .First(method => method.Name == (shape == "external" ? "Max" : "Fetch"));
-        if (shape == "external") Assert.AreEqual(typeof(Math), target.DeclaringType);
-        else if (shape is "stateless" or "identity") Assert.AreSame(source.GetType("PublicContext.Helper"), target.DeclaringType);
-        else Assert.AreSame(edit.Method!.Module.Assembly, target.Module.Assembly);
-        if (shape == "generic") Assert.AreSame(edit.Method!.DeclaringType, Assert.ContainsSingle(target.GetGenericArguments()));
-        if (shape == "signature") Assert.AreSame(edit.Method!.DeclaringType, Assert.ContainsSingle(target.GetParameters()).ParameterType);
+        if (shape == "external")
+        {
+            Assert.AreEqual(typeof(Math), target.DeclaringType);
+        }
+        else if (shape is "stateless" or "identity")
+        {
+            Assert.AreSame(source.GetType("PublicContext.Helper"), target.DeclaringType);
+        }
+        else
+        {
+            Assert.AreSame(edit.Method!.Module.Assembly, target.Module.Assembly);
+        }
+
+        if (shape == "generic")
+        {
+            Assert.AreSame(edit.Method!.DeclaringType, Assert.ContainsSingle(target.GetGenericArguments()));
+        }
+
+        if (shape == "signature")
+        {
+            Assert.AreSame(edit.Method!.DeclaringType, Assert.ContainsSingle(target.GetParameters()).ParameterType);
+        }
     }
 
     private Task<ComparisonReply> Run(Session session, string command) =>

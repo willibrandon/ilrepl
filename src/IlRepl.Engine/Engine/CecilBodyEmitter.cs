@@ -10,11 +10,13 @@ using EmitOpCodes = System.Reflection.Emit.OpCodes;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Emits a validated body into a Cecil method: the same entries the <c>ILGenerator</c> path
-/// emits for a cell, with the structured exception blocks turned into handler ranges and the
-/// <c>leave</c>, <c>endfinally</c>, and <c>endfilter</c> instructions that <c>ILGenerator</c>
-/// inserts at block boundaries written out explicitly.
+/// Emits a validated body into a Cecil method.
 /// </summary>
+/// <remarks>
+/// It emits the same entries the <c>ILGenerator</c> path emits for a cell. The structured exception blocks are turned into handler ranges,
+/// and the <c>leave</c>, <c>endfinally</c>, and <c>endfilter</c> instructions that <c>ILGenerator</c> inserts at block boundaries are
+/// written out explicitly.
+/// </remarks>
 public static class CecilBodyEmitter
 {
     /// <summary>
@@ -205,7 +207,8 @@ public static class CecilBodyEmitter
                     Append(_il.Create(op, FieldOperand(instruction)));
                     break;
                 case OperandKind.Method:
-                    Append(_il.Create(op, MethodOperand((ResolvedMethod)instruction.Operand!, callSite: op.Code is Code.Call or Code.Callvirt)));
+                    Append(_il.Create(op,
+                        MethodOperand((ResolvedMethod)instruction.Operand!, callSite: op.Code is Code.Call or Code.Callvirt)));
                     break;
                 case OperandKind.Token:
                     Append(instruction.Operand switch
@@ -217,6 +220,7 @@ public static class CecilBodyEmitter
                         ResolvedMethod r => _il.Create(op, MethodOperand(r, callSite: false)),
                         _ => throw new ReplException("unsupported token operand"),
                     });
+
                     break;
                 case OperandKind.Signature:
                     Append(_il.Create(op, CallSite((CalliSignature)instruction.Operand!)));
@@ -241,6 +245,7 @@ public static class CecilBodyEmitter
                     ExplicitThis = member.ExplicitThis,
                     CallingConvention = member.CallingConvention,
                 };
+
                 foreach (var parameter in member.Parameters)
                 {
                     reference.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
@@ -298,6 +303,7 @@ public static class CecilBodyEmitter
                 ExplicitThis = reference.ExplicitThis,
                 CallingConvention = MethodCallingConvention.VarArg,
             };
+
             foreach (var parameter in reference.Parameters)
             {
                 site.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
@@ -362,7 +368,8 @@ public static class CecilBodyEmitter
             {
                 site.HasThis = signature.ManagedConvention.HasFlag(CallingConventions.HasThis);
                 site.ExplicitThis = signature.ManagedConvention.HasFlag(CallingConventions.ExplicitThis);
-                site.CallingConvention = signature.ManagedConvention.HasFlag(CallingConventions.VarArgs) ? MethodCallingConvention.VarArg : MethodCallingConvention.Default;
+                site.CallingConvention = signature.ManagedConvention.HasFlag(CallingConventions.VarArgs) ? MethodCallingConvention.VarArg
+                    : MethodCallingConvention.Default;
             }
 
             if (exact is not null)
@@ -412,7 +419,13 @@ public static class CecilBodyEmitter
                     break;
                 case BlockKind.Catch:
                     LeaveCurrent();
-                    _frames[^1].Handlers.Add(new Handler { Kind = BlockKind.Catch, CatchType = writer.Import(map.Map(entry.CatchType ?? typeof(object))), Start = Mark() });
+                    _frames[^1].Handlers.Add(new Handler
+                    {
+                        Kind = BlockKind.Catch,
+                        CatchType = writer.Import(map.Map(entry.CatchType ?? typeof(object))),
+                        Start = Mark(),
+                    });
+
                     break;
                 case BlockKind.Filter:
                     LeaveCurrent();
@@ -549,6 +562,7 @@ public static class CecilBodyEmitter
                         CatchType = handler.CatchType,
                         FilterStart = handler.FilterStart?.Target,
                     };
+
                     method.Body.ExceptionHandlers.Add(cecil);
                 }
             }

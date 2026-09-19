@@ -21,6 +21,7 @@ internal static class SymbolArrayMethods
             CreateMethod(array, "Address", TypeSymbol.ByRef(array.Element!), indices),
             CreateMethod(array, ".ctor", TypeSymbol.Void, indices),
         };
+
         if (array.Kind == TypeSymbolKind.Array)
         {
             methods.Add(CreateMethod(array, ".ctor", TypeSymbol.Void, [.. indices, .. indices]));
@@ -39,7 +40,10 @@ internal static class SymbolArrayMethods
         return methods;
     }
 
-    private static MethodSymbol CreateMethod(TypeSymbol owner, string name, TypeSymbol result,
+    private static MethodSymbol CreateMethod(
+        TypeSymbol owner,
+        string name,
+        TypeSymbol result,
         IReadOnlyList<ParameterSymbol> parameters) => new()
     {
         Definition = RuntimeDefinitions.OfDeclaration(new object(), 0),

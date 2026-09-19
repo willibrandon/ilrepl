@@ -27,8 +27,13 @@ public sealed partial class SatelliteAssemblyTests
         if (directory is not null)
         {
             foreach (var versioned in new[] { false, true })
+            {
                 foreach (var lowercase in new[] { false, true })
+                {
                     await CaptureUnloadedSatelliteAsync(directory, versioned, lowercase, missing: false);
+                }
+            }
+
             await CaptureUnloadedSatelliteAsync(directory, versioned: true, lowercase: false, missing: true);
             return;
         }
@@ -42,6 +47,7 @@ public sealed partial class SatelliteAssemblyTests
                 FileName = Environment.ProcessPath!, WorkingDirectory = AppContext.BaseDirectory,
                 RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false,
             };
+
             start.ArgumentList.Add("--filter");
             start.ArgumentList.Add("FullyQualifiedName~SatelliteAssemblyTests.Compare_UnloadedSatelliteFilesRetainCapturedContext");
             start.Environment[UnloadedProbeDirectory] = directory;
@@ -64,12 +70,16 @@ public sealed partial class SatelliteAssemblyTests
 
             var packages = Directory.GetFiles(directory, "*.package.json");
             Assert.HasCount(5, packages);
-            foreach (var file in packages) await ChangeUnloadedSatelliteAsync(file);
+            foreach (var file in packages)
+            {
+                await ChangeUnloadedSatelliteAsync(file);
+            }
         }
         finally
         {
             Directory.Delete(directory, recursive: true);
         }
+
         Assert.IsFalse(Directory.Exists(directory));
     }
 
@@ -83,7 +93,11 @@ public sealed partial class SatelliteAssemblyTests
         Directory.CreateDirectory(satelliteDirectory);
         var satellitePath = Path.Combine(satelliteDirectory, fixture.Name + ".resources.dll");
         File.WriteAllBytes(sourcePath, fixture.Source);
-        if (!missing) File.WriteAllBytes(satellitePath, fixture.Satellite);
+        if (!missing)
+        {
+            File.WriteAllBytes(satellitePath, fixture.Satellite);
+        }
+
         var session = new Session();
         var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(sourcePath);
         session.Resolver.Load(assembly.FullName!);
@@ -106,6 +120,7 @@ public sealed partial class SatelliteAssemblyTests
                 Assert.AreEqual(43, edit.Method!.Invoke(null, null));
                 AssertNotLoaded();
             }
+
             File.WriteAllBytes(satellitePath, fixture.Satellite);
         }
 
@@ -178,6 +193,7 @@ public sealed partial class SatelliteAssemblyTests
             await AssertUnloadedSetupFailureAsync(package, "the original assembly file is unavailable", capturedPath);
             Assert.IsFalse(File.Exists(path));
         }
+
         Assert.AreSequenceEqual(parent.Image, File.ReadAllBytes(parent.OriginalLocation!));
     }
 

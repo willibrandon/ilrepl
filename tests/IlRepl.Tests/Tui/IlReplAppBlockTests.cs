@@ -1,3 +1,4 @@
+using System.Text;
 using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
@@ -21,9 +22,11 @@ public sealed class IlReplAppBlockTests
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
-    /// A block comment that spans lines inside a method is one comment: the text after its close
-    /// delimiter is the instruction, and the method compiles and runs.
+    /// A block comment that spans lines inside a method is one comment, and the method compiles and runs.
     /// </summary>
+    /// <remarks>
+    /// The text after its close delimiter is the instruction.
+    /// </remarks>
     [TestMethod]
     public async Task TypeBlock_WithMultiLineComment_Compiles()
     {
@@ -45,7 +48,8 @@ public sealed class IlReplAppBlockTests
         await AppTest.TypeLinesAsync(auto, ["call int32 F()", "ret"], ct);
         await auto.WaitUntilTextAsync("= 1 : int32");
 
-        Assert.AreSequenceEqual(["il[1]> .method int32 F() {", "il[1]>   /* open", "il[1]>   still */ ldc.i4.1", "il[1]>   ret", "il[1]> }", "il[2]> call int32 F()", "il[2]> ret"], AppTest.Echoes(transcript));
+        Assert.AreSequenceEqual(["il[1]> .method int32 F() {", "il[1]>   /* open", "il[1]>   still */ ldc.i4.1", "il[1]>   ret", "il[1]> }",
+            "il[2]> call int32 F()", "il[2]> ret"], AppTest.Echoes(transcript));
         Assert.DoesNotContain(l => l.Kind == LineKind.Error, transcript.Lines);
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -97,7 +101,8 @@ public sealed class IlReplAppBlockTests
         await auto.LeftAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 7 + ".method void F() {".Length, 0), description: "caret before nop");
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.PromptRow(s, 1) == "  ...>   nop" && AppTest.CaretAt(s, 9, 1), description: "nop moved to an indented line with the caret before it");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.PromptRow(s, 1) == "  ...>   nop"
+            && AppTest.CaretAt(s, 9, 1), description: "nop moved to an indented line with the caret before it");
         await auto.WaitUntilTextAsync("editing 2 lines");
         Assert.IsEmpty(AppTest.Echoes(transcript));
 
@@ -120,9 +125,11 @@ public sealed class IlReplAppBlockTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, [".method void F() {", "/* a"], ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 1) == "  ...>   /* a" && AppTest.CaretAt(s, 9, 2), description: "the comment line is indented and the next line copies its indentation");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 1) == "  ...>   /* a" && AppTest.CaretAt(s, 9, 2),
+            description: "the comment line is indented and the next line copies its indentation");
         await auto.TypeAsync("}", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...>   }" && AppTest.CaretAt(s, 10, 2), description: "the brace stays indented inside the comment");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...>   }" && AppTest.CaretAt(s, 10, 2),
+            description: "the brace stays indented inside the comment");
         await auto.WaitUntilTextAsync("Enter continues");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -144,12 +151,14 @@ public sealed class IlReplAppBlockTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, [".method void F() {", "nop"], ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 1) == "  ...>   nop" && AppTest.CaretAt(s, 9, 2), description: "an indented blank third line");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 1) == "  ...>   nop" && AppTest.CaretAt(s, 9, 2),
+            description: "an indented blank third line");
         await auto.TypeAsync("}", ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...> }" && AppTest.CaretAt(s, 8, 2), description: "the brace dedents");
         await auto.WaitUntilTextAsync("Enter sends 3 lines");
         await auto.Ctrl().KeyAsync(Hex1bKey.Z, ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...>" && AppTest.CaretAt(s, 9, 2), description: "undo restores the indentation and the caret after it");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...>" && AppTest.CaretAt(s, 9, 2),
+            description: "undo restores the indentation and the caret after it");
         await auto.WaitUntilTextAsync("Enter continues");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -177,7 +186,8 @@ public sealed class IlReplAppBlockTests
         await auto.Ctrl().KeyAsync(Hex1bKey.Z, ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...>" && AppTest.CaretAt(s, 9, 2), description: "undone");
         await auto.Ctrl().KeyAsync(Hex1bKey.Y, ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...> }" && AppTest.CaretAt(s, 8, 2), description: "redo brings the dedented brace back");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 2) == "  ...> }" && AppTest.CaretAt(s, 8, 2),
+            description: "redo brings the dedented brace back");
         await auto.WaitUntilTextAsync("Enter sends 3 lines");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -185,9 +195,11 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// Exception regions nest like the listings show them: each open brace steps in by two, and a
-    /// close brace steps out before the rest of its line.
+    /// Exception regions nest like the listings show them: each open brace steps in by two.
     /// </summary>
+    /// <remarks>
+    /// A close brace steps out before the rest of its line.
+    /// </remarks>
     [TestMethod]
     public async Task Nested_TryCatch_IndentsLikeShow()
     {
@@ -199,7 +211,9 @@ public sealed class IlReplAppBlockTests
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
 
         await auto.WaitUntilTextAsync("il[1]>");
-        await AppTest.TypeLinesAsync(auto, [".method void F() {", ".try {", "nop", "leave.s L", "} catch [System.Runtime]System.Exception {", "pop", "leave.s L", "}", "L: ret"], ct);
+        await AppTest.TypeLinesAsync(auto,
+            [".method void F() {", ".try {", "nop", "leave.s L", "} catch [System.Runtime]System.Exception {", "pop", "leave.s L", "}",
+            "L: ret"], ct);
         await auto.TypeAsync("}", ct: ct);
         string[] rows =
         [
@@ -220,11 +234,13 @@ public sealed class IlReplAppBlockTests
             var visible = s.Height - 1 - AppTest.PromptTop(s);
             return visible > 4 && rows.TakeLast(visible).Select((r, i) => AppTest.PromptRow(s, i) == r).All(b => b);
         }, description: "every row sits at its region's depth");
+
         await auto.WaitUntilTextAsync("Enter sends 10 lines");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("end of method F");
         Assert.DoesNotContain(l => l.Kind == LineKind.Error, transcript.Lines);
-        Assert.AreSequenceEqual(rows.Select(r => "il[1]> " + r[7..]).ToList(), AppTest.Echoes(transcript), "the echo keeps the indentation the editor gave each line");
+        Assert.AreSequenceEqual(rows.Select(r => "il[1]> " + r[7..]).ToList(), AppTest.Echoes(transcript),
+            "the echo keeps the indentation the editor gave each line");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -281,7 +297,8 @@ public sealed class IlReplAppBlockTests
         await auto.HomeAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 7, 0), description: "caret at the start of the first line");
         await auto.Shift().KeyAsync(Hex1bKey.DownArrow, ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 7, 1) && s.GetCell(8, AppTest.PromptTop(s)).Background is not null && s.GetCell(9, AppTest.PromptTop(s) + 1).Background is null, description: "the first line is selected and the second is not");
+        await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 7, 1) && s.GetCell(8, AppTest.PromptTop(s)).Background is not null
+            && s.GetCell(9, AppTest.PromptTop(s) + 1).Background is null, description: "the first line is selected and the second is not");
         await auto.WaitUntilTextAsync("editing 2 lines");
         Assert.IsFalse(terminal.CreateSnapshot().ContainsText("y yank"), "the transcript's copy mode must not start");
 
@@ -312,7 +329,8 @@ public sealed class IlReplAppBlockTests
         await auto.Shift().KeyAsync(Hex1bKey.DownArrow, ct: ct);
         await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 7, 1), description: "the first line is selected");
         await auto.TypeAsync("q", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q  nop" && !s.ContainsText("...>"), description: "the selection is replaced by the typed character");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q  nop" && !s.ContainsText("...>"),
+            description: "the selection is replaced by the typed character");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -341,12 +359,14 @@ public sealed class IlReplAppBlockTests
         await auto.Shift().KeyAsync(Hex1bKey.DownArrow, ct: ct);
         await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 7, 1), description: "the first line is selected");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
-        await auto.WaitUntilAsync(_ => recorder.Output.Contains("\x1b]52;c;", StringComparison.Ordinal), description: "the terminal is asked to copy");
+        await auto.WaitUntilAsync(_ => recorder.Output.Contains("\x1b]52;c;", StringComparison.Ordinal),
+            description: "the terminal is asked to copy");
         var payload = recorder.Output[(recorder.Output.LastIndexOf("\x1b]52;c;", StringComparison.Ordinal) + 7)..];
         payload = payload[..payload.IndexOfAny(['\x07', '\x1b'])];
-        var copied = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+        var copied = Encoding.UTF8.GetString(Convert.FromBase64String(payload));
         Assert.AreEqual(".method void F() {\n", copied);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.PromptRow(s, 1) == "  ...>   nop", description: "the buffer is untouched");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.PromptRow(s, 1) == "  ...>   nop",
+            description: "the buffer is untouched");
         Assert.IsFalse(run.IsCompleted, "Ctrl+C with a selection copies; it does not quit");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -400,16 +420,21 @@ public sealed class IlReplAppBlockTests
         await AppTest.TypeLinesAsync(auto, ["nop"], ct);
         await auto.WaitUntilTextAsync("il[1]> nop");
         await AppTest.TypeLinesAsync(auto, [".method void F() {", "ldc.i4 1"], ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 3 lines") && AppTest.CaretAt(s, 9, 2), description: "three lines with the caret on the third");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 3 lines") && AppTest.CaretAt(s, 9, 2),
+            description: "three lines with the caret on the third");
 
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.CaretLine(s) == 1 && s.ContainsText("editing 3 lines"), description: "Up moves to the second line and recalls nothing");
+        await auto.WaitUntilAsync(s => AppTest.CaretLine(s) == 1 && s.ContainsText("editing 3 lines"),
+            description: "Up moves to the second line and recalls nothing");
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.CaretLine(s) == 0 && s.ContainsText("editing 3 lines"), description: "Up moves to the first line");
+        await auto.WaitUntilAsync(s => AppTest.CaretLine(s) == 0 && s.ContainsText("editing 3 lines"),
+            description: "Up moves to the first line");
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop" && !s.ContainsText("editing"), description: "Up on the first line recalls the previous entry");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop" && !s.ContainsText("editing"),
+            description: "Up on the first line recalls the previous entry");
         await auto.DownAsync(ct: ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 3 lines") && AppTest.PromptRow(s, 1) == "  ...>   ldc.i4 1", description: "Down on the last line goes forward to the draft");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 3 lines") && AppTest.PromptRow(s, 1) == "  ...>   ldc.i4 1",
+            description: "Down on the last line goes forward to the draft");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -436,7 +461,8 @@ public sealed class IlReplAppBlockTests
         await auto.UpAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.CaretLine(s) == 1, description: "the caret is on the middle line");
         await auto.Ctrl().KeyAsync(Hex1bKey.P, ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop" && !s.ContainsText("editing"), description: "Ctrl+P recalls from the middle");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop" && !s.ContainsText("editing"),
+            description: "Ctrl+P recalls from the middle");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -486,12 +512,14 @@ public sealed class IlReplAppBlockTests
         await auto.WaitUntilTextAsync("opcodes 1/11");
         await auto.WaitUntilNoTextAsync("Enter accepts");
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Contains("il[1]> ldc.i4.") && transcript.Lines.Any(l => l.Kind == LineKind.Error), description: "the text went to the engine, which refused it");
+        await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Contains("il[1]> ldc.i4.")
+            && transcript.Lines.Any(l => l.Kind == LineKind.Error), description: "the text went to the engine, which refused it");
 
         // A refused line on its own is not put back; Up recalls it and Ctrl+C clears it again.
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "the prompt is empty after the refusal");
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldc.i4.", StringComparison.Ordinal), description: "Up recalls the refused line");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldc.i4.", StringComparison.Ordinal),
+            description: "Up recalls the refused line");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "Ctrl+C clears it in one press");
         Assert.IsFalse(run.IsCompleted);
@@ -520,7 +548,8 @@ public sealed class IlReplAppBlockTests
         await auto.WaitUntilTextAsync("❯ ldc.i4.1");
         await auto.WaitUntilTextAsync("Enter accepts");
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4.1" && !s.ContainsText("opcodes"), description: "the opcode is in the buffer and the palette is closed");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4.1" && !s.ContainsText("opcodes"),
+            description: "the opcode is in the buffer and the palette is closed");
         Assert.IsEmpty(AppTest.Echoes(transcript), "accepting a completion sends nothing");
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("[int32]");
@@ -546,7 +575,8 @@ public sealed class IlReplAppBlockTests
         await AppTest.TypeLinesAsync(auto, [".method void F() {", "nop", "nop"], ct);
         await auto.WaitUntilAsync(s => s.ContainsText("editing 4 lines") && PromptRows(s) == 4, description: "four lines take four rows");
         await AppTest.TypeLinesAsync(auto, Enumerable.Repeat("nop", 8), ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 12 lines") && PromptRows(s) == 10 && AppTest.CaretAt(s, 9, 9), description: "twelve lines take ten rows, a third of thirty, with the caret on the last");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 12 lines") && PromptRows(s) == 10 && AppTest.CaretAt(s, 9, 9),
+            description: "twelve lines take ten rows, a third of thirty, with the caret on the last");
         Assert.IsFalse(terminal.CreateSnapshot().ContainsText("il[1]>"), "the first line has scrolled out of the editor");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -568,7 +598,9 @@ public sealed class IlReplAppBlockTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await AppTest.TypeLinesAsync(auto, ["nop"], ct);
-        await auto.WaitUntilAsync(s => s.FindText("il[1]> nop") is [var hit] && Equals(s.GetCell(hit.Column + 7, hit.Line).Foreground, SpanPalette.Color(SpanStyle.Opcode)), description: "the echoed opcode is in the opcode colour");
+        await auto.WaitUntilAsync(s => s.FindText("il[1]> nop") is [var hit]
+            && Equals(s.GetCell(hit.Column + 7, hit.Line).Foreground, SpanPalette.Color(SpanStyle.Opcode)),
+            description: "the echoed opcode is in the opcode colour");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -589,7 +621,10 @@ public sealed class IlReplAppBlockTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync("nop", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop" && Equals(s.GetCell(7, AppTest.PromptTop(s)).Foreground, SpanPalette.Color(SpanStyle.Opcode)) && (s.GetCell(7, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) == 0, description: "the typed opcode is in the opcode colour");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop"
+            && Equals(s.GetCell(7, AppTest.PromptTop(s)).Foreground, SpanPalette.Color(SpanStyle.Opcode))
+            && (s.GetCell(7, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) == 0,
+            description: "the typed opcode is in the opcode colour");
         Assert.IsEmpty(AppTest.Echoes(transcript));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -611,7 +646,11 @@ public sealed class IlReplAppBlockTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync("nopq ", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nopq" && (s.GetCell(7, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) != 0 && (s.GetCell(10, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) != 0 && (s.GetCell(11, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) == 0, description: "the unknown word is underlined");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nopq"
+            && (s.GetCell(7, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) != 0
+            && (s.GetCell(10, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) != 0
+            && (s.GetCell(11, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) == 0,
+            description: "the unknown word is underlined");
         Assert.IsEmpty(AppTest.Echoes(transcript));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -637,7 +676,8 @@ public sealed class IlReplAppBlockTests
         await auto.WaitUntilTextAsync("editing 2 lines");
         await auto.WaitUntilTextAsync("Ctrl+C clears");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && !s.ContainsText("editing") && !s.ContainsText("...>"), description: "the buffer is cleared");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && !s.ContainsText("editing") && !s.ContainsText("...>"),
+            description: "the buffer is cleared");
         Assert.IsFalse(run.IsCompleted, "clearing does not quit");
         Assert.IsEmpty(AppTest.Echoes(transcript), "nothing went to the engine");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
@@ -668,9 +708,12 @@ public sealed class IlReplAppBlockTests
         await auto.WaitUntilTextAsync("history is not being saved: history.lock is held by another process");
         await AppTest.TypeLinesAsync(auto, ["nop"], ct);
         await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Count == 2, description: "the second line goes by");
-        Assert.HasCount(1, transcript.Lines.Where(l => l.PlainText.Contains("history is not being saved", StringComparison.Ordinal)).ToList(), "the problem is reported once");
+        Assert.HasCount(1,
+            transcript.Lines.Where(l => l.PlainText.Contains("history is not being saved", StringComparison.Ordinal)).ToList(),
+            "the problem is reported once");
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.Row(s, s.Height - 3) == "il[1]> nop" || s.ContainsText("il[1]> nop"), description: "recall still works in memory");
+        await auto.WaitUntilAsync(s => AppTest.Row(s, s.Height - 3) == "il[1]> nop" || s.ContainsText("il[1]> nop"),
+            description: "recall still works in memory");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -692,9 +735,11 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// A method whose brace comes on the next line is one block: Enter continues from the header
-    /// until the close, and the engine takes the brace as the header's own.
+    /// A method whose brace comes on the next line is one block: Enter continues from the header until the close.
     /// </summary>
+    /// <remarks>
+    /// The engine takes the brace as the header's own.
+    /// </remarks>
     [TestMethod]
     public async Task TypeMethod_BraceOnNextLine_SendsAtClose()
     {
@@ -710,7 +755,8 @@ public sealed class IlReplAppBlockTests
         await auto.WaitUntilTextAsync("Enter continues");
         await auto.EnterAsync(ct: ct);
         await AppTest.TypeLinesAsync(auto, ["{", "ldc.i4 1", "ret"], ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 1) == "  ...> {" && AppTest.PromptRow(s, 2) == "  ...>   ldc.i4 1", description: "the brace opens the body's indentation");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 1) == "  ...> {" && AppTest.PromptRow(s, 2) == "  ...>   ldc.i4 1",
+            description: "the brace opens the body's indentation");
         await auto.TypeAsync("}", ct: ct);
         await auto.WaitUntilTextAsync("Enter sends 5 lines");
         await auto.EnterAsync(ct: ct);
@@ -752,7 +798,8 @@ public sealed class IlReplAppBlockTests
         await auto.BackspaceAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "empty again");
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop", description: "the line typed before the load is the newest entry");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop",
+            description: "the line typed before the load is the newest entry");
         await auto.UpAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 1", description: "the stored entry is before it");
 
@@ -761,10 +808,11 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// A store that wrote for an earlier session in the same process, as the browser's does, does
-    /// not count those writes as this session's: a line submitted before the load answers stays
-    /// recallable once it does.
+    /// A store that wrote for an earlier session in the same process does not count those writes as this session's.
     /// </summary>
+    /// <remarks>
+    /// The browser's store writes that way. A line submitted before the load answers stays recallable once it does.
+    /// </remarks>
     [TestMethod]
     public async Task History_EarlierSessionsWrites_DoNotClaimTheNewLine()
     {
@@ -789,15 +837,15 @@ public sealed class IlReplAppBlockTests
         await auto.UpAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop", description: "the new line is the newest entry");
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> earlier", description: "the earlier session's entry is before it");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> earlier",
+            description: "the earlier session's entry is before it");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
     }
 
     /// <summary>
-    /// A brace in a command's argument opens no block: Enter sends the command, which the engine
-    /// answers, and the prompt is empty again.
+    /// A brace in a command's argument opens no block: Enter sends the command, which the engine answers, and the prompt is empty again.
     /// </summary>
     [TestMethod]
     public async Task Command_WithABraceInItsArgument_GoesOnEnter()
@@ -811,10 +859,13 @@ public sealed class IlReplAppBlockTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync(".load /nowhere/cell{draft.dll", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .load /nowhere/cell{draft.dll" && !s.ContainsText("Enter continues"), description: "the brace opens nothing");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .load /nowhere/cell{draft.dll"
+            && !s.ContainsText("Enter continues"), description: "the brace opens nothing");
         await auto.EnterAsync(ct: ct);
-        await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Contains("il[1]> .load /nowhere/cell{draft.dll") && transcript.Lines.Any(l => l.Kind == LineKind.Error), description: "the command went and was answered");
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && !s.ContainsText("open block"), description: "the prompt is empty and no block is open");
+        await auto.WaitUntilAsync(_ => AppTest.Echoes(transcript).Contains("il[1]> .load /nowhere/cell{draft.dll")
+            && transcript.Lines.Any(l => l.Kind == LineKind.Error), description: "the command went and was answered");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && !s.ContainsText("open block"),
+            description: "the prompt is empty and no block is open");
         Assert.AreEqual(0, engine.Status.OpenDepth);
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
@@ -822,9 +873,11 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// A comment before the header does not change what the header is: the block waits for its
-    /// brace, a refused body line brings the whole block back, and the correction commits it.
+    /// A comment before the header does not change what the header is: the block waits for its brace.
     /// </summary>
+    /// <remarks>
+    /// A refused body line brings the whole block back, and the correction commits it.
+    /// </remarks>
     [TestMethod]
     public async Task TypeMethod_CommentBeforeHeader_RecoversWhole()
     {
@@ -845,7 +898,9 @@ public sealed class IlReplAppBlockTests
         await auto.EnterAsync(ct: ct);
         await auto.WaitUntilTextAsync("unknown opcode 'lcd.i4'");
         await auto.WaitUntilTextAsync("method F abandoned; the block is back in the editor");
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 5 lines") && AppTest.PromptRow(s, 0) == "il[1]> /* note */ .method int32 F()" && AppTest.PromptRow(s, 2) == "  ...>   lcd.i4 1" && AppTest.CaretLine(s) == 2, description: "the whole block is back with the refused line selected");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 5 lines")
+            && AppTest.PromptRow(s, 0) == "il[1]> /* note */ .method int32 F()" && AppTest.PromptRow(s, 2) == "  ...>   lcd.i4 1"
+            && AppTest.CaretLine(s) == 2, description: "the whole block is back with the refused line selected");
         Assert.AreEqual(0, engine.Status.OpenDepth);
         Assert.IsNull(engine.Status.OpenMethod);
         await auto.TypeAsync("  ldc.i4 1", ct: ct);
@@ -901,8 +956,7 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// A space after the first word moves the caret into the operand: the palette closes and Up
-    /// walks history again.
+    /// A space after the first word moves the caret into the operand: the palette closes and Up walks history again.
     /// </summary>
     [TestMethod]
     public async Task Palette_ClosesAfterOperandSpace()
@@ -922,7 +976,8 @@ public sealed class IlReplAppBlockTests
         await auto.TypeAsync(" ", ct: ct);
         await auto.WaitUntilNoTextAsync("opcodes");
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop", description: "Up recalls history rather than moving the palette");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> nop",
+            description: "Up recalls history rather than moving the palette");
         await auto.DownAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4.", description: "Down brings the draft back");
         Assert.IsFalse(terminal.CreateSnapshot().ContainsText("opcodes"), "the palette stays closed while the caret is past the word");
@@ -947,9 +1002,12 @@ public sealed class IlReplAppBlockTests
 
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync("ld", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ld", StringComparison.Ordinal) && AppTest.PromptRow(s, 0).Length > "il[1]> ld".Length && AppTest.CaretAt(s, 9, 0), description: "a suggestion follows the typed text and the caret stays after it");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ld", StringComparison.Ordinal)
+            && AppTest.PromptRow(s, 0).Length > "il[1]> ld".Length && AppTest.CaretAt(s, 9, 0),
+            description: "a suggestion follows the typed text and the caret stays after it");
         await auto.TypeAsync("c", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldc", StringComparison.Ordinal) && AppTest.CaretAt(s, 10, 0), description: "the caret moves by one, as typed");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ldc", StringComparison.Ordinal)
+            && AppTest.CaretAt(s, 10, 0), description: "the caret moves by one, as typed");
         await auto.RightAsync(ct: ct);
         await auto.WaitUntilAsync(s => prompt.Text == "ldc.i4 " && AppTest.CaretAt(s, 7 + prompt.Text.Length, 0),
             description: "Right accepts the opcode and its operand space, with the caret at the end");
@@ -959,9 +1017,11 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// A first word still being typed is not underlined while it can still become a known word;
-    /// it is underlined once nothing begins with it, or once the caret leaves it unfinished.
+    /// A first word still being typed is not underlined while it can still become a known word.
     /// </summary>
+    /// <remarks>
+    /// It is underlined once nothing begins with it, or once the caret leaves it unfinished.
+    /// </remarks>
     [TestMethod]
     public async Task Buffer_WordBeingTyped_IsUnderlinedOnlyOnceItCannotComplete()
     {
@@ -971,21 +1031,27 @@ public sealed class IlReplAppBlockTests
         await using var terminal = AppTest.Build(engine, transcript);
         var run = terminal.RunAsync(ct);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
-        static bool Underlined(Hex1bTerminalSnapshot s, int x) => (s.GetCell(x, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) != 0;
+        static bool Underlined(Hex1bTerminalSnapshot s, int x) =>
+            (s.GetCell(x, AppTest.PromptTop(s)).Attributes & CellAttributes.Underline) != 0;
 
         await auto.WaitUntilTextAsync("il[1]>");
         await auto.TypeAsync("l", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> l", StringComparison.Ordinal) && AppTest.CaretAt(s, 8, 0) && !Underlined(s, 7), description: "a letter that starts many opcodes is not wrong yet");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> l", StringComparison.Ordinal) && AppTest.CaretAt(s, 8, 0)
+            && !Underlined(s, 7), description: "a letter that starts many opcodes is not wrong yet");
         await auto.TypeAsync("c", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> lc" && Underlined(s, 7) && Underlined(s, 8), description: "nothing begins with lc, so it is wrong already");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> lc" && Underlined(s, 7) && Underlined(s, 8),
+            description: "nothing begins with lc, so it is wrong already");
         await auto.BackspaceAsync(ct: ct);
         await auto.TypeAsync("d", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ld", StringComparison.Ordinal) && AppTest.CaretAt(s, 9, 0) && !Underlined(s, 7) && !Underlined(s, 8), description: "ld can still become ldc.i4");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0).StartsWith("il[1]> ld", StringComparison.Ordinal)
+            && AppTest.CaretAt(s, 9, 0) && !Underlined(s, 7) && !Underlined(s, 8), description: "ld can still become ldc.i4");
         await auto.TypeAsync(" ", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ld" && Underlined(s, 7) && Underlined(s, 8), description: "left unfinished, the word is wrong");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ld" && Underlined(s, 7) && Underlined(s, 8),
+            description: "left unfinished, the word is wrong");
         await auto.BackspaceAsync(ct: ct);
         await auto.TypeAsync("c.i4 1", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 1" && !Underlined(s, 7) && !Underlined(s, 12), description: "a known opcode is not underlined");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 1" && !Underlined(s, 7) && !Underlined(s, 12),
+            description: "a known opcode is not underlined");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
         await run;
@@ -1025,10 +1091,11 @@ public sealed class IlReplAppBlockTests
     }
 
     /// <summary>
-    /// Ctrl+U cuts the current line from the caret back to its start and leaves the caret there;
-    /// at the start of a line it joins the line to the one above, the other lines stay, and undo
-    /// puts each step back.
+    /// Ctrl+U cuts the current line from the caret back to its start and leaves the caret there.
     /// </summary>
+    /// <remarks>
+    /// At the start of a line it joins the line to the one above, the other lines stay, and undo puts each step back.
+    /// </remarks>
     [TestMethod]
     public async Task CtrlU_DeletesToTheStartOfTheLine()
     {
@@ -1044,34 +1111,45 @@ public sealed class IlReplAppBlockTests
         await auto.LeftAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 15, 0), description: "the caret sits before the last digit");
         await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> 2" && AppTest.CaretAt(s, 7, 0), description: "the text before the caret is gone and the caret is at the start");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> 2" && AppTest.CaretAt(s, 7, 0),
+            description: "the text before the caret is gone and the caret is at the start");
         await auto.Ctrl().KeyAsync(Hex1bKey.Z, ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 12" && AppTest.CaretAt(s, 15, 0) && s.GetCell(8, AppTest.PromptTop(s)).Background is null, description: "undo puts the line back with the caret where it was and nothing selected");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> ldc.i4 12" && AppTest.CaretAt(s, 15, 0)
+            && s.GetCell(8, AppTest.PromptTop(s)).Background is null,
+            description: "undo puts the line back with the caret where it was and nothing selected");
         await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
         await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
         await auto.TypeAsync("q", ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q2" && AppTest.CaretAt(s, 8, 0), description: "at the start of the only line, Ctrl+U does nothing and the text after the caret stays");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> q2" && AppTest.CaretAt(s, 8, 0),
+            description: "at the start of the only line, Ctrl+U does nothing and the text after the caret stays");
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: ct);
         await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>", description: "cleared");
 
         await AppTest.TypeLinesAsync(auto, [".method void F() {", "ldarg n"], ct);
         await auto.TypeAsync("nop", ct: ct);
         await auto.UpAsync(ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.CaretLine(s) == 1 && AppTest.PromptRow(s, 1) == "  ...>   ldarg n", description: "the caret is on the middle line");
+        await auto.WaitUntilAsync(s => AppTest.CaretLine(s) == 1 && AppTest.PromptRow(s, 1) == "  ...>   ldarg n",
+            description: "the caret is on the middle line");
         await auto.EndAsync(ct: ct);
         await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.PromptRow(s, 1) == "  ...>" && AppTest.PromptRow(s, 2) == "  ...>   nop" && AppTest.CaretAt(s, 7, 1), description: "only the current line is cut");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.PromptRow(s, 1) == "  ...>"
+            && AppTest.PromptRow(s, 2) == "  ...>   nop" && AppTest.CaretAt(s, 7, 1), description: "only the current line is cut");
         await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 0) == "il[1]> .method void F() {" && AppTest.PromptRow(s, 1) == "  ...>   nop" && AppTest.CaretAt(s, 7 + ".method void F() {".Length, 0), description: "at the start of a line, Ctrl+U joins it to the line above");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 0) == "il[1]> .method void F() {"
+            && AppTest.PromptRow(s, 1) == "  ...>   nop" && AppTest.CaretAt(s, 7 + ".method void F() {".Length, 0),
+            description: "at the start of a line, Ctrl+U joins it to the line above");
         await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
-        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && AppTest.PromptRow(s, 1) == "  ...>   nop" && AppTest.CaretAt(s, 7, 0), description: "and again cuts that line back to its start");
+        await auto.WaitUntilAsync(s => AppTest.PromptRow(s, 0) == "il[1]>" && AppTest.PromptRow(s, 1) == "  ...>   nop"
+            && AppTest.CaretAt(s, 7, 0), description: "and again cuts that line back to its start");
         await auto.DownAsync(ct: ct);
         await auto.HomeAsync(ct: ct);
         await auto.WaitUntilAsync(s => AppTest.CaretAt(s, 7, 1), description: "at the start of the last line");
         await auto.Ctrl().KeyAsync(Hex1bKey.U, ct: ct);
-        await auto.WaitUntilAsync(s => !s.ContainsText("editing") && AppTest.PromptRow(s, 0) == "il[1]>   nop" && AppTest.CaretAt(s, 7, 0), description: "joining up keeps the rest of the line after the caret");
+        await auto.WaitUntilAsync(s => !s.ContainsText("editing") && AppTest.PromptRow(s, 0) == "il[1]>   nop" && AppTest.CaretAt(s, 7, 0),
+            description: "joining up keeps the rest of the line after the caret");
         await auto.Ctrl().KeyAsync(Hex1bKey.Z, ct: ct);
-        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 1) == "  ...>   nop" && AppTest.CaretAt(s, 7, 1), description: "undo puts the line break back with the caret where it was");
+        await auto.WaitUntilAsync(s => s.ContainsText("editing 2 lines") && AppTest.PromptRow(s, 1) == "  ...>   nop"
+            && AppTest.CaretAt(s, 7, 1), description: "undo puts the line break back with the caret where it was");
         Assert.IsEmpty(AppTest.Echoes(transcript));
 
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);

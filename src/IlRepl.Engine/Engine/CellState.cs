@@ -87,24 +87,33 @@ public sealed class CellState
     }
 
     /// <summary>
-    /// Initializes an empty cell, or the body of a <c>.method</c> when a signature is given. A
-    /// method body names its parameters with <c>ldarg</c>, owns its locals and labels, and checks
-    /// <c>ret</c> against the declared return type.
+    /// Initializes an empty cell, or the body of a <c>.method</c> when a signature is given.
     /// </summary>
+    /// <remarks>
+    /// A method body names its parameters with <c>ldarg</c>, owns its locals and labels, and checks <c>ret</c> against the declared return
+    /// type.
+    /// </remarks>
     /// <param name="resolver">The type resolver.</param>
     /// <param name="generics">The generic parameters in scope for <c>!!N</c>.</param>
     /// <param name="methods">The session methods a call can name without a type.</param>
     /// <param name="signature">The method's signature, or null for the cell.</param>
     /// <param name="braceOpen">For a method body: true when the header line already carried the opening brace.</param>
-    public CellState(TypeResolver resolver, GenericContext generics, IReadOnlyList<MethodSignature> methods, MethodSignature? signature, bool braceOpen)
+    public CellState(
+        TypeResolver resolver,
+        GenericContext generics,
+        IReadOnlyList<MethodSignature> methods,
+        MethodSignature? signature,
+        bool braceOpen)
         : this(resolver, generics, methods, signature, braceOpen, TypeTable.Empty, null)
     {
     }
 
     /// <summary>
-    /// Initializes an empty cell, the body of a session method, or the body of a member of a
-    /// type being written. An instance member has <c>this</c> at argument 0.
+    /// Initializes an empty cell, the body of a session method, or the body of a member of a type being written.
     /// </summary>
+    /// <remarks>
+    /// An instance member has <c>this</c> at argument 0.
+    /// </remarks>
     /// <param name="resolver">The type resolver.</param>
     /// <param name="generics">The generic parameters in scope for <c>!N</c> and <c>!!N</c>.</param>
     /// <param name="methods">The session methods a call can name without a type.</param>
@@ -112,7 +121,14 @@ public sealed class CellState
     /// <param name="braceOpen">For a method body: true when the header line already carried the opening brace.</param>
     /// <param name="types">The session types a name can resolve to.</param>
     /// <param name="member">The type this body belongs to, or null for the cell and session methods.</param>
-    public CellState(TypeResolver resolver, GenericContext generics, IReadOnlyList<MethodSignature> methods, MethodSignature? signature, bool braceOpen, TypeTable types, MemberContext? member)
+    public CellState(
+        TypeResolver resolver,
+        GenericContext generics,
+        IReadOnlyList<MethodSignature> methods,
+        MethodSignature? signature,
+        bool braceOpen,
+        TypeTable types,
+        MemberContext? member)
     {
         ArgumentNullException.ThrowIfNull(resolver);
         ArgumentNullException.ThrowIfNull(generics);
@@ -254,10 +270,12 @@ public sealed class CellState
     public bool ReturnsValue => _entries.Any(e => e.Instruction is { Op.Name: "ret", RetPops: 1 });
 
     /// <summary>
-    /// True when the last instruction ends its path (a return, throw, unconditional branch, or
-    /// jump) so nothing falls off the end of the body. A trailing label or block boundary means
-    /// the end is reachable.
+    /// True when the last instruction ends its path, so nothing falls off the end of the body.
     /// </summary>
+    /// <remarks>
+    /// An instruction that ends its path is a return, throw, unconditional branch, or jump. A trailing label or block boundary means the
+    /// end is reachable.
+    /// </remarks>
     public bool LastInstructionEndsFlow
     {
         get
@@ -277,10 +295,12 @@ public sealed class CellState
     };
 
     /// <summary>
-    /// Checks that a <c>.method</c> body can close: every label is defined, and either the last
-    /// instruction ends its path or the stack holds what the return type needs for an implied
-    /// <c>ret</c> (nothing for <c>void</c>, exactly one compatible value otherwise).
+    /// Checks that a <c>.method</c> body can close.
     /// </summary>
+    /// <remarks>
+    /// Every label must be defined, and either the last instruction ends its path or the stack holds what the return type needs for an
+    /// implied <c>ret</c>. That is nothing for <c>void</c> and exactly one compatible value otherwise.
+    /// </remarks>
     /// <exception cref="InvalidOperationException">This is the cell, not a method body.</exception>
     /// <exception cref="ReplException">The body cannot close as it stands.</exception>
     public void ValidateMethodEnd()
@@ -450,6 +470,7 @@ public sealed class CellState
                 Labels = labels,
                 Location = normalized.Location
             });
+
             _definedLabels.UnionWith(labels);
             return new LineResult(LineOutcome.Labels, null, null);
         }
@@ -486,6 +507,7 @@ public sealed class CellState
             Instruction = instruction,
             Location = normalized.Location
         });
+
         _definedLabels.UnionWith(labels);
         return new LineResult(LineOutcome.Instruction, _entries[^1].Instruction, null);
     }
@@ -536,6 +558,7 @@ public sealed class CellState
                 RetBox = !IsMethod && top is { } type && (type.IsValueType || type.IsGenericParameter)
                     && type != typeof(NullReferenceMarker) && StackSimulator.BoxedType(type) is null ? type : null,
             };
+
             _entries[i] = new CellEntry
             {
                 Kind = entry.Kind,
@@ -578,7 +601,8 @@ public sealed class CellState
                 case ".vararg":
                     throw new ReplException("a member is made vararg on its header: .method public vararg ...");
                 case ".typeparams":
-                    throw new ReplException(".typeparams is not allowed inside a method; declare generic parameters on the header: Name<T>(...)");
+                    throw new ReplException(
+                        ".typeparams is not allowed inside a method; declare generic parameters on the header: Name<T>(...)");
                 default:
                     break;
             }
@@ -686,7 +710,9 @@ public sealed class CellState
                 return new LineResult(LineOutcome.Empty, null, null);
 
             default:
-                throw new ReplException($"unknown directive '{directive}'; expected .locals, .args, .typeparams, .typeargs, .vararg, .method, .class, .field, .try, or .maxstack");
+                throw new ReplException(
+                    $"unknown directive '{directive}'; expected .locals, .args, .typeparams, .typeargs, .vararg, .method, .class, " +
+                    $".field, .try, or .maxstack");
         }
     }
 
@@ -715,7 +741,8 @@ public sealed class CellState
         var parameters = Signature!.Parameters;
         if (index < 0 || index > parameters.Count)
         {
-            throw new ReplException($"{Signature.Name} has {parameters.Count} parameter(s); .param takes 0 (the return value) to {parameters.Count}");
+            throw new ReplException(
+                $"{Signature.Name} has {parameters.Count} parameter(s); .param takes 0 (the return value) to {parameters.Count}");
         }
 
         var after = s[(close + 1)..].Trim();
@@ -737,7 +764,15 @@ public sealed class CellState
             hasDefault = true;
         }
 
-        _entries.Add(new CellEntry { Kind = EntryKind.Param, Source = source, ParamIndex = index, ParamDefault = value, ParamHasDefault = hasDefault });
+        _entries.Add(new CellEntry
+        {
+            Kind = EntryKind.Param,
+            Source = source,
+            ParamIndex = index,
+            ParamDefault = value,
+            ParamHasDefault = hasDefault,
+        });
+
         return new LineResult(LineOutcome.Param, null, hasDefault ? $"param {index} = {ConstantText.Describe(value)}" : $"param {index}");
     }
 
@@ -793,7 +828,9 @@ public sealed class CellState
             case FieldInfo field:
                 if (field.IsLiteral && instruction.Op.Name is "ldsfld" or "ldsflda" or "stsfld")
                 {
-                    throw new ReplException($"{field.Name} is a literal; it has no storage, so {instruction.Op.Name} would fail with MissingFieldException at run time. Load its value instead{LiteralHint(field)}");
+                    throw new ReplException(
+                        $"{field.Name} is a literal; it has no storage, so {instruction.Op.Name} would fail with MissingFieldException " +
+                        $"at run time. Load its value instead{LiteralHint(field)}");
                 }
 
                 MemberAccess.CheckType(field.FieldType, scope, Types);
@@ -805,6 +842,7 @@ public sealed class CellState
                 {
                     CheckExactAccess(method.ExactDeclaringType, scope);
                 }
+
                 foreach (var optional in method.ExactOptionalParameterTypes ?? [])
                 {
                     CheckExactAccess(optional, scope);
@@ -848,8 +886,7 @@ public sealed class CellState
     }
 
     /// <summary>
-    /// Judges every member access in the body again, once the declarations it referenced ahead
-    /// of their headers are complete.
+    /// Judges every member access in the body again, once the declarations it referenced ahead of their headers are complete.
     /// </summary>
     /// <param name="types">The table with the final declarations.</param>
     /// <exception cref="ReplException">An access is not allowed.</exception>

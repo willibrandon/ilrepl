@@ -4,9 +4,11 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Puts <c>IgnoresAccessChecksTo</c> on a dynamic assembly for the session assemblies it
-/// references, defining the attribute type in the assembly itself as the runtime expects.
+/// Puts <c>IgnoresAccessChecksTo</c> on a dynamic assembly for the session assemblies it references.
 /// </summary>
+/// <remarks>
+/// It defines the attribute type in the assembly itself, as the runtime expects.
+/// </remarks>
 public static class AccessGrants
 {
     /// <summary>
@@ -25,8 +27,10 @@ public static class AccessGrants
             return;
         }
 
-        var attribute = module.DefineType("System.Runtime.CompilerServices.IgnoresAccessChecksToAttribute", TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed, typeof(Attribute));
-        var ctor = attribute.DefineConstructor(MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, CallingConventions.Standard, [typeof(string)]);
+        var attribute = module.DefineType("System.Runtime.CompilerServices.IgnoresAccessChecksToAttribute",
+            TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed, typeof(Attribute));
+        var ctor = attribute.DefineConstructor(MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName
+            | MethodAttributes.RTSpecialName, CallingConventions.Standard, [typeof(string)]);
         var il = ctor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, typeof(Attribute).GetConstructor(BindingFlags.NonPublic | BindingFlags.Instance, Type.EmptyTypes)!);

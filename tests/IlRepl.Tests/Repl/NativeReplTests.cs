@@ -28,7 +28,11 @@ public sealed class NativeReplTests
         using var files = new SessionWorkspaceFixture();
         using var core = new ReplCore();
         Submit(core, ".method int32 Other() { ldc.i4.7; ret }", ".dis Other");
-        foreach (var line in files.PendingDocument().Entries.SelectMany(entry => entry.Source)) Submit(core, line);
+        foreach (var line in files.PendingDocument().Entries.SelectMany(entry => entry.Source))
+        {
+            Submit(core, line);
+        }
+
         var before = core.Status;
 
         var result = core.Handle(".jit");
@@ -75,7 +79,11 @@ public sealed class NativeReplTests
     {
         using var files = new SessionWorkspaceFixture();
         using var core = new ReplCore();
-        foreach (var line in files.PendingDocument().Entries.SelectMany(entry => entry.Source)) Submit(core, line);
+        foreach (var line in files.PendingDocument().Entries.SelectMany(entry => entry.Source))
+        {
+            Submit(core, line);
+        }
+
         var number = core.Status.CellNumber;
         Submit(core, "ret");
         Assert.AreEqual("executed", File.ReadAllText(files.MarkerPath));
@@ -207,7 +215,10 @@ public sealed class NativeReplTests
         await using var engine = new InProcessEngine();
         var cancellationToken = TestContext.CancellationToken;
         foreach (var line in files.PendingDocument().Entries.SelectMany(entry => entry.Source))
+        {
             Assert.IsTrue((await engine.HandleAsync(line, cancellationToken)).Succeeded);
+        }
+
         var prepared = await engine.HandleAsync(".jit", cancellationToken);
         Assert.IsNotNull(prepared.PendingNative);
 
@@ -253,6 +264,9 @@ public sealed class NativeReplTests
 
     private static void Submit(ReplCore core, params string[] source)
     {
-        foreach (var line in IlLines.Expand(source)) Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + Plain(core));
+        foreach (var line in IlLines.Expand(source))
+        {
+            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + Plain(core));
+        }
     }
 }

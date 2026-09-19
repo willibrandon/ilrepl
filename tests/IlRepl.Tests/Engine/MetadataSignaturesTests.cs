@@ -1,8 +1,10 @@
 using System.Reflection;
 using System.Reflection.Metadata;
+using System.Runtime.CompilerServices;
 using IlRepl.Engine;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+using CallSite = Mono.Cecil.CallSite;
 using FieldDefinition = Mono.Cecil.FieldDefinition;
 using GenericParameter = Mono.Cecil.GenericParameter;
 using MethodDefinition = Mono.Cecil.MethodDefinition;
@@ -11,9 +13,11 @@ using TypeReference = Mono.Cecil.TypeReference;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for <see cref="MetadataSignatures"/>, <see cref="MetadataSignatureProvider"/>, and
-/// <see cref="IlSignatureRenderer"/>: signatures come out of the module's metadata whole.
+/// Tests for <see cref="MetadataSignatures"/>, <see cref="MetadataSignatureProvider"/>, and <see cref="IlSignatureRenderer"/>.
 /// </summary>
+/// <remarks>
+/// Signatures come out of the module's metadata whole.
+/// </remarks>
 [TestClass]
 public sealed class MetadataSignaturesTests
 {
@@ -27,7 +31,8 @@ public sealed class MetadataSignaturesTests
             {
                 return module.ResolveType(token);
             }
-            catch (Exception ex) when (ex is ArgumentException or FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException)
+            catch (Exception ex) when (
+                ex is ArgumentException or FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException)
             {
                 return null;
             }
@@ -52,7 +57,8 @@ public sealed class MetadataSignaturesTests
     {
         var (_, _, fixture) = CecilFixture.Build((module, type) =>
             type.Fields.Add(new FieldDefinition("Data", Mono.Cecil.FieldAttributes.Public | Mono.Cecil.FieldAttributes.Static,
-                new RequiredModifierType(module.ImportReference(typeof(System.Runtime.CompilerServices.IsVolatile)), module.TypeSystem.Int32))));
+                new RequiredModifierType(module.ImportReference(typeof(IsVolatile)),
+                module.TypeSystem.Int32))));
         var signature = Field(fixture, "Data");
         Assert.AreEqual(IlSignatureKind.Modified, signature.Kind);
         Assert.IsTrue(signature.IsRequired);
@@ -79,6 +85,7 @@ public sealed class MetadataSignaturesTests
             type.Fields.Add(new FieldDefinition("Three", Mono.Cecil.FieldAttributes.Public, sized));
             type.Fields.Add(new FieldDefinition("Vector", Mono.Cecil.FieldAttributes.Public, new ArrayType(module.TypeSystem.String)));
         });
+
         Assert.AreEqual("int32[1...3,0...]", IlSignatureRenderer.IlAsm(Field(fixture, "Grid")));
         Assert.AreEqual(typeof(int[,]), Field(fixture, "Grid").ToClrType());
         Assert.AreEqual("int32[0...3]", IlSignatureRenderer.IlAsm(Field(fixture, "Three")));
@@ -101,9 +108,11 @@ public sealed class MetadataSignaturesTests
             managed.Parameters.Add(new ParameterDefinition(new ArrayType(unmanaged)));
             type.Fields.Add(new FieldDefinition("Managed", Mono.Cecil.FieldAttributes.Public, managed));
         });
+
         Assert.AreEqual("method unmanaged cdecl int32 *(int32)", IlSignatureRenderer.IlAsm(Field(fixture, "Native")));
         Assert.AreEqual(typeof(nint), Field(fixture, "Native").ToClrType());
-        Assert.AreEqual("method instance void *(method unmanaged cdecl int32 *(int32)[])", IlSignatureRenderer.IlAsm(Field(fixture, "Managed")));
+        Assert.AreEqual("method instance void *(method unmanaged cdecl int32 *(int32)[])",
+            IlSignatureRenderer.IlAsm(Field(fixture, "Managed")));
 
         // The reflection path spells a function pointer type too, though it cannot recover the
         // specific convention from the legacy convention byte, which is one reason the listing
@@ -129,6 +138,7 @@ public sealed class MetadataSignaturesTests
             list.GenericArguments.Add(t);
             type.Fields.Add(new FieldDefinition("Items", Mono.Cecil.FieldAttributes.Public, list));
         });
+
         var item = Field(fixture, "Item");
         Assert.AreEqual("!0", IlSignatureRenderer.IlAsm(item));
         Assert.AreEqual("!T", IlSignatureRenderer.IlAsmNamed(item));
@@ -152,6 +162,7 @@ public sealed class MetadataSignaturesTests
             var missing = new TypeReference("Missing", "Thing", module, scope) { IsValueType = true };
             type.Fields.Add(new FieldDefinition("Gone", Mono.Cecil.FieldAttributes.Public, new ArrayType(missing)));
         });
+
         var gone = Field(fixture, "Gone");
         Assert.IsTrue(gone.HasUnresolved);
         Assert.AreEqual("valuetype [Nowhere]Missing.Thing[]", IlSignatureRenderer.IlAsm(gone));
@@ -167,13 +178,15 @@ public sealed class MetadataSignaturesTests
     {
         var (_, _, fixture) = CecilFixture.Build((module, type) =>
         {
-            var method = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            var method = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Void);
             method.Body.InitLocals = false;
             method.Body.Variables.Add(new VariableDefinition(new PinnedType(new ByReferenceType(module.TypeSystem.Int32))));
             method.Body.Variables.Add(new VariableDefinition(new PointerType(module.TypeSystem.Byte)));
             method.Body.GetILProcessor().Emit(OpCodes.Ret);
             type.Methods.Add(method);
         });
+
         var method = fixture.GetMethod("M")!;
         var body = method.GetMethodBody()!;
         Assert.IsFalse(body.InitLocals);
@@ -193,7 +206,8 @@ public sealed class MetadataSignaturesTests
     {
         var (_, _, fixture) = CecilFixture.Build((module, type) =>
         {
-            var method = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            var method = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Void);
             var il = method.Body.GetILProcessor();
             var explicitThis = new CallSite(module.TypeSystem.Int32) { HasThis = true, ExplicitThis = true };
             explicitThis.Parameters.Add(new ParameterDefinition(module.TypeSystem.Object));
@@ -208,6 +222,7 @@ public sealed class MetadataSignaturesTests
             il.Emit(OpCodes.Ret);
             type.Methods.Add(method);
         });
+
         var (reader, provider) = Open(fixture.Module);
         var il = IlReader.Read(fixture.GetMethod("M")!.GetMethodBody()!.GetILAsByteArray()!).Instructions;
         var explicitThis = MetadataSignatures.StandaloneMethod(reader, il[0].Operand.Token, provider, GenericContext.Empty)!;
@@ -230,11 +245,13 @@ public sealed class MetadataSignaturesTests
     {
         var (_, _, fixture) = CecilFixture.Build((module, type) =>
         {
-            var callee = new MethodDefinition("Count", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Int32) { CallingConvention = MethodCallingConvention.VarArg };
+            var callee = new MethodDefinition("Count", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Int32) { CallingConvention = MethodCallingConvention.VarArg };
             callee.Body.GetILProcessor().Emit(OpCodes.Ldc_I4_0);
             callee.Body.GetILProcessor().Emit(OpCodes.Ret);
             type.Methods.Add(callee);
-            var caller = new MethodDefinition("Call", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Int32);
+            var caller = new MethodDefinition("Call", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Int32);
             var site = new MethodReference("Count", module.TypeSystem.Int32, type) { CallingConvention = MethodCallingConvention.VarArg };
             site.Parameters.Add(new ParameterDefinition(new SentinelType(module.TypeSystem.Int32)));
             site.Parameters.Add(new ParameterDefinition(module.TypeSystem.String));
@@ -245,6 +262,7 @@ public sealed class MetadataSignaturesTests
             il.Emit(OpCodes.Ret);
             type.Methods.Add(caller);
         });
+
         var (reader, provider) = Open(fixture.Module);
         var il = IlReader.Read(fixture.GetMethod("Call")!.GetMethodBody()!.GetILAsByteArray()!).Instructions;
         var call = MetadataSignatures.MethodOperand(reader, il[2].Operand.Token, provider, GenericContext.Empty, out var instantiation)!;
@@ -263,7 +281,8 @@ public sealed class MetadataSignaturesTests
     {
         var (_, _, fixture) = CecilFixture.Build((module, type) =>
         {
-            var caller = new MethodDefinition("Call", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            var caller = new MethodDefinition("Call", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Void);
             var il = caller.Body.GetILProcessor();
             var empty = new GenericInstanceMethod(module.ImportReference(typeof(Array).GetMethod("Empty")!));
             empty.GenericArguments.Add(module.TypeSystem.String);
@@ -272,6 +291,7 @@ public sealed class MetadataSignaturesTests
             il.Emit(OpCodes.Ret);
             type.Methods.Add(caller);
         });
+
         var (reader, provider) = Open(fixture.Module);
         var il = IlReader.Read(fixture.GetMethod("Call")!.GetMethodBody()!.GetILAsByteArray()!).Instructions;
         var call = MetadataSignatures.MethodOperand(reader, il[0].Operand.Token, provider, GenericContext.Empty, out var instantiation)!;
@@ -288,7 +308,8 @@ public sealed class MetadataSignaturesTests
     {
         var (_, _, fixture) = CecilFixture.Build((module, type) =>
         {
-            var method = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            var method = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Void);
             var il = method.Body.GetILProcessor();
             il.Emit(OpCodes.Ldtoken, type);
             il.Emit(OpCodes.Pop);
@@ -302,6 +323,7 @@ public sealed class MetadataSignaturesTests
             il.Emit(OpCodes.Ret);
             type.Methods.Add(method);
         });
+
         var (reader, provider) = Open(fixture.Module);
         var il = IlReader.Read(fixture.GetMethod("M")!.GetMethodBody()!.GetILAsByteArray()!).Instructions;
         var self = MetadataSignatures.TypeOperand(reader, il[0].Operand.Token, provider, GenericContext.Empty)!;
@@ -322,17 +344,22 @@ public sealed class MetadataSignaturesTests
         var (_, _, fixture) = CecilFixture.Build((module, type) =>
         {
             var method = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
-                new OptionalModifierType(module.ImportReference(typeof(System.Runtime.CompilerServices.CallConvCdecl)), module.TypeSystem.Void));
+                new OptionalModifierType(module.ImportReference(typeof(CallConvCdecl)),
+                module.TypeSystem.Void));
             method.GenericParameters.Add(new GenericParameter("U", method));
-            method.Parameters.Add(new ParameterDefinition("x", Mono.Cecil.ParameterAttributes.None, new ByReferenceType(method.GenericParameters[0])));
+            method.Parameters.Add(new ParameterDefinition("x", Mono.Cecil.ParameterAttributes.None,
+                new ByReferenceType(method.GenericParameters[0])));
             method.Body.GetILProcessor().Emit(OpCodes.Ret);
             type.Methods.Add(method);
         });
+
         var method = fixture.GetMethod("M")!;
         var (reader, provider) = Open(fixture.Module);
-        var signature = MetadataSignatures.MethodDefinition(reader, method.MetadataToken, provider, new GenericContext([], method.GetGenericArguments()));
+        var signature = MetadataSignatures.MethodDefinition(reader, method.MetadataToken, provider,
+            new GenericContext([], method.GetGenericArguments()));
         Assert.AreEqual(1, signature.GenericParameterCount);
-        Assert.AreEqual("void modopt([System.Runtime]System.Runtime.CompilerServices.CallConvCdecl)", IlSignatureRenderer.IlAsm(signature.ReturnType));
+        Assert.AreEqual("void modopt([System.Runtime]System.Runtime.CompilerServices.CallConvCdecl)",
+            IlSignatureRenderer.IlAsm(signature.ReturnType));
         Assert.AreEqual("!!U&", IlSignatureRenderer.IlAsmNamed(signature.Parameters[0]));
         Assert.AreEqual("!!0&", IlSignatureRenderer.IlAsm(signature.Parameters[0]));
     }

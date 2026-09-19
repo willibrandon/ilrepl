@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 
 namespace IlRepl.Engine;
@@ -8,13 +9,12 @@ namespace IlRepl.Engine;
 public static class TypeNameFormatter
 {
     /// <summary>
-    /// Every identifier-shaped word the ILAsm lexer reserves: its keyword table
-    /// (dotnet/runtime, src/coreclr/inc/il_kywd.h) and every opcode name and alias
-    /// (src/coreclr/inc/opcode.def). A name in this set must be quoted to be read as a name.
+    /// Every word the ILAsm lexer reserves, keywords and opcode names alike, which a name must be quoted to use.
     /// </summary>
-    /// <summary>
-    /// Every ILAsm keyword, the opcode mnemonics included, as il_kywd.h lists them.
-    /// </summary>
+    /// <remarks>
+    /// The keyword table is src/coreclr/inc/il_kywd.h in dotnet/runtime, and the opcode names and aliases are in
+    /// src/coreclr/inc/opcode.def.
+    /// </remarks>
     public static IReadOnlyCollection<string> IlAsmKeywordNames => IlAsmKeywords;
 
     private static readonly HashSet<string> IlAsmKeywords = new(StringComparer.Ordinal)
@@ -67,9 +67,11 @@ public static class TypeNameFormatter
     }
 
     /// <summary>
-    /// Renders a name the way ILAsm needs it: quoted when the lexer reserves it or it is not a
-    /// plain identifier, so a method called <c>add</c> or a parameter called <c>value</c> assembles.
+    /// Renders a name the way ILAsm needs it, quoted when the lexer reserves it or it is not a plain identifier.
     /// </summary>
+    /// <remarks>
+    /// A method called <c>add</c> or a parameter called <c>value</c> therefore assembles.
+    /// </remarks>
     /// <param name="name">The name.</param>
     /// <returns>The name, quoted when needed.</returns>
     public static string IlAsmIdentifier(string name)
@@ -193,7 +195,8 @@ public static class TypeNameFormatter
             // parameters: ilasm encodes the keyword form as a TypeSpec, which the runtime refuses for
             // a definition, and the bare form as the TypeRef the C# compiler writes.
             var definitionText = IlAsmDefinition(type);
-            return definitionText.StartsWith("class ", StringComparison.Ordinal) ? definitionText[6..] : definitionText.StartsWith("valuetype ", StringComparison.Ordinal) ? definitionText[10..] : definitionText;
+            return definitionText.StartsWith("class ", StringComparison.Ordinal) ? definitionText[6..]
+                : definitionText.StartsWith("valuetype ", StringComparison.Ordinal) ? definitionText[10..] : definitionText;
         }
 
         var full = IlAsmDefinition(type);
@@ -206,9 +209,12 @@ public static class TypeNameFormatter
     }
 
     /// <summary>
-    /// True for a function pointer type. A builder or a placeholder type answers the question with
-    /// <see cref="NotImplementedException"/>, and none of those is a function pointer.
+    /// True for a function pointer type.
     /// </summary>
+    /// <remarks>
+    /// A builder or a placeholder type answers the question with <see cref="NotImplementedException"/>, and none of those is a function
+    /// pointer.
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <returns>True when the runtime describes the type as a function pointer.</returns>
     public static bool IsFunctionPointer(Type type)
@@ -225,7 +231,7 @@ public static class TypeNameFormatter
     }
 
     /// <summary>
-    /// The ILAsm spelling of a type's definition, without generic arguments: <c>class [System.Collections]System.Collections.Generic.List`1</c>.
+    /// A type definition's ILAsm spelling without generic arguments: <c>class [System.Collections]System.Collections.Generic.List`1</c>
     /// </summary>
     /// <param name="type">The type, or an instantiation of it.</param>
     /// <returns>The reference text with its <c>class</c>/<c>valuetype</c> word.</returns>
@@ -241,9 +247,11 @@ public static class TypeNameFormatter
     }
 
     /// <summary>
-    /// A type name as ILAsm reads it: quoted when the lexer would not take it as a name, with an
-    /// arity suffix left outside the quotes because ILAsm reads <c>List`1</c> as one name.
+    /// A type name as ILAsm reads it, quoted when the lexer would not take it as a name.
     /// </summary>
+    /// <remarks>
+    /// An arity suffix is left outside the quotes because ILAsm reads <c>List`1</c> as one name.
+    /// </remarks>
     /// <param name="name">The simple type name.</param>
     /// <returns>The name, quoted when needed.</returns>
     public static string IlAsmTypeName(string name)
@@ -261,9 +269,11 @@ public static class TypeNameFormatter
     }
 
     /// <summary>
-    /// The namespace-qualified, nesting-qualified name of a type definition, each segment quoted on
-    /// its own when it must be: <c>System.Collections.Generic.List`1</c>, <c>Program/'&lt;&gt;c'</c>.
+    /// The namespace-qualified, nesting-qualified name of a type definition, each segment quoted on its own when it must be.
     /// </summary>
+    /// <remarks>
+    /// Examples are <c>System.Collections.Generic.List`1</c> and <c>Program/'&lt;&gt;c'</c>.
+    /// </remarks>
     /// <param name="definition">The type definition.</param>
     /// <returns>The qualified name without an assembly.</returns>
     public static string QualifiedName(Type definition)
@@ -276,13 +286,16 @@ public static class TypeNameFormatter
 
         // Reflection escapes the simple name but reports the namespace as the metadata has it.
         var name = IlAsmTypeName(Unescape(definition.Name));
-        return string.IsNullOrEmpty(definition.Namespace) ? name : string.Join(".", definition.Namespace.Split('.').Select(IlAsmIdentifier)) + "." + name;
+        return string.IsNullOrEmpty(definition.Namespace) ? name
+            : string.Join(".", definition.Namespace.Split('.').Select(IlAsmIdentifier)) + "." + name;
     }
 
     /// <summary>
-    /// Reflection escapes the characters its own type-name grammar reserves, writing a comma in a
-    /// name as <c>\,</c>; the metadata name has no backslash, and neither does ILAsm's quoted form.
+    /// Reflection escapes the characters its own type-name grammar reserves, writing a comma in a name as <c>\,</c>.
     /// </summary>
+    /// <remarks>
+    /// The metadata name has no backslash, and neither does ILAsm's quoted form.
+    /// </remarks>
     internal static string Unescape(string name)
     {
         // Reflection escapes the characters its own grammar reserves, a comma as \, and a
@@ -329,15 +342,16 @@ public static class TypeNameFormatter
         return text.StartsWith("valuetype ", StringComparison.Ordinal) ? text[10..] : text;
     }
 
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, string> FacadeNames = new();
+    private static readonly ConcurrentDictionary<Type, string> FacadeNames = new();
 
     /// <summary>
-    /// The assembly name ILAsm should reference for a type. A type that lives in
-    /// <c>System.Private.CoreLib</c> is named by the facade that exports it, which is what a
-    /// reference must bind through: <c>System.Runtime</c> for <c>string</c>, <c>System.Collections</c>
-    /// for <c>List`1</c>. A reference through a facade that does not export the type would assemble
-    /// and then fail to load.
+    /// The assembly name ILAsm should reference for a type.
     /// </summary>
+    /// <remarks>
+    /// A type that lives in <c>System.Private.CoreLib</c> is named by the facade that exports it, which is what a reference must bind
+    /// through: <c>System.Runtime</c> for <c>string</c>, <c>System.Collections</c> for <c>List`1</c>. A reference through a facade that
+    /// does not export the type would assemble and then fail to load.
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <returns>The assembly name.</returns>
     public static string AssemblyReferenceName(Type type)

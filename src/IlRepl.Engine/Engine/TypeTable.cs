@@ -4,10 +4,12 @@ using System.Reflection;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// The types a session has defined with <c>.class</c>, and the ones being written, as a name
-/// lookup the type parser consults before any assembly. Session types shadow framework short
-/// names, as types in one ILAsm module shadow the ones it references.
+/// A name lookup of the types a session has defined with <c>.class</c> and the ones being written.
 /// </summary>
+/// <remarks>
+/// The type parser consults it before any assembly. Session types shadow framework short names, as types in one ILAsm module shadow the
+/// ones it references.
+/// </remarks>
 public sealed class TypeTable
 {
     private readonly List<(string FullName, string ShortName, Type Type)> _entries = [];
@@ -66,14 +68,15 @@ public sealed class TypeTable
     }
 
     /// <summary>
-    /// A callback that resolves a name inside the family being written to a placeholder, for a
-    /// nested type referenced before its declaration, or returns null.
+    /// A callback that resolves a name inside the family being written to a placeholder, or returns null.
     /// </summary>
+    /// <remarks>
+    /// The placeholder is for a nested type referenced before its declaration.
+    /// </remarks>
     public Func<string, bool, Type?>? Forward { get; set; }
 
     /// <summary>
-    /// Registers the members of a type being written, so references to them resolve through
-    /// the declarations rather than the builders.
+    /// Registers the members of a type being written, so references to them resolve through the declarations rather than the builders.
     /// </summary>
     /// <param name="prototype">The type's prototype builder.</param>
     /// <param name="members">Its members so far.</param>
@@ -109,6 +112,7 @@ public sealed class TypeTable
         {
             copy.MethodAliases.Add(pair.Key, pair.Value);
         }
+
         foreach (var pair in _members)
         {
             copy._members[pair.Key] = pair.Value;
@@ -119,8 +123,10 @@ public sealed class TypeTable
 
     /// <summary>
     /// Finds a type by the name written in IL: the exact path, or a short name when it is unique.
-    /// The most recently added entry wins an exact match, so an open type shadows an accepted one.
     /// </summary>
+    /// <remarks>
+    /// The most recently added entry wins an exact match, so an open type shadows an accepted one.
+    /// </remarks>
     /// <param name="name">The name as written, with its arity suffix if any.</param>
     /// <param name="withArguments">True when type arguments follow, so a name without a suffix may match a generic type.</param>
     /// <param name="valueType">True when the reference was written with <c>valuetype</c>, which decides the kind of a placeholder.</param>
@@ -152,7 +158,8 @@ public sealed class TypeTable
             return type is not null;
         }
 
-        var matches = _entries.Where(e => e.ShortName == name || (withArguments && StripArity(e.ShortName) == name)).Select(e => e.Type).Distinct().ToList();
+        var matches = _entries.Where(e => e.ShortName == name || (withArguments && StripArity(e.ShortName) == name)).Select(e => e.Type)
+            .Distinct().ToList();
         if (matches.Count == 1)
         {
             type = matches[0];
@@ -161,7 +168,9 @@ public sealed class TypeTable
 
         if (matches.Count > 1)
         {
-            throw new ReplException($"'{name}' is ambiguous: {string.Join(", ", _entries.Where(e => matches.Contains(e.Type)).Select(e => e.FullName))} (write the full name)");
+            throw new ReplException(
+                $"'{name}' is ambiguous: " +
+                $"{string.Join(", ", _entries.Where(e => matches.Contains(e.Type)).Select(e => e.FullName))} (write the full name)");
         }
 
         return false;

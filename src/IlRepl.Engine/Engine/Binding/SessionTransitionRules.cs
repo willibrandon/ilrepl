@@ -81,6 +81,7 @@ public static class SessionTransitionRules
                 + "e.g. .dis instance string [System.Runtime]System.String::Trim()  or  .dis Fib",
             _ => null,
         };
+
         if (usage is not null)
         {
             throw new ReplException(usage);

@@ -211,6 +211,7 @@ public sealed class NativeRuntimeSettingsTests
         {
             Options = package.Options with { Environment = new Dictionary<string, string> { [key] = "1" } },
         };
+
         var environment = NativeRuntimeSettings.Create(enabled, enabled.Left, "listing", "port");
         Assert.AreEqual("1", environment[key.Replace("COMPlus_", "DOTNET_", StringComparison.Ordinal)]);
     }

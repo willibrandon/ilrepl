@@ -70,7 +70,11 @@ public sealed class EditedOverrideMetadataTests
         var session = IlLines.Load(EditedOverrideExamples.Source(generic).Split('\n'));
         var edit = session.PrepareEdit(EditedOverrideExamples.Reference(generic), "Copy");
         session.CommitEdit(edit.Name, EditedOverrideExamples.Method(generic, slot));
-        foreach (var line in EditedOverrideExamples.Scenario(generic, slot).Split('\n')) session.AddLine(line);
+        foreach (var line in EditedOverrideExamples.Scenario(generic, slot).Split('\n'))
+        {
+            session.AddLine(line);
+        }
+
         var reply = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy using Scenario"),
             TestContext.CancellationToken);
         Assert.AreEqual("different", reply.Outcome, reply.Original.Detail + "; " + reply.Edited.Detail);
@@ -182,9 +186,15 @@ public sealed class EditedOverrideMetadataTests
         Assert.AreEqual(7, keep.GetMethod("Keep")!.Invoke(instance, null));
         Assert.AreEqual("Keep", Assert.ContainsSingle(owner.GetInterfaceMap(keep).TargetMethods).Name);
         Assert.AreEqual(43, owner.GetMethod("Alternate")!.Invoke(instance, null));
-        if (slot == "object") Assert.AreEqual(43, instance.GetHashCode());
+        if (slot == "object")
+        {
+            Assert.AreEqual(43, instance.GetHashCode());
+        }
+
         if (owner.IsGenericType)
+        {
             Assert.AreSequenceEqual(new[] { typeof(int) }, contract.GetGenericArguments());
+        }
     }
 
     private static void AssertExports(Session session, MethodEdit edit, string slot)
@@ -198,7 +208,11 @@ public sealed class EditedOverrideMetadataTests
                 var assembly = context.LoadFromStream(new MemoryStream(image));
                 var original = edit.Method!.DeclaringType!;
                 var owner = assembly.GetType(original.IsGenericType ? original.GetGenericTypeDefinition().FullName! : original.FullName!)!;
-                if (owner.IsGenericTypeDefinition) owner = owner.MakeGenericType(typeof(int));
+                if (owner.IsGenericTypeDefinition)
+                {
+                    owner = owner.MakeGenericType(typeof(int));
+                }
+
                 AssertDispatch(owner, slot);
             }
             finally

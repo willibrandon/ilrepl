@@ -98,8 +98,18 @@ public sealed class IndirectReflectionTests
         Assert.IsEmpty(edit.Problems, string.Join("; ", edit.Problems));
         session.CommitEdit(edit.Name, edit.Source);
         Assert.AreEqual(42, edit.Method!.Invoke(null, [Activator.CreateInstance(edit.Method.DeclaringType!)]));
-        foreach (var line in new[] { ".method int32 Scenario() {", "newobj instance void IlRepl.Edits.Copy.Owner::.ctor()",
-            "call Copy", "ret", "}" }) session.AddLine(line);
+        foreach (var line in new[]
+        {
+            ".method int32 Scenario() {",
+            "newobj instance void IlRepl.Edits.Copy.Owner::.ctor()",
+            "call Copy",
+            "ret",
+            "}",
+        })
+        {
+            session.AddLine(line);
+        }
+
         var result = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy using Scenario"),
             TestContext.CancellationToken);
         Assert.AreEqual("match", result.Outcome, result.Original.Detail + "; " + result.Edited.Detail);
@@ -139,6 +149,7 @@ public sealed class IndirectReflectionTests
             {
                 "typed resource" => "GetManifestResourceStream", "typed attributes" => "GetCustomAttributes", _ => api,
             };
+
             Assert.Contains(item => item.Contains(apiName, StringComparison.Ordinal), edit.Problems);
             Assert.Contains(dependency => dependency.Symbol.Contains(apiName, StringComparison.Ordinal)
                 && dependency.Disposition.Contains(problem, StringComparison.Ordinal), edit.Dependencies);
@@ -175,7 +186,11 @@ public sealed class IndirectReflectionTests
             Assert.HasCount(1, side.Invocations);
         }
 
-        if (unknown) session.AddLine("ldstr \"GetTypes\"");
+        if (unknown)
+        {
+            session.AddLine("ldstr \"GetTypes\"");
+        }
+
         session.AddLine("call Copy");
         foreach (var image in new[] { AssemblyExporter.Write(session, "indirect-copy"), IlasmLocator.Assemble(session.ToIlAsm()) })
         {

@@ -35,8 +35,12 @@ internal static partial class PackageResolver
     /// <param name="cancellationToken">Cancels restore and asset reads.</param>
     /// <param name="diagnostics">Receives successful restore warnings for display by the caller.</param>
     /// <returns>A candidate source document containing the successful verified graph.</returns>
-    internal static async Task<SessionDocument> ResolveAsync(SessionDocument document, string? request, string directory,
-        ICollection<string>? diagnostics, CancellationToken cancellationToken)
+    internal static async Task<SessionDocument> ResolveAsync(
+        SessionDocument document,
+        string? request,
+        string directory,
+        ICollection<string>? diagnostics,
+        CancellationToken cancellationToken)
     {
         _ = Credentials.Value;
         var roots = document.References.Where(reference => reference.Origin == "package" && reference.RequestedVersion is not null)
@@ -91,6 +95,7 @@ internal static partial class PackageResolver
             {
                 LibraryRange = new LibraryRange(root.Request, VersionRange.Parse(root.RequestedVersion!), LibraryDependencyTarget.Package),
             }).ToImmutableArray();
+
             var project = Path.Combine(output, "ilrepl.csproj");
             var lockPath = Path.Combine(output, "packages.lock.json");
             if (request is null)
@@ -112,11 +117,13 @@ internal static partial class PackageResolver
             {
                 await graphStream.CopyToAsync(graphFile, cancellationToken).ConfigureAwait(false);
             }
+
             var info = new TargetFrameworkInformation
             {
                 FrameworkName = framework, RuntimeIdentifierGraphPath = graphPath,
                 Dependencies = requests,
             };
+
             var spec = new PackageSpec([info])
             {
                 Name = "ilrepl", FilePath = project,
@@ -131,6 +138,7 @@ internal static partial class PackageResolver
                         restoreLockedMode: request is null && !platformChange),
                 },
             };
+
             spec.RestoreMetadata.ProjectWideWarningProperties.WarningsAsErrors.Add(NuGetLogCode.NU1605);
             using var cache = new SourceCacheContext();
             var providers = new RestoreCommandProvidersCache().GetOrCreate(packages, fallback, sources, cache, logger);
@@ -139,6 +147,7 @@ internal static partial class PackageResolver
             {
                 ProjectStyle = ProjectStyle.PackageReference, AllowNoOp = false,
             };
+
             restore.RequestedRuntimes.Add(RuntimeInformation.RuntimeIdentifier);
             var dependencyGraph = new DependencyGraphSpec();
             dependencyGraph.AddProject(spec);
@@ -184,8 +193,11 @@ internal static partial class PackageResolver
 
                         var asset = await DependencyAsset.ReadAsync(path, kind, assets, cancellationToken).ConfigureAwait(false);
                         var segments = item.Path.Split('/');
-                        selected.Add(asset with { PackagePath = item.Path,
-                            Rid = segments.Length > 2 && segments[0] == "runtimes" ? segments[1] : null });
+                        selected.Add(asset with
+                        {
+                            PackagePath = item.Path,
+                            Rid = segments.Length > 2 && segments[0] == "runtimes" ? segments[1] : null,
+                        });
                     }
                 }
 
@@ -221,13 +233,21 @@ internal static partial class PackageResolver
                 });
             }
 
-            if (recordedLock is not null) ValidateLockedPackages(recordedLock, result.LockFile, framework);
+            if (recordedLock is not null)
+            {
+                ValidateLockedPackages(recordedLock, result.LockFile, framework);
+            }
+
             await result.CommitAsync(logger, cancellationToken).ConfigureAwait(false);
             if (recordedLock is not null)
             {
                 MergeLockedTargets(lockPath, recordedLock, roots, framework, runtime, platformChange);
-                if (platformChange) diagnostics?.Add("restored locked package versions for " + runtime);
+                if (platformChange)
+                {
+                    diagnostics?.Add("restored locked package versions for " + runtime);
+                }
             }
+
             if (omittedVersion && requestedId is not null)
             {
                 var selectedVersion = references.Single(reference => reference.Request.Equals(requestedId,
@@ -243,14 +263,23 @@ internal static partial class PackageResolver
                 PackagesLockFileFormat.Write(lockPath, pinnedLock);
             }
 
-            foreach (var message in logger.Messages.Distinct(StringComparer.Ordinal)) diagnostics?.Add(message);
+            foreach (var message in logger.Messages.Distinct(StringComparer.Ordinal))
+            {
+                diagnostics?.Add(message);
+            }
+
             var packageLock = await File.ReadAllTextAsync(lockPath, cancellationToken).ConfigureAwait(false);
             var entries = document.Entries.ToList();
             if (requestedId is not null && !entries.Any(entry => entry.Kind == SessionEntryKind.Reference
                 && entry.Reference == identities[requestedId]))
             {
-                entries.Add(new SessionEntry { Kind = SessionEntryKind.Reference, Reference = identities[requestedId],
-                    Number = document.Cells.Select(cell => cell.Number).DefaultIfEmpty(0).Max() + 1, Source = [".load " + request] });
+                entries.Add(new SessionEntry
+                {
+                    Kind = SessionEntryKind.Reference,
+                    Reference = identities[requestedId],
+                    Number = document.Cells.Select(cell => cell.Number).DefaultIfEmpty(0).Max() + 1,
+                    Source = [".load " + request],
+                });
             }
 
             return document with

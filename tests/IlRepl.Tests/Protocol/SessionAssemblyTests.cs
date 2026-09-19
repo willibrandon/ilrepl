@@ -48,6 +48,7 @@ public sealed class SessionAssemblyTests
             WorkingDirectory = AppContext.BaseDirectory, RedirectStandardOutput = true,
             RedirectStandardError = true, UseShellExecute = false,
         };
+
         start.ArgumentList.Add("--filter");
         start.ArgumentList.Add("FullyQualifiedName~SessionAssemblyTests.Load_PreservesLocationAndFallsBackToFrozenImageAfterFileChanges");
         start.Environment[LocationProbePath] = path;

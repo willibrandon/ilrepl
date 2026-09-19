@@ -37,10 +37,12 @@ public sealed class SessionCheckpointProcessTests
                 release.Wait(token);
             }
         };
+
         var first = host.SessionAsync(new SessionRequest
         {
             Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = new SessionEditor { Lines = ["// first"] },
         }, token);
+
         try
         {
             await entered.Task.WaitAsync(token);
@@ -50,10 +52,15 @@ public sealed class SessionCheckpointProcessTests
                 Action = new SessionAction { Operation = SessionOperation.Capture },
                 Editor = new SessionEditor { Lines = ["// cancelled"] },
             }, cancellation.Token);
+
             await cancellation.CancelAsync();
             await Assert.ThrowsAsync<OperationCanceledException>(() => cancelled);
         }
-        finally { release.Set(); }
+        finally
+        {
+            release.Set();
+        }
+
         var firstReply = await first;
         Assert.AreEqual("// first", firstReply.Document.Editor.Lines[0]);
         Assert.AreSame(checkpoints.Last().Document, firstReply.Document);
@@ -62,11 +69,13 @@ public sealed class SessionCheckpointProcessTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token));
+
         var captures = Enumerable.Range(0, 12).Select(index => host.SessionAsync(new SessionRequest
         {
             Action = new SessionAction { Operation = SessionOperation.Capture },
             Editor = new SessionEditor { Lines = ["// draft " + index] },
         }, token)).ToArray();
+
         var replies = await Task.WhenAll(captures);
         for (var index = 0; index < replies.Length; index++)
         {
@@ -79,6 +88,7 @@ public sealed class SessionCheckpointProcessTests
             Assert.IsNull(acknowledged.CheckpointDelivery);
             Assert.AreEqual("ldc.i4.s 42", reply.Document.Entries.Single().Source.Single());
         }
+
         Assert.DoesNotContain(checkpoint => checkpoint.Document.Editor.Lines.Contains("// cancelled"), checkpoints);
         var executed = await host.HandleAsync("ret", token);
         Assert.Contains(line => line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal), executed.Lines);
@@ -103,6 +113,7 @@ public sealed class SessionCheckpointProcessTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath },
         }, token);
+
         Assert.IsTrue(opened.Reply.Succeeded);
         Assert.Contains(line => line.PlainText.Contains("saved stdout", StringComparison.Ordinal), opened.Reply.Lines);
         Assert.Contains(line => line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal), opened.Reply.Lines);
@@ -123,6 +134,7 @@ public sealed class SessionCheckpointProcessTests
         {
             Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = document.Editor,
         }, token);
+
         Assert.AreSequenceEqual(SessionCodec.Write(opened.Document), SessionCodec.Write(captured.Document));
         Assert.IsFalse(File.Exists(files.MarkerPath));
         await using var restored = await HostPaths.StartEngineAsync(token);
@@ -131,6 +143,7 @@ public sealed class SessionCheckpointProcessTests
             Action = new SessionAction { Operation = SessionOperation.Hydrate }, Document = checkpoints.Last().Document,
             AnnounceOpen = true,
         }, token);
+
         Assert.IsTrue(reopened.Reply.Succeeded);
         Assert.Contains(line => line.PlainText.Contains("saved stdout", StringComparison.Ordinal), reopened.Reply.Lines);
         Assert.Contains(line => line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal), reopened.Reply.Lines);

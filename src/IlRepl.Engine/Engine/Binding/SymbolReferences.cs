@@ -57,6 +57,7 @@ internal static class SymbolReferences
         {
             yield return field.ExactType;
         }
+
         foreach (var modifier in field.RequiredModifiers.Concat(field.OptionalModifiers))
         {
             yield return modifier;

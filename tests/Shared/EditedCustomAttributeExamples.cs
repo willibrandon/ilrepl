@@ -25,11 +25,18 @@ public static class EditedCustomAttributeExamples
         var result = ".method " + (isPrivate ? "private" : "public") + " static int32 Read(int32 value"
             + (additionalParameter ? ", int32 extra" : "") + ") {\n";
         if (!edited)
+        {
             return result + Original("method") + ".param [0]\n" + Original("return") + ".param [1]\n" + Original("parameter")
                 + "ldarg.0\nret\n}";
+        }
+
         result += Attribute("method") + Attribute("method") + ".param [0]\n" + Attribute("return")
             + ".param [1]\n" + Attribute("parameter-1") + Attribute("parameter-2");
-        if (additionalParameter) result += ".param [2]\n" + Attribute("added");
+        if (additionalParameter)
+        {
+            result += ".param [2]\n" + Attribute("added");
+        }
+
         return result + "nop\n" + Attribute("after-instruction") + "ldarg.0\nret\n}";
     }
 

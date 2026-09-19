@@ -9,5 +9,10 @@ namespace IlRepl.Protocol;
 /// <param name="IsRunning">Whether the operation has not yet settled.</param>
 /// <param name="CancellationRequested">Whether interruption has been requested.</param>
 /// <param name="Name">The operation name displayed while cancellation settles.</param>
-public sealed record ExecutionProgress(string Identity, long Sequence, ExecutionPhase Phase, bool IsRunning,
-    bool CancellationRequested = false, string Name = "operation");
+public sealed record ExecutionProgress(
+    string Identity,
+    long Sequence,
+    ExecutionPhase Phase,
+    bool IsRunning,
+    bool CancellationRequested = false,
+    string Name = "operation");

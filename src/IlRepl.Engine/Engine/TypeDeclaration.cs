@@ -3,9 +3,11 @@ using System.Reflection;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A type declared with <c>.class</c>, frozen when its block closes: everything the writer needs
-/// to emit it and everything a listing or an export shows. Nested types are declared inside it.
+/// A type declared with <c>.class</c>, frozen when its block closes.
 /// </summary>
+/// <remarks>
+/// It holds everything the writer needs to emit it and everything a listing or an export shows. Nested types are declared inside it.
+/// </remarks>
 /// <param name="Name">The metadata name, with its arity suffix for a generic type.</param>
 /// <param name="Namespace">The namespace, or empty.</param>
 /// <param name="FullName">The ILAsm path: <c>Geometry.Point</c>, <c>Outer/Inner</c>.</param>

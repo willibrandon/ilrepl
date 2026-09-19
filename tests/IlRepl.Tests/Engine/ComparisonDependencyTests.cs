@@ -36,6 +36,7 @@ public sealed class ComparisonDependencyTests
             read.Body.GetILProcessor().Emit(OpCodes.Ldc_I4, 41);
             read.Body.GetILProcessor().Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var missingName = "IlReplMissingOptional" + Guid.NewGuid().ToString("N");
         var (library, libraryImage, libraryType) = CecilFixture.Build((module, owner) =>
         {
@@ -52,6 +53,7 @@ public sealed class ComparisonDependencyTests
                 read.Body.GetILProcessor().Emit(OpCodes.Ret);
             }
         }, session.Resolver);
+
         Assert.AreEqual(41, libraryType.GetMethod("Read")!.Invoke(null, null));
         var target = useMissing ? "Optional" : "Read";
         foreach (var line in IlLines.Expand(".method int32 Work() {",

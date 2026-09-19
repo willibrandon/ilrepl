@@ -31,6 +31,7 @@ public sealed class NativeCliTests
             FileName = HostLocator.FindDotnet(), WorkingDirectory = RepoPaths.Root,
             UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
         };
+
         start.ArgumentList.Add(RepoPaths.FrontEndAssembly);
         start.ArgumentList.Add("--no-color");
         start.ArgumentList.Add("--eval");

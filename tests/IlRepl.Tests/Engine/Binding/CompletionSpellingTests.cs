@@ -41,8 +41,13 @@ public sealed class CompletionSpellingTests
     public void SessionTypeSpellings_DisambiguateAndEscape()
     {
         var session = new Session();
-        foreach (var header in new[] { ".class public A.Item { }", ".class public B.Item { }",
-            ".class public 'Slash\\\\Name'<T> { }", ".class public 'Quote\\'Name'<T> { }" })
+        foreach (var header in new[]
+        {
+            ".class public A.Item { }",
+            ".class public B.Item { }",
+            ".class public 'Slash\\\\Name'<T> { }",
+            ".class public 'Quote\\'Name'<T> { }",
+        })
         {
             session.AddLine(header);
         }

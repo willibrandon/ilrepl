@@ -3,18 +3,18 @@ using System.Reflection;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// The members a type being written has declared so far, keyed by the prototype builders the
-/// stack model sees. A builder cannot describe itself before its type is created, so every
-/// lookup goes through the declarations kept here.
+/// The members a type being written has declared so far, keyed by the prototype builders the stack model sees.
 /// </summary>
+/// <remarks>
+/// A builder cannot describe itself before its type is created, so every lookup goes through the declarations kept here.
+/// </remarks>
 public sealed class OwnMembers
 {
     private readonly List<(FieldDeclaration Declaration, FieldInfo Builder)> _fields = [];
     private readonly List<(MethodSignature Signature, MethodBase Builder, bool Declared)> _methods = [];
 
     /// <summary>
-    /// Defines a builder for a method referenced before its declaration, or null when the type
-    /// cannot take forward references.
+    /// Defines a builder for a method referenced before its declaration, or null when the type cannot take forward references.
     /// </summary>
     public Func<MethodSignature, MethodBase>? DefineForward { get; set; }
 

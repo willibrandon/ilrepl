@@ -58,6 +58,7 @@ public sealed partial class EditingSession
         {
             Properties = prepared?.Properties ?? [],
         });
+
         _state.Types = _state.Types.Clone([.. _state.OpenTypes.Select(block => block.Path), path]);
         var scope = Scope().WithGenerics(new SymbolGenericContext([.. parameters.Select(parameter => parameter.AsType)], []));
         TypeSymbol Bind(string text) => SymbolBinder.BindType(CilSyntaxParser.ParseType(text), scope).Type;
@@ -68,12 +69,14 @@ public sealed partial class EditingSession
             TypeKind.Enum => Bind("System.Enum"),
             _ => TypeSymbol.Object,
         };
+
         var kind = baseType is null ? header.Kind : SymbolRenderer.IlPath(baseType) switch
         {
             "System.ValueType" => TypeKind.Struct,
             "System.Enum" => TypeKind.Enum,
             _ => header.Kind,
         };
+
         if (baseType is not null && kind == TypeKind.Class
             && (baseType.Attributes.HasFlag(TypeAttributes.Sealed) || baseType.IsInterface || baseType.IsValueTypeShape
                 || baseType.Kind == TypeSymbolKind.Primitive && !SymbolIdentity.Equal(baseType, TypeSymbol.Object)))
@@ -118,6 +121,7 @@ public sealed partial class EditingSession
         {
             Properties = prepared?.Properties ?? [],
         };
+
         _state.Types.Add(path, type, declaration);
         var block = new EditingTypeBlock
         {
@@ -129,6 +133,7 @@ public sealed partial class EditingSession
             Kind = kind,
             BraceSeen = header.OpensBlock,
         };
+
         _state.OpenTypes.Add(block);
         if (header.ClosesBlock)
         {
@@ -207,6 +212,7 @@ public sealed partial class EditingSession
                 RequiredModifiers = field.Type.RequiredModifiers,
                 OptionalModifiers = field.Type.OptionalModifiers,
             };
+
             ReplaceMembers(declaration,
                 declaration.Fields.Where(existing => existing.Name != field.Name).Append(symbol), declaration.Methods);
             block.Fields.Add(field);
@@ -260,6 +266,7 @@ public sealed partial class EditingSession
                 ExactParameters = property.ExactParameterTypes,
             };
         })];
+
         var undeclared = declaration.Methods.FirstOrDefault(method => !method.IsDeclared);
         if (undeclared is not null)
         {

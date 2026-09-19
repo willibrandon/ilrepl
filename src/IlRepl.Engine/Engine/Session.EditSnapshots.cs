@@ -14,12 +14,18 @@ public sealed partial class Session
     /// <param name="images">The verified dependency images for the original.</param>
     /// <param name="nativeLibraries">The verified owned native paths retained by the original.</param>
     /// <returns>The restored edit awaiting its previously accepted revisions.</returns>
-    internal MethodEdit RestoreEditSnapshot(SessionEditSnapshot snapshot, IEnumerable<byte[]> images,
+    internal MethodEdit RestoreEditSnapshot(
+        SessionEditSnapshot snapshot,
+        IEnumerable<byte[]> images,
         IReadOnlyDictionary<string, string> nativeLibraries)
     {
         var resolver = Resolver.CreateSnapshotResolver(images, nativeLibraries);
         var family = ImportedMethodFamily.RestoreSnapshot(snapshot, this, resolver);
-        if (family.Problems.Count == 0) family.Compile();
+        if (family.Problems.Count == 0)
+        {
+            family.Compile();
+        }
+
         var edit = new MethodEdit(snapshot.Name, snapshot.Reference, family) { Fingerprint = snapshot.Fingerprint };
         _edits.Add(edit);
         CompletionRevision++;

@@ -40,18 +40,22 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
                     .CacheRendering().FixedHeight(1),
                 v.Separator().FixedHeight(1),
             };
+
             foreach (var row in rows.Skip(help.Scroll).Take(height))
             {
                 var action = row.Action >= 0 ? help.Actions[row.Action] : null;
                 var actionCurrent = action is not null && help.IsActionCurrent(State, row.Action);
                 var style = current || actionCurrent
                     ? row.Action == help.SelectedAction ? SpanStyle.TopType : SpanStyle.Member : SpanStyle.Dim;
+
+                // Hex1b redraws a hyperlink when its text, target, or id changes. The later rows of a wrapped link keep their
+                // text when the selection moves, so the id carries the style and every row is redrawn in the new color.
                 Hex1bWidget line = actionCurrent && action?.Url is { } url
                     ? v.ThemePanel(theme => theme.Clone()
                         .Set(HyperlinkTheme.ForegroundColor, SpanPalette.Color(style))
                         .Set(HyperlinkTheme.FocusedForegroundColor, SpanPalette.Color(style))
                         .Set(HyperlinkTheme.HoveredForegroundColor, SpanPalette.Color(style)),
-                        v.Hyperlink(row.Line.PlainText, url).Id("ilrepl-help-" + row.Action).OnClick(_ =>
+                        v.Hyperlink(row.Line.PlainText, url).Id("ilrepl-help-" + row.Action + "-" + style).OnClick(_ =>
                     {
                         if (help.IsActionCurrent(State, row.Action) && help.Actions[row.Action] == action)
                         {
@@ -69,11 +73,9 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
                 .CacheRendering().FixedHeight(1));
             return [.. content];
         })).InputBindings(b => Bind(b, State, Catalog, bodyWidth, height));
-        return ctx.Pastable(surface).OnPaste(e =>
-        {
-            e.Paste.Cancel();
-            State.PasteInput?.Applied();
-        });
+
+        // Help is read-only. A paste that reaches it holds back no later input, so there is nothing to release here.
+        return ctx.Pastable(surface).OnPaste(e => e.Paste.Cancel());
     }
 
     /// <summary>
@@ -93,6 +95,7 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
                 PromptHelp.Close(state);
             }
         }), "Toggle instruction help");
+
         b.Key(Hex1bKey.Escape).Action(_ => Process(state, () => PromptHelp.Close(state)), "Return to editor");
         if (state.Help is { } help)
         {
@@ -111,8 +114,11 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
             b.Mouse(MouseButton.ScrollUp).Action(_ => help.Scroll = Math.Max(0, help.Scroll - 3), "Scroll help up");
             b.Mouse(MouseButton.ScrollDown).Action(_ => help.Scroll += 3, "Scroll help down");
         }
+
         b.Ctrl().Key(Hex1bKey.Q).Action(context => context.RequestStop(), "Quit");
-        b.AnyCharacter().Action(_ => { }, "Read-only help");
+        b.AnyCharacter().Action(_ =>
+        {
+        }, "Read-only help");
     }
 
     /// <summary>

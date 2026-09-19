@@ -3,8 +3,7 @@ using IlRepl.Protocol;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// One accepted line of a cell after parsing: an instruction with its labels, a block boundary,
-/// or a declaration.
+/// One accepted line of a cell after parsing: an instruction with its labels, a block boundary, or a declaration.
 /// </summary>
 public sealed class CellEntry
 {
@@ -64,15 +63,19 @@ public sealed class CellEntry
     public OverrideDeclaration? Override { get; init; }
 
     /// <summary>
-    /// The attribute, for <see cref="EntryKind.Custom"/> entries; on the parameter named by the
-    /// preceding <c>.param</c> when <see cref="ParamIndex"/> is set.
+    /// The attribute, for <see cref="EntryKind.Custom"/> entries.
     /// </summary>
+    /// <remarks>
+    /// It is on the parameter named by the preceding <c>.param</c> when <see cref="ParamIndex"/> is set.
+    /// </remarks>
     public CustomAttributeDeclaration? Custom { get; init; }
 
     /// <summary>
-    /// The parameter index of a <see cref="EntryKind.Param"/> entry, or of the parameter a
-    /// <see cref="EntryKind.Custom"/> entry applies to: 0 for the return value, 1 for the first parameter.
+    /// The parameter index of a <see cref="EntryKind.Param"/> entry, or of the parameter a <see cref="EntryKind.Custom"/> entry applies to.
     /// </summary>
+    /// <remarks>
+    /// The index is 0 for the return value and 1 for the first parameter.
+    /// </remarks>
     public int? ParamIndex { get; init; }
 
     /// <summary>

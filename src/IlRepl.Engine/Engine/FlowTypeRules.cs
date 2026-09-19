@@ -96,6 +96,7 @@ internal sealed class FlowTypeRules<T>(
             StackCategory.Float => Algebra.Primitive("float64"),
             _ => left,
         };
+
         if (kind != StackCategory.ObjectReference)
         {
             return kind == StackCategory.ByRef ? SameLocation(Algebra.ElementOf(left)!, Algebra.ElementOf(right)!)

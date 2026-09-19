@@ -47,6 +47,7 @@ public sealed class SessionSnapshotStoreTests
                 Assets = [new SessionAsset { Hash = hash, Image = image }],
                 Editor = new SessionEditor { Lines = ["ldc.i4.s 42"], Caret = 11, Anchor = 11 },
             };
+
             var path = Path.Combine(directory, "shared", "example.ilrepl.json");
             SessionDocument captured;
             byte[] ready;
@@ -57,12 +58,14 @@ public sealed class SessionSnapshotStoreTests
                     Action = new SessionAction { Operation = SessionOperation.Hydrate },
                     Document = document, Editor = document.Editor,
                 }, TestContext.CancellationToken);
+
                 Assert.IsTrue(hydrated.Reply.Succeeded, string.Join('\n', hydrated.Reply.Lines.Select(line => line.PlainText)));
                 var saved = await host.SessionAsync(new SessionRequest
                 {
                     Action = new SessionAction { Operation = SessionOperation.Save, Path = path, Embed = embed },
                     Editor = document.Editor,
                 }, TestContext.CancellationToken);
+
                 Assert.IsTrue(saved.Reply.Succeeded);
                 captured = saved.Document;
                 ready = await File.ReadAllBytesAsync(path, TestContext.CancellationToken);

@@ -1,10 +1,12 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Decides whether a value on the simulated stack can be returned from a method with a declared
-/// return type. The rules are the ones the JIT applies to <c>ret</c>: the stack categories must
-/// agree, an int32 may fill a native int, references must be assignable, and value types must match.
+/// Decides whether a value on the simulated stack can be returned from a method with a declared return type.
 /// </summary>
+/// <remarks>
+/// The rules are the ones the JIT applies to <c>ret</c>: the stack categories must agree, an int32 may fill a native int, references must
+/// be assignable, and value types must match.
+/// </remarks>
 public static class StackCompatibility
 {
     /// <summary>
@@ -62,20 +64,23 @@ public static class StackCompatibility
 
     /// <summary>
     /// True when a value of the given stack type can be returned where <paramref name="declared"/> is expected.
-    /// A boxed value (<see cref="Boxed{T}"/>) can be returned wherever its value type is assignable,
-    /// a reference the model could not type (<see cref="UnknownReferenceMarker"/>) is accepted for
-    /// any reference type, and a value that is exactly <c>object</c> is not narrowed, because
-    /// returning it as a narrower type would be type confusion.
     /// </summary>
+    /// <remarks>
+    /// A boxed value (<see cref="Boxed{T}"/>) can be returned wherever its value type is assignable, a reference the model could not type
+    /// (<see cref="UnknownReferenceMarker"/>) is accepted for any reference type, and a value that is exactly <c>object</c> is not
+    /// narrowed, because returning it as a narrower type would be type confusion.
+    /// </remarks>
     /// <param name="actual">The type on the stack; null when the model could not infer it, which is accepted.</param>
     /// <param name="declared">The declared return type.</param>
     /// <returns>Whether <c>ret</c> is valid.</returns>
     public static bool CanReturn(Type? actual, Type declared) => CanReturn(actual, declared, TypeTable.Empty);
 
     /// <summary>
-    /// True when a value of the given stack type can be returned where <paramref name="declared"/> is expected,
-    /// with session types judged through the declarations in <paramref name="types"/>.
+    /// True when a value of the given stack type can be returned where <paramref name="declared"/> is expected.
     /// </summary>
+    /// <remarks>
+    /// Session types are judged through the declarations in <paramref name="types"/>.
+    /// </remarks>
     /// <param name="actual">The type on the stack; null when the model could not infer it, which is accepted.</param>
     /// <param name="declared">The declared return type.</param>
     /// <param name="types">The table that knows the types being written.</param>

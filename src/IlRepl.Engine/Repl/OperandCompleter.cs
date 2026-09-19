@@ -170,11 +170,14 @@ public sealed partial class OperandCompleter : IDisposable
         {
             _session.CompletionChanged -= Invalidate;
         }
+
         Invalidate();
     }
 
     private async ValueTask<CompletionQuery> BuildQueryAsync(
-        CompletionQueryIdentity identity, EditingView view, CancellationToken cancellationToken)
+        CompletionQueryIdentity identity,
+        EditingView view,
+        CancellationToken cancellationToken)
     {
         var document = identity.Document;
         var site = identity.Site;

@@ -32,19 +32,32 @@ public sealed class SessionHistoryLimitTests
             Entries = [.. original.Entries,
                 new SessionEntry { Number = 2, Kind = SessionEntryKind.Reset, Source = [".reset /* ignored"] },
                 new SessionEntry { Number = 2, Source = ["ldc.i4.1"] },
-                new SessionEntry { Number = 2, Kind = SessionEntryKind.Rollback,
-                    Mark = SessionMark.Initial with { InBlockComment = true }, Source = ["// rollback"] },
+                new SessionEntry
+                {
+                    Number = 2,
+                    Kind = SessionEntryKind.Rollback,
+                    Mark = SessionMark.Initial with { InBlockComment = true },
+                    Source = ["// rollback"],
+                },
                 new SessionEntry { Number = 2, Source = ["restored comment */ ldc.i4.2"] }],
             Cells = [.. original.Cells.Select(cell => cell with { State = "interrupted" }),
-                new SessionCell { Number = 3, Source = ["ldc.i4.3", "ret"],
-                    Output = [TranscriptLine.Of(LineKind.Result, "  = 3 : int32", SpanStyle.Number)] }],
+                new SessionCell
+                {
+                    Number = 3,
+                    Source = ["ldc.i4.3", "ret"],
+                    Output = [TranscriptLine.Of(LineKind.Result, "  = 3 : int32", SpanStyle.Number)],
+                }],
         };
+
         var complete = ReplCore.RenderSessionHistory(document);
         Assert.Contains(line => line.PlainText == "  1: cell, interrupted (historical)", complete);
         Assert.Contains(line => line.Spans.Any(span => span.Style == SpanStyle.Comment
             && span.Text.Contains("restored comment", StringComparison.Ordinal)), complete);
         for (var count = 1; count <= complete.Length + 1; count++)
+        {
             AssertRows(complete.TakeLast(count).ToArray(), ReplCore.RenderSessionHistoryTail(document, count));
+        }
+
         AssertRows(complete, ReplCore.RenderSessionHistoryTail(document, 0));
     }
 
@@ -74,11 +87,13 @@ public sealed class SessionHistoryLimitTests
             Action = new SessionAction { Operation = SessionOperation.Hydrate }, Document = document,
             HistoryLineLimit = -1, AnnounceOpen = false,
         };
+
         await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => engine.SessionAsync(request, token));
         var untouched = await engine.SessionAsync(new SessionRequest
         {
             Action = new SessionAction { Operation = SessionOperation.Capture },
         }, token);
+
         Assert.IsEmpty(untouched.Document.Entries);
         Assert.IsEmpty(untouched.Document.Cells);
         var restored = await engine.SessionAsync(request with { HistoryLineLimit = 1 }, token);
@@ -124,6 +139,7 @@ public sealed class SessionHistoryLimitTests
         {
             Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath }, HistoryLineLimit = 0,
         }, token);
+
         AssertRows(complete, unlimited.Reply.Lines.Skip(1).ToArray());
         Assert.AreSequenceEqual(SessionCodec.Write(document), SessionCodec.Write(unlimited.Document));
         Assert.IsFalse(File.Exists(files.MarkerPath), "Displaying limited or unlimited history must not replay its file side effect.");

@@ -20,10 +20,21 @@ namespace IlRepl.Engine;
 /// <param name="ExcludedSources">Sources known not to equal this source.</param>
 /// <param name="MayBeNaN">Whether a floating-point source can be unordered.</param>
 /// <param name="IsNaN">Whether a floating-point source is known to be NaN.</param>
-internal readonly record struct FilterPathValue(bool? IsZero, bool? IsOne, bool IsThis,
-    int? ReceiverSource = null, IReadOnlyList<int>? ReceiverSources = null,
-    bool HasNonSourceAlternative = false, long? IntegerValue = null,
-    IReadOnlyList<long>? ExcludedIntegers = null, int? ComparedSource = null,
-    long? ComparedInteger = null, bool? IsNull = null, int? ComparedOtherSource = null,
-    bool ComparedWithNull = false, IReadOnlyList<int>? EqualSources = null,
-    IReadOnlyList<int>? ExcludedSources = null, bool MayBeNaN = false, bool? IsNaN = null);
+internal readonly record struct FilterPathValue(
+    bool? IsZero,
+    bool? IsOne,
+    bool IsThis,
+    int? ReceiverSource = null,
+    IReadOnlyList<int>? ReceiverSources = null,
+    bool HasNonSourceAlternative = false,
+    long? IntegerValue = null,
+    IReadOnlyList<long>? ExcludedIntegers = null,
+    int? ComparedSource = null,
+    long? ComparedInteger = null,
+    bool? IsNull = null,
+    int? ComparedOtherSource = null,
+    bool ComparedWithNull = false,
+    IReadOnlyList<int>? EqualSources = null,
+    IReadOnlyList<int>? ExcludedSources = null,
+    bool MayBeNaN = false,
+    bool? IsNaN = null);

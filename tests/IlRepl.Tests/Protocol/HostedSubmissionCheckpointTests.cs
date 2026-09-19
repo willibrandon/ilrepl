@@ -185,6 +185,7 @@ public sealed class HostedSubmissionCheckpointTests
             Assert.IsTrue((await controller.HandleSourceAsync(source[index],
                 new AnalysisLocation("paste", index, 0, source[index].Length), token)).Succeeded);
         }
+
         var retained = Assert.ContainsSingle(checkpoints);
         Assert.AreSequenceEqual<string>([source[0]], retained.Document.Entries.SelectMany(entry => entry.Source));
         controller.QueuedInput = ["// queued"];
@@ -196,7 +197,11 @@ public sealed class HostedSubmissionCheckpointTests
             using var process = Process.GetProcessById(host.ProcessId);
             process.Kill();
         }
-        else await controller.RestartAsync(token);
+        else
+        {
+            await controller.RestartAsync(token);
+        }
+
         var workspace = await recovered.Task.WaitAsync(token);
         Assert.AreEqual(SessionRuntimeState.Ready, controller.RuntimeState);
         string[] expected = [.. source[1..], "// queued", "// typed"];
@@ -207,7 +212,11 @@ public sealed class HostedSubmissionCheckpointTests
         Assert.IsEmpty(workspace.Document.Interruptions, "No user code ran while collecting this method body.");
         controller.PendingInput = [];
         controller.Editor = new SessionEditor();
-        foreach (var line in expected) Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded);
+        foreach (var line in expected)
+        {
+            Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded);
+        }
+
         Assert.IsTrue((await controller.HandleAsync("call int32 Answer()", token)).Succeeded);
         var result = await controller.HandleAsync("ret", token);
         Assert.Contains(line => line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal), result.Lines);
@@ -261,6 +270,7 @@ public sealed class HostedSubmissionCheckpointTests
             Assert.IsTrue((await controller.HandleSourceAsync(source[index],
                 new AnalysisLocation("paste", index, 0, source[index].Length), token)).Succeeded);
         }
+
         Assert.HasCount(2, checkpoints);
         await controller.RollbackAsync(mark, token);
 
@@ -291,6 +301,7 @@ public sealed class HostedSubmissionCheckpointTests
             Assert.IsTrue((await controller.HandleSourceAsync(source[index],
                 new AnalysisLocation("paste", index, 0, source[index].Length), token)).Succeeded);
         }
+
         Assert.HasCount(2, checkpoints);
         Assert.AreSequenceEqual(source[..3], checkpoints.Last().Document.Entries.SelectMany(entry => entry.Source));
         controller.PendingInput = source[4..];
@@ -301,7 +312,11 @@ public sealed class HostedSubmissionCheckpointTests
         Assert.AreEqual(controller.Editor.Caret, controller.Editor.Anchor);
         controller.PendingInput = [];
         controller.Editor = new SessionEditor();
-        foreach (var line in source[4..]) Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded);
+        foreach (var line in source[4..])
+        {
+            Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded);
+        }
+
         Assert.IsTrue((await controller.HandleAsync("call int32 Answer()", token)).Succeeded);
         var result = await controller.HandleAsync("ret", token);
         Assert.Contains(line => line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal), result.Lines);
@@ -343,10 +358,15 @@ public sealed class HostedSubmissionCheckpointTests
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.AcknowledgeCheckpoint = checkpoint =>
         {
-            if (checkpoint.PendingSubmission is null) return Task.CompletedTask;
+            if (checkpoint.PendingSubmission is null)
+            {
+                return Task.CompletedTask;
+            }
+
             entered.TrySetResult();
             return release.Task;
         };
+
         var pending = connection.Proxy.HandleRetainedSourceAsync("ret", new AnalysisLocation("paste", 1, 0, 3), token);
         try
         {

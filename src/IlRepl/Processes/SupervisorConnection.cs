@@ -81,7 +81,12 @@ internal sealed class SupervisorConnection : IAsyncDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        if (managedAssembly.Length != 0) start.ArgumentList.Add(managedAssembly);
+
+        if (managedAssembly.Length != 0)
+        {
+            start.ArgumentList.Add(managedAssembly);
+        }
+
         start.ArgumentList.Add("--lifetime-supervisor");
         start.ArgumentList.Add(listener.SocketPath);
         start.ArgumentList.Add(epoch.ToString(CultureInfo.InvariantCulture));
@@ -102,9 +107,14 @@ internal sealed class SupervisorConnection : IAsyncDisposable
         {
             if (process is not null)
             {
-                if (!process.HasExited) process.Kill();
+                if (!process.HasExited)
+                {
+                    process.Kill();
+                }
+
                 process.Dispose();
             }
+
             listener.Dispose();
             throw;
         }
@@ -118,13 +128,21 @@ internal sealed class SupervisorConnection : IAsyncDisposable
     internal async Task DrainDiagnosticsAsync(CancellationToken cancellationToken)
     {
         bool exited;
-        try { exited = Rpc.Completion.IsCompleted || Process.HasExited; }
-        catch (InvalidOperationException) { exited = true; }
+        try
+        {
+            exited = Rpc.Completion.IsCompleted || Process.HasExited;
+        }
+        catch (InvalidOperationException)
+        {
+            exited = true;
+        }
+
         if (exited)
         {
             await _drained.WaitAsync(cancellationToken).ConfigureAwait(false);
             return;
         }
+
         var marker = "\u001eilrepl-diagnostics-" + Guid.NewGuid().ToString("N") + "\u001f";
         var acknowledged = _diagnostics.Mark(marker);
         await Service.FlushDiagnosticsAsync(marker, Epoch, cancellationToken).ConfigureAwait(false);
@@ -141,21 +159,30 @@ internal sealed class SupervisorConnection : IAsyncDisposable
                 Rpc.Dispose();
                 await _stream.DisposeAsync().ConfigureAwait(false);
             }
-            finally { _listener.Dispose(); }
+            finally
+            {
+                _listener.Dispose();
+            }
         }
         finally
         {
             try
             {
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                try { await Process.WaitForExitAsync(timeout.Token).ConfigureAwait(false); }
+                try
+                {
+                    await Process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+                }
                 catch (OperationCanceledException)
                 {
                     Process.Kill();
                     await Process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
                 }
             }
-            finally { Process.Dispose(); }
+            finally
+            {
+                Process.Dispose();
+            }
         }
     }
 }

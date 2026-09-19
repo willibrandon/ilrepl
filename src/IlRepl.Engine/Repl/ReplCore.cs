@@ -134,7 +134,10 @@ public sealed partial class ReplCore : IDisposable
     /// <param name="cancellationToken">Cancels engine-owned work before its commit boundary.</param>
     /// <param name="deferCheckpoint">Whether the frontend retains this provisional source until the next checkpoint.</param>
     /// <returns>The source acceptance and exit result.</returns>
-    internal HandleResult HandleCancellable(string line, AnalysisLocation? location, CancellationToken cancellationToken,
+    internal HandleResult HandleCancellable(
+        string line,
+        AnalysisLocation? location,
+        CancellationToken cancellationToken,
         bool deferCheckpoint = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -144,7 +147,11 @@ public sealed partial class ReplCore : IDisposable
         try
         {
             var result = RecordInput(line, location);
-            if (!deferCheckpoint || !result.Succeeded || Session.Generation != mark.Generation) SourceCheckpoint?.Invoke();
+            if (!deferCheckpoint || !result.Succeeded || Session.Generation != mark.Generation)
+            {
+                SourceCheckpoint?.Invoke();
+            }
+
             return result;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -155,6 +162,7 @@ public sealed partial class ReplCore : IDisposable
             {
                 Rollback(mark);
             }
+
             SourceCheckpoint?.Invoke();
             throw;
         }
@@ -176,7 +184,8 @@ public sealed partial class ReplCore : IDisposable
     {
         var line = normalized.Raw;
         var commentOpen = normalized.InBlockCommentBefore;
-        Transcript.Add(new TranscriptLine(LineKind.Input, [new TranscriptSpan(Prompt, SpanStyle.Prompt), .. Tokenizer.Spans(line, ref commentOpen, SpanStyle.Input)]));
+        Transcript.Add(new TranscriptLine(LineKind.Input,
+            [new TranscriptSpan(Prompt, SpanStyle.Prompt), .. Tokenizer.Spans(line, ref commentOpen, SpanStyle.Input)]));
 
         try
         {
@@ -332,6 +341,7 @@ public sealed partial class ReplCore : IDisposable
             Kind = SessionEntryKind.Rollback,
             Mark = mark,
         };
+
         _sourceEntries.Add(withdrawal);
         _ = TrackSource(withdrawal, CellNumber, false);
 
@@ -432,7 +442,10 @@ public sealed partial class ReplCore : IDisposable
 
     private void EchoStack()
     {
-        if (_restoringSource) return;
+        if (_restoringSource)
+        {
+            return;
+        }
 
         if (Session.State.StackText is "unreachable" or "?" or "invalid")
         {
@@ -471,7 +484,10 @@ public sealed partial class ReplCore : IDisposable
 
     private void Note(string text)
     {
-        if (!_restoringSource) Transcript.Add(LineKind.Info, "  " + text, SpanStyle.Dim);
+        if (!_restoringSource)
+        {
+            Transcript.Add(LineKind.Info, "  " + text, SpanStyle.Dim);
+        }
     }
 
     /// <summary>
@@ -483,7 +499,8 @@ public sealed partial class ReplCore : IDisposable
     /// Adds a block row of a listing: the offset column blank, then the row indented inside its region.
     /// </summary>
     private void BlockRow(int indent, string text) =>
-        Transcript.Add(new TranscriptLine(LineKind.Listing, [new TranscriptSpan("       ", SpanStyle.Dim), .. Tokenizer.Spans(new string(' ', indent * 2) + text)]));
+        Transcript.Add(new TranscriptLine(LineKind.Listing,
+        [new TranscriptSpan("       ", SpanStyle.Dim), .. Tokenizer.Spans(new string(' ', indent * 2) + text)]));
 
     /// <summary>
     /// Adds a disassembly row with its offset, syntax colors and stack transition.
@@ -505,7 +522,8 @@ public sealed partial class ReplCore : IDisposable
     private void Error(string message)
     {
         var lines = message.Split('\n');
-        Transcript.Add(new TranscriptLine(LineKind.Error, [new TranscriptSpan("  error: ", SpanStyle.Error), new TranscriptSpan(lines[0])]));
+        Transcript.Add(new TranscriptLine(LineKind.Error,
+            [new TranscriptSpan("  error: ", SpanStyle.Error), new TranscriptSpan(lines[0])]));
         foreach (var extra in lines.Skip(1))
         {
             Transcript.Add(LineKind.Error, "  " + extra, SpanStyle.Dim);
@@ -626,7 +644,8 @@ public sealed partial class ReplCore : IDisposable
                 {
                     var owner = Session.OpenType;
                     Session.AbandonMethod();
-                    Note(owner is null ? $"method {abandoned.Name} abandoned" : $"method {abandoned.Name} abandoned; class {owner} is still open");
+                    Note(owner is null ? $"method {abandoned.Name} abandoned"
+                        : $"method {abandoned.Name} abandoned; class {owner} is still open");
                     return new HandleResult(true, false);
                 }
 
@@ -780,6 +799,7 @@ public sealed partial class ReplCore : IDisposable
                         AssemblyExport = new AssemblyExportResult { Path = name, Image = image },
                     };
                 }
+
                 Session.SaveCancellable(argument, _cancellationToken);
                 {
                     var parts = new List<string> { "IlRepl.Cell.Run" };
@@ -799,6 +819,7 @@ public sealed partial class ReplCore : IDisposable
                         2 => parts[0] + " and " + parts[1],
                         _ => string.Join(", ", parts.Take(parts.Count - 1)) + ", and " + parts[^1],
                     };
+
                     Note($"wrote {Path.GetFullPath(argument)} with {with}");
                 }
 
@@ -877,7 +898,8 @@ public sealed partial class ReplCore : IDisposable
         MethodBase method;
         if (resolved.Definition is { } definition)
         {
-            var record = Session.Methods.FirstOrDefault(m => m.Signature.Name == definition.Name && SignatureIdentity.Same(m.Signature, definition))
+            var record = Session.Methods.FirstOrDefault(m => m.Signature.Name == definition.Name
+                && SignatureIdentity.Same(m.Signature, definition))
                 ?? throw new ReplException($"no method '{definition.Name}' in the session");
             method = record.Version.Body;
         }
@@ -887,7 +909,9 @@ public sealed partial class ReplCore : IDisposable
         }
         else
         {
-            throw new ReplException($"{TypeNameFormatter.Pretty(resolved.DeclaringType)}::{resolved.Declared?.Name ?? resolved.Method?.Name} belongs to the class being written and has no compiled body; close it with }} first");
+            throw new ReplException(
+                $"{TypeNameFormatter.Pretty(resolved.DeclaringType)}::{resolved.Declared?.Name ?? resolved.Method?.Name} belongs to the " +
+                $"class being written and has no compiled body; close it with }} first");
         }
 
         var listing = MethodDisassembler.Disassemble(method, Session);
@@ -902,7 +926,10 @@ public sealed partial class ReplCore : IDisposable
         Listing("  .maxstack " + listing.MaxStack.ToString(CultureInfo.InvariantCulture));
         if (listing.Locals.Count > 0)
         {
-            Listing((listing.InitLocals ? "  .locals init (" : "  .locals (") + string.Join(", ", listing.Locals.Select((l, i) => $"{IlSignatureRenderer.IlAsmNamed(l)} V_{i.ToString(CultureInfo.InvariantCulture)}")) + ")");
+            Listing((listing.InitLocals ? "  .locals init (" : "  .locals (")
+                + string.Join(", ",
+                listing.Locals.Select((l, i) => $"{IlSignatureRenderer.IlAsmNamed(l)} V_{i.ToString(CultureInfo.InvariantCulture)}"))
+                + ")");
         }
 
         var indent = 0;
@@ -926,6 +953,7 @@ public sealed partial class ReplCore : IDisposable
                         BlockKind.Fault => "} fault {",
                         _ => "}",
                     };
+
                     if (entry.Block != BlockKind.Try)
                     {
                         indent = Math.Max(0, indent - 1);
@@ -941,7 +969,8 @@ public sealed partial class ReplCore : IDisposable
                 }
 
                 default:
-                    InstructionRow("  " + entry.Offset.ToString("x4", CultureInfo.InvariantCulture) + " ", indent, entry.DisplayText, column[i] ?? "");
+                    InstructionRow("  " + entry.Offset.ToString("x4", CultureInfo.InvariantCulture) + " ", indent, entry.DisplayText,
+                        column[i] ?? "");
                     break;
             }
         }
@@ -983,7 +1012,8 @@ public sealed partial class ReplCore : IDisposable
     {
         var indent = new string(' ', level * 2);
         var header = type.KindWord + " " + type.DisplayName;
-        if (type.BaseType is not null && type.BaseType != typeof(object) && type.BaseType != typeof(ValueType) && type.BaseType != typeof(Enum))
+        if (type.BaseType is not null && type.BaseType != typeof(object) && type.BaseType != typeof(ValueType)
+            && type.BaseType != typeof(Enum))
         {
             header += " extends " + TypeNameFormatter.Pretty(type.BaseType);
         }
@@ -1030,12 +1060,15 @@ public sealed partial class ReplCore : IDisposable
     {
         if (state.Locals.Count > 0)
         {
-            Listing("  .locals init (" + string.Join(", ", state.Locals.Select((l, i) => $"{TypeNameFormatter.Pretty(l.Type)} {l.Name ?? "V_" + i.ToString(CultureInfo.InvariantCulture)}")) + ")");
+            var locals = state.Locals.Select((l, i) =>
+                $"{TypeNameFormatter.Pretty(l.Type)} {l.Name ?? "V_" + i.ToString(CultureInfo.InvariantCulture)}");
+            Listing("  .locals init (" + string.Join(", ", locals) + ")");
         }
 
         if (showArguments && state.Arguments.Count > 0)
         {
-            Listing("  .args (" + string.Join(", ", state.Arguments.Select(a => $"{TypeNameFormatter.Pretty(a.Type)} {a.Name} = {a.ValueText}")) + ")");
+            Listing("  .args ("
+                + string.Join(", ", state.Arguments.Select(a => $"{TypeNameFormatter.Pretty(a.Type)} {a.Name} = {a.ValueText}")) + ")");
         }
 
         if (state.IsEmpty)
@@ -1074,6 +1107,7 @@ public sealed partial class ReplCore : IDisposable
                         BlockKind.Fault => "} fault {",
                         _ => "}",
                     };
+
                     if (entry.Block != BlockKind.Try)
                     {
                         indent = Math.Max(0, indent - 1);
@@ -1107,5 +1141,4 @@ public sealed partial class ReplCore : IDisposable
             }
         }
     }
-
 }

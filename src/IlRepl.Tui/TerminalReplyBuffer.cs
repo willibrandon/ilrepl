@@ -30,7 +30,11 @@ internal sealed class TerminalReplyBuffer
     internal ReadOnlyMemory<byte> Append(ReadOnlyMemory<byte> input)
     {
         if (_ready.Count == 0 && !_escape && _stringKind == 0 && !_paste && _pasteStart == 0
-            && !input.Span.Contains((byte)27)) return input;
+            && !input.Span.Contains((byte)27))
+        {
+            return input;
+        }
+
         var output = new List<byte>(input.Length);
         foreach (var value in input.Span)
         {
@@ -39,7 +43,12 @@ internal sealed class TerminalReplyBuffer
                 output.Add(value);
                 var end = "\u001b[201~"u8;
                 _pasteEnd = value == end[_pasteEnd] ? _pasteEnd + 1 : value == 27 ? 1 : 0;
-                if (_pasteEnd == end.Length) { _paste = false; _pasteEnd = 0; }
+                if (_pasteEnd == end.Length)
+                {
+                    _paste = false;
+                    _pasteEnd = 0;
+                }
+
                 continue;
             }
 
@@ -47,18 +56,34 @@ internal sealed class TerminalReplyBuffer
             {
                 if (!_overflow)
                 {
-                    if (_reply.Count < MaximumReplyLength) _reply.Add(value);
-                    else { _reply.Clear(); _overflow = true; }
+                    if (_reply.Count < MaximumReplyLength)
+                    {
+                        _reply.Add(value);
+                    }
+                    else
+                    {
+                        _reply.Clear();
+                        _overflow = true;
+                    }
                 }
+
                 if (_stringEscape && value == '\\' || _stringKind == ']' && value == 7)
                 {
-                    if (!_overflow) output.AddRange(_reply);
+                    if (!_overflow)
+                    {
+                        output.AddRange(_reply);
+                    }
+
                     _reply.Clear();
                     _stringKind = 0;
                     _stringEscape = false;
                     _overflow = false;
                 }
-                else _stringEscape = value == 27;
+                else
+                {
+                    _stringEscape = value == 27;
+                }
+
                 continue;
             }
 
@@ -68,12 +93,18 @@ internal sealed class TerminalReplyBuffer
                 if (value == 27)
                 {
                     // The next Escape disambiguates the prior key. Keep its marker in a standalone parser batch.
-                    if (output.Count != 0) { _ready.Enqueue(output.ToArray()); output.Clear(); }
+                    if (output.Count != 0)
+                    {
+                        _ready.Enqueue(output.ToArray());
+                        output.Clear();
+                    }
+
                     _ready.Enqueue(EscapeMarker);
                     _escape = true;
                     _pasteStart = 0;
                     continue;
                 }
+
                 if (value is (byte)']' or (byte)'_')
                 {
                     _stringKind = value;
@@ -82,6 +113,7 @@ internal sealed class TerminalReplyBuffer
                     _pasteStart = 0;
                     continue;
                 }
+
                 output.Add(27);
                 _pasteStart = value == '[' ? 1 : 0;
             }
@@ -89,13 +121,28 @@ internal sealed class TerminalReplyBuffer
             {
                 var start = "[200~"u8;
                 _pasteStart = value == start[_pasteStart] ? _pasteStart + 1 : 0;
-                if (_pasteStart == start.Length) { _paste = true; _pasteStart = 0; }
+                if (_pasteStart == start.Length)
+                {
+                    _paste = true;
+                    _pasteStart = 0;
+                }
             }
 
-            if (value == 27) _escape = true;
-            else output.Add(value);
+            if (value == 27)
+            {
+                _escape = true;
+            }
+            else
+            {
+                output.Add(value);
+            }
         }
-        if (output.Count != 0) _ready.Enqueue(output.ToArray());
+
+        if (output.Count != 0)
+        {
+            _ready.Enqueue(output.ToArray());
+        }
+
         return ReadBuffered();
     }
 
@@ -111,7 +158,11 @@ internal sealed class TerminalReplyBuffer
     /// <returns>A complete Escape key sequence, or no input when a reply is pending.</returns>
     internal ReadOnlyMemory<byte> FlushEscape()
     {
-        if (!_escape) return ReadOnlyMemory<byte>.Empty;
+        if (!_escape)
+        {
+            return ReadOnlyMemory<byte>.Empty;
+        }
+
         _escape = false;
         _pasteStart = 0;
         _ready.Enqueue(EscapeMarker);

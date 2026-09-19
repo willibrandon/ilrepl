@@ -3,9 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Class members and session methods call each other through an explicit binding, and a
-/// compatible session-method redefinition reaches the class members already calling it.
+/// Class members and session methods call each other through an explicit binding.
 /// </summary>
+/// <remarks>
+/// A compatible session-method redefinition reaches the class members already calling it.
+/// </remarks>
 [TestClass]
 public sealed class InteropTests
 {
@@ -31,10 +33,12 @@ public sealed class InteropTests
             ".method int32 Twice(int32 n) { ldarg n; ldc.i4 2; mul; ret }",
             ".class public Calc {",
             ".field public int32 Seed",
-            ".method public instance void .ctor(int32 seed) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg seed; stfld int32 Calc::Seed; ret }",
+            ".method public instance void .ctor(int32 seed) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); " +
+            "ldarg.0; ldarg seed; stfld int32 Calc::Seed; ret }",
             ".method public instance int32 Doubled() { ldarg.0; ldfld int32 Calc::Seed; call int32 Twice(int32); ret }",
             "}",
-            ".method int32 UseCalc(int32 seed) { ldarg seed; newobj instance void Calc::.ctor(int32); call instance int32 Calc::Doubled(); ret }");
+            ".method int32 UseCalc(int32 seed) { ldarg seed; newobj instance void Calc::.ctor(int32); call instance int32 " +
+            "Calc::Doubled(); ret }");
         Assert.AreEqual(14, Run(session, "ldc.i4 7", "call int32 UseCalc(int32)"));
     }
 
@@ -59,9 +63,11 @@ public sealed class InteropTests
     }
 
     /// <summary>
-    /// A session method that mentions a type is rebuilt when the type is redefined, and a
-    /// signature change to a session method a class calls is refused as before.
+    /// A session method that mentions a type is rebuilt when the type is redefined.
     /// </summary>
+    /// <remarks>
+    /// A signature change to a session method a class calls is refused as before.
+    /// </remarks>
     [TestMethod]
     public void RedefineSessionMethodSignature_ClassCallerIsChecked()
     {
@@ -86,8 +92,10 @@ public sealed class InteropTests
             ".field public int32 A",
             ".field public int32 B",
             "}",
-            ".method valuetype Pair Make(int32 a, int32 b) { .locals init (valuetype Pair p); ldloca p; ldarg a; stfld int32 Pair::A; ldloca p; ldarg b; stfld int32 Pair::B; ldloc p; ret }",
+            ".method valuetype Pair Make(int32 a, int32 b) { .locals init (valuetype Pair p); ldloca p; ldarg a; stfld int32 Pair::A; " +
+            "ldloca p; ldarg b; stfld int32 Pair::B; ldloc p; ret }",
             ".method int32 Sum(valuetype Pair p) { ldarg p; ldfld int32 Pair::A; ldarg p; ldfld int32 Pair::B; add; ret }");
-        Assert.AreEqual(7, Run(session, "ldc.i4 3", "ldc.i4 4", "call valuetype Pair Make(int32, int32)", "call int32 Sum(valuetype Pair)"));
+        Assert.AreEqual(7,
+            Run(session, "ldc.i4 3", "ldc.i4 4", "call valuetype Pair Make(int32, int32)", "call int32 Sum(valuetype Pair)"));
     }
 }

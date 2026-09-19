@@ -3,9 +3,11 @@ using IlRepl.Protocol;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Raised when a line cannot be accepted: a parse error, an unresolved member, a stack
-/// underflow, or an invalid command. The message is written for the person at the prompt.
+/// Raised when a line cannot be accepted: a parse error, an unresolved member, a stack underflow, or an invalid command.
 /// </summary>
+/// <remarks>
+/// The message is written for the person at the prompt.
+/// </remarks>
 public sealed class ReplException : Exception
 {
     /// <summary>

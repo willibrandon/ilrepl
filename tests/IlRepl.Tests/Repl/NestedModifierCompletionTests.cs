@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
@@ -44,11 +46,11 @@ public sealed class NestedModifierCompletionTests
             }
 
             var element = generic ? (TypeReference)type.GenericParameters[0] : module.TypeSystem.Int32;
-            var modifier = module.ImportReference(typeof(System.Runtime.CompilerServices.IsVolatile));
+            var modifier = module.ImportReference(typeof(IsVolatile));
             var modified = required ? (TypeReference)new RequiredModifierType(modifier, element)
                 : new OptionalModifierType(modifier, element);
             var fieldType = shape == 2 ? (TypeReference)new PointerType(modified) : new ArrayType(modified, shape == 1 ? 2 : 1);
-            var root = module.ImportReference(typeof(System.Runtime.CompilerServices.IsReadOnlyAttribute));
+            var root = module.ImportReference(typeof(IsReadOnlyAttribute));
             var field = new FieldDefinition("Data", FieldAttributes.Public | FieldAttributes.Static,
                 new OptionalModifierType(root, fieldType));
             type.Fields.Add(field);
@@ -63,6 +65,7 @@ public sealed class NestedModifierCompletionTests
             accept.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
             type.Methods.Add(accept);
         }, session.State.Resolver, "NestedModifiers" + Guid.NewGuid().ToString("N") + (generic ? "`1" : ""));
+
         var fixture = generic ? definition.MakeGenericType(typeof(int)) : definition;
         var owner = $"[{assembly.GetName().Name}]{definition.FullName}" + (generic ? "<int32>" : "");
         using var snapshot = BindingSnapshot.Capture(session.State.Context);
@@ -120,7 +123,7 @@ public sealed class NestedModifierCompletionTests
             session.Save(path);
             foreach (var image in new[] { File.ReadAllBytes(path), IlasmLocator.Assemble(session.ToIlAsm()) })
             {
-                var context = new System.Runtime.Loader.AssemblyLoadContext("nested-modifier-export", isCollectible: true);
+                var context = new AssemblyLoadContext("nested-modifier-export", isCollectible: true);
                 context.Resolving += (_, name) => name.Name == assembly.GetName().Name ? assembly : null;
                 try
                 {

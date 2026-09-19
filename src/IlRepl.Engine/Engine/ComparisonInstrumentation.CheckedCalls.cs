@@ -106,7 +106,11 @@ internal static partial class ComparisonInstrumentation
                     ? new SentinelType(parameter.ParameterType) : parameter.ParameterType));
             }
 
-            if (receiver is not null) il.Emit(OpCodes.Constrained, receiver);
+            if (receiver is not null)
+            {
+                il.Emit(OpCodes.Constrained, receiver);
+            }
+
             il.Emit(OpCodes.Callvirt, destination);
             il.Emit(OpCodes.Ret);
             il.Append(observed);
@@ -121,6 +125,7 @@ internal static partial class ComparisonInstrumentation
         {
             CallingConvention = wrapper.CallingConvention,
         };
+
         foreach (var parameter in wrapper.Parameters)
         {
             called.Parameters.Add(new ParameterDefinition(parameter.ParameterType));

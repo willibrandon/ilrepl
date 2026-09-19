@@ -2,8 +2,8 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using Mono.Cecil;
-using TypeReference = Mono.Cecil.TypeReference;
 using PropertyDefinition = Mono.Cecil.PropertyDefinition;
+using TypeReference = Mono.Cecil.TypeReference;
 
 namespace IlRepl.Engine;
 
@@ -174,6 +174,7 @@ internal sealed class CecilSignatureFixups
             {
                 bytes[0] = header;
             }
+
             var original = metadata.GetBlobBytes(handle);
             if (bytes.AsSpan().SequenceEqual(original))
             {
@@ -286,6 +287,7 @@ internal sealed class CecilSignatureFixups
                 output.WriteBytes(_shapes.GetValueOrDefault(Convert.ToHexString(shape), shape));
                 break;
             }
+
             case 0x15: // Constructed generic type.
             {
                 CopyType(ref reader, output);
@@ -297,6 +299,7 @@ internal sealed class CecilSignatureFixups
 
                 break;
             }
+
             case 0x1b: // Function pointer.
                 CopySignature(ref reader, output);
                 break;

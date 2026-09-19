@@ -94,9 +94,14 @@ public sealed class BatchRunner
             {
                 suppliedInstructions = false;
             }
+
             var command = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
             if (kind == SourceLineKind.Text && command is ".show" or ".list" or ".ls" or ".il"
-                or ".dis" or ".disassemble" or ".diff" or ".jit" or ".save" or ".session") suppliedInstructions = false;
+                or ".dis" or ".disassemble" or ".diff" or ".jit" or ".save" or ".session")
+            {
+                suppliedInstructions = false;
+            }
+
             ok &= reply.Succeeded;
             Write(reply);
             if (reply.PendingComparison is { } comparison)
@@ -105,6 +110,7 @@ public sealed class BatchRunner
                 ok &= compared.Succeeded;
                 Write(compared);
             }
+
             if (reply.PendingNative is { } native)
             {
                 var inspected = await _engine.InspectNativeAsync(native.Identity, cancellationToken).ConfigureAwait(false);
@@ -124,6 +130,7 @@ public sealed class BatchRunner
         {
             return ok ? 0 : 1;
         }
+
         if (status.OpenEdit is { } edit)
         {
             var message = $"edit {edit} is still open; close it with }}";
@@ -137,7 +144,8 @@ public sealed class BatchRunner
         {
             // Input that ends inside a .method or .class block cannot be completed on the user's behalf.
             AnsiWriter.Write(_output, new TranscriptLine(LineKind.Error,
-                [new TranscriptSpan("  error: ", SpanStyle.Error), new TranscriptSpan($"method {open} is still open; close it with }}")]), _color);
+                [new TranscriptSpan("  error: ", SpanStyle.Error), new TranscriptSpan($"method {open} is still open; close it with }}")]),
+                _color);
             _output.Flush();
             return 1;
         }
@@ -145,7 +153,8 @@ public sealed class BatchRunner
         if (status.OpenType is { } openType)
         {
             AnsiWriter.Write(_output, new TranscriptLine(LineKind.Error,
-                [new TranscriptSpan("  error: ", SpanStyle.Error), new TranscriptSpan($"class {openType} is still open; close it with }}")]), _color);
+                [new TranscriptSpan("  error: ", SpanStyle.Error),
+                new TranscriptSpan($"class {openType} is still open; close it with }}")]), _color);
             _output.Flush();
             return 1;
         }
@@ -184,7 +193,10 @@ public sealed class BatchRunner
         if (reply.SessionEditor is { Lines.Length: > 0 } editor && editor.Lines.Any(line => line.Length != 0))
         {
             _output.WriteLine("  editor draft (not executed)");
-            foreach (var line in editor.Lines) _output.WriteLine(line);
+            foreach (var line in editor.Lines)
+            {
+                _output.WriteLine(line);
+            }
         }
 
         _output.Flush();

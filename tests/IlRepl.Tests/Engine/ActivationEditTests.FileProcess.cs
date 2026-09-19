@@ -26,6 +26,7 @@ public sealed partial class ActivationEditTests
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+
         start.Environment[FileProbePath] = path;
         start.Environment[FileProbeOverload] = overload.ToString(CultureInfo.InvariantCulture);
         start.Environment[FileProbeNested] = nested.ToString();

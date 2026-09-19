@@ -28,11 +28,21 @@
     <None Update="THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!--
+    A frontend publishes this host through a nested build that adds properties of its own. Any of them left on these
+    references would start a second build of the engine and the protocol into the same folders, and in a solution build
+    that second build runs while the first is still compiling. With all of them removed both builds are one.
+  -->
+  <PropertyGroup>
+    <_NestedPublishProperties>IntermediateOutputPath;OutputPath;PublishAot;PublishDir;PublishReadyToRun</_NestedPublishProperties>
+    <_NestedPublishProperties>$(_NestedPublishProperties);PublishSingleFile;PublishTrimmed;RuntimeIdentifier</_NestedPublishProperties>
+    <_NestedPublishProperties>$(_NestedPublishProperties);RuntimeIdentifiers;SelfContained;UseAppHost</_NestedPublishProperties>
+    <_NestedPublishProperties>$(_NestedPublishProperties);_IlReplHostBuild;_IlReplHostBuildDirectory</_NestedPublishProperties>
+  </PropertyGroup>
+
   <ItemGroup>
-    <ProjectReference Include="../IlRepl.Engine/IlRepl.Engine.csproj"
-                      GlobalPropertiesToRemove="IntermediateOutputPath;OutputPath;PublishAot;PublishDir;PublishReadyToRun;PublishSingleFile;PublishTrimmed;RuntimeIdentifier;RuntimeIdentifiers;SelfContained;UseAppHost" />
-    <ProjectReference Include="../IlRepl.Protocol/IlRepl.Protocol.csproj"
-                      GlobalPropertiesToRemove="IntermediateOutputPath;OutputPath;PublishAot;PublishDir;PublishReadyToRun;PublishSingleFile;PublishTrimmed;RuntimeIdentifier;RuntimeIdentifiers;SelfContained;UseAppHost" />
+    <ProjectReference Include="../IlRepl.Engine/IlRepl.Engine.csproj" GlobalPropertiesToRemove="$(_NestedPublishProperties)" />
+    <ProjectReference Include="../IlRepl.Protocol/IlRepl.Protocol.csproj" GlobalPropertiesToRemove="$(_NestedPublishProperties)" />
   </ItemGroup>
 
 </Project>

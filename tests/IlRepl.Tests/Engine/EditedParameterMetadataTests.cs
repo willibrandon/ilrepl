@@ -104,6 +104,7 @@ public sealed class EditedParameterMetadataTests
                 Constant = 7,
                 MarshalInfo = new MarshalInfo(NativeType.I4),
             };
+
             method.Parameters.Add(parameter);
             var attribute = new CustomAttribute(module.ImportReference(typeof(DescriptionAttribute).GetConstructor([typeof(string)])!));
             attribute.ConstructorArguments.Add(new CustomAttributeArgument(module.TypeSystem.String, "preserved"));
@@ -111,6 +112,7 @@ public sealed class EditedParameterMetadataTests
             method.Body.GetILProcessor().Emit(OpCodes.Ldarg_0);
             method.Body.GetILProcessor().Emit(OpCodes.Ret);
         }, session.Resolver);
+
         var edit = session.PrepareEdit("int32 [" + assembly.GetName().Name + "]N.Fixture::Read(int32)", "Copy");
         session.CommitEdit(edit.Name, ".method public static int32 Read([in] int32 renamed) {\nldarg renamed\nret\n}");
         AssertRetainedMetadata(edit.Method!.GetParameters().Single());

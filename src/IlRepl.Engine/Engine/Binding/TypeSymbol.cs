@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 
 namespace IlRepl.Engine.Binding;
@@ -294,7 +295,11 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
     /// <param name="name">The declared name.</param>
     /// <param name="attributes">The variance and special constraints.</param>
     /// <returns>The symbol.</returns>
-    public static TypeSymbol Parameter(DefinitionId owner, bool isMethodParameter, int position, string name,
+    public static TypeSymbol Parameter(
+        DefinitionId owner,
+        bool isMethodParameter,
+        int position,
+        string name,
         GenericParameterAttributes attributes)
     {
         ArgumentNullException.ThrowIfNull(name);
@@ -406,8 +411,8 @@ public sealed class TypeSymbol : IEquatable<TypeSymbol>
         ArgumentNullException.ThrowIfNull(ns);
         ArgumentNullException.ThrowIfNull(assemblyName);
         var tick = name.LastIndexOf('`');
-        var arity = tick > 0 && int.TryParse(name[(tick + 1)..], System.Globalization.NumberStyles.None,
-            System.Globalization.CultureInfo.InvariantCulture, out var count) ? count : 0;
+        var arity = tick > 0 && int.TryParse(name[(tick + 1)..], NumberStyles.None,
+            CultureInfo.InvariantCulture, out var count) ? count : 0;
         return new TypeSymbol(TypeSymbolKind.Unresolved)
         {
             Name = name,

@@ -186,6 +186,9 @@ public sealed class NativeCaptureTests
 
     private static void Add(Session session, params string[] source)
     {
-        foreach (var line in IlLines.Expand(source)) session.AddLine(line);
+        foreach (var line in IlLines.Expand(source))
+        {
+            session.AddLine(line);
+        }
     }
 }

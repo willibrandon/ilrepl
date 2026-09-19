@@ -10,5 +10,11 @@ namespace IlRepl.Engine;
 /// <param name="TimeoutMilliseconds">The execution time limit for each side after startup.</param>
 /// <param name="StandardInput">The identical standard input supplied to both sides.</param>
 /// <param name="FixtureDirectory">The directory whose contents initialize each separate working directory.</param>
-internal sealed record ComparisonOptions(string Name, IReadOnlyList<string> Arguments, string? Scenario,
-    bool Assert, int TimeoutMilliseconds, string StandardInput, string? FixtureDirectory);
+internal sealed record ComparisonOptions(
+    string Name,
+    IReadOnlyList<string> Arguments,
+    string? Scenario,
+    bool Assert,
+    int TimeoutMilliseconds,
+    string StandardInput,
+    string? FixtureDirectory);

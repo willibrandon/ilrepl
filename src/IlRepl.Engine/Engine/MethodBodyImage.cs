@@ -4,14 +4,36 @@ using System.Reflection.PortableExecutable;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A method body as read for a listing: the IL, the header facts, the exception clauses, and the
-/// metadata reader for the module when the body came from an image. Disposed when the command is done.
+/// A method body as read for a listing.
 /// </summary>
+/// <remarks>
+/// It holds the IL, the header facts, the exception clauses, and the metadata reader for the module when the body came from an image. It is
+/// disposed when the command is done.
+/// </remarks>
 public sealed class MethodBodyImage : IDisposable
 {
     private readonly PEReader? _pe;
 
-    internal MethodBodyImage(byte[] il, int maxStack, bool initLocals, int localSignatureToken, IReadOnlyList<RawExceptionRegion> regions, MetadataReader? metadata, PEReader? pe, string source)
+    /// <summary>
+    /// Holds a body that has already been read, and takes ownership of the image reader it came from.
+    /// </summary>
+    /// <param name="il">The IL bytes.</param>
+    /// <param name="maxStack">The declared maximum stack depth.</param>
+    /// <param name="initLocals">Whether the header asks for locals to be zeroed.</param>
+    /// <param name="localSignatureToken">The local signature token, or 0 when the body declares no locals.</param>
+    /// <param name="regions">The exception clauses as encoded.</param>
+    /// <param name="metadata">The module's metadata, or null when nothing but reflection is available.</param>
+    /// <param name="pe">The image reader to dispose with this body, or null when the body came through reflection.</param>
+    /// <param name="source">Where the body came from: <c>image</c> or <c>reflection</c>.</param>
+    internal MethodBodyImage(
+        byte[] il,
+        int maxStack,
+        bool initLocals,
+        int localSignatureToken,
+        IReadOnlyList<RawExceptionRegion> regions,
+        MetadataReader? metadata,
+        PEReader? pe,
+        string source)
     {
         Il = il;
         MaxStack = maxStack;

@@ -323,6 +323,7 @@ internal sealed class CaretWalk
                 return CompletionSite.None;
             }
         }
+
         if (name is ".diff" or ".compare" or ".methods")
         {
             if (WordSite(head + 1, CompletionSiteKind.EditName, name, -1) is { } operand)
@@ -364,17 +365,32 @@ internal sealed class CaretWalk
             {
                 var option = _r.TextAt(index).ToString();
                 if (option.StartsWith('-') && _r.TextAt(index - 1).SequenceEqual("-")
-                    && _r.EndOf(index - 1) == _r.StartOf(index)) option = "-" + option;
+                    && _r.EndOf(index - 1) == _r.StartOf(index))
+                {
+                    option = "-" + option;
+                }
+
                 if (option == "using" && WordSite(index + 1, CompletionSiteKind.Scenario, name, -1) is { } scenario)
+                {
                     return scenario with { DeclarationComplete = false };
+                }
+
                 if (option is "--tier" or "--pgo"
                     && WordSite(index + 1, CompletionSiteKind.CommandOption, name + " " + option, -1) is { } value)
+                {
                     return value with { DeclarationComplete = false };
+                }
+
                 if (option == "--against" && _caret > _r.EndOf(index))
+                {
                     return Member(index + 1, ".dis", CompletionSiteKind.Method, complete: false) ?? CompletionSite.None;
+                }
             }
+
             if (name == ".jit")
+            {
                 return Member(head + 1, ".dis", CompletionSiteKind.Method, complete: false) ?? CompletionSite.None;
+            }
         }
 
         if (word.SequenceEqual(".dis") || word.SequenceEqual(".disassemble") || word.SequenceEqual(".edit"))

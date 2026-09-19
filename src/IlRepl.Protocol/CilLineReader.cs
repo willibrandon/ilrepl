@@ -1,13 +1,16 @@
 namespace IlRepl.Protocol;
 
 /// <summary>
-/// Reads the grammar of one line over its lexemes and emits tokens as it goes: types with their
-/// modifiers and suffixes, parameter lists, member references, and the fallback for anything the
-/// grammar has no shape for. Types are consumed as grammar; a name is what is left over.
+/// Reads the grammar of one line over its lexemes and emits tokens as it goes.
 /// </summary>
+/// <remarks>
+/// The grammar covers types with their modifiers and suffixes, parameter lists, member references, and the fallback for anything the
+/// grammar has no shape for. Types are consumed as grammar, and a name is what is left over.
+/// </remarks>
 internal sealed class CilLineReader
 {
-    private static readonly string[] CallingConventions = ["instance", "explicit", "vararg", "unmanaged", "cdecl", "stdcall", "thiscall", "fastcall", "default", "winapi", "platformapi"];
+    private static readonly string[] CallingConventions = ["instance", "explicit", "vararg", "unmanaged", "cdecl", "stdcall", "thiscall",
+        "fastcall", "default", "winapi", "platformapi"];
     private static readonly string[] ParameterAttributes = ["[in]", "[out]", "[opt]"];
 
     private readonly CilTokenizer _tokenizer;
@@ -170,7 +173,8 @@ internal sealed class CilLineReader
         // pieces around it and no two tokens overlap.
         var start = _lexemes[from].Start;
         var end = _lexemes[to].End;
-        var comments = _tokens.Where(t => t.Style == SpanStyle.Comment && t.Start < end && t.Start + t.Length > start).OrderBy(t => t.Start).ToList();
+        var comments = _tokens.Where(t => t.Style == SpanStyle.Comment && t.Start < end && t.Start + t.Length > start).OrderBy(t => t.Start)
+            .ToList();
         foreach (var comment in comments)
         {
             if (comment.Start > start)
@@ -229,10 +233,12 @@ internal sealed class CilLineReader
     }
 
     /// <summary>
-    /// Reads one type: <c>class</c> or <c>valuetype</c>, an assembly hint, the name, a primitive
-    /// (<c>native int</c> included), a generic parameter, or a function pointer, then any generic
-    /// arguments, array bounds, pointer and reference marks, <c>pinned</c>, and modifiers.
+    /// Reads one type, then any generic arguments, array bounds, pointer and reference marks, <c>pinned</c>, and modifiers.
     /// </summary>
+    /// <remarks>
+    /// The type is <c>class</c> or <c>valuetype</c>, an assembly hint, the name, a primitive (<c>native int</c> included), a generic
+    /// parameter, or a function pointer.
+    /// </remarks>
     /// <param name="i">Where the type starts.</param>
     /// <returns>The index just past the type, or <paramref name="i"/> when there is no type here.</returns>
     public int ReadType(int i)
@@ -272,7 +278,8 @@ internal sealed class CilLineReader
 
         if (KindAt(i) == CilLexemeKind.Word)
         {
-            while ((IsWord(i, "native") || IsWord(i, "unsigned")) && (IsWord(i + 1, "native") || IsWord(i + 1, "unsigned") || IsPrimitive(i + 1)))
+            while ((IsWord(i, "native") || IsWord(i, "unsigned"))
+                && (IsWord(i + 1, "native") || IsWord(i + 1, "unsigned") || IsPrimitive(i + 1)))
             {
                 Emit(i, SpanStyle.Type);
                 i++;
@@ -295,9 +302,11 @@ internal sealed class CilLineReader
     }
 
     /// <summary>
-    /// Reads a parenthesised list of parameters or locals: each item is an optional slot or
-    /// attribute, a type, an optional name, and for a cell argument an optional default.
+    /// Reads a parenthesised list of parameters or locals.
     /// </summary>
+    /// <remarks>
+    /// Each item is an optional slot or attribute, a type, an optional name, and for a cell argument an optional default.
+    /// </remarks>
     /// <param name="i">The index of the opening parenthesis.</param>
     /// <returns>The index just past the closing parenthesis.</returns>
     public int ReadParameterList(int i)
@@ -370,10 +379,12 @@ internal sealed class CilLineReader
     }
 
     /// <summary>
-    /// Reads a method or field reference: the calling convention, the return or field type, then
-    /// either a bare name or a declaring type, <c>::</c>, and the name, then generic arguments and
-    /// the parameter types.
+    /// Reads a method or field reference.
     /// </summary>
+    /// <remarks>
+    /// It reads the calling convention, the return or field type, then either a bare name or a declaring type, <c>::</c>, and the name,
+    /// then generic arguments and the parameter types.
+    /// </remarks>
     /// <param name="i">Where the reference starts.</param>
     /// <returns>The index just past it.</returns>
     public int ReadMemberReference(int i)
@@ -579,9 +590,11 @@ internal sealed class CilLineReader
     }
 
     /// <summary>
-    /// Reads the generic parameters of a declaration: names, constraint keywords, and constraint
-    /// types in parentheses, between angle brackets.
+    /// Reads the generic parameters of a declaration, between angle brackets.
     /// </summary>
+    /// <remarks>
+    /// They are names, constraint keywords, and constraint types in parentheses.
+    /// </remarks>
     /// <param name="i">The index of the opening bracket.</param>
     /// <returns>The index just past the closing bracket.</returns>
     public int ReadGenericParameters(int i)
@@ -628,7 +641,8 @@ internal sealed class CilLineReader
                 continue;
             }
 
-            if (IsKeyword(i) && !IsName(i + 1) && !IsPunct(i + 1, ',') && !IsPunct(i + 1, '>') || IsWord(i, "class") || IsWord(i, "valuetype") || IsWord(i, "byreflike") || IsWord(i, ".ctor"))
+            if (IsKeyword(i) && !IsName(i + 1) && !IsPunct(i + 1, ',') && !IsPunct(i + 1, '>') || IsWord(i, "class")
+                || IsWord(i, "valuetype") || IsWord(i, "byreflike") || IsWord(i, ".ctor"))
             {
                 Emit(i, SpanStyle.Keyword);
                 i++;
@@ -657,16 +671,20 @@ internal sealed class CilLineReader
 
     /// <summary>
     /// Reads the modifiers of a declaration, keyword by keyword, and stops where a type begins.
-    /// A modifier with a parenthesised argument, such as <c>pinvokeimpl(...)</c>, is read whole.
     /// </summary>
+    /// <remarks>
+    /// A modifier with a parenthesised argument, such as <c>pinvokeimpl(...)</c>, is read whole.
+    /// </remarks>
     /// <param name="i">Where the modifiers start.</param>
     /// <returns>The index just past them.</returns>
     public int ReadModifiers(int i) => ReadModifiers(i, stopAtType: true);
 
     /// <summary>
-    /// Reads the modifiers of a declaration, keyword by keyword. A <c>.class</c> header has no type
-    /// between its modifiers and its name, so its reading does not stop where a type could begin.
+    /// Reads the modifiers of a declaration, keyword by keyword.
     /// </summary>
+    /// <remarks>
+    /// A <c>.class</c> header has no type between its modifiers and its name, so its reading does not stop where a type could begin.
+    /// </remarks>
     /// <param name="i">Where the modifiers start.</param>
     /// <param name="stopAtType">Whether to stop where a type could begin.</param>
     /// <returns>The index just past them.</returns>

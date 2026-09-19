@@ -43,7 +43,11 @@ public static class CellCompiler
         ArgumentNullException.ThrowIfNull(session);
         using var references = session.Resolver.EnterContext();
         RequireComplete(session);
-        if (activate) session.Activate();
+        if (activate)
+        {
+            session.Activate();
+        }
+
         var name = SessionAssemblies.NextName(SessionAssemblyKind.Cell);
         // Collectible assemblies let CoreCLR unload old cells; the browser runtime has no unloading.
         var access = AssemblyLifetimeScope.Collectible ? AssemblyBuilderAccess.RunAndCollect : AssemblyBuilderAccess.Run;
@@ -67,15 +71,21 @@ public static class CellCompiler
         }
         catch
         {
-            if (context is { IsCollectible: true }) context.Unload();
+            if (context is { IsCollectible: true })
+            {
+                context.Unload();
+            }
+
             throw;
         }
     }
 
     /// <summary>
-    /// Refuses a session whose cell cannot be compiled: an open block, a pending label, an open
-    /// protected region, or more than one value on the stack.
+    /// Refuses a session whose cell cannot be compiled.
     /// </summary>
+    /// <remarks>
+    /// A cell cannot be compiled when it has an open block, a pending label, an open protected region, or more than one value on the stack.
+    /// </remarks>
     /// <param name="session">The session.</param>
     /// <exception cref="ReplException">The cell is incomplete.</exception>
     public static void RequireComplete(Session session)
@@ -117,8 +127,13 @@ public static class CellCompiler
         }
     }
 
-    private static CompiledCell Build(Session session, AssemblyBuilder assembly, string moduleName,
-        DefinitionLoadContext? context, bool activate, CancellationToken cancellationToken)
+    private static CompiledCell Build(
+        Session session,
+        AssemblyBuilder assembly,
+        string moduleName,
+        DefinitionLoadContext? context,
+        bool activate,
+        CancellationToken cancellationToken)
     {
         RequireComplete(session);
         var cell = session.Cell;
@@ -244,7 +259,10 @@ public static class CellCompiler
         }
     }
 
-    private static void EmitBody(ILGenerator il, CellState state, IReadOnlyDictionary<string, MethodInfo> methods,
+    private static void EmitBody(
+        ILGenerator il,
+        CellState state,
+        IReadOnlyDictionary<string, MethodInfo> methods,
         CancellationToken cancellationToken)
     {
         var locals = state.Locals.Select(l => il.DeclareLocal(l.Type, l.IsPinned)).ToArray();

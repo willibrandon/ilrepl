@@ -3,9 +3,11 @@ using IlRepl.Protocol;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A line of input with its comments removed, exactly once, before anything looks at it. The
-/// text is what the session parses and stores; the raw line is what the transcript echoes.
+/// A line of input with its comments removed, exactly once, before anything looks at it.
 /// </summary>
+/// <remarks>
+/// The text is what the session parses and stores; the raw line is what the transcript echoes.
+/// </remarks>
 /// <param name="Raw">The line as typed.</param>
 /// <param name="Text">The line without comments, trimmed.</param>
 /// <param name="Kind">What the line amounts to.</param>

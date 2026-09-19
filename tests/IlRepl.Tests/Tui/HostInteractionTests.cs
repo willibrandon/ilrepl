@@ -40,7 +40,11 @@ public sealed class HostInteractionTests
             "WAIT: ldstr " + LiteralParser.Escape(release), "call bool File::Exists(string)", "brfalse WAIT", "ret", "}",
             "call void WaitForRelease()",
         ];
-        foreach (var line in source) Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded, line);
+        foreach (var line in source)
+        {
+            Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded, line);
+        }
+
         PromptState? prompt = null;
         var transcript = new Transcript();
         var adapter = new ScriptedPresentationAdapter(100, 30);
@@ -64,7 +68,11 @@ public sealed class HostInteractionTests
                 await auto.WaitUntilTextAsync("Enter accepts");
                 await auto.EnterAsync(ct: token);
             }
-            else await auto.TabAsync(ct: token);
+            else
+            {
+                await auto.TabAsync(ct: token);
+            }
+
             await auto.WaitUntilAsync(snapshot => prompt!.Text == expected && !snapshot.ContainsText("members"));
             Assert.IsTrue(prompt!.Submission is { IsRunning: true });
             Assert.IsEmpty(prompt.Pending);
@@ -118,6 +126,7 @@ public sealed class HostInteractionTests
             await launch.Task.WaitAsync(ct);
             return await HostPaths.StartEngineAsync(ct);
         });
+
         PromptState? prompt = null;
         var transcript = new Transcript();
         await using var terminal = AppTest.Build(controller, transcript, onPrompt: state => prompt = state);
@@ -169,6 +178,7 @@ public sealed class HostInteractionTests
             "finally" => [".try {", "leave DONE", "} finally {", "LOOP: br LOOP", "endfinally", "}", "DONE: ret"],
             _ => ["LOOP: br LOOP"],
         };
+
         await AppTest.TypeLinesAsync(auto,
         [
             ".method void WaitForever() {", "ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"running\"",
@@ -183,12 +193,13 @@ public sealed class HostInteractionTests
             await auto.EnterAsync(ct: token);
             await auto.WaitUntilAsync(_ => prompt!.Pending.Count == 1);
         }
+
         await auto.TypeAsync("// keep this draft", ct: token);
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
         await auto.WaitUntilTextAsync("Press Ctrl+C again to restart");
         Assert.AreEqual(SessionRuntimeState.Ready, controller.RuntimeState);
         Assert.IsTrue(controller.Progress.IsRunning);
-        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
+        await ConfirmRestartAsync(auto, prompt!, token);
         await auto.WaitUntilTextAsync("runtime restarted; source and definitions retained");
         var expectedDraft = queueInput ? "ldc.i4 73\n// keep this draft" : "// keep this draft";
         Assert.AreEqual(expectedDraft, prompt!.Text);
@@ -216,9 +227,17 @@ public sealed class HostInteractionTests
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
         await using var controller = await SessionWorkspaceFixture.StartAsync(token);
-        foreach (var line in new[] { "ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"running\"",
-            "call void System.IO.File::WriteAllText(string, string)", "LOOP: br LOOP" })
+        foreach (var line in new[]
+        {
+            "ldstr " + LiteralParser.Escape(files.MarkerPath),
+            "ldstr \"running\"",
+            "call void System.IO.File::WriteAllText(string, string)",
+            "LOOP: br LOOP",
+        })
+        {
             Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded);
+        }
+
         PromptState? prompt = null;
         await using var terminal = AppTest.Build(controller, new Transcript(), width: 12, height: 30,
             onPrompt: value => prompt = value);
@@ -232,7 +251,7 @@ public sealed class HostInteractionTests
             .Replace(" ", "", StringComparison.Ordinal).Contains("PressCtrl+Cagain", StringComparison.Ordinal));
         Assert.AreEqual(SessionRuntimeState.Ready, controller.RuntimeState);
         Assert.IsTrue(controller.Progress.IsRunning);
-        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
+        await ConfirmRestartAsync(auto, prompt!, token);
         await auto.WaitUntilAsync(_ => controller.RuntimeState == SessionRuntimeState.Ready && !controller.Progress.IsRunning
             && controller.Workspace!.Document.Interruptions.Length == 1);
         await executing.WaitAsync(token);
@@ -256,8 +275,13 @@ public sealed class HostInteractionTests
         var token = TestContext.CancellationToken;
         using var files = new SessionWorkspaceFixture();
         await using var controller = await SessionWorkspaceFixture.StartAsync(token);
-        foreach (var line in new[] { "ldstr " + LiteralParser.Escape(files.MarkerPath), "ldstr \"running\"",
-            "call void System.IO.File::WriteAllText(string, string)", "LOOP: br LOOP" })
+        foreach (var line in new[]
+        {
+            "ldstr " + LiteralParser.Escape(files.MarkerPath),
+            "ldstr \"running\"",
+            "call void System.IO.File::WriteAllText(string, string)",
+            "LOOP: br LOOP",
+        })
         {
             Assert.IsTrue((await controller.HandleAsync(line, token)).Succeeded);
         }
@@ -272,6 +296,7 @@ public sealed class HostInteractionTests
             auto!.TypeAsync(".clear", ct: token).GetAwaiter().GetResult();
             auto.WaitUntilAsync(_ => prompt!.Text == ".clear").GetAwaiter().GetResult();
         };
+
         await using var terminal = AppTest.Build(controller, new Transcript(), width: 80, height: 30,
             onPrompt: value => prompt = value);
         auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: AppTest.Timeout);
@@ -281,12 +306,26 @@ public sealed class HostInteractionTests
         await auto.WaitUntilAsync(_ => File.Exists(files.MarkerPath));
         await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
         await auto.WaitUntilTextAsync("Press Ctrl+C again");
-        await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
+        await ConfirmRestartAsync(auto, prompt!, token);
         await executing.WaitAsync(token);
         await auto.WaitUntilAsync(snapshot => snapshot.ContainsText("runtime restarted") && snapshot.ContainsText("il[2]> .clear"));
         Assert.AreEqual(".clear", prompt!.Text);
         await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
         await run.WaitAsync(token);
+    }
+
+    // The app honours the confirming press only once the notice for the current phase of the run has been flushed, and it
+    // ignores a press that arrives while a new phase redraws the notice, as it would for a person who then presses again.
+    // The text on screen cannot tell the two apart, so the press is repeated until one of them is taken.
+    private static async Task ConfirmRestartAsync(Hex1bTerminalAutomator auto, PromptState prompt, CancellationToken token)
+    {
+        while (prompt.Interruption.Counts.Restarts == 0)
+        {
+            await auto.WaitUntilAsync(_ => prompt.Interruption.Armed);
+            var presses = prompt.Interruption.Counts.Presses;
+            await auto.Ctrl().KeyAsync(Hex1bKey.C, ct: token);
+            await auto.WaitUntilAsync(_ => prompt.Interruption.Counts.Presses > presses);
+        }
     }
 
     private static string Flatten(Hex1bTerminalSnapshot snapshot) =>

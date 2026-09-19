@@ -3,10 +3,11 @@ using System.Reflection;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// A <c>.custom</c> attribute as semantic values: the constructor and its arguments, and the
-/// named fields and properties. A blob written in the ildasm form is decoded into these at the
-/// line, so the attribute can be written again against any assembly.
+/// A <c>.custom</c> attribute as semantic values: the constructor and its arguments, and the named fields and properties.
 /// </summary>
+/// <remarks>
+/// A blob written in the ildasm form is decoded into these at the line, so the attribute can be written again against any assembly.
+/// </remarks>
 /// <param name="Constructor">The attribute constructor.</param>
 /// <param name="FixedArguments">The constructor arguments, typed by the constructor's parameters.</param>
 /// <param name="NamedFields">The named field arguments.</param>

@@ -322,6 +322,7 @@ public sealed class SessionProjectTests
             Entries = [.. saved.Entries.Select(entry => entry.Reference == original.Identity
                 ? entry with { Reference = identity } : entry)],
         };
+
         await File.WriteAllBytesAsync(path, SessionCodec.Write(saved), TestContext.CancellationToken);
         var movedDirectory = Path.Combine(fixture.DirectoryPath, "moved project");
         Directory.Move(Path.GetDirectoryName(project)!, movedDirectory);

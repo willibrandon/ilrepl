@@ -5,6 +5,15 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static class SequenceDiff
 {
+    /// <summary>
+    /// Aligns two sequences of lines into matched, removed, and added rows, in order.
+    /// </summary>
+    /// <remarks>
+    /// The alignment is the shortest edit sequence until the two differ by 256 edits, then a divide and conquer match in linear memory.
+    /// </remarks>
+    /// <param name="original">The lines before the edit.</param>
+    /// <param name="edited">The lines after the edit.</param>
+    /// <returns>Index pairs into the two sequences, with -1 on the side a removed or added row is missing from.</returns>
     internal static IReadOnlyList<(int Original, int Edited)> Match(IReadOnlyList<string> original, IReadOnlyList<string> edited)
     {
         var maximum = original.Count + edited.Count;

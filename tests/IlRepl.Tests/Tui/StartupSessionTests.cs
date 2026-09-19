@@ -48,6 +48,7 @@ public sealed class StartupSessionTests
             await launch.Task.WaitAsync(ct);
             return await HostPaths.StartEngineAsync(ct);
         }, new SessionRequest { Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath } });
+
         if (lateInput)
         {
             controller.RecoveryCompleted += _ =>
@@ -56,6 +57,7 @@ public sealed class StartupSessionTests
                 deliver.Task.GetAwaiter().GetResult();
             };
         }
+
         PromptState? prompt = null;
         var transcript = new Transcript();
         var adapter = new ScriptedPresentationAdapter(100, 30);
@@ -73,8 +75,12 @@ public sealed class StartupSessionTests
             {
                 await adapter.PasteAsync(early);
                 await auto.WaitUntilAsync(_ => prompt!.Text == early);
-                if (!lateInput) typed = await SelectEndAsync();
+                if (!lateInput)
+                {
+                    typed = await SelectEndAsync();
+                }
             }
+
             launch.TrySetResult();
             if (lateInput)
             {
@@ -85,6 +91,7 @@ public sealed class StartupSessionTests
                 typed = await SelectEndAsync();
                 deliver.TrySetResult();
             }
+
             await controller.Initialization.WaitAsync(token);
             var prefix = savedDraft && edit ? string.Join('\n', saved.Lines) + "\n" : "";
             var expected = edit ? prefix + (lateInput ? late : early) : string.Join('\n', saved.Lines);
@@ -98,6 +105,7 @@ public sealed class StartupSessionTests
             {
                 Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = prompt.CaptureSessionEditor(),
             }, token);
+
             Assert.AreEqual(expected, string.Join('\n', captured.Document.Editor.Lines));
             Assert.AreEqual(edit, captured.Dirty);
             Assert.HasCount(1, captured.Document.Cells);
@@ -110,6 +118,7 @@ public sealed class StartupSessionTests
                 await auto.WaitUntilTextAsync("= 47 : int32");
                 Assert.IsFalse(File.Exists(files.MarkerPath));
             }
+
             await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: token);
             if (edit)
             {
@@ -117,6 +126,7 @@ public sealed class StartupSessionTests
                 await auto.DownAsync(ct: token);
                 await auto.EnterAsync(ct: token);
             }
+
             await run.WaitAsync(token);
         }
         finally

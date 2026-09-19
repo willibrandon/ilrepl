@@ -58,8 +58,10 @@ public static class ComparisonFixturePermissionExamples
             if (unix)
             {
                 foreach (var path in new[] { "nested", "." })
+                {
                     source.Append("ldstr \"").Append(path)
                         .Append("\"\nldc.i4.0\ncall void File::SetUnixFileMode(string, valuetype UnixFileMode)\n");
+                }
             }
         }
 
@@ -76,8 +78,14 @@ public static class ComparisonFixturePermissionExamples
         var source = new StringBuilder(".method public static int32[] Read() {\n"
             + "call string Environment::get_CurrentDirectory()\ncall void Console::WriteLine(string)\nldc.i4 ")
             .Append(unix ? "6" : "5").Append("\nnewarr int32\n");
-        var links = new[] { ("alias.txt", "readonly.txt"), ("missing.txt", "absent.txt"),
-            ("alias-dir", "nested"), ("missing-dir", "absent-dir") };
+        var links = new[]
+        {
+            ("alias.txt", "readonly.txt"),
+            ("missing.txt", "absent.txt"),
+            ("alias-dir", "nested"),
+            ("missing-dir", "absent-dir"),
+        };
+
         for (var index = 0; index < links.Length; index++)
         {
             var (path, target) = links[index];
@@ -91,7 +99,10 @@ public static class ComparisonFixturePermissionExamples
         source.Append("dup\nldc.i4.4\nldstr \"readonly.txt\"\ncall valuetype FileAttributes File::GetAttributes(string)\n")
             .Append("ldc.i4.1\nand\nstelem.i4\n");
         if (unix)
+        {
             source.Append("dup\nldc.i4.5\nldstr \"alias.txt\"\ncall valuetype UnixFileMode File::GetUnixFileMode(string)\nstelem.i4\n");
+        }
+
         return source.Append("ret\n}").ToString();
     }
 

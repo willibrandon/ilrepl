@@ -11,8 +11,14 @@ namespace IlRepl.Engine;
 /// <param name="HandlerEnd">The exclusive handler end.</param>
 /// <param name="FilterStart">The filter entry, when present.</param>
 /// <param name="CatchType">The catch type, when present.</param>
-public sealed record ExceptionRegion<T>(IlClauseKind Kind, string TryStart, string TryEnd,
-    string HandlerStart, string HandlerEnd, string? FilterStart, T? CatchType) where T : class
+public sealed record ExceptionRegion<T>(
+    IlClauseKind Kind,
+    string TryStart,
+    string TryEnd,
+    string HandlerStart,
+    string HandlerEnd,
+    string? FilterStart,
+    T? CatchType) where T : class
 {
     /// <summary>
     /// Every referenced boundary, in declaration order.

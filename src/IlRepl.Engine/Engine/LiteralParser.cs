@@ -72,9 +72,12 @@ public static class LiteralParser
     }
 
     /// <summary>
-    /// Parses a floating-point literal: a decimal number, <c>nan</c>, <c>inf</c>, or the ILAsm
-    /// <c>float64(0x...)</c> and <c>float32(0x...)</c> bit-pattern forms.
+    /// Parses a floating-point literal.
     /// </summary>
+    /// <remarks>
+    /// The literal is a decimal number, <c>nan</c>, <c>inf</c>, or the ILAsm <c>float64(0x...)</c> and <c>float32(0x...)</c> bit-pattern
+    /// forms.
+    /// </remarks>
     /// <param name="text">The literal text.</param>
     /// <param name="what">What the literal is for, used in error messages.</param>
     /// <returns>The value as a double.</returns>
@@ -132,9 +135,11 @@ public static class LiteralParser
     }
 
     /// <summary>
-    /// Parses a <c>float32</c> literal without widening it: <c>float32(0x...)</c> reinterprets the
-    /// bits exactly, so a signaling NaN stays signaling; every other spelling parses as a float.
+    /// Parses a <c>float32</c> literal without widening it.
     /// </summary>
+    /// <remarks>
+    /// <c>float32(0x...)</c> reinterprets the bits exactly, so a signaling NaN stays signaling. Every other spelling parses as a float.
+    /// </remarks>
     /// <param name="text">The literal text.</param>
     /// <param name="what">What the literal is for, used in error messages.</param>
     /// <returns>The value as a float.</returns>
@@ -188,9 +193,12 @@ public static class LiteralParser
     }
 
     /// <summary>
-    /// Parses a string operand: a double-quoted string with C-style escapes, a single-quoted string,
-    /// an ILAsm <c>bytearray (…)</c> of UTF-16 bytes, or, as a convenience, bare text.
+    /// Parses a string operand.
     /// </summary>
+    /// <remarks>
+    /// The operand is a double-quoted string with C-style escapes, a single-quoted string, an ILAsm <c>bytearray (…)</c> of UTF-16 bytes,
+    /// or, as a convenience, bare text.
+    /// </remarks>
     /// <param name="text">The operand text.</param>
     /// <returns>The string value.</returns>
     /// <exception cref="ReplException">A <c>bytearray</c> is malformed.</exception>
@@ -264,11 +272,13 @@ public static class LiteralParser
                 case '\'': sb.Append('\''); break;
                 case '?': sb.Append('?'); break;
                 case '\\': sb.Append('\\'); break;
-                case 'u' when i + 4 < s.Length && ushort.TryParse(s.AsSpan(i + 1, 4), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var code):
+                case 'u' when i + 4 < s.Length
+                    && ushort.TryParse(s.AsSpan(i + 1, 4), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var code):
                     sb.Append((char)code);
                     i += 4;
                     break;
-                case 'x' when i + 2 < s.Length && byte.TryParse(s.AsSpan(i + 1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexByte):
+                case 'x' when i + 2 < s.Length
+                    && byte.TryParse(s.AsSpan(i + 1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexByte):
                     sb.Append((char)hexByte);
                     i += 2;
                     break;

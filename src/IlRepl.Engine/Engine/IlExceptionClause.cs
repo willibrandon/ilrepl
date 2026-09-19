@@ -1,11 +1,13 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// One exception handling clause of a method body, normalized to offsets: the protected range,
-/// the filter code for a filter clause, the handler, and the catch type as far as it resolved.
-/// Kept on a disassembled method whether or not the listing draws it as a block, because the
-/// stack analysis and the fallback rendering both read it.
+/// One exception handling clause of a method body, normalized to offsets.
 /// </summary>
+/// <remarks>
+/// It holds the protected range, the filter code for a filter clause, the handler, and the catch type as far as it resolved. It is kept on
+/// a disassembled method whether or not the listing draws it as a block, because the stack analysis and the fallback rendering both read
+/// it.
+/// </remarks>
 /// <param name="Kind">The clause kind.</param>
 /// <param name="TryStart">The first offset of the protected range.</param>
 /// <param name="TryEnd">The offset just past the protected range.</param>
@@ -41,7 +43,9 @@ public sealed record IlExceptionClause(
         var handler = $"handler {IlReader.LabelFor(HandlerStart)} to {IlReader.LabelFor(HandlerEnd)}";
         return Kind switch
         {
-            IlClauseKind.Catch => head + "catch " + (CatchSignature is null ? (CatchType is null ? $"0x{CatchToken:x8}" : TypeNameFormatter.IlAsmDeclaring(CatchType)) : CatchText()) + " " + handler,
+            IlClauseKind.Catch => head + "catch "
+                + (CatchSignature is null ? (CatchType is null ? $"0x{CatchToken:x8}" : TypeNameFormatter.IlAsmDeclaring(CatchType))
+                : CatchText()) + " " + handler,
             IlClauseKind.Filter => head + "filter " + IlReader.LabelFor(FilterStart ?? HandlerStart) + " " + handler,
             IlClauseKind.Finally => head + "finally " + handler,
             _ => head + "fault " + handler,
@@ -51,6 +55,7 @@ public sealed record IlExceptionClause(
     private string CatchText()
     {
         var text = IlSignatureRenderer.IlAsm(CatchSignature!);
-        return text.StartsWith("class ", StringComparison.Ordinal) ? text[6..] : text.StartsWith("valuetype ", StringComparison.Ordinal) ? text[10..] : text;
+        return text.StartsWith("class ", StringComparison.Ordinal) ? text[6..] : text.StartsWith("valuetype ", StringComparison.Ordinal)
+            ? text[10..] : text;
     }
 }

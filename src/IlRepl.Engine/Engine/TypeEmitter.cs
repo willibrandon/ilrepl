@@ -18,7 +18,11 @@ public static class TypeEmitter
     /// <param name="prepare">True to ask the JIT to compile every body.</param>
     /// <returns>The loaded family.</returns>
     /// <exception cref="ReplException">The writer, the loader, or the JIT rejected the family.</exception>
-    public static CompiledFamily Compile(TypeDeclaration family, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> prototypes, IReadOnlyDictionary<string, MethodTrampoline> trampolines, bool prepare)
+    public static CompiledFamily Compile(
+        TypeDeclaration family,
+        IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> prototypes,
+        IReadOnlyDictionary<string, MethodTrampoline> trampolines,
+        bool prepare)
     {
         ArgumentNullException.ThrowIfNull(family);
         var name = SessionAssemblies.NextName(SessionAssemblyKind.Types);
@@ -41,9 +45,11 @@ public static class TypeEmitter
     }
 
     /// <summary>
-    /// Writes a family into an image under a name taken in advance. Prototypes of other families
-    /// written in the same group are referenced by their assembly names.
+    /// Writes a family into an image under a name taken in advance.
     /// </summary>
+    /// <remarks>
+    /// Prototypes of other families written in the same group are referenced by their assembly names.
+    /// </remarks>
     /// <param name="family">The outermost declaration.</param>
     /// <param name="prototypes">The prototype and members of every declaration, by path.</param>
     /// <param name="trampolines">The trampolines of the session methods, by name.</param>
@@ -51,7 +57,12 @@ public static class TypeEmitter
     /// <param name="externals">Prototypes of the other families of the group, or null.</param>
     /// <returns>The image and the loaded session assemblies it references.</returns>
     /// <exception cref="ReplException">The writer rejected the family.</exception>
-    public static (byte[] Image, IReadOnlyList<DefinitionAssembly> Dependencies) Write(TypeDeclaration family, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> prototypes, IReadOnlyDictionary<string, MethodTrampoline> trampolines, string name, IReadOnlyDictionary<Type, CecilWriter.ExternalPrototype>? externals)
+    public static (byte[] Image, IReadOnlyList<DefinitionAssembly> Dependencies) Write(
+        TypeDeclaration family,
+        IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> prototypes,
+        IReadOnlyDictionary<string, MethodTrampoline> trampolines,
+        string name,
+        IReadOnlyDictionary<Type, CecilWriter.ExternalPrototype>? externals)
     {
         ArgumentNullException.ThrowIfNull(family);
         ArgumentNullException.ThrowIfNull(prototypes);
@@ -131,15 +142,19 @@ public static class TypeEmitter
     }
 
     /// <summary>
-    /// Writes a family into an existing writer, for an export. The prototypes map onto the
-    /// definitions written; nothing is loaded.
+    /// Writes a family into an existing writer, for an export. The prototypes map onto the definitions written; nothing is loaded.
     /// </summary>
     /// <param name="writer">The writer.</param>
     /// <param name="family">The outermost declaration.</param>
     /// <param name="prototypes">The prototype and members of every declaration, by path.</param>
     /// <param name="trampolines">The trampolines of the session methods, by name.</param>
     /// <param name="runtimeTypes">The loaded types of the family by path, whose members other bodies are bound to, or null.</param>
-    public static void Write(CecilWriter writer, TypeDeclaration family, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> prototypes, IReadOnlyDictionary<string, MethodTrampoline> trampolines, IReadOnlyDictionary<string, Type>? runtimeTypes)
+    public static void Write(
+        CecilWriter writer,
+        TypeDeclaration family,
+        IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> prototypes,
+        IReadOnlyDictionary<string, MethodTrampoline> trampolines,
+        IReadOnlyDictionary<string, Type>? runtimeTypes)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(family);
@@ -152,9 +167,11 @@ public static class TypeEmitter
     /// <param name="writer">The writer.</param>
     /// <param name="families">The families with their prototypes and, for an export, their loaded types.</param>
     /// <param name="trampolines">The trampolines of the session methods, by name.</param>
-    public static void WriteAll(CecilWriter writer,
+    public static void WriteAll(
+        CecilWriter writer,
         IReadOnlyList<(TypeDeclaration Family, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> Prototypes,
-            IReadOnlyDictionary<string, Type>? RuntimeTypes)> families, IReadOnlyDictionary<string, MethodTrampoline> trampolines)
+            IReadOnlyDictionary<string, Type>? RuntimeTypes)> families,
+        IReadOnlyDictionary<string, MethodTrampoline> trampolines)
         => WriteAllCancellable(writer, families, trampolines, CancellationToken.None);
 
     /// <summary>
@@ -164,9 +181,11 @@ public static class TypeEmitter
     /// <param name="families">The declarations, prototypes, and optional live definitions.</param>
     /// <param name="trampolines">The session methods referenced by the definitions.</param>
     /// <param name="cancellationToken">Cancels preparation before the resulting image is published.</param>
-    internal static void WriteAllCancellable(CecilWriter writer,
+    internal static void WriteAllCancellable(
+        CecilWriter writer,
         IReadOnlyList<(TypeDeclaration Family, IReadOnlyDictionary<string, (TypeBuilder Prototype, OwnMembers Members)> Prototypes,
-            IReadOnlyDictionary<string, Type>? RuntimeTypes)> families, IReadOnlyDictionary<string, MethodTrampoline> trampolines,
+            IReadOnlyDictionary<string, Type>? RuntimeTypes)> families,
+        IReadOnlyDictionary<string, MethodTrampoline> trampolines,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(writer);
@@ -206,6 +225,12 @@ public static class TypeEmitter
         }
     }
 
+    /// <summary>
+    /// Loads a declared type from its emitted assembly, reporting a runtime rejection as a <see cref="ReplException"/>.
+    /// </summary>
+    /// <param name="assembly">The loaded assembly that defines the type.</param>
+    /// <param name="declaration">The declaration to find by its reflection name.</param>
+    /// <returns>The runtime type.</returns>
     internal static Type LoadType(Assembly assembly, TypeDeclaration declaration)
     {
         var name = ReflectionName(declaration);
@@ -246,7 +271,8 @@ public static class TypeEmitter
             }
         }
 
-        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance
+            | BindingFlags.DeclaredOnly;
         foreach (var method in type.GetMethods(all).Cast<MethodBase>().Concat(type.GetConstructors(all)))
         {
             if (method.IsAbstract || method.ContainsGenericParameters && method is MethodInfo { IsGenericMethodDefinition: true })
@@ -267,13 +293,19 @@ public static class TypeEmitter
             }
             catch (InvalidProgramException ex) when (ex.Message.Contains("Vararg", StringComparison.OrdinalIgnoreCase))
             {
-                throw new ReplException($"the runtime only supports the vararg calling convention on Windows; {declaration.KindWord} {declaration.FullName}::{method.Name} cannot be prepared here", ex);
+                throw new ReplException(
+                    $"the runtime only supports the vararg calling convention on Windows; " +
+                    $"{declaration.KindWord} {declaration.FullName}::{method.Name} cannot be prepared here", ex);
             }
             catch (InvalidProgramException ex)
             {
-                throw new ReplException($"the JIT rejected {declaration.FullName}::{method.Name}: {ex.Message} (check .show for a stack mismatch between branches)", ex);
+                throw new ReplException(
+                    $"the JIT rejected {declaration.FullName}::{method.Name}: {ex.Message} (check .show for a stack mismatch between " +
+                    $"branches)", ex);
             }
-            catch (Exception ex) when (ex is TypeLoadException or MissingMemberException or BadImageFormatException or TypeInitializationException or ArgumentException)
+            catch (Exception ex) when (
+                ex is TypeLoadException or MissingMemberException or BadImageFormatException or TypeInitializationException
+                or ArgumentException)
             {
                 throw new ReplException($"the runtime rejected {declaration.FullName}::{method.Name}: {ex.Message}", ex);
             }
@@ -294,8 +326,9 @@ public static class TypeEmitter
                 return null;
             }
 
-            var special = parameter.GenericParameterAttributes & System.Reflection.GenericParameterAttributes.SpecialConstraintMask;
-            arguments[i] = special.HasFlag(System.Reflection.GenericParameterAttributes.NotNullableValueTypeConstraint) ? typeof(int) : typeof(object);
+            var special = parameter.GenericParameterAttributes & GenericParameterAttributes.SpecialConstraintMask;
+            arguments[i] = special.HasFlag(GenericParameterAttributes.NotNullableValueTypeConstraint) ? typeof(int)
+                : typeof(object);
         }
 
         return arguments;

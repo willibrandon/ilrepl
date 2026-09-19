@@ -56,7 +56,9 @@ public sealed class GreeterTests
             "callvirt instance string Object::ToString()");
         Assert.AreEqual("Counter(16)", text);
 
-        Assert.AreEqual(3, Run(session, "newobj instance void Greeter.Counter::.ctor()", "dup", "ldc.i4 3", "stfld int32 Greeter.Counter::Count", "call instance int32 Greeter.Counter::get_Value()"));
+        Assert.AreEqual(3,
+            Run(session, "newobj instance void Greeter.Counter::.ctor()", "dup", "ldc.i4 3", "stfld int32 Greeter.Counter::Count",
+            "call instance int32 Greeter.Counter::get_Value()"));
     }
 
     /// <summary>
@@ -93,7 +95,9 @@ public sealed class GreeterTests
     public void Interfaces_DispatchThroughCallvirt()
     {
         var session = NewSession();
-        Assert.AreEqual(9.0, Run(session, "ldc.r8 3", "newobj instance void Greeter.Square::.ctor(float64)", "callvirt instance float64 Greeter.IShape::Area()"));
+        Assert.AreEqual(9.0,
+            Run(session, "ldc.r8 3", "newobj instance void Greeter.Square::.ctor(float64)",
+            "callvirt instance float64 Greeter.IShape::Area()"));
     }
 
     /// <summary>
@@ -165,7 +169,9 @@ public sealed class GreeterTests
     public void Pointers_AndByrefs()
     {
         var session = NewSession();
-        Assert.AreEqual(11, Run(session, ".locals init (int32 v)", "ldc.i4 11", "stloc v", "ldloca v", "conv.u", "call int32 Greeter.Hello::Deref(int32*)"));
+        Assert.AreEqual(11,
+            Run(session, ".locals init (int32 v)", "ldc.i4 11", "stloc v", "ldloca v", "conv.u",
+            "call int32 Greeter.Hello::Deref(int32*)"));
         Assert.AreEqual(12, Run(session, "ldloca v", "ldc.i4 12", "call void Greeter.Hello::Set(int32&, int32)", "ldloc v"));
     }
 
@@ -176,7 +182,8 @@ public sealed class GreeterTests
     public void Arrays_ToParamsMethod()
     {
         var session = NewSession();
-        var sum = Run(session, "ldc.i4 2", "newarr int32", "dup", "ldc.i4 0", "ldc.i4 20", "stelem.i4", "dup", "ldc.i4 1", "ldc.i4 22", "stelem.i4", "call int64 Greeter.Hello::Sum(int32[])");
+        var sum = Run(session, "ldc.i4 2", "newarr int32", "dup", "ldc.i4 0", "ldc.i4 20", "stelem.i4", "dup", "ldc.i4 1", "ldc.i4 22",
+            "stelem.i4", "call int64 Greeter.Hello::Sum(int32[])");
         Assert.AreEqual(42L, sum);
     }
 
@@ -209,7 +216,8 @@ public sealed class GreeterTests
         var session = NewSession();
         var name = Run(session,
             "ldtoken method string Greeter.Hello::Say(string)",
-            "call class [System.Runtime]System.Reflection.MethodBase [System.Runtime]System.Reflection.MethodBase::GetMethodFromHandle(valuetype [System.Runtime]System.RuntimeMethodHandle)",
+            "call class [System.Runtime]System.Reflection.MethodBase " +
+            "[System.Runtime]System.Reflection.MethodBase::GetMethodFromHandle(valuetype [System.Runtime]System.RuntimeMethodHandle)",
             "callvirt instance string [System.Runtime]System.Reflection.MemberInfo::get_Name()");
         Assert.AreEqual("Say", name);
     }
@@ -224,7 +232,8 @@ public sealed class GreeterTests
         session.Resolver.Load(SampleHost.Samples.GreeterDll);
         Assert.AreEqual("CountArgs", Run(session,
             "ldtoken method vararg int32 Greeter.Hello::CountArgs()",
-            "call class [System.Runtime]System.Reflection.MethodBase [System.Runtime]System.Reflection.MethodBase::GetMethodFromHandle(valuetype [System.Runtime]System.RuntimeMethodHandle)",
+            "call class [System.Runtime]System.Reflection.MethodBase " +
+            "[System.Runtime]System.Reflection.MethodBase::GetMethodFromHandle(valuetype [System.Runtime]System.RuntimeMethodHandle)",
             "callvirt instance string [System.Runtime]System.Reflection.MemberInfo::get_Name()"));
 
         // ldftn emits without a call-site signature; whether the JIT then accepts a pointer to a

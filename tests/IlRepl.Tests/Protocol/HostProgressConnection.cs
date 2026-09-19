@@ -69,16 +69,26 @@ internal sealed class HostProgressConnection : IReplClient, IAsyncDisposable
     {
         cancellationToken.ThrowIfCancellationRequested();
         Progress.Enqueue(progress);
-        if (AcknowledgeProgress is { } acknowledge) await acknowledge(progress).ConfigureAwait(false);
+        if (AcknowledgeProgress is { } acknowledge)
+        {
+            await acknowledge(progress).ConfigureAwait(false);
+        }
     }
 
     /// <inheritdoc />
     public async Task CheckpointAsync(SessionReply checkpoint, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (_checkpoints.Apply(checkpoint) is not { } accepted) return;
+        if (_checkpoints.Apply(checkpoint) is not { } accepted)
+        {
+            return;
+        }
+
         Checkpoints.Enqueue(accepted);
-        if (AcknowledgeCheckpoint is { } acknowledge) await acknowledge(accepted).ConfigureAwait(false);
+        if (AcknowledgeCheckpoint is { } acknowledge)
+        {
+            await acknowledge(accepted).ConfigureAwait(false);
+        }
     }
 
     /// <inheritdoc />

@@ -1,9 +1,9 @@
 using System.Reflection;
 using System.Runtime.Loader;
-using ILVerify;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 using IlRepl.Protocol;
+using ILVerify;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
@@ -175,6 +175,7 @@ public sealed class ArrayAddressHelpTests
                 session.AddLine(line);
             }
         });
+
         Assert.Contains("readonly. cannot prefix call", error.Message);
         Assert.HasCount(1, session.Methods);
     }

@@ -93,6 +93,7 @@ public sealed class EventModifierTests
                 session.AddLine(line);
             }
         });
+
         Assert.Contains("nested private", error.Message);
     }
 

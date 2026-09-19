@@ -39,10 +39,12 @@ public static class SpanPalette
     };
 
     /// <summary>
-    /// The colour of a style on a light ground: the same role in the same hue, darker and more
-    /// saturated so it reads on white, in the way of One Light. The top of the stack, brighter
-    /// than a type on a dark ground, is a deeper teal than a type here.
+    /// The colour of a style on a light ground: the same role in the same hue, darker and more saturated so it reads on white.
     /// </summary>
+    /// <remarks>
+    /// The colours are in the way of One Light. The top of the stack, brighter than a type on a dark ground, is a deeper teal than a type
+    /// here.
+    /// </remarks>
     /// <param name="style">The style.</param>
     /// <returns>The colour.</returns>
     public static Hex1bColor LightColor(SpanStyle style) => style switch
@@ -80,10 +82,11 @@ public static class SpanPalette
     }
 
     /// <summary>
-    /// How a style is drawn inside the editor: its colour, or for an error a curly red underline
-    /// under the text's own colour, so a word still being typed is not painted red while the
-    /// palette is showing what it could become.
+    /// How a style is drawn inside the editor: its colour, or for an error a curly red underline under the text's own colour.
     /// </summary>
+    /// <remarks>
+    /// A word still being typed is therefore not painted red while the palette is showing what it could become.
+    /// </remarks>
     /// <param name="style">The style.</param>
     /// <returns>The decoration, or null for a style drawn as plain text.</returns>
     public static TextDecoration? Decoration(SpanStyle style) => style switch

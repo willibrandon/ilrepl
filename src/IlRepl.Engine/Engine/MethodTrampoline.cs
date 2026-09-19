@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
@@ -24,8 +25,13 @@ public sealed class MethodTrampoline
     private readonly Lazy<Action<Delegate>> _bind;
     private readonly FieldInfo _implementationField;
 
-    private MethodTrampoline(MethodSignature signature, DefinitionAssembly definition, MethodInfo method,
-        Type delegateType, FieldInfo implementationField, Func<Action<Delegate>> bind)
+    private MethodTrampoline(
+        MethodSignature signature,
+        DefinitionAssembly definition,
+        MethodInfo method,
+        Type delegateType,
+        FieldInfo implementationField,
+        Func<Action<Delegate>> bind)
     {
         Signature = signature;
         Definition = definition;
@@ -79,7 +85,9 @@ public sealed class MethodTrampoline
             writer.DefineExternal(prototype, external);
         }
 
-        var cell = writer.DefineType("IlRepl", "Cell", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit, writer.Object);
+        var cell = writer.DefineType("IlRepl", "Cell",
+            TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
+            writer.Object);
         var returnType = writer.ImportSignature(
             signature.ReturnType,
             signature.ExactReturnType,
@@ -91,26 +99,33 @@ public sealed class MethodTrampoline
             parameter.RequiredModifiers,
             parameter.OptionalModifiers)).ToArray();
 
-        var delegateType = new TypeDefinition("", signature.Name + "Delegate", TypeAttributes.NestedPublic | TypeAttributes.Sealed | TypeAttributes.Class, writer.Import(typeof(MulticastDelegate)));
+        var delegateType = new TypeDefinition("", signature.Name + "Delegate",
+            TypeAttributes.NestedPublic | TypeAttributes.Sealed | TypeAttributes.Class, writer.Import(typeof(MulticastDelegate)));
         cell.NestedTypes.Add(delegateType);
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, writer.Module.TypeSystem.Void)
+        var constructor = new MethodDefinition(".ctor",
+            MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+            writer.Module.TypeSystem.Void)
         {
             ImplAttributes = MethodImplAttributes.Runtime | MethodImplAttributes.Managed,
         };
+
         constructor.Parameters.Add(new ParameterDefinition("object", ParameterAttributes.None, writer.Object));
         constructor.Parameters.Add(new ParameterDefinition("method", ParameterAttributes.None, writer.Module.TypeSystem.IntPtr));
         delegateType.Methods.Add(constructor);
-        var invoke = new MethodDefinition("Invoke", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual, returnType)
+        var invoke = new MethodDefinition("Invoke",
+            MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual, returnType)
         {
             ImplAttributes = MethodImplAttributes.Runtime | MethodImplAttributes.Managed,
         };
+
         AddParameters(invoke, signature, parameterTypes);
         delegateType.Methods.Add(invoke);
 
         var field = new FieldDefinition(signature.Name + "Impl", FieldAttributes.Private | FieldAttributes.Static, delegateType);
         cell.Fields.Add(field);
 
-        var bind = new MethodDefinition("Bind", MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig, writer.Module.TypeSystem.Void);
+        var bind = new MethodDefinition("Bind", MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
+            writer.Module.TypeSystem.Void);
         bind.Parameters.Add(new ParameterDefinition("impl", ParameterAttributes.None, writer.Import(typeof(Delegate))));
         var il = bind.Body.GetILProcessor();
         il.Emit(OpCodes.Ldarg_0);
@@ -120,7 +135,8 @@ public sealed class MethodTrampoline
         il.Emit(OpCodes.Ret);
         cell.Methods.Add(bind);
 
-        var method = new MethodDefinition(signature.Name, MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, returnType);
+        var method = new MethodDefinition(signature.Name, MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig,
+            returnType);
         AddParameters(method, signature, parameterTypes);
         il = method.Body.GetILProcessor();
         il.Emit(OpCodes.Volatile);
@@ -135,10 +151,14 @@ public sealed class MethodTrampoline
         cell.Methods.Add(method);
 
         var definition = writer.Load();
-        var type = definition.Assembly.GetType("IlRepl.Cell") ?? throw new ReplException($"the trampoline for {signature.Name} did not load");
-        var loaded = type.GetMethod(signature.Name, BindingFlags.Public | BindingFlags.Static) ?? throw new ReplException($"the trampoline for {signature.Name} has no entry point");
-        var loadedDelegate = type.GetNestedType(signature.Name + "Delegate") ?? throw new ReplException($"the trampoline for {signature.Name} has no delegate type");
-        var loadedBind = type.GetMethod("Bind", BindingFlags.NonPublic | BindingFlags.Static) ?? throw new ReplException($"the trampoline for {signature.Name} has no binder");
+        var type = definition.Assembly.GetType("IlRepl.Cell")
+            ?? throw new ReplException($"the trampoline for {signature.Name} did not load");
+        var loaded = type.GetMethod(signature.Name, BindingFlags.Public | BindingFlags.Static)
+            ?? throw new ReplException($"the trampoline for {signature.Name} has no entry point");
+        var loadedDelegate = type.GetNestedType(signature.Name + "Delegate")
+            ?? throw new ReplException($"the trampoline for {signature.Name} has no delegate type");
+        var loadedBind = type.GetMethod("Bind", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new ReplException($"the trampoline for {signature.Name} has no binder");
         var loadedField = type.GetField(field.Name, BindingFlags.NonPublic | BindingFlags.Static)
             ?? throw new ReplException($"the trampoline for {signature.Name} has no implementation field");
 
@@ -196,7 +216,10 @@ public sealed class MethodTrampoline
     internal static MethodTrampoline Restore(MethodSignature signature, MethodInfo method)
     {
         if (!SessionAssemblies.TryGetDefinition(method.Module.Assembly, out var definition))
+        {
             throw new ReplException("the captured trampoline has no owned assembly");
+        }
+
         var field = method.DeclaringType!.GetField(method.Name + "Impl", BindingFlags.NonPublic | BindingFlags.Static)
             ?? throw new ReplException("the captured trampoline has no implementation field");
         return new MethodTrampoline(signature, definition, method, field.FieldType, field, () => value => field.SetValue(null, value));
@@ -206,9 +229,8 @@ public sealed class MethodTrampoline
     {
         for (var i = 0; i < parameterTypes.Length; i++)
         {
-            var name = signature.Parameters[i].Name ?? ("arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            var name = signature.Parameters[i].Name ?? ("arg" + i.ToString(CultureInfo.InvariantCulture));
             method.Parameters.Add(new ParameterDefinition(name, ParameterAttributes.None, parameterTypes[i]));
         }
     }
-
 }

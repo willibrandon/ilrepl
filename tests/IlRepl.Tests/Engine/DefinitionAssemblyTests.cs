@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
@@ -35,11 +36,12 @@ public sealed partial class DefinitionAssemblyTests
     }
 
     /// <summary>
-    /// A definition calling another resolves through the registry by exact name, its
-    /// <c>assembly</c> member is reachable through the access-check attribute, the loaded
-    /// assembly object is what the registry recognizes, and an attribute naming a type in the
-    /// other assembly resolves from the defining module.
+    /// A definition calling another resolves through the registry by exact name.
     /// </summary>
+    /// <remarks>
+    /// Its <c>assembly</c> member is reachable through the access-check attribute. The loaded assembly object is what the registry
+    /// recognizes. An attribute naming a type in the other assembly resolves from the defining module.
+    /// </remarks>
     [TestMethod]
     public void Load_CrossDefinitionReference_ResolvesThroughRegistry()
     {
@@ -68,7 +70,11 @@ public sealed partial class DefinitionAssemblyTests
     public async Task Release_RetainedType_KeepsDependencyThenCollects()
     {
         TestSkip.Unless(!OperatingSystem.IsBrowser(), "unloading needs CoreCLR");
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         var (holderWeak, pointWeak) = RetainedScenario();
         Collect(() => AreCollected(holderWeak, pointWeak));
         Assert.IsFalse(holderWeak.TryGetTarget(out _), "the retained definition should collect once it is dropped");
@@ -136,9 +142,11 @@ public sealed partial class DefinitionAssemblyTests
     }
 
     /// <summary>
-    /// The number of definitions one definition may reference is not limited: sixty-five
-    /// families, each referencing every earlier one, all load and run.
+    /// The number of definitions one definition may reference is not limited.
     /// </summary>
+    /// <remarks>
+    /// Sixty-five families, each referencing every earlier one, all load and run.
+    /// </remarks>
     [TestMethod]
     public void Load_ManyMutualReferences_HasNoLimit()
     {
@@ -178,7 +186,7 @@ public sealed partial class DefinitionAssemblyTests
         var session = new Session();
         for (var i = 0; i < Runs; i++)
         {
-            session.AddLine("ldc.i4 " + i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            session.AddLine("ldc.i4 " + i.ToString(CultureInfo.InvariantCulture));
             Assert.AreEqual(i, session.Run().Value);
         }
 

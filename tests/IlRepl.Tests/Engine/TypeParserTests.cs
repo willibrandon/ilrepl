@@ -1,3 +1,6 @@
+using System.Collections.Immutable;
+using System.Net;
+using System.Text;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
@@ -35,9 +38,9 @@ public sealed class TypeParserTests
     /// <param name="text">The IL type.</param>
     /// <param name="expected">The expected type.</param>
     [TestMethod]
-    [DataRow("[System.Runtime]System.Text.StringBuilder", typeof(System.Text.StringBuilder))]
-    [DataRow("class [System.Runtime]System.Text.StringBuilder", typeof(System.Text.StringBuilder))]
-    [DataRow("StringBuilder", typeof(System.Text.StringBuilder))]
+    [DataRow("[System.Runtime]System.Text.StringBuilder", typeof(StringBuilder))]
+    [DataRow("class [System.Runtime]System.Text.StringBuilder", typeof(StringBuilder))]
+    [DataRow("StringBuilder", typeof(StringBuilder))]
     [DataRow("valuetype [System.Runtime]System.Collections.Generic.KeyValuePair`2<int32, string>", typeof(KeyValuePair<int, string>))]
     [DataRow("List<int32>", typeof(List<int>))]
     [DataRow("Dictionary<string, List<int32>>", typeof(Dictionary<string, List<int>>))]
@@ -166,8 +169,8 @@ public sealed class TypeParserTests
     [TestMethod]
     public void Parse_ShortNamesThatResolveToday_StillResolve()
     {
-        Assert.AreEqual(typeof(System.Net.WebUtility), TypeParser.Parse("WebUtility", Context));
-        Assert.AreEqual(typeof(System.Collections.Immutable.ImmutableArray<>), TypeParser.Parse("ImmutableArray`1", Context));
+        Assert.AreEqual(typeof(WebUtility), TypeParser.Parse("WebUtility", Context));
+        Assert.AreEqual(typeof(ImmutableArray<>), TypeParser.Parse("ImmutableArray`1", Context));
         var ex = Assert.ThrowsExactly<ReplException>(() => TypeParser.Parse("JsonSerializer", Context));
         Assert.Contains("ambiguous", ex.Message);
     }

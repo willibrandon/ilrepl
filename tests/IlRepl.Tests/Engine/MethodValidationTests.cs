@@ -191,7 +191,8 @@ public sealed class MethodValidationTests
         var session = Load(
             ".method int32 Fib(int32 n) {", "ldarg n", "ldc.i4 2", "blt BASE", "ldarg n", "ldc.i4 1", "sub", "call int32 Fib(int32)",
             "ldarg n", "ldc.i4 2", "sub", "call int32 Fib(int32)", "add", "ret", "BASE: ldarg n", "ret", "}",
-            ".method void Greet(string name) {", "ldstr \"hello, \"", "ldarg name", "call string String::Concat(string, string)", "call void Console::WriteLine(string)", "ret", "}");
+            ".method void Greet(string name) {", "ldstr \"hello, \"", "ldarg name", "call string String::Concat(string, string)",
+            "call void Console::WriteLine(string)", "ret", "}");
 
         session.AddLine("ldc.i4 10");
         session.AddLine("call int32 Fib(int32)");
@@ -241,8 +242,7 @@ public sealed class MethodValidationTests
     }
 
     /// <summary>
-    /// A try with both a catch and a finally is written as nested regions, the way ILGenerator
-    /// emits it, so the method prepares and runs.
+    /// A try with both a catch and a finally is written as nested regions, the way ILGenerator emits it, so the method prepares and runs.
     /// </summary>
     [TestMethod]
     public void CompileMethod_CatchAndFinally_NestsTheRegions()
@@ -250,7 +250,8 @@ public sealed class MethodValidationTests
         var session = new Session();
         foreach (var line in new[]
         {
-            ".method int32 Both() {", ".locals init (int32 v)", ".try {", "ldstr \"x\"", "newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)", "throw",
+            ".method int32 Both() {", ".locals init (int32 v)", ".try {", "ldstr \"x\"",
+                "newobj instance void [System.Runtime]System.InvalidOperationException::.ctor(string)", "throw",
             "} catch [System.Runtime]System.InvalidOperationException {", "pop", "ldc.i4 1", "stloc v", "leave DONE",
             "} finally {", "ldloc v", "ldc.i4 10", "add", "stloc v", "endfinally", "}",
             "DONE: ldloc v", "ret", "}",

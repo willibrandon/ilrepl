@@ -207,7 +207,11 @@ internal static class CustomAttributeBinding
     }
 
     private static NamedAttributeValue Named(
-        TypeSymbol owner, string name, bool isField, AttributeValueSymbol value, IBindingScope scope)
+        TypeSymbol owner,
+        string name,
+        bool isField,
+        AttributeValueSymbol value,
+        IBindingScope scope)
     {
         if (isField)
         {

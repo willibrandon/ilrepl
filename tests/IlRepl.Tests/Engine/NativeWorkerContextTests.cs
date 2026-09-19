@@ -44,6 +44,7 @@ public sealed class NativeWorkerContextTests
 
                 Assert.AreEqual("captured", File.ReadAllText(files.MarkerPath));
             }
+
             Add(session, "call string Value()");
             Assert.AreEqual("replacement", session.Run().Value);
         }
@@ -125,7 +126,11 @@ public sealed class NativeWorkerContextTests
         try
         {
             var assembly = session.Resolver.LoadImage(ModuleInitializerFixture.Create(true, files.MarkerPath));
-            if (throughCaller) Add(session, ".method int32 Caller() { call int32 Owner::Read(); ret }");
+            if (throughCaller)
+            {
+                Add(session, ".method int32 Caller() { call int32 Owner::Read(); ret }");
+            }
+
             var target = NativeCapture.Create(session, throughCaller ? "Caller" : "int32 Owner::Read()", new NativeOptions());
             using (var denied = new NativeWorkerContext(target, new NativeOptions()))
             {
@@ -166,11 +171,16 @@ public sealed class NativeWorkerContextTests
         {
             var unused = session.Resolver.LoadImage(ModuleInitializerFixture.Create(true, files.MarkerPath));
             if (cell)
+            {
                 Add(session, ".method int32 Unused() { call int32 Owner::Read(); ret }", "ldc.i4.s 42");
+            }
             else
+            {
                 Add(session, ".class public Caller {",
                     ".method public static int32 Unused() { call int32 Owner::Read(); ret }",
                     ".method public static int32 Value() { ldc.i4.s 42; ret }", "}");
+            }
+
             var target = NativeCapture.Create(session, cell ? "" : "int32 Caller::Value()", new NativeOptions());
             Assert.Contains(assembly => assembly.Name == unused.FullName, target.Assemblies);
             using var context = new NativeWorkerContext(target, new NativeOptions());
@@ -305,6 +315,7 @@ public sealed class NativeWorkerContextTests
             {
                 using var rejected = new NativeWorkerContext(duplicate, new NativeOptions());
             });
+
             compiled = CellCompiler.CompileForInspection(session);
 
             Assert.IsTrue(compiled.Assembly.IsCollectible, "A failed worker setup leaked its noncollectible lifetime into the caller.");
@@ -320,6 +331,9 @@ public sealed class NativeWorkerContextTests
 
     private static void Add(Session session, params string[] source)
     {
-        foreach (var line in IlLines.Expand(source)) session.AddLine(line);
+        foreach (var line in IlLines.Expand(source))
+        {
+            session.AddLine(line);
+        }
     }
 }

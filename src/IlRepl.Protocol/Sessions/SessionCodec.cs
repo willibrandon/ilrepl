@@ -85,7 +85,10 @@ public static class SessionCodec
                 hasVersion |= reader.ValueTextEquals("version"u8);
                 reader.Read();
                 reader.Skip();
-                if (hasFormat && hasVersion) break;
+                if (hasFormat && hasVersion)
+                {
+                    break;
+                }
             }
 
             if (!hasFormat || !hasVersion)

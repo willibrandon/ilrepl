@@ -5,9 +5,11 @@ using Hex1b.Tokens;
 namespace IlRepl.Tests.EndToEnd;
 
 /// <summary>
-/// A workload filter that keeps what a process wrote to the terminal, so a test can look for
-/// sequences the emulator does not surface, such as the caret shape.
+/// A workload filter that keeps what a process wrote to the terminal.
 /// </summary>
+/// <remarks>
+/// A test can then look for sequences the emulator does not surface, such as the caret shape.
+/// </remarks>
 internal sealed class WorkloadRecorder : IHex1bTerminalWorkloadFilter
 {
     private readonly StringBuilder _output = new();
@@ -28,7 +30,8 @@ internal sealed class WorkloadRecorder : IHex1bTerminalWorkloadFilter
     }
 
     /// <inheritdoc />
-    public ValueTask OnSessionStartAsync(int width, int height, DateTimeOffset timestamp, CancellationToken ct = default) => ValueTask.CompletedTask;
+    public ValueTask OnSessionStartAsync(int width, int height, DateTimeOffset timestamp, CancellationToken ct = default) =>
+        ValueTask.CompletedTask;
 
     /// <inheritdoc />
     public ValueTask OnOutputAsync(IReadOnlyList<AnsiToken> tokens, TimeSpan elapsed, CancellationToken ct = default)
@@ -46,7 +49,8 @@ internal sealed class WorkloadRecorder : IHex1bTerminalWorkloadFilter
     public ValueTask OnFrameCompleteAsync(TimeSpan elapsed, CancellationToken ct = default) => ValueTask.CompletedTask;
 
     /// <inheritdoc />
-    public ValueTask OnInputAsync(IReadOnlyList<AnsiToken> tokens, TimeSpan elapsed, CancellationToken ct = default) => ValueTask.CompletedTask;
+    public ValueTask OnInputAsync(IReadOnlyList<AnsiToken> tokens, TimeSpan elapsed, CancellationToken ct = default) =>
+        ValueTask.CompletedTask;
 
     /// <inheritdoc />
     public ValueTask OnResizeAsync(int width, int height, TimeSpan elapsed, CancellationToken ct = default) => ValueTask.CompletedTask;

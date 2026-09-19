@@ -4,8 +4,7 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Nested types: their runtime names, their visibility, and their use from the enclosing type
-/// and from cells.
+/// Nested types: their runtime names, their visibility, and their use from the enclosing type and from cells.
 /// </summary>
 [TestClass]
 public sealed class NestedTypeTests
@@ -34,7 +33,8 @@ public sealed class NestedTypeTests
             ".field public int32 V",
             "}",
             ".field public static valuetype Outer/Inner Last",
-            ".method public static int32 Set(int32 v) { .locals init (valuetype Outer/Inner i); ldloca i; ldarg v; stfld int32 Outer/Inner::V; ldloc i; stsfld valuetype Outer/Inner Outer::Last; ldarg v; ret }",
+            ".method public static int32 Set(int32 v) { .locals init (valuetype Outer/Inner i); ldloca i; ldarg v; stfld int32 " +
+            "Outer/Inner::V; ldloc i; stsfld valuetype Outer/Inner Outer::Last; ldarg v; ret }",
             "}");
         Assert.HasCount(1, session.Types);
         Assert.AreEqual(2, session.TypeCount);
@@ -61,13 +61,13 @@ public sealed class NestedTypeTests
             ".method public static int32 Reveal() { call int32 Outer/Secret::Value(); ldc.i4 1; add; ret }",
             "}");
         Assert.AreEqual(42, Run(session, "call int32 Outer::Reveal()"));
-        Assert.Contains("is nested private", Assert.ThrowsExactly<ReplException>(() => session.AddLine("call int32 Outer/Secret::Value()")).Message);
+        Assert.Contains("is nested private",
+            Assert.ThrowsExactly<ReplException>(() => session.AddLine("call int32 Outer/Secret::Value()")).Message);
         Assert.IsTrue(session.Types[0].Types["Outer/Secret"].IsNestedPrivate);
     }
 
     /// <summary>
-    /// A nested type is referenced before its declaration inside the family, and the
-    /// placeholder becomes the real type.
+    /// A nested type is referenced before its declaration inside the family, and the placeholder becomes the real type.
     /// </summary>
     [TestMethod]
     public void Nested_ForwardReference_Resolves()
@@ -77,11 +77,14 @@ public sealed class NestedTypeTests
             ".field public class Tree/Node Root",
             ".class nested public Node {",
             ".field public int32 Value",
-            ".method public instance void .ctor(int32 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg v; stfld int32 Tree/Node::Value; ret }",
+            ".method public instance void .ctor(int32 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; " +
+            "ldarg v; stfld int32 Tree/Node::Value; ret }",
             "}",
-            ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldc.i4 8; newobj instance void Tree/Node::.ctor(int32); stfld class Tree/Node Tree::Root; ret }",
+            ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldc.i4 " +
+            "8; newobj instance void Tree/Node::.ctor(int32); stfld class Tree/Node Tree::Root; ret }",
             "}");
-        Assert.AreEqual(8, Run(session, "newobj instance void Tree::.ctor()", "ldfld class Tree/Node Tree::Root", "ldfld int32 Tree/Node::Value"));
+        Assert.AreEqual(8,
+            Run(session, "newobj instance void Tree::.ctor()", "ldfld class Tree/Node Tree::Root", "ldfld int32 Tree/Node::Value"));
         Assert.AreSame(session.Types[0].Types["Tree/Node"], session.Types[0].RuntimeType!.GetField("Root")!.FieldType);
     }
 
@@ -106,9 +109,11 @@ public sealed class NestedTypeTests
     }
 
     /// <summary>
-    /// A nested generic type redeclares the enclosing parameters first and its arity suffix
-    /// counts only the ones it introduces (ECMA I.10.7.1); references carry the total list.
+    /// A nested generic type redeclares the enclosing parameters first and its arity suffix counts only the ones it introduces.
     /// </summary>
+    /// <remarks>
+    /// The rule is ECMA I.10.7.1. References carry the total list.
+    /// </remarks>
     [TestMethod]
     public void NestedGeneric_ArityAndReferences()
     {
@@ -117,7 +122,9 @@ public sealed class NestedTypeTests
             ".class nested public Inner`1<T, U> {",
             ".field public !0 A",
             ".field public !1 B",
-            ".method public instance void .ctor(!0 a, !1 b) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg a; stfld !0 class Outer`1/Inner`1<!0, !1>::A; ldarg.0; ldarg b; stfld !1 class Outer`1/Inner`1<!0, !1>::B; ret }",
+            ".method public instance void .ctor(!0 a, !1 b) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); " +
+            "ldarg.0; ldarg a; stfld !0 class Outer`1/Inner`1<!0, !1>::A; ldarg.0; ldarg b; stfld !1 class Outer`1/Inner`1<!0, !1>::B; " +
+            "ret }",
             "}",
             ".class nested public Same<T> { }",
             "}");
@@ -126,10 +133,15 @@ public sealed class NestedTypeTests
         Assert.AreEqual("Inner`1", inner.Name);
         Assert.HasCount(2, inner.GetGenericArguments(), "the nested type carries both parameters");
         Assert.AreEqual("Same", session.Types[0].Types["Outer`1/Same"].Name, "no arity suffix when nothing is introduced");
-        Assert.AreEqual("x", Run(session, "ldc.i4 1", "ldstr \"x\"", "newobj instance void class Outer`1/Inner`1<int32, string>::.ctor(!0, !1)", "ldfld !1 class Outer`1/Inner`1<int32, string>::B"));
-        Assert.AreEqual(1, Run(session, "ldc.i4 1", "ldstr \"x\"", "newobj instance void class Outer`1/Inner`1<int32, string>::.ctor(!0, !1)", "ldfld !0 class Outer`1/Inner`1<int32, string>::A"));
+        Assert.AreEqual("x",
+            Run(session, "ldc.i4 1", "ldstr \"x\"", "newobj instance void class Outer`1/Inner`1<int32, string>::.ctor(!0, !1)",
+            "ldfld !1 class Outer`1/Inner`1<int32, string>::B"));
+        Assert.AreEqual(1,
+            Run(session, "ldc.i4 1", "ldstr \"x\"", "newobj instance void class Outer`1/Inner`1<int32, string>::.ctor(!0, !1)",
+            "ldfld !0 class Outer`1/Inner`1<int32, string>::A"));
         Assert.AreSame(outer, inner.DeclaringType);
         var wrong = Load(".class public Outer`1<T> {");
-        Assert.Contains("Inner`1 needs 2 parameters, or write Inner for the 0 it introduces", Assert.ThrowsExactly<ReplException>(() => wrong.AddLine(".class nested public Inner`1<U> {")).Message);
+        Assert.Contains("Inner`1 needs 2 parameters, or write Inner for the 0 it introduces",
+            Assert.ThrowsExactly<ReplException>(() => wrong.AddLine(".class nested public Inner`1<U> {")).Message);
     }
 }

@@ -1,6 +1,6 @@
+using IlRepl.Protocol;
 using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Parsers.Clr;
-using IlRepl.Protocol;
 
 namespace IlRepl.Host;
 
@@ -23,24 +23,39 @@ internal sealed class NativeEventCollector
     {
         source.Clr.LoaderAssemblyLoad += data =>
         {
-            lock (_gate) _assemblies[(ulong)data.AssemblyID] = data.FullyQualifiedAssemblyName;
+            lock (_gate)
+            {
+                _assemblies[(ulong)data.AssemblyID] = data.FullyQualifiedAssemblyName;
+            }
         };
+
         source.Clr.LoaderModuleLoad += data =>
         {
-            lock (_gate) _modules[(ulong)data.ModuleID] = (ulong)data.AssemblyID;
+            lock (_gate)
+            {
+                _modules[(ulong)data.ModuleID] = (ulong)data.AssemblyID;
+            }
         };
+
         source.Clr.MethodJittingStarted += data =>
         {
-            lock (_gate) _compiling[data.ThreadID] = (data.MethodID, []);
+            lock (_gate)
+            {
+                _compiling[data.ThreadID] = (data.MethodID, []);
+            }
         };
+
         source.Clr.MethodInliningSucceeded += data =>
         {
             lock (_gate)
             {
                 if (_compiling.TryGetValue(data.ThreadID, out var method))
+                {
                     method.Inlinees.Add(Signature(data.InlineeNamespace, data.InlineeName, data.InlineeNameSignature));
+                }
             }
         };
+
         source.Clr.MethodILToNativeMap += data =>
         {
             lock (_gate)
@@ -57,9 +72,14 @@ internal sealed class NativeEventCollector
                 }
             }
         };
+
         source.Clr.MethodLoadVerbose += data =>
         {
-            if (!data.IsJitted) return;
+            if (!data.IsJitted)
+            {
+                return;
+            }
+
             lock (_gate)
             {
                 var inlinees = _compiling.TryGetValue(data.ThreadID, out var compiling) && compiling.Method == data.MethodID
@@ -80,10 +100,13 @@ internal sealed class NativeEventCollector
     /// <returns>The observed code versions in event order.</returns>
     internal NativeCodeEvent[] Snapshot()
     {
-        lock (_gate) return [.. _methods.Select(item => item with
+        lock (_gate)
+        {
+            return [.. _methods.Select(item => item with
         {
             Assembly = _modules.TryGetValue(item.ModuleId, out var assembly) && _assemblies.TryGetValue(assembly, out var name) ? name : "",
         })];
+        }
     }
 
     /// <summary>

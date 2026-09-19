@@ -18,10 +18,17 @@ public sealed partial class SessionController : IProcessSupervision
 
     private void ObserveSupervision(IReplEngine engine)
     {
-        if (engine is not IProcessSupervision supervision) return;
+        if (engine is not IProcessSupervision supervision)
+        {
+            return;
+        }
+
         supervision.SupervisionChanged += state =>
         {
-            if (ReferenceEquals(engine, _engine)) SupervisionChanged?.Invoke(state);
+            if (ReferenceEquals(engine, _engine))
+            {
+                SupervisionChanged?.Invoke(state);
+            }
         };
     }
 }

@@ -27,7 +27,10 @@ public sealed class NativeTerminalTests
         using var files = new SessionWorkspaceFixture();
         await using var engine = await HostPaths.StartEngineAsync(token);
         foreach (var line in files.PendingDocument().Entries.SelectMany(entry => entry.Source))
+        {
             Assert.IsTrue((await engine.HandleAsync(line, token)).Succeeded, line);
+        }
+
         var before = engine.Status;
         var transcript = new Transcript();
         PromptState? prompt = null;

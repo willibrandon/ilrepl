@@ -35,7 +35,8 @@ public sealed class AnsiWriterTests
         foreach (var style in Enum.GetValues<SpanStyle>())
         {
             var line = new TranscriptLine(LineKind.Listing, [new TranscriptSpan("x", style)]);
-            Assert.EndsWith("x" + (AnsiWriter.Render(line, color: true).Contains('\x1b', StringComparison.Ordinal) ? "\x1b[0m" : ""), AnsiWriter.Render(line, color: true), style.ToString());
+            Assert.EndsWith("x" + (AnsiWriter.Render(line, color: true).Contains('\x1b', StringComparison.Ordinal) ? "\x1b[0m" : ""),
+                AnsiWriter.Render(line, color: true), style.ToString());
         }
     }
 }

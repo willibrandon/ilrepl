@@ -27,7 +27,11 @@ public sealed class SessionCheckpointStore
             Prefix(_previous.References, document.References),
             Prefix(_previous.Assets, document.Assets), sourceKept);
         var entries = document.Entries[entriesKept..];
-        if (sourceKept != 0) entries[0] = entries[0] with { Source = entries[0].Source[sourceKept..] };
+        if (sourceKept != 0)
+        {
+            entries[0] = entries[0] with { Source = entries[0].Source[sourceKept..] };
+        }
+
         _previous = document;
         return checkpoint with
         {
@@ -52,8 +56,17 @@ public sealed class SessionCheckpointStore
             _previous = checkpoint.Document;
             return checkpoint;
         }
-        if (delta.Sequence <= _sequence) return null;
-        if (delta.Sequence != _sequence + 1) throw new InvalidDataException("an execution checkpoint predecessor is missing");
+
+        if (delta.Sequence <= _sequence)
+        {
+            return null;
+        }
+
+        if (delta.Sequence != _sequence + 1)
+        {
+            throw new InvalidDataException("an execution checkpoint predecessor is missing");
+        }
+
         var changes = checkpoint.Document;
         var document = changes with
         {
@@ -62,6 +75,7 @@ public sealed class SessionCheckpointStore
             References = Join(_previous.References, changes.References, delta.ReferencesKept),
             Assets = Join(_previous.Assets, changes.Assets, delta.AssetsKept),
         };
+
         _previous = document;
         _sequence = delta.Sequence;
         return checkpoint with { Document = document, CheckpointDelta = null };
@@ -71,16 +85,27 @@ public sealed class SessionCheckpointStore
     {
         var common = 0;
         while (common < Math.Min(previous.Length, current.Length) && (ReferenceEquals(previous[common], current[common])
-            || (equals?.Invoke(previous[common], current[common]) ?? false))) common++;
+            || (equals?.Invoke(previous[common], current[common]) ?? false)))
+        {
+            common++;
+        }
+
         return common;
     }
 
     private static SessionEntry[] JoinEntries(SessionEntry[] previous, SessionEntry[] changes, SessionCheckpointRevision delta)
     {
-        if (delta.SourceKept == 0) return Join(previous, changes, delta.EntriesKept);
+        if (delta.SourceKept == 0)
+        {
+            return Join(previous, changes, delta.EntriesKept);
+        }
+
         if (delta.SourceKept < 0 || delta.EntriesKept < 0 || delta.EntriesKept >= previous.Length || changes.Length == 0
             || previous[delta.EntriesKept].Identity != changes[0].Identity)
+        {
             throw new InvalidDataException("invalid execution checkpoint source prefix");
+        }
+
         var source = Join(previous[delta.EntriesKept].Source, changes[0].Source, delta.SourceKept);
         var entries = Join(previous, changes, delta.EntriesKept);
         entries[delta.EntriesKept] = changes[0] with { Source = source };
@@ -89,8 +114,16 @@ public sealed class SessionCheckpointStore
 
     private static T[] Join<T>(T[] previous, T[] changes, int kept)
     {
-        if (kept < 0 || kept > previous.Length) throw new InvalidDataException("invalid execution checkpoint prefix");
-        if (changes.Length == 0 && kept == previous.Length) return previous;
+        if (kept < 0 || kept > previous.Length)
+        {
+            throw new InvalidDataException("invalid execution checkpoint prefix");
+        }
+
+        if (changes.Length == 0 && kept == previous.Length)
+        {
+            return previous;
+        }
+
         var result = new T[checked(kept + changes.Length)];
         previous.AsSpan(0, kept).CopyTo(result);
         changes.CopyTo(result, kept);

@@ -129,8 +129,11 @@ internal sealed class CompletionCandidateSource
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The full candidate set, still unconfirmed and unranked.</returns>
     public async ValueTask<IReadOnlyList<OperandCandidate>> GatherAsync(
-        IReadOnlyList<GenericArgumentContext> genericArguments, IReadOnlyList<MethodSymbol> genericMethods,
-        IReadOnlySet<string> labels, bool hasElementSuffix, CancellationToken cancellationToken)
+        IReadOnlyList<GenericArgumentContext> genericArguments,
+        IReadOnlyList<MethodSymbol> genericMethods,
+        IReadOnlySet<string> labels,
+        bool hasElementSuffix,
+        CancellationToken cancellationToken)
     {
         switch (_site.Kind)
         {
@@ -170,6 +173,7 @@ internal sealed class CompletionCandidateSource
                     ".load" => ["--reload", "--framework", "--configuration", "--no-build"],
                     _ => ["--original"],
                 };
+
                 foreach (var option in options)
                 {
                     _candidates.Add(new OperandCandidate
@@ -180,6 +184,7 @@ internal sealed class CompletionCandidateSource
 
                 break;
             }
+
             case CompletionSiteKind.Type:
             case CompletionSiteKind.MemberHead:
             case CompletionSiteKind.TypeArgument:
@@ -263,6 +268,7 @@ internal sealed class CompletionCandidateSource
 
                 break;
             }
+
             case CompletionSiteKind.Label:
                 foreach (var label in labels.Order(StringComparer.Ordinal))
                 {
@@ -384,7 +390,9 @@ internal sealed class CompletionCandidateSource
     }
 
     private async ValueTask AddTypesAsync(
-        IReadOnlyList<GenericArgumentContext> arguments, bool suffix, CancellationToken cancellationToken)
+        IReadOnlyList<GenericArgumentContext> arguments,
+        bool suffix,
+        CancellationToken cancellationToken)
     {
         var seen = new HashSet<TypeSymbol>();
         var count = 0;
@@ -404,6 +412,7 @@ internal sealed class CompletionCandidateSource
             {
                 matching = WithoutArity(matching);
             }
+
             if (CandidateRanker.Match(query, matching).Tier == MatchTier.None)
             {
                 continue;
@@ -433,7 +442,11 @@ internal sealed class CompletionCandidateSource
     }
 
     private void AddType(
-        TypeSymbol type, string matching, bool generated, IReadOnlyList<GenericArgumentContext> arguments, bool suffix)
+        TypeSymbol type,
+        string matching,
+        bool generated,
+        IReadOnlyList<GenericArgumentContext> arguments,
+        bool suffix)
     {
         if (_typeSyntax is { HasArguments: true } existing && existing.End <= _site.ReplaceEnd)
         {
@@ -476,6 +489,7 @@ internal sealed class CompletionCandidateSource
             Rank = new CandidateRankFacts(matching, label, _scope.IsSessionType(type),
                 TypePreference(type), generated, DeclaringPath: SymbolRenderer.IlPath(type)),
         };
+
         if (_site.Kind == CompletionSiteKind.TypeArgument)
         {
             var supplied = type;
@@ -532,6 +546,7 @@ internal sealed class CompletionCandidateSource
                 ParameterList: string.Join(", ", method.ParameterTypes.Select(SymbolRenderer.Pretty)),
                 DeclaringPath: method.DeclaringType is null ? "" : SymbolRenderer.IlPath(method.DeclaringType)),
         };
+
         if (method.IsGenericDefinition)
         {
             _candidates.Add(candidate with { Kind = CompletionKind.TypeArguments, StartsGeneric = true });

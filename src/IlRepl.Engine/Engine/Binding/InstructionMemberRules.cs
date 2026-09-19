@@ -16,8 +16,12 @@ internal static class InstructionMemberRules
     /// <param name="pretty">The scope's type spelling.</param>
     /// <returns>The existing submission diagnostic, or null when the store is allowed.</returns>
     public static string? InitOnlyStoreProblem(
-        FieldSymbol field, string? opcode, MethodSymbol? signature, TypeSymbol? owner,
-        bool throughThis, Func<TypeSymbol?, string> pretty)
+        FieldSymbol field,
+        string? opcode,
+        MethodSymbol? signature,
+        TypeSymbol? owner,
+        bool throughThis,
+        Func<TypeSymbol?, string> pretty)
     {
         if (!field.IsInitOnly || opcode is not ("stsfld" or "stfld"))
         {

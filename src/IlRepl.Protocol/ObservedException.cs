@@ -52,8 +52,16 @@ public sealed record ObservedException(string Type, string? Message, int HResult
         hash.Add(Inner);
         hash.Add(Problem, StringComparer.Ordinal);
         hash.Add(Identity);
-        foreach (var member in Fields) hash.Add(member);
-        foreach (var child in AdditionalInnerExceptions) hash.Add(child);
+        foreach (var member in Fields)
+        {
+            hash.Add(member);
+        }
+
+        foreach (var child in AdditionalInnerExceptions)
+        {
+            hash.Add(child);
+        }
+
         return hash.ToHashCode();
     }
 }

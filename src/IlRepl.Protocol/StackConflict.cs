@@ -8,5 +8,9 @@ namespace IlRepl.Protocol;
 /// <param name="Expected">The requirement checked for this operand.</param>
 /// <param name="Actual">The established type, or null for a missing operand.</param>
 /// <param name="Producers">The distinct instructions that produced the value.</param>
-public sealed record StackConflict(int Index, string Role, string Expected, string? Actual,
+public sealed record StackConflict(
+    int Index,
+    string Role,
+    string Expected,
+    string? Actual,
     IReadOnlyList<AnalysisSource> Producers);

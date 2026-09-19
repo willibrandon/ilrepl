@@ -121,25 +121,41 @@ internal sealed partial class ImportedMethodFamily
 
         if (signature.Element is { } element)
         {
-            foreach (var nested in SignatureTypes(element)) yield return nested;
+            foreach (var nested in SignatureTypes(element))
+            {
+                yield return nested;
+            }
         }
 
         if (signature.Modifier is { } modifier)
         {
-            foreach (var nested in SignatureTypes(modifier)) yield return nested;
+            foreach (var nested in SignatureTypes(modifier))
+            {
+                yield return nested;
+            }
         }
 
         foreach (var argument in signature.Arguments)
         {
-            foreach (var nested in SignatureTypes(argument)) yield return nested;
+            foreach (var nested in SignatureTypes(argument))
+            {
+                yield return nested;
+            }
         }
 
         if (signature.Method is { } method)
         {
-            foreach (var nested in SignatureTypes(method.ReturnType)) yield return nested;
+            foreach (var nested in SignatureTypes(method.ReturnType))
+            {
+                yield return nested;
+            }
+
             foreach (var parameter in method.Parameters)
             {
-                foreach (var nested in SignatureTypes(parameter)) yield return nested;
+                foreach (var nested in SignatureTypes(parameter))
+                {
+                    yield return nested;
+                }
             }
         }
     }

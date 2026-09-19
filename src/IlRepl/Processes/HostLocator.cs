@@ -40,6 +40,7 @@ public static class HostLocator
             Path.Combine(directory, "host", HostFileName),
             Path.Combine(directory, HostFileName),
         };
+
         foreach (var candidate in candidates)
         {
             if (File.Exists(candidate))

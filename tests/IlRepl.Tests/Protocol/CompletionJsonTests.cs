@@ -34,6 +34,7 @@ public sealed class CompletionJsonTests
             Kind = CompletionKind.TypeArguments, Insert = "Dictionary<", Continues = true, Continuation = "owner",
             CaretOffset = 11, FullDetail = "Dictionary<TKey, TValue>\nSystem.Collections.Generic", Owner = "T of List<T>",
         };
+
         var reply = new CompletionReply(CompletionKind.Types, 8, 4, [item], "next", 90, true, 12, "query", 3, ["List<T>"]);
         var json = JsonSerializer.Serialize(reply, ProtocolJsonContext.Default.CompletionReply);
         var restored = JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.CompletionReply);

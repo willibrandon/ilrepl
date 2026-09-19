@@ -59,11 +59,13 @@ public sealed class HostCrashTests
                 "callvirt instance void System.Diagnostics.Process::Kill()"],
             _ => ["ldc.i8 0x123456781000", "conv.u", "ldind.i4"],
         };
+
         foreach (var line in source)
         {
             var reply = await engine.HandleAsync(line, token);
             Assert.IsTrue(reply.Succeeded, string.Join('\n', reply.Lines.Select(item => item.PlainText)));
         }
+
         await Assert.ThrowsAsync<HostProtocolException>(() => engine.HandleAsync("ret", token));
         Assert.IsTrue(exited.Task.IsCompletedSuccessfully, "Exit publication must precede the failed execution reply.");
         var observed = await exited.Task;
@@ -72,15 +74,31 @@ public sealed class HostCrashTests
         Assert.IsNotNull(observed.ExitCode);
         Assert.AreNotEqual(0, observed.ExitCode.Value);
         Assert.IsLessThanOrEqualTo(65536, Encoding.UTF8.GetByteCount(observed.StandardError));
-        if (failure == "fail-fast") Assert.Contains("ilrepl-fatal-diagnostic", observed.StandardError);
+        if (failure == "fail-fast")
+        {
+            Assert.Contains("ilrepl-fatal-diagnostic", observed.StandardError);
+        }
+
         if (failure == "fail-fast-large")
         {
             Assert.Contains("ilrepl-fatal-tail-marker", observed.StandardError);
             Assert.IsGreaterThan(32_768, Encoding.UTF8.GetByteCount(observed.StandardError));
         }
-        if (failure == "terminate-large") Assert.EndsWith("ilrepl-terminate-tail-marker", observed.StandardError);
-        if (failure == "stack-overflow") Assert.Contains("Stack overflow", observed.StandardError);
-        if (failure == "access-violation") Assert.Contains("AccessViolation", observed.StandardError);
+
+        if (failure == "terminate-large")
+        {
+            Assert.EndsWith("ilrepl-terminate-tail-marker", observed.StandardError);
+        }
+
+        if (failure == "stack-overflow")
+        {
+            Assert.Contains("Stack overflow", observed.StandardError);
+        }
+
+        if (failure == "access-violation")
+        {
+            Assert.Contains("AccessViolation", observed.StandardError);
+        }
     }
 
     /// <summary>
@@ -133,6 +151,7 @@ public sealed class HostCrashTests
             {
                 RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
             };
+
             start.ArgumentList.Add("/c");
             start.ArgumentList.Add("echo ilrepl-diagnostic-marker 1>&2");
             using var process = Process.Start(start)!;

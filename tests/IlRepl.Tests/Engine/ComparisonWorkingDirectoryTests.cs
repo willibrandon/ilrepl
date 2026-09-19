@@ -89,6 +89,7 @@ public sealed class ComparisonWorkingDirectoryTests
                 + "callvirt instance string FileSystemInfo::get_FullName()",
             _ => "call string Directory::GetCurrentDirectory()",
         };
+
         var session = IlLines.Load((".method string Location() {\n" + source + "\n"
             + "ldstr \"data.txt\"\ncall string File::ReadAllText(string)\ncall void Console::Write(string)\n"
             + "ldstr \"data.txt\"\nldstr \"changed\"\ncall void File::WriteAllText(string, string)\nret\n}").Split('\n'));

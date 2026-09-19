@@ -20,7 +20,11 @@ public static class NativeSymbolDisplay
             .GroupBy(fact => (fact.Kind, fact.DisplaySymbol))
             .Where(group => group.Select(fact => fact.Symbol).Distinct(StringComparer.Ordinal).Count() == 1)
             .Select(group => group.First()).OrderByDescending(fact => fact.Symbol.Length).ToArray();
-        if (names.Length == 0) return line;
+        if (names.Length == 0)
+        {
+            return line;
+        }
+
         var result = new StringBuilder();
         for (var index = 0; index < line.Length; index++)
         {
@@ -32,12 +36,21 @@ public static class NativeSymbolDisplay
                 {
                     var character = line[index];
                     result.Append(character);
-                    if (character == '\\' && index + 1 < line.Length) result.Append(line[++index]);
-                    else if (character == quote) break;
+                    if (character == '\\' && index + 1 < line.Length)
+                    {
+                        result.Append(line[++index]);
+                    }
+                    else if (character == quote)
+                    {
+                        break;
+                    }
+
                     index++;
                 }
+
                 continue;
             }
+
             var matched = false;
             if (line[index] == '<')
             {
@@ -46,15 +59,24 @@ public static class NativeSymbolDisplay
                     var key = "<" + fact.Kind + ":" + fact.Symbol;
                     var end = index + key.Length;
                     if (end >= line.Length || !line.AsSpan(index).StartsWith(key, StringComparison.Ordinal)
-                        || line[end] != '>' && !line.AsSpan(end).StartsWith("+0x", StringComparison.Ordinal)) continue;
+                        || line[end] != '>' && !line.AsSpan(end).StartsWith("+0x", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
                     result.Append('<').Append(fact.Kind).Append(':').Append(fact.DisplaySymbol);
                     index = end - 1;
                     matched = true;
                     break;
                 }
             }
-            if (!matched) result.Append(line[index]);
+
+            if (!matched)
+            {
+                result.Append(line[index]);
+            }
         }
+
         return result.ToString();
     }
 }

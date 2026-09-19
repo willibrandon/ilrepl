@@ -25,6 +25,7 @@ public sealed class NativeProtocolTests
             MethodArguments = ["System.Int32, System.Private.CoreLib"],
             JitNames = ["IlRepl.Cell[System.String]:Value[int](int):int", "IlRepl.Cell[System.__Canon]:Value[int](int):int"],
         };
+
         var trampoline = implementation with { Assembly = "ilrepl.trampolines.6", Token = 0x06000001 };
         byte[] bytes = [0, 1, 127, 128, 255];
         var package = new NativePackage
@@ -117,6 +118,7 @@ public sealed class NativeProtocolTests
             TypeArguments = ["System.String, System.Private.CoreLib"], MethodArguments = ["System.Int32, System.Private.CoreLib"],
             JitNames = ["IlRepl.Cell[System.String]:Value[int](int):int", "IlRepl.Cell[System.__Canon]:Value[int](int):int"],
         };
+
         var compilation = new NativeCompilation
         {
             Method = "IlRepl.Cell:Value(int)", Tier = "Instrumented Tier0", Pgo = "Dynamic", CodeSize = 23,
@@ -125,6 +127,7 @@ public sealed class NativeProtocolTests
             Normalized = ["mov rax, <type:Owner>", "ret"],
             Inlinees = ["Owner:Helper()"],
         };
+
         var reply = new NativeReply
         {
             Outcome = "indeterminate",

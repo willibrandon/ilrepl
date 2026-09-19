@@ -116,6 +116,7 @@ public sealed partial class EditingSession
                         ExactParameters = [.. property.ExactParameters.Select(type => type is null ? null : Map(type))],
                     })],
                 };
+
                 _predeclared.Add(path, shape);
                 _state.Types.Add(path, replacement, shape.Clone());
             }
@@ -220,6 +221,7 @@ public sealed partial class EditingSession
             mentioned |= types.Contains(node);
             return null;
         });
+
         return mentioned;
     }
 

@@ -48,6 +48,7 @@ public sealed class SessionDirtyStateTests
         {
             Action = new SessionAction { Operation = SessionOperation.Hydrate, Path = files.SessionPath }, Document = original,
         }, token);
+
         Assert.IsFalse(opened.Dirty);
         var baseline = opened.Document;
         var output = baseline.Cells[0].Output;
@@ -58,10 +59,16 @@ public sealed class SessionDirtyStateTests
             "embedded-copy" => baseline with { Assets = [new SessionAsset { Hash = SessionCodec.Hash([1, 2, 3]), Image = [1, 2, 3] }] },
             "editor-text" => baseline with { Editor = editor with { Lines = ["// café λ ", ""] } },
             "blank-lines" => baseline with { Editor = editor with { Lines = ["", ""] } },
-            "source" => baseline with { Entries = [baseline.Entries[0] with
-                { Source = [.. baseline.Entries[0].Source, "// retained source"] }, .. baseline.Entries.Skip(1)] },
-            "historical-output" => baseline with { Cells = [baseline.Cells[0] with
-                { Output = [.. output, TranscriptLine.Of(LineKind.Output, "retained output")] }] },
+            "source" => baseline with
+            {
+                Entries = [baseline.Entries[0] with
+                    { Source = [.. baseline.Entries[0].Source, "// retained source"] }, .. baseline.Entries.Skip(1)],
+            },
+            "historical-output" => baseline with
+            {
+                Cells = [baseline.Cells[0] with
+                    { Output = [.. output, TranscriptLine.Of(LineKind.Output, "retained output")] }],
+            },
             "cell-state" => baseline with { Cells = [baseline.Cells[0] with { State = "failed" }] },
             "runtime" => baseline with { Runtime = baseline.Runtime with { Culture = "tr-TR" } },
             "extension" => baseline with { Extensions = new Dictionary<string, JsonElement> { ["future"] = FutureField() } },
@@ -70,6 +77,7 @@ public sealed class SessionDirtyStateTests
             "interruption" => baseline with { Interruptions = [new SessionInterruption { Source = ["ret"], ExitCode = 17 }] },
             _ => throw new ArgumentOutOfRangeException(nameof(change)),
         };
+
         await files.WriteAsync(written, token);
         var bytes = await File.ReadAllBytesAsync(files.SessionPath, token);
         Assert.Contains("\n  \"format\"", Encoding.UTF8.GetString(bytes));
@@ -78,6 +86,7 @@ public sealed class SessionDirtyStateTests
             Action = new SessionAction { Operation = SessionOperation.AcknowledgeSave, Path = files.SessionPath },
             Document = SessionCodec.Read(bytes), Editor = editor,
         }, token);
+
         Assert.AreEqual(dirty, saved.Dirty, change);
         Assert.AreSequenceEqual(SessionCodec.Write(baseline), SessionCodec.Write(saved.Document));
         Assert.IsFalse(File.Exists(files.MarkerPath), "Saving and comparing source must not replay it.");
@@ -88,6 +97,7 @@ public sealed class SessionDirtyStateTests
             Action = new SessionAction { Operation = SessionOperation.AcknowledgeSave, Path = files.SessionPath },
             Document = SessionCodec.Read(await File.ReadAllBytesAsync(files.SessionPath, token)), Editor = editor,
         }, token);
+
         Assert.IsFalse(clean.Dirty, "Writing the actual current content restores the saved state.");
     }
 

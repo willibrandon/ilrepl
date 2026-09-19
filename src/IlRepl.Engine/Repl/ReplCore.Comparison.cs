@@ -75,7 +75,11 @@ public sealed partial class ReplCore
             Listing("      " + member.Name + " = " + Describe(member.Value));
         }
 
-        if (exception.Inner is { } inner) ExceptionDetails("      caused by ", inner);
+        if (exception.Inner is { } inner)
+        {
+            ExceptionDetails("      caused by ", inner);
+        }
+
         foreach (var additional in exception.AdditionalInnerExceptions)
         {
             ExceptionDetails("      caused by ", additional);

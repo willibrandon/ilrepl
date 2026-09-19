@@ -8,12 +8,14 @@ using System.Reflection.PortableExecutable;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Finds the bytes of a method body. The PE image comes first, because reflection refuses to
-/// describe a body whose locals or clauses name something it cannot load while the bytes sit
-/// there unchanged: the image a session definition was loaded from, the bytes read when an
-/// assembly was <c>.load</c>ed, or the file a framework assembly lives in. Every image is checked
-/// against the loaded module's version id before it is trusted. Reflection is the fallback.
+/// Finds the bytes of a method body.
 /// </summary>
+/// <remarks>
+/// The PE image comes first, because reflection refuses to describe a body whose locals or clauses name something it cannot load while the
+/// bytes sit there unchanged: the image a session definition was loaded from, the bytes read when an assembly was <c>.load</c>ed, or the
+/// file a framework assembly lives in. Every image is checked against the loaded module's version id before it is trusted. Reflection is
+/// the fallback.
+/// </remarks>
 public static class MethodBodySource
 {
     /// <summary>
@@ -41,7 +43,8 @@ public static class MethodBodySource
         }
 
         var impl = method.GetMethodImplementationFlags();
-        if (method.Attributes.HasFlag(MethodAttributes.PinvokeImpl) || (impl & MethodImplAttributes.CodeTypeMask) != MethodImplAttributes.IL || impl.HasFlag(MethodImplAttributes.InternalCall))
+        if (method.Attributes.HasFlag(MethodAttributes.PinvokeImpl)
+            || (impl & MethodImplAttributes.CodeTypeMask) != MethodImplAttributes.IL || impl.HasFlag(MethodImplAttributes.InternalCall))
         {
             throw new ReplException($"{describe} is implemented by the runtime; there is no IL");
         }
@@ -120,7 +123,9 @@ public static class MethodBodySource
             var mvid = metadata.GetGuid(metadata.GetModuleDefinition().Mvid);
             if (mvid != method.Module.ModuleVersionId)
             {
-                notes.Add("the image on disk no longer matches the loaded assembly (different module version id); the body was read through reflection");
+                notes.Add(
+                    "the image on disk no longer matches the loaded assembly (different module version id); the body was read through " +
+                    "reflection");
                 pe.Dispose();
                 return null;
             }
@@ -150,7 +155,8 @@ public static class MethodBodySource
                 r.CatchType.IsNil ? 0 : MetadataTokens.GetToken(r.CatchType),
                 null)).ToList();
             var localToken = body.LocalSignature.IsNil ? 0 : MetadataTokens.GetToken(body.LocalSignature);
-            return new MethodBodyImage(body.GetILBytes() ?? [], body.MaxStack, body.LocalVariablesInitialized, localToken, regions, metadata, pe, "image");
+            return new MethodBodyImage(body.GetILBytes() ?? [], body.MaxStack, body.LocalVariablesInitialized, localToken, regions,
+                metadata, pe, "image");
         }
         catch (Exception ex) when (ex is BadImageFormatException or InvalidOperationException or ArgumentException or IOException)
         {
@@ -167,7 +173,9 @@ public static class MethodBodySource
         {
             body = method.GetMethodBody();
         }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException)
+        catch (Exception ex) when (
+            ex is InvalidOperationException or NotSupportedException or FileNotFoundException or FileLoadException or TypeLoadException
+            or BadImageFormatException)
         {
             throw new ReplException($"{describe}: reflection could not read the body ({ex.Message})", ex);
         }
@@ -188,6 +196,7 @@ public static class MethodBodySource
                 ExceptionHandlingClauseOptions.Fault => IlClauseKind.Fault,
                 _ => IlClauseKind.Catch,
             };
+
             Type? catchType = null;
             if (kind == IlClauseKind.Catch)
             {
@@ -195,16 +204,20 @@ public static class MethodBodySource
                 {
                     catchType = clause.CatchType;
                 }
-                catch (Exception ex) when (ex is FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException or ArgumentException)
+                catch (Exception ex) when (
+                    ex is FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException or ArgumentException)
                 {
-                    notes.Add($"the catch type of a clause at {IlReader.LabelFor(clause.HandlerOffset)} could not be resolved ({ex.Message})");
+                    notes.Add(
+                        $"the catch type of a clause at {IlReader.LabelFor(clause.HandlerOffset)} could not be resolved ({ex.Message})");
                 }
             }
 
-            regions.Add(new RawExceptionRegion(kind, clause.TryOffset, clause.TryLength, clause.HandlerOffset, clause.HandlerLength, kind == IlClauseKind.Filter ? clause.FilterOffset : 0, 0, catchType));
+            regions.Add(new RawExceptionRegion(kind, clause.TryOffset, clause.TryLength, clause.HandlerOffset, clause.HandlerLength,
+                kind == IlClauseKind.Filter ? clause.FilterOffset : 0, 0, catchType));
         }
 
         notes.Add("the body was read through reflection");
-        return new MethodBodyImage(il, body.MaxStackSize, body.InitLocals, body.LocalSignatureMetadataToken, regions, ModuleMetadata.TryOpen(method.Module), null, "reflection");
+        return new MethodBodyImage(il, body.MaxStackSize, body.InitLocals, body.LocalSignatureMetadataToken, regions,
+            ModuleMetadata.TryOpen(method.Module), null, "reflection");
     }
 }

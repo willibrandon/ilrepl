@@ -42,7 +42,11 @@ public sealed record SessionEditor
     public SessionEditor WithStartupInput(SessionEditor input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        if (input.Revision == 0 && string.Join('\n', input.Lines).Length == 0) return this;
+        if (input.Revision == 0 && string.Join('\n', input.Lines).Length == 0)
+        {
+            return this;
+        }
+
         var saved = string.Join('\n', Lines);
         var offset = saved.Length == 0 ? 0 : saved.Length + (input.Lines.Length == 0 ? 0 : 1);
         return this with

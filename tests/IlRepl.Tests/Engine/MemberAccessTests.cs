@@ -3,10 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for the accessibility rules the REPL enforces on session members, which the runtime
-/// does not check for them. Each category is tried from the cell, from the declaring type, from
-/// a derived type, and from an unrelated type.
+/// Tests for the accessibility rules the REPL enforces on session members, which the runtime does not check for them.
 /// </summary>
+/// <remarks>
+/// Each category is tried from the cell, from the declaring type, from a derived type, and from an unrelated type.
+/// </remarks>
 [TestClass]
 public sealed class MemberAccessTests
 {
@@ -54,10 +55,13 @@ public sealed class MemberAccessTests
         session.AddLine("ldfld int32 Base::FamOrAsm");
         session.AddLine("pop");
         session.AddLine("dup");
-        Assert.Contains("int32 Base::Fam is family; only Base and types derived from it can use it, not the cell", Refused(session, "ldfld int32 Base::Fam"));
+        Assert.Contains("int32 Base::Fam is family; only Base and types derived from it can use it, not the cell",
+            Refused(session, "ldfld int32 Base::Fam"));
         Assert.Contains("is famandassem; only Base and types derived from it", Refused(session, "ldfld int32 Base::FamAsm"));
-        Assert.Contains("int32 Base::Priv is private; only Base and the types nested in it can use it, not the cell", Refused(session, "ldfld int32 Base::Priv"));
-        Assert.Contains("is privatescope (no access word); only Base's own module can use it, not the cell", Refused(session, "ldfld int32 Base::Scoped"));
+        Assert.Contains("int32 Base::Priv is private; only Base and the types nested in it can use it, not the cell",
+            Refused(session, "ldfld int32 Base::Priv"));
+        Assert.Contains("is privatescope (no access word); only Base's own module can use it, not the cell",
+            Refused(session, "ldfld int32 Base::Scoped"));
         Assert.Contains("is family", Refused(session, "call instance int32 Base::FamM()"));
         Assert.Contains("is private", Refused(session, "call instance int32 Base::PrivM()"));
         Assert.Contains("is privatescope", Refused(session, "call instance int32 Base::ScopedM()"));
@@ -106,13 +110,16 @@ public sealed class MemberAccessTests
     }
 
     /// <summary>
-    /// A derived type reaches family members through any receiver, as the runtime allows (the
-    /// receiver rule of ECMA II.10.5.3 is the verifier's), and never private or privatescope members.
+    /// A derived type reaches family members through any receiver, as the runtime allows, and never private or privatescope members.
     /// </summary>
+    /// <remarks>
+    /// The receiver rule of ECMA II.10.5.3 is the verifier's.
+    /// </remarks>
     [TestMethod]
     public void DerivedType_ReachesFamilyMembersButNotPrivateOnes()
     {
-        var session = Load([.. Base, ".class public Derived extends Base {", ".method public instance int32 Read(class Derived d, class Base b) {"]);
+        var session = Load([.. Base, ".class public Derived extends Base {",
+            ".method public instance int32 Read(class Derived d, class Base b) {"]);
         session.AddLine("ldarg.0");
         Assert.AreEqual(LineOutcome.Instruction, session.AddLine("ldfld int32 Base::Fam").Outcome, "through this");
         session.AddLine("ldarg d");
@@ -122,7 +129,8 @@ public sealed class MemberAccessTests
         Assert.AreEqual(LineOutcome.Instruction, session.AddLine("ldfld int32 Base::Fam").Outcome, "through a Base");
         session.AddLine("add");
         session.AddLine("ldarg b");
-        Assert.Contains("is private; only Base and the types nested in it can use it, not class Derived", Refused(session, "ldfld int32 Base::Priv"));
+        Assert.Contains("is private; only Base and the types nested in it can use it, not class Derived",
+            Refused(session, "ldfld int32 Base::Priv"));
         Assert.Contains("is privatescope", Refused(session, "ldfld int32 Base::Scoped"));
         Assert.AreEqual(LineOutcome.Instruction, session.AddLine("call instance int32 Base::FamM()").Outcome);
         session.AddLine("add");
@@ -136,8 +144,7 @@ public sealed class MemberAccessTests
     }
 
     /// <summary>
-    /// A constructor with family access can be used from a derived type, with call on this or
-    /// with newobj, and not from outside.
+    /// A constructor with family access can be used from a derived type, with call on this or with newobj, and not from outside.
     /// </summary>
     [TestMethod]
     public void FamilyConstructor_UsableFromDerivedTypesOnly()
@@ -157,7 +164,8 @@ public sealed class MemberAccessTests
         session.AddLine("ret");
         session.AddLine("}");
         session.AddLine("}");
-        Assert.Contains("is family; only Guarded and types derived from it can use it, not the cell", Refused(session, "newobj instance void Guarded::.ctor()"));
+        Assert.Contains("is family; only Guarded and types derived from it can use it, not the cell",
+            Refused(session, "newobj instance void Guarded::.ctor()"));
     }
 
     /// <summary>
@@ -173,9 +181,11 @@ public sealed class MemberAccessTests
     }
 
     /// <summary>
-    /// A nested type reaches the private members of the type it is nested in, and the enclosing
-    /// type reaches a nested private type; nothing else does.
+    /// A nested type reaches the private members of the type it is nested in, and the enclosing type reaches a nested private type.
     /// </summary>
+    /// <remarks>
+    /// Nothing else reaches them.
+    /// </remarks>
     [TestMethod]
     public void NestedTypes_ShareTheEnclosingTypesPrivacy()
     {
@@ -184,19 +194,23 @@ public sealed class MemberAccessTests
             ".field private static int32 Secret",
             ".class nested private Inner {",
             ".method public static int32 Peek() {");
-        Assert.AreEqual(LineOutcome.Instruction, session.AddLine("ldsfld int32 Outer::Secret").Outcome, "a nested type sees the enclosing type's private members");
+        Assert.AreEqual(LineOutcome.Instruction, session.AddLine("ldsfld int32 Outer::Secret").Outcome,
+            "a nested type sees the enclosing type's private members");
         session.AddLine("ret");
         session.AddLine("}");
         session.AddLine("}");
         session.AddLine(".method public static int32 Use() {");
-        Assert.AreEqual(LineOutcome.Instruction, session.AddLine("call int32 Outer/Inner::Peek()").Outcome, "the enclosing type sees its nested private type");
+        Assert.AreEqual(LineOutcome.Instruction, session.AddLine("call int32 Outer/Inner::Peek()").Outcome,
+            "the enclosing type sees its nested private type");
         session.AddLine("ret");
         session.AddLine("}");
         session.AddLine("}");
-        Assert.Contains("Outer/Inner is nested private; only Outer and the types nested in it can use it, not the cell", Refused(session, "call int32 Outer/Inner::Peek()"));
+        Assert.Contains("Outer/Inner is nested private; only Outer and the types nested in it can use it, not the cell",
+            Refused(session, "call int32 Outer/Inner::Peek()"));
         Assert.Contains("is nested private", Refused(session, ".locals init (class Outer/Inner x)"));
         var other = Load(".class public Outer {", ".class nested family Inner { }", "}", ".class public Unrelated {");
-        Assert.Contains("Outer/Inner is nested family; only Outer and types derived from it can use it, not class Unrelated", Refused(other, ".field public class Outer/Inner x"));
+        Assert.Contains("Outer/Inner is nested family; only Outer and types derived from it can use it, not class Unrelated",
+            Refused(other, ".field public class Outer/Inner x"));
         var derived = Load(".class public Outer {", ".class nested family Inner { }", "}", ".class public Sub extends Outer {");
         Assert.AreEqual(LineOutcome.Field, derived.AddLine(".field public class Outer/Inner x").Outcome);
     }
@@ -230,7 +244,8 @@ public sealed class MemberAccessTests
     public void GenericArguments_OfFrameworkMethods_AreJudged()
     {
         var session = Load(".class public Outer {", ".class nested private Inner { }", "}");
-        Assert.Contains("Outer/Inner is nested private", Refused(session, "call !!0[] [System.Runtime]System.Array::Empty<class Outer/Inner>()"));
+        Assert.Contains("Outer/Inner is nested private",
+            Refused(session, "call !!0[] [System.Runtime]System.Array::Empty<class Outer/Inner>()"));
     }
 
     /// <summary>

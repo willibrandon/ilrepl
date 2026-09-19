@@ -82,7 +82,8 @@ public sealed partial class ReplCoreDisassembleTests
         Assert.StartsWith("  .maxstack ", lines[1]);
         Assert.Contains(l => InstructionRow().IsMatch(l), lines);
         Assert.AreEqual("  }", lines[^1]);
-        Assert.Contains(l => l.Kind == LineKind.Info && l.PlainText.StartsWith("  code size ", StringComparison.Ordinal), core.Transcript.Lines);
+        Assert.Contains(l => l.Kind == LineKind.Info && l.PlainText.StartsWith("  code size ", StringComparison.Ordinal),
+            core.Transcript.Lines);
 
         // The short spelling resolves the same method.
         var shortLines = Listing(core, ".dis String::Trim()");
@@ -154,7 +155,8 @@ public sealed partial class ReplCoreDisassembleTests
     [TestMethod]
     public void Handle_Dis_ClosedClassMember_Lists()
     {
-        var core = Load(".class public Point {", ".field public int32 X", ".method public instance int32 Get() {", "ldarg.0", "ldfld int32 Point::X", "ret", "}", "}");
+        var core = Load(".class public Point {", ".field public int32 X", ".method public instance int32 Get() {", "ldarg.0",
+            "ldfld int32 Point::X", "ret", "}", "}");
         var text = string.Join("\n", Listing(core, ".dis instance int32 Point::Get()"));
         Assert.Contains("ldfld int32 Point::X", text);
         Assert.Contains("[Point]", text);
@@ -181,11 +183,15 @@ public sealed partial class ReplCoreDisassembleTests
     [TestMethod]
     public void Handle_Dis_TryCatchFinally_MatchesShowBlocks()
     {
-        var core = Load(".method string Guarded() {", ".locals init (string message)", ".try {", "ldstr \"boom\"", "newobj instance void InvalidOperationException::.ctor(string)", "throw",
-            "} catch InvalidOperationException {", "callvirt instance string Exception::get_Message()", "stloc message", "leave DONE", "} finally {", "ldstr \"finally ran\"", "call void Console::WriteLine(string)", "}", "DONE: ldloc message", "ret");
-        var shown = Listing(core, ".show").Where(l => l.TrimStart().StartsWith('.') || l.TrimStart().StartsWith('}')).Select(l => l.Trim()).Where(l => l != ".locals init (string message)" && !l.StartsWith(".method", StringComparison.Ordinal)).ToList();
+        var core = Load(".method string Guarded() {", ".locals init (string message)", ".try {", "ldstr \"boom\"",
+            "newobj instance void InvalidOperationException::.ctor(string)", "throw",
+            "} catch InvalidOperationException {", "callvirt instance string Exception::get_Message()", "stloc message", "leave DONE",
+            "} finally {", "ldstr \"finally ran\"", "call void Console::WriteLine(string)", "}", "DONE: ldloc message", "ret");
+        var shown = Listing(core, ".show").Where(l => l.TrimStart().StartsWith('.') || l.TrimStart().StartsWith('}')).Select(l => l.Trim())
+            .Where(l => l != ".locals init (string message)" && !l.StartsWith(".method", StringComparison.Ordinal)).ToList();
         core.Handle("}");
-        var disassembled = Listing(core, ".dis Guarded").Where(l => l.TrimStart().StartsWith(".try") || l.TrimStart().StartsWith('}')).Select(l => l.Trim()).ToList();
+        var disassembled = Listing(core, ".dis Guarded").Where(l => l.TrimStart().StartsWith(".try") || l.TrimStart().StartsWith('}'))
+            .Select(l => l.Trim()).ToList();
         Assert.AreSequenceEqual(shown, disassembled.Take(shown.Count));
         Assert.AreEqual("}", disassembled[^1]);
     }
@@ -230,19 +236,49 @@ public sealed partial class ReplCoreDisassembleTests
     }
 
     /// <summary>
-    /// The listing of a session method pastes back into a fresh method: the emitter forces zeroed
-    /// locals and writes its own transitions, and the pasted method runs to the same result.
+    /// The listing of a session method pastes back into a fresh method and runs to the same result.
     /// </summary>
+    /// <remarks>
+    /// The emitter forces zeroed locals and writes its own transitions.
+    /// </remarks>
     [TestMethod]
     public void Handle_Dis_Listing_PastesBackIntoAMethod()
     {
         var core = Load(Fib);
-        foreach (var line in new[] { ".method int32 Safe(int32 d) {", ".locals init (int32 n)", ".try {", "ldc.i4 1", "ldarg d", "div", "stloc n", "leave END", "} filter {", "isinst DivideByZeroException", "ldnull", "cgt.un", "endfilter", "} handler {", "pop", "ldc.i4 42", "stloc n", "leave END", "}", "END: ldloc n", "ret", "}" })
+        foreach (var line in new[]
+        {
+            ".method int32 Safe(int32 d) {",
+            ".locals init (int32 n)",
+            ".try {",
+            "ldc.i4 1",
+            "ldarg d",
+            "div",
+            "stloc n",
+            "leave END",
+            "} filter {",
+            "isinst DivideByZeroException",
+            "ldnull",
+            "cgt.un",
+            "endfilter",
+            "} handler {",
+            "pop",
+            "ldc.i4 42",
+            "stloc n",
+            "leave END",
+            "}",
+            "END: ldloc n",
+            "ret",
+            "}",
+        })
         {
             core.Handle(line);
         }
 
-        foreach (var (name, header, argument, expected) in new[] { ("Fib", ".method int32 Fib2(int32 n) {", "10", "55"), ("Safe", ".method int32 Safe2(int32 d) {", "0", "42") })
+        foreach (var (name, header, argument, expected) in new[]
+        {
+            ("Fib", ".method int32 Fib2(int32 n) {", "10", "55"),
+            ("Safe", ".method int32 Safe2(int32 d) {", "0", "42"),
+        })
         {
             var before = core.Transcript.Lines.Count;
             Assert.IsTrue(core.Handle(".dis " + name).Succeeded);
@@ -261,15 +297,18 @@ public sealed partial class ReplCoreDisassembleTests
                 pasted.Add(offsetColumn ? string.Concat(line.Spans.Skip(1).Take(line.Spans.Count - 2).Select(s => s.Text)).Trim() : text);
             }
 
-            Assert.Contains(l => l.StartsWith(".locals init", StringComparison.Ordinal) || name == "Fib", pasted, "the emitter forces zeroed locals, which the listing shows");
+            Assert.Contains(l => l.StartsWith(".locals init", StringComparison.Ordinal) || name == "Fib", pasted,
+                "the emitter forces zeroed locals, which the listing shows");
             Assert.IsTrue(core.Handle(header).Succeeded, header);
             foreach (var line in pasted)
             {
                 var result = core.Handle(line);
-                Assert.IsTrue(result.Succeeded, line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
+                Assert.IsTrue(result.Succeeded,
+                    line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
             }
 
-            Assert.IsTrue(core.Handle("}").Succeeded, "closing the pasted method\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
+            Assert.IsTrue(core.Handle("}").Succeeded,
+                "closing the pasted method\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
             var run = core.Transcript.Lines.Count;
             core.Handle("ldc.i4 " + argument);
             core.Handle("call int32 " + header.Split(' ')[2][..header.Split(' ')[2].IndexOf('(')] + "(int32)");
@@ -281,11 +320,12 @@ public sealed partial class ReplCoreDisassembleTests
     }
 
     /// <summary>
-    /// A listing of compiled C# pastes back into a method: the quoted names of a lambda's closure
-    /// parse, and a body over public members runs to the same result. The closure's own fields are
-    /// private to the loaded assembly, which the runtime still enforces, so that body compiles but
-    /// is not run.
+    /// A listing of compiled C# pastes back into a method, and a body over public members runs to the same result.
     /// </summary>
+    /// <remarks>
+    /// The quoted names of a lambda's closure parse. The closure's own fields are private to the loaded assembly, which the runtime still
+    /// enforces, so that body compiles but is not run.
+    /// </remarks>
     [TestMethod]
     public void Handle_Dis_LoadedListing_PastesBackIntoAMethod()
     {
@@ -294,10 +334,14 @@ public sealed partial class ReplCoreDisassembleTests
 
         var doubled = Pasteable(core, ".dis Fixtures.Shapes::Doubled");
         Assert.Contains(l => l.Contains("'<Doubled>b__0_0'", StringComparison.Ordinal), doubled, "the lambda's name needs quotes");
-        Assert.IsTrue(core.Handle(".method class [System.Runtime]System.Collections.Generic.IEnumerable`1<int32> Doubled2(class [System.Runtime]System.Collections.Generic.IEnumerable`1<int32> values) {").Succeeded);
+        Assert.IsTrue(
+            core.Handle(
+                ".method class [System.Runtime]System.Collections.Generic.IEnumerable`1<int32> Doubled2(class " +
+                "[System.Runtime]System.Collections.Generic.IEnumerable`1<int32> values) {").Succeeded);
         foreach (var line in doubled)
         {
-            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
+            Assert.IsTrue(core.Handle(line).Succeeded,
+                line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
         }
 
         Assert.IsTrue(core.Handle("}").Succeeded, string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
@@ -307,14 +351,22 @@ public sealed partial class ReplCoreDisassembleTests
         Assert.IsTrue(core.Handle(".method int32 Read2(class [Fixtures]Fixtures.Holder h) {").Succeeded);
         foreach (var line in read)
         {
-            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
+            Assert.IsTrue(core.Handle(line).Succeeded,
+                line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
         }
 
         Assert.IsTrue(core.Handle("}").Succeeded, string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
         var run = core.Transcript.Lines.Count;
-        foreach (var line in new[] { "ldstr \"abc\"", "newobj instance void [Fixtures]Fixtures.Holder::.ctor(string)", "call int32 Read2(class [Fixtures]Fixtures.Holder)", "ret" })
+        foreach (var line in new[]
         {
-            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + string.Join("\n", core.Transcript.Lines.Skip(run).Select(l => l.Kind + ": " + l.PlainText)));
+            "ldstr \"abc\"",
+            "newobj instance void [Fixtures]Fixtures.Holder::.ctor(string)",
+            "call int32 Read2(class [Fixtures]Fixtures.Holder)",
+            "ret",
+        })
+        {
+            Assert.IsTrue(core.Handle(line).Succeeded,
+                line + "\n" + string.Join("\n", core.Transcript.Lines.Skip(run).Select(l => l.Kind + ": " + l.PlainText)));
         }
 
         var results = core.Transcript.Lines.Skip(run).Where(l => l.Kind == LineKind.Result).Select(l => l.PlainText).ToList();
@@ -323,9 +375,11 @@ public sealed partial class ReplCoreDisassembleTests
     }
 
     /// <summary>
-    /// The lines of a listing that paste into a method block: everything between the header and
-    /// the closing brace except .maxstack, with the offset and stack columns removed.
+    /// The lines of a listing that paste into a method block, with the offset and stack columns removed.
     /// </summary>
+    /// <remarks>
+    /// They are everything between the header and the closing brace except .maxstack.
+    /// </remarks>
     private static List<string> Pasteable(ReplCore core, string command)
     {
         var listing = Listing(core, command);
@@ -356,17 +410,21 @@ public sealed partial class ReplCoreDisassembleTests
         var core = new ReplCore();
         var (_, _, fixture) = Engine.CecilFixture.Build((module, type) =>
         {
-            var a = new Mono.Cecil.TypeDefinition("A", "Item", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
-            var b = new Mono.Cecil.TypeDefinition("B", "Item", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class, module.TypeSystem.Object);
+            var a = new Mono.Cecil.TypeDefinition("A", "Item", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class,
+                module.TypeSystem.Object);
+            var b = new Mono.Cecil.TypeDefinition("B", "Item", Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Class,
+                module.TypeSystem.Object);
             module.Types.Add(a);
             module.Types.Add(b);
-            var m = new Mono.Cecil.MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            var m = new Mono.Cecil.MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Void);
             m.Body.InitLocals = true;
             m.Body.Variables.Add(new Mono.Cecil.Cil.VariableDefinition(a));
             m.Body.Variables.Add(new Mono.Cecil.Cil.VariableDefinition(b));
             m.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ret);
             type.Methods.Add(m);
         }, core.Session.Resolver);
+
         var assembly = fixture.Assembly.GetName().Name;
         var lines = Listing(core, ".dis void N.Fixture::M()");
         var locals = lines.Single(l => l.TrimStart().StartsWith(".locals", StringComparison.Ordinal)).Trim();
@@ -390,10 +448,12 @@ public sealed partial class ReplCoreDisassembleTests
         Assert.IsTrue(core.Handle(".method int32 M2() {").Succeeded);
         foreach (var line in pasted)
         {
-            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.Kind + ": " + l.PlainText)));
+            Assert.IsTrue(core.Handle(line).Succeeded,
+                line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.Kind + ": " + l.PlainText)));
         }
 
-        Assert.IsTrue(core.Handle("}").Succeeded, string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.Kind + ": " + l.PlainText)));
+        Assert.IsTrue(core.Handle("}").Succeeded,
+            string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.Kind + ": " + l.PlainText)));
         var run = core.Transcript.Lines.Count;
         core.Handle("call int32 M2()");
         core.Handle("ret");
@@ -403,9 +463,11 @@ public sealed partial class ReplCoreDisassembleTests
     }
 
     /// <summary>
-    /// A listing over types whose names carry special characters pastes back and runs against the
-    /// first type, which is also what the session's writer must emit.
+    /// A listing over types whose names carry special characters pastes back and runs against the first type.
     /// </summary>
+    /// <remarks>
+    /// That is also what the session's writer must emit.
+    /// </remarks>
     /// <param name="firstNamespace">The first type's namespace.</param>
     /// <param name="firstName">The first type's name.</param>
     /// <param name="secondNamespace">The colliding type's namespace.</param>
@@ -415,18 +477,26 @@ public sealed partial class ReplCoreDisassembleTests
     [DataRow("N", "Slash\\Name", "N", "SlashName", true)]
     [DataRow("N", "Quote'Name", "N", "QuoteName", true)]
     [DataRow("Ns\\Part", "Plain", "NsPart", "Plain", false)]
-    public void Handle_Dis_SpecialCharactersInNames_PasteBackToTheSameType(string firstNamespace, string firstName, string secondNamespace, string secondName, bool generic)
+    public void Handle_Dis_SpecialCharactersInNames_PasteBackToTheSameType(
+        string firstNamespace,
+        string firstName,
+        string secondNamespace,
+        string secondName,
+        bool generic)
     {
         var core = new ReplCore();
-        _ = Engine.CecilFixture.Build(Engine.MethodDisassemblerTests.CollidingTypes(firstNamespace, firstName, secondNamespace, secondName, generic), core.Session.Resolver);
+        _ = Engine.CecilFixture.Build(Engine.MethodDisassemblerTests.CollidingTypes(firstNamespace, firstName, secondNamespace, secondName,
+            generic), core.Session.Resolver);
         var pasted = Pasteable(core, ".dis int32 N.Fixture::M()");
         Assert.IsTrue(core.Handle(".method int32 M2() {").Succeeded);
         foreach (var line in pasted)
         {
-            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.Kind + ": " + l.PlainText)));
+            Assert.IsTrue(core.Handle(line).Succeeded,
+                line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.Kind + ": " + l.PlainText)));
         }
 
-        Assert.IsTrue(core.Handle("}").Succeeded, string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.Kind + ": " + l.PlainText)));
+        Assert.IsTrue(core.Handle("}").Succeeded,
+            string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.Kind + ": " + l.PlainText)));
         var run = core.Transcript.Lines.Count;
         core.Handle("call int32 M2()");
         core.Handle("ret");

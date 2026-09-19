@@ -27,7 +27,10 @@ public sealed class SessionSignatureTests
         var original = before.Methods.ToArray();
         var oldType = original.Single(method => method.Name == "Make").ReturnType;
 
-        if (accepted) AddType("Value", 42);
+        if (accepted)
+        {
+            AddType("Value", 42);
+        }
         else
         {
             var error = Assert.ThrowsExactly<ReplException>(() => AddType("Other", 42));
@@ -41,12 +44,19 @@ public sealed class SessionSignatureTests
         Assert.AreSame(current, after.Methods.Single(method => method.Name == "Read").Parameters.Single().Type);
         Assert.AreSame(oldType, before.Methods.Single(method => method.Name == "Make").ReturnType);
         Assert.AreSequenceEqual(original, before.Methods);
-        if (accepted) Assert.AreNotSame(oldType, current);
+        if (accepted)
+        {
+            Assert.AreNotSame(oldType, current);
+        }
         else
         {
             Assert.AreSame(oldType, current);
-            for (var index = 0; index < original.Length; index++) Assert.AreSame(original[index], after.Methods[index]);
+            for (var index = 0; index < original.Length; index++)
+            {
+                Assert.AreSame(original[index], after.Methods[index]);
+            }
         }
+
         for (var attempt = 0; attempt < 2; attempt++)
         {
             Add("call class Item Make()", "call int32 Read(class Item)");
@@ -59,7 +69,10 @@ public sealed class SessionSignatureTests
 
         void Add(params string[] source)
         {
-            foreach (var line in IlLines.Expand(source)) session.AddLine(line);
+            foreach (var line in IlLines.Expand(source))
+            {
+                session.AddLine(line);
+            }
         }
     }
 
@@ -86,6 +99,7 @@ public sealed class SessionSignatureTests
             session.AddLine("ret");
             session.AddLine("}");
         }
+
         var before = session.InspectionContext;
         var previous = before.Methods.ToArray();
         var name = replacement < 0 ? "Added" : $"Value{replacement}";
@@ -97,9 +111,16 @@ public sealed class SessionSignatureTests
         for (var index = 0; index < count; index++)
         {
             Assert.AreSame(previous[index], before.Methods[index]);
-            if (index == replacement) Assert.AreNotSame(previous[index], opened.Methods[index]);
-            else Assert.AreSame(previous[index], opened.Methods[index]);
+            if (index == replacement)
+            {
+                Assert.AreNotSame(previous[index], opened.Methods[index]);
+            }
+            else
+            {
+                Assert.AreSame(previous[index], opened.Methods[index]);
+            }
         }
+
         session.AddLine("ldc.i4.0");
         session.AddLine("brfalse done");
         session.AddLine($"call int32 {name}()");
@@ -115,6 +136,7 @@ public sealed class SessionSignatureTests
             session.AddLine($"call int32 Value{index}()");
             Assert.AreEqual(index == replacement ? 42 : index, session.Run().Value);
         }
+
         session.Reset();
         Assert.IsEmpty(session.InspectionContext.Methods);
         Assert.AreEqual(name, opened.Methods[slot].Name);

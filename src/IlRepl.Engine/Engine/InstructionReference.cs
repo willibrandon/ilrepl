@@ -74,8 +74,13 @@ public static class InstructionReference
     /// <summary>
     /// Describes an analyzed source instruction using its established operand and stack facts.
     /// </summary>
-    internal static InstructionHelp? For<T>(IReadOnlyList<FlowNode<T>> nodes, int position,
-        FlowTypeRules<T> types, FlowState<T>? state, int? returnArity = null, FlowState<T>? outgoing = null) where T : class
+    internal static InstructionHelp? For<T>(
+        IReadOnlyList<FlowNode<T>> nodes,
+        int position,
+        FlowTypeRules<T> types,
+        FlowState<T>? state,
+        int? returnArity = null,
+        FlowState<T>? outgoing = null) where T : class
     {
         var node = nodes[position];
         if (node.Instruction is not { } instruction)
@@ -100,9 +105,15 @@ public static class InstructionReference
         }
     }
 
-    private static InstructionHelp Specialize<T>(IReadOnlyList<FlowNode<T>> nodes, int position,
-        FlowTypeRules<T> types, FlowState<T>? state, FlowState<T>? outgoing,
-        InstructionHelp help, StackOperandView<T> instruction, int? returnArity)
+    private static InstructionHelp Specialize<T>(
+        IReadOnlyList<FlowNode<T>> nodes,
+        int position,
+        FlowTypeRules<T> types,
+        FlowState<T>? state,
+        FlowState<T>? outgoing,
+        InstructionHelp help,
+        StackOperandView<T> instruction,
+        int? returnArity)
         where T : class
     {
         var node = nodes[position];
@@ -111,6 +122,7 @@ public static class InstructionReference
             Syntax = node.Synthetic ? instruction.Op.Name! : node.InstructionSyntax ?? node.Source.Trim(),
             Notes = [.. help.Notes, .. ContextNotes(instruction, types.Algebra)],
         };
+
         if (state?.Kind != AnalyzedStackKind.Known || outgoing?.Kind != AnalyzedStackKind.Known)
         {
             var note = state?.Invalid == true || outgoing?.Invalid == true
@@ -134,10 +146,19 @@ public static class InstructionReference
                 {
                     if (nodes[prefix].Instruction is not { } preceding)
                     {
-                        if (nodes[prefix].Block is not null) break;
+                        if (nodes[prefix].Block is not null)
+                        {
+                            break;
+                        }
+
                         continue;
                     }
-                    if (preceding.Op.OpCodeType != OpCodeType.Prefix && preceding.DecodedPrefixName is null) break;
+
+                    if (preceding.Op.OpCodeType != OpCodeType.Prefix && preceding.DecodedPrefixName is null)
+                    {
+                        break;
+                    }
+
                     if (preceding.Op == OpCodes.Constrained && preceding.Type is { } constraint)
                     {
                         incoming[0] = types.Algebra.MakeByRef(constraint);
@@ -195,6 +216,7 @@ public static class InstructionReference
                 ? "argument" : "local",
             _ => name == "unaligned." ? "1|2|4" : "value",
         };
+
         return new InstructionHelp(name, name + (operand.Length == 0 ? "" : " " + operand),
             OpcodeTable.StackTransition(opcode).Trim(), Explanation(name), Notes(name), ReferenceUrl + Anchor(name));
     }
@@ -203,29 +225,65 @@ public static class InstructionReference
     {
         var family = name.EndsWith(".s", StringComparison.Ordinal) ? name[..^2] : name;
         if (family.StartsWith("ldarga", StringComparison.Ordinal))
+        {
             return "Pushes a managed pointer to an argument, allowing access to the argument's storage.";
+        }
+
         if (family.StartsWith("ldarg", StringComparison.Ordinal))
+        {
             return "Loads an argument onto the evaluation stack. In instance methods, argument 0 is this.";
+        }
+
         if (family.StartsWith("starg", StringComparison.Ordinal))
+        {
             return "Pops a value into the specified argument's storage; its type must be assignable to that argument.";
+        }
+
         if (family.StartsWith("ldloca", StringComparison.Ordinal))
+        {
             return "Pushes a managed pointer to a local variable's storage.";
+        }
+
         if (family.StartsWith("ldloc", StringComparison.Ordinal))
+        {
             return "Loads the specified local variable onto the evaluation stack.";
+        }
+
         if (family.StartsWith("stloc", StringComparison.Ordinal))
+        {
             return "Pops a value into the specified local variable; its type must be assignable to that local.";
+        }
+
         if (family.StartsWith("ldc.", StringComparison.Ordinal))
+        {
             return "Pushes the encoded numeric constant onto the evaluation stack.";
+        }
+
         if (family.StartsWith("conv.", StringComparison.Ordinal))
+        {
             return Conversion(name);
+        }
+
         if (family.StartsWith("ldind.", StringComparison.Ordinal))
+        {
             return "Loads a value through a managed or unmanaged pointer using the instruction's storage type.";
+        }
+
         if (family.StartsWith("stind.", StringComparison.Ordinal))
+        {
             return "Stores the top value through the pointer below it using the instruction's storage type.";
+        }
+
         if (family.StartsWith("ldelem", StringComparison.Ordinal) && family != "ldelema")
+        {
             return "Pops an array and index, then loads that element using the specified element type.";
+        }
+
         if (family.StartsWith("stelem", StringComparison.Ordinal))
+        {
             return "Pops an array, index, and value, then stores the value into that array element.";
+        }
+
         if (family.StartsWith("add", StringComparison.Ordinal) || family.StartsWith("sub", StringComparison.Ordinal)
             || family.StartsWith("mul", StringComparison.Ordinal))
         {
@@ -236,8 +294,12 @@ public static class InstructionReference
                 ? ", throwing OverflowException if the integer result is out of range."
                 : ". Integer overflow wraps; floating-point overflow produces infinity.");
         }
+
         if (FlowNumericRules.Comparison(family))
+        {
             return Comparison(family);
+        }
+
         return family switch
         {
             "nop" => "Does nothing and leaves the evaluation stack unchanged.",
@@ -316,13 +378,18 @@ public static class InstructionReference
     private static string Conversion(string name)
     {
         var destination = name.Replace("conv.", "", StringComparison.Ordinal).Replace("ovf.", "", StringComparison.Ordinal);
-        if (destination.EndsWith(".un", StringComparison.Ordinal)) destination = destination[..^3];
+        if (destination.EndsWith(".un", StringComparison.Ordinal))
+        {
+            destination = destination[..^3];
+        }
+
         var type = destination switch
         {
             "i1" => "int8", "i2" => "int16", "i4" => "int32", "i8" => "int64", "i" => "native int",
             "u1" => "uint8", "u2" => "uint16", "u4" => "uint32", "u8" => "uint64", "u" => "native uint",
             "r4" => "float32", "r8" => "float64", _ => "floating point",
         };
+
         return "Converts the top value to " + type + (name.Contains("ovf", StringComparison.Ordinal)
             ? ", throwing OverflowException if it cannot be represented." : " without an overflow check.");
     }
@@ -344,76 +411,153 @@ public static class InstructionReference
     {
         var notes = new List<string>();
         if (name.EndsWith(".s", StringComparison.Ordinal))
+        {
             notes.Add("The short form uses a smaller encoded operand; its operation is otherwise the same.");
+        }
+
         if (name.Contains("ovf", StringComparison.Ordinal) && !name.StartsWith("conv", StringComparison.Ordinal))
+        {
             notes.Add(name.EndsWith(".un", StringComparison.Ordinal)
                 ? "Operands and the result range are unsigned integers." : "Operands and the result range are signed integers.");
+        }
+
         if (name.StartsWith("conv", StringComparison.Ordinal))
         {
             notes.Add(name.EndsWith(".un", StringComparison.Ordinal)
                 ? "The source integer is interpreted as unsigned; the destination type is specified separately."
                 : "The destination type controls the result; integer sources are interpreted as signed for overflow checks.");
             if (name.Contains("ovf", StringComparison.Ordinal))
+            {
                 notes.Add("Floating-point sources truncate toward zero; .un does not change their interpretation.");
+            }
+
             notes.Add("Small integers occupy int32 stack slots. Native integers have the current runtime's pointer width.");
         }
+
         if (FlowNumericRules.Comparison(name))
         {
             notes.Add(name.Contains(".un", StringComparison.Ordinal)
                 ? "Integers are compared as unsigned. Floating-point unordered comparisons (NaN) make the condition true."
                 : "Integer ordering is signed. Floating-point comparisons involving NaN make the condition false.");
-            if (name == "cgt.un") notes.Add("Object references also support the non-null test against null.");
+            if (name == "cgt.un")
+            {
+                notes.Add("Object references also support the non-null test against null.");
+            }
         }
+
         if (name is "call" or "callvirt" or "calli")
+        {
             notes.Add("Push the receiver first when required, then arguments in signature order; a void return pushes nothing.");
+        }
+
         if (name == "newobj")
+        {
             notes.Add("Push constructor arguments in signature order. A constructor has a void signature, but newobj pushes the instance.");
+        }
+
         if (name == "callvirt")
+        {
             notes.Add("Nonvirtual instance methods are also allowed. An ordinary null object receiver throws NullReferenceException.");
-        if (name == "call") notes.Add("An instance call still needs a receiver; call does not itself provide callvirt's null check.");
-        if (name == "calli") notes.Add("Push the function pointer after the receiver and arguments. This operation is unverifiable.");
+        }
+
+        if (name == "call")
+        {
+            notes.Add("An instance call still needs a receiver; call does not itself provide callvirt's null check.");
+        }
+
+        if (name == "calli")
+        {
+            notes.Add("Push the function pointer after the receiver and arguments. This operation is unverifiable.");
+        }
+
         if (name is "box" or "unbox.any")
+        {
             notes.Add("Nullable boxing produces null for no value, otherwise a boxed underlying value;"
                 + " generic behavior depends on the type.");
-        if (name == "box") notes.Add("A reference-type operand leaves the reference unchanged.");
+        }
+
+        if (name == "box")
+        {
+            notes.Add("A reference-type operand leaves the reference unchanged.");
+        }
+
         if (name is "unbox" or "unbox.any")
+        {
             notes.Add("Unboxing checks the boxed type; it does not perform a numeric conversion. A mismatched"
                 + " type throws InvalidCastException.");
+        }
+
         if (name == "unbox")
+        {
             notes.Add("The result has controlled mutability. Unboxing Nullable<T> can require newly manufactured nullable storage.");
+        }
+
         if (name is "unbox" or "unbox.any")
+        {
             notes.Add("Null becomes an empty nullable value for Nullable<T>; a non-nullable value-type"
                 + " operand throws NullReferenceException.");
+        }
+
         if (name == "unbox.any")
+        {
             notes.Add("A reference-type operand preserves null. With a generic operand, the actual type determines the operation.");
+        }
+
         if (name == "constrained.")
         {
             notes.Add("For callvirt, the receiver is a managed pointer to the constrained type; boxing occurs only when required.");
             notes.Add("For call or ldftn, the target must be a static virtual interface method implemented by the constrained type.");
         }
+
         if (name == "tail.")
+        {
             notes.Add("Prefix call, callvirt, or calli; only its arguments may remain. Follow the call with"
                 + " ret outside protected regions.");
+        }
+
         if (name == "readonly.")
         {
             notes.Add("Suppresses the exact array-element type check, permitting covariant array reads.");
             notes.Add("Indirect writes through the result are unverifiable; field stores and mutating receiver calls are permitted.");
         }
+
         if (name is "unaligned." or "volatile.")
+        {
             notes.Add("Applies to indirect loads/stores, instance-field access, ldobj/stobj, cpblk, or initblk.");
+        }
+
         if (name == "volatile.")
+        {
             notes.Add("Also applies to ldsfld/stsfld. It does not make an otherwise non-atomic access atomic or replace a lock.");
+        }
+
         if (name == "no.")
+        {
             notes.Add("Mask bits 1, 2, and 4 select type, range, and null checks. Valid targets depend on the"
                 + " selected checks; unverifiable.");
+        }
+
         if (name is "tail." or "constrained." or "readonly." or "volatile." or "unaligned." or "no.")
+        {
             notes.Add("Prefixes attach to the following instruction. Branches must target the first prefix,"
                 + " not the middle of the sequence.");
+        }
+
         if (name is "div" or "div.un" or "rem" or "rem.un")
+        {
             notes.Add("Integer division by zero throws DivideByZeroException.");
-        if (name == "div") notes.Add("Floating-point division follows IEEE floating-point rules.");
+        }
+
+        if (name == "div")
+        {
+            notes.Add("Floating-point division follows IEEE floating-point rules.");
+        }
+
         if (name == "rem")
+        {
             notes.Add("Uses a quotient truncated toward zero; floating-point rem differs from Math.IEEERemainder.");
+        }
+
         if (name == "no.")
         {
             notes.Add("Type checks (1): castclass, unbox, ldelema, stelem, stelem.ref.");
@@ -421,19 +565,32 @@ public static class InstructionReference
             notes.Add("Null checks (4): those array operations, ldfld, stfld, callvirt, ldvirtftn.");
             notes.Add("Every selected check must be valid for the target instruction.");
         }
-        if (name == "ret") notes.Add("A top-level ilrepl cell may return zero or one value; managed pointers cannot escape the cell.");
+
+        if (name == "ret")
+        {
+            notes.Add("A top-level ilrepl cell may return zero or one value; managed pointers cannot escape the cell.");
+        }
+
         if (name.StartsWith("ldelem", StringComparison.Ordinal) || name.StartsWith("stelem", StringComparison.Ordinal))
+        {
             notes.Add("The index is int32 or native int; null and bounds checks apply. Small integer loads widen to int32.");
+        }
+
         return notes.ToArray();
     }
 
     private static IEnumerable<string> ContextNotes<T>(StackOperandView<T> instruction, IStackTypeAlgebra<T> algebra) where T : class
     {
         if (instruction.Op == OpCodes.Callvirt && instruction.MethodIsVirtual == false)
+        {
             yield return "This resolved instance method is nonvirtual, so this call does not select an override.";
+        }
+
         if (instruction.Op == OpCodes.Box && instruction.Type is { } type)
+        {
             yield return algebra.IsGenericParameter(type) ? "The actual generic type determines whether boxing is needed."
                 : algebra.IsValueType(type) ? "This operand is a value type."
                 : "This operand is a reference type; its reference is preserved.";
+        }
     }
 }

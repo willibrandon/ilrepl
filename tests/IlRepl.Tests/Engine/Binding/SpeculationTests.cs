@@ -22,8 +22,16 @@ public sealed class SpeculationTests
     public void Replacement_RebindsCommittedDependentsTwice()
     {
         var session = new Session();
-        foreach (var line in new[] { ".class public A { }", ".class public B {",
-            ".method public static A Id(A value) {", "ldarg value", "ret", "}", "}" })
+        foreach (var line in new[]
+        {
+            ".class public A { }",
+            ".class public B {",
+            ".method public static A Id(A value) {",
+            "ldarg value",
+            "ret",
+            "}",
+            "}",
+        })
         {
             session.AddLine(line);
         }
@@ -48,8 +56,16 @@ public sealed class SpeculationTests
     public void Replacement_RebuildsTheCellAfterDependentSignatures()
     {
         var session = new Session();
-        foreach (var line in new[] { ".class public A { }", ".method A Id(A value) {",
-            "ldarg value", "ret", "}", "ldnull", "call A Id(A)" })
+        foreach (var line in new[]
+        {
+            ".class public A { }",
+            ".method A Id(A value) {",
+            "ldarg value",
+            "ret",
+            "}",
+            "ldnull",
+            "call A Id(A)",
+        })
         {
             session.AddLine(line);
         }
@@ -70,8 +86,15 @@ public sealed class SpeculationTests
     public void Replacement_RefusesRemovalOfARequiredNestedType()
     {
         var session = new Session();
-        foreach (var line in new[] { ".class public Outer {", ".class nested public Inner { }", "}",
-            ".class public Holder {", ".field public class Outer/Inner Value", "}" })
+        foreach (var line in new[]
+        {
+            ".class public Outer {",
+            ".class nested public Inner { }",
+            "}",
+            ".class public Holder {",
+            ".field public class Outer/Inner Value",
+            "}",
+        })
         {
             session.AddLine(line);
         }

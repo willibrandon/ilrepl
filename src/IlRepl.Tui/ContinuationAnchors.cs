@@ -111,6 +111,7 @@ public sealed class ContinuationAnchors : IDisposable
                 ReplaceOperation replace => (replace.Range.Start.Value, replace.Range.End.Value, replace.NewText.Length),
                 _ => (-1, -1, 0),
             };
+
             if (start < 0)
             {
                 Clear();

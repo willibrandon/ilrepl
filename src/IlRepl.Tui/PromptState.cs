@@ -152,8 +152,7 @@ public sealed partial class PromptState
     internal SessionEditor? InitialSessionEditor { get; set; }
 
     /// <summary>
-    /// Buffers submitted while another submission was in flight, oldest first; each goes when
-    /// the one before it completes.
+    /// Buffers submitted while another submission was in flight, oldest first; each goes when the one before it completes.
     /// </summary>
     public Queue<string> Pending { get; } = new();
 
@@ -237,6 +236,25 @@ public sealed partial class PromptState
     }
 
     /// <summary>
+    /// Reads a paste to its end and posts the text, or the reason it could not be read, for the next frame to apply.
+    /// </summary>
+    /// <param name="paste">The paste to read.</param>
+    /// <returns>A task that completes once the paste has been posted.</returns>
+    internal async Task AcceptPasteAsync(PasteContext paste)
+    {
+        try
+        {
+            var text = await paste.ReadToEndAsync(ct: paste.CancellationToken).ConfigureAwait(false);
+            Post(SubmissionEvent.Paste(text));
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or IOException or OperationCanceledException)
+        {
+            paste.Cancel();
+            Post(new SubmissionEvent(SubmissionEventKind.Paste, Note: "paste failed: " + exception.Message));
+        }
+    }
+
+    /// <summary>
     /// Replaces the buffer, puts the caret somewhere in it, and forgets the undo history.
     /// </summary>
     /// <param name="text">The new buffer.</param>
@@ -278,40 +296,41 @@ public sealed partial class PromptState
     public int LastEditorRows { get; set; } = 1;
 
     /// <summary>
-    /// True when the editor's row count changed on the frame being built, so one more frame is
-    /// drawn to settle the transcript.
+    /// True when the editor's row count changed on the frame being built, so one more frame is drawn to settle the transcript.
     /// </summary>
     public bool RowsChanged { get; set; }
 
     /// <summary>
-    /// The line a refusal selected, so Ctrl+C on it clears rather than copies; null once the
-    /// buffer changes.
+    /// The line a refusal selected, so Ctrl+C on it clears rather than copies; null once the buffer changes.
     /// </summary>
     public DocumentRange? ReturnedSelection { get; private set; }
 
     /// <summary>
-    /// The document version the returned selection was made at; an edit since means the
-    /// selection, whatever its offsets, is the user's own.
+    /// The document version the returned selection was made at; an edit since means the selection, whatever its offsets, is the user's own.
     /// </summary>
     public long ReturnedVersion { get; private set; }
 
     /// <summary>
-    /// The document version when the transcript's copy mode was last seen to begin, so typing,
-    /// which changes it, ends the selection; null while copy mode is off.
+    /// The document version when the transcript's copy mode was last seen to begin, or null while copy mode is off.
     /// </summary>
+    /// <remarks>
+    /// Typing changes the document version, so it ends the selection.
+    /// </remarks>
     public long? CopyModeVersion { get; set; }
 
     /// <summary>
     /// True while the current selection is the one a refusal made, untouched since.
     /// </summary>
-    public bool SelectionIsReturned =>ReturnedSelection is { } returned && Editor.Document.Version == ReturnedVersion && Editor.Cursor.HasSelection && Editor.Cursor.SelectionRange == returned;
+    public bool SelectionIsReturned =>ReturnedSelection is { } returned && Editor.Document.Version == ReturnedVersion
+        && Editor.Cursor.HasSelection && Editor.Cursor.SelectionRange == returned;
 
     /// <summary>
-    /// The depth and comment state the next submission will start from: the engine's own while
-    /// nothing is in flight, otherwise where the submission in flight and everything queued behind
-    /// it will leave the engine, so a line typed meanwhile is judged against that and not against
-    /// a block the worker is still closing.
+    /// The depth and comment state the next submission will start from.
     /// </summary>
+    /// <remarks>
+    /// It is the engine's own while nothing is in flight, otherwise where the submission in flight and everything queued behind it will
+    /// leave the engine. A line typed meanwhile is judged against that and not against a block the worker is still closing.
+    /// </remarks>
     /// <param name="status">The engine's status now.</param>
     /// <returns>The open depth and whether a block comment is open.</returns>
     public (int Depth, bool CommentOpen) Expected(SessionStatus status)

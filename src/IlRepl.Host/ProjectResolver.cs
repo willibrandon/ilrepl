@@ -21,7 +21,9 @@ internal static class ProjectResolver
     /// <param name="action">The project load and build options.</param>
     /// <param name="cancellationToken">Cancels the SDK process and asset reads.</param>
     /// <returns>The candidate workspace with its evaluated project outputs.</returns>
-    internal static async Task<SessionDocument> ResolveAsync(SessionDocument document, SessionAction action,
+    internal static async Task<SessionDocument> ResolveAsync(
+        SessionDocument document,
+        SessionAction action,
         CancellationToken cancellationToken)
     {
         var path = Path.GetFullPath(action.Path ?? throw new InvalidDataException("a project path is required"));
@@ -100,6 +102,7 @@ internal static class ProjectResolver
             "-getItem:ReferenceCopyLocalPaths,RuntimeCopyLocalItems,NativeCopyLocalItems,ResourceCopyLocalItems,"
                 + "RuntimeTargetsCopyLocalItems,Compile,FrameworkReference",
         };
+
         if (action.NoBuild)
         {
             arguments.Add("-target:ResolveReferences");
@@ -146,6 +149,7 @@ internal static class ProjectResolver
         {
             await DependencyAsset.ReadAsync(target, "managed", assets, cancellationToken).ConfigureAwait(false),
         };
+
         var paths = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         string[] copyItems = ["ReferenceCopyLocalPaths", "RuntimeCopyLocalItems", "NativeCopyLocalItems", "ResourceCopyLocalItems",
             "RuntimeTargetsCopyLocalItems"];
@@ -207,11 +211,17 @@ internal static class ProjectResolver
             Configuration = configuration, SdkVersion = sdk,
             Assets = [.. selected.DistinctBy(asset => asset.Hash)], Frameworks = frameworks,
         };
+
         var entries = document.Entries.ToList();
         if (previous is null)
         {
-            entries.Add(new SessionEntry { Kind = SessionEntryKind.Reference, Reference = reference.Identity,
-                Number = document.Cells.Select(cell => cell.Number).DefaultIfEmpty(0).Max() + 1, Source = [".load " + path] });
+            entries.Add(new SessionEntry
+            {
+                Kind = SessionEntryKind.Reference,
+                Reference = reference.Identity,
+                Number = document.Cells.Select(cell => cell.Number).DefaultIfEmpty(0).Max() + 1,
+                Source = [".load " + path],
+            });
         }
 
         return document with
@@ -225,7 +235,9 @@ internal static class ProjectResolver
         .GetProperty("FrameworkReference").EnumerateArray().Select(item => item.GetProperty("Identity").GetString()!)
         .Where(name => name != "Microsoft.NETCore.App")];
 
-    private static async Task<JsonDocument> EvaluateAsync(string directory, IEnumerable<string> arguments,
+    private static async Task<JsonDocument> EvaluateAsync(
+        string directory,
+        IEnumerable<string> arguments,
         CancellationToken cancellationToken)
     {
         var output = await RunAsync(directory, arguments, cancellationToken).ConfigureAwait(false);
@@ -234,7 +246,11 @@ internal static class ProjectResolver
             try
             {
                 var parsed = JsonDocument.Parse(output[start..]);
-                if (parsed.RootElement.TryGetProperty("Properties", out _)) return parsed;
+                if (parsed.RootElement.TryGetProperty("Properties", out _))
+                {
+                    return parsed;
+                }
+
                 parsed.Dispose();
             }
             catch (JsonException)
@@ -259,10 +275,12 @@ internal static class ProjectResolver
                 RedirectStandardError = true, CreateNoWindow = true,
             },
         };
+
         foreach (var argument in arguments)
         {
             process.StartInfo.ArgumentList.Add(argument);
         }
+
         process.StartInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
         process.StartInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
         process.StartInfo.Environment["UseSharedCompilation"] = "false";

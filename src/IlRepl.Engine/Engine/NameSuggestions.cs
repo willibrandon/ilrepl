@@ -76,7 +76,11 @@ public static class NameSuggestions
     /// <param name="where">The context the type would be used from.</param>
     /// <param name="scope">The scope that binds the spelling.</param>
     /// <returns>The suggestion, or null.</returns>
-    public static TypeSuggestion? NearestType(string ilName, string? assemblyHint, TypeIndex index, AccessContext where,
+    public static TypeSuggestion? NearestType(
+        string ilName,
+        string? assemblyHint,
+        TypeIndex index,
+        AccessContext where,
         IBindingScope scope)
     {
         ArgumentNullException.ThrowIfNull(ilName);
@@ -154,7 +158,9 @@ public static class NameSuggestions
         return new TypeSuggestion(best, bestSpelling!);
     }
 
-    private static int Compare((int Distance, int Common, int Session, string Path) a, (int Distance, int Common, int Session,
+    private static int Compare(
+        (int Distance, int Common, int Session, string Path) a,
+        (int Distance, int Common, int Session,
         string Path) b)
     {
         var byDistance = a.Distance.CompareTo(b.Distance);

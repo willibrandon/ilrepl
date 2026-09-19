@@ -21,8 +21,10 @@ public enum SubmissionOutcome
     Completed,
 
     /// <summary>
-    /// The line failed after something irreversible happened, such as a cell that threw; the
-    /// submission stops and only the unsent lines return to the editor.
+    /// The line failed after something irreversible happened, such as a cell that threw.
     /// </summary>
+    /// <remarks>
+    /// The submission stops and only the unsent lines return to the editor.
+    /// </remarks>
     Failed,
 }

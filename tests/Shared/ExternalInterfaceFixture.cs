@@ -27,6 +27,7 @@ public static class ExternalInterfaceFixture
             "castclass" => "castclass " + contract + "\ncallvirt instance int32 " + contract + "::Value()",
             _ => "callvirt instance int32 " + contract + "::Value()"
         };
+
         var owner = operation == "base-isinst" ? "ExternalBase" : "Owner";
         return ".method public static int32 Probe() {\nnewobj instance void " + owner + "::.ctor()\n"
             + body + "\nldc.i4.1\nadd\nret\n}";
@@ -74,10 +75,18 @@ public static class ExternalInterfaceFixture
         }
 
         metadata.AddInterfaceImplementation(parent, implemented);
-        if (reimplement) metadata.AddInterfaceImplementation(owner, implemented);
+        if (reimplement)
+        {
+            metadata.AddInterfaceImplementation(owner, implemented);
+        }
+
         var value = metadata.AddMemberReference(implemented, metadata.GetOrAddString("Value"), Blob([0x20, 0, 8]));
         metadata.AddMethodImplementation(parent, MetadataTokens.MethodDefinitionHandle(3), value);
-        if (reimplement) metadata.AddMethodImplementation(owner, MetadataTokens.MethodDefinitionHandle(6), value);
+        if (reimplement)
+        {
+            metadata.AddMethodImplementation(owner, MetadataTokens.MethodDefinitionHandle(6), value);
+        }
+
         var bodies = new MethodBodyStreamEncoder(new BlobBuilder());
         var abstractMethod = MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.NewSlot | MethodAttributes.Abstract;
         metadata.AddMethodDefinition(abstractMethod,
@@ -121,7 +130,11 @@ public static class ExternalInterfaceFixture
         probe.OpCode(ILOpCode.Ret);
         metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.Static, MethodImplAttributes.IL,
             metadata.GetOrAddString("Probe"), Blob([0, 0, 8]), bodies.AddMethodBody(probe), firstParameter);
-        if (reimplement) Implementation(43);
+        if (reimplement)
+        {
+            Implementation(43);
+        }
+
         var pe = new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
             new MetadataRootBuilder(metadata), bodies.Builder, flags: CorFlags.ILOnly);
         var image = new BlobBuilder();

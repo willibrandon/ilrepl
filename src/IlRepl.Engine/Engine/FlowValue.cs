@@ -9,5 +9,9 @@ namespace IlRepl.Engine;
 /// <param name="IsThis">Whether the value is the original receiver.</param>
 /// <param name="IsReadOnly">Whether the address prohibits writes.</param>
 /// <param name="IsKnownZero">Whether every incoming path proves an integer zero.</param>
-internal sealed record FlowValue<T>(T? Type, int[] Origins, bool IsThis = false, bool IsReadOnly = false,
+internal sealed record FlowValue<T>(
+    T? Type,
+    int[] Origins,
+    bool IsThis = false,
+    bool IsReadOnly = false,
     bool IsKnownZero = false) where T : class;

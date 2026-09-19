@@ -3,9 +3,11 @@ using IlRepl.Engine;
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// Tests for <see cref="Session.Generation"/>: it moves on every change that forgetting lines
-/// cannot undo, and stays put while lines are merely accepted.
+/// Tests for <see cref="Session.Generation"/>, which moves on every change that forgetting lines cannot undo.
 /// </summary>
+/// <remarks>
+/// It stays put while lines are merely accepted.
+/// </remarks>
 [TestClass]
 public sealed class SessionGenerationTests
 {
@@ -45,8 +47,7 @@ public sealed class SessionGenerationTests
     }
 
     /// <summary>
-    /// Replacing a method with the same signature commits a new body, so the generation advances
-    /// although the method count does not.
+    /// Replacing a method with the same signature commits a new body, so the generation advances although the method count does not.
     /// </summary>
     [TestMethod]
     public void Generation_SameSignatureReplacement_Advances()
@@ -109,8 +110,7 @@ public sealed class SessionGenerationTests
     }
 
     /// <summary>
-    /// Lines accepted into the cell, an open method, or an open class are provisional and leave
-    /// the generation alone.
+    /// Lines accepted into the cell, an open method, or an open class are provisional and leave the generation alone.
     /// </summary>
     [TestMethod]
     public void Generation_ProvisionalLines_DoNotAdvance()

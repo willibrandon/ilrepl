@@ -57,7 +57,11 @@ public sealed class ExecutionThreadTests
     [TestMethod]
     public async Task ExecutionStack_AllowsThreeMiBOfLiveFrames()
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext)) return;
+        if (await IsolatedTestProcess.RunAsync(TestContext))
+        {
+            return;
+        }
+
         await using var engine = new InProcessEngine();
         await LineAsync(engine, "ldc.i4 192");
         await LineAsync(engine, "call int32 IlRepl.Tests.Protocol.ExecutionThreadFixture::Recurse(int32)");

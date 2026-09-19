@@ -47,6 +47,7 @@ static async Task RunSessionAsync(int columns, int rows, BrowserHistoryStore his
     {
         transcript.Add(line);
     }
+
     PromptState? prompt = null;
     // Selection and copy are the terminal's own in the browser, so the mouse stays with it. Wheel
     // notches still reach the app, as the reports a terminal sends; the page makes them.

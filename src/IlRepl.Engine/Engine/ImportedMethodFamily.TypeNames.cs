@@ -18,17 +18,36 @@ internal sealed partial class ImportedMethodFamily
 
     private string? TypeNameProblem(MethodBase method, object?[]? receivers)
     {
-        if (!IsTypeNameInspection(method)) return null;
-        if (receivers is null || receivers.Length == 0) return TypeNameReason;
+        if (!IsTypeNameInspection(method))
+        {
+            return null;
+        }
+
+        if (receivers is null || receivers.Length == 0)
+        {
+            return TypeNameReason;
+        }
+
         foreach (var receiver in receivers)
         {
-            if (receiver is null) continue;
+            if (receiver is null)
+            {
+                continue;
+            }
+
             if (receiver is Type type)
             {
-                if (TypeNameChanges(method.Name, type)) return TypeNameReason;
+                if (TypeNameChanges(method.Name, type))
+                {
+                    return TypeNameReason;
+                }
             }
-            else if (method.Name != "get_Name" || receiver is not MemberInfo) return TypeNameReason;
+            else if (method.Name != "get_Name" || receiver is not MemberInfo)
+            {
+                return TypeNameReason;
+            }
         }
+
         return null;
     }
 
@@ -42,7 +61,11 @@ internal sealed partial class ImportedMethodFamily
     private bool CopiedSimpleNameChanges(Type type)
     {
         type = NameDefinition(type);
-        if (type.IsGenericParameter || !_types.TryGetValue(DefinitionOf(type), out var path)) return false;
+        if (type.IsGenericParameter || !_types.TryGetValue(DefinitionOf(type), out var path))
+        {
+            return false;
+        }
+
         var separator = Math.Max(path.LastIndexOf('/'), path.LastIndexOf('.'));
         return path[(separator + 1)..] != type.Name;
     }
@@ -50,22 +73,41 @@ internal sealed partial class ImportedMethodFamily
     private bool CopiedNamespaceChanges(Type type)
     {
         type = NameDefinition(type);
-        if (type.IsGenericParameter || !_types.TryGetValue(DefinitionOf(type), out var path)) return false;
+        if (type.IsGenericParameter || !_types.TryGetValue(DefinitionOf(type), out var path))
+        {
+            return false;
+        }
+
         return path[..path.LastIndexOf('.')] != type.Namespace;
     }
 
     private static Type NameDefinition(Type type)
     {
-        while (type.HasElementType) type = type.GetElementType()!;
+        while (type.HasElementType)
+        {
+            type = type.GetElementType()!;
+        }
+
         return type.IsConstructedGenericType ? type.GetGenericTypeDefinition() : type;
     }
 
     private void ValidateTypeNameReference(ReflectionValueResolver values, MethodEditBody body, int position, Instruction instruction)
     {
-        if (instruction.Operand is not ResolvedMethod resolved || instruction.Op == OpCodes.Ldtoken) return;
+        if (instruction.Operand is not ResolvedMethod resolved || instruction.Op == OpCodes.Ldtoken)
+        {
+            return;
+        }
+
         var target = resolved.Method ?? _pinned[resolved.Definition!.Name];
-        if (!IsTypeNameInspection(target)) return;
+        if (!IsTypeNameInspection(target))
+        {
+            return;
+        }
+
         var receivers = instruction.Op == OpCodes.Ldftn ? null : values.Argument(body, position, -1);
-        if (TypeNameProblem(target, receivers) is { } problem) RejectReflection(body, instruction, target, problem);
+        if (TypeNameProblem(target, receivers) is { } problem)
+        {
+            RejectReflection(body, instruction, target, problem);
+        }
     }
 }

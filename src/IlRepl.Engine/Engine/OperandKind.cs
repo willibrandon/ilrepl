@@ -1,8 +1,7 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// The kind of operand an <see cref="Instruction"/> carries, which decides which
-/// <c>ILGenerator.Emit</c> overload is used.
+/// The kind of operand an <see cref="Instruction"/> carries, which decides which <c>ILGenerator.Emit</c> overload is used.
 /// </summary>
 public enum OperandKind
 {

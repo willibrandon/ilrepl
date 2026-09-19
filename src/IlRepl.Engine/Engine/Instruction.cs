@@ -4,8 +4,7 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// One parsed IL instruction: the opcode, its operand, and the details the emitter and the
-/// stack simulator need.
+/// One parsed IL instruction: the opcode, its operand, and the details the emitter and the stack simulator need.
 /// </summary>
 public sealed class Instruction
 {
@@ -30,9 +29,12 @@ public sealed class Instruction
     public OperandKind Kind { get; init; }
 
     /// <summary>
-    /// The operand: a boxed immediate, a string, a label name or names, a local or argument
-    /// index, a <see cref="Type"/>, a <see cref="ResolvedMethod"/>, a field, or a <see cref="CalliSignature"/>.
+    /// The operand.
     /// </summary>
+    /// <remarks>
+    /// It is a boxed immediate, a string, a label name or names, a local or argument index, a <see cref="Type"/>, a <see
+    /// cref="ResolvedMethod"/>, a field, or a <see cref="CalliSignature"/>.
+    /// </remarks>
     public object? Operand { get; init; }
 
     /// <summary>
@@ -66,14 +68,15 @@ public sealed class Instruction
     public Type? RetBox { get; init; }
 
     /// <summary>
-    /// For an inline <c>ret</c> in the cell: true when the stack is empty and <c>ldnull</c> must be
-    /// pushed first, because the cell method returns <c>object</c>. Never set inside a <c>.method</c>.
+    /// For an inline <c>ret</c> in the cell, true when the stack is empty and <c>ldnull</c> must be pushed first.
     /// </summary>
+    /// <remarks>
+    /// The push is needed because the cell method returns <c>object</c>. It is never set inside a <c>.method</c>.
+    /// </remarks>
     public bool RetNull { get; init; }
 
     /// <summary>
-    /// True when nothing after this instruction is reachable on the same path: a return, a throw,
-    /// an unconditional branch, or a jump.
+    /// True when nothing after this instruction is reachable on the same path: a return, a throw, an unconditional branch, or a jump.
     /// </summary>
     public bool EndsFlow => Binding.InstructionFlow.EndsPath(Op);
 }

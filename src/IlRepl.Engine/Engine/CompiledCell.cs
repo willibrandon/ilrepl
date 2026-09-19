@@ -11,7 +11,12 @@ namespace IlRepl.Engine;
 /// <param name="EntryPoint">The method to invoke. For vararg cells this is a standard-convention wrapper.</param>
 /// <param name="ArgumentValues">The values passed for the cell's declared arguments.</param>
 /// <param name="Definition">The session's record of the cell assembly.</param>
-public sealed record CompiledCell(AssemblyBuilder Assembly, Type CellType, MethodInfo EntryPoint, object?[] ArgumentValues, DefinitionAssembly Definition)
+public sealed record CompiledCell(
+    AssemblyBuilder Assembly,
+    Type CellType,
+    MethodInfo EntryPoint,
+    object?[] ArgumentValues,
+    DefinitionAssembly Definition)
 {
     /// <summary>
     /// The implementation body before any vararg or metadata forwarding wrapper.

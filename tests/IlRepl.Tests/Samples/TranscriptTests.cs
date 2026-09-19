@@ -30,7 +30,8 @@ public sealed class TranscriptTests
             var result = core.Handle(line);
             if (!result.Succeeded)
             {
-                failures.Add(line + " => " + string.Join(" | ", core.Transcript.Lines.Where(l => l.Kind == LineKind.Error).Select(l => l.PlainText)));
+                failures.Add(line + " => "
+                    + string.Join(" | ", core.Transcript.Lines.Where(l => l.Kind == LineKind.Error).Select(l => l.PlainText)));
             }
         }
 
@@ -88,9 +89,12 @@ public sealed class TranscriptTests
     }
 
     /// <summary>
-    /// The types transcript: a struct shown by its fields, a static that persists, an interface
-    /// dispatched through a class, and a generic class instantiated from a cell.
+    /// The types transcript, with a struct, a static, an interface, and a generic class.
     /// </summary>
+    /// <remarks>
+    /// The struct is shown by its fields, the static persists, the interface is dispatched through a class, and the generic class is
+    /// instantiated from a cell.
+    /// </remarks>
     [TestMethod]
     public void Transcripts_TypesProduceExpectedValues()
     {
@@ -128,7 +132,8 @@ public sealed class TranscriptTests
         Assert.Contains(l => l.Trim() == "} handler {", listing);
         Assert.Contains(l => l.Contains("ldfld int32 Point::X", StringComparison.Ordinal), listing);
         Assert.Contains(l => l.Contains("calli int32(int32, int32)", StringComparison.Ordinal), listing);
-        Assert.Contains(l => l.Contains(".method public hidebysig instance string Trim() cil managed {", StringComparison.Ordinal), listing);
+        Assert.Contains(l => l.Contains(".method public hidebysig instance string Trim() cil managed {", StringComparison.Ordinal),
+            listing);
         Assert.Contains(l => l.Contains("!0", StringComparison.Ordinal), listing);
         var results = core.Transcript.Lines.Where(l => l.Kind == LineKind.Result).Select(l => l.PlainText).ToList();
         Assert.HasCount(1, results);

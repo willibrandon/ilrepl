@@ -24,8 +24,12 @@ public sealed partial class SiblingTypeLookupTests
         Assert.DoesNotContain("Lookup.GenericSibling", edit.Source);
         Assert.IsEmpty(edit.Problems, string.Join("; ", edit.Problems));
         session.CommitEdit(edit.Name, edit.Source);
-        foreach (var name in new[] { "Lookup.Sibling", "Lookup.Sibling+Nested",
-            "Lookup.GenericSibling`1[[" + typeof(int).AssemblyQualifiedName + "]]" })
+        foreach (var name in new[]
+        {
+            "Lookup.Sibling",
+            "Lookup.Sibling+Nested",
+            "Lookup.GenericSibling`1[[" + typeof(int).AssemblyQualifiedName + "]]",
+        })
         {
             Assert.AreEqual(42, edit.Original.Requested.Invoke(null, [name]));
             Assert.AreEqual(42, edit.OriginalMethod.Invoke(null, [name]));
@@ -52,6 +56,8 @@ public sealed partial class SiblingTypeLookupTests
         session.AddLine("ldstr \"" + sibling + "\"");
         session.AddLine("call Copy");
         foreach (var image in new[] { AssemblyExporter.Write(session, "sibling-copy"), IlasmLocator.Assemble(session.ToIlAsm()) })
+        {
             AssertExport(image);
+        }
     }
 }

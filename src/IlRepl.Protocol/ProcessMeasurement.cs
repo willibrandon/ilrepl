@@ -10,5 +10,11 @@ namespace IlRepl.Protocol;
 /// <param name="RetainedBytes">Live managed heap bytes after a full collection at measurement shutdown.</param>
 /// <param name="WorkingSetBytes">Resident process memory at measurement shutdown.</param>
 /// <param name="Stages">Monotonic timestamps recorded during startup and execution.</param>
-public sealed record ProcessMeasurement(string Role, int ProcessId, string Runtime, long AllocatedBytes,
-    long RetainedBytes, long WorkingSetBytes, IReadOnlyDictionary<string, long> Stages);
+public sealed record ProcessMeasurement(
+    string Role,
+    int ProcessId,
+    string Runtime,
+    long AllocatedBytes,
+    long RetainedBytes,
+    long WorkingSetBytes,
+    IReadOnlyDictionary<string, long> Stages);

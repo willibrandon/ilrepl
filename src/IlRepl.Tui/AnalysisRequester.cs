@@ -35,6 +35,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
         {
             return published.Reply.Diagnostics;
         }
+
         return [];
     }
 
@@ -49,6 +50,7 @@ public sealed class AnalysisRequester(IReplEngine engine)
         {
             return published.Reply.Diagnostics;
         }
+
         return [];
     }
 

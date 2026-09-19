@@ -14,6 +14,7 @@ public sealed partial class InProcessEngine
     {
         WriteIndented = false,
     });
+
     private string? _sessionPath;
     private string? _savedSessionHash;
     private string[] _sessionDiagnostics = [];
@@ -41,7 +42,11 @@ public sealed partial class InProcessEngine
     public async Task<SessionReply> SessionAsync(SessionRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (request.HistoryLineLimit is < 0) throw new ArgumentOutOfRangeException(nameof(request), "history limits cannot be negative");
+        if (request.HistoryLineLimit is < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(request), "history limits cannot be negative");
+        }
+
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (request.Action.Operation is SessionOperation.Save or SessionOperation.Open or SessionOperation.Restore or SessionOperation.Load)
         {
@@ -58,6 +63,7 @@ public sealed partial class InProcessEngine
                 {
                     CheckpointDelivery = request.CheckpointDelivery,
                 };
+
                 WorkspaceCheckpoint?.Invoke(reply);
                 return reply;
             }, cancellationToken).ConfigureAwait(false);
@@ -91,6 +97,7 @@ public sealed partial class InProcessEngine
             _sessionDiagnostics = [];
             return CaptureReply(request.Editor) with { Reply = Reply(new HandleResult(true, false)) };
         }
+
         if (action.Operation == SessionOperation.AcknowledgeSave)
         {
             MarkSessionSaved(action.Path ?? throw new ReplException("the saved path is missing"),
@@ -160,8 +167,14 @@ public sealed partial class InProcessEngine
             var cell = _core.CaptureSession(request.Editor).Cells.SingleOrDefault(cell => cell.Number == number)
                 ?? throw new ReplException($"no retained cell {number}; use .session cells");
             var lines = _core.RecallSessionCell(cell);
-            var editor = new SessionEditor { Lines = lines, Caret = string.Join('\n', lines).Length,
-                Anchor = string.Join('\n', lines).Length, Revision = request.Editor.Revision + 1 };
+            var editor = new SessionEditor
+            {
+                Lines = lines,
+                Caret = string.Join('\n', lines).Length,
+                Anchor = string.Join('\n', lines).Length,
+                Revision = request.Editor.Revision + 1,
+            };
+
             _core.Transcript.Add(LineKind.Info, $"  recalled cell {number}; previous output is historical", SpanStyle.Dim);
             foreach (var output in cell.Output)
             {
@@ -236,8 +249,14 @@ public sealed partial class InProcessEngine
     private SessionReply CaptureReply(SessionEditor editor)
     {
         var document = _core.CaptureSession(editor);
-        return new SessionReply { Document = document, Path = _sessionPath, Dirty = IsDirty(document),
-            Diagnostics = _sessionDiagnostics, Reply = new HandleReply(true, false, [], _core.Status) };
+        return new SessionReply
+        {
+            Document = document,
+            Path = _sessionPath,
+            Dirty = IsDirty(document),
+            Diagnostics = _sessionDiagnostics,
+            Reply = new HandleReply(true, false, [], _core.Status),
+        };
     }
 
     private bool IsDirty(SessionDocument document) => _savedSessionHash is null
@@ -248,10 +267,16 @@ public sealed partial class InProcessEngine
     {
         var content = document with
         {
-            Editor = document.Editor with { Caret = 0, Anchor = 0, Revision = 0,
-                Lines = document.Editor.Lines.Length == 1 && document.Editor.Lines[0].Length == 0 ? [] : document.Editor.Lines },
+            Editor = document.Editor with
+            {
+                Caret = 0,
+                Anchor = 0,
+                Revision = 0,
+                Lines = document.Editor.Lines.Length == 1 && document.Editor.Lines[0].Length == 0 ? [] : document.Editor.Lines,
+            },
             Assets = [],
         };
+
         SessionCodec.Validate(content);
         // This identity stays inside the runtime. Session files still use the public readable codec.
         return SessionCodec.Hash(JsonSerializer.SerializeToUtf8Bytes(content, s_contentJson.SessionDocument));

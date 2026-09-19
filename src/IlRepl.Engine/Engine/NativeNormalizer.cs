@@ -20,29 +20,53 @@ public static partial class NativeNormalizer
     /// <param name="constants">Original numeric literals that cannot be treated as addresses.</param>
     /// <param name="pointerReturn">Whether metadata proves a pointer-capable or scalar return, when available.</param>
     /// <returns>The normalized instructions and unresolved evidence.</returns>
-    public static NativeNormalization Normalize(NativeCompilation compilation, IReadOnlyList<NativeAddressFact> facts,
-        IReadOnlyList<NativeProbe> probes, IReadOnlyList<NativeCompilation> listings, string architecture,
-        IReadOnlyList<ulong> constants, bool? pointerReturn = null)
+    public static NativeNormalization Normalize(
+        NativeCompilation compilation,
+        IReadOnlyList<NativeAddressFact> facts,
+        IReadOnlyList<NativeProbe> probes,
+        IReadOnlyList<NativeCompilation> listings,
+        string architecture,
+        IReadOnlyList<ulong> constants,
+        bool? pointerReturn = null)
     {
         var addresses = facts.ToList();
         var arm = architecture.Equals("Arm64", StringComparison.OrdinalIgnoreCase);
         foreach (var probe in probes)
         {
             var blocks = listings.Where(block => block.Method.StartsWith(probe.Method + "(", StringComparison.Ordinal)).ToArray();
-            if (blocks.Length != 1) continue;
+            if (blocks.Length != 1)
+            {
+                continue;
+            }
+
             var returned = ReturnValues(NativeDisassembly.Instructions(blocks[0]), arm);
             if (returned.Length == 1 && returned[0] != 0)
+            {
                 addresses.Add(new NativeAddressFact
                 {
                     Address = returned[0], Kind = probe.Kind, Symbol = probe.Symbol, DisplaySymbol = probe.DisplaySymbol,
                     Evidence = "compiled, never invoked, " + probe.Method + " return value",
                 });
-            if (probe.Kind != "static-field") continue;
+            }
+
+            if (probe.Kind != "static-field")
+            {
+                continue;
+            }
+
             foreach (var line in NativeDisassembly.Instructions(blocks[0]))
             {
-                if (!line.TrimStart().StartsWith("test", StringComparison.Ordinal)) continue;
+                if (!line.TrimStart().StartsWith("test", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 var memory = AbsoluteMemory().Match(line);
-                if (!memory.Success || !TryNumber(memory.Groups[1].Value, out var guard)) continue;
+                if (!memory.Success || !TryNumber(memory.Groups[1].Value, out var guard))
+                {
+                    continue;
+                }
+
                 addresses.Add(new NativeAddressFact
                 {
                     Address = guard, Kind = "initialization-guard", Symbol = probe.Symbol.Split("::", StringSplitOptions.None)[0],
@@ -51,6 +75,7 @@ public static partial class NativeNormalizer
                 });
             }
         }
+
         var lines = NativeDisassembly.Instructions(compilation);
         var pools = LiteralPools(lines);
         var locations = CodeLocations(compilation);
@@ -63,50 +88,102 @@ public static partial class NativeNormalizer
             var line = lines[index];
             foreach (Match relocation in Relocation().Matches(line))
             {
-                if (!TryNumber(relocation.Groups[2].Value, out var value)) continue;
+                if (!TryNumber(relocation.Groups[2].Value, out var value))
+                {
+                    continue;
+                }
+
                 var fact = Find(value, memory: true);
-                if (fact is null) problems.Add("unproven " + relocation.Groups[1].Value + " relocation " + relocation.Groups[2].Value);
-                else edits[(index, relocation.Groups[2].Index, relocation.Groups[2].Length)] =
+                if (fact is null)
+                {
+                    problems.Add("unproven " + relocation.Groups[1].Value + " relocation " + relocation.Groups[2].Value);
+                }
+                else
+                {
+                    edits[(index, relocation.Groups[2].Index, relocation.Groups[2].Length)] =
                     (relocation.Groups[1].Value == "HIGH" ? "page(" : "lo12(") + Symbol(fact, value) + ")";
+                }
             }
+
             foreach (Match relocation in OtherRelocation().Matches(line))
             {
                 var operand = relocation.Groups[1];
-                if (!TryNumber(operand.Value, out var value)) continue;
+                if (!TryNumber(operand.Value, out var value))
+                {
+                    continue;
+                }
+
                 var fact = Find(value, memory: true);
-                if (fact is null) problems.Add("unproven relocation " + operand.Value);
-                else edits[(index, operand.Index, operand.Length)] = Symbol(fact, value);
+                if (fact is null)
+                {
+                    problems.Add("unproven relocation " + operand.Value);
+                }
+                else
+                {
+                    edits[(index, operand.Index, operand.Length)] = Symbol(fact, value);
+                }
             }
+
             foreach (Match relative in RipRelative().Matches(line))
             {
                 if (!locations.TryGetValue(index, out var location) || !TryNumber(relative.Groups[2].Value, out var displacement))
-                { problems.Add("missing instruction location for " + relative.Value); continue; }
+                {
+                    problems.Add("missing instruction location for " + relative.Value);
+                    continue;
+                }
+
                 var value = relative.Groups[1].Value == "-" ? location - displacement : location + displacement;
                 var fact = Find(value, memory: true);
-                if (fact is null) problems.Add("unproven PC-relative operand " + relative.Value);
-                else edits[(index, relative.Groups[1].Index,
+                if (fact is null)
+                {
+                    problems.Add("unproven PC-relative operand " + relative.Value);
+                }
+                else
+                {
+                    edits[(index, relative.Groups[1].Index,
                     relative.Groups[2].Index + relative.Groups[2].Length - relative.Groups[1].Index)] =
                     "+rel32(" + Symbol(fact, value) + ")";
+                }
             }
+
             var table = JumpTable().Match(line);
             if (table.Success)
+            {
                 edits[(index, table.Groups[1].Index, table.Groups[1].Length)] = "<code:" + table.Groups[2].Value + ">";
+            }
+
             var parsed = Instruction().Match(line);
             if (!parsed.Success)
             {
-                if (branchTargets.Contains(line.TrimStart().Split(':')[0])) registers.Clear();
+                if (branchTargets.Contains(line.TrimStart().Split(':')[0]))
+                {
+                    registers.Clear();
+                }
+
                 continue;
             }
+
             var operation = parsed.Groups[1].Value;
             var operands = parsed.Groups[2].Value.Split(';')[0].Split("//", StringSplitOptions.None)[0].TrimEnd();
             var parts = operands.Split(',', StringSplitOptions.TrimEntries);
             foreach (Match memory in AbsoluteMemory().Matches(line))
             {
-                if (!TryNumber(memory.Groups[1].Value, out var value)) continue;
+                if (!TryNumber(memory.Groups[1].Value, out var value))
+                {
+                    continue;
+                }
+
                 var fact = Find(value, memory: true);
-                if (fact is not null) edits[(index, memory.Groups[1].Index, memory.Groups[1].Length)] = Symbol(fact, value);
-                else problems.Add("unproven absolute memory operand " + memory.Groups[1].Value);
+                if (fact is not null)
+                {
+                    edits[(index, memory.Groups[1].Index, memory.Groups[1].Length)] = Symbol(fact, value);
+                }
+                else
+                {
+                    problems.Add("unproven absolute memory operand " + memory.Groups[1].Value);
+                }
             }
+
             foreach (var (register, value) in registers)
             {
                 var memoryUse = RegisterMemory().Matches(line).FirstOrDefault(match => Canonical(match.Groups[1].Value, arm) == register);
@@ -116,62 +193,117 @@ public static partial class NativeNormalizer
                 {
                     usedValue = unchecked(usedValue + displacement);
                     if (value.Page)
+                    {
                         components = [.. components, new NativeAddressPart(index, memoryUse.Groups[2].Index,
                             memoryUse.Groups[2].Length, -1, "lo12")];
-                    else components = [.. components.Select(part => part with { Adjustment = part.Adjustment + displacement })];
+                    }
+                    else
+                    {
+                        components = [.. components.Select(part => part with { Adjustment = part.Adjustment + displacement })];
+                    }
                 }
+
                 var use = memoryUse is not null
                     || operation is "call" or "jmp" or "tail.jmp" or "blr" or "br" && operands.Trim() == register
                     || operation is "ret" && pointerReturn != false && register == (arm ? "x0" : "rax")
                     || operation is "call" or "bl" or "blr" && IsArgument(register, arm);
-                if (!use) continue;
+                if (!use)
+                {
+                    continue;
+                }
+
                 var fact = Find(usedValue, memory: false);
                 if (fact is null)
                 {
                     if ((memoryUse is not null || operation is "call" or "jmp" or "tail.jmp" or "blr" or "br" &&
                         operands.Trim() == register || value.Page
                         || operation == "ret" && pointerReturn == true && value.Value != 0)
-                        && !constants.Contains(value.Value)) problems.Add("unproven pointer use through " + register);
+                        && !constants.Contains(value.Value))
+                    {
+                        problems.Add("unproven pointer use through " + register);
+                    }
+
                     continue;
                 }
+
                 foreach (var component in components)
                 {
                     var label = Symbol(fact, usedValue);
-                    if (component.Adjustment != 0) label = "(" + label + "-0x"
+                    if (component.Adjustment != 0)
+                    {
+                        label = "(" + label + "-0x"
                         + component.Adjustment.ToString("X", CultureInfo.InvariantCulture) + ")";
-                    if (component.Shift >= 0) label = $"bits{component.Shift}:{component.Shift + 15}({label})";
-                    if (component.Operation == "~") label = "~" + label;
-                    else if (component.Operation.Length != 0) label = component.Operation + "(" + label + ")";
+                    }
+
+                    if (component.Shift >= 0)
+                    {
+                        label = $"bits{component.Shift}:{component.Shift + 15}({label})";
+                    }
+
+                    if (component.Operation == "~")
+                    {
+                        label = "~" + label;
+                    }
+                    else if (component.Operation.Length != 0)
+                    {
+                        label = component.Operation + "(" + label + ")";
+                    }
+
                     edits[(component.Line, component.Start, component.Length)] = label;
                 }
             }
+
             if (operation is "call" or "bl" or "blr")
             {
-                foreach (var register in registers.Keys.Where(register => IsVolatile(register, arm)).ToArray()) registers.Remove(register);
+                foreach (var register in registers.Keys.Where(register => IsVolatile(register, arm)).ToArray())
+                {
+                    registers.Remove(register);
+                }
+
                 continue;
             }
+
             if (operation.StartsWith('j') || operation == "tail.jmp" || operation is "b" or "br" or "ret" ||
                 operation.StartsWith("b.", StringComparison.Ordinal))
-            { registers.Clear(); continue; }
+            {
+                registers.Clear();
+                continue;
+            }
+
             Update(registers, line, index, operation, parts, arm, pools);
         }
+
         for (var index = 0; index < lines.Length; index++)
         {
             foreach (var edit in edits.Where(edit => edit.Key.Line == index).OrderByDescending(edit => edit.Key.Start))
+            {
                 lines[index] = lines[index].Remove(edit.Key.Start, edit.Key.Length).Insert(edit.Key.Start, edit.Value);
+            }
+
             // Relocations are explicit runtime evidence of a process-dependent value, never a guessed large integer.
             if (lines[index].Contains("reloc", StringComparison.OrdinalIgnoreCase)
                 && Relocation().Matches(lines[index]).Any(match => TryNumber(match.Groups[2].Value, out _)))
+            {
                 problems.Add("unresolved relocation: " + lines[index].Trim());
+            }
         }
+
         return new NativeNormalization { Lines = lines, Addresses = [.. addresses.Distinct()], Problems = [.. problems] };
 
         NativeAddressFact? Find(ulong value, bool memory)
         {
-            if (!memory && constants.Contains(value)) return null;
+            if (!memory && constants.Contains(value))
+            {
+                return null;
+            }
+
             var matching = addresses.Where(fact => value >= fact.Address && value - fact.Address < fact.Length
                 && (memory || fact.Kind != "initialization-guard")).ToArray();
-            if (matching.Select(fact => (fact.Kind, fact.Symbol)).Distinct().Count() != 1) return null;
+            if (matching.Select(fact => (fact.Kind, fact.Symbol)).Distinct().Count() != 1)
+            {
+                return null;
+            }
+
             return matching.Length == 0 ? null : matching[0];
         }
     }
@@ -185,18 +317,44 @@ public static partial class NativeNormalizer
         for (var index = 0; index < lines.Length; index++)
         {
             var parsed = Instruction().Match(lines[index]);
-            if (!parsed.Success) { if (branchTargets.Contains(lines[index].TrimStart().Split(':')[0])) registers.Clear(); continue; }
+            if (!parsed.Success)
+            {
+                if (branchTargets.Contains(lines[index].TrimStart().Split(':')[0]))
+                {
+                    registers.Clear();
+                }
+
+                continue;
+            }
+
             var operation = parsed.Groups[1].Value;
-            if (operation == "ret" && registers.TryGetValue(arm ? "x0" : "rax", out var returned)) values.Add(returned.Value);
-            if (operation is "call" or "bl" or "blr") registers.Clear();
-            else Update(registers, lines[index], index, operation,
-                parsed.Groups[2].Value.Split(',', StringSplitOptions.TrimEntries), arm, pools);
+            if (operation == "ret" && registers.TryGetValue(arm ? "x0" : "rax", out var returned))
+            {
+                values.Add(returned.Value);
+            }
+
+            if (operation is "call" or "bl" or "blr")
+            {
+                registers.Clear();
+            }
+            else
+            {
+                Update(registers, lines[index], index, operation,
+                    parsed.Groups[2].Value.Split(',', StringSplitOptions.TrimEntries), arm, pools);
+            }
         }
+
         return [.. values.Distinct()];
     }
 
-    private static void Update(Dictionary<string, NativeRegisterValue> registers,
-        string line, int index, string operation, string[] operands, bool arm, Dictionary<string, NativeRegisterValue> pools)
+    private static void Update(
+        Dictionary<string, NativeRegisterValue> registers,
+        string line,
+        int index,
+        string operation,
+        string[] operands,
+        bool arm,
+        Dictionary<string, NativeRegisterValue> pools)
     {
         if (operation == "ldp" && operands.Length > 1)
         {
@@ -204,23 +362,47 @@ public static partial class NativeNormalizer
             registers.Remove(Canonical(operands[1], arm));
             return;
         }
+
         if (!arm && operation is "mul" or "div" or "idiv" or "cpuid" or "cqo" or "cdq")
         {
             registers.Remove("rax");
             registers.Remove("rdx");
-            if (operation == "cpuid") { registers.Remove("rbx"); registers.Remove("rcx"); }
+            if (operation == "cpuid")
+            {
+                registers.Remove("rbx");
+                registers.Remove("rcx");
+            }
         }
-        if (operation == "xchg" && operands.Length > 1) registers.Remove(Canonical(operands[1], arm));
-        if (operands.Length == 0 || !Register().IsMatch(operands[0])) return;
+
+        if (operation == "xchg" && operands.Length > 1)
+        {
+            registers.Remove(Canonical(operands[1], arm));
+        }
+
+        if (operands.Length == 0 || !Register().IsMatch(operands[0]))
+        {
+            return;
+        }
+
         var destination = Canonical(operands[0], arm);
-        if (operation is "cmp" or "test" or "tst" or "str" or "stp" or "push" or "cbz" or "cbnz") return;
-        if (operands.Length < 2) { registers.Remove(destination); return; }
+        if (operation is "cmp" or "test" or "tst" or "str" or "stp" or "push" or "cbz" or "cbnz")
+        {
+            return;
+        }
+
+        if (operands.Length < 2)
+        {
+            registers.Remove(destination);
+            return;
+        }
+
         var literal = PoolReference().Match(operands[1]);
         if (operation is "ldr" or "mov" && literal.Success && pools.TryGetValue(literal.Groups[1].Value, out var pooled))
         {
             registers[destination] = pooled;
             return;
         }
+
         var relocation = Relocation().Match(operands[1]);
         // CoreCLR prints shifted Arm64 immediates as "#0x1234 LSL #16", without a separating comma.
         var shifted = Shift().Match(operands.Length > 2 ? operands[2] : operands[1]);
@@ -235,23 +417,42 @@ public static partial class NativeNormalizer
         {
             var shift = shifted.Success ? int.Parse(shifted.Groups[1].Value, CultureInfo.InvariantCulture) : 0;
             if (shift is < 0 or > 48 || (shift % 16) != 0 || width32 && shift > 16)
-            { registers.Remove(destination); return; }
+            {
+                registers.Remove(destination);
+                return;
+            }
+
             var value = (immediate << shift) & mask;
             var components = new List<NativeAddressPart>();
-            if (operation == "movn") value = ~value & mask;
+            if (operation == "movn")
+            {
+                value = ~value & mask;
+            }
+
             if (operation == "movk")
             {
-                if (!registers.TryGetValue(destination, out var prior)) { registers.Remove(destination); return; }
+                if (!registers.TryGetValue(destination, out var prior))
+                {
+                    registers.Remove(destination);
+                    return;
+                }
+
                 value = (prior.Value & ~(0xffffUL << shift) | value) & mask;
                 components.AddRange(prior.Parts.Where(part => part.Shift != shift));
             }
+
             components.Add(new NativeAddressPart(index, sourceIndex + number.Index, number.Length,
                 arm && operation != "mov" ? shift : -1, operation == "movn" ? "~" : ""));
             registers[destination] = new NativeRegisterValue(value, components);
             return;
         }
+
         if (operation == "mov" && registers.TryGetValue(Canonical(operands[1], arm), out var copied))
-        { registers[destination] = copied with { Value = copied.Value & mask }; return; }
+        {
+            registers[destination] = copied with { Value = copied.Value & mask };
+            return;
+        }
+
         if (arm && operation is "adr" or "adrp" && number.Success && TryNumber(number.Value, out var page))
         {
             registers[destination] = new NativeRegisterValue(operation == "adrp" ? page & ~0xfffUL : page,
@@ -259,12 +460,17 @@ public static partial class NativeNormalizer
                 Page: operation == "adrp");
             return;
         }
+
         var low = operands.Length > 2 ? Relocation().Match(operands[2]) : Match.Empty;
         var offsetText = low.Success ? low.Groups[2].Value : operands.ElementAtOrDefault(2) ?? "";
         if (arm && operation == "add" && operands.Length > 2
             && registers.TryGetValue(Canonical(operands[1], true), out var basis) && TryNumber(offsetText, out var offset))
         {
-            if (low.Success) offset &= 0xfff;
+            if (low.Success)
+            {
+                offset &= 0xfff;
+            }
+
             var components = basis.Page ? basis.Parts.ToList()
                 : basis.Parts.Select(part => part with { Adjustment = part.Adjustment + offset }).ToList();
             if (basis.Page && !low.Success)
@@ -272,9 +478,11 @@ public static partial class NativeNormalizer
                 var offsetIndex = line.IndexOf(operands[2], sourceIndex + operands[1].Length, StringComparison.Ordinal);
                 components.Add(new NativeAddressPart(index, offsetIndex, operands[2].Length, -1, "lo12"));
             }
+
             registers[destination] = new NativeRegisterValue((basis.Value + offset) & mask, components);
             return;
         }
+
         registers.Remove(destination);
     }
 
@@ -285,26 +493,40 @@ public static partial class NativeNormalizer
         {
             var entry = PoolEntry().Match(lines[index]);
             if (!entry.Success || !ulong.TryParse(entry.Groups[2].Value, NumberStyles.HexNumber,
-                CultureInfo.InvariantCulture, out var value)) continue;
+                CultureInfo.InvariantCulture, out var value))
+            {
+                continue;
+            }
+
             result[entry.Groups[1].Value] = new NativeRegisterValue(value,
                 [new NativeAddressPart(index, entry.Groups[2].Index, entry.Groups[2].Length + 1, -1)]);
         }
+
         return result;
     }
 
     private static Dictionary<int, ulong> CodeLocations(NativeCompilation compilation)
     {
         var result = new Dictionary<int, ulong>();
-        if (compilation.Address == 0) return result;
+        if (compilation.Address == 0)
+        {
+            return result;
+        }
+
         var raw = NativeDisassembly.Instructions(compilation, raw: true);
         var offset = 0UL;
         for (var index = 0; index < raw.Length; index++)
         {
             var bytes = EncodingBytes().Match(raw[index]);
-            if (!bytes.Success) continue;
+            if (!bytes.Success)
+            {
+                continue;
+            }
+
             offset += (ulong)bytes.Groups[1].Length / 2;
             result[index] = compilation.Address + offset;
         }
+
         // A cold region or omitted bytes cannot establish a contiguous instruction location.
         return offset == (ulong)compilation.CodeSize ? result : [];
     }

@@ -1,11 +1,13 @@
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Parses <c>.override</c> lines. Inside a method body, <c>.override T::M</c> names the slot the
-/// method implements, matched by the method's own signature, and <c>.override method callConv
-/// Ret T::M(params)</c> names it in full. At class level, <c>.override T::M with method ...</c>
-/// pairs a slot with an implementing method that may be declared later in the block.
+/// Parses <c>.override</c> lines.
 /// </summary>
+/// <remarks>
+/// Inside a method body, <c>.override T::M</c> names the slot the method implements, matched by the method's own signature, and
+/// <c>.override method callConv Ret T::M(params)</c> names it in full. At class level, <c>.override T::M with method ...</c> pairs a slot
+/// with an implementing method that may be declared later in the block.
+/// </remarks>
 public static class OverrideParser
 {
     /// <summary>

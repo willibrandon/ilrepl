@@ -6,10 +6,12 @@ using IlRepl.Repl;
 namespace IlRepl.Tests.Protocol;
 
 /// <summary>
-/// Tests for <see cref="CilTokenizer"/>: the caret fixtures pin every style, the property tests
-/// pin the shape of the tokens over every line the repository holds, and the listing tests pin
-/// that the transcript colours nothing by hand.
+/// Tests for <see cref="CilTokenizer"/> through caret fixtures, property tests, and listing tests.
 /// </summary>
+/// <remarks>
+/// The caret fixtures pin every style. The property tests pin the shape of the tokens over every line the repository holds. The listing
+/// tests pin that the transcript colours nothing by hand.
+/// </remarks>
 [TestClass]
 public sealed partial class CilTokenizerTests
 {
@@ -20,7 +22,8 @@ public sealed partial class CilTokenizerTests
     /// <summary>
     /// The fixture files, one row each.
     /// </summary>
-    public static IEnumerable<object[]> Fixtures => Directory.GetFiles(FixtureDirectory, "*.il").Order(StringComparer.Ordinal).Select(f => new object[] { Path.GetFileName(f) });
+    public static IEnumerable<object[]> Fixtures =>
+        Directory.GetFiles(FixtureDirectory, "*.il").Order(StringComparer.Ordinal).Select(f => new object[] { Path.GetFileName(f) });
 
     /// <summary>
     /// Every caret in a fixture finds a token that starts there, covers the run, and has the style.
@@ -47,9 +50,13 @@ public sealed partial class CilTokenizerTests
             {
                 var token = tokens.FirstOrDefault(t => t.Start == e.Column && (e.Length == 0 || t.Length == e.Length));
                 var found = tokens.Any(t => t.Start == e.Column && (e.Length == 0 || t.Length == e.Length));
-                var actual = string.Join(" ", tokens.Select(t => $"{t.Style}@{t.Start}+{t.Length}'{c.Subject.Substring(t.Start, t.Length)}'"));
-                Assert.IsTrue(found, $"{file}:{e.LineNumber}: no token at column {e.Column} covering {e.Length} in '{c.Subject}'; tokens: {actual}");
-                Assert.AreEqual(e.Style, token.Style, $"{file}:{e.LineNumber}: '{c.Subject.Substring(e.Column, e.Length == 0 ? token.Length : e.Length)}' in '{c.Subject}'; tokens: {actual}");
+                var actual = string.Join(" ",
+                    tokens.Select(t => $"{t.Style}@{t.Start}+{t.Length}'{c.Subject.Substring(t.Start, t.Length)}'"));
+                Assert.IsTrue(found,
+                    $"{file}:{e.LineNumber}: no token at column {e.Column} covering {e.Length} in '{c.Subject}'; tokens: {actual}");
+                Assert.AreEqual(e.Style, token.Style,
+                    $"{file}:{e.LineNumber}: '{c.Subject.Substring(e.Column, e.Length == 0 ? token.Length : e.Length)}' in " +
+                    $"'{c.Subject}'; tokens: {actual}");
             }
         }
 
@@ -57,10 +64,11 @@ public sealed partial class CilTokenizerTests
     }
 
     /// <summary>
-    /// Tokens are ordered, disjoint, and inside the line; every character that is not whitespace
-    /// is inside exactly one; whitespace is inside a token only for a string, a comment, or a
-    /// quoted name.
+    /// Tokens are ordered, disjoint, and inside the line, and every character that is not whitespace is inside exactly one.
     /// </summary>
+    /// <remarks>
+    /// Whitespace is inside a token only for a string, a comment, or a quoted name.
+    /// </remarks>
     [TestMethod]
     public void Tokens_AreOrderedDisjointAndCoverEveryNonSpaceCharacter()
     {
@@ -69,8 +77,10 @@ public sealed partial class CilTokenizerTests
             var next = 0;
             foreach (var token in tokens)
             {
-                Assert.IsGreaterThanOrEqualTo(next, token.Start, $"{source}: token at {token.Start} overlaps or is out of order in '{line}'");
-                Assert.IsTrue(token.Length > 0 && token.End <= line.Length, $"{source}: token at {token.Start} is empty or outside '{line}'");
+                Assert.IsGreaterThanOrEqualTo(next, token.Start,
+                    $"{source}: token at {token.Start} overlaps or is out of order in '{line}'");
+                Assert.IsTrue(token.Length > 0 && token.End <= line.Length,
+                    $"{source}: token at {token.Start} is empty or outside '{line}'");
                 var text = line.Substring(token.Start, token.Length);
                 if (token.Style is not (SpanStyle.String or SpanStyle.Comment) && !text.StartsWith('\'') && !text.StartsWith('"'))
                 {
@@ -117,7 +127,13 @@ public sealed partial class CilTokenizerTests
     [TestMethod]
     public void Tokenize_IsPureAndRepeatable()
     {
-        var lines = new[] { "call int32 [System.Runtime]System.Math::Max(int32, int32)", ".method public static int32 Fib(int32 n) cil managed {", "ldstr \"a\" // b" };
+        var lines = new[]
+        {
+            "call int32 [System.Runtime]System.Math::Max(int32, int32)",
+            ".method public static int32 Fib(int32 n) cil managed {",
+            "ldstr \"a\" // b",
+        };
+
         foreach (var line in lines)
         {
             var first = Tokenizer.Tokenize(line);
@@ -191,10 +207,11 @@ public sealed partial class CilTokenizerTests
     }
 
     /// <summary>
-    /// The echo, <c>.show</c>, <c>.dis</c>, and <c>.il</c> colour their IL with the tokenizer and
-    /// nothing else: with the prompt, offsets, padding, and the stack column taken away, every
-    /// line's spans are what the tokenizer gives for its text.
+    /// The echo, <c>.show</c>, <c>.dis</c>, and <c>.il</c> colour their IL with the tokenizer and nothing else.
     /// </summary>
+    /// <remarks>
+    /// With the prompt, offsets, padding, and the stack column taken away, every line's spans are what the tokenizer gives for its text.
+    /// </remarks>
     [TestMethod]
     public void Listings_UseTheTokenizer()
     {
@@ -213,7 +230,8 @@ public sealed partial class CilTokenizerTests
             ".show", ".dis Fib", ".dis instance int32 Point::Twice()", ".il",
         })
         {
-            Assert.IsTrue(core.Handle(line).Succeeded, line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
+            Assert.IsTrue(core.Handle(line).Succeeded,
+                line + "\n" + string.Join("\n", core.Transcript.Lines.TakeLast(3).Select(l => l.PlainText)));
         }
 
         var checkedLines = 0;
@@ -259,7 +277,8 @@ public sealed partial class CilTokenizerTests
         }
 
         Assert.IsGreaterThan(80, checkedLines);
-        Assert.DoesNotContain(l => l.Kind == LineKind.Listing && l.Spans.Any(s => s.Style == SpanStyle.Error), core.Transcript.Lines, "nothing the REPL prints is an error token");
+        Assert.DoesNotContain(l => l.Kind == LineKind.Listing && l.Spans.Any(s => s.Style == SpanStyle.Error), core.Transcript.Lines,
+            "nothing the REPL prints is an error token");
     }
 
     private static IEnumerable<(string Source, string Line, IReadOnlyList<CilToken> Tokens)> Corpus()

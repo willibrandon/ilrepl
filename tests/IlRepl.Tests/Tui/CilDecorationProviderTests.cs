@@ -48,9 +48,11 @@ public sealed class CilDecorationProviderTests
                         provider.Diagnostics = phase == 1 ? analysis.Diagnostics : [];
                         provider.CommentOpenAtStart = phase == 3;
                     }
+
                     return ctx.VStack(v => [v.Editor(editor).Decorations(provider).FixedHeight(2), v.Text("phase " + phase)]);
                 };
             }).Build();
+
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationToken);
         var run = terminal.RunAsync(cancellation.Token);
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(15));
@@ -74,8 +76,13 @@ public sealed class CilDecorationProviderTests
         finally
         {
             await cancellation.CancelAsync();
-            try { await run; }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            try
+            {
+                await run;
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+            }
         }
     }
 
@@ -103,7 +110,10 @@ public sealed class CilDecorationProviderTests
         var source = string.Join('\n', Enumerable.Repeat("nop", 2000).Prepend("/*").Append("*/").Append("ret"));
         var document = new Hex1bDocument(source);
         for (var line = 1980; line <= 2001; line++)
+        {
             AssertColor(provider, document, line, SpanStyle.Comment);
+        }
+
         AssertColor(provider, document, 2003, SpanStyle.Opcode);
         provider.Caret = new DocumentPosition(1980, 2);
         AssertColor(provider, document, 1980, SpanStyle.Comment);

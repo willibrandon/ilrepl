@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Reflection.Emit;
 using IlRepl.Engine.Binding;
@@ -163,7 +164,6 @@ internal sealed class TypeFamilyEmitter(
             definition.PackingSize = (short)(declaration.PackingSize ?? 0);
             definition.ClassSize = declaration.ClassSize ?? 0;
         }
-
     }
 
     private void DefineMembers(TypeDeclaration declaration)
@@ -205,13 +205,16 @@ internal sealed class TypeFamilyEmitter(
         {
             var signature = method.Signature;
             var builder = FindBuilder(members, signature);
-            var cecilMethod = new MethodDefinition(signature.Name, (CecilMethodAttributes)signature.Attributes, writer.Module
-                .TypeSystem.Void)
+            var cecilMethod = new MethodDefinition(
+                signature.Name,
+                (CecilMethodAttributes)signature.Attributes,
+                writer.Module.TypeSystem.Void)
             {
                 ImplAttributes = (CecilMethodImplAttributes)signature.ImplAttributes,
                 HasThis = !signature.IsStatic,
                 ExplicitThis = signature.CallingConvention.HasFlag(CallingConventions.ExplicitThis),
             };
+
             if (signature.CallingConvention.HasFlag(CallingConventions.VarArgs))
             {
                 cecilMethod.CallingConvention = MethodCallingConvention.VarArg;
@@ -303,8 +306,8 @@ internal sealed class TypeFamilyEmitter(
                     parameter.ExactType,
                     parameter.RequiredModifiers,
                     parameter.OptionalModifiers);
-                var cecilParameter = new ParameterDefinition(parameter.Name ?? ("arg" + i.ToString(System.Globalization
-                    .CultureInfo.InvariantCulture)), (CecilParameterAttributes)parameter.Attributes, type);
+                var named = parameter.Name ?? ("arg" + i.ToString(CultureInfo.InvariantCulture));
+                var cecilParameter = new ParameterDefinition(named, (CecilParameterAttributes)parameter.Attributes, type);
                 if (parameter.HasDefault)
                 {
                     cecilParameter.Constant = ConstantFor(parameter.DefaultValue);
@@ -338,6 +341,7 @@ internal sealed class TypeFamilyEmitter(
             {
                 HasThis = !property.IsStatic,
             };
+
             for (var index = 0; index < property.ParameterTypes.Count; index++)
             {
                 var parameterType = property.ExactParameterTypes.ElementAtOrDefault(index) is { } exact
@@ -375,6 +379,7 @@ internal sealed class TypeFamilyEmitter(
                 RemoveMethod = _methods[evt.RemoveOn],
                 InvokeMethod = evt.Fire is null ? null : _methods[evt.Fire],
             };
+
             foreach (var attribute in evt.CustomAttributes)
             {
                 cecilEvent.CustomAttributes.Add(Attribute(attribute));
@@ -454,8 +459,10 @@ internal sealed class TypeFamilyEmitter(
 
         foreach (var (declared, builder, isDeclared) in members.Methods)
         {
-            if (isDeclared && declared.Name == signature.Name && declared.IsStatic == signature.IsStatic && declared
-                .Parameters.Count == signature.Parameters.Count
+            if (isDeclared
+                && declared.Name == signature.Name
+                && declared.IsStatic == signature.IsStatic
+                && declared.Parameters.Count == signature.Parameters.Count
                 && SignatureIdentity.Same(declared, signature))
             {
                 return builder;
@@ -465,8 +472,8 @@ internal sealed class TypeFamilyEmitter(
         return null;
     }
 
-    private static object? ConstantFor(object? value) => value is Enum e ? System.Convert.ChangeType(e, Enum
-        .GetUnderlyingType(e.GetType()), System.Globalization.CultureInfo.InvariantCulture) : value;
+    private static object? ConstantFor(object? value) =>
+        value is Enum e ? Convert.ChangeType(e, Enum.GetUnderlyingType(e.GetType()), CultureInfo.InvariantCulture) : value;
 
     private CustomAttribute Attribute(CustomAttributeDeclaration declaration) => CecilCustomAttributes.Create(declaration, writer);
 }

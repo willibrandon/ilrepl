@@ -193,6 +193,7 @@ public sealed class SessionFileStoreTests
                     new() { Identity = "framework", Request = "System.Net.Http" },
                 ],
             };
+
             var original = SessionCodec.Write(document);
             var store = new SessionFileStore(Path.Combine(directory, "cache"));
             var firstPath = Path.Combine(firstDirectory, "first.ilrepl.json");
@@ -309,13 +310,23 @@ public sealed class SessionFileStoreTests
             {
                 References =
                 [
-                    new() { Identity = "original", Origin = "baseline", Request = "original-fingerprint",
-                        Assets = [new() { Name = "Baseline", Hash = baselineHash }] },
-                    new() { Identity = "dependency", Request = Path.Combine(directory, "removed.dll"),
-                        Assets = [new() { Name = "Dependency", Hash = dependencyHash }] },
+                    new()
+                    {
+                        Identity = "original",
+                        Origin = "baseline",
+                        Request = "original-fingerprint",
+                        Assets = [new() { Name = "Baseline", Hash = baselineHash }],
+                    },
+                    new()
+                    {
+                        Identity = "dependency",
+                        Request = Path.Combine(directory, "removed.dll"),
+                        Assets = [new() { Name = "Dependency", Hash = dependencyHash }],
+                    },
                 ],
                 Assets = [new() { Hash = baselineHash, Image = baseline }, new() { Hash = dependencyHash, Image = dependency }],
             };
+
             var cache = Path.Combine(directory, "cache");
             var store = new SessionFileStore(cache);
             var path = Path.Combine(directory, "example.ilrepl.json");
@@ -808,11 +819,15 @@ public sealed class SessionFileStoreTests
         try
         {
             var document = Referencing("Safe.Package", [1, 2, 3]);
-            document = document with { References = [document.References[0] with
+            document = document with
             {
-                Origin = "package", Version = "1.0.0",
-                Assets = [document.References[0].Assets[0] with { PackagePath = packagePath }],
-            }] };
+                References = [document.References[0] with
+                    {
+                        Origin = "package", Version = "1.0.0",
+                        Assets = [document.References[0].Assets[0] with { PackagePath = packagePath }],
+                    }],
+            };
+
             var store = new SessionFileStore(Path.Combine(directory, "cache"));
             await Assert.ThrowsExactlyAsync<InvalidDataException>(() =>
                 store.WriteAsync(Path.Combine(directory, "invalid.ilrepl.json"), document, false, TestContext.CancellationToken));

@@ -110,9 +110,11 @@ public static class Hello
     }
 
     /// <summary>
-    /// Calls the vararg method with one extra argument, so a listing of this body shows a call
-    /// site with a sentinel and the optional argument types it carries.
+    /// Calls the vararg method with one extra argument.
     /// </summary>
+    /// <remarks>
+    /// A listing of this body shows a call site with a sentinel and the optional argument types it carries.
+    /// </remarks>
     /// <returns>The count the callee reports.</returns>
     public static int CallCountArgs() => CountArgs(__arglist(123));
 

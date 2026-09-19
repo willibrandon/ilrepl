@@ -22,15 +22,18 @@ internal static class PromptHelpContent
         {
             lines.Add(new(LineKind.Info, tokenizer.Spans(instruction.Syntax)));
         }
+
         lines.Add(new(LineKind.Info, [new("Expected: ", SpanStyle.Dim), new(explanation.Requirement)]));
         if (explanation.Stack is { } stack)
         {
             lines.Add(new(LineKind.Info, [new("Stack before (bottom → top): ", SpanStyle.Dim), .. Stack(stack)]));
         }
+
         foreach (var conflict in explanation.Conflicts)
         {
             Value(conflict, "");
         }
+
         foreach (var path in explanation.Incoming)
         {
             lines.Add(new(LineKind.Info, [new("Incoming from ", SpanStyle.Dim), .. Source(path.Source, tokenizer),
@@ -40,6 +43,7 @@ internal static class PromptHelpContent
                 Value(value, "  ");
             }
         }
+
         return lines;
 
         void Value(StackConflict value, string indent)
@@ -50,6 +54,7 @@ internal static class PromptHelpContent
             {
                 lines.Add(new(LineKind.Info, [new(indent + "  from ", SpanStyle.Dim), .. Source(producer, tokenizer)]));
             }
+
             if (value.Actual is not null && value.Producers.Count == 0)
             {
                 lines.Add(TranscriptLine.Of(LineKind.Info, indent + "  producer unavailable", SpanStyle.Dim));
@@ -70,6 +75,7 @@ internal static class PromptHelpContent
             {
                 spans.Add(new(" → ", SpanStyle.Punctuation));
             }
+
             var side = string.Join(" ", sides[index].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
             if (side.StartsWith('[') && side.EndsWith(']'))
             {
@@ -81,6 +87,7 @@ internal static class PromptHelpContent
                     ? SpanStyle.Number : SpanStyle.TopType));
             }
         }
+
         return new(LineKind.Info, spans);
     }
 
@@ -118,9 +125,11 @@ internal static class PromptHelpContent
                 {
                     yield return span;
                 }
+
                 yield return new(")", SpanStyle.Dim);
             }
         }
+
         if (stack.Incomplete)
         {
             yield return new(" (incomplete body)", SpanStyle.Dim);
@@ -136,8 +145,10 @@ internal static class PromptHelpContent
             {
                 yield return new(", ", SpanStyle.Punctuation);
             }
+
             yield return new(values[index], index == values.Count - 1 ? SpanStyle.TopType : SpanStyle.Type);
         }
+
         yield return new("]", SpanStyle.Punctuation);
     }
 
@@ -147,6 +158,7 @@ internal static class PromptHelpContent
         {
             return [];
         }
+
         var values = new List<string>();
         var depth = 0;
         var start = 0;
@@ -166,6 +178,7 @@ internal static class PromptHelpContent
                     break;
             }
         }
+
         values.Add(text[start..].Trim());
         return values;
     }

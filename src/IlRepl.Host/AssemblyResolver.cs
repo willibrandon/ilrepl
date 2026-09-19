@@ -76,6 +76,7 @@ internal static class AssemblyResolver
         {
             Identity = previous?.Identity ?? Guid.NewGuid().ToString("N"), Origin = "assembly", Request = path, Assets = [.. selected],
         };
+
         var replacements = selected.Where(asset => asset.Kind is "managed" or "satellite")
             .ToDictionary(asset => Key(asset.Name), StringComparer.OrdinalIgnoreCase);
         var references = document.References.Where(item => item.Identity != reference.Identity).Select(item =>
@@ -86,6 +87,7 @@ internal static class AssemblyResolver
                     && string.Equals(asset.Path, replacement.Path, OperatingSystem.IsWindows()
                         ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) ? replacement : asset)],
             });
+
         return document with
         {
             References = [.. references, reference],

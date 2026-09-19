@@ -4,17 +4,20 @@ using System.Reflection.Emit;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Answers questions about how types relate when some of them are session types: the base
-/// chain, the interfaces, and assignability. Reflection answers for framework types; a type
-/// being written answers through the declarations kept in the <see cref="TypeTable"/>, because
-/// its builder cannot describe itself before it is created.
+/// Answers questions about how types relate when some of them are session types: the base chain, the interfaces, and assignability.
 /// </summary>
+/// <remarks>
+/// Reflection answers for framework types; a type being written answers through the declarations kept in the <see cref="TypeTable"/>,
+/// because its builder cannot describe itself before it is created.
+/// </remarks>
 public static class TypeRelations
 {
     /// <summary>
-    /// True for a type the session declared: a prototype still being written or a loaded
-    /// session type. Constructed forms are judged by their definition.
+    /// True for a type the session declared: a prototype still being written or a loaded session type.
     /// </summary>
+    /// <remarks>
+    /// Constructed forms are judged by their definition.
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <returns>True for a session type.</returns>
     public static bool IsSessionType(Type? type)
@@ -84,8 +87,7 @@ public static class TypeRelations
     }
 
     /// <summary>
-    /// The base type, with the type's generic arguments substituted into it; null for object
-    /// and interfaces.
+    /// The base type, with the type's generic arguments substituted into it; null for object and interfaces.
     /// </summary>
     /// <param name="type">The type.</param>
     /// <param name="types">The table that knows the types being written.</param>
@@ -201,9 +203,11 @@ public static class TypeRelations
     }
 
     /// <summary>
-    /// True when the definition of <paramref name="baseType"/> appears in the base chain of
-    /// <paramref name="derived"/>, whatever the generic arguments.
+    /// True when the definition of <paramref name="baseType"/> appears in the base chain of <paramref name="derived"/>.
     /// </summary>
+    /// <remarks>
+    /// The answer holds whatever the generic arguments.
+    /// </remarks>
     /// <param name="derived">The candidate derived type.</param>
     /// <param name="baseType">The base type.</param>
     /// <param name="types">The table that knows the types being written.</param>
@@ -226,11 +230,12 @@ public static class TypeRelations
     }
 
     /// <summary>
-    /// True when a reference of type <paramref name="from"/> can stand where <paramref name="to"/>
-    /// is expected: the same type, a base type, an implemented interface, or a variant
-    /// instantiation of one. Framework types answer through reflection; session types walk
-    /// their declarations.
+    /// True when a reference of type <paramref name="from"/> can stand where <paramref name="to"/> is expected.
     /// </summary>
+    /// <remarks>
+    /// That is the case for the same type, a base type, an implemented interface, or a variant instantiation of one. Framework types answer
+    /// through reflection. Session types walk their declarations.
+    /// </remarks>
     /// <param name="from">The type of the value.</param>
     /// <param name="to">The expected type.</param>
     /// <param name="types">The table that knows the types being written.</param>
@@ -281,7 +286,8 @@ public static class TypeRelations
 
             var element = from.GetElementType()!;
             var wanted = to.GetGenericArguments()[0];
-            return TypeIdentity.Equal(element, wanted) || (!element.IsValueType && !wanted.IsValueType && IsAssignable(element, wanted, types));
+            return TypeIdentity.Equal(element, wanted)
+                || (!element.IsValueType && !wanted.IsValueType && IsAssignable(element, wanted, types));
         }
 
         if (from.HasElementType || to.HasElementType)
@@ -466,6 +472,7 @@ public static class TypeRelations
                 GenericParameterAttributes.Contravariant => IsAssignable(b, a, types),
                 _ => false,
             };
+
             if (!ok)
             {
                 return false;

@@ -12,15 +12,19 @@ namespace IlRepl.Tests.Engine;
 [TestClass]
 public sealed class StackAnalysisTests
 {
-    private static DisassembledMethod Body(Action<ModuleDefinition, TypeDefinition, ILProcessor, MethodDefinition> emit, Mono.Cecil.TypeReference? returnType = null)
+    private static DisassembledMethod Body(
+        Action<ModuleDefinition, TypeDefinition, ILProcessor, MethodDefinition> emit,
+        Mono.Cecil.TypeReference? returnType = null)
     {
         var session = new Session();
         var (_, _, fixture) = CecilFixture.Build((module, type) =>
         {
-            var m = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, returnType ?? module.TypeSystem.Void);
+            var m = new MethodDefinition("M", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, returnType
+                ?? module.TypeSystem.Void);
             type.Methods.Add(m);
             emit(module, type, m.Body.GetILProcessor(), m);
         }, session.Resolver);
+
         return MethodDisassembler.Disassemble(fixture.GetMethod("M")!, session);
     }
 
@@ -52,11 +56,13 @@ public sealed class StackAnalysisTests
             il.Append(refJoin);
             il.Emit(OpCodes.Ret);
         });
+
         var lines = DisassemblyText.LinesWithStack(method);
         var text = string.Join("\n", lines);
         Assert.Contains("ldc.i4.1\t[int32]", text);
         Assert.Contains("ldarg.1\t[uint8]", text);
-        var join = method.Clauses.Count == 0 ? method.Entries.First(e => e.Instruction?.Op.Name == "pop") : throw new AssertFailedException("no clauses expected");
+        var join = method.Clauses.Count == 0 ? method.Entries.First(e => e.Instruction?.Op.Name == "pop")
+            : throw new AssertFailedException("no clauses expected");
         Assert.AreEqual("[]", DisassemblyText.StackAt(method, join.Offset));
         // The merged state at the join is what the pop consumed: int32 on both paths.
         var pops = method.Entries.Where(e => e.Instruction?.Op.Name == "pop").ToList();
@@ -86,6 +92,7 @@ public sealed class StackAnalysisTests
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         });
+
         var dup = method.Entries.First(e => e.Instruction?.Op.Name == "dup");
         Assert.AreEqual("[object, object]", DisassemblyText.StackAt(method, dup.Offset));
     }
@@ -112,6 +119,7 @@ public sealed class StackAnalysisTests
             il.Emit(OpCodes.Pop);
             il.Append(exit);
         });
+
         var lines = DisassemblyText.LinesWithStack(method);
         var text = string.Join("\n", lines);
         Assert.Contains("brtrue IL_0000\t[]", text);
@@ -138,8 +146,16 @@ public sealed class StackAnalysisTests
             il.Append(handler);
             il.Emit(OpCodes.Leave, end);
             il.Append(end);
-            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch) { TryStart = tryStart, TryEnd = handler, HandlerStart = handler, HandlerEnd = end, CatchType = module.ImportReference(typeof(Exception)) });
+            m.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch)
+            {
+                TryStart = tryStart,
+                TryEnd = handler,
+                HandlerStart = handler,
+                HandlerEnd = end,
+                CatchType = module.ImportReference(typeof(Exception)),
+            });
         });
+
         var lines = DisassemblyText.LinesWithStack(method);
         var text = string.Join("\n", lines);
         Assert.Contains("0000 pop\tinvalid", text);
@@ -171,6 +187,7 @@ public sealed class StackAnalysisTests
             il.Append(join);
             il.Emit(OpCodes.Ret);
         });
+
         var join = method.Entries.First(e => e.Instruction?.Op.Name == "nop");
         Assert.AreEqual("invalid", DisassemblyText.StackAt(method, join.Offset));
     }
@@ -194,6 +211,7 @@ public sealed class StackAnalysisTests
             il.Append(join);
             il.Emit(OpCodes.Ret);
         });
+
         var join = method.Entries.First(e => e.Instruction?.Op.Name == "nop");
         Assert.AreEqual("invalid", DisassemblyText.StackAt(method, join.Offset));
     }
@@ -230,6 +248,7 @@ public sealed class StackAnalysisTests
             il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ret);
         });
+
         var dups = method.Entries.Where(e => e.Instruction?.Op.Name == "dup").ToList();
         Assert.AreEqual("[string, string]", DisassemblyText.StackAt(method, dups[0].Offset));
         Assert.AreEqual("[object, object]", DisassemblyText.StackAt(method, dups[1].Offset));
@@ -247,11 +266,13 @@ public sealed class StackAnalysisTests
             il.Emit(OpCodes.Br, target);
             il.Append(target);
         });
+
         method = method with
         {
             Entries = method.Entries.Select(entry => entry.Raw?.BranchTarget is not null
                 ? entry with { Raw = entry.Raw with { BranchTarget = 12345 } } : entry).ToArray(),
         };
+
         var column = StackAnalysis.Run(method, out var diagnostics);
         Assert.IsNotEmpty(column);
         Assert.Contains(diagnostic => diagnostic.Code == "FLOW002" && diagnostic.Kind == AnalysisDiagnosticKind.Error, diagnostics);

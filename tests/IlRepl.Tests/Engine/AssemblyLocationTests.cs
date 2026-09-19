@@ -36,9 +36,15 @@ public sealed class AssemblyLocationTests
         if (directory is not null)
         {
             foreach (var (target, api, dispatch) in AssemblyLocationFixture.Cases)
+            {
                 await AssertCaseAsync(directory, target, api, dispatch, supported: false);
+            }
+
             foreach (var (target, api, dispatch) in AssemblyLocationFixture.SupportedCases)
+            {
                 await AssertCaseAsync(directory, target, api, dispatch, supported: true);
+            }
+
             return;
         }
 
@@ -51,6 +57,7 @@ public sealed class AssemblyLocationTests
                 FileName = Environment.ProcessPath!, WorkingDirectory = AppContext.BaseDirectory,
                 RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false,
             };
+
             start.ArgumentList.Add("--filter");
             start.ArgumentList.Add("FullyQualifiedName~AssemblyLocationTests.Edit_FileLoadedSourceMetadataRemainsRecoverable");
             start.Environment[ProbeDirectory] = directory;
@@ -76,6 +83,7 @@ public sealed class AssemblyLocationTests
         {
             Directory.Delete(directory, recursive: true);
         }
+
         Assert.IsFalse(Directory.Exists(directory));
     }
 
@@ -88,7 +96,11 @@ public sealed class AssemblyLocationTests
         File.WriteAllBytes(path, changed);
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            if (attempt == 1) File.Delete(path);
+            if (attempt == 1)
+            {
+                File.Delete(path);
+            }
+
             var result = await ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken);
             Assert.AreEqual("incomplete", result.Outcome);
             Assert.AreEqual("setup-failed", result.Original.Outcome, result.Original.Detail);
@@ -101,8 +113,14 @@ public sealed class AssemblyLocationTests
             Assert.IsNull(result.Edited.Exception);
             Assert.AreEqual("43", result.Edited.Result!.Value);
             Assert.HasCount(1, result.Edited.Invocations);
-            if (attempt == 0) Assert.AreSequenceEqual(changed, File.ReadAllBytes(path));
-            else Assert.IsFalse(File.Exists(path));
+            if (attempt == 0)
+            {
+                Assert.AreSequenceEqual(changed, File.ReadAllBytes(path));
+            }
+            else
+            {
+                Assert.IsFalse(File.Exists(path));
+            }
         }
     }
 
@@ -114,6 +132,7 @@ public sealed class AssemblyLocationTests
         {
             Architecture.X64 => Machine.Amd64, Architecture.Arm64 => Machine.Arm64, _ => Machine.I386,
         };
+
         var fixture = AssemblyLocationFixture.Create(target, api, dispatch, path, machine: imageMachine);
         File.WriteAllBytes(path, fixture.Image);
         var session = new Session();
@@ -139,6 +158,7 @@ public sealed class AssemblyLocationTests
                 assembly.GetLoadedModules(true).Select(module => module.ScopeName));
             Assert.AreSequenceEqual(expectedModules, assembly.Modules.Select(module => module.ScopeName));
         }
+
         using (var reader = new PEReader(new MemoryStream(fixture.Image)))
         {
             var metadata = reader.GetMetadataReader();
@@ -147,15 +167,21 @@ public sealed class AssemblyLocationTests
             Assert.AreEqual(Characteristics.ExecutableImage, reader.PEHeaders.CoffHeader.Characteristics);
             Assert.AreEqual(imageMachine, reader.PEHeaders.CoffHeader.Machine);
         }
+
         if (api == "GetPEKind")
         {
             assembly.ManifestModule.GetPEKind(out var kind, out var machine);
             var observation = "runtime PE kind " + kind + " (" + (int)kind + "), machine " + machine + " (" + (int)machine + ")";
             var expectedKind = PortableExecutableKinds.ILOnly;
-            if (imageMachine != Machine.I386) expectedKind |= PortableExecutableKinds.PE32Plus;
+            if (imageMachine != Machine.I386)
+            {
+                expectedKind |= PortableExecutableKinds.PE32Plus;
+            }
+
             Assert.AreEqual(expectedKind, kind, observation);
             Assert.AreEqual((ImageFileMachine)imageMachine, machine, observation);
         }
+
         var edit = session.PrepareEdit("int32 [" + assembly.GetName().Name + "]SourceInspection.Owner::Read(string)", "Copy");
         Assert.AreEqual(42, edit.Original.Requested.Invoke(null, [fixture.Expected]), target + "." + api);
         var source = edit.Source;
@@ -204,6 +230,7 @@ public sealed class AssemblyLocationTests
             Assert.IsNull(side.Exception);
             Assert.HasCount(1, side.Invocations);
         }
+
         Assert.AreEqual("42", result.Original.Result!.Value);
         Assert.AreEqual(supported ? "42" : "43", result.Edited.Result!.Value);
         if (!supported && target == "Assembly" && api == "Location" && dispatch == "direct")
@@ -212,7 +239,11 @@ public sealed class AssemblyLocationTests
                 JsonSerializer.Serialize(package, ProtocolJsonContext.Default.ComparisonPackage));
             File.WriteAllText(Path.Combine(directory, "frozen-location.path"), path);
             foreach (var line in IlLines.Expand(".method int32 Scenario() { ldstr " + LiteralParser.Escape(fixture.Expected)
-                + "; call Copy; ret }")) session.AddLine(line);
+                + "; call Copy; ret }"))
+            {
+                session.AddLine(line);
+            }
+
             var scenario = await ProcessComparisonRunner.RunAsync(ComparisonCapture.Create(session, "Copy using Scenario"),
                 TestContext.CancellationToken);
             Assert.AreEqual("different", scenario.Outcome, scenario.Original.Detail + "; " + scenario.Edited.Detail);
@@ -241,6 +272,7 @@ public sealed class AssemblyLocationTests
                 context.Unload();
             }
         }
+
         Assert.AreEqual(path, assembly.Location);
         Assert.AreSequenceEqual(fixture.Image, File.ReadAllBytes(path));
     }
@@ -287,6 +319,7 @@ public sealed class AssemblyLocationTests
             Assert.IsNull(side.Exception);
             Assert.HasCount(1, side.Invocations);
         }
+
         Assert.AreEqual(42, edit.Original.Requested.Invoke(null, null));
         Assert.AreEqual(43, edit.Method!.Invoke(null, null));
     }

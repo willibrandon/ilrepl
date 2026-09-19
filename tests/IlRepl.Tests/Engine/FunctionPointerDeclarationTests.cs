@@ -328,8 +328,11 @@ public sealed class FunctionPointerDeclarationTests
         Assert.AreEqual(42, session.Run().Value);
         var il = session.ToIlAsm();
         Assert.Contains(".method public static method !!U *(!!U) Pointer<U>()", il);
-        foreach (var image in new[] { AssemblyExporter.Write(session, "generic-function-pointer"),
-            IlasmLocator.Assemble(il) })
+        foreach (var image in new[]
+        {
+            AssemblyExporter.Write(session, "generic-function-pointer"),
+            IlasmLocator.Assemble(il),
+        })
         {
             var context = new AssemblyLoadContext("generic-function-pointer", isCollectible: true);
             try

@@ -43,6 +43,7 @@ internal static class ExternalVarArgFixture
         {
             ImplAttributes = MethodImplAttributes.InternalCall,
         };
+
         owner.Methods.Add(native);
         il.Emit(OpCodes.Call, native);
         il.Emit(OpCodes.Ldc_I4_0);

@@ -96,10 +96,12 @@ public sealed partial class OperandCompleter
             {
                 full += "\n" + constraints;
             }
+
             if (candidate.GenericOwner is { } argumentOwner)
             {
                 full += "\ntype argument " + ArgumentHint(argumentOwner, site.ArgumentIndex);
             }
+
             var owner = candidate.Method?.DeclaringType ?? candidate.Field?.DeclaringType;
             var description = owner is not null ? SymbolRenderer.IlPath(owner)
                 : candidate.Type is { } declared ? declared.AssemblyName : "";
@@ -111,6 +113,7 @@ public sealed partial class OperandCompleter
             {
                 label = SymbolRenderer.IlPath(declaring) + "::" + label;
             }
+
             if (candidate.Type is not null && candidate.Slot < 0)
             {
                 label = insertion.EndsWith("::", StringComparison.Ordinal) ? insertion[..^2] : insertion;

@@ -50,8 +50,14 @@ internal sealed partial class ControlFlowAnalysis<T> where T : class
         _ => "value type",
     };
 
-    private AnalysisDiagnostic Explain(AnalysisDiagnostic diagnostic, int position, IReadOnlyList<FlowNode<T>> nodes,
-        FlowState<T>? state, StackProblem? problem, IReadOnlyList<(int Position, FlowState<T> State)> incoming, int? returnArity,
+    private AnalysisDiagnostic Explain(
+        AnalysisDiagnostic diagnostic,
+        int position,
+        IReadOnlyList<FlowNode<T>> nodes,
+        FlowState<T>? state,
+        StackProblem? problem,
+        IReadOnlyList<(int Position, FlowState<T> State)> incoming,
+        int? returnArity,
         FlowState<T>? outgoing)
     {
         if (position < 0 || position >= nodes.Count)

@@ -88,6 +88,7 @@ public sealed partial class EditingSession
             Access = new AccessContext(owner, "edit " + _state.Edit.Name),
             Generics = generics,
         };
+
         if (owner is not null && !method.IsStatic)
         {
             var receiver = generics.TypeArguments.Count == 0 ? owner : TypeSymbol.Construct(owner, generics.TypeArguments);
@@ -99,6 +100,7 @@ public sealed partial class EditingSession
         {
             ExactType = parameter.ExactType,
         }));
+
         _state.Method = body;
     }
 }

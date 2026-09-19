@@ -10,8 +10,13 @@ internal static class JumpCompatibility
     /// <summary>
     /// Explains an incompatible target, or returns null when the signatures match.
     /// </summary>
-    public static string? Problem(MethodSymbol target, MethodSymbol? source, IReadOnlyList<VariableSymbol> arguments,
-        IReadOnlyList<TypeSymbol> methodArguments, bool isVarArg, IBindingScope scope)
+    public static string? Problem(
+        MethodSymbol target,
+        MethodSymbol? source,
+        IReadOnlyList<VariableSymbol> arguments,
+        IReadOnlyList<TypeSymbol> methodArguments,
+        bool isVarArg,
+        IBindingScope scope)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(arguments);
@@ -111,7 +116,10 @@ internal static class JumpCompatibility
         };
     }
 
-    private static bool MatchType(TypeSymbol target, TypeSymbol current, DefinitionId definition,
+    private static bool MatchType(
+        TypeSymbol target,
+        TypeSymbol current,
+        DefinitionId definition,
         Dictionary<int, TypeSymbol> substitutions)
     {
         if (target.Kind == TypeSymbolKind.MethodParameter && target.Owner == definition)

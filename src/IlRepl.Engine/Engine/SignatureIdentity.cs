@@ -3,10 +3,12 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Compares the types of two method signatures the way the CLI matches an implementation to a
-/// slot or an overload to another: a method's own generic parameters match by position, since
-/// <c>!!0</c> of one method is <c>!!0</c> of the other, while everything else is identity.
+/// Compares the types of two method signatures the way the CLI matches an implementation to a slot or an overload to another.
 /// </summary>
+/// <remarks>
+/// A method's own generic parameters match by position, since <c>!!0</c> of one method is <c>!!0</c> of the other, while everything else is
+/// identity.
+/// </remarks>
 public static class SignatureIdentity
 {
     /// <summary>
@@ -54,9 +56,11 @@ public static class SignatureIdentity
     }
 
     /// <summary>
-    /// The method's own generic parameters as they appear in a signature's types, indexed by
-    /// position; a parameter the signature never mentions leaves a null at its position.
+    /// The method's own generic parameters as they appear in a signature's types, indexed by position.
     /// </summary>
+    /// <remarks>
+    /// A parameter the signature never mentions leaves a null at its position.
+    /// </remarks>
     /// <param name="signature">The signature.</param>
     /// <returns>The parameters by position, as many as the signature declares.</returns>
     public static IReadOnlyList<Type?> MethodParametersOf(MethodSignature signature)

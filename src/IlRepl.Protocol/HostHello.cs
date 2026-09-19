@@ -8,4 +8,7 @@ namespace IlRepl.Protocol;
 /// <param name="Status">The status of the fresh session.</param>
 /// <param name="AssemblyVersion">The initial searchable assembly-load version.</param>
 public sealed record HostHello(
-    IReadOnlyList<CompletionItem> Catalog, CilVocabulary Vocabulary, SessionStatus Status, long AssemblyVersion = 0);
+    IReadOnlyList<CompletionItem> Catalog,
+    CilVocabulary Vocabulary,
+    SessionStatus Status,
+    long AssemblyVersion = 0);

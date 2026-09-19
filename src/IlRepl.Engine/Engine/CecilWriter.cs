@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.InteropServices;
+using System.Text;
 using IlRepl.Engine.Binding;
 using Mono.Cecil;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
@@ -34,8 +36,7 @@ public sealed class CecilWriter
     internal CecilSignatureFixups SignatureFixups { get; } = new();
 
     /// <summary>
-    /// A prototype written by another writer of the same group, referenced here by the name its
-    /// assembly will carry.
+    /// A prototype written by another writer of the same group, referenced here by the name its assembly will carry.
     /// </summary>
     /// <param name="AssemblyName">The simple name of the assembly the prototype is written into.</param>
     /// <param name="Namespace">The type's namespace, or empty.</param>
@@ -103,10 +104,12 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// Cecil's default core library for a new module is mscorlib 4.0, which the desktop resolves
-    /// through a facade and the browser bundle does not carry. Referencing the runtime's own core
-    /// library first makes the module's type system name that instead.
+    /// References the runtime's own core library first so the module's type system names that instead of mscorlib 4.0.
     /// </summary>
+    /// <remarks>
+    /// Cecil's default core library for a new module is mscorlib 4.0, which the desktop resolves through a facade and the browser bundle
+    /// does not carry.
+    /// </remarks>
     private void ReferenceCoreLibrary() => Module.ImportReference(typeof(object));
 
     /// <summary>
@@ -145,9 +148,11 @@ public sealed class CecilWriter
     public TypeReference Object => Import(typeof(object));
 
     /// <summary>
-    /// Records that a prototype builder or a generic parameter builder is written as a definition
-    /// of this module, so bodies bound to the prototype emit against the real definition.
+    /// Records that a prototype builder or a generic parameter builder is written as a definition of this module.
     /// </summary>
+    /// <remarks>
+    /// Bodies bound to the prototype then emit against the real definition.
+    /// </remarks>
     /// <param name="prototype">The builder.</param>
     /// <param name="definition">The definition or generic parameter in this module.</param>
     public void Define(Type prototype, TypeReference definition)
@@ -182,9 +187,11 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// Imports a type, noting a session assembly it comes from. A prototype maps to its
-    /// definition here; constructed types are rebuilt around their imported parts.
+    /// Imports a type, noting a session assembly it comes from.
     /// </summary>
+    /// <remarks>
+    /// A prototype maps to its definition here; constructed types are rebuilt around their imported parts.
+    /// </remarks>
     /// <param name="type">The type.</param>
     /// <returns>The reference.</returns>
     public TypeReference Import(Type type)
@@ -200,13 +207,15 @@ public sealed class CecilWriter
             return ExternalReference(type, external);
         }
 
-        if (type is System.Reflection.Emit.GenericTypeParameterBuilder { DeclaringMethod: null } parameter && parameter.DeclaringType is { } owner && _externals.TryGetValue(owner, out var ownerExternal))
+        if (type is GenericTypeParameterBuilder { DeclaringMethod: null } parameter
+            && parameter.DeclaringType is { } owner && _externals.TryGetValue(owner, out var ownerExternal))
         {
             var reference = ExternalReference(owner, ownerExternal);
             return reference.GenericParameters[parameter.GenericParameterPosition];
         }
 
-        if (type is System.Reflection.Emit.GenericTypeParameterBuilder { DeclaringMethod: not null } methodParameter && _externalMethod is { } building)
+        if (type is GenericTypeParameterBuilder { DeclaringMethod: not null } methodParameter
+            && _externalMethod is { } building)
         {
             // A method's own parameter inside its signature: !!N on the reference being built.
             return building.GenericParameters[methodParameter.GenericParameterPosition];
@@ -274,6 +283,7 @@ public sealed class CecilWriter
 
                 return instance;
             }
+
             case TypeSymbolKind.SzArray:
                 return new ArrayType(Import(type.Element!));
             case TypeSymbolKind.Array:
@@ -297,6 +307,14 @@ public sealed class CecilWriter
         }
     }
 
+    /// <summary>
+    /// Imports a return or parameter type, preferring its exact symbol over the runtime type and its modifiers.
+    /// </summary>
+    /// <param name="type">The runtime type.</param>
+    /// <param name="exact">The complete type when the runtime type cannot represent it, or null.</param>
+    /// <param name="required">The required custom modifiers, applied only when there is no exact type.</param>
+    /// <param name="optional">The optional custom modifiers, applied only when there is no exact type.</param>
+    /// <returns>The reference.</returns>
     internal TypeReference ImportSignature(
         Type type,
         TypeSymbol? exact,
@@ -315,6 +333,7 @@ public sealed class CecilWriter
             ExplicitThis = signature.ExplicitThis,
             ReturnType = Import(signature.ReturnType),
         };
+
         for (var index = 0; index < signature.Parameters.Count; index++)
         {
             var parameter = Import(signature.Parameters[index]);
@@ -338,19 +357,21 @@ public sealed class CecilWriter
 
         return signature.UnmanagedConvention switch
         {
-            System.Runtime.InteropServices.CallingConvention.Cdecl => MethodCallingConvention.C,
-            System.Runtime.InteropServices.CallingConvention.StdCall => MethodCallingConvention.StdCall,
-            System.Runtime.InteropServices.CallingConvention.ThisCall => MethodCallingConvention.ThisCall,
-            System.Runtime.InteropServices.CallingConvention.FastCall => MethodCallingConvention.FastCall,
+            CallingConvention.Cdecl => MethodCallingConvention.C,
+            CallingConvention.StdCall => MethodCallingConvention.StdCall,
+            CallingConvention.ThisCall => MethodCallingConvention.ThisCall,
+            CallingConvention.FastCall => MethodCallingConvention.FastCall,
             _ => MethodCallingConvention.Unmanaged,
         };
     }
 
     /// <summary>
-    /// Restores the metadata spelling of every name in an imported reference. Reflection escapes
-    /// the characters its own name grammar reserves, a backslash as <c>\\\\</c> and a comma as
-    /// <c>\\,</c>, and Cecil's importer copies that spelling, which names a type that does not exist.
+    /// Restores the metadata spelling of every name in an imported reference.
     /// </summary>
+    /// <remarks>
+    /// Reflection escapes the characters its own name grammar reserves, a backslash as <c>\\\\</c> and a comma as <c>\\,</c>, and Cecil's
+    /// importer copies that spelling, which names a type that does not exist.
+    /// </remarks>
     /// <param name="reference">The imported reference.</param>
     /// <returns>The same reference, with metadata names.</returns>
     private static TypeReference WithMetadataNames(TypeReference reference)
@@ -390,7 +411,7 @@ public sealed class CecilWriter
             return name;
         }
 
-        var sb = new System.Text.StringBuilder(name.Length);
+        var sb = new StringBuilder(name.Length);
         for (var i = 0; i < name.Length; i++)
         {
             if (name[i] == '\\' && i + 1 < name.Length)
@@ -413,8 +434,10 @@ public sealed class CecilWriter
         {
             HasThis = !signature.IsStatic,
             ExplicitThis = signature.CallingConvention.HasFlag(CallingConventions.ExplicitThis),
-            CallingConvention = signature.CallingConvention.HasFlag(CallingConventions.VarArgs) ? MethodCallingConvention.VarArg : MethodCallingConvention.Default,
+            CallingConvention = signature.CallingConvention.HasFlag(CallingConventions.VarArgs) ? MethodCallingConvention.VarArg
+            : MethodCallingConvention.Default,
         };
+
         foreach (var parameter in signature.TypeParameters)
         {
             reference.GenericParameters.Add(new GenericParameter(parameter.Name, reference));
@@ -496,9 +519,11 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// Imports a field, noting a session assembly it comes from. A prototype field maps to its
-    /// definition; a field of an instantiated prototype becomes a reference on the instantiation.
+    /// Imports a field, noting a session assembly it comes from.
     /// </summary>
+    /// <remarks>
+    /// A prototype field maps to its definition; a field of an instantiated prototype becomes a reference on the instantiation.
+    /// </remarks>
     /// <param name="field">The field.</param>
     /// <returns>The reference.</returns>
     public FieldReference Import(FieldInfo field)
@@ -524,7 +549,8 @@ public sealed class CecilWriter
         }
 
         var declaring = field.DeclaringType;
-        if (declaring is { IsGenericType: true, IsGenericTypeDefinition: false } && _definedTypes.TryGetValue(declaring.GetGenericTypeDefinition(), out var definitionType))
+        if (declaring is { IsGenericType: true, IsGenericTypeDefinition: false }
+            && _definedTypes.TryGetValue(declaring.GetGenericTypeDefinition(), out var definitionType))
         {
             var definitionField = definitionType.Resolve()!.Fields.First(f => f.Name == field.Name);
             return new FieldReference(field.Name, definitionField.FieldType, Import(declaring));
@@ -533,7 +559,8 @@ public sealed class CecilWriter
         if (declaring is { IsGenericType: true, IsGenericTypeDefinition: false } && NeedsRebuild(declaring))
         {
             // A field of a loaded generic type instantiated with a prototype's parameters or a type written here.
-            const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+            const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance
+                | BindingFlags.DeclaredOnly;
             var definitionField = declaring.GetGenericTypeDefinition().GetField(field.Name, all)
                 ?? throw new ReplException($"{TypeNameFormatter.Pretty(declaring)} has no field {field.Name}");
             var onDefinition = Import(definitionField);
@@ -553,14 +580,14 @@ public sealed class CecilWriter
             imported.FieldType = CecilArrayShapes.Restore(
                 imported.FieldType, RuntimeSymbolImporter.Import(field).FieldType, SignatureFixups);
         }
+
         WithMetadataNames(imported.DeclaringType);
         WithMetadataNames(imported.FieldType);
         return imported;
     }
 
     /// <summary>
-    /// Imports a member of a type, where the member may be a prototype builder and the declaring
-    /// type an instantiation of the prototype.
+    /// Imports a member of a type, where the member may be a prototype builder and the declaring type an instantiation of the prototype.
     /// </summary>
     /// <param name="method">The method or constructor.</param>
     /// <param name="declaring">The declaring type as referenced, or null for the method's own.</param>
@@ -583,6 +610,7 @@ public sealed class CecilWriter
                     ExplicitThis = defined.ExplicitThis,
                     CallingConvention = defined.CallingConvention,
                 };
+
                 foreach (var parameter in defined.Parameters)
                 {
                     onInstance.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
@@ -621,6 +649,7 @@ public sealed class CecilWriter
             CallingConvention = signature.CallingConvention.HasFlag(CallingConventions.VarArgs)
                 ? MethodCallingConvention.VarArg : MethodCallingConvention.Default,
         };
+
         foreach (var parameter in signature.TypeParameters)
         {
             reference.GenericParameters.Add(new GenericParameter(parameter.Name, reference));
@@ -653,10 +682,12 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// Imports a method or constructor, noting a session assembly it comes from. A member of a
-    /// loaded type instantiated with a prototype's parameters, or a generic method instantiated
-    /// with them, is rebuilt here, since the reflection importer cannot see a builder.
+    /// Imports a method or constructor, noting a session assembly it comes from.
     /// </summary>
+    /// <remarks>
+    /// A member of a loaded type instantiated with a prototype's parameters, or a generic method instantiated with them, is rebuilt here,
+    /// since the reflection importer cannot see a builder.
+    /// </remarks>
     /// <param name="method">The method.</param>
     /// <returns>The reference.</returns>
     public MethodReference Import(MethodBase method)
@@ -672,7 +703,10 @@ public sealed class CecilWriter
             return ExternalMethod(method, method.DeclaringType!, external!);
         }
 
-        if (method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } instantiated && (instantiated.GetGenericArguments().Any(NeedsRebuild) || _definedMethods.ContainsKey(instantiated.GetGenericMethodDefinition()) || IsDefinedInstantiationMember(instantiated.GetGenericMethodDefinition())))
+        if (method is MethodInfo { IsGenericMethod: true, IsGenericMethodDefinition: false } instantiated
+            && (instantiated.GetGenericArguments().Any(NeedsRebuild)
+            || _definedMethods.ContainsKey(instantiated.GetGenericMethodDefinition())
+            || IsDefinedInstantiationMember(instantiated.GetGenericMethodDefinition())))
         {
             var generic = new GenericInstanceMethod(Import(instantiated.GetGenericMethodDefinition()));
             foreach (var argument in instantiated.GetGenericArguments())
@@ -683,7 +717,9 @@ public sealed class CecilWriter
             return generic;
         }
 
-        if (method.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } definedInstance && _definedTypes.ContainsKey(definedInstance.GetGenericTypeDefinition()) && method is not System.Reflection.Emit.MethodBuilder and not System.Reflection.Emit.ConstructorBuilder)
+        if (method.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } definedInstance
+            && _definedTypes.ContainsKey(definedInstance.GetGenericTypeDefinition())
+            && method is not MethodBuilder and not ConstructorBuilder)
         {
             // A member of a loaded session type, reached through an instantiation: the definition
             // was written here, so the reference is built on the written instantiation.
@@ -696,6 +732,7 @@ public sealed class CecilWriter
                     ExplicitThis = written.ExplicitThis,
                     CallingConvention = written.CallingConvention,
                 };
+
                 foreach (var parameter in written.Parameters)
                 {
                     onWritten.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
@@ -710,7 +747,8 @@ public sealed class CecilWriter
             }
         }
 
-        if (method.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } declaring && NeedsRebuild(declaring) && !(_definedTypes.ContainsKey(declaring.GetGenericTypeDefinition())))
+        if (method.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } declaring && NeedsRebuild(declaring)
+            && !(_definedTypes.ContainsKey(declaring.GetGenericTypeDefinition())))
         {
             var definitionType = declaring.GetGenericTypeDefinition();
             var definitionMethod = DefinitionOf(method, definitionType);
@@ -721,6 +759,7 @@ public sealed class CecilWriter
                 ExplicitThis = onDefinition.ExplicitThis,
                 CallingConvention = onDefinition.CallingConvention,
             };
+
             foreach (var parameter in onDefinition.Parameters)
             {
                 onInstance.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
@@ -841,9 +880,11 @@ public sealed class CecilWriter
     public DefinitionAssembly Load() => SessionAssemblies.Load(Write(), Name, Kind, Dependencies);
 
     /// <summary>
-    /// Grants this assembly access to every member of a session assembly. The attribute type is
-    /// defined in this module, as the runtime expects.
+    /// Grants this assembly access to every member of a session assembly.
     /// </summary>
+    /// <remarks>
+    /// The attribute type is defined in this module, as the runtime expects.
+    /// </remarks>
     /// <param name="dependency">The session assembly.</param>
     public void GrantAccessTo(DefinitionAssembly dependency)
     {
@@ -860,8 +901,7 @@ public sealed class CecilWriter
     private readonly HashSet<string> _granted = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Grants this assembly access to every member of a session assembly by name, for one that
-    /// is not loaded yet.
+    /// Grants this assembly access to every member of a session assembly by name, for one that is not loaded yet.
     /// </summary>
     /// <param name="name">The assembly's simple name.</param>
     public void GrantAccessTo(string name)
@@ -879,8 +919,7 @@ public sealed class CecilWriter
     }
 
     /// <summary>
-    /// True when the type mentions a builder or a type written by this writer, so the reflection
-    /// importer must not see it.
+    /// True when the type mentions a builder or a type written by this writer, so the reflection importer must not see it.
     /// </summary>
     private bool NeedsRebuild(Type type)
     {
@@ -894,7 +933,8 @@ public sealed class CecilWriter
             return true;
         }
 
-        return type.IsGenericType && !type.IsGenericTypeDefinition && (_definedTypes.ContainsKey(type.GetGenericTypeDefinition()) || type.GetGenericArguments().Any(NeedsRebuild));
+        return type.IsGenericType && !type.IsGenericTypeDefinition
+            && (_definedTypes.ContainsKey(type.GetGenericTypeDefinition()) || type.GetGenericArguments().Any(NeedsRebuild));
     }
 
     /// <summary>
@@ -923,16 +963,22 @@ public sealed class CecilWriter
             }
         }
 
-        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance
+            | BindingFlags.DeclaredOnly;
         var wanted = method.GetParameters().Select(p => p.ParameterType).ToArray();
         return definitionType.GetMembers(all).OfType<MethodBase>()
             .FirstOrDefault(m => m.Name == method.Name && m.IsStatic == method.IsStatic && m is ConstructorInfo == method is ConstructorInfo
-                && m.GetParameters().Length == wanted.Length && m.GetParameters().Zip(wanted).All(p => TypeIdentity.Equal(p.First.ParameterType, p.Second) || p.First.ParameterType.IsGenericParameter))
-            ?? throw new ReplException($"{TypeNameFormatter.Pretty(method.DeclaringType)}::{method.Name} has no definition on {TypeNameFormatter.Pretty(definitionType)}");
+                && m.GetParameters().Length == wanted.Length
+                && m.GetParameters().Zip(wanted)
+                .All(p => TypeIdentity.Equal(p.First.ParameterType, p.Second) || p.First.ParameterType.IsGenericParameter))
+            ?? throw new ReplException(
+                $"{TypeNameFormatter.Pretty(method.DeclaringType)}::{method.Name} has no definition on " +
+                $"{TypeNameFormatter.Pretty(definitionType)}");
     }
 
     private bool IsDefinedInstantiationMember(MethodBase definition) =>
-        definition.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } declaring && _definedTypes.ContainsKey(declaring.GetGenericTypeDefinition());
+        definition.DeclaringType is { IsGenericType: true, IsGenericTypeDefinition: false } declaring
+        && _definedTypes.ContainsKey(declaring.GetGenericTypeDefinition());
 
     /// <summary>
     /// True when a builder, a prototype or one of its generic parameters, appears anywhere in the type.
@@ -944,17 +990,18 @@ public sealed class CecilWriter
             type = type.GetElementType()!;
         }
 
-        if (type is System.Reflection.Emit.TypeBuilder or System.Reflection.Emit.GenericTypeParameterBuilder)
+        if (type is TypeBuilder or GenericTypeParameterBuilder)
         {
             return true;
         }
 
         if (type.IsGenericParameter)
         {
-            return type.DeclaringMethod is System.Reflection.Emit.MethodBuilder || type.DeclaringType is System.Reflection.Emit.TypeBuilder;
+            return type.DeclaringMethod is MethodBuilder || type.DeclaringType is TypeBuilder;
         }
 
-        return type.IsGenericType && !type.IsGenericTypeDefinition && (MentionsBuilder(type.GetGenericTypeDefinition()) || type.GetGenericArguments().Any(MentionsBuilder));
+        return type.IsGenericType && !type.IsGenericTypeDefinition
+            && (MentionsBuilder(type.GetGenericTypeDefinition()) || type.GetGenericArguments().Any(MentionsBuilder));
     }
 
     private void NoteSessionMembers(Type? type)
@@ -981,7 +1028,9 @@ public sealed class CecilWriter
             {
                 if (IsExport)
                 {
-                    throw new ReplException($"{TypeNameFormatter.Pretty(type)} belongs to session assembly {definition.Name}, which an export cannot reference (it is not part of the session's types)");
+                    throw new ReplException(
+                        $"{TypeNameFormatter.Pretty(type)} belongs to session assembly {definition.Name}, which an export cannot " +
+                        $"reference (it is not part of the session's types)");
                 }
 
                 GrantAccessTo(definition);
@@ -993,12 +1042,16 @@ public sealed class CecilWriter
 
     private MethodDefinition DefineIgnoresAccessChecksAttribute()
     {
-        var attribute = DefineType("System.Runtime.CompilerServices", "IgnoresAccessChecksToAttribute", TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed, Module.ImportReference(typeof(Attribute)));
-        var ctor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, Module.TypeSystem.Void);
+        var attribute = DefineType("System.Runtime.CompilerServices", "IgnoresAccessChecksToAttribute",
+            TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed, Module.ImportReference(typeof(Attribute)));
+        var ctor = new MethodDefinition(".ctor",
+            MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+            Module.TypeSystem.Void);
         ctor.Parameters.Add(new ParameterDefinition("assemblyName", ParameterAttributes.None, Module.TypeSystem.String));
         var il = ctor.Body.GetILProcessor();
         il.Emit(Mono.Cecil.Cil.OpCodes.Ldarg_0);
-        il.Emit(Mono.Cecil.Cil.OpCodes.Call, Module.ImportReference(typeof(Attribute).GetConstructor(BindingFlags.NonPublic | BindingFlags.Instance, Type.EmptyTypes)!));
+        il.Emit(Mono.Cecil.Cil.OpCodes.Call,
+            Module.ImportReference(typeof(Attribute).GetConstructor(BindingFlags.NonPublic | BindingFlags.Instance, Type.EmptyTypes)!));
         il.Emit(Mono.Cecil.Cil.OpCodes.Ret);
         attribute.Methods.Add(ctor);
         return ctor;

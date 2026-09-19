@@ -2,15 +2,18 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
+using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 using IlRepl.Engine;
 
 namespace IlRepl.Tests.Engine;
 
 /// <summary>
-/// The exported assembly carries the session's types and methods with the metadata that was
-/// declared, references no session assembly, and runs when loaded.
+/// The exported assembly carries the session's types and methods with the metadata that was declared.
 /// </summary>
+/// <remarks>
+/// It references no session assembly and runs when loaded.
+/// </remarks>
 [TestClass]
 public sealed class AssemblyExporterTests
 {
@@ -23,14 +26,18 @@ public sealed class AssemblyExporterTests
         ".pack 4",
         ".field public int32 X",
         ".field public int32 Y",
-        ".method public instance void .ctor(int32 x, int32 y) { ldarg.0; ldarg x; stfld int32 Point::X; ldarg.0; ldarg y; stfld int32 Point::Y; ret }",
-        ".method public virtual instance float64 Area() { ldarg.0; ldfld int32 Point::X; ldarg.0; ldfld int32 Point::Y; mul; conv.r8; ret }",
+        ".method public instance void .ctor(int32 x, int32 y) { ldarg.0; ldarg x; stfld int32 Point::X; ldarg.0; ldarg y; stfld int32 " +
+        "Point::Y; ret }",
+        ".method public virtual instance float64 Area() { ldarg.0; ldfld int32 Point::X; ldarg.0; ldfld int32 Point::Y; mul; " +
+            "conv.r8; ret }",
         "}",
         ".class public Line {",
         ".field public valuetype Point A",
         ".field public static int32 Made",
-        ".method public instance void .ctor(valuetype Point a) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg a; stfld valuetype Point Line::A; ldsfld int32 Line::Made; ldc.i4 1; add; stsfld int32 Line::Made; ret }",
-        ".method public instance int32 Sum() { ldarg.0; ldflda valuetype Point Line::A; ldfld int32 Point::X; ldarg.0; ldflda valuetype Point Line::A; ldfld int32 Point::Y; add; call int32 Twice(int32); ret }",
+        ".method public instance void .ctor(valuetype Point a) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); " +
+        "ldarg.0; ldarg a; stfld valuetype Point Line::A; ldsfld int32 Line::Made; ldc.i4 1; add; stsfld int32 Line::Made; ret }",
+        ".method public instance int32 Sum() { ldarg.0; ldflda valuetype Point Line::A; ldfld int32 Point::X; ldarg.0; ldflda valuetype " +
+        "Point Line::A; ldfld int32 Point::Y; add; call int32 Twice(int32); ret }",
         "}",
     ];
 
@@ -50,9 +57,17 @@ public sealed class AssemblyExporterTests
     public void Write_TypesMethodsAndCell_Run()
     {
         var session = Load([".method int32 Twice(int32 n) { ldarg n; ldc.i4 2; mul; ret }", .. Geometry,
-            "ldc.i4 3", "ldc.i4 4", "newobj instance void Point::.ctor(int32, int32)", "newobj instance void Line::.ctor(valuetype Point)", "call instance int32 Line::Sum()"]);
+            "ldc.i4 3", "ldc.i4 4", "newobj instance void Point::.ctor(int32, int32)", "newobj instance void Line::.ctor(valuetype Point)",
+            "call instance int32 Line::Sum()"]);
         Assert.AreEqual(14, session.Run().Value);
-        foreach (var line in new[] { "ldc.i4 3", "ldc.i4 4", "newobj instance void Point::.ctor(int32, int32)", "newobj instance void Line::.ctor(valuetype Point)", "call instance int32 Line::Sum()" })
+        foreach (var line in new[]
+        {
+            "ldc.i4 3",
+            "ldc.i4 4",
+            "newobj instance void Point::.ctor(int32, int32)",
+            "newobj instance void Line::.ctor(valuetype Point)",
+            "call instance int32 Line::Sum()",
+        })
         {
             session.AddLine(line);
         }
@@ -70,7 +85,8 @@ public sealed class AssemblyExporterTests
             var line = assembly.GetType("Line")!;
             Assert.AreEqual(point, line.GetField("A")!.FieldType);
             Assert.AreEqual(1, line.GetField("Made")!.GetValue(null), "the export's own static, counted by its own Run");
-            Assert.IsEmpty(assembly.GetReferencedAssemblies().Where(a => a.Name!.StartsWith("ilrepl", StringComparison.Ordinal)), "nothing in the export names a session assembly");
+            Assert.IsEmpty(assembly.GetReferencedAssemblies().Where(a => a.Name!.StartsWith("ilrepl", StringComparison.Ordinal)),
+                "nothing in the export names a session assembly");
         }
         finally
         {
@@ -79,9 +95,12 @@ public sealed class AssemblyExporterTests
     }
 
     /// <summary>
-    /// The saved metadata is what was declared: layouts and offsets, no synthesized constructor,
-    /// non-vector arrays, a parameter default that is not optional, modifiers, and attributes.
+    /// The saved metadata is what was declared.
     /// </summary>
+    /// <remarks>
+    /// That covers layouts and offsets, no synthesized constructor, non-vector arrays, a parameter default that is not optional, modifiers,
+    /// and attributes.
+    /// </remarks>
     [TestMethod]
     public void Write_KeepsDeclaredMetadata()
     {
@@ -102,7 +121,8 @@ public sealed class AssemblyExporterTests
         var reader = pe.GetMetadataReader();
         Assert.AreEqual(2, reader.GetTableRowCount(TableIndex.FieldLayout));
         Assert.AreEqual(1, reader.GetTableRowCount(TableIndex.ClassLayout), "the struct with .size has a layout row; the class has none");
-        Assert.IsEmpty(reader.AssemblyReferences.Select(h => reader.GetString(reader.GetAssemblyReference(h).Name)).Where(n => n.StartsWith("ilrepl", StringComparison.Ordinal)));
+        Assert.IsEmpty(reader.AssemblyReferences.Select(h => reader.GetString(reader.GetAssemblyReference(h).Name))
+            .Where(n => n.StartsWith("ilrepl", StringComparison.Ordinal)));
         var context = new AssemblyLoadContext("declared", isCollectible: true);
         try
         {
@@ -117,7 +137,7 @@ public sealed class AssemblyExporterTests
             Assert.IsFalse(take[1].IsOptional);
             Assert.AreEqual("bare", bare.GetCustomAttribute<ObsoleteAttribute>()!.Message);
             var union = assembly.GetType("Union")!;
-            Assert.AreEqual(System.Runtime.InteropServices.LayoutKind.Explicit, union.StructLayoutAttribute!.Value);
+            Assert.AreEqual(LayoutKind.Explicit, union.StructLayoutAttribute!.Value);
             Assert.AreEqual(8, union.StructLayoutAttribute.Size);
         }
         finally
@@ -137,7 +157,9 @@ public sealed class AssemblyExporterTests
             ".field public !0 V",
             ".field public static int32 Made",
             ".class nested public Tag { .field public static int32 N }",
-            ".method public instance void .ctor(!0 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; ldarg v; stfld !0 class Box`1<!0>::V; ldsfld int32 class Box`1<!0>::Made; ldc.i4 1; add; stsfld int32 class Box`1<!0>::Made; ret }",
+            ".method public instance void .ctor(!0 v) { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ldarg.0; " +
+            "ldarg v; stfld !0 class Box`1<!0>::V; ldsfld int32 class Box`1<!0>::Made; ldc.i4 1; add; stsfld int32 class " +
+            "Box`1<!0>::Made; ret }",
             ".method public instance !0 Get() { ldarg.0; ldfld !0 class Box`1<!0>::V; ret }",
             "}",
             ".method int32 Unbox(class Box`1<int32> b) { ldarg b; call instance !0 class Box`1<int32>::Get(); ret }",
@@ -166,7 +188,8 @@ public sealed class AssemblyExporterTests
         var session = Load(
             ".class public Point { }",
             ".class public Line {",
-            ".custom instance void [System.Runtime]System.Diagnostics.DebuggerTypeProxyAttribute::.ctor(class [System.Runtime]System.Type) = { type(Point) }",
+            ".custom instance void [System.Runtime]System.Diagnostics.DebuggerTypeProxyAttribute::.ctor(class " +
+            "[System.Runtime]System.Type) = { type(Point) }",
             "}");
         var (assembly, context) = LoadExport(session, "proxied");
         try
@@ -195,8 +218,7 @@ public sealed class AssemblyExporterTests
     }
 
     /// <summary>
-    /// A family listed first may mention one listed later, since every family is declared
-    /// before any shape is imported.
+    /// A family listed first may mention one listed later, since every family is declared before any shape is imported.
     /// </summary>
     [TestMethod]
     public void Write_FamiliesInAnyOrder()
@@ -219,9 +241,11 @@ public sealed class AssemblyExporterTests
     [TestMethod]
     public void Write_FrameworkGenericOverASessionType()
     {
-        var session = Load(".class public Point {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", "}",
+        var session = Load(".class public Point {",
+            ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Object::.ctor(); ret }", "}",
             "newobj instance void class [System.Collections]System.Collections.Generic.List`1<class Point>::.ctor()",
-            "dup", "newobj instance void Point::.ctor()", "callvirt instance void class [System.Collections]System.Collections.Generic.List`1<class Point>::Add(!0)",
+            "dup", "newobj instance void Point::.ctor()",
+            "callvirt instance void class [System.Collections]System.Collections.Generic.List`1<class Point>::Add(!0)",
             "callvirt instance int32 class [System.Collections]System.Collections.Generic.List`1<class Point>::get_Count()");
         var (assembly, context) = LoadExport(session, "listed");
         try
@@ -235,15 +259,19 @@ public sealed class AssemblyExporterTests
     }
 
     /// <summary>
-    /// An attribute type declared in the session is applied and exported; its constructor is a
-    /// definition of the export before any attribute is imported.
+    /// An attribute type declared in the session is applied and exported.
     /// </summary>
+    /// <remarks>
+    /// Its constructor is a definition of the export before any attribute is imported.
+    /// </remarks>
     [TestMethod]
     public void Write_SessionDefinedAttribute()
     {
         var session = Load(
-            ".class public Marker extends [System.Runtime]System.Attribute {", ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Attribute::.ctor(); ret }", "}",
-            ".class public Tagged {", ".custom instance void Marker::.ctor() = ( 01 00 00 00 )", ".field public int32 X", ".custom instance void Marker::.ctor() = ( 01 00 00 00 )", "}");
+            ".class public Marker extends [System.Runtime]System.Attribute {",
+            ".method public instance void .ctor() { ldarg.0; call instance void [System.Runtime]System.Attribute::.ctor(); ret }", "}",
+            ".class public Tagged {", ".custom instance void Marker::.ctor() = ( 01 00 00 00 )", ".field public int32 X",
+            ".custom instance void Marker::.ctor() = ( 01 00 00 00 )", "}");
         Assert.AreEqual("Marker", session.Types[1].RuntimeType!.GetCustomAttributesData()[0].AttributeType.Name);
         var (assembly, context) = LoadExport(session, "marked");
         try

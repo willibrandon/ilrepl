@@ -27,7 +27,12 @@ public sealed class TerminalReplyBufferTests
     {
         string[] replies = ["\x1b]11;rgb:1111/2222/3333\x1b\\", "\x1b]11;rgb:a/b/c\a", "\x1b_Gi=991122;OK\x1b\\"];
         foreach (var reply in replies)
-            for (var split = 1; split < reply.Length; split++) yield return (reply, split);
+        {
+            for (var split = 1; split < reply.Length; split++)
+            {
+                yield return (reply, split);
+            }
+        }
     }
 
     /// <summary>
@@ -47,6 +52,7 @@ public sealed class TerminalReplyBufferTests
             Assert.IsFalse(buffer.NeedsEscapeTimeout, "A recognized control string is not an ambiguous Escape key.");
             Assert.IsTrue(buffer.FlushEscape().IsEmpty, "The Escape deadline must never release a reply prefix.");
         }
+
         var completed = buffer.Append(bytes.AsMemory(split));
         Assert.AreSequenceEqual(bytes, completed.ToArray());
         var parsed = AnsiTokenizer.Tokenize(Encoding.UTF8.GetString(completed.Span));
@@ -87,7 +93,11 @@ public sealed class TerminalReplyBufferTests
         var buffer = new TerminalReplyBuffer();
         var bytes = Encoding.UTF8.GetBytes("\x1b[200~// λ日本\x1b]11;rgb:1/2/3\a\x1b_Gi=1;OK\x1b\\\x1b[201~");
         var output = new List<byte>();
-        foreach (var value in bytes) output.AddRange(buffer.Append(new byte[] { value }).ToArray());
+        foreach (var value in bytes)
+        {
+            output.AddRange(buffer.Append(new byte[] { value }).ToArray());
+        }
+
         Assert.AreSequenceEqual(bytes, output);
         Assert.IsTrue(buffer.Append("\x1b]11;rgb:1/2/3"u8.ToArray()).IsEmpty,
             "The closing paste marker must restore reply framing.");
@@ -119,7 +129,11 @@ public sealed class TerminalReplyBufferTests
         var buffer = new TerminalReplyBuffer();
         Assert.IsTrue(buffer.Append("\x1b_Gi=1;"u8.ToArray()).IsEmpty);
         var chunk = Encoding.ASCII.GetBytes(new string('x', 1024));
-        for (var index = 0; index < 100; index++) Assert.IsTrue(buffer.Append(chunk).IsEmpty);
+        for (var index = 0; index < 100; index++)
+        {
+            Assert.IsTrue(buffer.Append(chunk).IsEmpty);
+        }
+
         Assert.IsTrue(buffer.FlushEscape().IsEmpty);
         Assert.AreEqual("after λ", Encoding.UTF8.GetString(buffer.Append("\x1b\\after λ"u8.ToArray()).Span));
         Assert.AreEqual("\x1b]11;rgb:a/b/c\a", Encoding.UTF8.GetString(buffer.Append("\x1b]11;rgb:a/b/c\a"u8.ToArray()).Span));
@@ -145,8 +159,15 @@ public sealed class TerminalReplyBufferTests
         var bytes = Encoding.ASCII.GetBytes(prefix + new string('x', length - prefix.Length - suffix.Length) + suffix);
         Assert.IsTrue(buffer.Append(bytes.AsMemory(0, bytes.Length - suffix.Length)).IsEmpty);
         var completed = buffer.Append(bytes.AsMemory(bytes.Length - suffix.Length));
-        if (length <= 65_536) Assert.AreSequenceEqual(bytes, completed.ToArray());
-        else Assert.IsTrue(completed.IsEmpty, "An oversized reply must be discarded through its terminator.");
+        if (length <= 65_536)
+        {
+            Assert.AreSequenceEqual(bytes, completed.ToArray());
+        }
+        else
+        {
+            Assert.IsTrue(completed.IsEmpty, "An oversized reply must be discarded through its terminator.");
+        }
+
         Assert.AreEqual("next λ", Encoding.UTF8.GetString(buffer.Append("next λ"u8.ToArray()).Span));
         Assert.IsFalse(buffer.NeedsEscapeTimeout);
     }
@@ -178,6 +199,7 @@ public sealed class TerminalReplyBufferTests
             Assert.HasCount(1, tokens);
             Assert.IsTrue(tokens[0] is OscToken { Command: "7777", Payload: "ilrepl-escape" });
         }
+
         Assert.IsTrue(buffer.ReadBuffered().IsEmpty);
         Assert.IsTrue(buffer.NeedsEscapeTimeout);
         var final = AnsiTokenizer.Tokenize(Encoding.UTF8.GetString(buffer.FlushEscape().Span));

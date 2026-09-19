@@ -1,5 +1,5 @@
-using IlRepl.Protocol;
 using System.Text.Json.Serialization;
+using IlRepl.Protocol;
 
 namespace IlRepl.Tests.Responsiveness;
 
@@ -23,10 +23,24 @@ namespace IlRepl.Tests.Responsiveness;
 /// <param name="Startups">Raw timestamps for each separately launched frontend and its first edit and submission.</param>
 /// <param name="Metrics">Named startup and interaction distributions.</param>
 /// <param name="Processes">Independent memory and runtime evidence for every observed process.</param>
-internal sealed record ResponsivenessRecord(int Schema, string Commit, string Fixture, string Scenario, string Sdk,
-    string Runtime, string OperatingSystem, string Rid, string Cpu, string Machine, string Configuration, string Frontend,
-    string FrontendSha256, long TimestampFrequency, StartupSample[] Startups,
-    IReadOnlyDictionary<string, LatencySamples> Metrics, ProcessMeasurement[] Processes)
+internal sealed record ResponsivenessRecord(
+    int Schema,
+    string Commit,
+    string Fixture,
+    string Scenario,
+    string Sdk,
+    string Runtime,
+    string OperatingSystem,
+    string Rid,
+    string Cpu,
+    string Machine,
+    string Configuration,
+    string Frontend,
+    string FrontendSha256,
+    long TimestampFrequency,
+    StartupSample[] Startups,
+    IReadOnlyDictionary<string, LatencySamples> Metrics,
+    ProcessMeasurement[] Processes)
 {
     /// <summary>
     /// Identifies why an incomplete observation cannot be used as a reference baseline.

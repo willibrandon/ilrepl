@@ -22,8 +22,7 @@ public sealed class InstructionParserTests
     }
 
     /// <summary>
-    /// A quoted name keeps its slashes, a comment needs no space before it, and a block comment
-    /// with no close runs to the end of the line.
+    /// A quoted name keeps its slashes, a comment needs no space before it, and a block comment with no close runs to the end of the line.
     /// </summary>
     [TestMethod]
     public void StripComments_QuotedNamesAndUnspacedComments()
@@ -76,7 +75,12 @@ public sealed class InstructionParserTests
     [TestMethod]
     public void Parse_Locals_ResolveByNameAndIndex()
     {
-        var context = Empty with { Locals = [new LocalDeclaration(typeof(int), "i", false), new LocalDeclaration(typeof(string), "s", false)] };
+        var context = Empty with
+        {
+            Locals = [new LocalDeclaration(typeof(int), "i", false),
+                new LocalDeclaration(typeof(string), "s", false)],
+        };
+
         Assert.AreEqual(1, InstructionParser.Parse("ldloc s", context).LocalIndex);
         Assert.AreEqual(0, InstructionParser.Parse("stloc 0", context).LocalIndex);
         Assert.AreEqual(1, InstructionParser.Parse("ldloc.1", context).LocalIndex);

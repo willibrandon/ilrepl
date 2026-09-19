@@ -40,16 +40,25 @@ public sealed class StartupAttachmentTests
             await launch.Task.WaitAsync(ct);
             return await HostPaths.StartEngineAsync(ct);
         }, new SessionRequest { Action = new SessionAction { Operation = SessionOperation.Open, Path = files.SessionPath } });
+
         controller.RecoveryCompleted += _ =>
         {
             published.TrySetResult();
-            if (holdNotification) release.Task.GetAwaiter().GetResult();
+            if (holdNotification)
+            {
+                release.Task.GetAwaiter().GetResult();
+            }
         };
+
         try
         {
             launch.TrySetResult();
             await published.Task.WaitAsync(token);
-            if (!holdNotification) await controller.Initialization.WaitAsync(token);
+            if (!holdNotification)
+            {
+                await controller.Initialization.WaitAsync(token);
+            }
+
             PromptState? prompt = null;
             var transcript = new Transcript();
             await using var terminal = AppTest.Build(controller, transcript, onPrompt: value => prompt = value);
@@ -68,6 +77,7 @@ public sealed class StartupAttachmentTests
             {
                 Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = prompt.CaptureSessionEditor(),
             }, token);
+
             Assert.AreEqual(expected, string.Join('\n', captured.Document.Editor.Lines));
             Assert.IsFalse(captured.Dirty);
             Assert.HasCount(1, captured.Document.Cells);

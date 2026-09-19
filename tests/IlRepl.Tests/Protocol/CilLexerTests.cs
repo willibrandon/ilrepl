@@ -125,8 +125,7 @@ public sealed class CilLexerTests
     }
 
     /// <summary>
-    /// Stripping removes comments and nothing else, so a comment between an opcode and its
-    /// operand joins them, as ilasm reads it.
+    /// Stripping removes comments and nothing else, so a comment between an opcode and its operand joins them, as ilasm reads it.
     /// </summary>
     [TestMethod]
     public void StripComments_RemovesOnlyComments()
@@ -166,9 +165,11 @@ public sealed class CilLexerTests
     }
 
     /// <summary>
-    /// A blank line outside a comment is blank; a comment alone, or a blank line inside an open
-    /// comment, is a comment; anything else is text with its comments removed.
+    /// A blank line outside a comment is blank, and a comment alone, or a blank line inside an open comment, is a comment.
     /// </summary>
+    /// <remarks>
+    /// Anything else is text with its comments removed.
+    /// </remarks>
     [TestMethod]
     public void Classify_Kinds()
     {

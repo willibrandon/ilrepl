@@ -4,10 +4,12 @@ using IlRepl.Engine.Binding;
 namespace IlRepl.Engine;
 
 /// <summary>
-/// Finds the session assemblies a body mentions: the types of its operands, locals, arguments,
-/// and catch clauses, the declaring types of the members it reaches for, and every type inside
-/// them (elements, generic arguments).
+/// Finds the session assemblies a body mentions.
 /// </summary>
+/// <remarks>
+/// It looks at the types of its operands, locals, arguments, and catch clauses, the declaring types of the members it reaches for, and
+/// every type inside them (elements, generic arguments).
+/// </remarks>
 public static class SessionMentions
 {
     /// <summary>
@@ -101,7 +103,8 @@ public static class SessionMentions
             if (entry.Custom is { } custom)
             {
                 yield return custom.AttributeType;
-                foreach (var value in custom.FixedArguments.Concat(custom.NamedFields.Select(f => f.Value)).Concat(custom.NamedProperties.Select(p => p.Value)))
+                foreach (var value in custom.FixedArguments.Concat(custom.NamedFields.Select(f => f.Value))
+                    .Concat(custom.NamedProperties.Select(p => p.Value)))
                 {
                     if (value is Type mentioned)
                     {

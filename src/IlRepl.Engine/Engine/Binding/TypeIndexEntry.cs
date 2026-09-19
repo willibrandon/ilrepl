@@ -18,8 +18,15 @@ namespace IlRepl.Engine.Binding;
 /// <param name="Arity">The number of generic parameters, inherited ones included.</param>
 /// <param name="Kind">The kind.</param>
 /// <param name="IsCompilerGenerated">True for a compiler-generated type.</param>
-public sealed record TypeIndexEntry(DefinitionId Definition, string Name, string Namespace, string IlPath, TypeAttributes Attributes,
-    int Arity, TypeIndexKind Kind, bool IsCompilerGenerated)
+public sealed record TypeIndexEntry(
+    DefinitionId Definition,
+    string Name,
+    string Namespace,
+    string IlPath,
+    TypeAttributes Attributes,
+    int Arity,
+    TypeIndexKind Kind,
+    bool IsCompilerGenerated)
 {
     /// <summary>
     /// The name without its arity suffix.

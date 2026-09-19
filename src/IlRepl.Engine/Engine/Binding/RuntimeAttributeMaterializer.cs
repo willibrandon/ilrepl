@@ -15,7 +15,9 @@ internal static class RuntimeAttributeMaterializer
     /// <param name="source">The accepted source line.</param>
     /// <returns>The runtime declaration.</returns>
     public static CustomAttributeDeclaration Materialize(
-        CustomAttributeSymbol attribute, RuntimeBindingAdapter adapter, string source)
+        CustomAttributeSymbol attribute,
+        RuntimeBindingAdapter adapter,
+        string source)
     {
         var resolved = adapter.ToResolvedMethod(attribute.Constructor);
         if (resolved.Method is not ConstructorInfo constructor)
