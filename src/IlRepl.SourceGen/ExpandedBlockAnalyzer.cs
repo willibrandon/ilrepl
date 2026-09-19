@@ -111,8 +111,7 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
         {
             foreach (var trivia in token.LeadingTrivia.Concat(token.TrailingTrivia))
             {
-                var span = tree.GetLineSpan(trivia.Span);
-                if (IsComment(trivia) && (span.StartLinePosition.Line == line || span.EndLinePosition.Line == line))
+                if (IsComment(trivia) && Touches(tree, trivia, line))
                 {
                     return true;
                 }
@@ -122,8 +121,18 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
         return false;
     }
 
+    // Whatever is neither blank space nor a directive is a comment of some kind, documentation comments included.
     private static bool IsComment(SyntaxTrivia trivia) =>
-        trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) || trivia.IsKind(SyntaxKind.MultiLineCommentTrivia);
+        !trivia.IsKind(SyntaxKind.WhitespaceTrivia) && !trivia.IsKind(SyntaxKind.EndOfLineTrivia) && !trivia.IsDirective;
+
+    // A documentation comment's span runs to the start of the next line, which is not a line it is written on.
+    private static bool Touches(SyntaxTree tree, SyntaxTrivia trivia, int line)
+    {
+        var span = tree.GetLineSpan(trivia.Span);
+        var end = span.EndLinePosition;
+        var last = end.Character == 0 && end.Line > span.StartLinePosition.Line ? end.Line - 1 : end.Line;
+        return span.StartLinePosition.Line == line || last == line;
+    }
 
     private static bool SharesLine(SyntaxToken first, SyntaxToken second)
     {

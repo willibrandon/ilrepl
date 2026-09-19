@@ -41,15 +41,22 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
                 continue;
             }
 
-            var last = token;
-            for (var next = last.GetNextToken(); SharesLine(last, next); next = last.GetNextToken())
+            // Closing punctuation wrapped onto the next line still belongs to the brace, as in "}" and then ");".
+            var last = LastOnLine(token);
+            while (true)
             {
-                last = next;
-            }
+                var next = last.GetNextToken(includeZeroWidth: true);
+                if (FindComment(last, next) is { } comment)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlankLineAfterBrace, comment.GetLocation()));
+                }
 
-            if (FindComment(last, last.GetNextToken(includeZeroWidth: true)) is { } comment)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlankLineAfterBrace, comment.GetLocation()));
+                if (!IsCloser(next) || StartLineOf(next) != LineOf(last) + 1 || !ClosesOnly(next, LastOnLine(next)))
+                {
+                    break;
+                }
+
+                last = LastOnLine(next);
             }
         }
     }
@@ -83,7 +90,7 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
 
             // A comment under the brace is the other pass's to report.
             var first = next.GetFirstToken();
-            if (!HasComment(first) && first.SyntaxTree!.GetLineSpan(first.Span).StartLinePosition.Line == LineOf(last) + 1)
+            if (!HasComment(first) && StartLineOf(first) == LineOf(last) + 1)
             {
                 context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlankLineAfterBrace, first.GetLocation()));
             }
@@ -92,7 +99,8 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
 
     private static bool IsStatement(SyntaxNode node) => node is StatementSyntax or GlobalStatementSyntax;
 
-    // A body, a lambda, or an initializer can end a statement or member on a line that begins with its closing brace.
+    // A body, a lambda, or an initializer can end a statement or member on a line that begins with its closing brace. Lines
+    // that hold nothing but the closing punctuation around that brace, such as ");", count as part of it.
     private static bool EndsOnBraceLine(SyntaxNode node)
     {
         var token = node.GetLastToken();
@@ -101,13 +109,63 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
             return false;
         }
 
+        while (true)
+        {
+            var first = FirstOnLine(token);
+            if (first.IsKind(SyntaxKind.CloseBraceToken))
+            {
+                return true;
+            }
+
+            var above = first.GetPreviousToken();
+            if (!ClosesOnly(first, token) || first.SpanStart <= node.SpanStart || LineOf(above) + 1 != StartLineOf(first))
+            {
+                return false;
+            }
+
+            token = above;
+        }
+    }
+
+    private static SyntaxToken FirstOnLine(SyntaxToken token)
+    {
         while (SharesLine(token.GetPreviousToken(), token))
         {
             token = token.GetPreviousToken();
         }
 
-        return token.IsKind(SyntaxKind.CloseBraceToken);
+        return token;
     }
+
+    private static SyntaxToken LastOnLine(SyntaxToken token)
+    {
+        while (SharesLine(token, token.GetNextToken()))
+        {
+            token = token.GetNextToken();
+        }
+
+        return token;
+    }
+
+    private static bool ClosesOnly(SyntaxToken first, SyntaxToken last)
+    {
+        for (var token = first; ; token = token.GetNextToken())
+        {
+            if (!IsCloser(token))
+            {
+                return false;
+            }
+
+            if (token == last)
+            {
+                return true;
+            }
+        }
+    }
+
+    private static bool IsCloser(SyntaxToken token) =>
+        token.IsKind(SyntaxKind.CloseParenToken) || token.IsKind(SyntaxKind.CloseBracketToken)
+        || token.IsKind(SyntaxKind.SemicolonToken) || token.IsKind(SyntaxKind.CommaToken);
 
     // The comment on the line right under the one "last" ends, when a comment is the first thing written there.
     private static SyntaxTrivia? FindComment(SyntaxToken last, SyntaxToken next)
@@ -144,6 +202,8 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
         trivia.IsKind(SyntaxKind.WhitespaceTrivia) || trivia.IsKind(SyntaxKind.EndOfLineTrivia) || trivia.IsDirective;
 
     private static int LineOf(SyntaxToken token) => token.SyntaxTree!.GetLineSpan(token.Span).EndLinePosition.Line;
+
+    private static int StartLineOf(SyntaxToken token) => token.SyntaxTree!.GetLineSpan(token.Span).StartLinePosition.Line;
 
     private static bool SharesLine(SyntaxToken first, SyntaxToken second)
     {
