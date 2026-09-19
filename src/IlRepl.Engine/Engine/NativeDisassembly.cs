@@ -54,6 +54,7 @@ public static partial class NativeDisassembly
                 Method = header.Groups[1].Value, Tier = header.Groups[2].Value, Pgo = pgo,
                 CodeSize = int.Parse(Size().Match(lines[end]).Groups[1].Value, CultureInfo.InvariantCulture), Listing = block,
             });
+
             index = end;
         }
 

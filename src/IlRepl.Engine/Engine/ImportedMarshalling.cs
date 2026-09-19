@@ -89,6 +89,7 @@ internal static class ImportedMarshalling
                 ParameterDefinition parameter => "parameter " + parameter.Name,
                 _ => "return parameter",
             };
+
             throw new ReplException($"invalid marshalling descriptor for {name} at token 0x{token:x8}: {exception.Message}", exception);
         }
     }
@@ -109,6 +110,7 @@ internal static class ImportedMarshalling
                     Size = OptionalInteger(ref reader),
                     SizeParameterMultiplier = OptionalInteger(ref reader),
                 };
+
                 break;
             case NativeType.FixedArray:
                 result = new FixedArrayMarshalInfo
@@ -116,6 +118,7 @@ internal static class ImportedMarshalling
                     Size = reader.ReadCompressedInteger(),
                     ElementType = reader.RemainingBytes == 0 ? NativeType.None : (NativeType)reader.ReadByte(),
                 };
+
                 break;
             case NativeType.FixedSysString:
                 result = new FixedSysStringMarshalInfo { Size = reader.ReadCompressedInteger() };
@@ -126,6 +129,7 @@ internal static class ImportedMarshalling
                 {
                     ElementType = reader.RemainingBytes == 0 ? VariantType.None : (VariantType)reader.ReadCompressedInteger(),
                 };
+
                 if (reader.RemainingBytes != 0)
                 {
                     var prefix = reader.Offset;
@@ -163,6 +167,7 @@ internal static class ImportedMarshalling
                     ManagedType = writer.Import(type),
                     Cookie = cookie,
                 };
+
                 break;
             }
             default:

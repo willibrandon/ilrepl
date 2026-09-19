@@ -450,6 +450,7 @@ internal sealed class MethodBodyReader
                 {
                     Op = OpCodes.Ldsfld, Text = "", Kind = OperandKind.Field, Operand = field,
                 })[7..];
+
                 return Instruction(raw, new Instruction
                 {
                     Op = emit, Text = $"{emit.Name} field {text}", Kind = OperandKind.Token, Operand = field,
@@ -462,6 +463,7 @@ internal sealed class MethodBodyReader
                 {
                     Op = OpCodes.Call, Text = "", Kind = OperandKind.Method, Operand = resolved!,
                 })[5..];
+
                 return Instruction(raw, new Instruction
                 {
                     Op = emit, Text = $"{emit.Name} method {text}", Kind = OperandKind.Token, Operand = resolved,
@@ -684,6 +686,7 @@ internal sealed class MethodBodyReader
                         .GetMethodDefinition((MethodDefinitionHandle)row.Parent).GetDeclaringType(), 0),
                     _ => null,
                 };
+
                 break;
             }
 

@@ -48,6 +48,7 @@ public static class ClipboardWriter
                     RedirectStandardError = true,
                     UseShellExecute = false,
                 });
+
                 if (process is null)
                 {
                     continue;

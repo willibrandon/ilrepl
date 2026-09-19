@@ -75,6 +75,7 @@ public sealed class SessionCheckpointStore
             References = Join(_previous.References, changes.References, delta.ReferencesKept),
             Assets = Join(_previous.Assets, changes.Assets, delta.AssetsKept),
         };
+
         _previous = document;
         _sequence = delta.Sequence;
         return checkpoint with { Document = document, CheckpointDelta = null };

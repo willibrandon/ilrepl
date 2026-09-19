@@ -45,6 +45,7 @@ internal sealed class HostSessionService
         {
             Action = new SessionAction { Operation = SessionOperation.Capture },
         }, cancellationToken).ConfigureAwait(false);
+
         if (request.Action.Operation == SessionOperation.Save)
         {
             var path = request.Action.Path ?? capture.Path ?? throw new InvalidDataException("a path is required for the first save");
@@ -54,6 +55,7 @@ internal sealed class HostSessionService
                 Action = new SessionAction { Operation = SessionOperation.AcknowledgeSave, Path = path },
                 Document = capture.Document,
             }, cancellationToken).ConfigureAwait(false);
+
             return saved with
             {
                 Reply = saved.Reply with
@@ -79,6 +81,7 @@ internal sealed class HostSessionService
                         Operation = SessionOperation.Load, Path = project.Request, Framework = project.Framework,
                         Configuration = project.Configuration,
                     }, cancellationToken).ConfigureAwait(false);
+
                     var outputs = built.References.Single(reference => reference.Identity == project.Identity);
                     if (!project.Assets.Select(asset => asset.Hash).Order()
                         .SequenceEqual(outputs.Assets.Select(asset => asset.Hash).Order()))
@@ -118,6 +121,7 @@ internal sealed class HostSessionService
             },
             Document = resolved,
         }, cancellationToken).ConfigureAwait(false);
+
         if (reply.Diagnostics.Length != 0 && request.Action.Operation == SessionOperation.Load)
         {
             throw new InvalidDataException(string.Join(Environment.NewLine, reply.Diagnostics));

@@ -126,6 +126,7 @@ public static class ProcessNativeRunner
                 UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
                 StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8, CreateNoWindow = true,
             };
+
             process.StartInfo.ArgumentList.Add("--fx-version");
             process.StartInfo.ArgumentList.Add(NativeRuntimeSettings.FrameworkVersion(typeof(object).Assembly.Location));
             process.StartInfo.ArgumentList.Add("--roll-forward");
@@ -339,6 +340,7 @@ public static class ProcessNativeRunner
             StandardOutput = stdout is null ? "" : await stdout.ConfigureAwait(false),
             StandardError = stderr is null ? "" : await stderr.ConfigureAwait(false),
         };
+
         var raw = File.Exists(listingPath) ? await ReadListingAsync(listingPath).ConfigureAwait(false) : "";
         var events = collector?.Snapshot() ?? [];
         var publications = events.Where(item => NativeEventCollector.Selected(item, state.MethodId, state.Method)).ToList();
@@ -349,6 +351,7 @@ public static class ProcessNativeRunner
             Address = item.Compilation.Address, Length = (ulong)item.Compilation.CodeSize, Kind = "code",
             Symbol = item.Compilation.Method, Evidence = "EventPipe MethodLoadVerbose published code range",
         })).ToArray();
+
         var normalizationProblems = new HashSet<string>(StringComparer.Ordinal);
         foreach (var block in blocks)
         {
@@ -383,6 +386,7 @@ public static class ProcessNativeRunner
             Compilations = [.. compilations], Addresses = addresses, NormalizationProblems = [.. normalizationProblems],
             UnattributedListings = NativeDisassembly.Unattributed(raw, state.Method?.JitNames ?? [], compilations),
         };
+
         if (report.UnattributedListings.Length != 0 && report.Outcome == "complete")
         {
             report = report with { Outcome = "incomplete", Detail = "selected-signature output lacks complete, unambiguous attribution" };

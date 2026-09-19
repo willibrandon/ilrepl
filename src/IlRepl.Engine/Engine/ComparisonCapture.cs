@@ -164,6 +164,7 @@ public static partial class ComparisonCapture
                 }
             }
         }, writer => ComparisonInstrumentation.Complete(writer, selectedMethod!, entry!, externalVarArg));
+
         using (var module = ModuleDefinition.ReadModule(new MemoryStream(image, writable: false)))
         {
             foreach (var reference in module.AssemblyReferences)
@@ -177,6 +178,7 @@ public static partial class ComparisonCapture
             var source = (Type)family.OriginalMember(type);
             return "[" + source.Assembly.GetName().Name + "]" + source.FullName;
         }, StringComparer.Ordinal);
+
         return new ComparisonImage(image, options.Scenario is null ? entry!.DeclaringType.FullName.Replace('/', '+') : "IlRepl.Cell",
             options.Scenario ?? entry!.Name, options.Scenario is null ? entry!.MetadataToken.ToInt32() : 0,
             typeArguments, methodArguments, options.Arguments, names)
@@ -304,6 +306,7 @@ public static partial class ComparisonCapture
             OriginalLocation = string.IsNullOrEmpty(location) ? null : location,
             IsCollectible = assembly.IsCollectible,
         });
+
         using var module = ModuleDefinition.ReadModule(new MemoryStream(image, writable: false));
         if (module.Mvid != assembly.ManifestModule.ModuleVersionId)
         {

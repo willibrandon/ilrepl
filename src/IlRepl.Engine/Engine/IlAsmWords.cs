@@ -35,12 +35,14 @@ public static class IlAsmWords
             TypeAttributes.ExplicitLayout => "explicit ",
             _ => "auto ",
         });
+
         sb.Append((attributes & TypeAttributes.StringFormatMask) switch
         {
             TypeAttributes.UnicodeClass => "unicode ",
             TypeAttributes.AutoClass => "autochar ",
             _ => "ansi ",
         });
+
         if (attributes.HasFlag(TypeAttributes.Import))
         {
             sb.Append("import ");

@@ -37,6 +37,7 @@ internal static partial class ComparisonInstrumentation
             CallingConvention = target.CallingConvention == MethodCallingConvention.VarArg
                 ? MethodCallingConvention.Default : target.CallingConvention,
         };
+
         owner.Methods.Add(wrapper);
         foreach (var parameter in target.GenericParameters)
         {
@@ -50,6 +51,7 @@ internal static partial class ComparisonInstrumentation
             {
                 Attributes = parameter.Attributes & ~GenericParameterAttributes.VarianceMask,
             };
+
             wrapper.GenericParameters.Add(copy);
             map.Add(parameter, copy);
         }
@@ -346,6 +348,7 @@ internal static partial class ComparisonInstrumentation
                 ExplicitThis = destination.ExplicitThis,
                 CallingConvention = destination.CallingConvention,
             };
+
             foreach (var parameter in destination.Parameters)
             {
                 called.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
@@ -402,6 +405,7 @@ internal static partial class ComparisonInstrumentation
             HandlerEnd = end,
             CatchType = writer.Import(typeof(Exception)),
         });
+
         return wrapper;
     }
 

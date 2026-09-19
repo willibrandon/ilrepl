@@ -121,6 +121,7 @@ internal sealed partial class ImportedMethodFamily
                 0 => definition.MethodReturnType,
                 _ => definition,
             };
+
             target.CustomAttributes.Add(CecilCustomAttributes.Create(entry.Custom!, writer));
         }
     }

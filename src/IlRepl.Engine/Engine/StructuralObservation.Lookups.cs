@@ -49,6 +49,7 @@ internal sealed partial class StructuralObservation
                 {
                     new("key", Capture(grouping.GetType().GetProperty("Key")!.GetValue(grouping), depth + 2)),
                 };
+
                 var elements = ((IEnumerable)grouping).GetEnumerator();
                 try
                 {

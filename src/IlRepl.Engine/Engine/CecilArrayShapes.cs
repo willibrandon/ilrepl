@@ -73,6 +73,7 @@ internal static class CecilArrayShapes
                     ExplicitThis = pointer.ExplicitThis,
                     ReturnType = Restore(pointer.ReturnType, signature.Signature!.ReturnType, fixups),
                 };
+
                 for (var index = 0; index < pointer.Parameters.Count; index++)
                 {
                     restored.Parameters.Add(new ParameterDefinition(

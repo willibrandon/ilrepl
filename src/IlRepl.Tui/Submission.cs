@@ -73,6 +73,7 @@ public sealed class Submission
             RuntimeEpoch = update.Kind == SubmissionEventKind.SessionDocument ? engine.AssemblyVersion >> 32 : runtimeEpoch,
             SubmissionIdentity = _sourceIdentity,
         });
+
         Total = _units.Sum(u => u.Sends.Count);
         var after = BlockBalance.Scan(string.Join('\n', lines), openDepth, inBlockComment, commands: engine.Vocabulary.Commands);
         DepthAfter = Math.Max(0, after.Depth);

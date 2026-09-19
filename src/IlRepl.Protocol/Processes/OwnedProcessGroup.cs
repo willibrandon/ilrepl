@@ -48,6 +48,7 @@ public sealed partial class OwnedProcessGroup : IDisposable
         {
             Basic = new OwnedJobLimits { Flags = 0x2000 }, // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
         };
+
         if (SetInformationJobObject(_job, 9, in limits, (uint)Marshal.SizeOf<OwnedJobExtendedLimits>()) == 0
             || AssignProcessToJobObject(_job, process.SafeHandle) == 0)
         {

@@ -381,6 +381,7 @@ public sealed partial class Session
             BraceSeen = header.OpensBlock,
             Members = predeclared?.Members ?? new OwnMembers(),
         };
+
         block.Members.DefineForward = signature => DefineForwardMethod(block, signature);
         block.Members.BaseType = baseType;
         block.Members.Interfaces = interfaces;

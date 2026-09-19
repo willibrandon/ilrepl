@@ -56,6 +56,7 @@ internal sealed record GenericArgumentContext
                 found |= pending.Contains(part);
                 return null;
             });
+
             return found;
         }
 

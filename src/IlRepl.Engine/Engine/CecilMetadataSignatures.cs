@@ -99,6 +99,7 @@ internal static class CecilMetadataSignatures
             HasThis = signature.HasThis,
             ExplicitThis = signature.ExplicitThis,
         };
+
         for (var index = 0; index < signature.GenericParameterCount; index++)
         {
             reference.GenericParameters.Add(new GenericParameter("T" + index, reference));
@@ -189,6 +190,7 @@ internal static class CecilMetadataSignatures
                     ExplicitThis = method.ExplicitThis,
                     ReturnType = Import(method.ReturnType, context, writer),
                 };
+
                 for (var index = 0; index < method.Parameters.Count; index++)
                 {
                     var parameter = Import(method.Parameters[index], context, writer);

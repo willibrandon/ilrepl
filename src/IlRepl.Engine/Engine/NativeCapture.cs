@@ -394,6 +394,7 @@ public static class NativeCapture
         {
             OriginalLocation = visited.FirstOrDefault(assembly => assembly.FullName == image.Name && !assembly.IsDynamic)?.Location,
         }, StringComparer.OrdinalIgnoreCase);
+
         ComparisonCapture.CaptureSatellites(session, resources, sourceResolver);
         foreach (var resource in resources.Values)
         {

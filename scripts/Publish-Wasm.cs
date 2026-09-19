@@ -16,6 +16,7 @@ var conformanceOption = new Option<bool>("--conformance")
 {
     Description = "Includes the test-only browser conformance entry point.",
 };
+
 var root = new RootCommand("Publishes the browser build of ilrepl and copies it into the docs site.")
 {
     configurationOption, outputOption, conformanceOption,

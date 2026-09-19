@@ -325,6 +325,7 @@ public sealed partial class SessionController : IReplEngine
                 {
                     Lines = [line, .. PendingInput, .. checkpoint.Document.Editor.Lines], Caret = 0, Anchor = 0,
                 };
+
                 await beforeExecution(checkpoint with
                 {
                     Document = checkpoint.Document with { Editor = draft },
@@ -453,6 +454,7 @@ public sealed partial class SessionController : IReplEngine
             {
                 Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = request.Editor,
             }, cancellationToken).ConfigureAwait(false);
+
             if (await external(request with { Document = request.Document ?? current.Document }, cancellationToken)
                 .ConfigureAwait(false) is { } handled)
             {
@@ -594,6 +596,7 @@ public sealed partial class SessionController : IReplEngine
                 Action = new SessionAction { Operation = SessionOperation.Save },
                 Editor = Editor,
             }, cancellationToken).ConfigureAwait(false);
+
             return !saved.Dirty;
         }
 
@@ -617,6 +620,7 @@ public sealed partial class SessionController : IReplEngine
             Action = new SessionAction { Operation = SessionOperation.Capture },
             Editor = Editor,
         }, cancellationToken).ConfigureAwait(false);
+
         return Workspace;
     }
 

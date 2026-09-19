@@ -87,6 +87,7 @@ internal sealed class ReferenceLoadContext : AssemblyLoadContext
             Version = definition.Version,
             CultureName = definition.Culture.IsNil ? null : reader.GetString(definition.Culture),
         };
+
         if (!definition.PublicKey.IsNil)
         {
             name.SetPublicKey(reader.GetBlobBytes(definition.PublicKey));

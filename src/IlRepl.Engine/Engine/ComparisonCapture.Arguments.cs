@@ -39,6 +39,7 @@ public static partial class ComparisonCapture
             ModuleDefinition module => module.Assembly.Name.FullName,
             _ => throw new ReplException($"generic argument {type.FullName} has no loadable assembly identity"),
         };
+
         return ReflectionName(type) + ", " + assembly;
     }
 

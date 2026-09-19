@@ -18,19 +18,23 @@ var versionOption = new Option<string>("--package-version")
     Description = "The package version, with or without a leading v.",
     DefaultValueFactory = _ => "0.5.2",
 };
+
 var outputOption = new Option<string>("--output")
 {
     Description = "The artifacts directory, relative to the repository.",
     DefaultValueFactory = _ => "artifacts/native-aot",
 };
+
 var buildOnlyOption = new Option<bool>("--build-only")
 {
     Description = "Publish and inspect native host code without executing checks or producing a package.",
 };
+
 var smokeOnlyOption = new Option<bool>("--smoke-only")
 {
     Description = "Validate the existing published files without rebuilding or packing them.",
 };
+
 var root = new RootCommand("Publishes and validates the Native AOT frontend and its runtime-specific tool package.")
 {
     ridOption,
@@ -176,6 +180,7 @@ root.SetAction(async (parseResult, cancellationToken) =>
                 ["executableSha256"] = Convert.ToHexString(
                     SHA256.HashData(await File.ReadAllBytesAsync(packagedExecutable, cancellationToken))),
             };
+
             if (packagedTerminalHelper is not null)
             {
                 packageEvidence["terminalHelperSha256"] = packagedTerminalHelper;
@@ -220,6 +225,7 @@ static Dictionary<string, string>? ReadReadyToRunHost(string directory, string r
         "arm64" => (ushort)Machine.Arm64,
         _ => throw new ArgumentException($"unsupported ReadyToRun target: {rid}"),
     };
+
     // CoreCLR's IMAGE_FILE_MACHINE_NATIVE_OS_OVERRIDE is XORed with the target architecture.
     var os = rid.StartsWith("win-", StringComparison.Ordinal) ? 0
         : rid.StartsWith("osx-", StringComparison.Ordinal) ? 0x4644
@@ -429,6 +435,7 @@ static async Task<(int ExitCode, string Output)> CaptureAsync(
         RedirectStandardError = true,
         RedirectStandardInput = true,
     };
+
     foreach (var argument in arguments)
     {
         startInfo.ArgumentList.Add(argument);
@@ -516,6 +523,7 @@ static async Task<bool> SmokeSessionsAsync(string repo, string publishDirectory,
             ["DOTNET_HOST_PATH"] = muxer, ["DOTNET_ROOT"] = runtimeOnly, ["DOTNET_MULTILEVEL_LOOKUP"] = "0",
             ["PATH"] = runtimeOnly, ["NUGET_PACKAGES"] = Path.Combine(directory, "packages"),
         };
+
         var sdks = await CaptureAsync(directory, muxer, ["--list-sdks"], cancellationToken, environment);
         if (sdks.ExitCode != 0 || !string.IsNullOrWhiteSpace(sdks.Output))
         {

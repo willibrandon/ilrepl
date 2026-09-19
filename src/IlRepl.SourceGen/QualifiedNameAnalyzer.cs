@@ -44,6 +44,17 @@ public sealed class QualifiedNameAnalyzer : DiagnosticAnalyzer
             return;
         }
 
+        var root = type.ContainingNamespace;
+        while (root.ContainingNamespace is { IsGlobalNamespace: false } outer)
+        {
+            root = outer;
+        }
+
+        if (root.Name != "System")
+        {
+            return;
+        }
+
         // The full name stays where the short one already means something else, such as a Mono.Cecil type or a member.
         var original = type.OriginalDefinition;
         var visible = model.LookupSymbols(node.SpanStart, name: type.Name);

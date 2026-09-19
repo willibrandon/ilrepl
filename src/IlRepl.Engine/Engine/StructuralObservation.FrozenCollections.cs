@@ -31,6 +31,7 @@ internal sealed partial class StructuralObservation
         {
             new("comparer", Capture(collection.GetProperty("Comparer")!.GetValue(value), depth + 1)),
         };
+
         ObservedValue Result() => new(dictionary ? "dictionary" : "set", name, null, identity, members);
         ObservedValue Incomplete(string reason)
         {

@@ -131,6 +131,7 @@ public sealed class NativeAddressEvidence : IDisposable
                     Address = (ulong)pin.AddrOfPinnedObject(), Length = checked((ulong)(value.Length + 1) * 2),
                     Kind = "string-data", Symbol = identity, Evidence = "GCHandle.AddrOfPinnedObject for the resolved ldstr string",
                 });
+
                 Probe("string-object", identity, il => il.Emit(OpCodes.Ldstr, value));
                 continue;
             }

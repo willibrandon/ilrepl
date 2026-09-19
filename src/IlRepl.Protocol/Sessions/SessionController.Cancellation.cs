@@ -61,6 +61,7 @@ public sealed partial class SessionController
                 ForwardOutput(output);
             }
         };
+
         hosted.CheckpointReceived += checkpoint =>
         {
             if (ReferenceEquals(candidate, _runningCandidate))
@@ -68,6 +69,7 @@ public sealed partial class SessionController
                 _runningCheckpoint = checkpoint;
             }
         };
+
         hosted.Exited += exit =>
         {
             if (ReferenceEquals(candidate, _runningCandidate) && !exit.Expected)
@@ -117,6 +119,7 @@ public sealed partial class SessionController
                     + string.Join(' ', request.Action.Numbers.Order()))],
                 ExitCode = _runningExit?.ExitCode, StandardError = _runningExit?.StandardError,
             };
+
             if (interruptedNumber is { } number)
             {
                 var cell = source.Cells.FirstOrDefault(item => item.Number == number) ?? new SessionCell { Number = number };
@@ -151,6 +154,7 @@ public sealed partial class SessionController
                     Editor = source.Editor, Modified = true,
                     HistoryLineLimit = request.HistoryLineLimit ?? HistoryLineLimit,
                 }, cancellationToken).ConfigureAwait(false);
+
                 var notice = _runningExit is null ? "session run cancelled" : "session run interrupted by host exit";
                 return (recovered, reply with { Reply = reply.Reply with { Succeeded = false,
                     Lines = [.. ExitLines(_runningExit), .. reply.Reply.Lines,

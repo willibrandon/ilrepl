@@ -38,6 +38,7 @@ public static partial class IlReplApp
                     _ = RefreshInterruptNoticeAsync(prompt, progress);
                 }
             };
+
             prompt.Interrupt = () =>
             {
                 if (engine is SessionController { RuntimeState: SessionRuntimeState.Starting } starting)
@@ -127,6 +128,7 @@ public static partial class IlReplApp
             ExecutionPhase.CannotStop => TimeSpan.Zero,
             _ => TimeSpan.FromSeconds(5),
         };
+
         await Task.Delay(delay).ConfigureAwait(false);
         prompt.Invalidate?.Invoke();
     }

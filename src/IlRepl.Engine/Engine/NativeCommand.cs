@@ -154,6 +154,7 @@ public static class NativeCommand
             Selector = string.Join(' ', selector), Against = right ? string.Join(' ', against) : null,
             Iterations = iterations ? options.Iterations : options.Tier == "tier1" ? 1000 : 1,
         };
+
         if (options.Collectible && options.Tier != "fullopts")
         {
             throw new ReplException("collectible methods cannot be tiered; remove --collectible or use --tier fullopts");

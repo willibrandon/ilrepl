@@ -657,6 +657,7 @@ internal sealed partial class FlowGraph<T> where T : class
                     "no." => NoPrefixAllows(prefixInstruction.ByteOperand, op),
                     _ => true,
                 };
+
                 if (!allowed)
                 {
                     Report(prefix, "FLOW019", AnalysisDiagnosticKind.Error, $"{name} cannot prefix {op}");

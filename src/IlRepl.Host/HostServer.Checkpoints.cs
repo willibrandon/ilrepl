@@ -38,6 +38,7 @@ public sealed partial class HostServer
             PendingInputs = executing ? _core.PendingInputDeclarations : [],
             Reply = new HandleReply(true, false, [], _core.Status),
         };
+
         _lastCheckpoint = document;
         client.CheckpointAsync(_checkpoints.Encode(checkpoint), CancellationToken.None).GetAwaiter().GetResult();
     }

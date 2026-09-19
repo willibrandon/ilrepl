@@ -53,6 +53,7 @@ public sealed partial class Session
                 ReturnRequiredModifiers = body.ReturnParameter.GetRequiredCustomModifiers(),
                 ReturnOptionalModifiers = body.ReturnParameter.GetOptionalCustomModifiers(),
             };
+
             var trampoline = MethodTrampoline.Restore(signature, trampolineMethod);
             if (!SessionAssemblies.TryGetDefinition(body.Module.Assembly, out var definition))
             {

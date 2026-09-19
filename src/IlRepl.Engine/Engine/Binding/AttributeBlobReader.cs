@@ -77,6 +77,7 @@ internal sealed class AttributeBlobReader
             0x08 => "int32", 0x09 => "uint32", 0x0A => "int64", 0x0B => "uint64", 0x0C => "float32",
             0x0D => "float64", 0x0E => "string", 0x51 => "object", _ => null,
         };
+
         if (keyword is not null)
         {
             return TypeSymbol.Primitive(keyword);
@@ -112,6 +113,7 @@ internal sealed class AttributeBlobReader
             "uint64" => ReadUInt64(), "float32" => BitConverter.Int32BitsToSingle(unchecked((int)ReadUInt32())),
             "float64" => BitConverter.Int64BitsToDouble(unchecked((long)ReadUInt64())), "string" => ReadString(), _ => null,
         };
+
         if (type.Keyword is "bool" or "char" or "int8" or "uint8" or "int16" or "uint16" or "int32"
             or "uint32" or "int64" or "uint64" or "float32" or "float64" or "string")
         {

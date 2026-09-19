@@ -108,6 +108,7 @@ public sealed class MethodTrampoline
         {
             ImplAttributes = MethodImplAttributes.Runtime | MethodImplAttributes.Managed,
         };
+
         constructor.Parameters.Add(new ParameterDefinition("object", ParameterAttributes.None, writer.Object));
         constructor.Parameters.Add(new ParameterDefinition("method", ParameterAttributes.None, writer.Module.TypeSystem.IntPtr));
         delegateType.Methods.Add(constructor);
@@ -116,6 +117,7 @@ public sealed class MethodTrampoline
         {
             ImplAttributes = MethodImplAttributes.Runtime | MethodImplAttributes.Managed,
         };
+
         AddParameters(invoke, signature, parameterTypes);
         delegateType.Methods.Add(invoke);
 

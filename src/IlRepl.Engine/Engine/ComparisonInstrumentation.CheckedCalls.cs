@@ -125,6 +125,7 @@ internal static partial class ComparisonInstrumentation
         {
             CallingConvention = wrapper.CallingConvention,
         };
+
         foreach (var parameter in wrapper.Parameters)
         {
             called.Parameters.Add(new ParameterDefinition(parameter.ParameterType));

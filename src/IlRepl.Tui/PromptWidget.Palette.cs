@@ -157,6 +157,7 @@ public sealed partial record PromptWidget
             CompletionKind.Signatures => "signatures",
             _ => candidates[0].Name.StartsWith('.') ? "commands" : "opcodes",
         };
+
         var total = reply?.Total ?? candidates.Count;
         var provisional = reply?.TotalIsProvisional == true ? "~" : "";
         return state.PendingDisplay is not null ? "updating " + kind

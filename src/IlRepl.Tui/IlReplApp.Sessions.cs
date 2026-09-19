@@ -31,6 +31,7 @@ public static partial class IlReplApp
             prompt.Invalidate?.Invoke();
             return await dialog.PathResult.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         };
+
         controller.ConfirmUnsavedAsync = async (path, cancellationToken) =>
         {
             var dialog = new SessionDialog { Path = path ?? "unsaved session" };
@@ -58,6 +59,7 @@ public static partial class IlReplApp
                 Action = new SessionAction { Operation = operation },
                 Editor = editor,
             }, CancellationToken.None).ConfigureAwait(false);
+
             prompt.Post(new SubmissionEvent(SubmissionEventKind.SessionDocument, reply.Reply.Lines)
             {
                 SessionEditor = reply.Reply.SessionEditor,

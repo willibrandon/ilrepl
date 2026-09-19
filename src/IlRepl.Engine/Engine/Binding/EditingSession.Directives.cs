@@ -68,6 +68,7 @@ public sealed partial class EditingSession
                     {
                         ExactType = argument.ExactType,
                     }));
+
                 break;
             case ".vararg":
                 body.IsVarArg = true;

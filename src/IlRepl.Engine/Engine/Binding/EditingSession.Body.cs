@@ -135,6 +135,7 @@ public sealed partial class EditingSession
                     _ => [],
                 },
             }, scope);
+
             body.Instructions.Add(instruction);
             if (instruction.Operand is { Kind: OperandKind.Label, Value: string target })
             {
@@ -183,6 +184,7 @@ public sealed partial class EditingSession
             Block = transition.Kind,
             CatchType = caught,
         }, Scope());
+
         body.RegionBracePending = transition.Kind != BlockKind.End;
         body.ParameterTarget = null;
         body.Lines.Add(text);
@@ -326,6 +328,7 @@ public sealed partial class EditingSession
         {
             SourceKind = _replaySourceKind ?? node.SourceKind,
         };
+
         body.FlowNodes.Add(node);
         if (_analyzingDocument)
         {

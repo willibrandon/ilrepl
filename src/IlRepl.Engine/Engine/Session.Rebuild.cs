@@ -501,6 +501,7 @@ public sealed partial class Session
                 RequiredModifiers = [.. field.RequiredModifiers.Select(map.Map)],
                 OptionalModifiers = [.. field.OptionalModifiers.Select(map.Map)],
             };
+
             var fieldBuilder = builder.DefineField(mapped.Name, mapped.Type, [.. mapped.RequiredModifiers], [.. mapped.OptionalModifiers],
                 mapped.Attributes);
             if (mapped.Offset is { } offset)

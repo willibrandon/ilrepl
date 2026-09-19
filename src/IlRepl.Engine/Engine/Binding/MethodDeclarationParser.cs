@@ -93,6 +93,7 @@ public static class MethodDeclarationParser
                 "privatescope" => MethodAttributes.PrivateScope,
                 _ => null,
             };
+
             if (access is { } a)
             {
                 if (accessSeen)

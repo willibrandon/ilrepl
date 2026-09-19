@@ -126,6 +126,7 @@ internal static class CecilForwardingMethod
             ExplicitThis = target.ExplicitThis,
             CallingConvention = target.CallingConvention,
         };
+
         foreach (var parameter in target.Parameters)
         {
             call.Parameters.Add(new ParameterDefinition(parameter.ParameterType));

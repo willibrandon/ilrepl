@@ -51,6 +51,7 @@ public static class IlAsmClauseWriter
                     BlockKind.Fault => "} fault {",
                     _ => "}",
                 };
+
                 sb.Append(' ', indent).AppendLine(text);
                 if (b.Kind != BlockKind.End)
                 {

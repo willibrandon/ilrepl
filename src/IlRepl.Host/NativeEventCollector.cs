@@ -28,6 +28,7 @@ internal sealed class NativeEventCollector
                 _assemblies[(ulong)data.AssemblyID] = data.FullyQualifiedAssemblyName;
             }
         };
+
         source.Clr.LoaderModuleLoad += data =>
         {
             lock (_gate)
@@ -35,6 +36,7 @@ internal sealed class NativeEventCollector
                 _modules[(ulong)data.ModuleID] = (ulong)data.AssemblyID;
             }
         };
+
         source.Clr.MethodJittingStarted += data =>
         {
             lock (_gate)
@@ -42,6 +44,7 @@ internal sealed class NativeEventCollector
                 _compiling[data.ThreadID] = (data.MethodID, []);
             }
         };
+
         source.Clr.MethodInliningSucceeded += data =>
         {
             lock (_gate)
@@ -52,6 +55,7 @@ internal sealed class NativeEventCollector
                 }
             }
         };
+
         source.Clr.MethodILToNativeMap += data =>
         {
             lock (_gate)
@@ -68,6 +72,7 @@ internal sealed class NativeEventCollector
                 }
             }
         };
+
         source.Clr.MethodLoadVerbose += data =>
         {
             if (!data.IsJitted)

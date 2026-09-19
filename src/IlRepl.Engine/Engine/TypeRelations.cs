@@ -467,6 +467,7 @@ public static class TypeRelations
                 GenericParameterAttributes.Contravariant => IsAssignable(b, a, types),
                 _ => false,
             };
+
             if (!ok)
             {
                 return false;

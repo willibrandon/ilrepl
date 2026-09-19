@@ -165,6 +165,7 @@ public sealed partial record PromptWidget(
                     state.Post(new SubmissionEvent(SubmissionEventKind.Paste, Note: "paste failed: " + exception.Message));
                 }
             }).FixedHeight(Math.Max(1, Fit.EditorRows));
+
             var children = new List<Hex1bWidget>();
             var diagnosticStyle = PromptDiagnostics.Display(state)?.Style ?? SpanStyle.Dim;
             children.AddRange(PromptDiagnostics.Lines(state, Width).Take(Fit.DiagnosticRows)
@@ -231,6 +232,7 @@ public sealed partial record PromptWidget(
             state.PaletteDismissed = true;
             state.PaletteNavigated = false;
         }, "Dismiss palette");
+
         b.Remove(EditorWidget.AddCursorAtNextMatch);
         b.Remove(EditorWidget.CtrlClick);
         b.Remove(EditorWidget.ToggleFold);

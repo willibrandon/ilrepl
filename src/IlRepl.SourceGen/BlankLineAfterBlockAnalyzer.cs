@@ -5,12 +5,11 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Microsoft.CodeAnalysis.Text;
 
 namespace IlRepl.SourceGen;
 
 /// <summary>
-/// Requires a blank line after a closing brace where the SDK's rule is silent: before a comment, and between members.
+/// Requires a blank line after a closing brace where the SDK's rule is silent: comments, members, and lines such as "});".
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
@@ -32,42 +31,13 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeMembers(SyntaxNodeAnalysisContext context)
     {
         var members = ((TypeDeclarationSyntax)context.Node).Members;
-        var tree = context.Node.SyntaxTree;
         for (var index = 0; index + 1 < members.Count; index++)
         {
-            // An accessor list such as "{ get; set; }" ends in a brace too, but only a brace on its own line closes a body.
-            var last = members[index].GetLastToken();
-            if (!last.IsKind(SyntaxKind.CloseBraceToken) || SharesLine(last.GetPreviousToken(), last))
+            if (EndsOnBraceLine(members[index]))
             {
-                continue;
-            }
-
-            // The next member begins with its first comment, attribute, or token, whichever comes first.
-            var next = members[index + 1].GetFirstToken();
-            var start = next.SpanStart;
-            foreach (var trivia in next.LeadingTrivia)
-            {
-                if (!trivia.IsKind(SyntaxKind.WhitespaceTrivia) && !trivia.IsKind(SyntaxKind.EndOfLineTrivia) && !trivia.IsDirective)
-                {
-                    start = trivia.SpanStart;
-                    break;
-                }
-            }
-
-            var line = tree.GetLineSpan(last.Span).EndLinePosition.Line;
-            if (tree.GetLineSpan(new TextSpan(start, 0)).StartLinePosition.Line == line + 1)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlankLineAfterBrace,
-                    Location.Create(tree, new TextSpan(start, 0))));
+                Check(context, members[index].GetLastToken(), members[index + 1].GetFirstToken(), codeAlso: true);
             }
         }
-    }
-
-    private static bool SharesLine(SyntaxToken first, SyntaxToken second)
-    {
-        var tree = second.SyntaxTree!;
-        return !first.IsKind(SyntaxKind.None)
-            && tree.GetLineSpan(first.Span).EndLinePosition.Line == tree.GetLineSpan(second.Span).StartLinePosition.Line;
     }
 
     private static void AnalyzeStatements(SyntaxNodeAnalysisContext context)
@@ -91,35 +61,70 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
 
         for (var index = 0; index < statements.Count; index++)
         {
+            if (!EndsOnBraceLine(statements[index]))
+            {
+                continue;
+            }
+
+            // The SDK's rule already reports a statement placed right under a block, so only what it misses is reported
+            // here: a comment under any closing brace, and code under a line such as "});" that ends an expression.
             var last = statements[index].GetLastToken();
-            if (!last.IsKind(SyntaxKind.CloseBraceToken))
+            if (index + 1 < statements.Count)
+            {
+                Check(context, last, statements[index + 1].GetFirstToken(), codeAlso: !last.IsKind(SyntaxKind.CloseBraceToken));
+            }
+            else if (!end.IsKind(SyntaxKind.None))
+            {
+                Check(context, last, end, codeAlso: false);
+            }
+        }
+    }
+
+    // A body, a lambda, or an initializer can end a statement or member on a line that begins with its closing brace.
+    private static bool EndsOnBraceLine(SyntaxNode node)
+    {
+        var tree = node.SyntaxTree;
+        var token = node.GetLastToken();
+        var line = tree.GetLineSpan(token.Span).StartLinePosition.Line;
+        if (tree.GetLineSpan(node.Span).StartLinePosition.Line == line)
+        {
+            return false;
+        }
+
+        while (true)
+        {
+            var previous = token.GetPreviousToken();
+            if (previous.IsKind(SyntaxKind.None) || tree.GetLineSpan(previous.Span).EndLinePosition.Line != line)
+            {
+                return token.IsKind(SyntaxKind.CloseBraceToken);
+            }
+
+            token = previous;
+        }
+    }
+
+    private static void Check(SyntaxNodeAnalysisContext context, SyntaxToken last, SyntaxToken next, bool codeAlso)
+    {
+        var tree = last.SyntaxTree!;
+        var line = tree.GetLineSpan(last.Span).EndLinePosition.Line;
+        foreach (var trivia in next.LeadingTrivia)
+        {
+            if (trivia.IsKind(SyntaxKind.WhitespaceTrivia) || trivia.IsKind(SyntaxKind.EndOfLineTrivia) || trivia.IsDirective)
             {
                 continue;
             }
 
-            // The comment belongs to whatever comes next: the following statement, or the brace that ends this list.
-            var next = index + 1 < statements.Count ? statements[index + 1].GetFirstToken() : end;
-            if (next.IsKind(SyntaxKind.None))
+            if (tree.GetLineSpan(trivia.Span).StartLinePosition.Line == line + 1)
             {
-                continue;
+                context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlankLineAfterBrace, trivia.GetLocation()));
             }
 
-            var tree = node.SyntaxTree;
-            var line = tree.GetLineSpan(last.Span).EndLinePosition.Line;
-            foreach (var trivia in next.LeadingTrivia)
-            {
-                if (!trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) && !trivia.IsKind(SyntaxKind.MultiLineCommentTrivia))
-                {
-                    continue;
-                }
+            return;
+        }
 
-                if (tree.GetLineSpan(trivia.Span).StartLinePosition.Line == line + 1)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlankLineAfterBrace, trivia.GetLocation()));
-                }
-
-                break;
-            }
+        if (codeAlso && tree.GetLineSpan(next.Span).StartLinePosition.Line == line + 1)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlankLineAfterBrace, next.GetLocation()));
         }
     }
 }

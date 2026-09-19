@@ -90,6 +90,7 @@ internal sealed class InterruptState
                 ExecutionPhase.CannotStop => TimeSpan.Zero,
                 _ => TimeSpan.FromSeconds(5),
             };
+
             if (now - _requestedAt >= grace)
             {
                 _builtRevision = _progress.Sequence;

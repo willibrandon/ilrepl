@@ -319,6 +319,7 @@ public sealed class CecilWriter
             ExplicitThis = signature.ExplicitThis,
             ReturnType = Import(signature.ReturnType),
         };
+
         for (var index = 0; index < signature.Parameters.Count; index++)
         {
             var parameter = Import(signature.Parameters[index]);
@@ -420,6 +421,7 @@ public sealed class CecilWriter
             CallingConvention = signature.CallingConvention.HasFlag(CallingConventions.VarArgs) ? MethodCallingConvention.VarArg
             : MethodCallingConvention.Default,
         };
+
         foreach (var parameter in signature.TypeParameters)
         {
             reference.GenericParameters.Add(new GenericParameter(parameter.Name, reference));
@@ -591,6 +593,7 @@ public sealed class CecilWriter
                     ExplicitThis = defined.ExplicitThis,
                     CallingConvention = defined.CallingConvention,
                 };
+
                 foreach (var parameter in defined.Parameters)
                 {
                     onInstance.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
@@ -629,6 +632,7 @@ public sealed class CecilWriter
             CallingConvention = signature.CallingConvention.HasFlag(CallingConventions.VarArgs)
                 ? MethodCallingConvention.VarArg : MethodCallingConvention.Default,
         };
+
         foreach (var parameter in signature.TypeParameters)
         {
             reference.GenericParameters.Add(new GenericParameter(parameter.Name, reference));
@@ -709,6 +713,7 @@ public sealed class CecilWriter
                     ExplicitThis = written.ExplicitThis,
                     CallingConvention = written.CallingConvention,
                 };
+
                 foreach (var parameter in written.Parameters)
                 {
                     onWritten.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
@@ -735,6 +740,7 @@ public sealed class CecilWriter
                 ExplicitThis = onDefinition.ExplicitThis,
                 CallingConvention = onDefinition.CallingConvention,
             };
+
             foreach (var parameter in onDefinition.Parameters)
             {
                 onInstance.Parameters.Add(new ParameterDefinition(parameter.ParameterType));

@@ -166,6 +166,7 @@ public sealed partial class ReplCore
                 ".load" => SessionEntryKind.Reference,
                 _ => null,
             };
+
         if (!result.Succeeded && CellNumber == number)
         {
             entryKind = SessionEntryKind.Rejected;

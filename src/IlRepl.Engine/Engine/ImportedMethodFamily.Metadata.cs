@@ -76,6 +76,7 @@ internal sealed partial class ImportedMethodFamily
                 CallingConvention = original.CallingConvention.HasFlag(CallingConventions.VarArgs) ? MethodCallingConvention.VarArg
                     : MethodCallingConvention.Default,
             };
+
             var owner = IsModuleInitializer(original) ? moduleOwners[original.Module]
                 : (TypeDefinition)definitions[DefinitionOf(original.DeclaringType!)];
             owner.Methods.Add(definition);
@@ -202,6 +203,7 @@ internal sealed partial class ImportedMethodFamily
             {
                 Attributes = (CecilGenericAttributes)parameter.GenericParameterAttributes,
             };
+
             owner.GenericParameters.Add(definition);
             writer.Define(parameter, definition);
         }
@@ -322,6 +324,7 @@ internal sealed partial class ImportedMethodFamily
                 RemoveMethod = copiedRemove,
                 InvokeMethod = copiedRaise,
             };
+
             foreach (var other in others)
             {
                 copy.OtherMethods.Add(other);
@@ -511,6 +514,7 @@ internal sealed partial class ImportedMethodFamily
             CustomAttributeTypedArgument nested => AttributeArgument(nested, writer),
             _ => argument.Value,
         });
+
         return declared == typeof(object) && argumentType != typeof(object)
             ? new CustomAttributeArgument(writer.Object, value) : value;
     }

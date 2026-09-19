@@ -41,6 +41,7 @@ internal static class CecilGenericSubstitution
                 CallingConvention = pointer.CallingConvention,
                 ReturnType = Map(pointer.ReturnType),
             };
+
             foreach (var parameter in pointer.Parameters)
             {
                 copy.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, Map(parameter.ParameterType)));

@@ -46,6 +46,7 @@ public sealed partial class OperandCompleter
             ArgumentIndex = site.EnclosingTypeStart >= 0 ? site.EnclosingParameterIndex : site.ArgumentIndex,
             IsFunctionPointerReturn = false,
         };
+
         return (site.Owner != ".field" || !declared.Pinned) && MemberEligibility.Admits(declared.Type, enclosing, view);
     }
 }

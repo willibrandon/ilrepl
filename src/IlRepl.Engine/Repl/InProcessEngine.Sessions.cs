@@ -14,6 +14,7 @@ public sealed partial class InProcessEngine
     {
         WriteIndented = false,
     });
+
     private string? _sessionPath;
     private string? _savedSessionHash;
     private string[] _sessionDiagnostics = [];
@@ -62,6 +63,7 @@ public sealed partial class InProcessEngine
                 {
                     CheckpointDelivery = request.CheckpointDelivery,
                 };
+
                 WorkspaceCheckpoint?.Invoke(reply);
                 return reply;
             }, cancellationToken).ConfigureAwait(false);
@@ -257,6 +259,7 @@ public sealed partial class InProcessEngine
                 Lines = document.Editor.Lines.Length == 1 && document.Editor.Lines[0].Length == 0 ? [] : document.Editor.Lines },
             Assets = [],
         };
+
         SessionCodec.Validate(content);
         // This identity stays inside the runtime. Session files still use the public readable codec.
         return SessionCodec.Hash(JsonSerializer.SerializeToUtf8Bytes(content, s_contentJson.SessionDocument));

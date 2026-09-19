@@ -69,6 +69,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                             ConstructorState: graph.Seeds[0].ConstructorState)],
                     },
                 };
+
                 var result = (FlowResult<T>?)null;
                 foreach (var step in AnalyzeSteps(graph, returnType, cell, cancellationToken, seeds,
                     section.Start, section.End, unwindEffects, validateGraph: false))
@@ -193,6 +194,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                     ConstructorState = outgoing.ConstructorState,
                     IsCorrelationOnly = outgoing.IsCorrelationOnly,
                 };
+
                 Propagate(target, source, WithExceptional(targetState,
                     outgoing.PendingUnwindHandlers, syntheticFilter is null ? null : entry.SyntheticHandler));
             }
@@ -226,6 +228,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 Values = [],
                 PendingUnwindEffect = null,
             }).ToArray();
+
             var state = WithExceptional(entry with
             {
                 ThisArgumentIsOriginal = incoming.ThisArgumentIsOriginal,
@@ -233,6 +236,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 ConstructorState = incoming.ConstructorState,
                 IsCorrelationOnly = incoming.IsCorrelationOnly,
             }, null, incoming.SyntheticHandler);
+
             var key = (source, handler);
             unwindEntries ??= [];
             if (unwindEntries.TryGetValue(key, out var current))
@@ -590,6 +594,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                     IsCorrelationOnly = state.IsCorrelationOnly
                         || acceptingFilterPaths is { Length: 0 },
                 }, finalizerEffects, (unwind, incoming) => EnterUnwindHandler(index, unwind, incoming));
+
                 if (outgoing is not null)
                 {
                     var targetState = handlerEntry with
@@ -599,6 +604,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                         ConstructorState = outgoing.ConstructorState,
                         IsCorrelationOnly = outgoing.IsCorrelationOnly,
                     };
+
                     Propagate(handler, index, WithExceptional(targetState, null,
                         syntheticFilter ? handlerEntry.SyntheticHandler : null));
                 }
@@ -689,6 +695,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                         FilterPaths = edgeFilterPaths,
                         ConstructorState = constructorState,
                     });
+
                 if (edge.ClearsStack)
                 {
                     outgoing = QueueUnwindHandlers(outgoing!, graph.FinalizersForTransfer(index, edge.Target),
@@ -720,6 +727,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                     IsCorrelationOnly = restoresFilterPaths
                         ? stateBeforeInstruction.IsCorrelationOnly : state.IsCorrelationOnly,
                 };
+
                 foreach (var target in graph.ExceptionSearchTargets(index))
                 {
                     if (state.SyntheticHandler is { } synthetic
@@ -752,6 +760,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                         ConstructorState = outgoing.ConstructorState,
                         IsCorrelationOnly = outgoing.IsCorrelationOnly,
                     };
+
                     Propagate(target, -index - 2, WithExceptional(entry,
                         outgoing.PendingUnwindHandlers, state.SyntheticHandler));
                 }
@@ -794,6 +803,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                         ConstructorState = protectedStates.Select(state => state.ConstructorState)
                             .Aggregate(MergeConstructorStates),
                     };
+
                     Propagate(position, -1, tracksFilterPaths ? StartFilterPaths(deferred) : deferred);
                     continue;
                 }
@@ -960,6 +970,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                     PendingUnwindEffect = null,
                     StackUnknown = true,
                 };
+
                 if (!transformations.Any(candidate => SameFilterPath(candidate, transformation)))
                 {
                     transformations.Add(transformation);
@@ -989,6 +1000,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 }),
             ],
         };
+
         return WithExceptional(queued, pending, state.SyntheticHandler);
     }
 
@@ -1130,6 +1142,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                         ConstructorStateAtHandler(state.ConstructorState, pending, handler, effects)),
                     IsCorrelationOnly = state.IsCorrelationOnly || boundedInputs.Length == 0,
                 };
+
                 enterHandler?.Invoke(handler, WithExceptional(handlerState, null, state.SyntheticHandler));
             }
 
@@ -1142,6 +1155,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                     ApplyConstructorEffects(state.ConstructorState, pending, effects)),
                 IsCorrelationOnly = state.IsCorrelationOnly || boundedCompleted.Length == 0,
             };
+
             if (completed.Count > 0)
             {
                 return WithExceptional(result, null, state.SyntheticHandler);
@@ -1266,6 +1280,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 Values = [],
                 PendingUnwindEffect = null,
             })];
+
         return WithExceptional(seed with
         {
             ThisArgumentIsOriginal = incoming.ThisArgumentIsOriginal,
@@ -1336,6 +1351,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                 {
                     CorrelatedAlternatives = [],
                 };
+
                 return;
             }
 
@@ -1703,6 +1719,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                     : new FilterPathValue(null, null, !locals && key == 0 && path.ThisArgumentIsOriginal,
                         locals ? ~key : key);
             }).ToArray();
+
             result[key] = CollapseFilterValue(values);
         }
 
@@ -1845,6 +1862,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             ConstructorState = ApplyConstructorEffect(path.ConstructorState,
                 transformation.ConstructorState),
         };
+
         return true;
     }
 
@@ -2688,6 +2706,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             "ref" => "object",
             _ => null,
         };
+
         return keyword is null ? null : _types.Algebra.Primitive(keyword);
     }
 
@@ -2869,6 +2888,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             "ref" => "object",
             _ => null,
         };
+
         return keyword is null ? null : _types.Algebra.Primitive(keyword);
     }
 
@@ -3023,6 +3043,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             (false, true) => rightFact,
             _ => leftFact && rightFact,
         };
+
         ConstructorThisState MergeConstructorFact() => (leftVerifierPath, rightVerifierPath) switch
         {
             (true, true) => MergeConstructorStates(left.ConstructorState, right.ConstructorState),
@@ -3030,6 +3051,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
             (false, true) => right.ConstructorState,
             _ => MergeConstructorStates(left.ConstructorState, right.ConstructorState),
         };
+
         var thisArgumentIsOriginal = MergeReceiverFact(left.ThisArgumentIsOriginal, right.ThisArgumentIsOriginal);
         var constructorState = MergeConstructorFact();
         var filterPaths = MergeFilterPaths(left.FilterPaths, right.FilterPaths);

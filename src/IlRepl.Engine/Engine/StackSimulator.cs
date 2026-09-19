@@ -354,6 +354,7 @@ public sealed class StackSimulator
                 && op.Name is "ldarg.0" or "ldarg" or "ldarg.s" or "ldarga" or "ldarga.s",
             WritesThisArgument = instruction.ArgumentIndex == 0 && context.ThisIndex == 0 && op.Name is "starg" or "starg.s",
         };
+
         if (instruction.LocalIndex is int local && local < context.Locals.Count)
         {
             view = view with { SlotType = context.Locals[local].Type, SlotIsPinned = context.Locals[local].IsPinned };

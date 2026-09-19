@@ -52,6 +52,7 @@ internal static class DependencyAsset
                 Version = definition.Version,
                 CultureName = definition.Culture.IsNil ? null : metadata.GetString(definition.Culture),
             };
+
             if (!definition.PublicKey.IsNil)
             {
                 identity.SetPublicKey(metadata.GetBlobBytes(definition.PublicKey));

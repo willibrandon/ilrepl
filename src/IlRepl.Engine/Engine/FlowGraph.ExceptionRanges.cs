@@ -107,6 +107,7 @@ internal sealed partial class FlowGraph<T> where T : class
                 IlClauseKind.Finally => BlockKind.Finally,
                 _ => BlockKind.Fault,
             };
+
             if (handlerStart >= 0)
             {
                 var handler = Section(kind, handlerStart, handlerEnd, group, !labels.ContainsKey(region.HandlerEnd));

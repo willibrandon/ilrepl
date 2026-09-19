@@ -257,6 +257,7 @@ public static class SymbolRenderer
                 CallingConvention.FastCall => "fastcall ",
                 _ => "",
             };
+
             if (!signature.IsExtensibleUnmanaged)
             {
                 sb.Append(word);

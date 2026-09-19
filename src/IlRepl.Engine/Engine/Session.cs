@@ -706,6 +706,7 @@ public sealed partial class Session
             Signatures = table,
             State = new CellState(Resolver, GenericContext.Empty, table, signature, braceOpen, _typeTable, null),
         };
+
         return new LineResult(LineOutcome.MethodStart, null, "method " + signature.DescribeWithNames());
     }
 
@@ -788,6 +789,7 @@ public sealed partial class Session
                 ? target.Method
                 : throw new ReplException($"no method '{signature.Name}' is bound in the session");
         });
+
         CompiledMethodVersion? version = null;
         Delegate? implementation = null;
         try

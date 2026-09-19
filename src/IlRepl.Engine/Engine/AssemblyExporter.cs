@@ -295,6 +295,7 @@ public static class AssemblyExporter
                 HasThis = false,
                 CallingConvention = MethodCallingConvention.VarArg,
             };
+
             foreach (var parameter in run.Parameters)
             {
                 site.Parameters.Add(new ParameterDefinition(parameter.ParameterType));

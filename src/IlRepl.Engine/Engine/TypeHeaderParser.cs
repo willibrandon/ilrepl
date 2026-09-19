@@ -80,6 +80,7 @@ public static class TypeHeaderParser
                         "famorassem" => TypeAttributes.NestedFamORAssem,
                         _ => throw new ReplException("'nested' needs public, private, family, assembly, famandassem, or famorassem"),
                     };
+
                     if (!nested)
                     {
                         // ILAsm rewrites a nested visibility at top level to the plain one.

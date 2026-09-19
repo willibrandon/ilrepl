@@ -33,6 +33,7 @@ public static partial class ComparisonProbe
 
             Leave(identity, receiver, arguments, result, failure, aliases);
         });
+
         return task;
     }
 
@@ -61,6 +62,7 @@ public static partial class ComparisonProbe
 
             Leave(identity, receiver, arguments, null, failure, aliases);
         });
+
         return task;
     }
 
@@ -91,6 +93,7 @@ public static partial class ComparisonProbe
 
             Leave(identity, receiver, arguments, result, failure, aliases);
         });
+
         return task;
     }
 

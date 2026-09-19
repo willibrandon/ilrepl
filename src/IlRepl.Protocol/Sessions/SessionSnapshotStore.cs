@@ -45,6 +45,7 @@ public static partial class SessionSnapshotStore
             References = [.. document.References.Select(reference => PortableLocators(reference, directory))],
             Assets = embed ? document.Assets : [.. document.Assets.Where(asset => baselines.Contains(asset.Hash))],
         };
+
         var bytes = SessionCodec.Write(portable);
         Directory.CreateDirectory(cacheDirectory);
         foreach (var reference in document.References.Where(reference => reference.Origin is "project" or "assembly"))

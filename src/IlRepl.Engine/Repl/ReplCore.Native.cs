@@ -57,6 +57,7 @@ public sealed partial class ReplCore
             Options = options, Left = left, Right = right, Environment = environment, Files = [.. files],
             Culture = CultureInfo.CurrentCulture.Name, UICulture = CultureInfo.CurrentUICulture.Name,
         };
+
         Note($"native inspection: {left.Name}" + (right is null ? "" : " against " + right.Name));
         return new HandleResult(true, false) { NativePackage = package };
     }
@@ -93,6 +94,7 @@ public sealed partial class ReplCore
         {
             Entries = document.Entries[..boundary], Cells = document.Cells.Where(cell => cell.Number < number).ToArray(),
         };
+
         var problems = reconstructed.ReopenSession(historical);
         if (problems.Length != 0)
         {

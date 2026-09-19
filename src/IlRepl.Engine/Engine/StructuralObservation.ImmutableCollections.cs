@@ -31,6 +31,7 @@ internal sealed partial class StructuralObservation
         {
             new("comparer", Capture(type.GetProperty("KeyComparer")!.GetValue(value), depth + 1)),
         };
+
         if (dictionary)
         {
             members.Add(new ObservedMember("value comparer", Capture(type.GetProperty("ValueComparer")!.GetValue(value),

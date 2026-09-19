@@ -166,6 +166,7 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
             SignatureCallingConvention.Unmanaged => FunctionPointerConvention.FromMarkers(optionalModifiers),
             _ => CallingConvention.Winapi,
         };
+
         var isUnmanaged = header.CallingConvention is SignatureCallingConvention.CDecl or SignatureCallingConvention.StdCall
             or SignatureCallingConvention.ThisCall or SignatureCallingConvention.FastCall or SignatureCallingConvention.Unmanaged;
         int? sentinel = signature.RequiredParameterCount < signature.ParameterTypes.Length ? signature.RequiredParameterCount : null;

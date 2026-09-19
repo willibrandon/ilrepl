@@ -189,6 +189,7 @@ public sealed partial class EditingSession
                         helpRules[caretBody.AnalysisIdentity], incoming, ReturnArity(caretBody), result!.After[caretPosition])
                     : sourceHelp.ElementAtOrDefault(fromCaret ? 0 : request.Line),
             };
+
             if (!fromCaret)
             {
                 var presentations = positions.Select((position, line) =>
@@ -212,11 +213,13 @@ public sealed partial class EditingSession
                         : sourceHelp[line];
                     return (display, beforeInstruction, help);
                 }).ToArray();
+
                 reply = reply with
                 {
                     Positions = presentations.Select(position => new AnalysisPosition(position.Item1, position.Item2, position.Item3))
                         .ToArray(),
                 };
+
                 AnalyzedDocument = new AnalyzedDocument([.. request.Lines], reply, presentations);
             }
 

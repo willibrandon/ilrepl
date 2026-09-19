@@ -63,6 +63,7 @@ internal static class OverrideBinding
             })],
             Attributes = reference.IsStatic ? MethodAttributes.Static : MethodAttributes.PrivateScope,
         };
+
         var target = Resolve(text[..separator].Trim(), scope, body);
         if (!SignatureSymbolIdentity.Equal(target.Method, body))
         {

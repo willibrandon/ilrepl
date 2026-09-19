@@ -57,6 +57,7 @@ internal static class WorkerOwnerWatchdog
             group.StopAsync().GetAwaiter().GetResult();
             Environment.Exit(3);
         }) { IsBackground = true, Name = "ilrepl worker owner" };
+
         thread.Start();
     }
 }

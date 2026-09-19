@@ -49,6 +49,7 @@ internal static class ExceptionRegionParser
             "fault" => IlClauseKind.Fault,
             _ => throw new ReplException("an exception range needs catch, filter, finally, or fault"),
         };
+
         T? catchType = null;
         string? filter = null;
         if (kind == IlClauseKind.Catch)

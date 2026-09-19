@@ -102,6 +102,7 @@ internal static class ProjectResolver
             "-getItem:ReferenceCopyLocalPaths,RuntimeCopyLocalItems,NativeCopyLocalItems,ResourceCopyLocalItems,"
                 + "RuntimeTargetsCopyLocalItems,Compile,FrameworkReference",
         };
+
         if (action.NoBuild)
         {
             arguments.Add("-target:ResolveReferences");
@@ -148,6 +149,7 @@ internal static class ProjectResolver
         {
             await DependencyAsset.ReadAsync(target, "managed", assets, cancellationToken).ConfigureAwait(false),
         };
+
         var paths = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         string[] copyItems = ["ReferenceCopyLocalPaths", "RuntimeCopyLocalItems", "NativeCopyLocalItems", "ResourceCopyLocalItems",
             "RuntimeTargetsCopyLocalItems"];
@@ -209,6 +211,7 @@ internal static class ProjectResolver
             Configuration = configuration, SdkVersion = sdk,
             Assets = [.. selected.DistinctBy(asset => asset.Hash)], Frameworks = frameworks,
         };
+
         var entries = document.Entries.ToList();
         if (previous is null)
         {
@@ -267,6 +270,7 @@ internal static class ProjectResolver
                 RedirectStandardError = true, CreateNoWindow = true,
             },
         };
+
         foreach (var argument in arguments)
         {
             process.StartInfo.ArgumentList.Add(argument);

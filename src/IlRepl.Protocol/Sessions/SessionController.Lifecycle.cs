@@ -197,6 +197,7 @@ public sealed partial class SessionController : IInterruptibleEngine
                 Document = checkpoint.Document with { Editor = Editor },
             };
         };
+
         hosted.OutputReceived += output =>
         {
             if (ReferenceEquals(engine, _engine))
@@ -204,6 +205,7 @@ public sealed partial class SessionController : IInterruptibleEngine
                 ForwardOutput(output);
             }
         };
+
         hosted.Exited += exit =>
         {
             lock (_lifecycleLock)
@@ -246,6 +248,7 @@ public sealed partial class SessionController : IInterruptibleEngine
                     SessionEditor = retained.Document.Editor,
                 },
             };
+
             Editor = result.Document.Editor;
             _checkpointPendingInput = [];
             QueuedInput = [];
@@ -297,6 +300,7 @@ public sealed partial class SessionController : IInterruptibleEngine
                     Document = retained.Document, Editor = retained.Document.Editor, Modified = retained.Dirty,
                     HistoryLineLimit = HistoryLineLimit,
                 }, cancellationToken).ConfigureAwait(false);
+
                 await InstallEngineAsync(candidate).ConfigureAwait(false);
                 var editor = RecoveryEditor();
                 result = restored with { Document = restored.Document with { Editor = editor },
@@ -344,6 +348,7 @@ public sealed partial class SessionController : IInterruptibleEngine
             {
                 Number = number, Source = source, ExitCode = exit?.ExitCode, StandardError = exit?.StandardError,
             };
+
             var cells = document.Cells.Where(cell => cell.Number != number).ToArray();
             document = document with
             {

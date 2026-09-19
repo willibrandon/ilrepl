@@ -461,6 +461,7 @@ static async Task<List<TranscriptLine>> SubmitAsync(IReplEngine engine, IReadOnl
                     failed |= message.Kind == SubmissionEventKind.Failed;
                 }
             });
+
         await submission.Completion;
         if (failed)
         {

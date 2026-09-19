@@ -104,6 +104,7 @@ public sealed record MethodSignature(string Name, Type ReturnType, IReadOnlyList
                 : SymbolRenderer.Annotated(parameter.ExactType);
             return (type + " " + (parameter.Name ?? "")).TrimEnd();
         });
+
         return $"{returnType} {Name}({string.Join(", ", parameters)})";
     }
 }

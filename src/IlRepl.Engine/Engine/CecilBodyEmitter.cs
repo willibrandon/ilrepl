@@ -218,6 +218,7 @@ public static class CecilBodyEmitter
                         ResolvedMethod r => _il.Create(op, MethodOperand(r, callSite: false)),
                         _ => throw new ReplException("unsupported token operand"),
                     });
+
                     break;
                 case OperandKind.Signature:
                     Append(_il.Create(op, CallSite((CalliSignature)instruction.Operand!)));
@@ -242,6 +243,7 @@ public static class CecilBodyEmitter
                     ExplicitThis = member.ExplicitThis,
                     CallingConvention = member.CallingConvention,
                 };
+
                 foreach (var parameter in member.Parameters)
                 {
                     reference.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
@@ -299,6 +301,7 @@ public static class CecilBodyEmitter
                 ExplicitThis = reference.ExplicitThis,
                 CallingConvention = MethodCallingConvention.VarArg,
             };
+
             foreach (var parameter in reference.Parameters)
             {
                 site.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
@@ -552,6 +555,7 @@ public static class CecilBodyEmitter
                         CatchType = handler.CatchType,
                         FilterStart = handler.FilterStart?.Target,
                     };
+
                     method.Body.ExceptionHandlers.Add(cecil);
                 }
             }

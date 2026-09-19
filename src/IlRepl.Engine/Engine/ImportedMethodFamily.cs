@@ -105,6 +105,7 @@ internal sealed partial class ImportedMethodFamily
                     {
                         Access = MemberAccess.AccessWord(method.Attributes),
                     });
+
                     throw new ReplException($"cannot reproduce {MemberResolver.Describe(Selected.Method)}: "
                         + $"required helper {MemberResolver.Describe(method)}: {ex.Message}", ex);
                 }
@@ -702,6 +703,7 @@ internal sealed partial class ImportedMethodFamily
                 FieldDefinition field => Definition.Assembly.ManifestModule.ResolveField(field.MetadataToken.ToInt32())!,
                 _ => throw new InvalidOperationException("unknown copied member"),
             };
+
             _runtime.Add(original, runtime);
         }
 

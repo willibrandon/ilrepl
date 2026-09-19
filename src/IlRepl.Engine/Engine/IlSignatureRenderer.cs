@@ -263,6 +263,7 @@ public static class IlSignatureRenderer
                 (null, int s) => "...+" + s.ToString(CultureInfo.InvariantCulture),
                 _ => "...",
             };
+
             dimensions.Add(text);
         }
 

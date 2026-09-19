@@ -214,6 +214,7 @@ internal sealed class TypeFamilyEmitter(
                 HasThis = !signature.IsStatic,
                 ExplicitThis = signature.CallingConvention.HasFlag(CallingConventions.ExplicitThis),
             };
+
             if (signature.CallingConvention.HasFlag(CallingConventions.VarArgs))
             {
                 cecilMethod.CallingConvention = MethodCallingConvention.VarArg;
@@ -340,6 +341,7 @@ internal sealed class TypeFamilyEmitter(
             {
                 HasThis = !property.IsStatic,
             };
+
             for (var index = 0; index < property.ParameterTypes.Count; index++)
             {
                 var parameterType = property.ExactParameterTypes.ElementAtOrDefault(index) is { } exact
@@ -377,6 +379,7 @@ internal sealed class TypeFamilyEmitter(
                 RemoveMethod = _methods[evt.RemoveOn],
                 InvokeMethod = evt.Fire is null ? null : _methods[evt.Fire],
             };
+
             foreach (var attribute in evt.CustomAttributes)
             {
                 cecilEvent.CustomAttributes.Add(Attribute(attribute));

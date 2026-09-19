@@ -24,6 +24,7 @@ public sealed partial class EditingSession
             LabelSpace = original.LabelSpace,
             AnalysisIdentity = original.AnalysisIdentity,
         };
+
         body.Arguments.AddRange(original.Arguments);
         _state.Method = body;
         try

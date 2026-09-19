@@ -42,6 +42,7 @@ internal static partial class ComparisonInstrumentation
             {
                 Attributes = parameter.Attributes & ~GenericParameterAttributes.VarianceMask,
             };
+
             holder.GenericParameters.Add(copy);
             foreach (var constraint in parameter.Constraints)
             {
@@ -137,6 +138,7 @@ internal static partial class ComparisonInstrumentation
             ExplicitThis = target.ExplicitThis,
             CallingConvention = target.CallingConvention,
         };
+
         foreach (var parameter in target.Parameters)
         {
             reference.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, parameter.ParameterType));

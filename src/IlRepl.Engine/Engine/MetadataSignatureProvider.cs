@@ -37,6 +37,7 @@ public sealed class MetadataSignatureProvider(Func<int, Type?> resolve) : ISigna
             PrimitiveTypeCode.TypedReference => typeof(TypedReference),
             _ => throw new BadImageFormatException($"unexpected primitive type code {typeCode}"),
         };
+
         return IlSignature.Primitive(type, TypeParser.PrimitiveKeyword(type)!);
     }
 

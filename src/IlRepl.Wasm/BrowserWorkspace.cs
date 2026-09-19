@@ -77,6 +77,7 @@ public static partial class BrowserWorkspace
                     Action = new SessionAction { Operation = SessionOperation.Hydrate, Force = true, Path = InitialPath() },
                     Document = SupplyBundledAssets(document), Editor = document.Editor, AnnounceOpen = InitialAnnounceOpen(),
                 }, CancellationToken.None).ConfigureAwait(false);
+
                 StartupMessages = opened.Reply.Lines;
             }
             catch (Exception exception) when (source.StartsWith('#')
@@ -101,6 +102,7 @@ public static partial class BrowserWorkspace
             s_checkpoint = document;
             PublishedAssets.UnionWith(document.Assets.Select(asset => asset.Hash));
         };
+
         controller.EditorChanged = editor =>
         {
             var serialized = JsonSerializer.Serialize(editor, SessionJsonContext.Default.SessionEditor);
@@ -110,6 +112,7 @@ public static partial class BrowserWorkspace
                 EditorChanged(serialized);
             }
         };
+
         controller.ExternalActionAsync = async (request, cancellationToken) =>
         {
             var document = request.Document!;
@@ -164,6 +167,7 @@ public static partial class BrowserWorkspace
 
             return null;
         };
+
         await controller.SessionAsync(new SessionRequest
         {
             Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = controller.Editor,
@@ -290,6 +294,7 @@ public static partial class BrowserWorkspace
                 Action = new SessionAction { Operation = SessionOperation.AcknowledgeSave, Path = path },
                 Document = downloaded, Editor = controller.Editor,
             }, CancellationToken.None).ConfigureAwait(false);
+
             return "";
         }
 
@@ -309,6 +314,7 @@ public static partial class BrowserWorkspace
                 {
                     Action = new SessionAction { Operation = SessionOperation.Run, Numbers = numbers }, Editor = controller.Editor,
                 }, CancellationToken.None).ConfigureAwait(false);
+
                 s_prompt?.Post(new SubmissionEvent(SubmissionEventKind.SessionDocument, result.Reply.Lines)
                 {
                     SessionEditor = result.Reply.SessionEditor,
@@ -331,6 +337,7 @@ public static partial class BrowserWorkspace
         {
             Action = new SessionAction { Operation = SessionOperation.Capture }, Editor = controller.Editor,
         }, CancellationToken.None).ConfigureAwait(false);
+
         if (operation == "share")
         {
             return SessionCodec.Share(captured.Document, value);

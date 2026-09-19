@@ -81,6 +81,7 @@ public sealed record IlMethodSignature(
             SignatureCallingConvention.FastCall => CallingConvention.FastCall,
             _ => CallingConvention.Winapi,
         };
+
         return new CalliSignature(IsUnmanaged, unmanaged, managed, returnType, fixedTypes!, optional!);
     }
 

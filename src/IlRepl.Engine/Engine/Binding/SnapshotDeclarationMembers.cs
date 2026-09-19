@@ -69,6 +69,7 @@ internal sealed class SnapshotDeclarationMembers : IDeclarationMembers
             ReturnOptionalModifiers = signature.ReturnOptionalModifiers,
             IsDeclared = false,
         };
+
         _declaration.AddForward(defined);
         return defined;
     }

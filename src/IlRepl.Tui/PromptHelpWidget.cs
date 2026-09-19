@@ -40,6 +40,7 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
                     .CacheRendering().FixedHeight(1),
                 v.Separator().FixedHeight(1),
             };
+
             foreach (var row in rows.Skip(help.Scroll).Take(height))
             {
                 var action = row.Action >= 0 ? help.Actions[row.Action] : null;
@@ -69,6 +70,7 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
                 .CacheRendering().FixedHeight(1));
             return [.. content];
         })).InputBindings(b => Bind(b, State, Catalog, bodyWidth, height));
+
         return ctx.Pastable(surface).OnPaste(e =>
         {
             e.Paste.Cancel();
@@ -93,6 +95,7 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
                 PromptHelp.Close(state);
             }
         }), "Toggle instruction help");
+
         b.Key(Hex1bKey.Escape).Action(_ => Process(state, () => PromptHelp.Close(state)), "Return to editor");
         if (state.Help is { } help)
         {

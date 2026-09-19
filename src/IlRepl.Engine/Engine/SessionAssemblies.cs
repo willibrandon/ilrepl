@@ -43,6 +43,7 @@ public static class SessionAssemblies
             SessionAssemblyKind.Trampoline => "tramp",
             _ => "cell",
         };
+
         return Prefix + word + "." + Interlocked.Increment(ref s_counter).ToString(CultureInfo.InvariantCulture);
     }
 

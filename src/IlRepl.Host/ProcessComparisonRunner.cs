@@ -91,6 +91,7 @@ public static class ProcessComparisonRunner
                 StandardErrorEncoding = Encoding.UTF8,
                 CreateNoWindow = true,
             };
+
             process.StartInfo.ArgumentList.Add(host);
             process.StartInfo.ArgumentList.Add("--comparison-worker");
             process.StartInfo.ArgumentList.Add(packagePath);

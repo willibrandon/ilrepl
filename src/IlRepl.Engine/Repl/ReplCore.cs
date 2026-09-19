@@ -341,6 +341,7 @@ public sealed partial class ReplCore : IDisposable
             Kind = SessionEntryKind.Rollback,
             Mark = mark,
         };
+
         _sourceEntries.Add(withdrawal);
         _ = TrackSource(withdrawal, CellNumber, false);
 
@@ -818,6 +819,7 @@ public sealed partial class ReplCore : IDisposable
                         2 => parts[0] + " and " + parts[1],
                         _ => string.Join(", ", parts.Take(parts.Count - 1)) + ", and " + parts[^1],
                     };
+
                     Note($"wrote {Path.GetFullPath(argument)} with {with}");
                 }
 
@@ -951,6 +953,7 @@ public sealed partial class ReplCore : IDisposable
                         BlockKind.Fault => "} fault {",
                         _ => "}",
                     };
+
                     if (entry.Block != BlockKind.Try)
                     {
                         indent = Math.Max(0, indent - 1);
@@ -1104,6 +1107,7 @@ public sealed partial class ReplCore : IDisposable
                         BlockKind.Fault => "} fault {",
                         _ => "}",
                     };
+
                     if (entry.Block != BlockKind.Try)
                     {
                         indent = Math.Max(0, indent - 1);

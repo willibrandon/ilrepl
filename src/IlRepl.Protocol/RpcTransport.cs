@@ -25,6 +25,7 @@ public static class RpcTransport
         {
             JsonSerializerOptions = { TypeInfoResolver = new ProtocolTypeInfoResolver() },
         };
+
         return new HeaderDelimitedMessageHandler(sending, receiving, formatter);
     }
 }

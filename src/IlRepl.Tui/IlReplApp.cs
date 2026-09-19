@@ -75,6 +75,7 @@ public static partial class IlReplApp
             OpenDocumentation = DocumentationLauncher.Open,
             CurrentHelpIdentity = () => (engine.Status.Revision, engine.AssemblyVersion),
         };
+
         ConfigureInterruption(prompt, engine);
         if (engine is SessionController controller)
         {
@@ -259,6 +260,7 @@ public static partial class IlReplApp
                 _ when ownSelection => new List<string> { "Tab complete", "Shift+↑ select", "Ctrl+Q quit" },
                 _ => new List<string> { "Tab complete", "Ctrl+Q quit" },
             };
+
         if (!copyMode)
         {
             hints.Insert(0, "F1 help");
@@ -731,6 +733,7 @@ public static partial class IlReplApp
             { Degraded: true } => "Process supervision unavailable; press Alt+R to retry without restarting",
             _ => null,
         } : null;
+
         var noticeWidth = Math.Max(1, size.Width);
         var noticeRows = (interruptNotice is null ? 0 : (interruptNotice.Length + noticeWidth - 1) / noticeWidth)
             + (supervisionNotice is null ? 0 : (supervisionNotice.Length + noticeWidth - 1) / noticeWidth);
@@ -835,6 +838,7 @@ public static partial class IlReplApp
                         status.OpenBlocks > 0 ? $"{status.OpenBlocks} open block{(status.OpenBlocks == 1 ? "" : "s")}"
                         : $"{status.Instructions} instruction{(status.Instructions == 1 ? "" : "s")}",
                     };
+
                     if (prompt.Analysis is { Stack: null })
                     {
                         facts.RemoveAt(0);
@@ -939,12 +943,14 @@ public static partial class IlReplApp
 
                 c.RequestStop();
             }, "Quit");
+
             if (engine is SessionController controllerForKeys)
             {
                 b.Ctrl().Key(Hex1bKey.S).Action(c =>
                 {
                     _ = RunSessionActionAsync(prompt, controllerForKeys, SessionOperation.Save);
                 }, "Save session");
+
                 b.Ctrl().Key(Hex1bKey.O).Action(c =>
                 {
                     _ = RunSessionActionAsync(prompt, controllerForKeys, SessionOperation.Open);
@@ -965,6 +971,7 @@ public static partial class IlReplApp
                 transcript.Add(LineKind.Info, Banner, SpanStyle.Dim);
                 app.Invalidate();
             }, "Clear transcript");
+
             if (!ownSelection)
             {
                 return;
@@ -979,6 +986,7 @@ public static partial class IlReplApp
                     EndCopyMode(app, selected);
                 }
             }, "End the selection");
+
             b.Mouse(MouseButton.Right).OverridesCapture().Action(async _ =>
             {
                 if (FindNode<SelectionPanelNode>(app) is { IsInCopyMode: true, HasSelection: true } selected)
@@ -992,6 +1000,7 @@ public static partial class IlReplApp
                     }
                 }
             }, "Copy the selection");
+
             // Shift+Up from the prompt selects the last transcript line; more Shift+Up extends it.
             b.Shift().Key(Hex1bKey.UpArrow).Action(c =>
             {

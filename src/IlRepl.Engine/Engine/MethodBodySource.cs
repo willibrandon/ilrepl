@@ -194,6 +194,7 @@ public static class MethodBodySource
                 ExceptionHandlingClauseOptions.Fault => IlClauseKind.Fault,
                 _ => IlClauseKind.Catch,
             };
+
             Type? catchType = null;
             if (kind == IlClauseKind.Catch)
             {

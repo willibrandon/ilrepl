@@ -256,6 +256,7 @@ public sealed partial class InProcessEngine : IReplEngine, IInterruptibleEngine
                     WorkspaceCheckpoint?.Invoke(workspace);
                     return workspace;
                 }, cancellationToken).ConfigureAwait(false);
+
                 return loaded.Reply with { Lines = [.. reply.Lines, .. loaded.Reply.Lines] };
             }
             catch (Exception exception) when (exception is ReplException or IOException or InvalidDataException or ArgumentException)

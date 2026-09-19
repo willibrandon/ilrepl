@@ -37,6 +37,7 @@ public sealed partial class EditingSession
                     Types = empty, CommittedTypes = empty.Clone(),
                     NextBody = _state.NextBody + 1, Cell = new EditingBody { LabelSpace = _state.NextBody },
                 };
+
                 break;
             }
             case SessionTransition.Clear:
@@ -139,6 +140,7 @@ public sealed partial class EditingSession
         {
             Generics = previous.Generics, IsVarArg = previous.IsVarArg, LabelSpace = _state.NextBody++,
         };
+
         _state.Cell.Locals.AddRange(previous.Locals);
         _state.Cell.Arguments.AddRange(previous.Arguments);
     }

@@ -462,6 +462,7 @@ public sealed class CellState
                 Labels = labels,
                 Location = normalized.Location
             });
+
             _definedLabels.UnionWith(labels);
             return new LineResult(LineOutcome.Labels, null, null);
         }
@@ -498,6 +499,7 @@ public sealed class CellState
             Instruction = instruction,
             Location = normalized.Location
         });
+
         _definedLabels.UnionWith(labels);
         return new LineResult(LineOutcome.Instruction, _entries[^1].Instruction, null);
     }
@@ -548,6 +550,7 @@ public sealed class CellState
                 RetBox = !IsMethod && top is { } type && (type.IsValueType || type.IsGenericParameter)
                     && type != typeof(NullReferenceMarker) && StackSimulator.BoxedType(type) is null ? type : null,
             };
+
             _entries[i] = new CellEntry
             {
                 Kind = entry.Kind,

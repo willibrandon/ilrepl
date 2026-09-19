@@ -62,6 +62,7 @@ internal static class RuntimeFlowAnalysis
             CatchType = entry.CatchType,
             ExceptionRegion = entry.ExceptionRegion,
         }).ToArray();
+
         var returnType = state.Signature?.ReturnType;
         var declaringType = state.Member?.Owner;
         var tracksConstructorInitialization = state.Signature is { Name: ".ctor", IsStatic: false }
@@ -113,6 +114,7 @@ internal static class RuntimeFlowAnalysis
             Instruction = View(state, instruction, state.Context),
             InstructionSyntax = InstructionSyntax(entry),
         };
+
         var declaringType = state.Member?.Owner;
         var tracksConstructorInitialization = state.Signature is { Name: ".ctor", IsStatic: false }
             && declaringType?.IsValueType == false;
@@ -121,6 +123,7 @@ internal static class RuntimeFlowAnalysis
         {
             BodyName = body,
         };
+
         var original = previous.End;
         var values = original?.Values;
         var copies = values?.Select(value => value with { Origins = [] }).ToArray();

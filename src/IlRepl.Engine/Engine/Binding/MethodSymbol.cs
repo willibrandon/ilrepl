@@ -215,6 +215,7 @@ public sealed class MethodSymbol : IEquatable<MethodSymbol>
                 ? RuntimeSymbolTypes.RebaseExact(Parameters[index].Type, Parameters[index].ExactType, parameter.Type)
                 : parameter.ExactType,
         }).ToArray();
+
         return WithExact(
             declaringType,
             returnType,

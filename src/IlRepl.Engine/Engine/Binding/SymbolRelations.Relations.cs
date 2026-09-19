@@ -268,6 +268,7 @@ public static partial class SymbolRelations
                 GenericParameterAttributes.Contravariant => IsAssignable(b, a, scope),
                 _ => false,
             };
+
             if (!ok)
             {
                 return false;

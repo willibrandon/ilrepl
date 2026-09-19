@@ -91,6 +91,7 @@ internal sealed partial class StructuralObservation(
             Type reflected => TypeName(reflected),
             _ => null,
         };
+
         if (scalar is not null)
         {
             return Scalar(value, name, scalar);

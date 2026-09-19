@@ -212,6 +212,7 @@ public sealed partial class InProcessEngine
                 {
                     Snapshot = previous.Snapshot.WithProcessAssemblies(ProcessAssemblies.Current), AssemblyVersion = version,
                 };
+
                 previous.Dispose();
             }
 

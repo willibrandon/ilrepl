@@ -56,6 +56,7 @@ public sealed partial class InProcessEngine
                 Name = package.Left.Name, Detail = "this frontend has no isolated CoreCLR native inspection worker",
             },
         } : await _nativeRunner(package, cancellation.Token).ConfigureAwait(false);
+
         await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {

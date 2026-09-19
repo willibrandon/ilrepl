@@ -95,6 +95,7 @@ internal static partial class PackageResolver
             {
                 LibraryRange = new LibraryRange(root.Request, VersionRange.Parse(root.RequestedVersion!), LibraryDependencyTarget.Package),
             }).ToImmutableArray();
+
             var project = Path.Combine(output, "ilrepl.csproj");
             var lockPath = Path.Combine(output, "packages.lock.json");
             if (request is null)
@@ -122,6 +123,7 @@ internal static partial class PackageResolver
                 FrameworkName = framework, RuntimeIdentifierGraphPath = graphPath,
                 Dependencies = requests,
             };
+
             var spec = new PackageSpec([info])
             {
                 Name = "ilrepl", FilePath = project,
@@ -136,6 +138,7 @@ internal static partial class PackageResolver
                         restoreLockedMode: request is null && !platformChange),
                 },
             };
+
             spec.RestoreMetadata.ProjectWideWarningProperties.WarningsAsErrors.Add(NuGetLogCode.NU1605);
             using var cache = new SourceCacheContext();
             var providers = new RestoreCommandProvidersCache().GetOrCreate(packages, fallback, sources, cache, logger);
@@ -144,6 +147,7 @@ internal static partial class PackageResolver
             {
                 ProjectStyle = ProjectStyle.PackageReference, AllowNoOp = false,
             };
+
             restore.RequestedRuntimes.Add(RuntimeInformation.RuntimeIdentifier);
             var dependencyGraph = new DependencyGraphSpec();
             dependencyGraph.AddProject(spec);

@@ -21,6 +21,7 @@ internal static class SymbolArrayMethods
             CreateMethod(array, "Address", TypeSymbol.ByRef(array.Element!), indices),
             CreateMethod(array, ".ctor", TypeSymbol.Void, indices),
         };
+
         if (array.Kind == TypeSymbolKind.Array)
         {
             methods.Add(CreateMethod(array, ".ctor", TypeSymbol.Void, [.. indices, .. indices]));

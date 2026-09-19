@@ -97,7 +97,8 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
         var line = tree.GetLineSpan(brace.Span).StartLinePosition.Line;
         foreach (var trivia in brace.LeadingTrivia.Concat(brace.TrailingTrivia))
         {
-            if (IsComment(trivia) && tree.GetLineSpan(trivia.Span).EndLinePosition.Line == line)
+            var span = tree.GetLineSpan(trivia.Span);
+            if (IsComment(trivia) && (span.StartLinePosition.Line == line || span.EndLinePosition.Line == line))
             {
                 return true;
             }

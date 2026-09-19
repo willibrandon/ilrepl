@@ -209,6 +209,7 @@ public static class SymbolBinder
             "ldloc.3" or "stloc.3" => 3,
             _ => (int?)null,
         };
+
         if (implicitLocal is int localIndex)
         {
             if (localIndex >= scope.Locals.Count)
@@ -228,6 +229,7 @@ public static class SymbolBinder
             "ldarg.3" => 3,
             _ => (int?)null,
         };
+
         if (implicitArgument is int argumentIndex)
         {
             if (argumentIndex >= scope.Arguments.Count)
@@ -578,6 +580,7 @@ public static class SymbolBinder
             ExactGenericArguments = exactMethodArguments,
             ExactOptionalParameterTypes = exactOptionalTypes ?? (method.OptionalParameterTypes is null ? null : []),
         };
+
         if (scope.TryGetDeclaration(declaring, out var own))
         {
             var bound = BindOwnMethod(own, declaring, scope, syntax, parameterTypes, boundParameterTypes, returnType,
@@ -783,6 +786,7 @@ public static class SymbolBinder
                     return false;
                 }
             });
+
             return nearest is null ? "" : NameSuggestions.Parenthetical(nearest);
         }
     }
@@ -1005,6 +1009,7 @@ public static class SymbolBinder
                 })],
                 IsDeclared = false,
             };
+
             return new BoundMethod(own.DefineForward(forward), null, optionalTypes);
         }
 

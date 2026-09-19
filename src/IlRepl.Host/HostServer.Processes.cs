@@ -46,6 +46,7 @@ public sealed partial class HostServer
             group.Adopt(scope.ProcessId);
             await group.StopAsync().ConfigureAwait(false);
         });
+
         await Task.WhenAll(cleanups).ConfigureAwait(false);
     }
 }

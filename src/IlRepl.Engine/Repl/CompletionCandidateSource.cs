@@ -173,6 +173,7 @@ internal sealed class CompletionCandidateSource
                     ".load" => ["--reload", "--framework", "--configuration", "--no-build"],
                     _ => ["--original"],
                 };
+
                 foreach (var option in options)
                 {
                     _candidates.Add(new OperandCandidate
@@ -486,6 +487,7 @@ internal sealed class CompletionCandidateSource
             Rank = new CandidateRankFacts(matching, label, _scope.IsSessionType(type),
                 TypePreference(type), generated, DeclaringPath: SymbolRenderer.IlPath(type)),
         };
+
         if (_site.Kind == CompletionSiteKind.TypeArgument)
         {
             var supplied = type;
@@ -542,6 +544,7 @@ internal sealed class CompletionCandidateSource
                 ParameterList: string.Join(", ", method.ParameterTypes.Select(SymbolRenderer.Pretty)),
                 DeclaringPath: method.DeclaringType is null ? "" : SymbolRenderer.IlPath(method.DeclaringType)),
         };
+
         if (method.IsGenericDefinition)
         {
             _candidates.Add(candidate with { Kind = CompletionKind.TypeArguments, StartsGeneric = true });

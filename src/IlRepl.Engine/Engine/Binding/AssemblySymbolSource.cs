@@ -279,6 +279,7 @@ public sealed class AssemblySymbolSource
         {
             IsVisible = IsVisible(handle),
         };
+
         lock (_gate)
         {
             _entries.TryAdd(handle, entry);
@@ -411,6 +412,7 @@ public sealed class AssemblySymbolSource
             HandleKind.TypeDefinition => _reader.GetString(_reader.GetTypeDefinition((TypeDefinitionHandle)type).Name),
             _ => null,
         };
+
         if (!qualified || name is null)
         {
             return name;

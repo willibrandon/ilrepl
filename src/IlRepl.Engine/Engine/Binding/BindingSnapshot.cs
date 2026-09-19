@@ -211,6 +211,7 @@ public sealed class BindingSnapshot : IDisposable
                 ThisIndex = ThisIndex,
                 Inspecting = Inspecting,
             };
+
             snapshot._leases.AddRange(leases);
             return snapshot;
         }
@@ -378,6 +379,7 @@ public sealed class BindingSnapshot : IDisposable
             Access = context.Scope is { } scope ? new AccessContext(scope.Type is null ? null : RuntimeSymbolImporter.Import(scope.Type),
                 scope.Description) : AccessContext.Cell,
         };
+
         snapshot._leases.AddRange(leases);
         return snapshot;
     }

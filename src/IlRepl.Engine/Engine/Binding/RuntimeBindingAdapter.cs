@@ -129,6 +129,7 @@ public sealed class RuntimeBindingAdapter
                                     ? null : method.Parameters[i].ExactType,
                             })],
                 };
+
                 return new ResolvedMethod(declared.Builder, effective, declaringType)
                 {
                     IsAlias = bound.IsAlias,
@@ -150,6 +151,7 @@ public sealed class RuntimeBindingAdapter
                     MethodInfo info => TypeBuilder.GetMethod(declaringType, info),
                     _ => throw new InvalidOperationException("a definition member is a method or a constructor"),
                 };
+
                 var arguments = ToTypes(method.GenericArguments);
                 if (arguments.Length > 0)
                 {
@@ -259,6 +261,7 @@ public sealed class RuntimeBindingAdapter
                 operand.Field) : ToResolvedMethod(operand.Method!),
             _ => operand.Value,
         };
+
         return new Instruction
         {
             Op = bound.Op,

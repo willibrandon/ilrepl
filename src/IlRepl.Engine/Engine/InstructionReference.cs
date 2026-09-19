@@ -122,6 +122,7 @@ public static class InstructionReference
             Syntax = node.Synthetic ? instruction.Op.Name! : node.InstructionSyntax ?? node.Source.Trim(),
             Notes = [.. help.Notes, .. ContextNotes(instruction, types.Algebra)],
         };
+
         if (state?.Kind != AnalyzedStackKind.Known || outgoing?.Kind != AnalyzedStackKind.Known)
         {
             var note = state?.Invalid == true || outgoing?.Invalid == true
@@ -215,6 +216,7 @@ public static class InstructionReference
                 ? "argument" : "local",
             _ => name == "unaligned." ? "1|2|4" : "value",
         };
+
         return new InstructionHelp(name, name + (operand.Length == 0 ? "" : " " + operand),
             OpcodeTable.StackTransition(opcode).Trim(), Explanation(name), Notes(name), ReferenceUrl + Anchor(name));
     }
@@ -387,6 +389,7 @@ public static class InstructionReference
             "u1" => "uint8", "u2" => "uint16", "u4" => "uint32", "u8" => "uint64", "u" => "native uint",
             "r4" => "float32", "r8" => "float64", _ => "floating point",
         };
+
         return "Converts the top value to " + type + (name.Contains("ovf", StringComparison.Ordinal)
             ? ", throwing OverflowException if it cannot be represented." : " without an overflow check.");
     }

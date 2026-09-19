@@ -44,6 +44,7 @@ public sealed partial class SessionController
                 {
                     HistoryLineLimit = initialRequest.HistoryLineLimit ?? HistoryLineLimit,
                 }, cancellationToken).ConfigureAwait(false);
+
             await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
@@ -66,6 +67,7 @@ public sealed partial class SessionController
                         Document = opened.Document with { Editor = editor },
                         Dirty = opened.Dirty || !SameEditorText(saved, editor),
                     };
+
                     RecoveryCompleted?.Invoke(Workspace with { StartupEditor = saved });
                 }
 
