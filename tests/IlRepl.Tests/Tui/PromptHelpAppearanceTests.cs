@@ -187,6 +187,16 @@ public sealed class PromptHelpAppearanceTests
             await auto.Ctrl().KeyAsync(Hex1bKey.Q, ct: ct);
             await run;
         }
+        catch
+        {
+            // Help ignores Tab while it is not current, and the screen looks the same either way, so the state is recorded.
+            var help = prompt.Help;
+            TestContext.WriteLine($"Help action {help?.SelectedAction}, current {help?.IsCurrent(prompt)}, "
+                + $"link current {help?.IsActionCurrent(prompt, 1)}, analysis pending {prompt.Analyzer?.IsPending}, "
+                + $"completion pending {prompt.Requester?.IsPending}, palette {prompt.Palette}, selected {prompt.SelectedIndex}, "
+                + $"busy {prompt.Busy}, input sequence {prompt.HelpInputSequence}");
+            throw;
+        }
         finally
         {
             await cancellation.CancelAsync();

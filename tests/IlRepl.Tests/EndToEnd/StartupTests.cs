@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Hex1b;
 using Hex1b.Automation;
@@ -70,7 +71,17 @@ public sealed class StartupTests
             records.Add(record);
         }
 
+        // A host that leaves through its hard exit, or that the frontend stops after its grace period, writes no record.
+        // Which records exist, and how long the frontend took to leave, tell the two apart.
+        TestContext.WriteLine("Measurement records: " + string.Join("; ", records.Select(record => record.Role + " "
+            + string.Join(",", record.Stages.OrderBy(stage => stage.Value).Select(stage => stage.Key)))));
         var frontend = records.Single(record => record.Role == "frontend");
+        if (frontend.Stages.TryGetValue("exit", out var left) && frontend.Stages.TryGetValue("host-ready", out var ready))
+        {
+            var elapsed = Stopwatch.GetElapsedTime(ready, left).TotalMilliseconds;
+            TestContext.WriteLine($"Frontend left {elapsed:F0} ms after the host was ready.");
+        }
+
         var rendered = frontend.Stages["prompt-rendered"];
         Assert.IsGreaterThanOrEqualTo(rendered, frontend.Stages["host-starting"]);
         Assert.IsGreaterThan(frontend.Stages["host-starting"], frontend.Stages["host-ready"]);
