@@ -62,8 +62,8 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
                     SwitchExpressionSyntax choice => (choice.OpenBraceToken, choice.CloseBraceToken),
                     InitializerExpressionSyntax initializer => (initializer.OpenBraceToken, initializer.CloseBraceToken),
                     AnonymousObjectCreationExpressionSyntax anonymous => (anonymous.OpenBraceToken, anonymous.CloseBraceToken),
-                    _ => (((PropertyPatternClauseSyntax)context.Node).OpenBraceToken,
-                        ((PropertyPatternClauseSyntax)context.Node).CloseBraceToken),
+                    PropertyPatternClauseSyntax pattern => (pattern.OpenBraceToken, pattern.CloseBraceToken),
+                    _ => default,
                 };
 
                 if (SharesLine(open, close))

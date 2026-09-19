@@ -72,7 +72,8 @@ public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer
             CompilationUnitSyntax unit => unit.Members,
             BaseNamespaceDeclarationSyntax space => space.Members,
             AccessorListSyntax accessors => accessors.Accessors,
-            _ => ((TypeDeclarationSyntax)context.Node).Members,
+            TypeDeclarationSyntax type => type.Members,
+            _ => [],
         };
 
         for (var index = 0; index + 1 < items.Count; index++)
