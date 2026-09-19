@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace IlRepl.SourceGen;
 
 /// <summary>
-/// Requires a blank line after a closing brace where the SDK's rule is silent: comments, members, and lines such as "});".
+/// Requires a blank line after a line that begins with a closing brace, where the SDK's rule is silent on it.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class BlankLineAfterBlockAnalyzer : DiagnosticAnalyzer

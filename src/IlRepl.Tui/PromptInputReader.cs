@@ -70,11 +70,19 @@ internal sealed class PromptInputReader(
         // that rebuilds the palette at that moment can leave the delivery without the editor, and the text with it.
         // A paste meant for the prompt is therefore read here, which does not depend on where focus is. Later input
         // waits for it alone: a paste that travels on through focus has no one here to say when it has landed.
-        if (item is Hex1bPasteEvent paste && take(paste.Paste))
+        if (item is Hex1bPasteEvent paste)
         {
+            // The gate stands before the read starts, because a paste that has already arrived in full can be applied at once.
             _paste = paste.Paste;
             _applied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            item = Hex1bKeyEvent.Plain(Hex1bKey.None);
+            if (take(paste.Paste))
+            {
+                item = Hex1bKeyEvent.Plain(Hex1bKey.None);
+            }
+            else
+            {
+                Applied();
+            }
         }
 
         return true;

@@ -45,7 +45,7 @@ internal static class DiagnosticDescriptors
     /// </summary>
     internal static readonly DiagnosticDescriptor BlankLineAfterBrace = new(
         id: "ILREPL0005",
-        title: "A closing brace is followed by a blank line",
+        title: "A line that begins with a closing brace is followed by a blank line",
         messageFormat: "Leave a blank line after the closing brace above",
         category: "IlRepl.Layout",
         defaultSeverity: DiagnosticSeverity.Error,
