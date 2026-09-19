@@ -502,6 +502,7 @@ internal sealed partial class ControlFlowAnalysis<T>(FlowTypeRules<T> types) whe
                         {
                             thisArgumentIsOriginal = filterPaths.All(path => path.ThisArgumentIsOriginal);
                         }
+
                         // Ordinary control flow retains verifier paths even when constant propagation excludes them.
                         // Constructor calls initialize this state; conditional edges and exception dispatch refine paths.
                         state = WithExceptional(new FlowState<T>([.. output], state.HasUnknownPath,

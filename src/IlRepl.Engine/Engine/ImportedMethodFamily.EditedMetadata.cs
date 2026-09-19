@@ -144,6 +144,7 @@ internal sealed partial class ImportedMethodFamily
         {
             Add(body, declaration);
         }
+
         // Edited slots replace the pinned mapping; duplicates to the same slot remain idempotent.
         foreach (var (method, body) in _methods.Where(pair => pair.Value is not null
             && pair.Key.DeclaringType is { } owner && DefinitionOf(owner) == original))

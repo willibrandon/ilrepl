@@ -29,7 +29,8 @@ public sealed class QualifiedNameAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeName(SyntaxNodeAnalysisContext context)
     {
         var node = context.Node;
-        if (!node.ToString().StartsWith("System.", StringComparison.Ordinal)
+        var text = node.ToString();
+        if (!text.StartsWith("System.", StringComparison.Ordinal) && !text.StartsWith("global::System.", StringComparison.Ordinal)
             || node.Ancestors().Any(ancestor => ancestor is UsingDirectiveSyntax))
         {
             return;

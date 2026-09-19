@@ -49,6 +49,7 @@ internal sealed partial class StructuralObservation
         {
             return Incomplete("collection changed during observation");
         }
+
         // Reflection boxes these volatile value fields without an acquire read; order the snapshot explicitly.
         Thread.MemoryBarrier();
         var count = State<int>("_count");

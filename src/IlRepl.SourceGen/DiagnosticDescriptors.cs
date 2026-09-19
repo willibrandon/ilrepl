@@ -8,7 +8,7 @@ namespace IlRepl.SourceGen;
 internal static class DiagnosticDescriptors
 {
     /// <summary>
-    /// A block is never written on one line, and each of its braces begins a line.
+    /// A block, type, namespace, or switch is never written on one line, and each of its braces stands alone on its line.
     /// </summary>
     internal static readonly DiagnosticDescriptor BlockIsNotExpanded = new(
         id: "ILREPL0001",
@@ -36,6 +36,17 @@ internal static class DiagnosticDescriptors
         id: "ILREPL0004",
         title: "A System type is imported instead of written out in full",
         messageFormat: "Import '{0}' with a using directive and write '{1}'",
+        category: "IlRepl.Layout",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// A closing brace is followed by a blank line before the comment or member that comes next.
+    /// </summary>
+    internal static readonly DiagnosticDescriptor BlankLineAfterBrace = new(
+        id: "ILREPL0005",
+        title: "A closing brace is followed by a blank line",
+        messageFormat: "Leave a blank line after the closing brace above",
         category: "IlRepl.Layout",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);

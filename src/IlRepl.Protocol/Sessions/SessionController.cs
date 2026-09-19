@@ -342,6 +342,7 @@ public sealed partial class SessionController : IReplEngine
                 reply = location is null ? await _engine.HandleAsync(line, cancellationToken).ConfigureAwait(false)
                     : await _engine.HandleSourceAsync(line, location, cancellationToken).ConfigureAwait(false);
             }
+
             // Hosted input remains paired with the source revision that actually acknowledged it.
             if (_engine is not IHostedEngine)
             {

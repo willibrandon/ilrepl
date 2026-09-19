@@ -43,6 +43,7 @@ internal sealed partial class ImportedMethodFamily
             {
                 return;
             }
+
             // An unbound function pointer can receive metadata objects after it leaves the copied family.
             if (op == OpCodes.Ldftn)
             {

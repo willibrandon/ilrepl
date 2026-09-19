@@ -78,6 +78,7 @@ public sealed class LocalSocketListener : IDisposable
                     await stream.WriteAsync(new byte[] { 1 }, cancellationToken).ConfigureAwait(false);
                     return stream;
                 }
+
                 // Windows Unix sockets can leave a peer's pending read waiting after shutdown and close.
                 // Send an explicit rejection so the peer never relies on EOF to recognize a refused bootstrap.
                 await stream.WriteAsync(new byte[] { 0 }, cancellationToken).ConfigureAwait(false);

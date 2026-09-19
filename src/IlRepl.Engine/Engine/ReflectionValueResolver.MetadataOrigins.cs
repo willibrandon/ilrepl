@@ -62,6 +62,7 @@ internal sealed partial class ReflectionValueResolver
                     _ordinaryMetadataOrigins.Add((visited.Method, visited.Origin, isCopiedMember));
                 }
             }
+
             // Nested queries only schedule alternatives; only the outer traversal has a complete answer to cache.
             _copiedMetadataQueries.Add(key, _copiedMetadataFound);
             return _copiedMetadataFound;

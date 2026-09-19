@@ -442,6 +442,7 @@ public static class ProcessNativeRunner
         var count = await stream.ReadAtLeastAsync(buffer.AsMemory(), buffer.Length, throwOnEndOfStream: false).ConfigureAwait(false);
         return Encoding.UTF8.GetString(buffer, 0, count);
     }
+
     private static async Task WriteInputAsync(Stream stream, string input, CancellationToken cancellationToken)
     {
         await using (stream.ConfigureAwait(false))

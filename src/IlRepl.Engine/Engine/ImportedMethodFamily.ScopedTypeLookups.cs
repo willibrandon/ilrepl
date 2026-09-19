@@ -94,6 +94,7 @@ internal sealed partial class ImportedMethodFamily
         {
             instructions.Add(il.Create(OpCodes.Stloc, argument));
         }
+
         // Assembly and Module receivers are reference types, including constrained generic instantiations.
         instructions.Add(il.Create(OpCodes.Ldind_Ref));
         foreach (var argument in arguments)

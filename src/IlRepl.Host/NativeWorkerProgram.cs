@@ -82,6 +82,7 @@ internal static class NativeWorkerProgram
                     {
                         continue;
                     }
+
                     // Maintain at most 100 driver calls per second while allowing runtime events to stop the workload.
                     var next = TimeSpan.FromMilliseconds(state.Report.Invocations * 10L) - elapsed.Elapsed;
                     if (next > TimeSpan.Zero)

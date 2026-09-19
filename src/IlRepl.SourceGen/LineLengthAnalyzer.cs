@@ -50,7 +50,7 @@ public sealed class LineLengthAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    // A single word, such as a link in a comment, has nowhere to break.
+    // Only a comment can hold a single word with nowhere to break, such as a link. Code can always be wrapped.
     private static bool IsUnbreakable(TextLine line)
     {
         var text = line.ToString().Trim();
@@ -61,6 +61,10 @@ public sealed class LineLengthAnalyzer : DiagnosticAnalyzer
         else if (text.StartsWith("//", StringComparison.Ordinal))
         {
             text = text.Substring(2).TrimStart();
+        }
+        else
+        {
+            return false;
         }
 
         return text.IndexOfAny(s_blanks) < 0;

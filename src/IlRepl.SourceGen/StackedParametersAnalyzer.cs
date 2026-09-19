@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -21,13 +22,17 @@ public sealed class StackedParametersAnalyzer : DiagnosticAnalyzer
     {
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.EnableConcurrentExecution();
-        context.RegisterSyntaxNodeAction(AnalyzeParameters, SyntaxKind.ParameterList, SyntaxKind.BracketedParameterList);
+        context.RegisterSyntaxNodeAction(AnalyzeParameters, SyntaxKind.ParameterList, SyntaxKind.BracketedParameterList,
+            SyntaxKind.FunctionPointerParameterList);
     }
 
     private static void AnalyzeParameters(SyntaxNodeAnalysisContext context)
     {
-        var list = (BaseParameterListSyntax)context.Node;
-        if (list.Parameters.Count == 0)
+        var list = context.Node;
+        var parameters = list is FunctionPointerParameterListSyntax pointer
+            ? pointer.Parameters.Cast<SyntaxNode>().ToList()
+            : ((BaseParameterListSyntax)list).Parameters.Cast<SyntaxNode>().ToList();
+        if (parameters.Count == 0)
         {
             return;
         }
@@ -39,15 +44,15 @@ public sealed class StackedParametersAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        foreach (var parameter in list.Parameters)
+        foreach (var parameter in parameters)
         {
             var first = parameter.GetFirstToken();
             var previous = first.GetPreviousToken();
             var startsItsLine = tree.GetLineSpan(previous.Span).EndLinePosition.Line != tree.GetLineSpan(first.Span).StartLinePosition.Line;
             if (!startsItsLine)
             {
-                context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.ParametersAreNotStacked, parameter.GetLocation(),
-                    parameter.Identifier.ValueText));
+                var name = parameter is ParameterSyntax named ? named.Identifier.ValueText : parameter.ToString();
+                context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.ParametersAreNotStacked, parameter.GetLocation(), name));
             }
         }
     }

@@ -32,6 +32,7 @@ public sealed partial class Session
         CellsRun++;
         Submissions++;
     }
+
     /// <summary>
     /// Defers JIT preparation, delegates, and argument values while reconstructing source.
     /// </summary>

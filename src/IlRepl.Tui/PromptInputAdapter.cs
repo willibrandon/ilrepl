@@ -79,6 +79,7 @@ internal sealed class PromptInputAdapter(
         {
             return false;
         }
+
         // Narrow terminals wrap the notice between ANSI cursor moves and may omit the inter-word spaces.
         var painted = string.Concat(AnsiTokenizer.Tokenize(text).OfType<TextToken>().Select(token => token.Text));
         return painted.Replace(" ", "", StringComparison.Ordinal).Contains("PressCtrl+Cagain", StringComparison.Ordinal);

@@ -295,6 +295,7 @@ public sealed partial class OwnedProcessGroup : IDisposable
                 {
                     break;
                 }
+
                 // Darwin can return EPERM while an exited group's zombies await reaping.
                 if (error != 0 && !(OperatingSystem.IsMacOS() && error == 1))
                 {

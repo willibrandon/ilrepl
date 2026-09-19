@@ -64,6 +64,7 @@ public sealed class NativeAddressEvidence : IDisposable
         {
             return;
         }
+
         // Only relevant IL operands are candidates; buffered runtimes may not expose their selected listing until shutdown.
         foreach (var (kind, symbol, emit) in _pending)
         {
@@ -238,6 +239,7 @@ public sealed class NativeAddressEvidence : IDisposable
         {
             return;
         }
+
         // One attribute definition per probe assembly; subsequent grants reuse its constructor.
         var attributeName = "System.Runtime.CompilerServices.IgnoresAccessChecksToAttribute";
         var attribute = _assembly.GetType(attributeName);

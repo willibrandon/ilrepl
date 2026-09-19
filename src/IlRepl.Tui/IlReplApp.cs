@@ -755,6 +755,7 @@ public static partial class IlReplApp
         {
             enter = EnterAction.Busy;
         }
+
         // The scrollbar takes the last column of the transcript panel.
         var lineWidth = size.Width > 1 ? size.Width - 1 : 0;
         var root = ctx.VStack(v =>

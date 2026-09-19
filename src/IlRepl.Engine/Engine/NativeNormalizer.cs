@@ -279,6 +279,7 @@ public static partial class NativeNormalizer
             {
                 lines[index] = lines[index].Remove(edit.Key.Start, edit.Key.Length).Insert(edit.Key.Start, edit.Value);
             }
+
             // Relocations are explicit runtime evidence of a process-dependent value, never a guessed large integer.
             if (lines[index].Contains("reloc", StringComparison.OrdinalIgnoreCase)
                 && Relocation().Matches(lines[index]).Any(match => TryNumber(match.Groups[2].Value, out _)))
@@ -525,6 +526,7 @@ public static partial class NativeNormalizer
             offset += (ulong)bytes.Groups[1].Length / 2;
             result[index] = compilation.Address + offset;
         }
+
         // A cold region or omitted bytes cannot establish a contiguous instruction location.
         return offset == (ulong)compilation.CodeSize ? result : [];
     }
