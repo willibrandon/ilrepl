@@ -16,7 +16,7 @@ var ridOption = new Option<string>("--rid") { Description = "The runtime identif
 var versionOption = new Option<string>("--package-version")
 {
     Description = "The package version, with or without a leading v.",
-    DefaultValueFactory = _ => "0.5.1",
+    DefaultValueFactory = _ => "0.5.2",
 };
 var outputOption = new Option<string>("--output")
 {
