@@ -199,7 +199,9 @@ public static class TypeNameFixture
         {
             var signature = new BlobBuilder();
             new BlobEncoder(signature).MethodSignature(genericParameterCount: methodName == "Probe" ? 1 : 0).Parameters(0,
-                returns => EncodeType(returns.Type(), result), _ => { });
+                returns => EncodeType(returns.Type(), result), _ =>
+                {
+                });
             var method = metadata.AddMethodDefinition(MethodAttributes.Static
                 | (methodName == "Read" || methodName == "Probe" ? MethodAttributes.Public : MethodAttributes.Private),
                 MethodImplAttributes.IL, metadata.GetOrAddString(methodName), metadata.GetOrAddBlob(signature),

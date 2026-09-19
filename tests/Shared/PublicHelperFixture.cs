@@ -202,7 +202,9 @@ public static class PublicHelperFixture
             {
                 var invoke = new BlobBuilder();
                 new BlobEncoder(invoke).MethodSignature(isInstanceMethod: true).Parameters(0,
-                    result => result.Type().GenericTypeParameter(0), _ => { });
+                    result => result.Type().GenericTypeParameter(0), _ =>
+                    {
+                    });
                 selected.OpCode(ILOpCode.Callvirt);
                 selected.Token(metadata.AddMemberReference(callbackType, metadata.GetOrAddString("Invoke"),
                     metadata.GetOrAddBlob(invoke)));
@@ -235,7 +237,9 @@ public static class PublicHelperFixture
             if (shape == "identity")
             {
                 new BlobEncoder(property).MethodSignature(isInstanceMethod: true).Parameters(0,
-                    result => result.Type().String(), _ => { });
+                    result => result.Type().String(), _ =>
+                    {
+                    });
                 body.OpCode(ILOpCode.Callvirt);
                 body.Token(metadata.AddMemberReference(reflected, metadata.GetOrAddString("get_FullName"),
                     metadata.GetOrAddBlob(property)));
@@ -244,7 +248,9 @@ public static class PublicHelperFixture
             {
                 var assembly = Type("System.Reflection", "Assembly");
                 new BlobEncoder(property).MethodSignature(isInstanceMethod: true).Parameters(0,
-                    result => result.Type().Type(assembly, isValueType: false), _ => { });
+                    result => result.Type().Type(assembly, isValueType: false), _ =>
+                    {
+                    });
                 body.OpCode(ILOpCode.Callvirt);
                 body.Token(metadata.AddMemberReference(reflected, metadata.GetOrAddString("get_Assembly"),
                     metadata.GetOrAddBlob(property)));

@@ -149,7 +149,9 @@ public sealed partial class SymbolIdentityTests
     [TestMethod]
     public void Definition_LoadedTwice_IsTwoIdentities()
     {
-        var (_, image, _) = CecilFixture.Build((_, type) => { });
+        var (_, image, _) = CecilFixture.Build((_, type) =>
+        {
+        });
         var first = new AssemblyLoadContext("identity-first", isCollectible: true);
         var second = new AssemblyLoadContext("identity-second", isCollectible: true);
         try

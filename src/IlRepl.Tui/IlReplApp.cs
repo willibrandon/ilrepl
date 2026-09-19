@@ -350,7 +350,13 @@ public static partial class IlReplApp
         var panel = FindNode<SelectionPanelNode>(app);
         if (panel is null)
         {
-            return new DragHandler(onMove: (_, _, _) => { }, onEnd: _ => { });
+            return new DragHandler(
+                onMove: (_, _, _) =>
+                {
+                },
+                onEnd: _ =>
+                {
+                });
         }
 
         // Copy mode starts on the first movement, with the anchor where the press was, so a plain

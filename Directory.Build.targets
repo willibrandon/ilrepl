@@ -8,12 +8,18 @@
     time into the same folder, where one build's clean removes the assembly another project is compiling against.
     Removing those properties leaves exactly one build of the analyzers.
   -->
+  <PropertyGroup>
+    <_AnalyzerPropertiesToRemove>IncludeIlReplHostInOutput;RuntimeIdentifier;SelfContained</_AnalyzerPropertiesToRemove>
+    <_AnalyzerPropertiesToRemove
+      >$(_AnalyzerPropertiesToRemove);PublishAot;PublishReadyToRun;PublishSingleFile;PublishTrimmed</_AnalyzerPropertiesToRemove>
+  </PropertyGroup>
+
   <ItemGroup Condition="'$(MSBuildProjectName)' != 'IlRepl.SourceGen' and '$(_IlReplHostBuildDirectory)' == ''
                         and Exists('$(MSBuildThisFileDirectory)src/IlRepl.SourceGen/IlRepl.SourceGen.csproj')">
     <ProjectReference Include="$(MSBuildThisFileDirectory)src/IlRepl.SourceGen/IlRepl.SourceGen.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false"
                       PrivateAssets="all"
-                      GlobalPropertiesToRemove="IncludeIlReplHostInOutput;RuntimeIdentifier;SelfContained;PublishAot;PublishReadyToRun;PublishSingleFile;PublishTrimmed" />
+                      GlobalPropertiesToRemove="$(_AnalyzerPropertiesToRemove)" />
   </ItemGroup>
 </Project>

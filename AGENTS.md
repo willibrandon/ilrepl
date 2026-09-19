@@ -12,7 +12,7 @@ These instructions apply to the entire repository.
 ## Code
 
 - Keep one type per file.
-- Keep lines at 140 characters or fewer.
+- Keep C# lines at 140 characters or fewer. In other files, keep changed lines within the same limit.
 - Give every body braces, with each brace on its own line. This includes single statements, `try`, `catch`, `finally`, `else`, and `lock`.
 - Leave a blank line after a closing brace before the next statement.
 - When a parameter list does not fit on one line, put every parameter on its own line.

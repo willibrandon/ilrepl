@@ -380,7 +380,9 @@ public sealed class CompletionRequesterTests
         var requester = state.Requester!;
         requester.Refresh(state);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        state.Submission = new Submission(engine, [], 0, false, ct => release.Task.WaitAsync(ct), _ => { });
+        state.Submission = new Submission(engine, [], 0, false, ct => release.Task.WaitAsync(ct), _ =>
+        {
+        });
         try
         {
             requester.Refresh(state);

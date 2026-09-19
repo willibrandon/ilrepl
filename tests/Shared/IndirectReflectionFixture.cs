@@ -598,7 +598,9 @@ public static class IndirectReflectionFixture
             instructions.Call(MethodReference(typeof(RuntimeMethodHandle).GetMethod(nameof(RuntimeMethodHandle.GetFunctionPointer))!));
             var indirectSignature = new BlobBuilder();
             new BlobEncoder(indirectSignature).MethodSignature(isInstanceMethod: true).Parameters(0,
-                value => EncodeType(value.Type(), inspection.ReturnType), _ => { });
+                value => EncodeType(value.Type(), inspection.ReturnType), _ =>
+                {
+                });
             instructions.OpCode(ILOpCode.Calli);
             instructions.Token(metadata.AddStandaloneSignature(metadata.GetOrAddBlob(indirectSignature)));
         }

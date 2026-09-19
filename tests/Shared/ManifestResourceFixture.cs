@@ -38,7 +38,9 @@ public static class ManifestResourceFixture
             MetadataTokens.FieldDefinitionHandle(1), MetadataTokens.MethodDefinitionHandle(1));
         var executingSignature = new BlobBuilder();
         new BlobEncoder(executingSignature).MethodSignature().Parameters(0,
-            result => result.Type().Type(assemblyType, isValueType: false), _ => { });
+            result => result.Type().Type(assemblyType, isValueType: false), _ =>
+            {
+            });
         var executing = metadata.AddMemberReference(assemblyType, metadata.GetOrAddString("GetExecutingAssembly"),
             metadata.GetOrAddBlob(executingSignature));
         var signature = new BlobBuilder();
@@ -92,7 +94,9 @@ public static class ManifestResourceFixture
         if (stream)
         {
             var read = new BlobBuilder();
-            new BlobEncoder(read).MethodSignature(isInstanceMethod: true).Parameters(0, result => result.Type().Int32(), _ => { });
+            new BlobEncoder(read).MethodSignature(isInstanceMethod: true).Parameters(0, result => result.Type().Int32(), _ =>
+            {
+            });
             instructions.OpCode(ILOpCode.Callvirt);
             instructions.Token(metadata.AddMemberReference(streamType, metadata.GetOrAddString("ReadByte"), metadata.GetOrAddBlob(read)));
         }

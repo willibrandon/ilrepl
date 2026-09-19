@@ -113,7 +113,9 @@ public sealed record PromptHelpWidget(PromptState State, IReadOnlyList<Completio
         }
 
         b.Ctrl().Key(Hex1bKey.Q).Action(context => context.RequestStop(), "Quit");
-        b.AnyCharacter().Action(_ => { }, "Read-only help");
+        b.AnyCharacter().Action(_ =>
+        {
+        }, "Read-only help");
     }
 
     /// <summary>

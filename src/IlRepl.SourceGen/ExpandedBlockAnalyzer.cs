@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace IlRepl.SourceGen;
 
 /// <summary>
-/// Requires each brace of a statement block to begin its own line, so no block is written on one line.
+/// Requires each brace of a block to begin its own line, a lambda body included, so no block is written on one line.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
@@ -27,13 +27,6 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeBlock(SyntaxNodeAnalysisContext context)
     {
         var block = (BlockSyntax)context.Node;
-
-        // A lambda's body sits inside an expression, where a short block reads better in place.
-        if (block.Parent is AnonymousFunctionExpressionSyntax)
-        {
-            return;
-        }
-
         if (SharesLineWithPreviousToken(block.OpenBraceToken) || SharesLineWithPreviousToken(block.CloseBraceToken))
         {
             context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlockIsNotExpanded, block.OpenBraceToken.GetLocation()));

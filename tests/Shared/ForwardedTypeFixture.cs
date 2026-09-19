@@ -35,12 +35,16 @@ public static class ForwardedTypeFixture
             metadata.GetOrAddString("String"), reference, 0);
         var executingSignature = new BlobBuilder();
         new BlobEncoder(executingSignature).MethodSignature().Parameters(0,
-            result => result.Type().Type(assemblyType, isValueType: false), _ => { });
+            result => result.Type().Type(assemblyType, isValueType: false), _ =>
+            {
+            });
         var executing = metadata.AddMemberReference(assemblyType, metadata.GetOrAddString("GetExecutingAssembly"),
             metadata.GetOrAddBlob(executingSignature));
         var forwardedSignature = new BlobBuilder();
         new BlobEncoder(forwardedSignature).MethodSignature(isInstanceMethod: true).Parameters(0,
-            result => result.Type().SZArray().Type(reflectedType, isValueType: false), _ => { });
+            result => result.Type().SZArray().Type(reflectedType, isValueType: false), _ =>
+            {
+            });
         var forwarded = metadata.AddMemberReference(assemblyType, metadata.GetOrAddString("GetForwardedTypes"),
             metadata.GetOrAddBlob(forwardedSignature));
         var instructions = new InstructionEncoder(new BlobBuilder());

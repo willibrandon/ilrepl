@@ -185,7 +185,9 @@ public sealed class NameSuggestionsTests
             module.AssemblyReferences.Add(reference);
             module.ExportedTypes.Add(new ExportedType("N", outer.Name, module, reference) { IsForwarder = true });
         }, resolver, "FacadeDefined" + suffix);
-        var (_, _, unrelated) = CecilFixture.Build((_, _) => { }, resolver, "NotForwarded" + suffix);
+        var (_, _, unrelated) = CecilFixture.Build((_, _) =>
+        {
+        }, resolver, "NotForwarded" + suffix);
         var target = nested ? outer.GetNestedType("Inner")! : outer;
         var path = outer.FullName + (nested ? "/Inner" : "");
         var hint = facade.GetName().Name!;

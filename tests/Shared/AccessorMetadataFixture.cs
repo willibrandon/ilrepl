@@ -67,10 +67,18 @@ public static class AccessorMetadataFixture
         Method("Unused", MethodAttributes.Public | methodFlags, Blob(0, 0, 8), il => il.LoadConstantI4(13));
         Method("get_Value", MethodAttributes.Public | MethodAttributes.SpecialName | methodFlags,
             Blob(0, 0, 0x12, 12), il => il.OpCode(ILOpCode.Ldnull));
-        Method("set_Value", MethodAttributes.Public | MethodAttributes.SpecialName | methodFlags, Blob(0, 1, 1, 0x12, 12), _ => { });
-        Method("add_Changed", MethodAttributes.Public | MethodAttributes.SpecialName | methodFlags, Blob(0, 1, 1, 0x12, 9), _ => { });
-        Method("remove_Changed", MethodAttributes.Public | MethodAttributes.SpecialName | methodFlags, Blob(0, 1, 1, 0x12, 9), _ => { });
-        Method("Raise", MethodAttributes.Public | MethodAttributes.SpecialName | methodFlags, Blob(0, 0, 1), _ => { });
+        Method("set_Value", MethodAttributes.Public | MethodAttributes.SpecialName | methodFlags, Blob(0, 1, 1, 0x12, 12), _ =>
+        {
+        });
+        Method("add_Changed", MethodAttributes.Public | MethodAttributes.SpecialName | methodFlags, Blob(0, 1, 1, 0x12, 9), _ =>
+        {
+        });
+        Method("remove_Changed", MethodAttributes.Public | MethodAttributes.SpecialName | methodFlags, Blob(0, 1, 1, 0x12, 9), _ =>
+        {
+        });
+        Method("Raise", MethodAttributes.Public | MethodAttributes.SpecialName | methodFlags, Blob(0, 0, 1), _ =>
+        {
+        });
         var tagConstructor = Method(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
             Blob(0x20, 1, 1, 0x12, 17), il =>
             {

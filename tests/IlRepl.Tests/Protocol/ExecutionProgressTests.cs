@@ -188,7 +188,10 @@ public sealed class ExecutionProgressTests
         {
             await entered.Task.WaitAsync(token);
             var identity = engine.Progress.Identity;
-            caller = Task.Run(() => { interrupt = engine.InterruptAsync(identity, token); }, token);
+            caller = Task.Run(() =>
+            {
+                interrupt = engine.InterruptAsync(identity, token);
+            }, token);
             await interruptEntered.Task.WaitAsync(token);
             await caller.WaitAsync(token);
             await cleanupEntered.Task.WaitAsync(token);
