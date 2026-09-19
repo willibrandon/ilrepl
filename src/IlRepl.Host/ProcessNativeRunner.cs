@@ -69,8 +69,9 @@ public static class ProcessNativeRunner
             return new NativeReply { Outcome = "indeterminate", Left = left, Right = right };
         }
 
-        var leftLines = left.Compilations[^1].Normalized;
-        var rightLines = right.Compilations[^1].Normalized;
+        // An address load is compared as one step, because its length in instructions follows the address and not the code.
+        var leftLines = NativeAddressLoads.Fold(left.Compilations[^1].Normalized);
+        var rightLines = NativeAddressLoads.Fold(right.Compilations[^1].Normalized);
         var equal = leftLines.SequenceEqual(rightLines, StringComparer.Ordinal);
         return new NativeReply
         {

@@ -107,6 +107,10 @@ and instruction structure remain meaningful. If address evidence is insufficient
 indeterminate and explains why. It never reports equality from incomplete evidence. Displayed symbols
 use concise CIL names; comparisons retain their full assembly identities. Ambiguous names stay qualified.
 
+On Arm64 the JIT builds an address from up to four 16-bit moves and leaves out any part that is zero, so
+the same load can take a different number of instructions in each worker. A comparison reads such a load
+as one step. `.jit` on its own still shows every instruction.
+
 `--raw` includes encoding-level detail, including bytes and process-specific addresses. Raw comparisons
 can differ because the workers occupy different addresses. Use normal comparisons for ordinary
 code-generation assertions.
