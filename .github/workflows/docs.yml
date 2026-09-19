@@ -62,7 +62,7 @@ jobs:
           cache-dependency-path: docs/pnpm-lock.yaml
 
       - name: Build the site
-        run: pnpm install --frozen-lockfile && pnpm build
+        run: pnpm install --frozen-lockfile && pnpm build:site
         working-directory: docs
 
       - uses: actions/configure-pages@v6
