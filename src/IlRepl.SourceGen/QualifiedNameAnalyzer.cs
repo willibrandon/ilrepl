@@ -22,7 +22,8 @@ public sealed class QualifiedNameAnalyzer : DiagnosticAnalyzer
     {
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.EnableConcurrentExecution();
-        context.RegisterSyntaxNodeAction(AnalyzeName, SyntaxKind.QualifiedName, SyntaxKind.SimpleMemberAccessExpression);
+        context.RegisterSyntaxNodeAction(AnalyzeName, SyntaxKind.QualifiedName, SyntaxKind.SimpleMemberAccessExpression,
+            SyntaxKind.QualifiedCref);
     }
 
     private static void AnalyzeName(SyntaxNodeAnalysisContext context)
@@ -33,10 +34,24 @@ public sealed class QualifiedNameAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        var left = node is QualifiedNameSyntax qualified ? qualified.Left : ((MemberAccessExpressionSyntax)node).Expression;
+        (SyntaxNode Left, SyntaxNode Written) parts = node switch
+        {
+            QualifiedNameSyntax qualified => (qualified.Left, qualified.Right),
+            MemberAccessExpressionSyntax access => (access.Expression, access.Name),
+            _ => (((QualifiedCrefSyntax)node).Container, ((QualifiedCrefSyntax)node).Member),
+        };
+
+        var (left, written) = parts;
         var model = context.SemanticModel;
-        if (model.GetSymbolInfo(node, context.CancellationToken).Symbol is not INamedTypeSymbol type
-            || model.GetSymbolInfo(left, context.CancellationToken).Symbol is not INamespaceSymbol)
+        var symbol = model.GetSymbolInfo(node, context.CancellationToken).Symbol;
+
+        // An attribute's name binds to the constructor it calls rather than to the type.
+        if (symbol is IMethodSymbol { MethodKind: MethodKind.Constructor } constructor && node.Parent is AttributeSyntax)
+        {
+            symbol = constructor.ContainingType;
+        }
+
+        if (symbol is not INamedTypeSymbol type || model.GetSymbolInfo(left, context.CancellationToken).Symbol is not INamespaceSymbol)
         {
             return;
         }
@@ -53,17 +68,25 @@ public sealed class QualifiedNameAnalyzer : DiagnosticAnalyzer
         }
 
         // The full name stays where the short one already means something else, such as a Mono.Cecil type or a member.
-        var original = type.OriginalDefinition;
-        var visible = model.LookupSymbols(node.SpanStart, name: type.Name);
-        if (visible.Any(symbol => !SymbolEqualityComparer.Default.Equals(symbol.OriginalDefinition, original)))
+        // An attribute is looked up under both of its names, because "Flags" is written for FlagsAttribute.
+        var simple = written is NameMemberCrefSyntax member ? member.Name : written;
+        var spelled = simple is SimpleNameSyntax { Identifier.ValueText: var text } ? text : type.Name;
+        foreach (var candidate in new[] { type.Name, spelled }.Distinct())
         {
-            return;
+            if (model.LookupSymbols(node.SpanStart, name: candidate).Any(other => IsRival(other, type)))
+            {
+                return;
+            }
         }
 
-        var written = node is QualifiedNameSyntax name ? name.Right.ToString() : ((MemberAccessExpressionSyntax)node).Name.ToString();
         context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.NameIsQualified, node.GetLocation(),
-            type.ContainingNamespace.ToDisplayString(), written));
+            type.ContainingNamespace.ToDisplayString(), written.ToString()));
     }
+
+    // A type with another number of type arguments, as IList<T> beside IList, does not compete for the short name.
+    private static bool IsRival(ISymbol other, INamedTypeSymbol type) =>
+        (other is not INamedTypeSymbol named || named.Arity == type.Arity)
+        && !SymbolEqualityComparer.Default.Equals(other.OriginalDefinition, type.OriginalDefinition);
 
     // The name is read from its tokens, so a line break or a comment inside it changes nothing.
     private static bool StartsAtSystem(SyntaxNode node)
@@ -77,6 +100,9 @@ public sealed class QualifiedNameAnalyzer : DiagnosticAnalyzer
                     break;
                 case MemberAccessExpressionSyntax access:
                     node = access.Expression;
+                    break;
+                case QualifiedCrefSyntax cref:
+                    node = cref.Container;
                     break;
                 case AliasQualifiedNameSyntax alias:
                     return alias.Alias.Identifier.IsKind(SyntaxKind.GlobalKeyword) && alias.Name.Identifier.ValueText == "System";

@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Reflection.Emit;
 using IlRepl.Engine.Binding;
 
 namespace IlRepl.Engine;
@@ -7,7 +8,7 @@ namespace IlRepl.Engine;
 /// A method reference resolved at a call site: either a framework method or constructor, with
 /// the optional parameter types of a vararg call, or a method defined in the session with
 /// <c>.method</c>, which is bound to a builder only when the cell is emitted. Nothing here
-/// reflects over a builder, because a <see cref="System.Reflection.Emit.MethodBuilder"/> cannot
+/// reflects over a builder, because a <see cref="MethodBuilder"/> cannot
 /// describe its parameters before its type is created.
 /// </summary>
 public sealed record ResolvedMethod

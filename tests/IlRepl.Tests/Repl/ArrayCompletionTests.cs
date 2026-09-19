@@ -187,7 +187,7 @@ public sealed class ArrayCompletionTests
         GC.KeepAlive(session);
     }
 
-    [System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference CompileAndRelease(Session session)
     {
         var compiled = CellCompiler.Compile(session);

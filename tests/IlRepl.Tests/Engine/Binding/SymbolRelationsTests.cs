@@ -1,3 +1,4 @@
+using System.Collections;
 using IlRepl.Engine;
 using IlRepl.Engine.Binding;
 
@@ -26,17 +27,16 @@ public sealed partial class SymbolRelationsTests
         var scope = new SnapshotBindingScope(snapshot);
         var types = new[]
         {
-            typeof(object), typeof(string), typeof(int), typeof(long), typeof(int?), typeof(ValueType), typeof(Enum), typeof(
-                Environment.SpecialFolder),
+            typeof(object), typeof(string), typeof(int), typeof(long), typeof(int?), typeof(ValueType), typeof(Enum),
+            typeof(Environment.SpecialFolder),
             typeof(Exception), typeof(ArgumentException), typeof(IDisposable), typeof(Stream), typeof(MemoryStream),
-            typeof(IEnumerable<string>), typeof(IEnumerable<object>), typeof(List<string>), typeof(IList<string>), typeof(
-                IReadOnlyList<string>),
-            typeof(string[]), typeof(object[]), typeof(int[]), typeof(int[,]), typeof(Array), typeof(System.Collections.IList), typeof(
-                System.Collections.IEnumerable),
-            typeof(Action<string>), typeof(Action<object>), typeof(Delegate), typeof(Func<object>), typeof(Func<string>), typeof(
-                IComparable<int>),
-            typeof(KeyValuePair<string, int>), typeof(Dictionary<string, int>), typeof(IDictionary<string, int>), typeof(
-                IReadOnlyCollection<string>),
+            typeof(IEnumerable<string>), typeof(IEnumerable<object>), typeof(List<string>), typeof(IList<string>),
+            typeof(IReadOnlyList<string>),
+            typeof(string[]), typeof(object[]), typeof(int[]), typeof(int[,]), typeof(Array), typeof(IList), typeof(IEnumerable),
+            typeof(Action<string>), typeof(Action<object>), typeof(Delegate), typeof(Func<object>), typeof(Func<string>),
+            typeof(IComparable<int>),
+            typeof(KeyValuePair<string, int>), typeof(Dictionary<string, int>), typeof(IDictionary<string, int>),
+            typeof(IReadOnlyCollection<string>),
         };
 
         var disagreements = new List<string>();
@@ -136,11 +136,18 @@ public sealed partial class SymbolRelationsTests
     {
         using var snapshot = BindingSnapshot.Capture(Context);
         var scope = new SnapshotBindingScope(snapshot);
-        var owners = new[] { typeof(Nullable<>), typeof(NeedsClass<>), typeof(NeedsStruct<>), typeof(NeedsNew<>), typeof(NeedsComparable<>),
-            typeof(NeedsStream<>), typeof(List<>) };
-        var arguments = new[] { typeof(int), typeof(string), typeof(object), typeof(int?), typeof(MemoryStream), typeof(
-            Stream), typeof(Exception), typeof(int[]), typeof(IDisposable), typeof(Environment.SpecialFolder), typeof(
-            KeyValuePair<int, int>) };
+        var owners = new[]
+        {
+            typeof(Nullable<>), typeof(NeedsClass<>), typeof(NeedsStruct<>), typeof(NeedsNew<>), typeof(NeedsComparable<>),
+            typeof(NeedsStream<>), typeof(List<>),
+        };
+
+        var arguments = new[]
+        {
+            typeof(int), typeof(string), typeof(object), typeof(int?), typeof(MemoryStream), typeof(Stream), typeof(Exception),
+            typeof(int[]), typeof(IDisposable), typeof(Environment.SpecialFolder), typeof(KeyValuePair<int, int>),
+        };
+
         var disagreements = new List<string>();
         foreach (var owner in owners)
         {

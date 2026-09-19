@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -167,7 +168,7 @@ public static class SessionAssemblies
     /// <returns>True when the assembly is a session assembly.</returns>
     public static bool TryGetDefinition(
         Assembly assembly,
-        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out DefinitionAssembly? definition)
+        [NotNullWhen(true)] out DefinitionAssembly? definition)
     {
         ArgumentNullException.ThrowIfNull(assembly);
         return Owners.TryGetValue(assembly, out definition);

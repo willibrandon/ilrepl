@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace IlRepl.Engine.Binding;
@@ -133,7 +134,7 @@ public sealed class SnapshotTypeTable
         string name,
         bool withArguments,
         bool valueType,
-        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TypeSymbol? type,
+        [NotNullWhen(true)] out TypeSymbol? type,
         bool allowForward = true)
     {
         ArgumentNullException.ThrowIfNull(name);

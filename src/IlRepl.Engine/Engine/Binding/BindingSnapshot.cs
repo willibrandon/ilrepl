@@ -352,8 +352,14 @@ public sealed class BindingSnapshot : IDisposable
             {
                 declaration = context.Types.TryGetMembers(type, out var members)
                     ? CopyDeclaration(symbol, type, members)
-                    : new DeclarationSymbol(symbol, symbol.IsValueType ? RuntimeSymbolImporter.Import(typeof(
-                        ValueType)) : TypeSymbol.Object, [], [], [], [], false)
+                    : new DeclarationSymbol(
+                        symbol,
+                        symbol.IsValueType ? RuntimeSymbolImporter.Import(typeof(ValueType)) : TypeSymbol.Object,
+                        [],
+                        [],
+                        [],
+                        [],
+                        false)
                     { IsPlaceholder = true };
             }
 

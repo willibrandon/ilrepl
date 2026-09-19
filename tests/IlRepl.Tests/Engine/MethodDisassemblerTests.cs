@@ -1003,7 +1003,7 @@ public sealed class MethodDisassemblerTests
         Assert.IsFalse(reference.IsAlive, "the listed definition should be collectable after .reset");
     }
 
-    [System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference ListAndReset(Session session)
     {
         foreach (var line in new[] { ".method int32 Two() {", "ldc.i4 2", "ret", "}" })

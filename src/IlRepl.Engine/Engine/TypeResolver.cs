@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 
@@ -233,7 +234,7 @@ public sealed partial class TypeResolver : IDisposable
     /// <param name="assembly">The assembly.</param>
     /// <param name="image">The bytes read when it was loaded.</param>
     /// <returns>True when the image is known.</returns>
-    public bool TryGetImage(Assembly assembly, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out byte[]? image)
+    public bool TryGetImage(Assembly assembly, [NotNullWhen(true)] out byte[]? image)
     {
         ArgumentNullException.ThrowIfNull(assembly);
         return _images.TryGetValue(assembly, out image);
