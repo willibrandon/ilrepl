@@ -25,6 +25,10 @@ public sealed class Submission
     private readonly bool _inBlockComment;
     private readonly Func<CancellationToken, Task> _persist;
     private readonly Action<SubmissionEvent> _post;
+
+    // Replies the host gave for lines after the one asked about, kept short so progress and cancellation stay responsive.
+    private readonly Queue<HandleReply> _ahead = new();
+    private const int MaximumRun = 32;
     private readonly Lock _comparisonLock = new();
     private readonly CancellationTokenSource _cancellation = new();
     private CancellationTokenSource? _comparisonCancellation;
@@ -171,14 +175,30 @@ public sealed class Submission
                     HandleReply reply;
                     try
                     {
-                        var start = _lines[index].Length - _lines[index].TrimStart().Length;
-                        var location = new AnalysisLocation(_sourceIdentity, index, start, _lines[index].Length - start);
-                        if (_engine is SessionController controller)
+                        if (_ahead.TryDequeue(out var answered))
+                        {
+                            reply = answered;
+                        }
+                        else if (_engine is SessionController controller)
                         {
                             controller.PendingInput = _lines.Skip(index + 1).ToArray();
+
+                            // Only a provisional unit offers a run, because abandoning it withdraws whatever the host took ahead.
+                            var run = provisional ? RunFrom(unit, i) : 1;
+                            var replies = await controller.HandleSourceRunAsync([.. _lines.Skip(index).Take(run)],
+                                [.. Enumerable.Range(index, run).Select(Location)], _cancellation.Token).ConfigureAwait(false);
+                            reply = replies[0];
+                            foreach (var next in replies.Skip(1))
+                            {
+                                _ahead.Enqueue(next);
+                            }
+                        }
+                        else
+                        {
+                            reply = await _engine.HandleSourceAsync(_lines[index], Location(index), _cancellation.Token)
+                                .ConfigureAwait(false);
                         }
 
-                        reply = await _engine.HandleSourceAsync(_lines[index], location, _cancellation.Token).ConfigureAwait(false);
                         if (reply.PendingComparison is not null || reply.PendingNative is not null)
                         {
                             _post(SubmissionEvent.Reply(reply.Lines));
@@ -369,6 +389,24 @@ public sealed class Submission
                 _cancellation.Dispose();
             }
         }
+    }
+
+    private AnalysisLocation Location(int index)
+    {
+        var start = _lines[index].Length - _lines[index].TrimStart().Length;
+        return new AnalysisLocation(_sourceIdentity, index, start, _lines[index].Length - start);
+    }
+
+    // How many of a unit's sends from this one are consecutive lines, so the host can take them in one call.
+    private static int RunFrom(SubmissionUnit unit, int first)
+    {
+        var count = 1;
+        while (count < MaximumRun && first + count < unit.Sends.Count && unit.Sends[first + count] == unit.Sends[first] + count)
+        {
+            count++;
+        }
+
+        return count;
     }
 
     // The engine's open depth counts braces it has seen; the text counts a header waiting for

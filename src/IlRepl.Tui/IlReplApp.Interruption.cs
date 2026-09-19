@@ -58,6 +58,7 @@ public static partial class IlReplApp
                 result.Reply.Lines)
             {
                 SessionEditor = result.Document.Editor, StartupEditor = result.StartupEditor, RuntimeRecovery = true,
+                RecoveredInput = result.RecoveredInput,
             });
         }
     }

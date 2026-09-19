@@ -162,6 +162,96 @@ public sealed partial class SessionController : IReplEngine
     public Task<HandleReply> HandleSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken) =>
         HandleCoreAsync(line, location, cancellationToken);
 
+    /// <summary>
+    /// Handles the first of several retained lines, taking the ordinary instructions that follow it in the same host call.
+    /// </summary>
+    /// <param name="lines">Consecutive lines starting with the one to handle. <see cref="PendingInput"/> holds what follows it.</param>
+    /// <param name="locations">Their locations in the submitting document.</param>
+    /// <param name="cancellationToken">Cancels the operation.</param>
+    /// <returns>A reply for each line handled, always including the first.</returns>
+    public async Task<HandleReply[]> HandleSourceRunAsync(string[] lines, AnalysisLocation[] locations,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        ArgumentNullException.ThrowIfNull(locations);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (lines.Length == 0 || lines.Length != locations.Length)
+        {
+            throw new ArgumentException("Every line needs its location.", nameof(locations));
+        }
+
+        if (lines.Length > 1 && _engine is IHostedEngine)
+        {
+            var replies = await HandleRetainedRunAsync(lines, locations, cancellationToken).ConfigureAwait(false);
+            if (replies.Length != 0)
+            {
+                return replies;
+            }
+        }
+
+        return [await HandleCoreAsync(lines[0], locations[0], cancellationToken).ConfigureAwait(false)];
+    }
+
+    private async Task<HandleReply[]> HandleRetainedRunAsync(string[] lines, AnalysisLocation[] locations,
+        CancellationToken cancellationToken)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+        await _gate.WaitAsync(linked.Token).ConfigureAwait(false);
+        try
+        {
+            if (RuntimeState != SessionRuntimeState.Ready || _engine is not IHostedEngine hosted)
+            {
+                return [];
+            }
+
+            var count = RetainedRun(lines);
+            if (count < 2)
+            {
+                return [];
+            }
+
+            var replies = await hosted.HandleRetainedSourceRunAsync(lines[..count], locations[..count], linked.Token)
+                .ConfigureAwait(false);
+            if (replies.Length == 0)
+            {
+                return replies;
+            }
+
+            for (var index = 0; index < replies.Length; index++)
+            {
+                replies[index] = SuppressStreamedOutput(replies[index]);
+            }
+
+            // A refused line published the revision that holds it, so only what follows it is still unsent.
+            var handled = replies.Length - 1;
+            if (!replies[handled].Succeeded)
+            {
+                _checkpointPendingInput = PendingInput[handled..];
+            }
+
+            _checkpointBatch = replies[handled].Succeeded && PendingInput.Length > handled;
+            return replies;
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException or ReplEngineException)
+        {
+            if (!RecoverHostFailures && exception is ReplEngineException { ExitCode: 3 })
+            {
+                throw;
+            }
+
+            _checkpointBatch = false;
+            return [Failure(exception.Message) with { Quit = _disposed }];
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+            return [new HandleReply(false, true, [], Status)];
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     private async Task<HandleReply> HandleCoreAsync(string line, AnalysisLocation? location, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -528,14 +618,33 @@ public sealed partial class SessionController : IReplEngine
 
         // End the batch before comments, declarations, labels, commands, or closing braces can change its interpretation.
         var comment = Status.Mark.InBlockComment;
-        return IsInstruction(line, ref comment) && IsInstruction(PendingInput[0], ref comment);
+        return Vocabulary.IsInstruction(line, ref comment) && Vocabulary.IsInstruction(PendingInput[0], ref comment);
     }
 
-    private bool IsInstruction(string line, ref bool comment)
+    private int RetainedRun(string[] lines)
     {
-        if (CilLexer.Classify(line, ref comment, out var text) != SourceLineKind.Text) return false;
-        var end = text.AsSpan().IndexOfAny(' ', '\t');
-        return Vocabulary.Opcodes.ContainsKey(end < 0 ? text : text[..end]);
+        if (RequiresCheckpoint(lines[0]) || !CanDeferCheckpoint(lines[0]))
+        {
+            return 0;
+        }
+
+        // A line joins the run while it and the line after it are ordinary instructions in the retained tail.
+        var pending = PendingInput;
+        var comment = Status.Mark.InBlockComment;
+        var count = 0;
+        while (count < lines.Length && count < pending.Length && (count == 0 || lines[count] == pending[count - 1])
+            && !RequiresCheckpoint(lines[count]) && Vocabulary.IsInstruction(lines[count], ref comment))
+        {
+            var following = comment;
+            if (!Vocabulary.IsInstruction(pending[count], ref following))
+            {
+                break;
+            }
+
+            count++;
+        }
+
+        return count;
     }
 
     /// <inheritdoc />

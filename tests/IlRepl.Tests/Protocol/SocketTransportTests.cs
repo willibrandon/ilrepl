@@ -114,7 +114,7 @@ public sealed class SocketTransportTests
             await using var stream = new NetworkStream(impostor);
             var bootstrap = new byte[60];
             "ILRP"u8.CopyTo(bootstrap);
-            var version = mismatch switch { "version" => 999, "previous version" => 3, _ => 4 };
+            var version = mismatch switch { "version" => 999, "previous version" => 4, _ => 5 };
             BinaryPrimitives.WriteInt32LittleEndian(bootstrap.AsSpan(4), version);
             var credentials = listener.Secret.Split('.');
             Convert.FromHexString(credentials[0]).CopyTo(bootstrap, 8);

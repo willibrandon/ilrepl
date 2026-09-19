@@ -58,7 +58,14 @@ internal sealed class DiagnosticTail
     /// <param name="reader">The directly inherited diagnostic pipe reader.</param>
     /// <param name="destination">The current runtime's diagnostic buffer.</param>
     /// <returns>Completion when the last inherited writer closes the pipe.</returns>
-    internal static async Task DrainAsync(StreamReader reader, Func<DiagnosticTail> destination)
+    internal static Task DrainAsync(StreamReader reader, Func<DiagnosticTail> destination)
+    {
+        // A redirected pipe is opened for synchronous reads on Windows, so each asynchronous read holds a pool thread in a
+        // blocking call and cannot even begin until one is free. A thread of its own keeps diagnostics independent of the pool.
+        return OperatingSystem.IsWindows() ? DrainOnThread(reader, destination) : DrainPipeAsync(reader, destination);
+    }
+
+    private static async Task DrainPipeAsync(StreamReader reader, Func<DiagnosticTail> destination)
     {
         var buffer = new char[4096];
         try
@@ -66,11 +73,55 @@ internal sealed class DiagnosticTail
             while (true)
             {
                 var read = await reader.ReadAsync(buffer.AsMemory(), CancellationToken.None).ConfigureAwait(false);
-                if (read == 0) return;
+                if (read == 0)
+                {
+                    return;
+                }
+
                 destination().Append(buffer.AsSpan(0, read));
             }
         }
-        catch (Exception exception) when (exception is IOException or ObjectDisposedException) { }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
+        {
+            // The pipe closed with its process.
+        }
+    }
+
+    private static Task DrainOnThread(StreamReader reader, Func<DiagnosticTail> destination)
+    {
+        var drained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            var buffer = new char[4096];
+            try
+            {
+                while (true)
+                {
+                    var read = reader.Read(buffer, 0, buffer.Length);
+                    if (read == 0)
+                    {
+                        return;
+                    }
+
+                    destination().Append(buffer.AsSpan(0, read));
+                }
+            }
+            catch (Exception exception) when (exception is IOException or ObjectDisposedException)
+            {
+                // The pipe closed with its process.
+            }
+            finally
+            {
+                drained.TrySetResult();
+            }
+        }, 256 * 1024)
+        {
+            IsBackground = true,
+            Name = "ilrepl diagnostics",
+        };
+
+        thread.Start();
+        return drained.Task;
     }
 
     /// <summary>

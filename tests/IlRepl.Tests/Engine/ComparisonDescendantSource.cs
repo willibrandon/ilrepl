@@ -68,14 +68,17 @@ public static partial class ComparisonDescendantSource
     }
 
     /// <summary>
-    /// Checks a recorded process without relying on its original parent remaining alive.
+    /// Checks whether a recorded process can still execute, treating a killed process that awaits reaping as stopped.
     /// </summary>
     /// <param name="record">The process identifier and stable kernel creation identity.</param>
     /// <returns>Whether the process is still running.</returns>
     public static bool IsRunning(string record)
     {
-        using var process = Open(record);
-        return process is not null && !(OperatingSystem.IsWindows() ? process.WaitForExit(0) : process.HasExited);
+        // An orphan is reaped by its container's init process, which can lag. HasExited reports such a zombie as alive.
+        var parts = record.Split(' ');
+        return parts.Length == 2 && int.TryParse(parts[0], CultureInfo.InvariantCulture, out var process)
+            && long.TryParse(parts[1], CultureInfo.InvariantCulture, out var started)
+            && OwnedProcessGroup.IsRunning(new OwnedProcessScope("", process, started, null));
     }
 
     /// <summary>

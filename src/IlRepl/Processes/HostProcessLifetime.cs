@@ -87,9 +87,9 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
                 var scope = OwnedProcessGroup.Describe(process, identity);
                 _scopes.Add(identity, scope);
                 var diagnostics = new DiagnosticTail();
-                _ = DiagnosticTail.DrainAsync(process.StandardError, () => diagnostics);
-                _ = DiagnosticTail.DrainAsync(process.StandardOutput, () => diagnostics);
-                return new OwnedHostProcess(process, scope, diagnostics);
+                var drained = Task.WhenAll(DiagnosticTail.DrainAsync(process.StandardError, () => diagnostics),
+                    DiagnosticTail.DrainAsync(process.StandardOutput, () => diagnostics));
+                return new OwnedHostProcess(process, scope, diagnostics, drained);
             }
             await EnsureSupervisorCoreAsync(cancellationToken).ConfigureAwait(false);
             var current = _current!;
@@ -101,7 +101,8 @@ public sealed class HostProcessLifetime : IProcessSupervision, IAsyncDisposable
             _diagnosticOwners[identity] = current;
             _revision++;
             await AdoptCoreAsync(current, cancellationToken).ConfigureAwait(false);
-            return new OwnedHostProcess(Process.GetProcessById(launched.ProcessId), launched, buffer);
+            // The supervisor relays these diagnostics, and ExitCodeAsync confirms their boundary.
+            return new OwnedHostProcess(Process.GetProcessById(launched.ProcessId), launched, buffer, Task.CompletedTask);
         }
         finally { _gate.Release(); }
     }

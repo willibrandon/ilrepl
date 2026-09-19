@@ -11,6 +11,7 @@ public sealed partial class SessionController : IInterruptibleEngine
     private HostExit? _lastHostExit;
     private HostExit? _pendingHostExit;
     private string[] _checkpointPendingInput = [];
+    private string[] _recoveredInput = [];
 
     /// <summary>
     /// Whether an unexpected host exit starts one attempt to reconstruct the retained source.
@@ -197,7 +198,7 @@ public sealed partial class SessionController : IInterruptibleEngine
             QueuedInput = [];
             Workspace = result;
             SetRuntimeState(SessionRuntimeState.Unavailable);
-            RecoveryCompleted?.Invoke(result);
+            RecoveryCompleted?.Invoke(result with { RecoveredInput = _recoveredInput });
             return result;
         }
     }
@@ -267,7 +268,7 @@ public sealed partial class SessionController : IInterruptibleEngine
         {
             _gate.Release();
         }
-        RecoveryCompleted?.Invoke(result);
+        RecoveryCompleted?.Invoke(result with { RecoveredInput = _recoveredInput });
         return result;
     }
 
@@ -309,6 +310,7 @@ public sealed partial class SessionController : IInterruptibleEngine
     {
         var editor = Editor;
         string[] prefix = [.. _checkpointPendingInput, .. QueuedInput];
+        _recoveredInput = prefix;
         if (prefix.Length == 0) return editor;
         var offset = string.Join('\n', prefix).Length + (editor.Lines.Length == 0 ? 0 : 1);
         return editor with { Lines = [.. prefix, .. editor.Lines], Caret = editor.Caret + offset, Anchor = editor.Anchor + offset };

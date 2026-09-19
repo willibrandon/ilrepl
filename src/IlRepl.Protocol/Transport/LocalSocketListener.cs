@@ -13,7 +13,7 @@ public sealed class LocalSocketListener : IDisposable
     private readonly string _directory;
     private readonly byte[] _secret = RandomNumberGenerator.GetBytes(32);
     private readonly Guid _generation = Guid.NewGuid();
-    private const int ProtocolVersion = 4;
+    private const int ProtocolVersion = 5;
     private int _disposed;
 
     /// <summary>

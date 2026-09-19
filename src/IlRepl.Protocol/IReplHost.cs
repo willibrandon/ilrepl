@@ -23,6 +23,15 @@ public partial interface IReplHost
     Task<HandleReply> HandleRetainedSourceAsync(string line, AnalysisLocation location, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Handles a run of frontend-retained instructions in one operation, ending at the first line that is not plainly accepted.
+    /// </summary>
+    /// <param name="lines">The retained instructions inside an open method, in order.</param>
+    /// <param name="locations">Their locations in the submitting document.</param>
+    /// <param name="cancellationToken">Cancels the operation.</param>
+    /// <returns>One reply for each line handled, which can be fewer than were sent.</returns>
+    Task<HandleReply[]> HandleRetainedSourceRunAsync(string[] lines, AnalysisLocation[] locations, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Requests interruption without waiting for the execution gate.
     /// </summary>
     /// <param name="identity">The operation the frontend intends to interrupt.</param>

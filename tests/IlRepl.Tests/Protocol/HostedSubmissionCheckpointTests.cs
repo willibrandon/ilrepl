@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using IlRepl.Protocol;
 using IlRepl.Repl;
+using IlRepl.Tui;
 
 namespace IlRepl.Tests.Protocol;
 
@@ -49,6 +50,118 @@ public sealed class HostedSubmissionCheckpointTests
         var result = await controller.HandleAsync("ret", token);
         Assert.Contains(line => line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal), result.Lines);
     }
+
+    /// <summary>
+    /// A run of retained instructions is answered line by line from one host operation.
+    /// </summary>
+    [TestMethod]
+    [Timeout(45_000, CooperativeCancellation = true)]
+    public async Task Run_AnswersEveryInstructionFromOneHostOperation()
+    {
+        var token = TestContext.CancellationToken;
+        var host = await HostPaths.StartEngineAsync(token);
+        await using var controller = new SessionController(host, async ct => await HostPaths.StartEngineAsync(ct));
+        var checkpoints = new ConcurrentQueue<SessionReply>();
+        host.CheckpointReceived += checkpoints.Enqueue;
+        var operations = new ConcurrentDictionary<string, bool>();
+        string[] source = [".method int32 Answer() {", "ldc.i4.s 42", .. Enumerable.Repeat("nop", 40), "ret", "}"];
+        controller.PendingInput = source[1..];
+        Assert.IsTrue((await controller.HandleSourceAsync(source[0], new AnalysisLocation("paste", 0, 0, source[0].Length), token))
+            .Succeeded);
+        host.ProgressChanged += progress => operations.TryAdd(progress.Identity, true);
+        controller.PendingInput = source[2..];
+        var replies = await controller.HandleSourceRunAsync(source[1..], Locations(source, 1), token);
+
+        // The instruction before ret closes the run, because ret is a boundary that checkpoints on its own.
+        Assert.HasCount(41, replies);
+        Assert.IsTrue(replies.All(reply => reply.Succeeded));
+        Assert.HasCount(1, operations);
+        Assert.HasCount(1, checkpoints);
+        Assert.AreEqual(41, replies[^1].Status.Instructions);
+        for (var index = 42; index < source.Length; index++)
+        {
+            controller.PendingInput = source[(index + 1)..];
+            Assert.IsTrue((await controller.HandleSourceAsync(source[index],
+                new AnalysisLocation("paste", index, 0, source[index].Length), token)).Succeeded);
+        }
+
+        Assert.AreSequenceEqual(source, checkpoints.Last().Document.Entries.SelectMany(entry => entry.Source));
+        Assert.IsTrue((await controller.HandleAsync("call int32 Answer()", token)).Succeeded);
+        var result = await controller.HandleAsync("ret", token);
+        Assert.Contains(line => line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal), result.Lines);
+    }
+
+    /// <summary>
+    /// A run ends at the line the host refuses, leaving the lines after it unsent.
+    /// </summary>
+    [TestMethod]
+    [Timeout(45_000, CooperativeCancellation = true)]
+    public async Task Run_EndsAtTheRefusedLine()
+    {
+        var token = TestContext.CancellationToken;
+        var host = await HostPaths.StartEngineAsync(token);
+        await using var controller = new SessionController(host, async ct => await HostPaths.StartEngineAsync(ct));
+        var checkpoints = new ConcurrentQueue<SessionReply>();
+        host.CheckpointReceived += checkpoints.Enqueue;
+        string[] source = [".method void Body() {", "nop", "ldc.i4 invalid", "nop", "nop", "ret", "}"];
+        controller.PendingInput = source[1..];
+        Assert.IsTrue((await controller.HandleSourceAsync(source[0], new AnalysisLocation("paste", 0, 0, source[0].Length), token))
+            .Succeeded);
+        controller.PendingInput = source[2..];
+        var replies = await controller.HandleSourceRunAsync(source[1..], Locations(source, 1), token);
+        Assert.HasCount(2, replies);
+        Assert.IsTrue(replies[0].Succeeded);
+        Assert.IsFalse(replies[1].Succeeded);
+        Assert.AreEqual(1, replies[1].Status.Instructions);
+        Assert.AreEqual(SessionEntryKind.Rejected, checkpoints.Last().Document.Entries.Last().Kind);
+    }
+
+    /// <summary>
+    /// The host takes no line of a run outside an open method, so the frontend handles it as a single line.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000, CooperativeCancellation = true)]
+    public async Task Run_OutsideAMethodHandlesNothing()
+    {
+        var token = TestContext.CancellationToken;
+        await using var connection = new HostProgressConnection(new ReplCore());
+        var replies = await connection.Proxy.HandleRetainedSourceRunAsync(["ldc.i4.s 42", "ret"],
+            [new AnalysisLocation("paste", 0, 0, 11), new AnalysisLocation("paste", 1, 0, 3)], token);
+        Assert.IsEmpty(replies);
+        Assert.IsFalse(connection.Progress.Last().IsRunning);
+        Assert.IsEmpty(connection.Checkpoints);
+        Assert.IsTrue((await connection.Proxy.HandleAsync("ldc.i4.s 42", token)).Succeeded);
+        var result = await connection.Proxy.HandleAsync("ret", token);
+        Assert.Contains(line => line.PlainText.Contains("= 42 : int32", StringComparison.Ordinal), result.Lines);
+    }
+
+    /// <summary>
+    /// A pasted method body reaches the host in a handful of operations while every line is still answered.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000, CooperativeCancellation = true)]
+    public async Task Submission_SendsAMethodBodyInAHandfulOfHostOperations()
+    {
+        var token = TestContext.CancellationToken;
+        var host = await HostPaths.StartEngineAsync(token);
+        await using var controller = new SessionController(host, async ct => await HostPaths.StartEngineAsync(ct));
+        var operations = new ConcurrentDictionary<string, bool>();
+        host.ProgressChanged += progress => operations.TryAdd(progress.Identity, true);
+        var events = new ConcurrentQueue<SubmissionEvent>();
+        string[] source = [".method int32 Big() {", "  ldc.i4 7", .. Enumerable.Repeat("  nop", 196), "  ret", "}"];
+        var submission = new Submission(controller, source, 0, false, _ => Task.CompletedTask, events.Enqueue);
+        await submission.Completion.WaitAsync(token);
+        Assert.AreEqual(SubmissionEventKind.Completed, events.Last().Kind);
+        Assert.AreEqual(200, submission.Sent);
+        Assert.HasCount(200, events);
+        Assert.IsLessThan(16, operations.Count, "A run of instructions must not cost one host operation for each line.");
+        Assert.IsTrue((await controller.HandleAsync("call int32 Big()", token)).Succeeded);
+        var result = await controller.HandleAsync("ret", token);
+        Assert.Contains(line => line.PlainText.Contains("= 7 : int32", StringComparison.Ordinal), result.Lines);
+    }
+
+    private static AnalysisLocation[] Locations(string[] source, int first) =>
+        [.. Enumerable.Range(first, source.Length - first).Select(index => new AnalysisLocation("paste", index, 0, source[index].Length))];
 
     /// <summary>
     /// Recovery preserves accepted provisional lines together with unsent source and independently typed input.

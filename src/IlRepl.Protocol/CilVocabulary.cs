@@ -16,4 +16,22 @@ public sealed record CilVocabulary(
     IReadOnlyList<string> Directives,
     IReadOnlyList<string> Commands,
     IReadOnlyList<string> Keywords,
-    IReadOnlyList<string> Primitives);
+    IReadOnlyList<string> Primitives)
+{
+    /// <summary>
+    /// Whether a physical line is an ordinary instruction rather than a comment, label, declaration, command, or brace.
+    /// </summary>
+    /// <param name="line">The physical source line.</param>
+    /// <param name="inBlockComment">Whether a block comment is open before the line, updated to its state after it.</param>
+    /// <returns>Whether the line starts with a known opcode.</returns>
+    public bool IsInstruction(string line, ref bool inBlockComment)
+    {
+        if (CilLexer.Classify(line, ref inBlockComment, out var text) != SourceLineKind.Text)
+        {
+            return false;
+        }
+
+        var end = text.AsSpan().IndexOfAny(' ', '\t');
+        return Opcodes.ContainsKey(end < 0 ? text : text[..end]);
+    }
+}

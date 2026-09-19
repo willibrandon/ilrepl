@@ -52,6 +52,11 @@ public sealed record SubmissionEvent(
     public SessionEditor? StartupEditor { get; init; }
 
     /// <summary>
+    /// The retained lines a runtime recovery puts ahead of the latest terminal input.
+    /// </summary>
+    public string[]? RecoveredInput { get; init; }
+
+    /// <summary>
     /// Whether an approved workspace action requested that the terminal close.
     /// </summary>
     public bool SessionQuit { get; init; }
