@@ -97,8 +97,14 @@ public sealed partial class HostProcessEngine : IReplClient, IHostedEngine, IPro
                 code = _process.ExitCode;
                 // WaitForExitAsync covers only event-based readers, so a dying runtime's last words can still be unread here.
                 // A worker that inherited the pipe can keep it open, so the wait is bounded like ExitCodeAsync.
-                try { await _drained.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false); }
-                catch (TimeoutException) { }
+                try
+                {
+                    await _drained.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+                }
+                catch (TimeoutException)
+                {
+                    // The tail retained so far is reported while an inherited writer keeps the pipe open.
+                }
             }
             else code = await _lifetime.ExitCodeAsync(_scope.Identity).ConfigureAwait(false);
             string tail;
