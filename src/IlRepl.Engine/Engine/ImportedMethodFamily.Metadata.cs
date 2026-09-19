@@ -20,6 +20,11 @@ namespace IlRepl.Engine;
 /// </summary>
 internal sealed partial class ImportedMethodFamily
 {
+    /// <summary>
+    /// Writes the family's types, methods, and fields into an assembly and binds their runtime members to the new definitions.
+    /// </summary>
+    /// <param name="writer">The writer for the assembly that receives the family.</param>
+    /// <returns>The definition written for each original type, method, and field.</returns>
     internal Dictionary<MemberInfo, IMemberDefinition> Write(CecilWriter writer)
     {
         RequireValid();

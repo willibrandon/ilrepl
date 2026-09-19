@@ -172,19 +172,54 @@ public sealed class CilTokenizer
         }
     }
 
+    /// <summary>
+    /// Tells whether a word is an opcode mnemonic in the vocabulary.
+    /// </summary>
+    /// <param name="word">The word, compared by exact case.</param>
+    /// <returns>True when the vocabulary lists the word as an opcode.</returns>
     internal bool IsOpcode(ReadOnlySpan<char> word) => _opcodeLookup.ContainsKey(word);
 
+    /// <summary>
+    /// Tells whether a word is an IL directive in the vocabulary.
+    /// </summary>
+    /// <param name="word">The word, leading dot included, compared by exact case.</param>
+    /// <returns>True when the vocabulary lists the word as a directive.</returns>
     internal bool IsDirective(ReadOnlySpan<char> word) => _directiveLookup.Contains(word);
 
+    /// <summary>
+    /// Tells whether a word is a REPL command in the vocabulary.
+    /// </summary>
+    /// <param name="word">The word, leading dot included, compared by exact case.</param>
+    /// <returns>True when the vocabulary lists the word as a command.</returns>
     internal bool IsCommand(ReadOnlySpan<char> word) => _commandLookup.Contains(word);
 
+    /// <summary>
+    /// Tells whether a word is a signature or declaration keyword in the vocabulary.
+    /// </summary>
+    /// <param name="word">The word, compared by exact case.</param>
+    /// <returns>True when the vocabulary lists the word as a keyword.</returns>
     internal bool IsKeyword(ReadOnlySpan<char> word) => _keywordLookup.Contains(word);
 
+    /// <summary>
+    /// Tells whether a word names a primitive type in the vocabulary.
+    /// </summary>
+    /// <param name="word">The word, compared by exact case.</param>
+    /// <returns>True when the vocabulary lists the word as a primitive type.</returns>
     internal bool IsPrimitive(ReadOnlySpan<char> word) => _primitiveLookup.Contains(word);
 
+    /// <summary>
+    /// Looks up the kind of operand an opcode takes.
+    /// </summary>
+    /// <param name="word">The opcode mnemonic.</param>
+    /// <returns>The operand kind, or <see cref="CilOperandKind.None"/> when the word is not an opcode.</returns>
     internal CilOperandKind OperandKindOf(ReadOnlySpan<char> word) => _opcodeLookup.TryGetValue(word,
         out var kind) ? kind : CilOperandKind.None;
 
+    /// <summary>
+    /// Tells whether a word opens an exception handling block, such as <c>catch</c> or <c>finally</c>.
+    /// </summary>
+    /// <param name="word">The word, compared by exact case.</param>
+    /// <returns>True when the word is a block keyword.</returns>
     internal static bool IsBlockKeywordWord(ReadOnlySpan<char> word) => IsBlockKeyword(word);
 
     private void ReadLine(CilLineReader r)

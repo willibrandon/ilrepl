@@ -32,6 +32,11 @@ public partial class Nesting
     /// <returns>True.</returns>
     protected static bool TakeProtected(ProtectedNested value) => value is not null;
 
+    /// <summary>
+    /// Takes the internal nested type.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <returns>True.</returns>
     internal static bool TakeInternal(InternalNested value) => value is not null;
 
     private static bool TakePrivate(PrivateNested value) => value is not null;

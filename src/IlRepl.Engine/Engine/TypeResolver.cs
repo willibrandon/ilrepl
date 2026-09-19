@@ -9,6 +9,9 @@ namespace IlRepl.Engine;
 /// </summary>
 public sealed partial class TypeResolver : IDisposable
 {
+    /// <summary>
+    /// The namespaces searched, in order, for a type name written without one, and preferred among equally close name suggestions.
+    /// </summary>
     internal static readonly string[] CommonNamespaces =
     [
         "System", "System.Text", "System.Collections.Generic", "System.Collections", "System.IO", "System.Linq",

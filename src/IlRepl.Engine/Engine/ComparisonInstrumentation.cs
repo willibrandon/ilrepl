@@ -12,6 +12,13 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static partial class ComparisonInstrumentation
 {
+    /// <summary>
+    /// Adds a public wrapper beside the target that records the call, its arguments, and its result or exception.
+    /// </summary>
+    /// <param name="writer">The writer for the comparison assembly.</param>
+    /// <param name="target">The selected method under observation, whose body stays as it is.</param>
+    /// <param name="externalVarArg">The external vararg original that the wrapper calls in place of the target, or null.</param>
+    /// <returns>The wrapper, named <c>__ilrepl_observe_</c> plus the target's name and underscores until it is unique.</returns>
     internal static MethodDefinition Wrap(CecilWriter writer, MethodDefinition target, MethodReference? externalVarArg = null)
         => Wrap(writer, target, [], "__ilrepl_observe_" + target.Name, externalVarArg);
 

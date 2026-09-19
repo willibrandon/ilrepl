@@ -29,6 +29,12 @@ public sealed class SymbolSignatureProvider : ISignatureTypeProvider<TypeSymbol,
     {
     }
 
+    /// <summary>
+    /// Initializes a provider that can hand type references to a caller's own resolver instead of the catalog.
+    /// </summary>
+    /// <param name="source">The module's symbol source.</param>
+    /// <param name="catalog">The catalog.</param>
+    /// <param name="reference">Resolves a type reference from its handle and raw type kind, or null to use the catalog.</param>
     internal SymbolSignatureProvider(
         AssemblySymbolSource source,
         LoadedBindingCatalog catalog,

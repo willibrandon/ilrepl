@@ -91,5 +91,11 @@ public static class MemberResolver
         return $"{instance}{returnType} {TypeNameFormatter.Pretty(method.DeclaringType)}::{name}({parameters})";
     }
 
+    /// <summary>
+    /// Tells whether two types are the same under <see cref="TypeIdentity"/>, with no owner map.
+    /// </summary>
+    /// <param name="a">The first type.</param>
+    /// <param name="b">The second type.</param>
+    /// <returns>True when they match.</returns>
     internal static bool TypesEqual(Type a, Type b) => TypeIdentity.Equal(a, b);
 }

@@ -8,9 +8,21 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static class CecilForwardingMethod
 {
+    /// <summary>
+    /// Adds a public static entry type to the target's module with one method that calls the target.
+    /// </summary>
+    /// <param name="target">The method that outside callers cannot reach directly.</param>
+    /// <param name="name">The forwarding method's name, which also stems the entry type's name.</param>
+    /// <returns>The forwarding method, which takes an instance target's receiver as its first parameter.</returns>
     internal static MethodDefinition Create(MethodDefinition target, string name)
         => Shell(target, target, name);
 
+    /// <summary>
+    /// Finds the forwarding method that <see cref="Create"/> added for a selected method.
+    /// </summary>
+    /// <param name="selected">The method the forwarding method was created for.</param>
+    /// <param name="name">The forwarding method's name.</param>
+    /// <returns>The method of that name on the entry type, or on the outermost declaring type when no entry type exists.</returns>
     internal static MethodDefinition Find(MethodDefinition selected, string name)
     {
         var root = selected.DeclaringType;
@@ -168,6 +180,12 @@ internal static class CecilForwardingMethod
         il.Emit(OpCodes.Ret);
     }
 
+    /// <summary>
+    /// Renames the call inside a forwarding method so it reaches another method of the same owner.
+    /// </summary>
+    /// <param name="selected">The method the forwarding method was created for.</param>
+    /// <param name="name">The forwarding method's name.</param>
+    /// <param name="target">The method whose name the forwarded call takes.</param>
     internal static void Redirect(MethodDefinition selected, string name, MethodDefinition target)
     {
         var forwarding = Find(selected, name);

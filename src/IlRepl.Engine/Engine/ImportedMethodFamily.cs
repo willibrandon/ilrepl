@@ -759,6 +759,9 @@ internal sealed partial class ImportedMethodFamily
         return method;
     }
 
+    /// <summary>
+    /// Throws a <see cref="ReplException"/> that carries every recorded problem, one per line, when the family has any.
+    /// </summary>
     internal void RequireValid()
     {
         if (_problems.Count != 0)
@@ -767,6 +770,10 @@ internal sealed partial class ImportedMethodFamily
         }
     }
 
+    /// <summary>
+    /// Records a problem and drops the compiled copy, releasing its assembly and clearing every runtime binding.
+    /// </summary>
+    /// <param name="problem">The message that explains why the family cannot be used.</param>
     internal void Reject(string problem)
     {
         if (Definition is { } definition)

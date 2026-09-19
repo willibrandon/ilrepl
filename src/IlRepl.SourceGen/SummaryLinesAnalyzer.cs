@@ -30,6 +30,14 @@ public sealed class SummaryLinesAnalyzer : DiagnosticAnalyzer
     {
         var text = context.Tree.GetText(context.CancellationToken);
         var root = context.Tree.GetRoot(context.CancellationToken);
+
+        // "<summary />" is an element of another kind, and it has no line of text at all.
+        foreach (var empty in root.DescendantNodes(descendIntoTrivia: true).OfType<XmlEmptyElementSyntax>()
+            .Where(element => element.Name.LocalName.ValueText == "summary"))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.SummaryIsNotThreeLines, empty.GetLocation()));
+        }
+
         foreach (var summary in root.DescendantNodes(descendIntoTrivia: true).OfType<XmlElementSyntax>()
             .Where(element => element.StartTag.Name.LocalName.ValueText == "summary"))
         {

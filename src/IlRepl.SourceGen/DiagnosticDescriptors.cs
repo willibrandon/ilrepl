@@ -52,6 +52,17 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true);
 
     /// <summary>
+    /// A public or internal type or member carries XML documentation.
+    /// </summary>
+    internal static readonly DiagnosticDescriptor MemberIsNotDocumented = new(
+        id: "ILREPL0007",
+        title: "A public or internal type or member is documented",
+        messageFormat: "Document '{0}' with a triple slash XML comment",
+        category: "IlRepl.Layout",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
     /// A documentation summary takes the opening tag, one line of text, and the closing tag.
     /// </summary>
     internal static readonly DiagnosticDescriptor SummaryIsNotThreeLines = new(

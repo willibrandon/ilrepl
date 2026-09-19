@@ -12,6 +12,16 @@ namespace IlRepl.Engine;
 /// <param name="State">The validated body in its source declaring context.</param>
 internal sealed record MethodEditBody(MethodBase Method, DisassembledMethod Listing, string Source, CellState State)
 {
+    /// <summary>
+    /// Disassembles a method and renders it as an editable <c>.method</c> definition, validated as written.
+    /// </summary>
+    /// <param name="method">The method to edit.</param>
+    /// <param name="session">The session whose resolver and types the body is read against.</param>
+    /// <param name="signatures">The method signatures the body may call by name.</param>
+    /// <param name="types">The type table to parse against, or null for the session's own.</param>
+    /// <param name="contextType">The type to treat as the declaring type, or null for the method's own.</param>
+    /// <returns>The editable body.</returns>
+    /// <exception cref="ReplException">The body holds an instruction the disassembler cannot express as editable source.</exception>
     internal static MethodEditBody Read(
         MethodBase method,
         Session session,
@@ -51,6 +61,17 @@ internal sealed record MethodEditBody(MethodBase Method, DisassembledMethod List
         return Parse(listing, string.Join('\n', lines), session, signatures, types, contextType);
     }
 
+    /// <summary>
+    /// Parses and validates edited source as a replacement body for a disassembled method.
+    /// </summary>
+    /// <param name="listing">The original disassembly of the method being edited.</param>
+    /// <param name="source">The edited text, holding exactly one complete <c>.method</c> definition.</param>
+    /// <param name="session">The session whose resolver and types the body is read against.</param>
+    /// <param name="signatures">The method signatures the body may call by name.</param>
+    /// <param name="types">The type table to parse against, or null for the session's own.</param>
+    /// <param name="contextType">The type to treat as the declaring type, or null for the method's own.</param>
+    /// <returns>The editable body.</returns>
+    /// <exception cref="ReplException">The source is incomplete or changes the method's name, static flag, or generic arity.</exception>
     internal static MethodEditBody Parse(
         DisassembledMethod listing,
         string source,

@@ -225,6 +225,12 @@ public static class TypeEmitter
         }
     }
 
+    /// <summary>
+    /// Loads a declared type from its emitted assembly, reporting a runtime rejection as a <see cref="ReplException"/>.
+    /// </summary>
+    /// <param name="assembly">The loaded assembly that defines the type.</param>
+    /// <param name="declaration">The declaration to find by its reflection name.</param>
+    /// <returns>The runtime type.</returns>
     internal static Type LoadType(Assembly assembly, TypeDeclaration declaration)
     {
         var name = ReflectionName(declaration);

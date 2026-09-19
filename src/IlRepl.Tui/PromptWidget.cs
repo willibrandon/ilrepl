@@ -34,8 +34,14 @@ public sealed partial record PromptWidget(
     int OpenDepth,
     bool CommentOpen) : Hex1bWidget
 {
+    /// <summary>
+    /// The handler that receives a complete buffer, or null when none is set.
+    /// </summary>
     internal Action<string>? SubmitHandler { get; init; }
 
+    /// <summary>
+    /// The handler that copies a selection, or null when none is set.
+    /// </summary>
     internal Action<string>? CopyHandler { get; init; }
 
     /// <summary>

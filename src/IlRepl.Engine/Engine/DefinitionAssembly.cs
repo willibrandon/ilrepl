@@ -12,6 +12,13 @@ namespace IlRepl.Engine;
 /// </remarks>
 public sealed class DefinitionAssembly
 {
+    /// <summary>
+    /// Initializes the record of a loaded session assembly.
+    /// </summary>
+    /// <param name="assembly">The loaded assembly.</param>
+    /// <param name="kind">What the assembly holds.</param>
+    /// <param name="dependencies">The session assemblies this one references, copied and held strongly.</param>
+    /// <param name="context">The load context that holds the assembly, or null for a cell built with Reflection.Emit.</param>
     internal DefinitionAssembly(
         Assembly assembly,
         SessionAssemblyKind kind,

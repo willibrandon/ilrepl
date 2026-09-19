@@ -1174,6 +1174,11 @@ public static class IlAsmRenderer
         sb.Append(pad).AppendLine("}");
     }
 
+    /// <summary>
+    /// Renders one generic parameter as ILAsm declares it: variance, constraint flags, constraint types, then the name.
+    /// </summary>
+    /// <param name="parameter">The generic parameter of a type or method declaration.</param>
+    /// <returns>The text that goes between the angle brackets of the declaration.</returns>
     internal static string GenericParameterIlAsm(GenericParameterDeclaration parameter)
     {
         var words = new List<string>();

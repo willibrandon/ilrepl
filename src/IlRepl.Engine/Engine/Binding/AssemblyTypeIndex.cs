@@ -25,6 +25,11 @@ public sealed class AssemblyTypeIndex
     private readonly Dictionary<string, List<TypeDefinitionHandle>> _bySimpleName = new(StringComparer.Ordinal);
     private IReadOnlyList<TypeIndexEntry>? _entries;
 
+    /// <summary>
+    /// Builds the whole index from an assembly's metadata in one uninterrupted pass.
+    /// </summary>
+    /// <param name="source">The leased assembly source.</param>
+    /// <param name="reader">Its metadata reader.</param>
     internal AssemblyTypeIndex(AssemblySymbolSource source, MetadataReader reader)
         : this(source)
     {

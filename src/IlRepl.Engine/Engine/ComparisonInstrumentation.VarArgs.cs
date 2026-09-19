@@ -7,6 +7,13 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static partial class ComparisonInstrumentation
 {
+    /// <summary>
+    /// Finishes observation once every body is written, giving each vararg call site a typed wrapper and relocating the helpers.
+    /// </summary>
+    /// <param name="writer">The writer for the comparison assembly.</param>
+    /// <param name="target">The selected method under observation.</param>
+    /// <param name="entry">The observation entry point made for <paramref name="target"/>.</param>
+    /// <param name="externalVarArg">The external vararg original that the wrappers call in place of the target, or null.</param>
     internal static void Complete(
         CecilWriter writer,
         MethodDefinition target,

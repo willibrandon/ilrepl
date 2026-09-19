@@ -7,6 +7,12 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static class CecilGenericSubstitution
 {
+    /// <summary>
+    /// Replaces each mapped generic parameter inside a type signature, rebuilding the types constructed around it.
+    /// </summary>
+    /// <param name="type">The signature to rewrite, which is left unchanged.</param>
+    /// <param name="map">The replacement for each generic parameter, where an unmapped parameter stays as it is.</param>
+    /// <returns>The rewritten signature, or the same reference when the type has no constructed parts to rebuild.</returns>
     internal static TypeReference Apply(TypeReference type, Dictionary<GenericParameter, TypeReference> map)
     {
         TypeReference Map(TypeReference value) => Apply(value, map);

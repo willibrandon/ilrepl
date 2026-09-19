@@ -24,7 +24,7 @@ These instructions apply to the entire repository.
 - Prefer `using` directives and short type names over repeated fully qualified `System.*` names.
 - The build enforces these rules through `.editorconfig` and the analyzers in `src/IlRepl.SourceGen`. Fix what they report.
 - Do not suppress a rule.
-- Add triple slash XML documentation to every changed public or internal type and member.
+- Add triple slash XML documentation to every public or internal type and member.
 - Write every `<summary>` as exactly three physical lines: the opening tag, one text line, and the closing tag. Put the rest in `<remarks>`.
 - Add no dependency unless Microsoft or the .NET Foundation owns it. Prefer a small local implementation when practical.
 - When adding or changing a file-based app script, update its directory's README in the same change.

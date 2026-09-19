@@ -307,6 +307,14 @@ public sealed class CecilWriter
         }
     }
 
+    /// <summary>
+    /// Imports a return or parameter type, preferring its exact symbol over the runtime type and its modifiers.
+    /// </summary>
+    /// <param name="type">The runtime type.</param>
+    /// <param name="exact">The complete type when the runtime type cannot represent it, or null.</param>
+    /// <param name="required">The required custom modifiers, applied only when there is no exact type.</param>
+    /// <param name="optional">The optional custom modifiers, applied only when there is no exact type.</param>
+    /// <returns>The reference.</returns>
     internal TypeReference ImportSignature(
         Type type,
         TypeSymbol? exact,

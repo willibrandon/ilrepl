@@ -15,6 +15,11 @@ public sealed class MetadataLease : IDisposable
 {
     private Assembly? _assembly;
 
+    /// <summary>
+    /// Initializes a lease that holds an assembly for a symbol source.
+    /// </summary>
+    /// <param name="assembly">The assembly to keep loaded.</param>
+    /// <param name="source">The symbol source that reads the assembly's metadata.</param>
     internal MetadataLease(Assembly assembly, AssemblySymbolSource source)
     {
         _assembly = assembly;

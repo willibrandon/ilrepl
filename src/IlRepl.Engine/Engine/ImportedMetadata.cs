@@ -15,6 +15,11 @@ namespace IlRepl.Engine;
 /// </summary>
 internal static partial class ImportedMetadata
 {
+    /// <summary>
+    /// Decodes a property's exact signature from its metadata blob.
+    /// </summary>
+    /// <param name="property">The property to read.</param>
+    /// <returns>The decoded signature and the length of its encoded blob in bytes.</returns>
     internal static (PropertySignature Signature, int Size) PropertySignature(PropertyInfo property)
     {
         var metadata = ModuleMetadata.TryOpen(property.Module)
@@ -25,6 +30,11 @@ internal static partial class ImportedMetadata
         return (definition.DecodeSignature(provider, GenericContext.Empty), metadata.GetBlobBytes(definition.Signature).Length);
     }
 
+    /// <summary>
+    /// Lists the explicit method overrides a type declares in its metadata.
+    /// </summary>
+    /// <param name="owner">The type whose method implementation rows are read.</param>
+    /// <returns>Each overriding body paired with the declaration it implements, closed over the owner's generic arguments.</returns>
     internal static IEnumerable<(MethodBase Body, MethodBase Declaration)> Overrides(Type owner)
     {
         var metadata = ModuleMetadata.TryOpen(owner.Module)
@@ -39,6 +49,12 @@ internal static partial class ImportedMetadata
         }
     }
 
+    /// <summary>
+    /// Rebuilds a method's platform invoke record against the module being written.
+    /// </summary>
+    /// <param name="method">The imported method declared with a native import.</param>
+    /// <param name="writer">The writer whose module gains a reference to the native library when it lacks one.</param>
+    /// <returns>The import attributes, the entry point name, and the module reference for the library.</returns>
     internal static PInvokeInfo NativeImport(MethodBase method, CecilWriter writer)
     {
         var metadata = ModuleMetadata.TryOpen(method.Module)
@@ -56,6 +72,12 @@ internal static partial class ImportedMetadata
         return new PInvokeInfo((PInvokeAttributes)import.Attributes, metadata.GetString(import.Name), module);
     }
 
+    /// <summary>
+    /// Reads the initial bytes of an RVA field from the image its module was loaded from.
+    /// </summary>
+    /// <param name="field">The field whose data lives in the image.</param>
+    /// <param name="resolver">The resolver that may hold the retained image of the field's assembly.</param>
+    /// <returns>The field's data, sized by its explicit layout or else by its marshaled size.</returns>
     internal static byte[] ReadFieldData(FieldInfo field, TypeResolver resolver)
     {
         byte[]? image = null;

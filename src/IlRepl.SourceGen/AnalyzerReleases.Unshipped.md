@@ -8,3 +8,4 @@ ILREPL0003 | IlRepl.Layout | Error | A line fits within max_line_length.
 ILREPL0004 | IlRepl.Layout | Error | A System type is imported instead of written out in full.
 ILREPL0005 | IlRepl.Layout | Error | A line that begins with a closing brace is followed by a blank line.
 ILREPL0006 | IlRepl.Layout | Error | A summary takes exactly three lines.
+ILREPL0007 | IlRepl.Layout | Error | A public or internal type or member is documented.
