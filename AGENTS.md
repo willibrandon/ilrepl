@@ -16,8 +16,9 @@ These instructions apply to the entire repository.
 - Give every body braces, with each brace on its own line. This includes single statements, `try`, `catch`, `finally`, `else`, and `lock`.
 - Braces that hold no statements, as in `{ get; set; }`, an initializer, a pattern, or a `switch` expression, may share one line.
   Once they take more than one line, lay them out like a body.
-- Only what completes the surrounding expression or declaration may share a line with a closing brace, as in `});` or `} = value;`.
-- Put the `while` that ends a `do`, or a member access such as `.ToList()`, on the line after the closing brace.
+- Directly after a closing brace, only closing punctuation or a property's initializer may follow on its line, as in `});`,
+  `}, token).ConfigureAwait(false);`, or `} = value;`. The statement may finish there, but no second statement may start.
+- Put the `while` that ends a `do`, or a member access written straight after the brace as in `}.ToList()`, on the next line.
 - Leave a blank line after a line that begins with a closing brace, before the next statement, comment, member, accessor, or `case`.
 - When a parameter list does not fit on one line, put every parameter on its own line.
 - Prefer `using` directives and short type names over repeated fully qualified `System.*` names.

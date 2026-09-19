@@ -117,8 +117,8 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    // The rest of the line may finish the statement, as "}, token);" does. A statement that starts after it, as in
-    // "}); Next();", is code beside the brace.
+    // The rest of the line may finish the statement, as "}, token).ConfigureAwait(false);" does, which is how such a call
+    // is written everywhere. A statement that starts after it, as in "}); Next();", is code beside the brace.
     private static bool StartsAnotherStatement(SyntaxToken close)
     {
         for (var token = close.GetNextToken(); SharesLine(close, token); token = token.GetNextToken())
