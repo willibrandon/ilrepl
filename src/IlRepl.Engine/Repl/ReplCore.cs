@@ -1057,10 +1057,9 @@ public sealed partial class ReplCore : IDisposable
     {
         if (state.Locals.Count > 0)
         {
-            Listing("  .locals init ("
-                + string.Join(", ",
-                state.Locals.Select((l,
-                i) => $"{TypeNameFormatter.Pretty(l.Type)} {l.Name ?? "V_" + i.ToString(CultureInfo.InvariantCulture)}")) + ")");
+            var locals = state.Locals.Select((l, i) =>
+                $"{TypeNameFormatter.Pretty(l.Type)} {l.Name ?? "V_" + i.ToString(CultureInfo.InvariantCulture)}");
+            Listing("  .locals init (" + string.Join(", ", locals) + ")");
         }
 
         if (showArguments && state.Arguments.Count > 0)

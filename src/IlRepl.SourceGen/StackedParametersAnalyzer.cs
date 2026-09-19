@@ -27,9 +27,7 @@ public sealed class StackedParametersAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeParameters(SyntaxNodeAnalysisContext context)
     {
         var list = (BaseParameterListSyntax)context.Node;
-
-        // A lambda's parameters belong to the expression around them.
-        if (list.Parameters.Count == 0 || list.Parent is AnonymousFunctionExpressionSyntax)
+        if (list.Parameters.Count == 0)
         {
             return;
         }

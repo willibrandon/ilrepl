@@ -27,21 +27,47 @@ public sealed class ExpandedBlockAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeBlock(SyntaxNodeAnalysisContext context)
     {
         var block = (BlockSyntax)context.Node;
-        if (SharesLineWithPreviousToken(block.OpenBraceToken) || SharesLineWithPreviousToken(block.CloseBraceToken))
+        var open = block.OpenBraceToken;
+        var close = block.CloseBraceToken;
+        if (SharesLine(open.GetPreviousToken(), open) || SharesLine(open, open.GetNextToken())
+            || SharesLine(close.GetPreviousToken(), close) || ContinuesWithCode(close))
         {
-            context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlockIsNotExpanded, block.OpenBraceToken.GetLocation()));
+            context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.BlockIsNotExpanded, open.GetLocation()));
         }
     }
 
-    private static bool SharesLineWithPreviousToken(SyntaxToken brace)
+    // What closes the expression or statement around a block may follow its brace, as in "});" or "} while (more);".
+    private static bool ContinuesWithCode(SyntaxToken close)
     {
-        var previous = brace.GetPreviousToken();
-        if (previous.IsKind(SyntaxKind.None))
+        var next = close.GetNextToken();
+        if (!SharesLine(close, next))
         {
             return false;
         }
 
-        var tree = brace.SyntaxTree!;
-        return tree.GetLineSpan(previous.Span).EndLinePosition.Line == tree.GetLineSpan(brace.Span).StartLinePosition.Line;
+        switch (next.Kind())
+        {
+            case SyntaxKind.CloseParenToken:
+            case SyntaxKind.CloseBracketToken:
+            case SyntaxKind.SemicolonToken:
+            case SyntaxKind.CommaToken:
+            case SyntaxKind.DotToken:
+                return false;
+            case SyntaxKind.WhileKeyword:
+                return next.Parent is not DoStatementSyntax;
+            default:
+                return true;
+        }
+    }
+
+    private static bool SharesLine(SyntaxToken first, SyntaxToken second)
+    {
+        if (first.IsKind(SyntaxKind.None) || second.IsKind(SyntaxKind.None))
+        {
+            return false;
+        }
+
+        var tree = first.SyntaxTree!;
+        return tree.GetLineSpan(first.Span).EndLinePosition.Line == tree.GetLineSpan(second.Span).StartLinePosition.Line;
     }
 }
