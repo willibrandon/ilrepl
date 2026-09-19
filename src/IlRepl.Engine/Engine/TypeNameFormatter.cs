@@ -9,13 +9,12 @@ namespace IlRepl.Engine;
 public static class TypeNameFormatter
 {
     /// <summary>
-    /// Every identifier-shaped word the ILAsm lexer reserves: its keyword table
-    /// (dotnet/runtime, src/coreclr/inc/il_kywd.h) and every opcode name and alias
-    /// (src/coreclr/inc/opcode.def). A name in this set must be quoted to be read as a name.
+    /// Every word the ILAsm lexer reserves, keywords and opcode names alike, which a name must be quoted to use.
     /// </summary>
-    /// <summary>
-    /// Every ILAsm keyword, the opcode mnemonics included, as il_kywd.h lists them.
-    /// </summary>
+    /// <remarks>
+    /// The keyword table is src/coreclr/inc/il_kywd.h in dotnet/runtime, and the opcode names and aliases are in
+    /// src/coreclr/inc/opcode.def.
+    /// </remarks>
     public static IReadOnlyCollection<string> IlAsmKeywordNames => IlAsmKeywords;
 
     private static readonly HashSet<string> IlAsmKeywords = new(StringComparer.Ordinal)
