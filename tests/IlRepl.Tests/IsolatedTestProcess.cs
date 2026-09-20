@@ -16,9 +16,13 @@ internal static class IsolatedTestProcess
     /// Runs only the calling test case in a child process, or lets its assertions run when already in that child.
     /// </summary>
     /// <param name="context">The calling test's cancellation and output context.</param>
+    /// <param name="environment">Variables the child starts with, for a test whose subject reads them from its process.</param>
     /// <param name="method">The test method to run.</param>
     /// <returns>Whether the parent has completed the test in a child process.</returns>
-    internal static async Task<bool> RunAsync(TestContext context, [CallerMemberName] string method = "")
+    internal static async Task<bool> RunAsync(
+        TestContext context,
+        IReadOnlyDictionary<string, string>? environment = null,
+        [CallerMemberName] string method = "")
     {
         var name = context.FullyQualifiedTestClassName + "." + method;
         if (Environment.GetEnvironmentVariable(SelectedTest) == name)
@@ -26,7 +30,7 @@ internal static class IsolatedTestProcess
             return false;
         }
 
-        await RunChildAsync(context, name);
+        await RunChildAsync(context, name, environment: environment);
         return true;
     }
 
@@ -57,7 +61,11 @@ internal static class IsolatedTestProcess
         }
     }
 
-    private static async Task RunChildAsync(TestContext context, string name, string? directory = null)
+    private static async Task RunChildAsync(
+        TestContext context,
+        string name,
+        string? directory = null,
+        IReadOnlyDictionary<string, string>? environment = null)
     {
         var start = new ProcessStartInfo
         {
@@ -87,6 +95,11 @@ internal static class IsolatedTestProcess
         if (directory is not null)
         {
             start.Environment[Workspace] = directory;
+        }
+
+        foreach (var (variable, value) in environment ?? new Dictionary<string, string>())
+        {
+            start.Environment[variable] = value;
         }
 
         using var child = Process.Start(start) ?? throw new InvalidOperationException("The isolated test did not start.");

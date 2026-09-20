@@ -52,6 +52,9 @@ internal static class HistoryProbes
             case "append":
                 await AppendMany();
                 return true;
+            case "path":
+                Console.Out.WriteLine(FileHistoryStore.DefaultPath());
+                return true;
             default:
                 return false;
         }

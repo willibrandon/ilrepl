@@ -11,6 +11,8 @@ namespace IlRepl.Tests.Protocol;
 [TestCategory("Interaction")]
 public sealed class ProcessDisposalTests
 {
+    private const string CleanupDirectory = "ILREPL_DISPOSAL_TEST_DIRECTORY";
+
     /// <summary>
     /// Supplies cancellation for real process and notification synchronization.
     /// </summary>
@@ -115,22 +117,24 @@ public sealed class ProcessDisposalTests
     [Timeout(60_000, CooperativeCancellation = true)]
     public async Task Dispose_ConcurrentAndLaterCallersObserveCleanupFailure(bool hostEndpoint)
     {
-        if (await IsolatedTestProcess.RunAsync(TestContext))
+        // The endpoints are created under TMPDIR, so the child that runs the assertions starts with a directory of its own there.
+        var directory = Environment.GetEnvironmentVariable(CleanupDirectory)
+            ?? Path.Combine("/tmp", "ilr-dispose-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(directory);
+        if (await IsolatedTestProcess.RunAsync(TestContext,
+            new Dictionary<string, string> { ["TMPDIR"] = directory, [CleanupDirectory] = directory }))
         {
+            Directory.Delete(directory, recursive: true);
             return;
         }
 
         var token = TestContext.CancellationToken;
-        var directory = Path.Combine("/tmp", "ilr-dispose-" + Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(directory);
-        var originalTemp = Environment.GetEnvironmentVariable("TMPDIR");
         var lifetime = new HostProcessLifetime();
         Process? supervisor = null;
         Process? adoptedSupervisor = null;
         HostProcessEngine? failedEngine = null;
         try
         {
-            Environment.SetEnvironmentVariable("TMPDIR", directory);
             await using (var engine = await lifetime.StartAsync(HostPaths.HostAssembly, RepoPaths.Root, cancellationToken: token))
             {
                 supervisor = Process.GetProcessById(lifetime.SupervisorProcessId!.Value);
@@ -195,7 +199,6 @@ public sealed class ProcessDisposalTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("TMPDIR", originalTemp);
             if (failedEngine is not null)
             {
                 try
@@ -225,8 +228,6 @@ public sealed class ProcessDisposalTests
                 await child.WaitForExitAsync(CancellationToken.None);
                 child.Dispose();
             }
-
-            Directory.Delete(directory, recursive: true);
         }
     }
 }

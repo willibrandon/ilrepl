@@ -144,21 +144,22 @@ public sealed class CompletionLifetimeTests
     [TestMethod]
     public async Task Completion_InitializerAndConstructor_AreNeverExecuted()
     {
-        var key = "ILREPL_COMPLETION_" + Guid.NewGuid().ToString("N");
+        var marker = Path.Combine(Path.GetTempPath(), "ilrepl-completion-" + Guid.NewGuid().ToString("N"));
+        var path = LiteralParser.Escape(marker);
         var session = new Session();
         using var completer = new OperandCompleter(session);
         string[] lines = [".class public CompletionSideEffect {",
-            ".method private static void .cctor() {", $"ldstr \"{key}\"", "ldstr \"initialized\"",
-            "call Environment::SetEnvironmentVariable(string, string)", "ret", "}",
+            ".method private static void .cctor() {", "ldstr " + path, "ldstr \"initialized\"",
+            "call File::WriteAllText(string, string)", "ret", "}",
             ".method public instance void .ctor() {", "ldarg.0", "call instance void Object::.ctor()",
-            $"ldstr \"{key}\"", "ldstr \"constructed\"", "call Environment::SetEnvironmentVariable(string, string)",
+            "ldstr " + path, "ldstr \"constructed\"", "call File::WriteAllText(string, string)",
             "ret", "}", "}", "newobj CompletionSideEffect::"];
         try
         {
             var reply = await completer.CompleteAsync(new CompletionRequest(lines, lines.Length - 1, lines[^1].Length, null, []),
                 TestContext.CancellationToken);
             Assert.HasCount(1, reply.Items);
-            Assert.IsNull(Environment.GetEnvironmentVariable(key));
+            Assert.IsFalse(File.Exists(marker));
             foreach (var line in lines.Take(lines.Length - 1))
             {
                 session.AddLine(line);
@@ -167,15 +168,15 @@ public sealed class CompletionLifetimeTests
             var accepted = await completer.CompleteAsync(
                 new CompletionRequest([lines[^1]], 0, lines[^1].Length, null, []), TestContext.CancellationToken);
             Assert.HasCount(1, accepted.Items);
-            Assert.IsNull(Environment.GetEnvironmentVariable(key));
+            Assert.IsFalse(File.Exists(marker));
             session.AddLine("newobj " + accepted.Items[0].InsertText);
-            Assert.IsNull(Environment.GetEnvironmentVariable(key));
+            Assert.IsFalse(File.Exists(marker));
             session.Run();
-            Assert.AreEqual("constructed", Environment.GetEnvironmentVariable(key));
+            Assert.AreEqual("constructed", File.ReadAllText(marker));
         }
         finally
         {
-            Environment.SetEnvironmentVariable(key, null);
+            File.Delete(marker);
             session.Reset();
         }
     }

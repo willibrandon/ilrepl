@@ -59,33 +59,36 @@ public sealed class MethodComparisonIsolationTests
     /// <summary>
     /// Each worker receives the captured environment and its mutations cannot reach the other worker or the parent.
     /// </summary>
+    /// <remarks>
+    /// The variable exists only in the captured package, never in this process, so a worker that reads it cannot have inherited it.
+    /// </remarks>
     [TestMethod]
     public async Task Run_EnvironmentUsesCapturedValuesAndIsolatesWrites()
     {
         var variable = "ILREPL_COMPARISON_" + Guid.NewGuid().ToString("N");
-        try
+        var session = IlLines.Load(".method string Read() {", ".locals init (string original)",
+            "ldstr " + LiteralParser.Escape(variable), "call string Environment::GetEnvironmentVariable(string)", "stloc.0",
+            "ldstr " + LiteralParser.Escape(variable), "ldstr \"worker mutation\"",
+            "call void Environment::SetEnvironmentVariable(string, string)", "ldloc.0", "ret", "}");
+        Commit(session, "Read");
+        var captured = ComparisonCapture.Create(session, "Copy ()");
+        foreach (var (name, value) in captured.Environment)
         {
-            Environment.SetEnvironmentVariable(variable, "captured");
-            var session = IlLines.Load(".method string Read() {", ".locals init (string original)",
-                "ldstr " + LiteralParser.Escape(variable), "call string Environment::GetEnvironmentVariable(string)", "stloc.0",
-                "ldstr " + LiteralParser.Escape(variable), "ldstr \"worker mutation\"",
-                "call void Environment::SetEnvironmentVariable(string, string)", "ldloc.0", "ret", "}");
-            Commit(session, "Read");
-            var package = ComparisonCapture.Create(session, "Copy ()");
-            Environment.SetEnvironmentVariable(variable, "parent changed after capture");
-
-            var result = await ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken);
-
-            Assert.AreEqual("match", result.Outcome, Details(result));
-            Assert.AreEqual("captured", result.Original.Result!.Value);
-            Assert.AreEqual("captured", result.Edited.Result!.Value);
-            Assert.AreEqual("parent changed after capture", Environment.GetEnvironmentVariable(variable));
-            AssertParentUsable(session);
+            Assert.AreEqual(Environment.GetEnvironmentVariable(name), value, name + " is captured as this process has it.");
         }
-        finally
+
+        var package = captured with
         {
-            Environment.SetEnvironmentVariable(variable, null);
-        }
+            Environment = new Dictionary<string, string>(captured.Environment, StringComparer.Ordinal) { [variable] = "captured" },
+        };
+
+        var result = await ProcessComparisonRunner.RunAsync(package, TestContext.CancellationToken);
+
+        Assert.AreEqual("match", result.Outcome, Details(result));
+        Assert.AreEqual("captured", result.Original.Result!.Value);
+        Assert.AreEqual("captured", result.Edited.Result!.Value);
+        Assert.IsNull(Environment.GetEnvironmentVariable(variable), "A worker's write must not reach this process.");
+        AssertParentUsable(session);
     }
 
     /// <summary>
