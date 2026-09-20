@@ -111,6 +111,10 @@ On Arm64 the JIT builds an address from up to four 16-bit moves and leaves out a
 the same load can take a different number of instructions in each worker. A comparison reads such a load
 as one step. `.jit` on its own still shows every instruction.
 
+On x64 the JIT normally calls a method through an address relative to the call. When the runtime placed the
+two more than 2 GB apart, it loads the address into a register first, so the same call can take one
+instruction in one worker and two in the other. A comparison reads both forms as the same call.
+
 `--raw` includes encoding-level detail, including bytes and process-specific addresses. Raw comparisons
 can differ because the workers occupy different addresses. Use normal comparisons for ordinary
 code-generation assertions.
