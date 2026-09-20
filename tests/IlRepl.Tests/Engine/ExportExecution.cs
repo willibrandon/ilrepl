@@ -162,10 +162,14 @@ internal sealed class ExportExecution : IDisposable
         }
 
         var enabled = profile == "tiered" ? "1" : "0";
-        foreach (var name in new[] { "TieredCompilation", "TieredPGO", "TC_QuickJit", "TC_QuickJitForLoops", "ReadyToRun" })
+        foreach (var name in new[] { "TieredCompilation", "TieredPGO", "TC_QuickJit", "TC_QuickJitForLoops" })
         {
             variables["DOTNET_" + name] = enabled;
         }
+
+        // A fixture holds only IL, so the JIT compiles it under either profile. Turning the framework's precompiled code off
+        // would change nothing about the fixture and make every child compile the runtime's own startup path first.
+        variables["DOTNET_ReadyToRun"] = "1";
 
         return variables;
     }

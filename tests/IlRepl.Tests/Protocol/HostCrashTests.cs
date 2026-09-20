@@ -92,7 +92,18 @@ public sealed class HostCrashTests
 
         if (failure == "stack-overflow")
         {
-            Assert.Contains("Stack overflow", observed.StandardError);
+            // On Windows a garbage collection that suspends the thread as its stack runs out ends the runtime with an access
+            // violation, sometimes before it has written anything. The named exit code is then all there is to report.
+            var code = ExitCodes.Describe(observed.ExitCode.Value);
+            if (OperatingSystem.IsWindows() && code == "0xC0000005 (access violation)")
+            {
+                Assert.IsTrue(observed.StandardError.Length == 0 || observed.StandardError.StartsWith("Stack overflow",
+                    StringComparison.Ordinal), observed.StandardError);
+            }
+            else
+            {
+                Assert.Contains("Stack overflow", observed.StandardError, "The host exited with code " + code);
+            }
         }
 
         if (failure == "access-violation")

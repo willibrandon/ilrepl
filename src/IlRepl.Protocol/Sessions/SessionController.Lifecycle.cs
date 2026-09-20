@@ -405,8 +405,9 @@ public sealed partial class SessionController : IInterruptibleEngine
             yield break;
         }
 
+        var code = exit.ExitCode is { } value ? ExitCodes.Describe(value) : "unknown";
         yield return TranscriptLine.Of(LineKind.Error,
-            $"  execution host exited (process {exit.ProcessId}, exit code {exit.ExitCode?.ToString() ?? "unknown"})", SpanStyle.Error);
+            $"  execution host exited (process {exit.ProcessId}, exit code {code})", SpanStyle.Error);
         if (exit.StandardError.Length != 0)
         {
             foreach (var line in exit.StandardError.TrimEnd().Split('\n'))
