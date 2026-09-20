@@ -20,11 +20,15 @@ dotnet run --file scripts/Publish-NativeAot.cs -- --rid osx-arm64 --package-vers
 | `Generate-OpcodeReference.cs` | Writes `docs/src/content/docs/reference/opcodes.md` from the engine's opcode table. |
 | `Publish-Wasm.cs` | Publishes the browser build and copies it into `docs/public/try` without the pre-compressed variants. |
 | `Publish-NativeAot.cs` | Publishes and checks a Native AOT frontend, then packs and checks its runtime-specific tool package. |
+| `Verify-CodeQl.cs` | Lists every finding in the CodeQL results under a directory and fails when there is one. |
 
 The scripts build under the repository's `.editorconfig` and the analyzers in `src/IlRepl.SourceGen`, like every project, so
 `dotnet build scripts/<name>.cs` reports a layout error, or a type or method a script declares without documentation, as the
 solution build would. `dotnet format` cannot process a file-based app, so fix what that build reports by hand. The solution does
 not include the scripts, so build each of them after a change to the analyzers.
+
+GitHub shows CodeQL findings in the Security tab without failing a check. The CodeQL workflow therefore saves its result
+file and runs `Verify-CodeQl.cs` on it, so a finding fails the pull request that introduced it.
 
 The bootstrap catalog lets the terminal offer editing and command help before the execution host connects.
 After changing the engine's command catalog or IL vocabulary, run `Generate-BootstrapCatalog.cs` from inside the repository.
